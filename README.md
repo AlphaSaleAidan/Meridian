@@ -1,28 +1,58 @@
 # Meridian
 
-**AI-Powered POS Analytics for Independent Business Owners**
+AI-powered POS analytics platform for independent business owners.
 
-Meridian connects to your Square POS and transforms raw transaction data into actionable business intelligence — revenue insights, product performance scoring, demand forecasting, and "money left on the table" analysis.
+## What It Does
+Connects to existing POS systems (Square, Toast, Clover) and delivers:
+- **Actionable recommendations** (not just charts)
+- **"Money Left on the Table" score** — single headline metric
+- **Predictive revenue forecasting**
+- **Delivery/event schedule management** with smart notifications
+- **Anonymous benchmarking** across similar businesses
+
+## Pricing
+| Plan | Price/mo | Features |
+|------|----------|----------|
+| Insights | $500 | Core analytics + recommendations |
+| Optimize | $750 | + Forecasting + notifications |
+| Command | $1,000 | + Benchmarking + what-if simulator |
 
 ## Architecture
-
-- **Backend:** FastAPI (Python)
-- **Database:** Supabase (PostgreSQL + TimescaleDB)
-- **POS Integration:** Square (OAuth + Webhooks)
-- **AI Engine:** Revenue analysis, pattern detection, product scoring, demand forecasting
-
-## Quick Start
-
-```bash
-cp .env.example .env
-# Fill in your Square and Supabase credentials
-pip install -r requirements.txt
-uvicorn src.api.app:app --host 0.0.0.0 --port 8000
+```
+Square OAuth → Sync Engine → Supabase → AI Engine → Dashboard
+                (backfill + incremental + webhooks)
 ```
 
-## Deploy
+## Key Components
+- **Database**: 24 tables, 4 materialized views, 21 RLS policies, 9 functions (Supabase)
+- **Square Integration**: OAuth, sync engine (18mo backfill + 15min incremental + webhooks), rate limiter
+- **AI Engine**: Revenue Analyzer, Product Intelligence, Pattern Detection, Money Left on Table, Forecasting, Weekly Reports
+- **Backend**: FastAPI application with full pipeline orchestration
 
-```bash
-docker build -t meridian .
-docker run -p 8000:8000 --env-file .env meridian
+## Project Structure
 ```
+├── src/                    # Modular source code
+│   ├── ai/                 # AI analysis engines
+│   ├── api/                # FastAPI application
+│   ├── db/                 # Database clients + queries
+│   ├── square/             # Square POS integration
+│   ├── tests/              # Test suites
+│   └── workers/            # Background workers
+├── app/                    # Application services
+├── scripts/                # Pipeline + verification scripts
+├── 001-009_*.sql           # Database migrations
+├── meridian_backend_complete.py   # Combined backend (8,954 lines)
+├── ai_engine_combined.py          # Combined AI engine (4,443 lines)
+└── meridian_supabase_migration.sql # Full DB schema (1,441 lines)
+```
+
+## Status
+- ✅ Database schema deployed to Supabase
+- ✅ Square integration tested (32/32 sandbox tests)
+- ✅ AI insights engine operational
+- ✅ Live pipeline: Square → Supabase → AI (1,000 txns tested)
+- 🚧 Frontend polish
+- 🚧 Toast + Clover integrations
+- 🚧 Notification system (Twilio + SendGrid)
+- 🚧 What-If Simulator
+- 🚧 Anonymous benchmarking
