@@ -54,18 +54,22 @@ class OAuthManager:
 
     # ─── Step 1: Generate Authorization URL ───────────────────
 
-    def get_authorize_url(self, org_id: str | None = None) -> tuple[str, str]:
+    def get_authorize_url(self, org_id: str | None = None, state: str | None = None) -> tuple[str, str]:
         """
         Generate Square OAuth authorization URL.
+        
+        Args:
+            org_id: Merchant org ID (embedded in state if no explicit state given)
+            state: Pre-built CSRF state token (e.g. HMAC-signed). If None, generates one.
         
         Returns (url, csrf_state_token) — store the state token
         in the session to verify on callback.
         """
-        state = secrets.token_urlsafe(32)
-        
-        # Encode org_id into state if provided (to link callback to org)
-        if org_id:
-            state = f"{org_id}:{state}"
+        if state is None:
+            state = secrets.token_urlsafe(32)
+            # Encode org_id into state if provided (to link callback to org)
+            if org_id:
+                state = f"{org_id}:{state}"
 
         params = {
             "client_id": self.app_id,
