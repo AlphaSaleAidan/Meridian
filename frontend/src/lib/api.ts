@@ -2,9 +2,12 @@
  * Meridian API Client
  * 
  * Calls the FastAPI backend for dashboard data.
+ * In demo mode (org_id='demo'): returns realistic mock data client-side.
  * In dev: proxied via Vite to localhost:8000
  * In prod: uses VITE_API_URL env var
  */
+
+import { demoData } from './demo-data'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -34,6 +37,11 @@ async function apiFetch<T>(path: string, opts?: ApiOptions): Promise<T> {
   }
 
   return res.json()
+}
+
+// Simulate network delay for realism
+function delay<T>(data: T, ms = 400): Promise<T> {
+  return new Promise(resolve => setTimeout(() => resolve(data), ms + Math.random() * 200))
 }
 
 // ─── Type Definitions ────────────────────────────────────
@@ -155,34 +163,62 @@ export interface ConnectionInfo {
 
 // ─── API Functions ───────────────────────────────────────
 
+function isDemo(orgId: string): boolean {
+  return orgId === 'demo'
+}
+
 export const api = {
   overview: (orgId: string) =>
-    apiFetch<Overview>('/api/dashboard/overview', { params: { org_id: orgId } }),
+    isDemo(orgId)
+      ? delay(demoData.overview())
+      : apiFetch<Overview>('/api/dashboard/overview', { params: { org_id: orgId } }),
 
   revenue: (orgId: string, days = 30) =>
-    apiFetch<RevenueData>('/api/dashboard/revenue', { params: { org_id: orgId, days } }),
+    isDemo(orgId)
+      ? delay(demoData.revenue(days))
+      : apiFetch<RevenueData>('/api/dashboard/revenue', { params: { org_id: orgId, days } }),
 
   hourlyRevenue: (orgId: string, days = 30) =>
-    apiFetch<HourlyData>('/api/dashboard/revenue/hourly', { params: { org_id: orgId, days } }),
+    isDemo(orgId)
+      ? delay(demoData.hourlyRevenue())
+      : apiFetch<HourlyData>('/api/dashboard/revenue/hourly', { params: { org_id: orgId, days } }),
 
   products: (orgId: string, days = 30) =>
-    apiFetch<ProductsData>('/api/dashboard/products', { params: { org_id: orgId, days } }),
+    isDemo(orgId)
+      ? delay(demoData.products(days))
+      : apiFetch<ProductsData>('/api/dashboard/products', { params: { org_id: orgId, days } }),
 
   insights: (orgId: string, limit = 20) =>
-    apiFetch<{ insights: Insight[]; total: number }>('/api/dashboard/insights', { params: { org_id: orgId, limit } }),
+    isDemo(orgId)
+      ? delay(demoData.insights(limit))
+      : apiFetch<{ insights: Insight[]; total: number }>('/api/dashboard/insights', { params: { org_id: orgId, limit } }),
 
   forecasts: (orgId: string) =>
-    apiFetch<{ forecasts: Forecast[]; total: number }>('/api/dashboard/forecasts', { params: { org_id: orgId } }),
+    isDemo(orgId)
+      ? delay(demoData.forecasts())
+      : apiFetch<{ forecasts: Forecast[]; total: number }>('/api/dashboard/forecasts', { params: { org_id: orgId } }),
 
   notifications: (orgId: string, limit = 20) =>
-    apiFetch<{ notifications: Notification[]; total: number }>('/api/dashboard/notifications', { params: { org_id: orgId, limit } }),
+    isDemo(orgId)
+      ? delay(demoData.notifications(limit))
+      : apiFetch<{ notifications: Notification[]; total: number }>('/api/dashboard/notifications', { params: { org_id: orgId, limit } }),
 
   connection: (orgId: string) =>
-    apiFetch<{ connections: ConnectionInfo[] }>('/api/dashboard/connection', { params: { org_id: orgId } }),
+    isDemo(orgId)
+      ? delay(demoData.connection())
+      : apiFetch<{ connections: ConnectionInfo[] }>('/api/dashboard/connection', { params: { org_id: orgId } }),
 
   weeklyReport: (orgId: string) =>
-    apiFetch<{ report: any }>('/api/dashboard/weekly-report', { params: { org_id: orgId } }),
+    isDemo(orgId)
+      ? delay(demoData.weeklyReport())
+      : apiFetch<{ report: any }>('/api/dashboard/weekly-report', { params: { org_id: orgId } }),
 
   updateInsightAction: (insightId: string, orgId: string, status: string) =>
-    apiFetch<any>(`/api/dashboard/insights/${insightId}/action`, { params: { org_id: orgId, action_status: status } }),
+    isDemo(orgId)
+      ? delay({ success: true })
+      : apiFetch<any>(`/api/dashboard/insights/${insightId}/action`, { params: { org_id: orgId, action_status: status } }),
+
+  // OAuth URL for connecting Square
+  squareAuthorize: (orgId: string) =>
+    `${API_BASE}/api/square/authorize?org_id=${orgId}`,
 }
