@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Lightbulb, Filter } from 'lucide-react'
+import { Filter } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { formatCentsCompact } from '@/lib/format'
@@ -40,19 +40,19 @@ export default function InsightsPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">AI Insights</h1>
         <p className="text-sm text-slate-400 mt-1">
-          {data.total} active insights • {actionable} actionable • {formatCentsCompact(totalImpact)}/mo potential impact
+          {data.total} active • {actionable} actionable • {formatCentsCompact(totalImpact)}/mo impact
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      {/* Filters — scrollable on mobile */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
         <Filter size={14} className="text-slate-500 flex-shrink-0" />
         {insightTypes.map(t => (
           <button
             key={t.key}
             onClick={() => setTypeFilter(t.key)}
             className={clsx(
-              'px-3 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap border',
+              'px-3 py-2 sm:py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap border',
               typeFilter === t.key
                 ? 'bg-meridian-700/20 text-meridian-400 border-meridian-700/30'
                 : 'text-slate-400 border-slate-700/40 hover:text-white hover:border-slate-600'

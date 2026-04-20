@@ -61,6 +61,25 @@
   }
 }
 
+@layer utilities {
+  /* Hide scrollbar for filter rows on mobile */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Line clamp utility */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
 /* Animations */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -74,4 +93,11 @@
 /* Recharts tooltip custom */
 .recharts-tooltip-wrapper {
   outline: none !important;
+}
+
+/* Prevent iOS zoom on input focus */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }

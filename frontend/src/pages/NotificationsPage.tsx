@@ -33,13 +33,11 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Notifications</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {data.total} notifications • {unread} unread
-          </p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-white">Notifications</h1>
+        <p className="text-sm text-slate-400 mt-1">
+          {data.total} notifications • {unread} unread
+        </p>
       </div>
 
       {/* Notifications List */}
@@ -71,10 +69,10 @@ export default function NotificationsPage() {
                         {!isRead && (
                           <span className={clsx('w-2 h-2 rounded-full', pConfig.dot)} />
                         )}
-                        <span className="text-xs text-slate-500">{formatRelative(n.created_at)}</span>
+                        <span className="text-xs text-slate-500 hidden sm:inline">{formatRelative(n.created_at)}</span>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">{n.body}</p>
+                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{n.body}</p>
                     <div className="flex items-center gap-2 mt-2">
                       <span className={clsx('badge', {
                         'badge-red': n.priority === 'urgent',
@@ -84,6 +82,7 @@ export default function NotificationsPage() {
                         {n.priority}
                       </span>
                       <span className="text-xs text-slate-600">{n.status}</span>
+                      <span className="text-xs text-slate-500 sm:hidden ml-auto">{formatRelative(n.created_at)}</span>
                     </div>
                   </div>
                 </div>

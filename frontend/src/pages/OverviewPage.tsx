@@ -1,3 +1,4 @@
+import { useLocation, Link } from 'react-router-dom'
 import {
   DollarSign, ShoppingCart, Receipt, TrendingUp, ArrowUpRight, ArrowDownRight,
 } from 'lucide-react'
@@ -11,10 +12,12 @@ import InsightCard from '@/components/InsightCard'
 import ConnectionBadge from '@/components/ConnectionBadge'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 
-// TODO: Replace with auth context org_id
 const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
 
 export default function OverviewPage() {
+  const location = useLocation()
+  const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
+
   const overview = useApi(() => api.overview(ORG_ID), [])
   const revenue = useApi(() => api.revenue(ORG_ID, 30), [])
   const insights = useApi(() => api.insights(ORG_ID, 5), [])
@@ -27,7 +30,7 @@ export default function OverviewPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -42,7 +45,7 @@ export default function OverviewPage() {
       </div>
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
           label="Total Revenue"
           value={formatCentsCompact(data.revenue_cents_30d)}
@@ -73,7 +76,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Money Left + Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">
         <div className="lg:col-span-2">
           <MoneyLeftCard score={data.money_left_score} />
         </div>
@@ -81,7 +84,7 @@ export default function OverviewPage() {
           {revenue.data ? (
             <RevenueChart data={revenue.data.daily} height={280} />
           ) : (
-            <div className="card p-5 h-[340px] flex items-center justify-center">
+            <div className="card p-5 h-[280px] sm:h-[340px] flex items-center justify-center">
               <p className="text-sm text-slate-500">Loading chart...</p>
             </div>
           )}
@@ -92,9 +95,12 @@ export default function OverviewPage() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-white">Recent Insights</h2>
-          <a href="/insights" className="text-xs text-meridian-400 hover:text-meridian-300 font-medium">
+          <Link
+            to={`${basePath}/insights`}
+            className="text-xs text-meridian-400 hover:text-meridian-300 font-medium"
+          >
             View all →
-          </a>
+          </Link>
         </div>
         {insights.data && insights.data.insights.length > 0 ? (
           <div className="space-y-2">

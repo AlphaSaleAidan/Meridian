@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom'
 import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
@@ -25,6 +26,8 @@ const statusColors: Record<string, string> = {
 }
 
 export default function SettingsPage() {
+  const location = useLocation()
+  const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
   const conn = useApi(() => api.connection(ORG_ID), [])
 
   if (conn.loading) return <LoadingPage />
@@ -41,11 +44,12 @@ export default function SettingsPage() {
 
       {/* POS Connections */}
       <div className="card overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-800/60 flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-4 border-b border-slate-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-white">POS Connections</h3>
           <a
-            href={`${API_URL}/api/square/authorize?org_id=${ORG_ID}`}
-            className="px-4 py-2 text-xs font-medium text-white bg-meridian-700 rounded-lg hover:bg-meridian-600 transition-colors inline-flex items-center gap-2"
+            href={basePath === '/demo' ? '#' : `${API_URL}/api/square/authorize?org_id=${ORG_ID}`}
+            onClick={basePath === '/demo' ? (e) => { e.preventDefault(); alert('Connect Square is disabled in demo mode. Sign up to connect your real POS!') } : undefined}
+            className="px-4 py-2.5 sm:py-2 text-xs font-medium text-white bg-meridian-700 rounded-lg hover:bg-meridian-600 transition-colors inline-flex items-center gap-2"
           >
             <ExternalLink size={14} />
             Connect Square
@@ -59,7 +63,7 @@ export default function SettingsPage() {
               const color = statusColors[c.status] || 'text-slate-500'
 
               return (
-                <div key={c.id} className="px-5 py-4">
+                <div key={c.id} className="px-4 sm:px-5 py-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={clsx('p-2 rounded-lg bg-slate-800/60', color)}>
@@ -72,18 +76,16 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <span className={clsx('badge', {
-                        'badge-green': c.status === 'connected',
-                        'badge-amber': c.status === 'syncing' || c.status === 'pending',
-                        'badge-red': c.status === 'error' || c.status === 'disconnected',
-                      })}>
-                        {c.status}
-                      </span>
-                    </div>
+                    <span className={clsx('badge', {
+                      'badge-green': c.status === 'connected',
+                      'badge-amber': c.status === 'syncing' || c.status === 'pending',
+                      'badge-red': c.status === 'error' || c.status === 'disconnected',
+                    })}>
+                      {c.status}
+                    </span>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                  <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 text-xs">
                     <div>
                       <span className="text-slate-500">Last Sync</span>
                       <p className="text-slate-300 mt-0.5">
@@ -123,20 +125,20 @@ export default function SettingsPage() {
       </div>
 
       {/* API Info */}
-      <div className="card p-5">
+      <div className="card p-4 sm:p-5">
         <h3 className="text-sm font-semibold text-white mb-3">API Configuration</h3>
         <div className="space-y-2 text-xs">
           <div className="flex items-center justify-between py-1.5 border-b border-slate-800/30">
             <span className="text-slate-400">API Server</span>
-            <code className="text-slate-300 font-mono">{API_URL || 'localhost:8000'}</code>
+            <code className="text-slate-300 font-mono text-[11px] truncate max-w-[200px] sm:max-w-none">{API_URL || 'localhost:8000'}</code>
           </div>
           <div className="flex items-center justify-between py-1.5 border-b border-slate-800/30">
-            <span className="text-slate-400">Organization ID</span>
-            <code className="text-slate-300 font-mono text-[10px]">{ORG_ID}</code>
+            <span className="text-slate-400">Organization</span>
+            <code className="text-slate-300 font-mono text-[11px]">{ORG_ID}</code>
           </div>
           <div className="flex items-center justify-between py-1.5">
-            <span className="text-slate-400">Dashboard Version</span>
-            <code className="text-slate-300 font-mono">0.2.0</code>
+            <span className="text-slate-400">Version</span>
+            <code className="text-slate-300 font-mono text-[11px]">0.2.0</code>
           </div>
         </div>
       </div>
