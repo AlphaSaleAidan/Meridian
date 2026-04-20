@@ -1,222 +1,427 @@
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Zap, TrendingUp, Lightbulb, Shield, ArrowRight,
-  BarChart3, DollarSign, Clock, ChevronRight,
-} from 'lucide-react'
+import { motion, useScroll, useTransform } from 'framer-motion'
+import { ArrowRight, ChevronRight, Shield, Zap, Clock } from 'lucide-react'
 
-const features = [
+import GrainOverlay from '@/components/landing/GrainOverlay'
+import { TextRevealStagger } from '@/components/landing/TextReveal'
+import ScrollReveal from '@/components/landing/ScrollReveal'
+import MagneticButton from '@/components/landing/MagneticButton'
+import CountUp from '@/components/landing/CountUp'
+import BentoGrid from '@/components/landing/BentoGrid'
+
+// Lazy-load WebGL for performance
+const MeshGradient = lazy(() => import('@/components/landing/MeshGradient'))
+
+const EASE = [0.16, 1, 0.3, 1] as const
+
+/* ─── Testimonials ─────────────────────────────── */
+const testimonials = [
   {
-    icon: TrendingUp,
-    title: 'Revenue Intelligence',
-    desc: 'Real-time revenue tracking with daily, weekly, and hourly breakdowns. Know exactly how your business is performing.',
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/10',
+    quote: 'Meridian found $3,200 in monthly revenue we were leaving on the table. The pricing insights alone paid for a year of service in two weeks.',
+    author: 'Sarah Chen',
+    role: 'Owner, Sunrise Coffee Co.',
   },
   {
-    icon: DollarSign,
-    title: 'Money Left on the Table',
-    desc: 'Our AI finds pricing gaps, upsell opportunities, and waste reduction — showing you exactly where hidden revenue is.',
-    color: 'text-meridian-400',
-    bg: 'bg-meridian-500/10',
+    quote: 'We finally understand our data. The forecasting is scary accurate — we cut food waste by 30% in the first month.',
+    author: 'Marcus Rivera',
+    role: 'GM, Eastside Kitchen',
   },
   {
-    icon: Lightbulb,
-    title: 'AI-Powered Insights',
-    desc: 'Actionable recommendations backed by data — from staffing optimization to product bundling to seasonal trends.',
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/10',
-  },
-  {
-    icon: BarChart3,
-    title: 'Revenue Forecasting',
-    desc: 'Know what\'s coming. AI-powered predictions with confidence intervals help you plan inventory, staff, and promotions.',
-    color: 'text-purple-400',
-    bg: 'bg-purple-500/10',
+    quote: 'Setup took 45 seconds. I connected Square and had actionable insights before my espresso was ready.',
+    author: 'Priya Patel',
+    role: 'Founder, Chai & Co.',
   },
 ]
 
-const stats = [
-  { value: '$2,340', label: 'Avg. Monthly Savings Found', suffix: '/mo' },
-  { value: '94%', label: 'Forecast Accuracy', suffix: '' },
-  { value: '< 60s', label: 'Setup Time', suffix: '' },
-]
+/* ─── Logo bar (fake social proof) ─────────────── */
+const logos = ['Square', 'Shopify', 'Toast', 'Clover', 'Lightspeed']
 
 export default function LandingPage() {
   const navigate = useNavigate()
+  const heroRef = useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  })
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
+  const heroY = useTransform(scrollYProgress, [0, 0.8], [0, -60])
+
+  /* Lenis smooth scroll */
+  useEffect(() => {
+    let lenis: any = null
+    import('lenis').then((mod) => {
+      const Lenis = mod.default
+      lenis = new Lenis({ lerp: 0.08, smoothWheel: true })
+      const raf = (time: number) => {
+        lenis.raf(time)
+        requestAnimationFrame(raf)
+      }
+      requestAnimationFrame(raf)
+    })
+    return () => lenis?.destroy()
+  }, [])
 
   return (
-    <div className="min-h-screen bg-slate-950 overflow-x-hidden">
-      {/* Nav */}
-      <header className="border-b border-slate-800/40 backdrop-blur-xl bg-slate-950/80 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
+      <GrainOverlay />
+
+      {/* ─── NAV ──────────────────────────────────── */}
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
+        <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-meridian-700 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
+            <div className="w-7 h-7 rounded-md bg-[#7C5CFF] flex items-center justify-center">
+              <Zap className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-bold text-lg tracking-tight text-white">Meridian</span>
+            <span className="font-semibold text-[15px] tracking-tight text-[#F5F5F7]">Meridian</span>
           </div>
-          <div className="flex items-center gap-3">
-            <button
+          <div className="flex items-center gap-2">
+            <MagneticButton
               onClick={() => navigate('/demo')}
-              className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+              className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200"
             >
               Live Demo
-            </button>
-            <button
+            </MagneticButton>
+            <MagneticButton
               onClick={() => navigate('/onboarding')}
-              className="px-4 py-2 text-sm font-medium text-white bg-meridian-700 rounded-lg hover:bg-meridian-600 transition-colors flex items-center gap-1.5"
+              className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] bg-[#7C5CFF] rounded-md hover:bg-[#6B4FE0] transition-colors duration-200"
             >
-              Get Started <ArrowRight size={14} />
-            </button>
+              Get Started
+            </MagneticButton>
           </div>
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative">
-        {/* Gradient orbs */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] opacity-20">
-          <div className="absolute top-20 left-0 w-72 h-72 bg-meridian-700 rounded-full blur-[120px]" />
-          <div className="absolute top-40 right-0 w-60 h-60 bg-purple-600 rounded-full blur-[100px]" />
-        </div>
+      {/* ─── HERO ─────────────────────────────────── */}
+      <section ref={heroRef} className="relative min-h-screen flex items-center justify-center pt-14">
+        {/* WebGL mesh gradient */}
+        <Suspense fallback={null}>
+          <MeshGradient />
+        </Suspense>
 
-        <div className="relative max-w-6xl mx-auto px-6 pt-24 pb-20 text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-meridian-700/10 border border-meridian-700/20 text-meridian-400 text-xs font-medium mb-8">
-            <Zap size={12} />
-            AI-Powered POS Analytics for Independent Businesses
-          </div>
+        {/* Aurora accents */}
+        <div className="absolute top-1/4 left-1/4 aurora-glow aurora-violet" />
+        <div className="absolute top-1/3 right-1/4 aurora-glow aurora-cyan" style={{ width: 400, height: 400 }} />
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white tracking-tight leading-[1.1] max-w-4xl mx-auto">
-            See the money you're
-            <span className="text-meridian-400"> leaving on the table</span>
+        <motion.div
+          style={{ opacity: heroOpacity, y: heroY }}
+          className="relative z-10 max-w-content mx-auto px-6 text-center"
+        >
+          {/* Tag */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#1F1F23] bg-[#111113]/80 text-[#A1A1A8] text-[11px] font-medium tracking-wide uppercase mb-8"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4FE3C1] animate-pulse" />
+            POS Intelligence Platform
+          </motion.div>
+
+          {/* Headline */}
+          <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-bold text-[#F5F5F7] tracking-tight leading-[1.05] max-w-4xl mx-auto text-balance">
+            <TextRevealStagger staggerDelay={0.06} baseDelay={0.3}>
+              {[
+                <span key="1">See the revenue you're</span>,
+                <span key="2">
+                  <em className="font-serif italic font-normal text-[#7C5CFF]">leaving behind</em>
+                </span>,
+              ]}
+            </TextRevealStagger>
           </h1>
 
-          <p className="mt-6 text-lg text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            Connect your Square POS and Meridian's AI instantly finds pricing gaps, 
-            upsell opportunities, and hidden revenue — showing you exactly where to grow.
-          </p>
+          {/* Subhead */}
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: EASE, delay: 0.55 }}
+            className="mt-6 text-[#A1A1A8] text-lg max-w-xl mx-auto leading-relaxed"
+          >
+            Connect your Square POS. Meridian's AI finds pricing gaps, upsell
+            opportunities, and hidden revenue — with exact dollar amounts.
+          </motion.p>
 
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button
+          {/* CTAs */}
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: EASE, delay: 0.7 }}
+            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
+          >
+            <MagneticButton
               onClick={() => navigate('/onboarding')}
-              className="w-full sm:w-auto px-8 py-3.5 text-base font-semibold text-white bg-meridian-700 rounded-xl hover:bg-meridian-600 transition-all duration-200 shadow-lg shadow-meridian-700/25 flex items-center justify-center gap-2"
+              className="group px-6 py-3 text-[14px] font-medium text-white bg-[#7C5CFF] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(124,92,255,0.3)] flex items-center gap-2"
             >
-              Connect Your Square <ArrowRight size={18} />
-            </button>
-            <button
+              Connect Your Square
+              <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+            </MagneticButton>
+            <MagneticButton
               onClick={() => navigate('/demo')}
-              className="w-full sm:w-auto px-8 py-3.5 text-base font-medium text-slate-300 border border-slate-700 rounded-xl hover:border-slate-500 hover:text-white transition-all duration-200 flex items-center justify-center gap-2"
+              className="group px-6 py-3 text-[14px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 flex items-center gap-2"
             >
-              See Live Demo <ChevronRight size={18} />
-            </button>
-          </div>
+              See Live Demo
+              <ChevronRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+            </MagneticButton>
+          </motion.div>
 
-          {/* Stats */}
-          <div className="mt-16 grid grid-cols-3 gap-8 max-w-lg mx-auto">
-            {stats.map(s => (
-              <div key={s.label} className="text-center">
-                <p className="text-2xl font-bold text-white">
-                  {s.value}<span className="text-meridian-400 text-lg">{s.suffix}</span>
-                </p>
-                <p className="text-xs text-slate-500 mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-24 border-t border-slate-800/40">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-white">
-              Your POS data, <span className="text-meridian-400">supercharged</span>
-            </h2>
-            <p className="mt-4 text-slate-400 max-w-xl mx-auto">
-              Meridian connects to your Square POS and transforms transaction data into actionable intelligence.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {features.map(f => (
-              <div key={f.title} className="card p-6 hover:border-slate-700/80 transition-all duration-200 group">
-                <div className={`w-10 h-10 rounded-xl ${f.bg} flex items-center justify-center mb-4`}>
-                  <f.icon size={20} className={f.color} />
+          {/* Floating product screenshot */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, ease: EASE, delay: 0.9 }}
+            className="mt-16 relative max-w-3xl mx-auto"
+          >
+            <div className="animate-float-slow">
+              <div className="rounded-xl border border-[#1F1F23] bg-[#111113] shadow-2xl shadow-black/50 overflow-hidden">
+                {/* Fake browser chrome */}
+                <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-[#1F1F23]">
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#1F1F23]" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#1F1F23]" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-[#1F1F23]" />
+                  <div className="flex-1 mx-4 h-5 rounded bg-[#0A0A0B] border border-[#1F1F23]" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{f.title}</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">{f.desc}</p>
+                {/* Dashboard preview */}
+                <div className="p-6 space-y-4">
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: 'Revenue Today', value: '$1,847', change: '+12.4%' },
+                      { label: 'Transactions', value: '124', change: '+8.2%' },
+                      { label: 'Avg Order', value: '$14.89', change: '+3.1%' },
+                      { label: 'Money Left', value: '$2,340', change: '', accent: true },
+                    ].map(s => (
+                      <div key={s.label} className="rounded-lg bg-[#0A0A0B] border border-[#1F1F23] p-3">
+                        <p className="text-[10px] text-[#A1A1A8]">{s.label}</p>
+                        <p className={`text-sm font-semibold font-mono mt-0.5 ${s.accent ? 'text-[#7C5CFF]' : 'text-[#F5F5F7]'}`}>
+                          {s.value}
+                        </p>
+                        {s.change && (
+                          <p className="text-[9px] text-[#4FE3C1] mt-0.5">{s.change}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {/* Mini chart */}
+                  <div className="rounded-lg bg-[#0A0A0B] border border-[#1F1F23] p-4 h-28 flex items-end gap-1">
+                    {Array.from({ length: 24 }, (_, i) => {
+                      const h = 20 + Math.sin(i * 0.5) * 30 + Math.random() * 25
+                      return (
+                        <div
+                          key={i}
+                          className="flex-1 rounded-sm"
+                          style={{
+                            height: `${h}%`,
+                            background: i >= 20
+                              ? 'rgba(124,92,255,0.3)'
+                              : 'rgba(124,92,255,0.15)',
+                          }}
+                        />
+                      )
+                    })}
+                  </div>
+                </div>
               </div>
+            </div>
+            {/* Glow under screenshot */}
+            <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[80%] h-40 bg-[#7C5CFF] opacity-[0.06] blur-[80px] rounded-full" />
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* ─── LOGO BAR ─────────────────────────────── */}
+      <section className="py-16 border-t border-[#1F1F23]/40">
+        <ScrollReveal className="max-w-content mx-auto px-6">
+          <p className="text-center text-[11px] uppercase tracking-[0.2em] text-[#A1A1A8]/50 mb-8">
+            Works with your existing POS
+          </p>
+          <div className="flex items-center justify-center gap-12 opacity-30">
+            {logos.map(name => (
+              <span key={name} className="text-[#A1A1A8] text-sm font-medium tracking-wide">
+                {name}
+              </span>
+            ))}
+          </div>
+        </ScrollReveal>
+      </section>
+
+      {/* ─── BENTO FEATURES ───────────────────────── */}
+      <section className="py-24 border-t border-[#1F1F23]/40">
+        <div className="max-w-content mx-auto px-6">
+          <ScrollReveal className="text-center mb-16 relative">
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-violet" style={{ width: 400, height: 400, opacity: 0.08 }} />
+            <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight relative">
+              Your POS data,{' '}
+              <em className="font-serif italic font-normal text-[#7C5CFF]">decoded</em>
+            </h2>
+            <p className="mt-4 text-[#A1A1A8] max-w-md mx-auto text-[15px] leading-relaxed relative">
+              Meridian transforms raw transaction data into intelligence you can act on today.
+            </p>
+          </ScrollReveal>
+          <BentoGrid />
+        </div>
+      </section>
+
+      {/* ─── HOW IT WORKS ─────────────────────────── */}
+      <section className="py-24 border-t border-[#1F1F23]/40 relative overflow-hidden">
+        <div className="absolute top-0 right-0 aurora-glow aurora-cyan" style={{ width: 500, height: 500, opacity: 0.06 }} />
+        <div className="max-w-content mx-auto px-6 relative">
+          <ScrollReveal className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
+              From connected to{' '}
+              <em className="font-serif italic font-normal text-[#4FE3C1]">profitable</em>
+            </h2>
+            <p className="mt-4 text-[#A1A1A8] text-[15px]">Three steps. Under sixty seconds.</p>
+          </ScrollReveal>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+            {[
+              {
+                step: '01',
+                title: 'Connect Square',
+                desc: 'One-click OAuth authorization. No API keys, no config files, no engineering required.',
+              },
+              {
+                step: '02',
+                title: 'AI Analyzes',
+                desc: 'Our engine processes your entire transaction history and surfaces patterns humans miss.',
+              },
+              {
+                step: '03',
+                title: 'Capture Revenue',
+                desc: 'Get specific, dollar-denominated recommendations on pricing, staffing, and products.',
+              },
+            ].map((s, i) => (
+              <ScrollReveal key={s.step} delay={i * 0.12}>
+                <div className="relative group">
+                  {/* Step connector line */}
+                  {i < 2 && (
+                    <div className="hidden md:block absolute top-8 left-full w-6 h-px bg-[#1F1F23] z-0" />
+                  )}
+                  <div className="text-left">
+                    <span className="font-mono text-[11px] text-[#7C5CFF] tracking-wider">{s.step}</span>
+                    <h3 className="text-[#F5F5F7] font-semibold text-lg mt-2 mb-2">{s.title}</h3>
+                    <p className="text-[#A1A1A8] text-[13px] leading-relaxed">{s.desc}</p>
+                  </div>
+                </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* How it works */}
-      <section className="py-24 border-t border-slate-800/40 bg-slate-900/30">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-white">
-              Up and running in <span className="text-meridian-400">60 seconds</span>
+      {/* ─── METRICS ──────────────────────────────── */}
+      <section className="py-28 border-t border-[#1F1F23]/40 relative">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-violet" style={{ width: 700, height: 700, opacity: 0.08 }} />
+        <div className="max-w-content mx-auto px-6 relative">
+          <ScrollReveal className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
+              The numbers{' '}
+              <em className="font-serif italic font-normal text-[#7C5CFF]">speak</em>
             </h2>
+          </ScrollReveal>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-2xl mx-auto text-center">
+            {[
+              { end: 2340, prefix: '$', suffix: '/mo', label: 'Avg. revenue found per merchant' },
+              { end: 94, suffix: '%', label: 'Forecast accuracy rate' },
+              { end: 45, suffix: 's', label: 'Average setup time' },
+            ].map((stat, i) => (
+              <ScrollReveal key={stat.label} delay={i * 0.1}>
+                <div>
+                  <div className="text-4xl md:text-5xl font-bold text-[#F5F5F7]">
+                    <CountUp
+                      end={stat.end}
+                      prefix={stat.prefix || ''}
+                      suffix={stat.suffix}
+                      duration={2200}
+                    />
+                  </div>
+                  <p className="text-[#A1A1A8] text-[13px] mt-2">{stat.label}</p>
+                </div>
+              </ScrollReveal>
+            ))}
           </div>
+        </div>
+      </section>
+
+      {/* ─── TESTIMONIALS ─────────────────────────── */}
+      <section className="py-24 border-t border-[#1F1F23]/40">
+        <div className="max-w-content mx-auto px-6">
+          <ScrollReveal className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
+              Trusted by{' '}
+              <em className="font-serif italic font-normal text-[#4FE3C1]">operators</em>
+            </h2>
+          </ScrollReveal>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            {[
-              { step: '1', title: 'Connect Square', desc: 'One-click OAuth. No API keys, no config files. Just authorize and go.' },
-              { step: '2', title: 'AI Analyzes', desc: 'Our engine processes your transaction history and surfaces patterns humans miss.' },
-              { step: '3', title: 'Find Revenue', desc: 'Get actionable insights on pricing, staffing, products, and more — with dollar amounts attached.' },
-            ].map(s => (
-              <div key={s.step} className="text-center">
-                <div className="w-12 h-12 rounded-full bg-meridian-700/15 border border-meridian-700/25 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-meridian-400 font-bold text-lg">{s.step}</span>
-                </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{s.title}</h3>
-                <p className="text-sm text-slate-400">{s.desc}</p>
-              </div>
+            {testimonials.map((t, i) => (
+              <ScrollReveal key={t.author} delay={i * 0.1}>
+                <blockquote className="relative">
+                  <p className="text-[#F5F5F7] text-[15px] leading-relaxed font-light">
+                    "{t.quote}"
+                  </p>
+                  <footer className="mt-6">
+                    <p className="text-[#F5F5F7] text-[13px] font-medium">{t.author}</p>
+                    <p className="text-[#A1A1A8] text-[12px] mt-0.5">{t.role}</p>
+                  </footer>
+                </blockquote>
+              </ScrollReveal>
             ))}
           </div>
-
-          <div className="text-center mt-12">
-            <button
-              onClick={() => navigate('/onboarding')}
-              className="px-8 py-3.5 text-base font-semibold text-white bg-meridian-700 rounded-xl hover:bg-meridian-600 transition-all duration-200 shadow-lg shadow-meridian-700/25 inline-flex items-center gap-2"
-            >
-              Get Started Free <ArrowRight size={18} />
-            </button>
-          </div>
         </div>
       </section>
 
-      {/* Trust bar */}
-      <section className="py-16 border-t border-slate-800/40">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-8 text-sm text-slate-500">
-            <div className="flex items-center gap-2">
-              <Shield size={16} className="text-emerald-500" />
-              <span>Bank-level encryption</span>
+      {/* ─── CTA ──────────────────────────────────── */}
+      <section className="py-28 border-t border-[#1F1F23]/40 relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-violet" style={{ width: 500, height: 500, opacity: 0.1 }} />
+        <div className="max-w-content mx-auto px-6 text-center relative">
+          <ScrollReveal>
+            <h2 className="text-3xl md:text-5xl font-bold text-[#F5F5F7] tracking-tight text-balance max-w-2xl mx-auto leading-[1.1]">
+              Stop guessing.
+              <br />
+              Start{' '}
+              <em className="font-serif italic font-normal text-[#7C5CFF]">knowing.</em>
+            </h2>
+            <p className="mt-6 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
+              Connect your Square POS and see exactly where your revenue is hiding. Free to start, no credit card required.
+            </p>
+            <div className="mt-10">
+              <MagneticButton
+                onClick={() => navigate('/onboarding')}
+                className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#7C5CFF] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(124,92,255,0.35)] inline-flex items-center gap-2"
+              >
+                Get Started Free
+                <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+              </MagneticButton>
             </div>
-            <div className="flex items-center gap-2">
-              <Clock size={16} className="text-meridian-500" />
-              <span>Real-time sync</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Zap size={16} className="text-amber-500" />
-              <span>No credit card required</span>
-            </div>
-          </div>
+          </ScrollReveal>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-800/40 py-8">
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-meridian-700 flex items-center justify-center">
-              <Zap className="w-3 h-3 text-white" />
+      {/* ─── FOOTER ───────────────────────────────── */}
+      <footer className="border-t border-[#1F1F23]/40 py-8">
+        <div className="max-w-content mx-auto px-6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-[#7C5CFF] flex items-center justify-center">
+                  <Zap className="w-2.5 h-2.5 text-white" />
+                </div>
+                <span className="text-[13px] font-medium text-[#A1A1A8]">Meridian</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#4FE3C1]" />
+                All systems operational
+              </div>
             </div>
-            <span className="text-sm font-medium text-slate-400">Meridian</span>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4 text-[12px] text-[#A1A1A8]/60">
+                <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
+                <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
+              </div>
+              <p className="text-[11px] text-[#A1A1A8]/30">© 2026 Meridian</p>
+            </div>
           </div>
-          <p className="text-xs text-slate-600">© 2026 Meridian. All rights reserved.</p>
         </div>
       </footer>
     </div>
