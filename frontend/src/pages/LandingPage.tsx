@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, ChevronRight, Shield, Zap, Clock } from 'lucide-react'
+import { ArrowRight, ChevronRight, Shield, Clock } from 'lucide-react'
 
+import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import { TextRevealStagger } from '@/components/landing/TextReveal'
 import ScrollReveal from '@/components/landing/ScrollReveal'
@@ -70,10 +71,8 @@ export default function LandingPage() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-[#7C5CFF] flex items-center justify-center">
-              <Zap className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="font-semibold text-[15px] tracking-tight text-[#F5F5F7]">Meridian</span>
+            <MeridianEmblem size={28} />
+            <MeridianWordmark size="text-[15px]" />
           </div>
           <div className="flex items-center gap-2">
             <MagneticButton
@@ -404,10 +403,8 @@ export default function LandingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded bg-[#7C5CFF] flex items-center justify-center">
-                  <Zap className="w-2.5 h-2.5 text-white" />
-                </div>
-                <span className="text-[13px] font-medium text-[#A1A1A8]">Meridian</span>
+                <MeridianEmblem size={20} />
+                <MeridianWordmark size="text-[13px]" className="text-[#A1A1A8]" />
               </div>
               <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#4FE3C1]" />
@@ -419,7 +416,7 @@ export default function LandingPage() {
                 <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
                 <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
               </div>
-              <p className="text-[11px] text-[#A1A1A8]/30">© 2026 Meridian</p>
+              <p className="text-[11px] text-[#A1A1A8]/30">© 2026 <span className="font-serif italic">Meridian</span></p>
             </div>
           </div>
         </div>

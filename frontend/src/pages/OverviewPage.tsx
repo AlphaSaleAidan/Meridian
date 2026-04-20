@@ -11,6 +11,7 @@ import RevenueChart from '@/components/RevenueChart'
 import InsightCard from '@/components/InsightCard'
 import ConnectionBadge from '@/components/ConnectionBadge'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
+import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 
 const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
 
@@ -30,74 +31,84 @@ export default function OverviewPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Last 30 days • {data.days_with_data} days with data
-          </p>
+      <ScrollReveal variant="fadeUp">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Dashboard</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              Last 30 days • <span className="font-mono">{data.days_with_data}</span> days with data
+            </p>
+          </div>
+          <ConnectionBadge
+            status={data.connection.status}
+            provider={data.connection.provider}
+            lastSync={data.connection.last_sync_at}
+          />
         </div>
-        <ConnectionBadge
-          status={data.connection.status}
-          provider={data.connection.provider}
-          lastSync={data.connection.last_sync_at}
-        />
-      </div>
+      </ScrollReveal>
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          label="Total Revenue"
-          value={formatCentsCompact(data.revenue_cents_30d)}
-          change={formatPercent(data.revenue_change_pct)}
-          changeType={data.revenue_change_pct >= 0 ? 'positive' : 'negative'}
-          icon={DollarSign}
-          iconColor="text-emerald-400"
-        />
-        <StatCard
-          label="Transactions"
-          value={formatNumber(data.transaction_count_30d)}
-          icon={ShoppingCart}
-          iconColor="text-blue-400"
-        />
-        <StatCard
-          label="Avg Ticket"
-          value={formatCents(data.avg_ticket_cents)}
-          icon={Receipt}
-          iconColor="text-purple-400"
-        />
-        <StatCard
-          label="Revenue Trend"
-          value={formatPercent(data.revenue_change_pct)}
-          icon={data.revenue_change_pct >= 0 ? ArrowUpRight : ArrowDownRight}
-          iconColor={data.revenue_change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}
-          subtitle="vs prior 30 days"
-        />
-      </div>
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StaggerItem>
+          <StatCard
+            label="Total Revenue"
+            value={formatCentsCompact(data.revenue_cents_30d)}
+            change={formatPercent(data.revenue_change_pct)}
+            changeType={data.revenue_change_pct >= 0 ? 'positive' : 'negative'}
+            icon={DollarSign}
+            iconColor="text-[#4FE3C1]"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            label="Transactions"
+            value={formatNumber(data.transaction_count_30d)}
+            icon={ShoppingCart}
+            iconColor="text-[#7C5CFF]"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            label="Avg Ticket"
+            value={formatCents(data.avg_ticket_cents)}
+            icon={Receipt}
+            iconColor="text-[#7C5CFF]"
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            label="Revenue Trend"
+            value={formatPercent(data.revenue_change_pct)}
+            icon={data.revenue_change_pct >= 0 ? ArrowUpRight : ArrowDownRight}
+            iconColor={data.revenue_change_pct >= 0 ? 'text-[#4FE3C1]' : 'text-red-400'}
+            subtitle="vs prior 30 days"
+          />
+        </StaggerItem>
+      </StaggerContainer>
 
       {/* Money Left + Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">
-        <div className="lg:col-span-2">
+        <ScrollReveal variant="fadeUp" delay={0.1} className="lg:col-span-2">
           <MoneyLeftCard score={data.money_left_score} />
-        </div>
-        <div className="lg:col-span-3">
+        </ScrollReveal>
+        <ScrollReveal variant="fadeUp" delay={0.2} className="lg:col-span-3">
           {revenue.data ? (
             <RevenueChart data={revenue.data.daily} height={280} />
           ) : (
             <div className="card p-5 h-[280px] sm:h-[340px] flex items-center justify-center">
-              <p className="text-sm text-slate-500">Loading chart...</p>
+              <p className="text-sm text-[#A1A1A8]/50">Loading chart...</p>
             </div>
           )}
-        </div>
+        </ScrollReveal>
       </div>
 
       {/* Recent Insights */}
-      <div>
+      <ScrollReveal variant="fadeUp" delay={0.1}>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-white">Recent Insights</h2>
+          <h2 className="text-lg font-semibold text-[#F5F5F7]">Recent Insights</h2>
           <Link
             to={`${basePath}/insights`}
-            className="text-xs text-meridian-400 hover:text-meridian-300 font-medium"
+            className="text-xs text-[#7C5CFF] hover:text-[#9B82FF] font-medium transition-colors"
           >
             View all →
           </Link>
@@ -114,7 +125,7 @@ export default function OverviewPage() {
             description="Insights will appear here once your POS data is synced and analyzed."
           />
         )}
-      </div>
+      </ScrollReveal>
     </div>
   )
 }

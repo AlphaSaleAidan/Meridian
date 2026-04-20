@@ -161,6 +161,69 @@ export interface ConnectionInfo {
   created_at: string
 }
 
+// ─── Transaction Drill-Down Types ────────────────────────
+
+export interface TransactionLineItem {
+  id: string
+  product_name: string
+  sku: string | null
+  quantity: number
+  unit_price_cents: number
+  total_cents: number
+  category: string | null
+}
+
+export interface TransactionDetail {
+  id: string
+  created_at: string
+  total_cents: number
+  tip_cents: number
+  discount_cents: number
+  refund_cents: number
+  payment_method: string
+  items: TransactionLineItem[]
+}
+
+export interface DayTransactions {
+  date: string
+  transactions: TransactionDetail[]
+  summary: {
+    total_revenue_cents: number
+    transaction_count: number
+    unique_products: number
+    avg_ticket_cents: number
+    top_product: string
+    top_product_qty: number
+  }
+}
+
+// ─── Inventory Types ─────────────────────────────────────
+
+export interface InventoryItem {
+  id: string
+  product_name: string
+  sku: string
+  category: string
+  current_stock: number
+  unit: string
+  reorder_point: number
+  predicted_daily_usage: number
+  days_until_reorder: number | null
+  trend: 'rising' | 'falling' | 'stable'
+  trend_pct: number
+  last_updated: string
+}
+
+export interface InventoryData {
+  items: InventoryItem[]
+  total: number
+  alerts: {
+    low_stock: number
+    overstocked: number
+    trending_up: number
+  }
+}
+
 // ─── API Functions ───────────────────────────────────────
 
 function isDemo(orgId: string): boolean {
@@ -217,6 +280,18 @@ export const api = {
     isDemo(orgId)
       ? delay({ success: true })
       : apiFetch<any>(`/api/dashboard/insights/${insightId}/action`, { params: { org_id: orgId, action_status: status } }),
+
+  // Transaction drill-down: get individual SKUs/products sold on a specific day
+  dayTransactions: (orgId: string, date: string) =>
+    isDemo(orgId)
+      ? delay(demoData.dayTransactions(date))
+      : apiFetch<DayTransactions>('/api/dashboard/transactions/day', { params: { org_id: orgId, date } }),
+
+  // Inventory management
+  inventory: (orgId: string) =>
+    isDemo(orgId)
+      ? delay(demoData.inventory())
+      : apiFetch<InventoryData>('/api/dashboard/inventory', { params: { org_id: orgId } }),
 
   // OAuth URL for connecting Square
   squareAuthorize: (orgId: string) =>

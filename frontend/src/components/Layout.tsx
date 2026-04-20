@@ -5,19 +5,21 @@ import {
   LayoutDashboard,
   TrendingUp,
   Package,
+  Layers,
   Lightbulb,
   LineChart,
   Bell,
   Settings,
-  Zap,
   Menu,
   X,
 } from 'lucide-react'
+import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 
 const navItems = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
   { path: 'revenue', icon: TrendingUp, label: 'Revenue' },
   { path: 'products', icon: Package, label: 'Products' },
+  { path: 'inventory', icon: Layers, label: 'Inventory' },
   { path: 'insights', icon: Lightbulb, label: 'Insights' },
   { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
   { path: 'notifications', icon: Bell, label: 'Alerts' },
@@ -46,20 +48,17 @@ export default function Layout() {
   const sidebarContent = (
     <>
       {/* Logo */}
-      <div className="h-16 flex items-center gap-2.5 px-5 border-b border-slate-800/60 flex-shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-meridian-700 flex items-center justify-center">
-          <Zap className="w-4 h-4 text-white" />
-        </div>
-        <span className="font-bold text-lg tracking-tight text-white">Meridian</span>
+      <div className="h-16 flex items-center gap-2.5 px-5 border-b border-[#1F1F23] flex-shrink-0">
+        <MeridianLogo size={32} showText textSize="text-lg" />
         {basePath === '/demo' && (
-          <span className="ml-auto text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+          <span className="ml-auto text-[10px] font-medium text-[#7C5CFF] bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 px-1.5 py-0.5 rounded">
             DEMO
           </span>
         )}
         {/* Close button (mobile only) */}
         <button
           onClick={() => setSidebarOpen(false)}
-          className="ml-auto lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors"
+          className="ml-auto lg:hidden p-1.5 rounded-lg text-[#A1A1A8] hover:text-white hover:bg-[#1F1F23] transition-colors"
           aria-label="Close menu"
         >
           <X size={18} />
@@ -67,7 +66,7 @@ export default function Layout() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+      <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ path, icon: Icon, label }) => {
           const to = path ? `${basePath}/${path}` : basePath
           return (
@@ -77,14 +76,14 @@ export default function Layout() {
               end={!path}
               className={({ isActive }) =>
                 clsx(
-                  'flex items-center gap-3 px-3 py-3 lg:py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
+                  'group flex items-center gap-3 px-3 py-3 lg:py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-meridian-700/15 text-meridian-400 border border-meridian-700/20'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
+                    ? 'bg-[#7C5CFF]/10 text-[#7C5CFF] border border-[#7C5CFF]/15'
+                    : 'text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23]/60 border border-transparent'
                 )
               }
             >
-              <Icon size={18} />
+              <Icon size={18} className="transition-transform duration-200 group-hover:scale-110" />
               {label}
             </NavLink>
           )
@@ -92,9 +91,9 @@ export default function Layout() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t border-slate-800/60 flex-shrink-0">
-        <div className="text-xs text-slate-500">
-          Meridian v0.2.0
+      <div className="p-4 border-t border-[#1F1F23] flex-shrink-0">
+        <div className="text-[11px] text-[#A1A1A8]/40 font-mono">
+          v0.2.0
         </div>
       </div>
     </>
@@ -103,14 +102,14 @@ export default function Layout() {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-[220px] flex-shrink-0 bg-slate-950 border-r border-slate-800/60 flex-col">
+      <aside className="hidden lg:flex w-[220px] flex-shrink-0 bg-[#0A0A0B] border-r border-[#1F1F23] flex-col">
         {sidebarContent}
       </aside>
 
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -118,7 +117,7 @@ export default function Layout() {
       {/* Mobile sidebar drawer */}
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-[260px] bg-slate-950 border-r border-slate-800/60 flex flex-col transition-transform duration-300 ease-out lg:hidden',
+          'fixed inset-y-0 left-0 z-50 w-[260px] bg-[#0A0A0B] border-r border-[#1F1F23] flex flex-col transition-transform duration-300 ease-out lg:hidden',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -126,24 +125,20 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden bg-[#0A0A0B]">
         {/* Mobile top bar */}
-        <header className="lg:hidden h-14 flex items-center gap-3 px-4 border-b border-slate-800/60 bg-slate-950 flex-shrink-0">
+        <header className="lg:hidden h-14 flex items-center gap-3 px-4 border-b border-[#1F1F23] bg-[#0A0A0B] flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors -ml-1"
+            className="p-2 rounded-lg text-[#A1A1A8] hover:text-white hover:bg-[#1F1F23] transition-colors -ml-1"
             aria-label="Open menu"
           >
             <Menu size={20} />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-meridian-700 flex items-center justify-center">
-              <Zap className="w-3 h-3 text-white" />
-            </div>
-            <span className="font-semibold text-sm text-white">Meridian</span>
-          </div>
+          <MeridianEmblem size={24} />
+          <MeridianWordmark size="text-sm" />
           {basePath === '/demo' && (
-            <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-medium text-[#7C5CFF] bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 px-1.5 py-0.5 rounded">
               DEMO
             </span>
           )}

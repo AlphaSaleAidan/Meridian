@@ -9,6 +9,8 @@ import type {
   Overview, MoneyLeftScore, DailyRevenue, WeeklyRevenue, RevenueData,
   HourlyData, ProductPerf, ProductsData, Insight, Forecast,
   Notification, ConnectionInfo,
+  DayTransactions, TransactionDetail, TransactionLineItem,
+  InventoryData, InventoryItem,
 } from './api'
 
 // ─── Helpers ────────────────────────────────────────────
@@ -515,6 +517,149 @@ function generateOverview(daily: DailyRevenue[]): Overview {
   }
 }
 
+// ─── Transaction Drill-Down ─────────────────────────────
+
+function generateDayTransactions(date: string): DayTransactions {
+  // Seed from date for consistency
+  const dateSeed = date.split('-').reduce((a, b) => a + parseInt(b), 0)
+  let localSeed = dateSeed * 16807
+
+  function lr() {
+    localSeed = (localSeed * 16807) % 2147483647
+    return (localSeed - 1) / 2147483646
+  }
+
+  function lrRange(min: number, max: number) {
+    return Math.floor(lr() * (max - min + 1)) + min
+  }
+
+  const paymentMethods = ['card', 'card', 'card', 'cash', 'apple_pay', 'google_pay']
+  const txCount = lrRange(80, 160)
+  const transactions: TransactionDetail[] = []
+  const productQtyCounts: Record<string, number> = {}
+
+  for (let t = 0; t < txCount; t++) {
+    const hour = lrRange(6, 19)
+    const minute = lrRange(0, 59)
+    const second = lrRange(0, 59)
+    const timestamp = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}Z`
+
+    const itemCount = lr() < 0.4 ? 1 : lr() < 0.75 ? 2 : 3
+    const items: TransactionLineItem[] = []
+    let txTotal = 0
+
+    const usedProducts = new Set<number>()
+    for (let j = 0; j < itemCount; j++) {
+      let pIdx: number
+      do {
+        pIdx = lrRange(0, PRODUCTS.length - 1)
+      } while (usedProducts.has(pIdx) && usedProducts.size < PRODUCTS.length)
+      usedProducts.add(pIdx)
+
+      const p = PRODUCTS[pIdx]
+      const qty = lr() < 0.8 ? 1 : 2
+      const itemTotal = p.price * qty
+      txTotal += itemTotal
+
+      productQtyCounts[p.name] = (productQtyCounts[p.name] || 0) + qty
+
+      items.push({
+        id: uuid(),
+        product_name: p.name,
+        sku: p.sku,
+        quantity: qty,
+        unit_price_cents: p.price,
+        total_cents: itemTotal,
+        category: p.category,
+      })
+    }
+
+    const hasTip = lr() < 0.35
+    const tipCents = hasTip ? lrRange(50, 300) : 0
+    const hasDiscount = lr() < 0.08
+    const discountCents = hasDiscount ? lrRange(100, 400) : 0
+    const hasRefund = lr() < 0.02
+    const refundCents = hasRefund ? txTotal : 0
+
+    transactions.push({
+      id: uuid(),
+      created_at: timestamp,
+      total_cents: txTotal - discountCents + tipCents,
+      tip_cents: tipCents,
+      discount_cents: discountCents,
+      refund_cents: refundCents,
+      payment_method: paymentMethods[lrRange(0, paymentMethods.length - 1)],
+      items,
+    })
+  }
+
+  // Sort by time
+  transactions.sort((a, b) => a.created_at.localeCompare(b.created_at))
+
+  const totalRev = transactions.reduce((s, t) => s + t.total_cents, 0)
+  const uniqueProducts = new Set(transactions.flatMap(t => t.items.map(i => i.product_name))).size
+
+  // Top product
+  let topProduct = ''
+  let topQty = 0
+  for (const [name, qty] of Object.entries(productQtyCounts)) {
+    if (qty > topQty) {
+      topProduct = name
+      topQty = qty
+    }
+  }
+
+  return {
+    date,
+    transactions,
+    summary: {
+      total_revenue_cents: totalRev,
+      transaction_count: txCount,
+      unique_products: uniqueProducts,
+      avg_ticket_cents: Math.floor(totalRev / txCount),
+      top_product: topProduct,
+      top_product_qty: topQty,
+    },
+  }
+}
+
+// ─── Inventory ──────────────────────────────────────────
+
+function generateInventory(): InventoryData {
+  const items: InventoryItem[] = PRODUCTS.map((p, i) => {
+    seed = 100 + i * 7
+    const dailyUsage = Math.floor(p.popularity * seededRandRange(8, 35))
+    const currentStock = seededRandRange(dailyUsage * 2, dailyUsage * 14)
+    const reorderPoint = Math.ceil(dailyUsage * 3) // 3 day buffer
+    const daysUntil = dailyUsage > 0 ? Math.max(0, Math.floor((currentStock - reorderPoint) / dailyUsage)) : null
+    const trendRoll = seededRand()
+    const trend = trendRoll < 0.3 ? 'rising' as const : trendRoll < 0.6 ? 'falling' as const : 'stable' as const
+    const trendPct = trend === 'rising' ? seededRandRange(5, 25) : trend === 'falling' ? -seededRandRange(5, 20) : seededRandRange(-3, 3)
+    const unit = p.category === 'drinks' ? 'servings' : 'units'
+
+    return {
+      id: uuid(),
+      product_name: p.name,
+      sku: p.sku,
+      category: p.category,
+      current_stock: currentStock,
+      unit,
+      reorder_point: reorderPoint,
+      predicted_daily_usage: dailyUsage,
+      days_until_reorder: daysUntil,
+      trend,
+      trend_pct: trendPct,
+      last_updated: hoursAgo(seededRandRange(1, 12)),
+    }
+  })
+
+  const lowStock = items.filter(i => i.days_until_reorder !== null && i.days_until_reorder <= 2).length
+  const overstocked = items.filter(i => i.current_stock > i.predicted_daily_usage * 12).length
+  const trendingUp = items.filter(i => i.trend === 'rising').length
+
+  return { items, total: items.length, alerts: { low_stock: lowStock, overstocked, trending_up: trendingUp } }
+}
+
 // ─── Public API ─────────────────────────────────────────
 
 const daily30 = generateDailyRevenue(30)
@@ -548,6 +693,10 @@ export const demoData = {
   },
 
   connection: () => generateConnection(),
+
+  dayTransactions: (date: string) => generateDayTransactions(date),
+
+  inventory: () => generateInventory(),
 
   weeklyReport: () => ({
     report: {

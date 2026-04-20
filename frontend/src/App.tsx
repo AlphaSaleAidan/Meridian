@@ -9,6 +9,7 @@ import InsightsPage from '@/pages/InsightsPage'
 import ForecastsPage from '@/pages/ForecastsPage'
 import NotificationsPage from '@/pages/NotificationsPage'
 import SettingsPage from '@/pages/SettingsPage'
+import InventoryPage from '@/pages/InventoryPage'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
         <Route index element={<OverviewPage />} />
         <Route path="revenue" element={<RevenuePage />} />
         <Route path="products" element={<ProductsPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
         <Route path="insights" element={<InsightsPage />} />
         <Route path="forecasts" element={<ForecastsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
@@ -33,6 +35,7 @@ export default function App() {
         <Route index element={<OverviewPage />} />
         <Route path="revenue" element={<RevenuePage />} />
         <Route path="products" element={<ProductsPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
         <Route path="insights" element={<InsightsPage />} />
         <Route path="forecasts" element={<ForecastsPage />} />
         <Route path="notifications" element={<NotificationsPage />} />

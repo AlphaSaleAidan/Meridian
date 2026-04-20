@@ -37,19 +37,26 @@
 }
 
 @layer components {
-  /* Dashboard cards (existing) */
+  /* ─── Premium Dashboard Cards ─────────────────── */
   .card {
-    @apply bg-slate-900/80 border border-slate-800/60 rounded-xl backdrop-blur-sm;
+    @apply bg-[#111113] border border-[#1F1F23] rounded-xl;
+    backdrop-filter: blur(8px);
   }
   .card-hover {
-    @apply card transition-all duration-200 hover:border-slate-700/80 hover:bg-slate-900;
+    @apply card transition-all duration-300;
+  }
+  .card-hover:hover {
+    @apply border-[#7C5CFF]/20 bg-[#141416];
+    box-shadow: 0 4px 24px rgba(124, 92, 255, 0.06), 0 0 0 1px rgba(124, 92, 255, 0.05);
   }
   .stat-value {
-    @apply text-2xl font-bold text-white tracking-tight;
+    @apply text-2xl font-bold text-[#F5F5F7] tracking-tight font-mono;
   }
   .stat-label {
-    @apply text-xs font-medium text-slate-400 uppercase tracking-wider;
+    @apply text-xs font-medium text-[#A1A1A8] uppercase tracking-wider;
   }
+
+  /* Badges */
   .badge {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
   }
@@ -63,19 +70,57 @@
     @apply badge bg-amber-500/10 text-amber-400 border border-amber-500/20;
   }
   .badge-blue {
-    @apply badge bg-blue-500/10 text-blue-400 border border-blue-500/20;
-  }
-  .glow-blue {
-    box-shadow: 0 0 20px rgba(20, 84, 225, 0.15), 0 0 60px rgba(20, 84, 225, 0.05);
+    @apply badge bg-[#7C5CFF]/10 text-[#7C5CFF] border border-[#7C5CFF]/20;
   }
 
-  /* Premium landing page components */
+  /* Glow effects */
+  .glow-violet {
+    box-shadow: 0 0 40px rgba(124, 92, 255, 0.15), 0 0 80px rgba(124, 92, 255, 0.05);
+  }
+  .glow-cyan {
+    box-shadow: 0 0 40px rgba(79, 227, 193, 0.15), 0 0 80px rgba(79, 227, 193, 0.05);
+  }
+  .glow-blue {
+    box-shadow: 0 0 20px rgba(124, 92, 255, 0.15), 0 0 60px rgba(124, 92, 255, 0.05);
+  }
+
+  /* Premium landing page surface */
   .pm-surface {
     @apply bg-[#111113] border border-[#1F1F23];
   }
 
-  .glow-violet {
-    box-shadow: 0 0 40px rgba(124, 92, 255, 0.15), 0 0 80px rgba(124, 92, 255, 0.05);
+  /* Period toggle buttons */
+  .period-toggle {
+    @apply flex gap-1 bg-[#111113] border border-[#1F1F23] rounded-lg p-1 self-start;
+  }
+  .period-btn {
+    @apply px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all duration-200;
+  }
+  .period-btn-active {
+    @apply period-btn bg-[#7C5CFF] text-white shadow-[0_0_12px_rgba(124,92,255,0.3)];
+  }
+  .period-btn-inactive {
+    @apply period-btn text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23];
+  }
+
+  /* Table styling */
+  .pm-table {
+    @apply w-full text-sm;
+  }
+  .pm-table thead tr {
+    @apply border-b border-[#1F1F23];
+  }
+  .pm-table th {
+    @apply px-4 sm:px-5 py-3 text-left text-xs font-medium text-[#A1A1A8] uppercase tracking-wider;
+  }
+  .pm-table tbody {
+    @apply divide-y divide-[#1F1F23]/50;
+  }
+  .pm-table tbody tr {
+    @apply transition-colors duration-150 hover:bg-[#7C5CFF]/[0.03];
+  }
+  .pm-table td {
+    @apply px-4 sm:px-5 py-3;
   }
 }
 

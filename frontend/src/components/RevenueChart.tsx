@@ -9,6 +9,14 @@ interface Props {
   height?: number
 }
 
+const tooltipStyle = {
+  backgroundColor: '#111113',
+  border: '1px solid #1F1F23',
+  borderRadius: '10px',
+  fontSize: '12px',
+  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+}
+
 export default function RevenueChart({ data, height = 300 }: Props) {
   const chartData = data.map(d => ({
     ...d,
@@ -18,52 +26,54 @@ export default function RevenueChart({ data, height = 300 }: Props) {
 
   return (
     <div className="card p-5">
-      <h3 className="text-sm font-semibold text-white mb-4">Revenue Trend</h3>
+      <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Revenue Trend</h3>
       <ResponsiveContainer width="100%" height={height}>
         <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#1454e1" stopOpacity={0.3} />
-              <stop offset="100%" stopColor="#1454e1" stopOpacity={0} />
+              <stop offset="0%" stopColor="#7C5CFF" stopOpacity={0.25} />
+              <stop offset="50%" stopColor="#7C5CFF" stopOpacity={0.08} />
+              <stop offset="100%" stopColor="#7C5CFF" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#1e293b"
+            stroke="#1F1F23"
             vertical={false}
           />
           <XAxis
             dataKey="date"
-            tick={{ fill: '#64748b', fontSize: 11 }}
+            tick={{ fill: '#A1A1A8', fontSize: 11, fontFamily: 'Geist Mono, monospace' }}
             axisLine={false}
             tickLine={false}
             interval="preserveStartEnd"
           />
           <YAxis
-            tick={{ fill: '#64748b', fontSize: 11 }}
+            tick={{ fill: '#A1A1A8', fontSize: 11, fontFamily: 'Geist Mono, monospace' }}
             axisLine={false}
             tickLine={false}
             tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`}
             width={50}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: '#0f172a',
-              border: '1px solid #1e293b',
-              borderRadius: '8px',
-              fontSize: '12px',
-            }}
-            labelStyle={{ color: '#94a3b8' }}
+            contentStyle={tooltipStyle}
+            labelStyle={{ color: '#A1A1A8' }}
             formatter={(value: number) => [formatCents(value * 100), 'Revenue']}
+            cursor={{ stroke: '#7C5CFF', strokeWidth: 1, strokeDasharray: '4 4' }}
           />
           <Area
             type="monotone"
             dataKey="revenue"
-            stroke="#1454e1"
+            stroke="#7C5CFF"
             strokeWidth={2}
             fill="url(#revenueGradient)"
             dot={false}
-            activeDot={{ r: 4, strokeWidth: 0, fill: '#338bff' }}
+            activeDot={{
+              r: 5,
+              fill: '#7C5CFF',
+              stroke: '#0A0A0B',
+              strokeWidth: 2,
+            }}
           />
         </AreaChart>
       </ResponsiveContainer>

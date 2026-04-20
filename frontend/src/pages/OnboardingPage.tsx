@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Zap, ArrowRight, ArrowLeft, CheckCircle2, Loader2,
+  ArrowRight, ArrowLeft, CheckCircle2, Loader2,
   Store, BarChart3, Lightbulb, Shield,
 } from 'lucide-react'
+import MeridianLogo, { MeridianWordmark } from '@/components/MeridianLogo'
 import { api } from '@/lib/api'
 
 type Step = 'welcome' | 'connect' | 'syncing' | 'ready'
@@ -56,19 +57,14 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
+    <div className="min-h-screen bg-[#0A0A0B] flex flex-col">
       {/* Header */}
-      <header className="border-b border-slate-800/40 bg-slate-950/80 backdrop-blur-xl">
+      <header className="border-b border-[#1F1F23] bg-[#0A0A0B]/80 backdrop-blur-xl">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-meridian-700 flex items-center justify-center">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-lg tracking-tight text-white">Meridian</span>
-          </div>
+          <MeridianLogo size={32} showText textSize="text-lg" />
           <button
             onClick={() => navigate('/landing')}
-            className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-1"
+            className="text-sm text-[#A1A1A8] hover:text-white transition-colors flex items-center gap-1"
           >
             <ArrowLeft size={14} /> Back
           </button>
@@ -76,9 +72,9 @@ export default function OnboardingPage() {
       </header>
 
       {/* Progress bar */}
-      <div className="h-1 bg-slate-800/60">
+      <div className="h-1 bg-[#1F1F23]">
         <div
-          className="h-full bg-meridian-700 transition-all duration-700 ease-out"
+          className="h-full bg-[#7C5CFF] transition-all duration-700 ease-out shadow-[0_0_12px_rgba(124,92,255,0.4)]"
           style={{
             width: step === 'welcome' ? '25%'
               : step === 'connect' ? '50%'
@@ -95,13 +91,13 @@ export default function OnboardingPage() {
           {/* Step 1: Welcome */}
           {step === 'welcome' && (
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-meridian-700/15 border border-meridian-700/25 flex items-center justify-center mx-auto mb-6">
-                <Store size={28} className="text-meridian-400" />
+              <div className="w-16 h-16 rounded-2xl bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center justify-center mx-auto mb-6">
+                <Store size={28} className="text-[#7C5CFF]" />
               </div>
-              <h1 className="text-3xl font-bold text-white mb-3">
-                Welcome to Meridian
+              <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
+                Welcome to <MeridianWordmark size="text-3xl" />
               </h1>
-              <p className="text-slate-400 mb-8 leading-relaxed">
+              <p className="text-[#A1A1A8] mb-8 leading-relaxed">
                 Let's get your POS data connected so our AI can start finding revenue opportunities for your business.
               </p>
 
@@ -111,42 +107,44 @@ export default function OnboardingPage() {
                   { icon: Lightbulb, text: 'Get AI insights on pricing, staffing & products' },
                   { icon: Shield, text: 'Bank-level security — we never store card data' },
                 ].map(item => (
-                  <div key={item.text} className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/60 border border-slate-800/40">
-                    <item.icon size={18} className="text-meridian-400 flex-shrink-0" />
-                    <span className="text-sm text-slate-300">{item.text}</span>
+                  <div key={item.text} className="flex items-center gap-3 p-3 rounded-lg bg-[#111113] border border-[#1F1F23]">
+                    <item.icon size={18} className="text-[#7C5CFF] flex-shrink-0" />
+                    <span className="text-sm text-[#A1A1A8]">{item.text}</span>
                   </div>
                 ))}
               </div>
 
               <button
                 onClick={() => setStep('connect')}
-                className="w-full py-3.5 text-base font-semibold text-white bg-meridian-700 rounded-xl hover:bg-meridian-600 transition-all duration-200 shadow-lg shadow-meridian-700/25 flex items-center justify-center gap-2"
+                className="w-full py-3.5 text-base font-semibold text-white bg-[#7C5CFF] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#7C5CFF]/25 flex items-center justify-center gap-2"
               >
                 Let's Go <ArrowRight size={18} />
               </button>
-              <p className="text-xs text-slate-600 mt-4">Takes less than 60 seconds</p>
+              <p className="text-xs text-[#A1A1A8]/30 mt-4">Takes less than 60 seconds</p>
             </div>
           )}
 
           {/* Step 2: Connect Square */}
           {step === 'connect' && (
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-slate-800/80 border border-slate-700/40 flex items-center justify-center mx-auto mb-6">
+              <div className="w-16 h-16 rounded-2xl bg-[#1F1F23] border border-[#2A2A30] flex items-center justify-center mx-auto mb-6">
                 {/* Square icon */}
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
                   <rect x="3" y="3" width="18" height="18" rx="3" fill="#fff"/>
-                  <rect x="7" y="7" width="10" height="10" rx="1.5" fill="#0f172a"/>
+                  <rect x="7" y="7" width="10" height="10" rx="1.5" fill="#0A0A0B"/>
                 </svg>
               </div>
-              <h1 className="text-3xl font-bold text-white mb-3">
+              <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
                 Connect Your Square
               </h1>
-              <p className="text-slate-400 mb-8 leading-relaxed">
+              <p className="text-[#A1A1A8] mb-8 leading-relaxed">
                 We'll securely connect to your Square account to import your transaction data. You can disconnect anytime.
               </p>
 
               <div className="card p-5 mb-6 text-left">
-                <h3 className="text-sm font-semibold text-white mb-3">Meridian will access:</h3>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-3">
+                  <MeridianWordmark size="text-sm" /> will access:
+                </h3>
                 <div className="space-y-2.5">
                   {[
                     'Transaction & payment history',
@@ -155,13 +153,13 @@ export default function OnboardingPage() {
                     'Location & business info',
                   ].map(item => (
                     <div key={item} className="flex items-center gap-2.5">
-                      <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
-                      <span className="text-sm text-slate-300">{item}</span>
+                      <CheckCircle2 size={14} className="text-[#4FE3C1] flex-shrink-0" />
+                      <span className="text-sm text-[#A1A1A8]">{item}</span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 pt-3 border-t border-slate-800/40">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                <div className="mt-4 pt-3 border-t border-[#1F1F23]">
+                  <div className="flex items-center gap-2 text-xs text-[#A1A1A8]/50">
                     <Shield size={12} />
                     We never store credit card numbers or sensitive payment data
                   </div>
@@ -181,7 +179,7 @@ export default function OnboardingPage() {
 
               <button
                 onClick={() => setStep('welcome')}
-                className="mt-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+                className="mt-3 text-sm text-[#A1A1A8]/50 hover:text-[#A1A1A8] transition-colors"
               >
                 ← Back
               </button>
@@ -191,25 +189,25 @@ export default function OnboardingPage() {
           {/* Step 3: Syncing */}
           {step === 'syncing' && (
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-meridian-700/15 border border-meridian-700/25 flex items-center justify-center mx-auto mb-6">
-                <Loader2 size={28} className="text-meridian-400 animate-spin" />
+              <div className="w-16 h-16 rounded-2xl bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center justify-center mx-auto mb-6">
+                <Loader2 size={28} className="text-[#7C5CFF] animate-spin" />
               </div>
-              <h1 className="text-3xl font-bold text-white mb-3">
+              <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
                 Analyzing Your Data
               </h1>
-              <p className="text-slate-400 mb-10">
+              <p className="text-[#A1A1A8] mb-10">
                 This usually takes about 30 seconds...
               </p>
 
               {/* Progress bar */}
               <div className="mb-4">
                 <div className="flex items-center justify-between text-xs mb-2">
-                  <span className="text-slate-400">{syncStage}</span>
-                  <span className="text-meridian-400 font-mono">{syncProgress}%</span>
+                  <span className="text-[#A1A1A8]">{syncStage}</span>
+                  <span className="text-[#7C5CFF] font-mono">{syncProgress}%</span>
                 </div>
-                <div className="h-2 bg-slate-800/80 rounded-full overflow-hidden">
+                <div className="h-2 bg-[#1F1F23] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-meridian-700 to-meridian-500 rounded-full transition-all duration-1000 ease-out"
+                    className="h-full bg-gradient-to-r from-[#7C5CFF] to-[#4FE3C1] rounded-full transition-all duration-1000 ease-out shadow-[0_0_16px_rgba(124,92,255,0.3)]"
                     style={{ width: `${syncProgress}%` }}
                   />
                 </div>
@@ -231,19 +229,19 @@ export default function OnboardingPage() {
                     <div
                       key={item.label}
                       className={`flex items-center gap-3 p-2.5 rounded-lg transition-all duration-500 ${
-                        done ? 'bg-emerald-500/5 border border-emerald-500/10' :
-                        active ? 'bg-slate-800/40 border border-slate-700/30' :
+                        done ? 'bg-[#4FE3C1]/5 border border-[#4FE3C1]/10' :
+                        active ? 'bg-[#111113] border border-[#1F1F23]' :
                         'border border-transparent opacity-40'
                       }`}
                     >
                       {done ? (
-                        <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+                        <CheckCircle2 size={16} className="text-[#4FE3C1] flex-shrink-0" />
                       ) : active ? (
-                        <Loader2 size={16} className="text-meridian-400 animate-spin flex-shrink-0" />
+                        <Loader2 size={16} className="text-[#7C5CFF] animate-spin flex-shrink-0" />
                       ) : (
-                        <div className="w-4 h-4 rounded-full border border-slate-600 flex-shrink-0" />
+                        <div className="w-4 h-4 rounded-full border border-[#1F1F23] flex-shrink-0" />
                       )}
-                      <span className={`text-sm ${done ? 'text-emerald-300' : active ? 'text-slate-300' : 'text-slate-500'}`}>
+                      <span className={`text-sm ${done ? 'text-[#4FE3C1]' : active ? 'text-[#A1A1A8]' : 'text-[#A1A1A8]/40'}`}>
                         {item.label}
                       </span>
                     </div>
@@ -256,39 +254,39 @@ export default function OnboardingPage() {
           {/* Step 4: Ready */}
           {step === 'ready' && (
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 size={28} className="text-emerald-400" />
+              <div className="w-16 h-16 rounded-2xl bg-[#4FE3C1]/10 border border-[#4FE3C1]/20 flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 size={28} className="text-[#4FE3C1]" />
               </div>
-              <h1 className="text-3xl font-bold text-white mb-3">
+              <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
                 You're All Set! 🎉
               </h1>
-              <p className="text-slate-400 mb-8 leading-relaxed">
-                We've analyzed 847 transactions and found <span className="text-emerald-400 font-semibold">$2,340/month</span> in revenue opportunities for your business.
+              <p className="text-[#A1A1A8] mb-8 leading-relaxed">
+                We've analyzed 847 transactions and found <span className="text-[#4FE3C1] font-semibold font-mono">$2,340/month</span> in revenue opportunities for your business.
               </p>
 
               {/* Quick preview stats */}
               <div className="grid grid-cols-3 gap-3 mb-8">
                 <div className="card p-4 text-center">
-                  <p className="text-lg font-bold text-white">$2,340</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Money Left</p>
+                  <p className="text-lg font-bold font-mono text-[#7C5CFF]">$2,340</p>
+                  <p className="text-xs text-[#A1A1A8]/50 mt-0.5">Money Left</p>
                 </div>
                 <div className="card p-4 text-center">
-                  <p className="text-lg font-bold text-white">8</p>
-                  <p className="text-xs text-slate-500 mt-0.5">AI Insights</p>
+                  <p className="text-lg font-bold font-mono text-[#F5F5F7]">8</p>
+                  <p className="text-xs text-[#A1A1A8]/50 mt-0.5">AI Insights</p>
                 </div>
                 <div className="card p-4 text-center">
-                  <p className="text-lg font-bold text-white">14</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Day Forecast</p>
+                  <p className="text-lg font-bold font-mono text-[#F5F5F7]">14</p>
+                  <p className="text-xs text-[#A1A1A8]/50 mt-0.5">Day Forecast</p>
                 </div>
               </div>
 
               <button
                 onClick={() => navigate('/demo')}
-                className="w-full py-3.5 text-base font-semibold text-white bg-meridian-700 rounded-xl hover:bg-meridian-600 transition-all duration-200 shadow-lg shadow-meridian-700/25 flex items-center justify-center gap-2"
+                className="w-full py-3.5 text-base font-semibold text-white bg-[#7C5CFF] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#7C5CFF]/25 flex items-center justify-center gap-2"
               >
                 Go to Dashboard <ArrowRight size={18} />
               </button>
-              <p className="text-xs text-slate-600 mt-4">
+              <p className="text-xs text-[#A1A1A8]/30 mt-4">
                 Your data syncs automatically every 15 minutes
               </p>
             </div>
