@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, ChevronRight, Shield, Clock } from 'lucide-react'
 
-import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import { TextRevealStagger } from '@/components/landing/TextReveal'
 import ScrollReveal from '@/components/landing/ScrollReveal'
@@ -70,10 +70,7 @@ export default function LandingPage() {
       {/* ─── NAV ──────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <MeridianEmblem size={28} />
-            <MeridianWordmark size="text-[15px]" />
-          </div>
+          <MeridianLogo size={28} showText showTagline={false} textSize="text-[15px]" />
           <div className="flex items-center gap-2">
             <MagneticButton
               onClick={() => navigate('/demo')}
@@ -83,7 +80,7 @@ export default function LandingPage() {
             </MagneticButton>
             <MagneticButton
               onClick={() => navigate('/onboarding')}
-              className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] bg-[#7C5CFF] rounded-md hover:bg-[#6B4FE0] transition-colors duration-200"
+              className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] bg-[#1A8FD6] rounded-md hover:bg-[#1574B8] transition-colors duration-200"
             >
               Get Started
             </MagneticButton>
@@ -99,13 +96,23 @@ export default function LandingPage() {
         </Suspense>
 
         {/* Aurora accents */}
-        <div className="absolute top-1/4 left-1/4 aurora-glow aurora-violet" />
-        <div className="absolute top-1/3 right-1/4 aurora-glow aurora-cyan" style={{ width: 400, height: 400 }} />
+        <div className="absolute top-1/4 left-1/4 aurora-glow aurora-blue" />
+        <div className="absolute top-1/3 right-1/4 aurora-glow aurora-teal" style={{ width: 400, height: 400 }} />
 
         <motion.div
           style={{ opacity: heroOpacity, y: heroY }}
           className="relative z-10 max-w-content mx-auto px-6 text-center"
         >
+          {/* Logo emblem — large hero version */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, ease: EASE, delay: 0.05 }}
+            className="flex justify-center mb-6"
+          >
+            <MeridianEmblem size={72} />
+          </motion.div>
+
           {/* Tag */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -113,8 +120,8 @@ export default function LandingPage() {
             transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
             className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#1F1F23] bg-[#111113]/80 text-[#A1A1A8] text-[11px] font-medium tracking-wide uppercase mb-8"
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4FE3C1] animate-pulse" />
-            POS Intelligence Platform
+            <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0] animate-pulse" />
+            AI POS Analytics · Profit Growth
           </motion.div>
 
           {/* Headline */}
@@ -123,7 +130,7 @@ export default function LandingPage() {
               {[
                 <span key="1">See the revenue you're</span>,
                 <span key="2">
-                  <em className="font-serif italic font-normal text-[#7C5CFF]">leaving behind</em>
+                  <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">leaving behind</em>
                 </span>,
               ]}
             </TextRevealStagger>
@@ -149,7 +156,7 @@ export default function LandingPage() {
           >
             <MagneticButton
               onClick={() => navigate('/onboarding')}
-              className="group px-6 py-3 text-[14px] font-medium text-white bg-[#7C5CFF] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(124,92,255,0.3)] flex items-center gap-2"
+              className="group px-6 py-3 text-[14px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(26,143,214,0.3)] flex items-center gap-2"
             >
               Connect Your Square
               <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
@@ -190,11 +197,11 @@ export default function LandingPage() {
                     ].map(s => (
                       <div key={s.label} className="rounded-lg bg-[#0A0A0B] border border-[#1F1F23] p-3">
                         <p className="text-[10px] text-[#A1A1A8]">{s.label}</p>
-                        <p className={`text-sm font-semibold font-mono mt-0.5 ${s.accent ? 'text-[#7C5CFF]' : 'text-[#F5F5F7]'}`}>
+                        <p className={`text-sm font-semibold font-mono mt-0.5 ${s.accent ? 'text-[#1A8FD6]' : 'text-[#F5F5F7]'}`}>
                           {s.value}
                         </p>
                         {s.change && (
-                          <p className="text-[9px] text-[#4FE3C1] mt-0.5">{s.change}</p>
+                          <p className="text-[9px] text-[#17C5B0] mt-0.5">{s.change}</p>
                         )}
                       </div>
                     ))}
@@ -210,8 +217,8 @@ export default function LandingPage() {
                           style={{
                             height: `${h}%`,
                             background: i >= 20
-                              ? 'rgba(124,92,255,0.3)'
-                              : 'rgba(124,92,255,0.15)',
+                              ? 'rgba(26,143,214,0.3)'
+                              : 'rgba(26,143,214,0.15)',
                           }}
                         />
                       )
@@ -221,7 +228,7 @@ export default function LandingPage() {
               </div>
             </div>
             {/* Glow under screenshot */}
-            <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[80%] h-40 bg-[#7C5CFF] opacity-[0.06] blur-[80px] rounded-full" />
+            <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[80%] h-40 bg-[#1A8FD6] opacity-[0.06] blur-[80px] rounded-full" />
           </motion.div>
         </motion.div>
       </section>
@@ -246,10 +253,10 @@ export default function LandingPage() {
       <section className="py-24 border-t border-[#1F1F23]/40">
         <div className="max-w-content mx-auto px-6">
           <ScrollReveal className="text-center mb-16 relative">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-violet" style={{ width: 400, height: 400, opacity: 0.08 }} />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-blue" style={{ width: 400, height: 400, opacity: 0.08 }} />
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight relative">
               Your POS data,{' '}
-              <em className="font-serif italic font-normal text-[#7C5CFF]">decoded</em>
+              <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">decoded</em>
             </h2>
             <p className="mt-4 text-[#A1A1A8] max-w-md mx-auto text-[15px] leading-relaxed relative">
               Meridian transforms raw transaction data into intelligence you can act on today.
@@ -261,12 +268,12 @@ export default function LandingPage() {
 
       {/* ─── HOW IT WORKS ─────────────────────────── */}
       <section className="py-24 border-t border-[#1F1F23]/40 relative overflow-hidden">
-        <div className="absolute top-0 right-0 aurora-glow aurora-cyan" style={{ width: 500, height: 500, opacity: 0.06 }} />
+        <div className="absolute top-0 right-0 aurora-glow aurora-teal" style={{ width: 500, height: 500, opacity: 0.06 }} />
         <div className="max-w-content mx-auto px-6 relative">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
               From connected to{' '}
-              <em className="font-serif italic font-normal text-[#4FE3C1]">profitable</em>
+              <em className="font-serif italic font-normal text-[#17C5B0]">profitable</em>
             </h2>
             <p className="mt-4 text-[#A1A1A8] text-[15px]">Three steps. Under sixty seconds.</p>
           </ScrollReveal>
@@ -296,7 +303,7 @@ export default function LandingPage() {
                     <div className="hidden md:block absolute top-8 left-full w-6 h-px bg-[#1F1F23] z-0" />
                   )}
                   <div className="text-left">
-                    <span className="font-mono text-[11px] text-[#7C5CFF] tracking-wider">{s.step}</span>
+                    <span className="font-mono text-[11px] text-[#1A8FD6] tracking-wider">{s.step}</span>
                     <h3 className="text-[#F5F5F7] font-semibold text-lg mt-2 mb-2">{s.title}</h3>
                     <p className="text-[#A1A1A8] text-[13px] leading-relaxed">{s.desc}</p>
                   </div>
@@ -309,12 +316,12 @@ export default function LandingPage() {
 
       {/* ─── METRICS ──────────────────────────────── */}
       <section className="py-28 border-t border-[#1F1F23]/40 relative">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-violet" style={{ width: 700, height: 700, opacity: 0.08 }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-blue" style={{ width: 700, height: 700, opacity: 0.08 }} />
         <div className="max-w-content mx-auto px-6 relative">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
               The numbers{' '}
-              <em className="font-serif italic font-normal text-[#7C5CFF]">speak</em>
+              <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">speak</em>
             </h2>
           </ScrollReveal>
 
@@ -348,7 +355,7 @@ export default function LandingPage() {
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
               Trusted by{' '}
-              <em className="font-serif italic font-normal text-[#4FE3C1]">operators</em>
+              <em className="font-serif italic font-normal text-[#17C5B0]">operators</em>
             </h2>
           </ScrollReveal>
 
@@ -372,14 +379,18 @@ export default function LandingPage() {
 
       {/* ─── CTA ──────────────────────────────────── */}
       <section className="py-28 border-t border-[#1F1F23]/40 relative overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-violet" style={{ width: 500, height: 500, opacity: 0.1 }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-blue" style={{ width: 500, height: 500, opacity: 0.1 }} />
         <div className="max-w-content mx-auto px-6 text-center relative">
           <ScrollReveal>
+            {/* Logo emblem above CTA */}
+            <div className="flex justify-center mb-8">
+              <MeridianEmblem size={48} />
+            </div>
             <h2 className="text-3xl md:text-5xl font-bold text-[#F5F5F7] tracking-tight text-balance max-w-2xl mx-auto leading-[1.1]">
               Stop guessing.
               <br />
               Start{' '}
-              <em className="font-serif italic font-normal text-[#7C5CFF]">knowing.</em>
+              <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">knowing.</em>
             </h2>
             <p className="mt-6 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
               Connect your Square POS and see exactly where your revenue is hiding. Free to start, no credit card required.
@@ -387,7 +398,7 @@ export default function LandingPage() {
             <div className="mt-10">
               <MagneticButton
                 onClick={() => navigate('/onboarding')}
-                className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#7C5CFF] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(124,92,255,0.35)] inline-flex items-center gap-2"
+                className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(26,143,214,0.35)] inline-flex items-center gap-2"
               >
                 Get Started Free
                 <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
@@ -402,12 +413,9 @@ export default function LandingPage() {
         <div className="max-w-content mx-auto px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <MeridianEmblem size={20} />
-                <MeridianWordmark size="text-[13px]" className="text-[#A1A1A8]" />
-              </div>
+              <MeridianLogo size={20} showText showTagline={false} textSize="text-[13px]" />
               <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#4FE3C1]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0]" />
                 All systems operational
               </div>
             </div>
@@ -416,7 +424,7 @@ export default function LandingPage() {
                 <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
                 <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
               </div>
-              <p className="text-[11px] text-[#A1A1A8]/30">© 2026 <span className="font-serif italic">Meridian</span></p>
+              <p className="text-[11px] text-[#A1A1A8]/30">© 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>
             </div>
           </div>
         </div>
