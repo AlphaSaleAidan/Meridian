@@ -31,7 +31,7 @@
 
   /* Selection color */
   ::selection {
-    background: rgba(124, 92, 255, 0.25);
+    background: rgba(26, 143, 214, 0.25);
     color: #F5F5F7;
   }
 }
@@ -46,8 +46,8 @@
     @apply card transition-all duration-300;
   }
   .card-hover:hover {
-    @apply border-[#7C5CFF]/20 bg-[#141416];
-    box-shadow: 0 4px 24px rgba(124, 92, 255, 0.06), 0 0 0 1px rgba(124, 92, 255, 0.05);
+    @apply border-[#1A8FD6]/20 bg-[#141416];
+    box-shadow: 0 4px 24px rgba(26, 143, 214, 0.06), 0 0 0 1px rgba(26, 143, 214, 0.05);
   }
   .stat-value {
     @apply text-2xl font-bold text-[#F5F5F7] tracking-tight font-mono;
@@ -70,18 +70,17 @@
     @apply badge bg-amber-500/10 text-amber-400 border border-amber-500/20;
   }
   .badge-blue {
-    @apply badge bg-[#7C5CFF]/10 text-[#7C5CFF] border border-[#7C5CFF]/20;
+    @apply badge bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/20;
   }
 
   /* Glow effects */
-  .glow-violet {
-    box-shadow: 0 0 40px rgba(124, 92, 255, 0.15), 0 0 80px rgba(124, 92, 255, 0.05);
-  }
-  .glow-cyan {
-    box-shadow: 0 0 40px rgba(79, 227, 193, 0.15), 0 0 80px rgba(79, 227, 193, 0.05);
-  }
+  .glow-violet,
   .glow-blue {
-    box-shadow: 0 0 20px rgba(124, 92, 255, 0.15), 0 0 60px rgba(124, 92, 255, 0.05);
+    box-shadow: 0 0 40px rgba(26, 143, 214, 0.15), 0 0 80px rgba(26, 143, 214, 0.05);
+  }
+  .glow-cyan,
+  .glow-teal {
+    box-shadow: 0 0 40px rgba(23, 197, 176, 0.15), 0 0 80px rgba(23, 197, 176, 0.05);
   }
 
   /* Premium landing page surface */
@@ -97,7 +96,7 @@
     @apply px-3 py-2 sm:py-1.5 text-xs font-medium rounded-md transition-all duration-200;
   }
   .period-btn-active {
-    @apply period-btn bg-[#7C5CFF] text-white shadow-[0_0_12px_rgba(124,92,255,0.3)];
+    @apply period-btn bg-[#1A8FD6] text-white shadow-[0_0_12px_rgba(26,143,214,0.3)];
   }
   .period-btn-inactive {
     @apply period-btn text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23];
@@ -117,7 +116,7 @@
     @apply divide-y divide-[#1F1F23]/50;
   }
   .pm-table tbody tr {
-    @apply transition-colors duration-150 hover:bg-[#7C5CFF]/[0.03];
+    @apply transition-colors duration-150 hover:bg-[#1A8FD6]/[0.03];
   }
   .pm-table td {
     @apply px-4 sm:px-5 py-3;
@@ -175,12 +174,14 @@
   pointer-events: none;
 }
 
-.aurora-violet {
-  background: radial-gradient(circle, #7C5CFF 0%, transparent 70%);
+.aurora-violet,
+.aurora-blue {
+  background: radial-gradient(circle, #1A8FD6 0%, transparent 70%);
 }
 
-.aurora-cyan {
-  background: radial-gradient(circle, #4FE3C1 0%, transparent 70%);
+.aurora-cyan,
+.aurora-teal {
+  background: radial-gradient(circle, #17C5B0 0%, transparent 70%);
 }
 
 /* ─── Animations ────────────────────────────────── */
