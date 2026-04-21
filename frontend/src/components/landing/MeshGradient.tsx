@@ -100,8 +100,8 @@ function MeshGradientScene() {
     () => ({
       uTime: { value: 0 },
       uColor1: { value: new THREE.Color('#0A0A0B') },
-      uColor2: { value: new THREE.Color('#1a1040') },
-      uColor3: { value: new THREE.Color('#0d2233') },
+      uColor2: { value: new THREE.Color('#0D2A4A') },
+      uColor3: { value: new THREE.Color('#0B3048') },
     }),
     []
   )
