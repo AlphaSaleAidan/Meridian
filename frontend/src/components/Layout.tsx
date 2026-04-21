@@ -51,7 +51,7 @@ export default function Layout() {
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-[#1F1F23] flex-shrink-0">
         <MeridianLogo size={32} showText textSize="text-lg" />
         {basePath === '/demo' && (
-          <span className="ml-auto text-[10px] font-medium text-[#7C5CFF] bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 px-1.5 py-0.5 rounded">
+          <span className="ml-auto text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 px-1.5 py-0.5 rounded">
             DEMO
           </span>
         )}
@@ -78,7 +78,7 @@ export default function Layout() {
                 clsx(
                   'group flex items-center gap-3 px-3 py-3 lg:py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
                   isActive
-                    ? 'bg-[#7C5CFF]/10 text-[#7C5CFF] border border-[#7C5CFF]/15'
+                    ? 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/15'
                     : 'text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23]/60 border border-transparent'
                 )
               }
@@ -138,7 +138,7 @@ export default function Layout() {
           <MeridianEmblem size={24} />
           <MeridianWordmark size="text-sm" />
           {basePath === '/demo' && (
-            <span className="text-[10px] font-medium text-[#7C5CFF] bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 px-1.5 py-0.5 rounded">
               DEMO
             </span>
           )}
