@@ -92,7 +92,7 @@ export default function OnboardingPage() {
       {/* Progress bar */}
       <div className="h-1 bg-[#1F1F23]">
         <div
-          className="h-full bg-[#7C5CFF] transition-all duration-700 ease-out shadow-[0_0_12px_rgba(124,92,255,0.4)]"
+          className="h-full bg-[#1A8FD6] transition-all duration-700 ease-out shadow-[0_0_12px_rgba(124,92,255,0.4)]"
           style={{
             width: step === 'welcome' ? '25%'
               : step === 'connect' ? '50%'
@@ -109,8 +109,8 @@ export default function OnboardingPage() {
           {/* Step 1: Welcome */}
           {step === 'welcome' && (
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center justify-center mx-auto mb-6">
-                <Store size={28} className="text-[#7C5CFF]" />
+              <div className="w-16 h-16 rounded-2xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center mx-auto mb-6">
+                <Store size={28} className="text-[#1A8FD6]" />
               </div>
               <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
                 Welcome to <MeridianWordmark size="text-3xl" />
@@ -126,7 +126,7 @@ export default function OnboardingPage() {
                   { icon: Shield, text: 'Bank-level security — we never store card data' },
                 ].map(item => (
                   <div key={item.text} className="flex items-center gap-3 p-3 rounded-lg bg-[#111113] border border-[#1F1F23]">
-                    <item.icon size={18} className="text-[#7C5CFF] flex-shrink-0" />
+                    <item.icon size={18} className="text-[#1A8FD6] flex-shrink-0" />
                     <span className="text-sm text-[#A1A1A8]">{item.text}</span>
                   </div>
                 ))}
@@ -134,7 +134,7 @@ export default function OnboardingPage() {
 
               <button
                 onClick={() => setStep('connect')}
-                className="w-full py-3.5 text-base font-semibold text-white bg-[#7C5CFF] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#7C5CFF]/25 flex items-center justify-center gap-2"
+                className="w-full py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
               >
                 Let's Go <ArrowRight size={18} />
               </button>
@@ -171,7 +171,7 @@ export default function OnboardingPage() {
                     'Location & business info',
                   ].map(item => (
                     <div key={item} className="flex items-center gap-2.5">
-                      <CheckCircle2 size={14} className="text-[#4FE3C1] flex-shrink-0" />
+                      <CheckCircle2 size={14} className="text-[#17C5B0] flex-shrink-0" />
                       <span className="text-sm text-[#A1A1A8]">{item}</span>
                     </div>
                   ))}
@@ -207,8 +207,8 @@ export default function OnboardingPage() {
           {/* Step 3: Syncing */}
           {step === 'syncing' && (
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center justify-center mx-auto mb-6">
-                <Loader2 size={28} className="text-[#7C5CFF] animate-spin" />
+              <div className="w-16 h-16 rounded-2xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center mx-auto mb-6">
+                <Loader2 size={28} className="text-[#1A8FD6] animate-spin" />
               </div>
               <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
                 Analyzing Your Data
@@ -221,11 +221,11 @@ export default function OnboardingPage() {
               <div className="mb-4">
                 <div className="flex items-center justify-between text-xs mb-2">
                   <span className="text-[#A1A1A8]">{syncStage}</span>
-                  <span className="text-[#7C5CFF] font-mono">{syncProgress}%</span>
+                  <span className="text-[#1A8FD6] font-mono">{syncProgress}%</span>
                 </div>
                 <div className="h-2 bg-[#1F1F23] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-[#7C5CFF] to-[#4FE3C1] rounded-full transition-all duration-1000 ease-out shadow-[0_0_16px_rgba(124,92,255,0.3)]"
+                    className="h-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] rounded-full transition-all duration-1000 ease-out shadow-[0_0_16px_rgba(124,92,255,0.3)]"
                     style={{ width: `${syncProgress}%` }}
                   />
                 </div>
@@ -247,19 +247,19 @@ export default function OnboardingPage() {
                     <div
                       key={item.label}
                       className={`flex items-center gap-3 p-2.5 rounded-lg transition-all duration-500 ${
-                        done ? 'bg-[#4FE3C1]/5 border border-[#4FE3C1]/10' :
+                        done ? 'bg-[#17C5B0]/5 border border-[#17C5B0]/10' :
                         active ? 'bg-[#111113] border border-[#1F1F23]' :
                         'border border-transparent opacity-40'
                       }`}
                     >
                       {done ? (
-                        <CheckCircle2 size={16} className="text-[#4FE3C1] flex-shrink-0" />
+                        <CheckCircle2 size={16} className="text-[#17C5B0] flex-shrink-0" />
                       ) : active ? (
-                        <Loader2 size={16} className="text-[#7C5CFF] animate-spin flex-shrink-0" />
+                        <Loader2 size={16} className="text-[#1A8FD6] animate-spin flex-shrink-0" />
                       ) : (
                         <div className="w-4 h-4 rounded-full border border-[#1F1F23] flex-shrink-0" />
                       )}
-                      <span className={`text-sm ${done ? 'text-[#4FE3C1]' : active ? 'text-[#A1A1A8]' : 'text-[#A1A1A8]/40'}`}>
+                      <span className={`text-sm ${done ? 'text-[#17C5B0]' : active ? 'text-[#A1A1A8]' : 'text-[#A1A1A8]/40'}`}>
                         {item.label}
                       </span>
                     </div>
@@ -272,20 +272,20 @@ export default function OnboardingPage() {
           {/* Step 4: Ready */}
           {step === 'ready' && (
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-[#4FE3C1]/10 border border-[#4FE3C1]/20 flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 size={28} className="text-[#4FE3C1]" />
+              <div className="w-16 h-16 rounded-2xl bg-[#17C5B0]/10 border border-[#17C5B0]/20 flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 size={28} className="text-[#17C5B0]" />
               </div>
               <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
                 You're All Set! 🎉
               </h1>
               <p className="text-[#A1A1A8] mb-8 leading-relaxed">
-                We've analyzed 847 transactions and found <span className="text-[#4FE3C1] font-semibold font-mono">$2,340/month</span> in revenue opportunities for your business.
+                We've analyzed 847 transactions and found <span className="text-[#17C5B0] font-semibold font-mono">$2,340/month</span> in revenue opportunities for your business.
               </p>
 
               {/* Quick preview stats */}
               <div className="grid grid-cols-3 gap-3 mb-8">
                 <div className="card p-4 text-center">
-                  <p className="text-lg font-bold font-mono text-[#7C5CFF]">$2,340</p>
+                  <p className="text-lg font-bold font-mono text-[#1A8FD6]">$2,340</p>
                   <p className="text-xs text-[#A1A1A8]/50 mt-0.5">Money Left</p>
                 </div>
                 <div className="card p-4 text-center">
@@ -300,7 +300,7 @@ export default function OnboardingPage() {
 
               <button
                 onClick={() => navigate('/demo')}
-                className="w-full py-3.5 text-base font-semibold text-white bg-[#7C5CFF] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#7C5CFF]/25 flex items-center justify-center gap-2"
+                className="w-full py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
               >
                 Go to Dashboard <ArrowRight size={18} />
               </button>
