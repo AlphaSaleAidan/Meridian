@@ -18,7 +18,7 @@ export default function StatCard({
   change,
   changeType = 'neutral',
   icon: Icon,
-  iconColor = 'text-[#7C5CFF]',
+  iconColor = 'text-[#1A8FD6]',
   subtitle,
 }: StatCardProps) {
   return (
@@ -33,7 +33,7 @@ export default function StatCard({
         </div>
         {Icon && (
           <div className={clsx(
-            'p-1.5 sm:p-2 rounded-lg bg-[#1F1F23]/60 flex-shrink-0 transition-all duration-300 group-hover:bg-[#7C5CFF]/10',
+            'p-1.5 sm:p-2 rounded-lg bg-[#1F1F23]/60 flex-shrink-0 transition-all duration-300 group-hover:bg-[#1A8FD6]/10',
             iconColor
           )}>
             <Icon size={16} className="sm:w-5 sm:h-5 transition-transform duration-300 group-hover:scale-110" />
@@ -44,7 +44,7 @@ export default function StatCard({
         <div className="mt-2 sm:mt-3 flex items-center gap-1.5">
           <span
             className={clsx('text-xs font-semibold font-mono', {
-              'text-[#4FE3C1]': changeType === 'positive',
+              'text-[#17C5B0]': changeType === 'positive',
               'text-red-400': changeType === 'negative',
               'text-[#A1A1A8]': changeType === 'neutral',
             })}
