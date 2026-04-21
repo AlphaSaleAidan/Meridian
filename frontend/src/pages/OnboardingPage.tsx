@@ -50,11 +50,29 @@ export default function OnboardingPage() {
   }, [step])
 
   const handleConnect = () => {
-    // In production, this would redirect to Square OAuth:
-    // window.location.href = api.squareAuthorize(orgId)
-    // For demo, simulate the flow:
-    setStep('syncing')
+    // Read org_id from URL params or default to 'demo'
+    const params = new URLSearchParams(window.location.search)
+    const orgId = params.get('org_id') || 'demo'
+
+    if (orgId === 'demo') {
+      // Demo mode — simulate the flow
+      setStep('syncing')
+    } else {
+      // Production — redirect to Square OAuth via the backend
+      window.location.href = api.squareAuthorize(orgId)
+    }
   }
+
+  // Handle return from Square OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('oauth') === 'success') {
+      setStep('syncing')
+    } else if (params.get('oauth') === 'denied') {
+      // Could show an error, for now stay on connect step
+      setStep('connect')
+    }
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col">
