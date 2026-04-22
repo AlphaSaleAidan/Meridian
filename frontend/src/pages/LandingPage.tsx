@@ -29,7 +29,7 @@ const testimonials = [
     role: 'GM, Eastside Kitchen',
   },
   {
-    quote: 'Setup took 45 seconds. I connected Square and had actionable insights before my espresso was ready.',
+    quote: 'Setup took 45 seconds. I connected my POS and had actionable insights before my espresso was ready.',
     author: 'Priya Patel',
     role: 'Founder, Chai & Co.',
   },
