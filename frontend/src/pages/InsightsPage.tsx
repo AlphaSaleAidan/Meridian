@@ -58,7 +58,7 @@ export default function InsightsPage() {
               className={clsx(
                 'px-3 py-2 sm:py-1.5 text-xs font-medium rounded-full transition-all duration-200 whitespace-nowrap border',
                 typeFilter === t.key
-                  ? 'bg-[#7C5CFF]/10 text-[#7C5CFF] border-[#7C5CFF]/20 shadow-[0_0_12px_rgba(124,92,255,0.1)]'
+                  ? 'bg-[#1A8FD6]/10 text-[#1A8FD6] border-[#1A8FD6]/20 shadow-[0_0_12px_rgba(124,92,255,0.1)]'
                   : 'text-[#A1A1A8] border-[#1F1F23] hover:text-[#F5F5F7] hover:border-[#2A2A30]'
               )}
             >
