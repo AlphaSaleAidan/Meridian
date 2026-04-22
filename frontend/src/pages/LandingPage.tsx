@@ -143,7 +143,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7, ease: EASE, delay: 0.55 }}
             className="mt-6 text-[#A1A1A8] text-lg max-w-xl mx-auto leading-relaxed"
           >
-            Connect your Square POS. Meridian's AI finds pricing gaps, upsell
+            Connect your Square or Clover POS. Meridian's AI finds pricing gaps, upsell
             opportunities, and hidden revenue — with exact dollar amounts.
           </motion.p>
 
@@ -158,7 +158,7 @@ export default function LandingPage() {
               onClick={() => navigate('/onboarding')}
               className="group px-6 py-3 text-[14px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(26,143,214,0.3)] flex items-center gap-2"
             >
-              Connect Your Square
+              Get Started Free
               <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
             <MagneticButton
@@ -282,8 +282,8 @@ export default function LandingPage() {
             {[
               {
                 step: '01',
-                title: 'Connect Square',
-                desc: 'One-click OAuth authorization. No API keys, no config files, no engineering required.',
+                title: 'Connect Your POS',
+                desc: 'One-click Square or Clover authorization. No API keys, no config files, no engineering required.',
               },
               {
                 step: '02',
@@ -393,7 +393,7 @@ export default function LandingPage() {
               <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">knowing.</em>
             </h2>
             <p className="mt-6 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
-              Connect your Square POS and see exactly where your revenue is hiding. Free to start, no credit card required.
+              Connect your Square or Clover POS and see exactly where your revenue is hiding. First month free — start seeing results in 60 seconds.
             </p>
             <div className="mt-10">
               <MagneticButton
