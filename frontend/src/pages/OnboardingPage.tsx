@@ -655,9 +655,12 @@ export default function OnboardingPage() {
                   )}
                 </div>
 
-                {/* Square Checkout button */}
+                {/* Square Checkout button — monthly or weekly */}
                 <a
-                  href={import.meta.env.VITE_SQUARE_CHECKOUT_URL || 'https://square.link/u/0ScYp9tI'}
+                  href={billingCycle === 'weekly'
+                    ? (import.meta.env.VITE_SQUARE_CHECKOUT_WEEKLY_URL || 'https://square.link/u/JuktuGXs')
+                    : (import.meta.env.VITE_SQUARE_CHECKOUT_URL || 'https://square.link/u/0ScYp9tI')
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-full mt-5 py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#148ACF] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
