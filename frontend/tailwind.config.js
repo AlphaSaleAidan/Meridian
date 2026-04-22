@@ -5,27 +5,30 @@ export default {
     extend: {
       colors: {
         meridian: {
-          50: '#eef7ff',
-          100: '#d9edff',
-          200: '#bce0ff',
-          300: '#8ecdff',
-          400: '#59b0ff',
-          500: '#338bff',
-          600: '#1b6af5',
-          700: '#1454e1',
-          800: '#1744b6',
-          900: '#193c8f',
-          950: '#142657',
+          50: '#e6f5fc',
+          100: '#c0e5f8',
+          200: '#8dcef2',
+          300: '#53b4ea',
+          400: '#2da0e2',
+          500: '#1A8FD6',
+          600: '#1574B8',
+          700: '#0F5A94',
+          800: '#0B3D6B',
+          900: '#072A4D',
+          950: '#041A32',
         },
-        // Premium redesign tokens
+        // Premium redesign tokens – now blue-teal to match logo
         pm: {
           bg:      '#0A0A0B',
           surface: '#111113',
           border:  '#1F1F23',
           text:    '#F5F5F7',
           muted:   '#A1A1A8',
-          violet:  '#7C5CFF',
-          cyan:    '#4FE3C1',
+          blue:    '#1A8FD6',
+          teal:    '#17C5B0',
+          // Legacy aliases (kept for any remaining references)
+          violet:  '#1A8FD6',
+          cyan:    '#17C5B0',
         },
         slate: {
           850: '#172033',

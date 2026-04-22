@@ -19,8 +19,8 @@ type Filter = 'all' | 'low_stock' | 'overstocked' | 'trending_up'
 
 function TrendBadge({ trend, pct }: { trend: string; pct: number }) {
   const Icon = trend === 'rising' ? TrendingUp : trend === 'falling' ? TrendingDown : Minus
-  const color = trend === 'rising' ? 'text-[#4FE3C1]' : trend === 'falling' ? 'text-red-400' : 'text-[#A1A1A8]/50'
-  const bg = trend === 'rising' ? 'bg-[#4FE3C1]/10' : trend === 'falling' ? 'bg-red-400/10' : 'bg-[#1F1F23]'
+  const color = trend === 'rising' ? 'text-[#17C5B0]' : trend === 'falling' ? 'text-red-400' : 'text-[#A1A1A8]/50'
+  const bg = trend === 'rising' ? 'bg-[#17C5B0]/10' : trend === 'falling' ? 'bg-red-400/10' : 'bg-[#1F1F23]'
 
   return (
     <span className={clsx('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-medium', color, bg)}>
@@ -51,7 +51,7 @@ function StockBar({ current, reorder, max }: { current: number; reorder: number;
             ? 'linear-gradient(90deg, #ef4444, #f87171)'
             : isHigh
               ? 'linear-gradient(90deg, #f59e0b, #fbbf24)'
-              : 'linear-gradient(90deg, #7C5CFF, #4FE3C1)',
+              : 'linear-gradient(90deg, #1A8FD6, #17C5B0)',
         }}
       />
     </div>
@@ -134,7 +134,7 @@ export default function InventoryPage() {
             <input type="file" ref={fileRef} className="hidden" accept=".csv,.xlsx" onChange={handleUpload} />
             <button
               onClick={() => fileRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#A1A1A8] bg-[#111113] border border-[#1F1F23] rounded-lg hover:border-[#7C5CFF]/40 hover:text-[#F5F5F7] transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#A1A1A8] bg-[#111113] border border-[#1F1F23] rounded-lg hover:border-[#1A8FD6]/40 hover:text-[#F5F5F7] transition-all"
             >
               <Upload size={13} /> Upload Stock
             </button>
@@ -143,8 +143,8 @@ export default function InventoryPage() {
       </ScrollReveal>
 
       {showUpload && (
-        <div className="card p-3 border-[#4FE3C1]/20 bg-[#4FE3C1]/[0.03] flex items-center gap-2 animate-fade-in">
-          <span className="text-xs text-[#4FE3C1]">✓ Stock levels uploaded successfully. AI will recalculate predictions.</span>
+        <div className="card p-3 border-[#17C5B0]/20 bg-[#17C5B0]/[0.03] flex items-center gap-2 animate-fade-in">
+          <span className="text-xs text-[#17C5B0]">✓ Stock levels uploaded successfully. AI will recalculate predictions.</span>
         </div>
       )}
 
@@ -153,8 +153,8 @@ export default function InventoryPage() {
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#7C5CFF]/10 flex items-center justify-center">
-                <Layers size={16} className="text-[#7C5CFF]" />
+              <div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center">
+                <Layers size={16} className="text-[#1A8FD6]" />
               </div>
               <div>
                 <p className="stat-label">Total SKUs</p>
@@ -192,12 +192,12 @@ export default function InventoryPage() {
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#4FE3C1]/10 flex items-center justify-center">
-                <TrendingUp size={16} className="text-[#4FE3C1]" />
+              <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center">
+                <TrendingUp size={16} className="text-[#17C5B0]" />
               </div>
               <div>
                 <p className="stat-label">Trending Up</p>
-                <p className="text-lg font-bold text-[#4FE3C1] font-mono">{data.alerts.trending_up}</p>
+                <p className="text-lg font-bold text-[#17C5B0] font-mono">{data.alerts.trending_up}</p>
               </div>
             </div>
           </DashboardTiltCard>
@@ -235,7 +235,7 @@ export default function InventoryPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search products..."
-              className="w-full pl-8 pr-3 py-2 text-xs bg-[#111113] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:border-[#7C5CFF]/40 focus:outline-none transition-colors"
+              className="w-full pl-8 pr-3 py-2 text-xs bg-[#111113] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:border-[#1A8FD6]/40 focus:outline-none transition-colors"
             />
           </div>
         </div>
@@ -277,9 +277,9 @@ export default function InventoryPage() {
                         <div className="flex items-center gap-2.5">
                           <div className={clsx(
                             'w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0',
-                            item.category === 'drinks' ? 'bg-[#7C5CFF]/10' : 'bg-[#4FE3C1]/10'
+                            item.category === 'drinks' ? 'bg-[#1A8FD6]/10' : 'bg-[#17C5B0]/10'
                           )}>
-                            <Package size={12} className={item.category === 'drinks' ? 'text-[#7C5CFF]' : 'text-[#4FE3C1]'} />
+                            <Package size={12} className={item.category === 'drinks' ? 'text-[#1A8FD6]' : 'text-[#17C5B0]'} />
                           </div>
                           <div>
                             <p className="text-sm font-medium text-[#F5F5F7]">{item.product_name}</p>
@@ -340,10 +340,10 @@ export default function InventoryPage() {
 
       {/* AI Predictions Info */}
       <ScrollReveal variant="fadeUp" delay={0.2}>
-        <div className="card p-4 sm:p-5 border-[#7C5CFF]/10">
+        <div className="card p-4 sm:p-5 border-[#1A8FD6]/10">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#7C5CFF]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <TrendingUp size={16} className="text-[#7C5CFF]" />
+            <div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <TrendingUp size={16} className="text-[#1A8FD6]" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">AI-Predicted Optimal Levels</h3>

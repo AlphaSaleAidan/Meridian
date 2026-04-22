@@ -113,7 +113,7 @@ export default function RevenuePage() {
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <p className="stat-label">Tips</p>
-            <p className="text-lg sm:text-2xl font-bold text-[#4FE3C1] font-mono mt-1">{formatCentsCompact(totalTips)}</p>
+            <p className="text-lg sm:text-2xl font-bold text-[#17C5B0] font-mono mt-1">{formatCentsCompact(totalTips)}</p>
           </DashboardTiltCard>
         </StaggerItem>
       </StaggerContainer>
@@ -126,8 +126,8 @@ export default function RevenuePage() {
             <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#7C5CFF" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#7C5CFF" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#1A8FD6" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="#1A8FD6" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
@@ -135,9 +135,9 @@ export default function RevenuePage() {
               <YAxis tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
                 tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`} width={45} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v: number, name: string) => [formatCents(v * 100), name]}
-                cursor={{ stroke: '#7C5CFF', strokeWidth: 1, strokeDasharray: '4 4' }} />
-              <Area type="monotone" dataKey="revenue" stroke="#7C5CFF" strokeWidth={2} fill="url(#revGrad)" dot={false}
-                activeDot={{ r: 5, fill: '#7C5CFF', stroke: '#0A0A0B', strokeWidth: 2 }} name="Revenue" />
+                cursor={{ stroke: '#1A8FD6', strokeWidth: 1, strokeDasharray: '4 4' }} />
+              <Area type="monotone" dataKey="revenue" stroke="#1A8FD6" strokeWidth={2} fill="url(#revGrad)" dot={false}
+                activeDot={{ r: 5, fill: '#1A8FD6', stroke: '#0A0A0B', strokeWidth: 2 }} name="Revenue" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -148,7 +148,7 @@ export default function RevenuePage() {
         <div className="card p-4 sm:p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Daily Transactions</h3>
-            <span className="text-[10px] text-[#7C5CFF] uppercase tracking-wider font-medium">Click a bar to drill down</span>
+            <span className="text-[10px] text-[#1A8FD6] uppercase tracking-wider font-medium">Click a bar to drill down</span>
           </div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart
@@ -162,12 +162,12 @@ export default function RevenuePage() {
               <YAxis tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false} width={35} />
               <Tooltip
                 contentStyle={tooltipStyle}
-                cursor={{ fill: 'rgba(124, 92, 255, 0.06)' }}
+                cursor={{ fill: 'rgba(26, 143, 214, 0.06)' }}
                 formatter={(v: number, name: string) => [v, name]}
               />
               <Bar
                 dataKey="transactions"
-                fill="#4FE3C1"
+                fill="#17C5B0"
                 radius={[3, 3, 0, 0]}
                 name="Transactions"
                 fillOpacity={0.8}

@@ -56,7 +56,7 @@ export default function OverviewPage() {
             change={formatPercent(data.revenue_change_pct)}
             changeType={data.revenue_change_pct >= 0 ? 'positive' : 'negative'}
             icon={DollarSign}
-            iconColor="text-[#4FE3C1]"
+            iconColor="text-[#17C5B0]"
           />
         </StaggerItem>
         <StaggerItem>
@@ -64,7 +64,7 @@ export default function OverviewPage() {
             label="Transactions"
             value={formatNumber(data.transaction_count_30d)}
             icon={ShoppingCart}
-            iconColor="text-[#7C5CFF]"
+            iconColor="text-[#1A8FD6]"
           />
         </StaggerItem>
         <StaggerItem>
@@ -72,7 +72,7 @@ export default function OverviewPage() {
             label="Avg Ticket"
             value={formatCents(data.avg_ticket_cents)}
             icon={Receipt}
-            iconColor="text-[#7C5CFF]"
+            iconColor="text-[#1A8FD6]"
           />
         </StaggerItem>
         <StaggerItem>
@@ -80,7 +80,7 @@ export default function OverviewPage() {
             label="Revenue Trend"
             value={formatPercent(data.revenue_change_pct)}
             icon={data.revenue_change_pct >= 0 ? ArrowUpRight : ArrowDownRight}
-            iconColor={data.revenue_change_pct >= 0 ? 'text-[#4FE3C1]' : 'text-red-400'}
+            iconColor={data.revenue_change_pct >= 0 ? 'text-[#17C5B0]' : 'text-red-400'}
             subtitle="vs prior 30 days"
           />
         </StaggerItem>
@@ -108,7 +108,7 @@ export default function OverviewPage() {
           <h2 className="text-lg font-semibold text-[#F5F5F7]">Recent Insights</h2>
           <Link
             to={`${basePath}/insights`}
-            className="text-xs text-[#7C5CFF] hover:text-[#9B82FF] font-medium transition-colors"
+            className="text-xs text-[#1A8FD6] hover:text-[#9B82FF] font-medium transition-colors"
           >
             View all →
           </Link>

@@ -68,7 +68,7 @@ export default function ForecastsPage() {
         <StaggerItem>
           <DashboardTiltCard className="card p-4 sm:p-5">
             <p className="stat-label">Forecasted Revenue</p>
-            <p className="text-lg sm:text-2xl font-bold font-mono text-[#7C5CFF] mt-1">{formatCentsCompact(totalPredicted)}</p>
+            <p className="text-lg sm:text-2xl font-bold font-mono text-[#1A8FD6] mt-1">{formatCentsCompact(totalPredicted)}</p>
             <p className="text-xs text-[#A1A1A8]/50 mt-1">next forecast period</p>
           </DashboardTiltCard>
         </StaggerItem>
@@ -101,12 +101,12 @@ export default function ForecastsPage() {
               <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#7C5CFF" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#7C5CFF" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#1A8FD6" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#1A8FD6" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4FE3C1" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#4FE3C1" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#17C5B0" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="#17C5B0" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
@@ -117,13 +117,13 @@ export default function ForecastsPage() {
                   tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`} width={45} />
                 <Tooltip contentStyle={tooltipStyle}
                   formatter={(v: any, name: string) => [v != null ? formatCents(v * 100) : '—', name]}
-                  cursor={{ stroke: '#7C5CFF', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                <Area type="monotone" dataKey="actual" stroke="#7C5CFF" strokeWidth={2} fill="url(#actualGrad)" dot={false}
-                  activeDot={{ r: 4, fill: '#7C5CFF', stroke: '#0A0A0B', strokeWidth: 2 }} name="Actual" connectNulls={false} />
-                <Area type="monotone" dataKey="predicted" stroke="#4FE3C1" strokeWidth={2} strokeDasharray="6 3" fill="url(#forecastGrad)" dot={false}
-                  activeDot={{ r: 4, fill: '#4FE3C1', stroke: '#0A0A0B', strokeWidth: 2 }} name="Forecast" connectNulls={false} />
+                  cursor={{ stroke: '#1A8FD6', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                <Area type="monotone" dataKey="actual" stroke="#1A8FD6" strokeWidth={2} fill="url(#actualGrad)" dot={false}
+                  activeDot={{ r: 4, fill: '#1A8FD6', stroke: '#0A0A0B', strokeWidth: 2 }} name="Actual" connectNulls={false} />
+                <Area type="monotone" dataKey="predicted" stroke="#17C5B0" strokeWidth={2} strokeDasharray="6 3" fill="url(#forecastGrad)" dot={false}
+                  activeDot={{ r: 4, fill: '#17C5B0', stroke: '#0A0A0B', strokeWidth: 2 }} name="Forecast" connectNulls={false} />
                 {forecastData.some(d => d.upper != null) && (
-                  <Area type="monotone" dataKey="upper" stroke="none" fill="#4FE3C1" fillOpacity={0.04} dot={false} name="Upper Bound" connectNulls={false} />
+                  <Area type="monotone" dataKey="upper" stroke="none" fill="#17C5B0" fillOpacity={0.04} dot={false} name="Upper Bound" connectNulls={false} />
                 )}
               </AreaChart>
             </ResponsiveContainer>
