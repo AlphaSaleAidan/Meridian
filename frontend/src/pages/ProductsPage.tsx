@@ -87,8 +87,8 @@ export default function ProductsPage() {
                 <YAxis type="category" dataKey="name" tick={{ fill: '#A1A1A8', fontSize: 10 }} axisLine={false}
                   tickLine={false} width={110} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatCents(v * 100), 'Revenue']}
-                  cursor={{ fill: 'rgba(124, 92, 255, 0.04)' }} />
-                <Bar dataKey="revenue" fill="#7C5CFF" radius={[0, 4, 4, 0]} fillOpacity={0.8} />
+                  cursor={{ fill: 'rgba(26, 143, 214, 0.04)' }} />
+                <Bar dataKey="revenue" fill="#1A8FD6" radius={[0, 4, 4, 0]} fillOpacity={0.8} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -105,7 +105,7 @@ export default function ProductsPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search products..."
-              className="w-full pl-9 pr-4 py-2.5 sm:py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#7C5CFF]/40 focus:shadow-[0_0_0_3px_rgba(124,92,255,0.08)] transition-all"
+              className="w-full pl-9 pr-4 py-2.5 sm:py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/40 focus:shadow-[0_0_0_3px_rgba(124,92,255,0.08)] transition-all"
             />
           </div>
           <div className="period-toggle">
@@ -155,7 +155,7 @@ export default function ProductsPage() {
                     </div>
                   </div>
                   <div className="mt-3 h-1.5 bg-[#1F1F23] rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#4FE3C1] transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%` }} />
+                    <div className="h-full rounded-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                 </div>
               )
@@ -203,7 +203,7 @@ export default function ProductsPage() {
                         <td>
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-16 h-1.5 bg-[#1F1F23] rounded-full overflow-hidden">
-                              <div className="h-full rounded-full bg-gradient-to-r from-[#7C5CFF] to-[#4FE3C1]" style={{ width: `${Math.min(pct, 100)}%` }} />
+                              <div className="h-full rounded-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0]" style={{ width: `${Math.min(pct, 100)}%` }} />
                             </div>
                             <span className="text-xs font-mono text-[#A1A1A8] w-10 text-right">{pct.toFixed(1)}%</span>
                           </div>
