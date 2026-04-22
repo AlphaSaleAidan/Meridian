@@ -20,6 +20,23 @@ except ImportError:
                 os.environ.setdefault(key.strip(), value.strip())
 
 
+# ─── Base URL Detection ───────────────────────────────────
+# Resolves the canonical backend URL from env.
+# Priority: APP_BASE_URL > RAILWAY_PUBLIC_DOMAIN > fallback
+
+def _resolve_base_url() -> str:
+    """Determine the public-facing backend URL."""
+    explicit = os.getenv("APP_BASE_URL", "").rstrip("/")
+    if explicit:
+        return explicit
+    railway = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+    if railway:
+        return f"https://{railway}"
+    return "https://app.meridian.tips"
+
+_BASE_URL = _resolve_base_url()
+
+
 # ─── Square Configuration ─────────────────────────────────
 
 @dataclass(frozen=True)
@@ -39,7 +56,6 @@ class SquareConfig:
 
     @property
     def oauth_authorize_url(self) -> str:
-        # OAuth authorize always goes through production URL
         if self.environment == "production":
             return "https://connect.squareup.com/oauth2/authorize"
         return "https://connect.squareupsandbox.com/oauth2/authorize"
@@ -76,7 +92,7 @@ class CloverConfig:
     def redirect_uri(self) -> str:
         return os.getenv(
             "CLOVER_REDIRECT_URI",
-            "https://app.meridianpos.ai/api/clover/callback",
+            f"{_BASE_URL}/api/clover/callback",
         )
 
 
@@ -98,10 +114,10 @@ class SyncConfig:
 @dataclass(frozen=True)
 class AppConfig:
     """Application configuration."""
-    redirect_uri: str = os.getenv("SQUARE_REDIRECT_URI", "https://app.meridianpos.ai/api/square/callback")
-    webhook_url: str = os.getenv("SQUARE_WEBHOOK_URL", "https://app.meridianpos.ai/api/webhooks/square")
-    clover_redirect_uri: str = os.getenv("CLOVER_REDIRECT_URI", "https://app.meridianpos.ai/api/clover/callback")
-    clover_webhook_url: str = os.getenv("CLOVER_WEBHOOK_URL", "https://app.meridianpos.ai/api/webhooks/clover")
+    redirect_uri: str = os.getenv("SQUARE_REDIRECT_URI", f"{_BASE_URL}/api/square/callback")
+    webhook_url: str = os.getenv("SQUARE_WEBHOOK_URL", f"{_BASE_URL}/api/webhooks/square")
+    clover_redirect_uri: str = os.getenv("CLOVER_REDIRECT_URI", f"{_BASE_URL}/api/clover/callback")
+    clover_webhook_url: str = os.getenv("CLOVER_WEBHOOK_URL", f"{_BASE_URL}/api/webhooks/clover")
     database_url: str = os.getenv("DATABASE_URL", "")
     host: str = os.getenv("APP_HOST", "0.0.0.0")
     port: int = int(os.getenv("APP_PORT", "8000"))
