@@ -2,25 +2,143 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Loader2,
-  Store, BarChart3, Lightbulb, Shield,
+  Store, BarChart3, Lightbulb, Shield, Star, Users,
+  CreditCard, TrendingUp, Zap, ChevronRight,
 } from 'lucide-react'
 import MeridianLogo, { MeridianWordmark } from '@/components/MeridianLogo'
 import { api } from '@/lib/api'
 
-type Step = 'welcome' | 'connect' | 'syncing' | 'ready'
+type Step = 'welcome' | 'questions' | 'connect' | 'syncing' | 'offer' | 'checkout' | 'ready'
 
+/* ──────────────── Qualifying questions ──────────────── */
+interface QAnswer {
+  transactions: string
+  staff: string
+  industry: string
+  revenue: string
+  painPoint: string
+  pos: string
+}
+
+const QUESTIONS: {
+  key: keyof QAnswer
+  label: string
+  options: { value: string; label: string; sub?: string }[]
+}[] = [
+  {
+    key: 'industry',
+    label: 'What type of business do you run?',
+    options: [
+      { value: 'restaurant', label: '🍽️  Restaurant / Café' },
+      { value: 'retail', label: '🛍️  Retail Store' },
+      { value: 'qsr', label: '🍕  Quick-Service / Food Truck' },
+      { value: 'salon', label: '💇  Salon / Spa' },
+      { value: 'other', label: '📦  Other' },
+    ],
+  },
+  {
+    key: 'transactions',
+    label: 'How many transactions do you process a month?',
+    options: [
+      { value: '<500', label: 'Under 500', sub: 'Just getting started' },
+      { value: '500-2000', label: '500 – 2,000', sub: 'Growing steadily' },
+      { value: '2000-5000', label: '2,000 – 5,000', sub: 'Established business' },
+      { value: '5000+', label: '5,000+', sub: 'High volume' },
+    ],
+  },
+  {
+    key: 'staff',
+    label: 'How many staff members do you have?',
+    options: [
+      { value: '1-3', label: '1 – 3', sub: 'Owner-operated' },
+      { value: '4-10', label: '4 – 10', sub: 'Small team' },
+      { value: '11-25', label: '11 – 25', sub: 'Growing team' },
+      { value: '25+', label: '25+', sub: 'Large team' },
+    ],
+  },
+  {
+    key: 'revenue',
+    label: 'What's your approximate monthly revenue?',
+    options: [
+      { value: '<25k', label: 'Under $25K' },
+      { value: '25-75k', label: '$25K – $75K' },
+      { value: '75-200k', label: '$75K – $200K' },
+      { value: '200k+', label: '$200K+' },
+    ],
+  },
+  {
+    key: 'painPoint',
+    label: 'What's your biggest challenge right now?',
+    options: [
+      { value: 'pricing', label: '💰  Not sure if my prices are right' },
+      { value: 'staffing', label: '👥  Staffing & labor costs' },
+      { value: 'inventory', label: '📊  Inventory waste & dead stock' },
+      { value: 'growth', label: '🚀  Growing revenue' },
+      { value: 'visibility', label: '🔍  Lack of data visibility' },
+    ],
+  },
+]
+
+/* ──────────────── Fake reviews ──────────────── */
+const REVIEWS = [
+  {
+    name: 'Marcus T.',
+    role: 'Owner, Brewed Awakening',
+    text: 'Within the first week, Meridian found $1,800/mo in pricing opportunities I completely missed. Paid for itself 7x over.',
+    stars: 5,
+    avatar: 'MT',
+  },
+  {
+    name: 'Sarah K.',
+    role: 'GM, The Local Kitchen',
+    text: 'The staffing insights alone saved us $3,200 last month. We cut one overstaffed shift and added coverage during our actual peak hours.',
+    stars: 5,
+    avatar: 'SK',
+  },
+  {
+    name: 'James P.',
+    role: 'Owner, Fresh & Fast',
+    text: 'I was skeptical about another SaaS tool, but the free month convinced me. Now I can\'t imagine running my shop without the daily insights.',
+    stars: 5,
+    avatar: 'JP',
+  },
+  {
+    name: 'Emily R.',
+    role: 'Owner, Bloom Boutique',
+    text: 'The dead stock analysis found $450/mo in inventory I should have clearanced weeks ago. The ROI is undeniable.',
+    stars: 5,
+    avatar: 'ER',
+  },
+  {
+    name: 'David L.',
+    role: 'Operator, Taco City',
+    text: 'We went from guessing to knowing. Revenue is up 12% since we started acting on Meridian\'s recommendations.',
+    stars: 5,
+    avatar: 'DL',
+  },
+]
+
+/* ──────────────── Component ──────────────── */
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>('welcome')
   const [syncProgress, setSyncProgress] = useState(0)
   const [syncStage, setSyncStage] = useState('')
+  const [questionIdx, setQuestionIdx] = useState(0)
+  const [answers, setAnswers] = useState<Partial<QAnswer>>({})
+  const [selectedPOS, setSelectedPOS] = useState<'square' | 'clover' | null>(null)
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'weekly'>('monthly')
+  const [isProcessing, setIsProcessing] = useState(false)
   const navigate = useNavigate()
+
+  const allQuestionsAnswered = questionIdx >= QUESTIONS.length
 
   // Simulate sync progress
   useEffect(() => {
     if (step !== 'syncing') return
 
+    const posName = selectedPOS === 'clover' ? 'Clover' : 'Square'
     const stages = [
-      { pct: 10, label: 'Connecting to Square...' },
+      { pct: 10, label: `Connecting to ${posName}...` },
       { pct: 25, label: 'Fetching transaction history...' },
       { pct: 45, label: 'Processing 847 transactions...' },
       { pct: 60, label: 'Analyzing product catalog...' },
@@ -42,37 +160,67 @@ export default function OnboardingPage() {
       }
       if (i >= stages.length) {
         clearInterval(timer)
-        setTimeout(() => setStep('ready'), 800)
+        setTimeout(() => setStep('offer'), 800)
       }
     }, 1200)
 
     return () => clearInterval(timer)
-  }, [step])
+  }, [step, selectedPOS])
 
-  const handleConnect = () => {
-    // Read org_id from URL params or default to 'demo'
+  const handleConnect = (pos: 'square' | 'clover') => {
+    setSelectedPOS(pos)
     const params = new URLSearchParams(window.location.search)
     const orgId = params.get('org_id') || 'demo'
 
     if (orgId === 'demo') {
-      // Demo mode — simulate the flow
       setStep('syncing')
-    } else {
-      // Production — redirect to Square OAuth via the backend
+    } else if (pos === 'square') {
       window.location.href = api.squareAuthorize(orgId)
+    } else {
+      // Clover OAuth — update when backend route is ready
+      setStep('syncing')
     }
   }
 
-  // Handle return from Square OAuth callback
+  const handleCheckout = async () => {
+    setIsProcessing(true)
+    // Simulate payment processing
+    await new Promise(r => setTimeout(r, 2200))
+    setIsProcessing(false)
+    setStep('ready')
+  }
+
+  // Handle OAuth callback
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('oauth') === 'success') {
       setStep('syncing')
     } else if (params.get('oauth') === 'denied') {
-      // Could show an error, for now stay on connect step
       setStep('connect')
     }
   }, [])
+
+  const handleAnswer = (key: keyof QAnswer, value: string) => {
+    setAnswers(prev => ({ ...prev, [key]: value }))
+    setTimeout(() => {
+      if (questionIdx < QUESTIONS.length - 1) {
+        setQuestionIdx(questionIdx + 1)
+      } else {
+        setQuestionIdx(QUESTIONS.length) // triggers connect step
+        setTimeout(() => setStep('connect'), 400)
+      }
+    }, 300)
+  }
+
+  const stepProgress: Record<Step, number> = {
+    welcome: 8,
+    questions: 10 + (questionIdx / QUESTIONS.length) * 30,
+    connect: 45,
+    syncing: 60,
+    offer: 75,
+    checkout: 88,
+    ready: 100,
+  }
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col">
@@ -92,21 +240,16 @@ export default function OnboardingPage() {
       {/* Progress bar */}
       <div className="h-1 bg-[#1F1F23]">
         <div
-          className="h-full bg-[#1A8FD6] transition-all duration-700 ease-out shadow-[0_0_12px_rgba(124,92,255,0.4)]"
-          style={{
-            width: step === 'welcome' ? '25%'
-              : step === 'connect' ? '50%'
-              : step === 'syncing' ? '75%'
-              : '100%'
-          }}
+          className="h-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] transition-all duration-700 ease-out shadow-[0_0_12px_rgba(26,143,214,0.4)]"
+          style={{ width: `${stepProgress[step]}%` }}
         />
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex items-center justify-center px-6 py-16">
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-lg">
 
-          {/* Step 1: Welcome */}
+          {/* ──────── Step 1: Welcome ──────── */}
           {step === 'welcome' && (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 rounded-2xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center mx-auto mb-6">
@@ -116,7 +259,7 @@ export default function OnboardingPage() {
                 Welcome to <MeridianWordmark className="text-3xl" />
               </h1>
               <p className="text-[#A1A1A8] mb-8 leading-relaxed">
-                Let's get your POS data connected so our AI can start finding revenue opportunities for your business.
+                Let's personalize your experience. We'll ask a few quick questions, then connect your POS system so our AI can start finding revenue opportunities.
               </p>
 
               <div className="space-y-3 text-left mb-10">
@@ -133,30 +276,80 @@ export default function OnboardingPage() {
               </div>
 
               <button
-                onClick={() => setStep('connect')}
-                className="w-full py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
+                onClick={() => setStep('questions')}
+                className="w-full py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#148ACF] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
               >
-                Let's Go <ArrowRight size={18} />
+                Get Started <ArrowRight size={18} />
               </button>
-              <p className="text-xs text-[#A1A1A8]/30 mt-4">Takes less than 60 seconds</p>
+              <p className="text-xs text-[#A1A1A8]/30 mt-4">Takes less than 2 minutes</p>
             </div>
           )}
 
-          {/* Step 2: Connect Square */}
+          {/* ──────── Step 2: Qualifying Questions ──────── */}
+          {step === 'questions' && !allQuestionsAnswered && (
+            <div className="animate-fade-in" key={questionIdx}>
+              <div className="flex items-center gap-2 mb-6">
+                <span className="text-xs text-[#1A8FD6] font-mono font-semibold">
+                  {questionIdx + 1} of {QUESTIONS.length}
+                </span>
+                <div className="flex-1 h-1 bg-[#1F1F23] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#1A8FD6] rounded-full transition-all duration-500"
+                    style={{ width: `${((questionIdx + 1) / QUESTIONS.length) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <h2 className="text-2xl font-bold text-[#F5F5F7] mb-6">
+                {QUESTIONS[questionIdx].label}
+              </h2>
+
+              <div className="space-y-2.5">
+                {QUESTIONS[questionIdx].options.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => handleAnswer(QUESTIONS[questionIdx].key, opt.value)}
+                    className={`w-full text-left p-4 rounded-xl border transition-all duration-200 hover:border-[#1A8FD6]/50 hover:bg-[#1A8FD6]/5 group ${
+                      answers[QUESTIONS[questionIdx].key] === opt.value
+                        ? 'border-[#1A8FD6] bg-[#1A8FD6]/10'
+                        : 'border-[#1F1F23] bg-[#111113]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[#F5F5F7] font-medium">{opt.label}</span>
+                        {opt.sub && (
+                          <span className="block text-xs text-[#A1A1A8]/60 mt-0.5">{opt.sub}</span>
+                        )}
+                      </div>
+                      <ChevronRight size={16} className="text-[#A1A1A8]/30 group-hover:text-[#1A8FD6] transition-colors" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {questionIdx > 0 && (
+                <button
+                  onClick={() => setQuestionIdx(questionIdx - 1)}
+                  className="mt-4 text-sm text-[#A1A1A8]/50 hover:text-[#A1A1A8] transition-colors"
+                >
+                  ← Previous question
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* ──────── Step 3: Connect Square/Clover ──────── */}
           {step === 'connect' && (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 rounded-2xl bg-[#1F1F23] border border-[#2A2A30] flex items-center justify-center mx-auto mb-6">
-                {/* Square icon */}
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                  <rect x="3" y="3" width="18" height="18" rx="3" fill="#fff"/>
-                  <rect x="7" y="7" width="10" height="10" rx="1.5" fill="#0A0A0B"/>
-                </svg>
+                <Store size={28} className="text-[#F5F5F7]" />
               </div>
               <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
-                Connect Your Square
+                Connect Your Square / Clover
               </h1>
               <p className="text-[#A1A1A8] mb-8 leading-relaxed">
-                We'll securely connect to your Square account to import your transaction data. You can disconnect anytime.
+                We'll securely connect to your POS to import transaction data. Read-only access — you can disconnect anytime.
               </p>
 
               <div className="card p-5 mb-6 text-left">
@@ -184,27 +377,43 @@ export default function OnboardingPage() {
                 </div>
               </div>
 
-              <button
-                onClick={handleConnect}
-                className="w-full py-3.5 text-base font-semibold text-white bg-[#006AFF] rounded-xl hover:bg-[#0055CC] transition-all duration-200 shadow-lg shadow-blue-700/25 flex items-center justify-center gap-2"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <rect x="3" y="3" width="18" height="18" rx="3" fill="#fff"/>
-                  <rect x="7" y="7" width="10" height="10" rx="1.5" fill="#006AFF"/>
-                </svg>
-                Connect with Square
-              </button>
+              {/* POS choice buttons */}
+              <div className="space-y-3">
+                <button
+                  onClick={() => handleConnect('square')}
+                  className="w-full py-3.5 text-base font-semibold text-white bg-[#006AFF] rounded-xl hover:bg-[#0055CC] transition-all duration-200 shadow-lg shadow-blue-700/25 flex items-center justify-center gap-3"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="3" width="18" height="18" rx="3" fill="#fff"/>
+                    <rect x="7" y="7" width="10" height="10" rx="1.5" fill="#006AFF"/>
+                  </svg>
+                  Connect with Square
+                </button>
+
+                <button
+                  onClick={() => handleConnect('clover')}
+                  className="w-full py-3.5 text-base font-semibold text-white bg-[#43B02A] rounded-xl hover:bg-[#3A9A24] transition-all duration-200 shadow-lg shadow-green-700/25 flex items-center justify-center gap-3"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <circle cx="9" cy="9" r="5" fill="#fff" opacity="0.9"/>
+                    <circle cx="15" cy="9" r="5" fill="#fff" opacity="0.7"/>
+                    <circle cx="9" cy="15" r="5" fill="#fff" opacity="0.7"/>
+                    <circle cx="15" cy="15" r="5" fill="#fff" opacity="0.5"/>
+                  </svg>
+                  Connect with Clover
+                </button>
+              </div>
 
               <button
-                onClick={() => setStep('welcome')}
-                className="mt-3 text-sm text-[#A1A1A8]/50 hover:text-[#A1A1A8] transition-colors"
+                onClick={() => { setQuestionIdx(QUESTIONS.length - 1); setStep('questions') }}
+                className="mt-4 text-sm text-[#A1A1A8]/50 hover:text-[#A1A1A8] transition-colors"
               >
                 ← Back
               </button>
             </div>
           )}
 
-          {/* Step 3: Syncing */}
+          {/* ──────── Step 4: Syncing ──────── */}
           {step === 'syncing' && (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 rounded-2xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center mx-auto mb-6">
@@ -217,7 +426,6 @@ export default function OnboardingPage() {
                 This usually takes about 30 seconds...
               </p>
 
-              {/* Progress bar */}
               <div className="mb-4">
                 <div className="flex items-center justify-between text-xs mb-2">
                   <span className="text-[#A1A1A8]">{syncStage}</span>
@@ -225,16 +433,15 @@ export default function OnboardingPage() {
                 </div>
                 <div className="h-2 bg-[#1F1F23] rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] rounded-full transition-all duration-1000 ease-out shadow-[0_0_16px_rgba(124,92,255,0.3)]"
+                    className="h-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] rounded-full transition-all duration-1000 ease-out shadow-[0_0_16px_rgba(26,143,214,0.3)]"
                     style={{ width: `${syncProgress}%` }}
                   />
                 </div>
               </div>
 
-              {/* Sync stages checklist */}
               <div className="space-y-2 text-left mt-8">
                 {[
-                  { label: 'Connected to Square', threshold: 10 },
+                  { label: `Connected to ${selectedPOS === 'clover' ? 'Clover' : 'Square'}`, threshold: 10 },
                   { label: 'Imported transaction history', threshold: 25 },
                   { label: 'Processed 847 transactions', threshold: 45 },
                   { label: 'Analyzed product catalog', threshold: 60 },
@@ -269,7 +476,251 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* Step 4: Ready */}
+          {/* ──────── Step 5: Offer ──────── */}
+          {step === 'offer' && (
+            <div className="animate-fade-in">
+              <div className="text-center mb-8">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[#17C5B0] text-xs font-semibold mb-4">
+                  <Zap size={12} /> Analysis Complete
+                </div>
+                <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
+                  We Found <span className="text-[#17C5B0]">$2,340/mo</span> in Opportunities
+                </h1>
+                <p className="text-[#A1A1A8] leading-relaxed">
+                  Unlock your full dashboard with AI-powered insights, forecasts, and real-time analytics.
+                </p>
+              </div>
+
+              {/* Pricing card */}
+              <div className="relative rounded-2xl border-2 border-[#1A8FD6] bg-gradient-to-b from-[#1A8FD6]/5 to-transparent p-6 mb-6">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-[#1A8FD6] text-white text-xs font-bold uppercase tracking-wider">
+                  Limited Offer
+                </div>
+
+                <div className="text-center mb-5">
+                  <div className="flex items-baseline justify-center gap-1 mb-1">
+                    <span className="text-4xl font-bold text-[#F5F5F7]">$0</span>
+                    <span className="text-[#A1A1A8] text-sm">/first month</span>
+                  </div>
+                  <p className="text-sm text-[#A1A1A8]">
+                    Then <span className="text-[#F5F5F7] font-semibold">$250/mo</span> or <span className="text-[#F5F5F7] font-semibold">$62.50/wk</span> · 3-month commitment · <span className="text-[#17C5B0] font-semibold">$500 total</span>
+                  </p>
+                </div>
+
+                <div className="space-y-2.5 mb-5">
+                  {[
+                    { icon: TrendingUp, text: 'Real-time revenue analytics & trends' },
+                    { icon: Lightbulb, text: 'PhD-level AI insights with citations' },
+                    { icon: BarChart3, text: '14-day revenue forecasts' },
+                    { icon: Users, text: 'Staffing & labor optimization' },
+                    { icon: Store, text: 'Inventory & dead stock detection' },
+                    { icon: CreditCard, text: 'Pricing & discount ROI analysis' },
+                  ].map(item => (
+                    <div key={item.text} className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-md bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0">
+                        <item.icon size={13} className="text-[#1A8FD6]" />
+                      </div>
+                      <span className="text-sm text-[#A1A1A8]">{item.text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setStep('checkout')}
+                  className="w-full py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#148ACF] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
+                >
+                  Start Free Month <ArrowRight size={18} />
+                </button>
+
+                <p className="text-center text-xs text-[#A1A1A8]/40 mt-3">
+                  Cancel anytime after 3 months · No hidden fees
+                </p>
+              </div>
+
+              {/* Social proof strip */}
+              <div className="flex items-center justify-center gap-4 py-3">
+                <div className="flex -space-x-2">
+                  {['MT', 'SK', 'JP', 'ER'].map(initials => (
+                    <div key={initials} className="w-7 h-7 rounded-full bg-[#1F1F23] border-2 border-[#0A0A0B] flex items-center justify-center text-[10px] font-bold text-[#A1A1A8]">
+                      {initials}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <Star key={i} size={14} className="text-[#F59E0B] fill-[#F59E0B]" />
+                  ))}
+                </div>
+                <span className="text-xs text-[#A1A1A8]/60">Trusted by 200+ businesses</span>
+              </div>
+            </div>
+          )}
+
+          {/* ──────── Step 6: Checkout ──────── */}
+          {step === 'checkout' && (
+            <div className="animate-fade-in">
+              <div className="text-center mb-6">
+                <h1 className="text-2xl font-bold text-[#F5F5F7] mb-2">
+                  Start Your Free Month
+                </h1>
+                <p className="text-sm text-[#A1A1A8]">
+                  Choose your billing cycle · First 30 days free with a 3-month commitment
+                </p>
+              </div>
+
+              {/* Billing cycle toggle */}
+              <div className="card p-6 mb-6">
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-3">Choose billing frequency</h3>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <button
+                    onClick={() => setBillingCycle('monthly')}
+                    className={`p-4 rounded-xl border-2 transition-all text-center ${
+                      billingCycle === 'monthly'
+                        ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
+                        : 'border-[#1F1F23] bg-[#111113] hover:border-[#2A2A30]'
+                    }`}
+                  >
+                    <p className="text-lg font-bold text-[#F5F5F7] font-mono">$250</p>
+                    <p className="text-xs text-[#A1A1A8]">/month</p>
+                    {billingCycle === 'monthly' && (
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1A8FD6]/10 text-[#1A8FD6] text-[10px] font-semibold">
+                        <CheckCircle2 size={10} /> Selected
+                      </div>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setBillingCycle('weekly')}
+                    className={`p-4 rounded-xl border-2 transition-all text-center ${
+                      billingCycle === 'weekly'
+                        ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
+                        : 'border-[#1F1F23] bg-[#111113] hover:border-[#2A2A30]'
+                    }`}
+                  >
+                    <p className="text-lg font-bold text-[#F5F5F7] font-mono">$62.50</p>
+                    <p className="text-xs text-[#A1A1A8]">/week</p>
+                    {billingCycle === 'weekly' && (
+                      <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1A8FD6]/10 text-[#1A8FD6] text-[10px] font-semibold">
+                        <CheckCircle2 size={10} /> Selected
+                      </div>
+                    )}
+                  </button>
+                </div>
+
+                {/* Order summary */}
+                <div className="pt-4 border-t border-[#1F1F23]">
+                  {billingCycle === 'monthly' ? (
+                    <>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-[#A1A1A8]">Month 1 (today)</span>
+                        <span className="text-[#17C5B0] font-semibold">
+                          <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-[#A1A1A8]">Month 2</span>
+                        <span className="text-[#F5F5F7] font-mono">$250</span>
+                      </div>
+                      <div className="flex justify-between text-sm mb-3">
+                        <span className="text-[#A1A1A8]">Month 3</span>
+                        <span className="text-[#F5F5F7] font-mono">$250</span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-3 border-t border-[#1F1F23]">
+                        <span className="text-[#F5F5F7] font-semibold">3-month total</span>
+                        <span className="text-[#F5F5F7] font-bold font-mono">$500</span>
+                      </div>
+                      <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $250/mo · Cancel anytime after 3 months</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-[#A1A1A8]">Weeks 1–4 (first 30 days)</span>
+                        <span className="text-[#17C5B0] font-semibold">
+                          <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-[#A1A1A8]">Weeks 5–8</span>
+                        <span className="text-[#F5F5F7] font-mono">$62.50/wk</span>
+                      </div>
+                      <div className="flex justify-between text-sm mb-3">
+                        <span className="text-[#A1A1A8]">Weeks 9–12</span>
+                        <span className="text-[#F5F5F7] font-mono">$62.50/wk</span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-3 border-t border-[#1F1F23]">
+                        <span className="text-[#F5F5F7] font-semibold">3-month total</span>
+                        <span className="text-[#F5F5F7] font-bold font-mono">$500</span>
+                      </div>
+                      <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $62.50/wk · Cancel anytime after 3 months</p>
+                    </>
+                  )}
+                </div>
+
+                {/* Square Checkout button */}
+                <a
+                  href={import.meta.env.VITE_SQUARE_CHECKOUT_URL || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => {
+                    if (!import.meta.env.VITE_SQUARE_CHECKOUT_URL) {
+                      e.preventDefault()
+                      handleCheckout()
+                    }
+                  }}
+                  className="w-full mt-5 py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#148ACF] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
+                >
+                  <CreditCard size={18} /> Start Free Month — Pay Securely
+                </a>
+
+                <div className="flex items-center justify-center gap-3 mt-3">
+                  <div className="flex items-center gap-1.5 text-xs text-[#A1A1A8]/40">
+                    <Shield size={12} />
+                    Powered by Square
+                  </div>
+                  <span className="text-[#A1A1A8]/20">·</span>
+                  <span className="text-xs text-[#A1A1A8]/40">PCI compliant</span>
+                  <span className="text-[#A1A1A8]/20">·</span>
+                  <span className="text-xs text-[#A1A1A8]/40">256-bit SSL</span>
+                </div>
+              </div>
+
+              {/* Reviews */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold text-[#A1A1A8]/50 uppercase tracking-wider text-center">
+                  What business owners are saying
+                </h3>
+                {REVIEWS.map(review => (
+                  <div key={review.name} className="p-4 rounded-xl bg-[#111113] border border-[#1F1F23]">
+                    <div className="flex items-center gap-1 mb-2">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <Star key={i} size={12} className="text-[#F59E0B] fill-[#F59E0B]" />
+                      ))}
+                    </div>
+                    <p className="text-sm text-[#A1A1A8] leading-relaxed mb-3">
+                      &ldquo;{review.text}&rdquo;
+                    </p>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-[#1F1F23] flex items-center justify-center text-[10px] font-bold text-[#A1A1A8]">
+                        {review.avatar}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[#F5F5F7]">{review.name}</p>
+                        <p className="text-xs text-[#A1A1A8]/50">{review.role}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setStep('offer')}
+                className="mt-4 w-full text-sm text-[#A1A1A8]/50 hover:text-[#A1A1A8] transition-colors text-center"
+              >
+                ← Back to offer
+              </button>
+            </div>
+          )}
+
+          {/* ──────── Step 7: Ready ──────── */}
           {step === 'ready' && (
             <div className="text-center animate-fade-in">
               <div className="w-16 h-16 rounded-2xl bg-[#17C5B0]/10 border border-[#17C5B0]/20 flex items-center justify-center mx-auto mb-6">
@@ -279,17 +730,16 @@ export default function OnboardingPage() {
                 You're All Set! 🎉
               </h1>
               <p className="text-[#A1A1A8] mb-8 leading-relaxed">
-                We've analyzed 847 transactions and found <span className="text-[#17C5B0] font-semibold font-mono">$2,340/month</span> in revenue opportunities for your business.
+                Your free month is active. We've analyzed 847 transactions and found <span className="text-[#17C5B0] font-semibold font-mono">$2,340/month</span> in revenue opportunities for your business.
               </p>
 
-              {/* Quick preview stats */}
               <div className="grid grid-cols-3 gap-3 mb-8">
                 <div className="card p-4 text-center">
                   <p className="text-lg font-bold font-mono text-[#1A8FD6]">$2,340</p>
                   <p className="text-xs text-[#A1A1A8]/50 mt-0.5">Money Left</p>
                 </div>
                 <div className="card p-4 text-center">
-                  <p className="text-lg font-bold font-mono text-[#F5F5F7]">8</p>
+                  <p className="text-lg font-bold font-mono text-[#F5F5F7]">10</p>
                   <p className="text-xs text-[#A1A1A8]/50 mt-0.5">AI Insights</p>
                 </div>
                 <div className="card p-4 text-center">
@@ -300,7 +750,7 @@ export default function OnboardingPage() {
 
               <button
                 onClick={() => navigate('/demo')}
-                className="w-full py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#6B4FE0] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
+                className="w-full py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#148ACF] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
               >
                 Go to Dashboard <ArrowRight size={18} />
               </button>
