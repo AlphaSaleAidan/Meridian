@@ -127,6 +127,8 @@ export default function OnboardingPage() {
   const [answers, setAnswers] = useState<Partial<QAnswer>>({})
   const [selectedPOS, setSelectedPOS] = useState<'square' | 'clover' | null>(null)
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'weekly'>('monthly')
+  const [couponCode, setCouponCode] = useState('')
+  const [couponApplied, setCouponApplied] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const navigate = useNavigate()
 
@@ -612,9 +614,13 @@ export default function OnboardingPage() {
                     <>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Month 1 (today)</span>
-                        <span className="text-[#17C5B0] font-semibold">
-                          <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
-                        </span>
+                        {couponApplied ? (
+                          <span className="text-[#17C5B0] font-semibold">
+                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE ✨
+                          </span>
+                        ) : (
+                          <span className="text-[#F5F5F7] font-mono">$250</span>
+                        )}
                       </div>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Month 2</span>
@@ -626,7 +632,7 @@ export default function OnboardingPage() {
                       </div>
                       <div className="flex justify-between text-sm pt-3 border-t border-[#1F1F23]">
                         <span className="text-[#F5F5F7] font-semibold">3-month total</span>
-                        <span className="text-[#F5F5F7] font-bold font-mono">$500</span>
+                        <span className="text-[#F5F5F7] font-bold font-mono">{couponApplied ? '$500' : '$750'}</span>
                       </div>
                       <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $250/mo · Cancel anytime after 3 months</p>
                     </>
@@ -634,9 +640,13 @@ export default function OnboardingPage() {
                     <>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Weeks 1–4 (first 30 days)</span>
-                        <span className="text-[#17C5B0] font-semibold">
-                          <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
-                        </span>
+                        {couponApplied ? (
+                          <span className="text-[#17C5B0] font-semibold">
+                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE ✨
+                          </span>
+                        ) : (
+                          <span className="text-[#F5F5F7] font-mono">4 × $62.50</span>
+                        )}
                       </div>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Weeks 5–8</span>
@@ -648,10 +658,40 @@ export default function OnboardingPage() {
                       </div>
                       <div className="flex justify-between text-sm pt-3 border-t border-[#1F1F23]">
                         <span className="text-[#F5F5F7] font-semibold">3-month total</span>
-                        <span className="text-[#F5F5F7] font-bold font-mono">$500</span>
+                        <span className="text-[#F5F5F7] font-bold font-mono">{couponApplied ? '$500' : '$750'}</span>
                       </div>
                       <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $62.50/wk · Cancel anytime after 3 months</p>
                     </>
+                  )}
+                </div>
+
+                {/* Coupon code */}
+                <div className="mt-5 pt-4 border-t border-[#1F1F23]">
+                  <label className="block text-xs font-semibold text-[#A1A1A8] mb-1.5 uppercase tracking-wider">Have a promo code?</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={e => { setCouponCode(e.target.value.toUpperCase()); setCouponApplied(false) }}
+                      placeholder="Enter code"
+                      className="flex-1 px-4 py-2.5 rounded-xl bg-[#111113] border border-[#1F1F23] text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6] transition-colors text-sm font-mono"
+                    />
+                    <button
+                      onClick={() => {
+                        if (couponCode === 'FREEMONTH') setCouponApplied(true)
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-[#1F1F23] border border-[#2A2A30] text-sm font-semibold text-[#F5F5F7] hover:bg-[#2A2A30] transition-colors"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                  {couponApplied && (
+                    <div className="flex items-center gap-1.5 mt-2 text-xs text-[#17C5B0] font-medium">
+                      <CheckCircle2 size={12} /> First month free — code applied!
+                    </div>
+                  )}
+                  {couponCode && !couponApplied && couponCode !== 'FREEMONTH' && couponCode.length >= 5 && (
+                    <p className="mt-2 text-xs text-red-400">Invalid promo code</p>
                   )}
                 </div>
 
