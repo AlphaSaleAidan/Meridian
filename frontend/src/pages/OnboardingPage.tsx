@@ -657,15 +657,9 @@ export default function OnboardingPage() {
 
                 {/* Square Checkout button */}
                 <a
-                  href={import.meta.env.VITE_SQUARE_CHECKOUT_URL || '#'}
+                  href={import.meta.env.VITE_SQUARE_CHECKOUT_URL || 'https://square.link/u/0ScYp9tI'}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => {
-                    if (!import.meta.env.VITE_SQUARE_CHECKOUT_URL) {
-                      e.preventDefault()
-                      handleCheckout()
-                    }
-                  }}
                   className="w-full mt-5 py-3.5 text-base font-semibold text-white bg-[#1A8FD6] rounded-xl hover:bg-[#148ACF] transition-all duration-200 shadow-lg shadow-[#1A8FD6]/25 flex items-center justify-center gap-2"
                 >
                   <CreditCard size={18} /> Start Free Month — Pay Securely
