@@ -79,7 +79,7 @@ export default function OnboardingPage() {
       {/* Header */}
       <header className="border-b border-[#1F1F23] bg-[#0A0A0B]/80 backdrop-blur-xl">
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
-          <MeridianLogo size={32} showText textSize="text-lg" />
+          <MeridianLogo size={32} showWordmark />
           <button
             onClick={() => navigate('/landing')}
             className="text-sm text-[#A1A1A8] hover:text-white transition-colors flex items-center gap-1"
@@ -113,7 +113,7 @@ export default function OnboardingPage() {
                 <Store size={28} className="text-[#1A8FD6]" />
               </div>
               <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
-                Welcome to <MeridianWordmark size="text-3xl" />
+                Welcome to <MeridianWordmark className="text-3xl" />
               </h1>
               <p className="text-[#A1A1A8] mb-8 leading-relaxed">
                 Let's get your POS data connected so our AI can start finding revenue opportunities for your business.
@@ -161,7 +161,7 @@ export default function OnboardingPage() {
 
               <div className="card p-5 mb-6 text-left">
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-3">
-                  <MeridianWordmark size="text-sm" /> will access:
+                  <MeridianWordmark className="text-sm" /> will access:
                 </h3>
                 <div className="space-y-2.5">
                   {[
