@@ -19,7 +19,7 @@ const statusIcons: Record<string, typeof Wifi> = {
 }
 
 const statusColors: Record<string, string> = {
-  connected: 'text-[#4FE3C1]',
+  connected: 'text-[#17C5B0]',
   syncing: 'text-amber-400',
   error: 'text-red-400',
   pending: 'text-[#A1A1A8]',
@@ -53,7 +53,7 @@ export default function SettingsPage() {
             <a
               href={basePath === '/demo' ? '#' : `${API_URL}/api/square/authorize?org_id=${ORG_ID}`}
               onClick={basePath === '/demo' ? (e) => { e.preventDefault(); alert('Connect Square is disabled in demo mode. Sign up to connect your real POS!') } : undefined}
-              className="px-4 py-2.5 sm:py-2 text-xs font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all shadow-[0_0_16px_rgba(124,92,255,0.25)] hover:shadow-[0_0_24px_rgba(124,92,255,0.35)] inline-flex items-center gap-2"
+              className="px-4 py-2.5 sm:py-2 text-xs font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#6B4FE0] transition-all shadow-[0_0_16px_rgba(124,92,255,0.25)] hover:shadow-[0_0_24px_rgba(124,92,255,0.35)] inline-flex items-center gap-2"
             >
               <ExternalLink size={14} />
               Connect Square
