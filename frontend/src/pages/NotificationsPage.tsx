@@ -11,7 +11,7 @@ const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
 const priorityConfig: Record<string, { color: string; dot: string }> = {
   urgent: { color: 'text-red-400', dot: 'bg-red-400' },
   high: { color: 'text-amber-400', dot: 'bg-amber-400' },
-  normal: { color: 'text-[#7C5CFF]', dot: 'bg-[#7C5CFF]' },
+  normal: { color: 'text-[#1A8FD6]', dot: 'bg-[#1A8FD6]' },
   low: { color: 'text-[#A1A1A8]', dot: 'bg-[#A1A1A8]/50' },
 }
 
@@ -57,7 +57,7 @@ export default function NotificationsPage() {
                   key={n.id}
                   className={clsx(
                     'card-hover p-4 transition-all duration-200',
-                    !isRead && 'border-l-2 border-l-[#7C5CFF] bg-[#7C5CFF]/[0.02]'
+                    !isRead && 'border-l-2 border-l-[#1A8FD6] bg-[#1A8FD6]/[0.02]'
                   )}
                 >
                   <div className="flex items-start gap-3">
