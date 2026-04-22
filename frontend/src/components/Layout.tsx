@@ -49,7 +49,7 @@ export default function Layout() {
     <>
       {/* Logo */}
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-[#1F1F23] flex-shrink-0">
-        <MeridianLogo size={32} showText textSize="text-lg" />
+        <MeridianLogo size={32} showWordmark />
         {basePath === '/demo' && (
           <span className="ml-auto text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 px-1.5 py-0.5 rounded">
             DEMO
@@ -136,7 +136,7 @@ export default function Layout() {
             <Menu size={20} />
           </button>
           <MeridianEmblem size={24} />
-          <MeridianWordmark size="text-sm" />
+          <MeridianWordmark className="text-sm" />
           {basePath === '/demo' && (
             <span className="text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 px-1.5 py-0.5 rounded">
               DEMO
