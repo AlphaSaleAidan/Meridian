@@ -11,6 +11,7 @@ import NotificationsPage from '@/pages/NotificationsPage'
 import SettingsPage from '@/pages/SettingsPage'
 import InventoryPage from '@/pages/InventoryPage'
 import CareersPage from '@/pages/CareersPage'
+import PortalPage from '@/pages/PortalPage'
 
 export default function App() {
   return (
@@ -19,6 +20,8 @@ export default function App() {
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/careers" element={<CareersPage />} />
+      <Route path="/portal" element={<PortalPage />} />
+      <Route path="/portal/*" element={<PortalPage />} />
 
       {/* Dashboard (demo mode) */}
       <Route path="/demo" element={<Layout />}>
