@@ -4,6 +4,8 @@ import {
   ArrowRight, ArrowLeft, CheckCircle2, Loader2,
   Store, BarChart3, Lightbulb, Shield, Star, Users,
   CreditCard, TrendingUp, Zap, ChevronRight,
+  UtensilsCrossed, ShoppingBag, Pizza, Scissors, Package,
+  DollarSign, BarChart, Rocket, Search,
 } from 'lucide-react'
 import MeridianLogo, { MeridianWordmark } from '@/components/MeridianLogo'
 import { api } from '@/lib/api'
@@ -23,17 +25,17 @@ interface QAnswer {
 const QUESTIONS: {
   key: keyof QAnswer
   label: string
-  options: { value: string; label: string; sub?: string }[]
+  options: { value: string; label: string; sub?: string; icon?: React.ReactNode }[]
 }[] = [
   {
     key: 'industry',
     label: 'What type of business do you run?',
     options: [
-      { value: 'restaurant', label: '🍽️  Restaurant / Café' },
-      { value: 'retail', label: '🛍️  Retail Store' },
-      { value: 'qsr', label: '🍕  Quick-Service / Food Truck' },
-      { value: 'salon', label: '💇  Salon / Spa' },
-      { value: 'other', label: '📦  Other' },
+      { value: 'restaurant', label: 'Restaurant / Café', icon: <UtensilsCrossed size={18} /> },
+      { value: 'retail', label: 'Retail Store', icon: <ShoppingBag size={18} /> },
+      { value: 'qsr', label: 'Quick-Service / Food Truck', icon: <Pizza size={18} /> },
+      { value: 'salon', label: 'Salon / Spa', icon: <Scissors size={18} /> },
+      { value: 'other', label: 'Other', icon: <Package size={18} /> },
     ],
   },
   {
@@ -58,7 +60,7 @@ const QUESTIONS: {
   },
   {
     key: 'revenue',
-    label: "What's your approximate monthly revenue?",
+    label: 'What's your approximate monthly revenue?',
     options: [
       { value: '<25k', label: 'Under $25K' },
       { value: '25-75k', label: '$25K – $75K' },
@@ -68,13 +70,13 @@ const QUESTIONS: {
   },
   {
     key: 'painPoint',
-    label: "What's your biggest challenge right now?",
+    label: 'What's your biggest challenge right now?',
     options: [
-      { value: 'pricing', label: '💰  Not sure if my prices are right' },
-      { value: 'staffing', label: '👥  Staffing & labor costs' },
-      { value: 'inventory', label: '📊  Inventory waste & dead stock' },
-      { value: 'growth', label: '🚀  Growing revenue' },
-      { value: 'visibility', label: '🔍  Lack of data visibility' },
+      { value: 'pricing', label: 'Not sure if my prices are right', icon: <DollarSign size={18} /> },
+      { value: 'staffing', label: 'Staffing & labor costs', icon: <Users size={18} /> },
+      { value: 'inventory', label: 'Inventory waste & dead stock', icon: <BarChart size={18} /> },
+      { value: 'growth', label: 'Growing revenue', icon: <Rocket size={18} /> },
+      { value: 'visibility', label: 'Lack of data visibility', icon: <Search size={18} /> },
     ],
   },
 ]
@@ -125,7 +127,7 @@ export default function OnboardingPage() {
   const [syncStage, setSyncStage] = useState('')
   const [questionIdx, setQuestionIdx] = useState(0)
   const [answers, setAnswers] = useState<Partial<QAnswer>>({})
-  const [selectedPOS, setSelectedPOS] = useState<'square' | 'clover' | null>(null)
+  const [selectedPOS, setSelectedPOS] = useState<'square' | 'clover' | 'toast' | null>(null)
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'weekly'>('monthly')
   const [couponCode, setCouponCode] = useState('')
   const [couponApplied, setCouponApplied] = useState(false)
@@ -138,7 +140,7 @@ export default function OnboardingPage() {
   useEffect(() => {
     if (step !== 'syncing') return
 
-    const posName = selectedPOS === 'clover' ? 'Clover' : 'Square'
+    const posName = selectedPOS === 'clover' ? 'Clover' : selectedPOS === 'toast' ? 'Toast' : 'Square'
     const stages = [
       { pct: 10, label: `Connecting to ${posName}...` },
       { pct: 25, label: 'Fetching transaction history...' },
@@ -169,7 +171,7 @@ export default function OnboardingPage() {
     return () => clearInterval(timer)
   }, [step, selectedPOS])
 
-  const handleConnect = (pos: 'square' | 'clover') => {
+  const handleConnect = (pos: 'square' | 'clover' | 'toast') => {
     setSelectedPOS(pos)
     const params = new URLSearchParams(window.location.search)
     const orgId = params.get('org_id') || 'demo'
@@ -178,6 +180,9 @@ export default function OnboardingPage() {
       setStep('syncing')
     } else if (pos === 'square') {
       window.location.href = api.squareAuthorize(orgId)
+    } else if (pos === 'toast') {
+      // Toast OAuth — update when backend route is ready
+      setStep('syncing')
     } else {
       // Clover OAuth — update when backend route is ready
       setStep('syncing')
@@ -318,11 +323,14 @@ export default function OnboardingPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-[#F5F5F7] font-medium">{opt.label}</span>
-                        {opt.sub && (
-                          <span className="block text-xs text-[#A1A1A8]/60 mt-0.5">{opt.sub}</span>
-                        )}
+                      <div className="flex items-center gap-3">
+                        {opt.icon && <span className="text-[#1A8FD6] shrink-0">{opt.icon}</span>}
+                        <div>
+                          <span className="text-[#F5F5F7] font-medium">{opt.label}</span>
+                          {opt.sub && (
+                            <span className="block text-xs text-[#A1A1A8]/60 mt-0.5">{opt.sub}</span>
+                          )}
+                        </div>
                       </div>
                       <ChevronRight size={16} className="text-[#A1A1A8]/30 group-hover:text-[#1A8FD6] transition-colors" />
                     </div>
@@ -348,7 +356,7 @@ export default function OnboardingPage() {
                 <Store size={28} className="text-[#F5F5F7]" />
               </div>
               <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
-                Connect Your Square / Clover
+                Connect Your POS
               </h1>
               <p className="text-[#A1A1A8] mb-8 leading-relaxed">
                 We'll securely connect to your POS to import transaction data. Read-only access — you can disconnect anytime.
@@ -404,6 +412,17 @@ export default function OnboardingPage() {
                   </svg>
                   Connect with Clover
                 </button>
+
+                <button
+                  onClick={() => handleConnect('toast')}
+                  className="w-full py-3.5 text-base font-semibold text-white bg-[#FF6100] rounded-xl hover:bg-[#E55800] transition-all duration-200 shadow-lg shadow-orange-700/25 flex items-center justify-center gap-3"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <rect x="2" y="6" width="20" height="12" rx="3" fill="#fff"/>
+                    <path d="M7 10h10M7 14h6" stroke="#FF6100" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  Connect with Toast
+                </button>
               </div>
 
               <button
@@ -443,7 +462,7 @@ export default function OnboardingPage() {
 
               <div className="space-y-2 text-left mt-8">
                 {[
-                  { label: `Connected to ${selectedPOS === 'clover' ? 'Clover' : 'Square'}`, threshold: 10 },
+                  { label: `Connected to ${selectedPOS === 'clover' ? 'Clover' : selectedPOS === 'toast' ? 'Toast' : 'Square'}`, threshold: 10 },
                   { label: 'Imported transaction history', threshold: 25 },
                   { label: 'Processed 847 transactions', threshold: 45 },
                   { label: 'Analyzed product catalog', threshold: 60 },
@@ -616,7 +635,7 @@ export default function OnboardingPage() {
                         <span className="text-[#A1A1A8]">Month 1 (today)</span>
                         {couponApplied ? (
                           <span className="text-[#17C5B0] font-semibold">
-                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE ✨
+                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
                           </span>
                         ) : (
                           <span className="text-[#F5F5F7] font-mono">$250</span>
@@ -642,7 +661,7 @@ export default function OnboardingPage() {
                         <span className="text-[#A1A1A8]">Weeks 1–4 (first 30 days)</span>
                         {couponApplied ? (
                           <span className="text-[#17C5B0] font-semibold">
-                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE ✨
+                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
                           </span>
                         ) : (
                           <span className="text-[#F5F5F7] font-mono">4 × $62.50</span>
@@ -764,7 +783,7 @@ export default function OnboardingPage() {
                 <CheckCircle2 size={28} className="text-[#17C5B0]" />
               </div>
               <h1 className="text-3xl font-bold text-[#F5F5F7] mb-3">
-                You're All Set! 🎉
+                You're All Set!
               </h1>
               <p className="text-[#A1A1A8] mb-8 leading-relaxed">
                 Your free month is active. We've analyzed 847 transactions and found <span className="text-[#17C5B0] font-semibold font-mono">$2,340/month</span> in revenue opportunities for your business.
