@@ -13,6 +13,8 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 
 interface ApiOptions {
   params?: Record<string, string | number | boolean>
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  body?: Record<string, unknown>
 }
 
 async function apiFetch<T>(path: string, opts?: ApiOptions): Promise<T> {
@@ -26,10 +28,21 @@ async function apiFetch<T>(path: string, opts?: ApiOptions): Promise<T> {
     })
   }
 
-  const res = await fetch(url.toString(), {
+  const fetchOpts: RequestInit = {
+    method: opts?.method || 'GET',
     credentials: 'include',
     headers: { 'Accept': 'application/json' },
-  })
+  }
+
+  if (opts?.body) {
+    fetchOpts.headers = {
+      ...fetchOpts.headers,
+      'Content-Type': 'application/json',
+    }
+    fetchOpts.body = JSON.stringify(opts.body)
+  }
+
+  const res = await fetch(url.toString(), fetchOpts)
 
   if (!res.ok) {
     const body = await res.text()
@@ -39,6 +52,10 @@ async function apiFetch<T>(path: string, opts?: ApiOptions): Promise<T> {
   return res.json()
 }
 
+// Simulate network delay for realism
+function delay<T>(data: T, ms = 400): Promise<T> {
+  return new Promise(resolve => setTimeout(() => resolve(data), ms + Math.random() * 200))
+}
 // Simulate network delay for realism
 function delay<T>(data: T, ms = 400): Promise<T> {
   return new Promise(resolve => setTimeout(() => resolve(data), ms + Math.random() * 200))
@@ -279,7 +296,7 @@ export const api = {
   updateInsightAction: (insightId: string, orgId: string, status: string) =>
     isDemo(orgId)
       ? delay({ success: true })
-      : apiFetch<any>(`/api/dashboard/insights/${insightId}/action`, { params: { org_id: orgId, action_status: status } }),
+      : apiFetch<any>(`/api/dashboard/insights/${insightId}/action`, { method: 'PATCH', params: { org_id: orgId, action_status: status } }),
 
   // Transaction drill-down: get individual SKUs/products sold on a specific day
   dayTransactions: (orgId: string, date: string) =>
