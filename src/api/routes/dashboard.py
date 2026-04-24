@@ -436,3 +436,157 @@ async def get_weekly_report(
             "created_at": r.get("created_at"),
         },
     }
+
+
+# ─── Transaction Drill-Down ──────────────────────────────
+
+@router.get("/transactions/day")
+async def get_day_transactions(
+    org_id: str = Query(..., description="Organization ID"),
+    date: str = Query(..., description="Date in YYYY-MM-DD format"),
+    db=Depends(_get_db),
+):
+    """
+    Get individual transactions for a specific day.
+    Returns line-item-level detail for drill-down analysis.
+    """
+    transactions = await db.select(
+        "transactions",
+        filters={
+            "org_id": f"eq.{org_id}",
+            "created_at": f"gte.{date}T00:00:00Z",
+        },
+        order="created_at.asc",
+        limit=500,
+    )
+
+    # Filter to same-day only (Supabase gte doesn't have lte in same filter easily)
+    day_txns = [
+        t for t in transactions
+        if t.get("created_at", "")[:10] == date
+    ]
+
+    # Load line items for each transaction
+    tx_ids = [t["id"] for t in day_txns if t.get("id")]
+    line_items_by_tx: dict[str, list] = {}
+
+    if tx_ids:
+        # Batch fetch line items
+        for tx_id in tx_ids:
+            items = await db.select(
+                "transaction_line_items",
+                filters={
+                    "transaction_id": f"eq.{tx_id}",
+                },
+            )
+            line_items_by_tx[tx_id] = items
+
+    # Build response
+    result_txns = []
+    product_qty: dict[str, int] = {}
+
+    for t in day_txns:
+        tx_id = t.get("id", "")
+        items = line_items_by_tx.get(tx_id, [])
+
+        formatted_items = []
+        for item in items:
+            qty = item.get("quantity", 1) or 1
+            name = item.get("product_name", "Unknown")
+            product_qty[name] = product_qty.get(name, 0) + qty
+            formatted_items.append({
+                "id": item.get("id", ""),
+                "product_name": name,
+                "sku": item.get("sku"),
+                "quantity": qty,
+                "unit_price_cents": item.get("unit_price_cents", 0),
+                "total_cents": item.get("total_cents", 0),
+                "category": item.get("category"),
+            })
+
+        result_txns.append({
+            "id": tx_id,
+            "created_at": t.get("created_at", ""),
+            "total_cents": t.get("total_cents", 0) or 0,
+            "tip_cents": t.get("tip_cents", 0) or 0,
+            "discount_cents": t.get("discount_cents", 0) or 0,
+            "refund_cents": t.get("refund_cents", 0) or 0,
+            "payment_method": t.get("payment_method", "unknown"),
+            "items": formatted_items,
+        })
+
+    total_revenue = sum(t["total_cents"] for t in result_txns)
+    unique_products = len(product_qty)
+    top_product = max(product_qty, key=product_qty.get, default="") if product_qty else ""
+    top_qty = product_qty.get(top_product, 0)
+
+    return {
+        "date": date,
+        "transactions": result_txns,
+        "summary": {
+            "total_revenue_cents": total_revenue,
+            "transaction_count": len(result_txns),
+            "unique_products": unique_products,
+            "avg_ticket_cents": total_revenue // len(result_txns) if result_txns else 0,
+            "top_product": top_product,
+            "top_product_qty": top_qty,
+        },
+    }
+
+
+# ─── Inventory ────────────────────────────────────────────
+
+@router.get("/inventory")
+async def get_inventory(
+    org_id: str = Query(..., description="Organization ID"),
+    db=Depends(_get_db),
+):
+    """Current inventory levels with reorder predictions."""
+    inventory = await db.get_inventory_current(org_id)
+
+    items = []
+    low_stock = 0
+    overstocked = 0
+    trending_up = 0
+
+    for item in inventory:
+        daily_usage = item.get("predicted_daily_usage", 0) or 0
+        current = item.get("current_stock", 0) or 0
+        reorder = item.get("reorder_point", 0) or 0
+        trend = item.get("trend", "stable")
+
+        days_until = None
+        if daily_usage > 0:
+            days_until = max(0, int((current - reorder) / daily_usage))
+
+        if days_until is not None and days_until <= 2:
+            low_stock += 1
+        if daily_usage > 0 and current > daily_usage * 12:
+            overstocked += 1
+        if trend == "rising":
+            trending_up += 1
+
+        items.append({
+            "id": item.get("id", ""),
+            "product_name": item.get("product_name", ""),
+            "sku": item.get("sku", ""),
+            "category": item.get("category", ""),
+            "current_stock": current,
+            "unit": item.get("unit", "units"),
+            "reorder_point": reorder,
+            "predicted_daily_usage": daily_usage,
+            "days_until_reorder": days_until,
+            "trend": trend,
+            "trend_pct": item.get("trend_pct", 0) or 0,
+            "last_updated": item.get("last_updated", ""),
+        })
+
+    return {
+        "items": items,
+        "total": len(items),
+        "alerts": {
+            "low_stock": low_stock,
+            "overstocked": overstocked,
+            "trending_up": trending_up,
+        },
+    }
