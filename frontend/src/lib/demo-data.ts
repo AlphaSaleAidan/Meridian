@@ -448,18 +448,6 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
     confidence: 0.84,
   })
 
-  // Monthly forecast
-  forecasts.push({
-    id: uuid(),
-    type: 'monthly_revenue',
-    period_start: daysFromNow(1),
-    period_end: daysFromNow(30),
-    predicted_cents: 5600000,
-    lower_bound_cents: 4800000,
-    upper_bound_cents: 6400000,
-    confidence: 0.76,
-  })
-
   return { forecasts, total: forecasts.length }
 }
 
@@ -576,11 +564,11 @@ function generateOverview(daily: DailyRevenue[]): Overview {
     id: uuid(),
     total_score_cents: 234000,
     components: {
-      pricing_opportunity: { amount_cents: 52000, label: 'Pricing', description: 'Items underpriced vs market' },
-      upsell_potential: { amount_cents: 84000, label: 'Upselling', description: 'Cross-sell & upsell potential' },
-      waste_reduction: { amount_cents: 38000, label: 'Waste', description: 'Food waste & overstock savings' },
-      staffing_optimization: { amount_cents: 32000, label: 'Staffing', description: 'Labor cost optimization' },
-      gap_filling: { amount_cents: 28000, label: 'Gap Filling', description: 'Revenue during slow periods' },
+      underpriced_products: { amount_cents: 52000, label: 'Pricing', description: 'Items underpriced vs market' },
+      peak_hour_missed: { amount_cents: 84000, label: 'Peak Hours', description: 'Revenue lost from understaffed peak hours' },
+      dead_stock: { amount_cents: 38000, label: 'Dead Stock', description: 'Zero-velocity inventory holding costs' },
+      staffing_waste: { amount_cents: 32000, label: 'Staffing', description: 'Labor cost optimization' },
+      discount_leakage: { amount_cents: 28000, label: 'Discounts', description: 'Excessive discounting eroding margins' },
     },
     scored_at: hoursAgo(1),
   }
