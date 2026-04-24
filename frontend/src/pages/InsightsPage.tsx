@@ -18,6 +18,9 @@ const insightTypes = [
   { key: 'staffing', label: 'Staffing' },
   { key: 'anomaly', label: 'Anomalies' },
   { key: 'seasonal', label: 'Seasonal' },
+  { key: 'inventory', label: 'Inventory' },
+  { key: 'benchmark', label: 'Benchmarks' },
+  { key: 'general', label: 'General' },
 ]
 
 export default function InsightsPage() {
