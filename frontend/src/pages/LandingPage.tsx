@@ -155,7 +155,7 @@ export default function LandingPage() {
             transition={{ duration: 0.7, ease: EASE, delay: 0.55 }}
             className="mt-6 text-[#A1A1A8] text-lg max-w-xl mx-auto leading-relaxed"
           >
-            Connect your Square or Clover POS. Meridian's AI finds pricing gaps, upsell
+            Connect your Square, Clover, or Toast POS. Meridian's AI finds pricing gaps, upsell
             opportunities, and hidden revenue — with exact dollar amounts.
           </motion.p>
 
@@ -295,7 +295,7 @@ export default function LandingPage() {
               {
                 step: '01',
                 title: 'Connect Your POS',
-                desc: 'One-click Square or Clover authorization. No API keys, no config files, no engineering required.',
+                desc: 'One-click Square, Clover, or Toast authorization. No API keys, no config files, no engineering required.',
               },
               {
                 step: '02',
@@ -405,7 +405,7 @@ export default function LandingPage() {
               <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">knowing.</em>
             </h2>
             <p className="mt-6 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
-              Connect your Square or Clover POS and see exactly where your revenue is hiding. First month free — start seeing results in 60 seconds.
+              Connect your Square, Clover, or Toast POS and see exactly where your revenue is hiding. First month free — start seeing results in 60 seconds.
             </p>
             <div className="mt-10">
               <MagneticButton
