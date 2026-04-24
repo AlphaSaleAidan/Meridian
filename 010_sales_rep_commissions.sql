@@ -1,14 +1,14 @@
 -- ============================================================
--- PART 10: SALES REP COMMISSIONS & AUTO PAYOUTS
+-- PART 10: SALES REP COMMISSIONS & PAYOUT TRACKING
 -- ============================================================
 -- Tracks sales reps, commission rates, earned commissions,
--- and automated payout splits via Stripe Connect.
+-- and manual payout records. Auto-calculates splits on
+-- every inbound Square/Clover payment via webhook.
 -- ============================================================
 
--- New enums for payout system
+-- New enums
 CREATE TYPE commission_status AS ENUM ('pending', 'earned', 'paid', 'disputed', 'cancelled');
-CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'cancelled');
-CREATE TYPE payout_method AS ENUM ('stripe_connect', 'manual', 'bank_transfer');
+CREATE TYPE payout_status AS ENUM ('pending', 'completed', 'cancelled');
 
 -- ============================================================
 -- SALES REPS (linked to portal users)
@@ -20,8 +20,6 @@ CREATE TABLE sales_reps (
     phone           TEXT,
     commission_rate DECIMAL(5, 2) NOT NULL DEFAULT 30.00,  -- 30-60% set by admin
     recruiter       TEXT,                                    -- who recruited this rep
-    stripe_connect_account_id TEXT,                          -- Stripe Connect acct for payouts
-    stripe_connect_onboarded  BOOLEAN DEFAULT FALSE,
     is_active       BOOLEAN DEFAULT TRUE,
     total_earned    DECIMAL(12, 2) DEFAULT 0.00,
     total_paid      DECIMAL(12, 2) DEFAULT 0.00,
@@ -58,19 +56,19 @@ CREATE TABLE commissions (
     org_id              UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     assignment_id       UUID REFERENCES rep_client_assignments(id),
     
-    -- Payment source
-    source_type         TEXT NOT NULL DEFAULT 'subscription',  -- 'subscription' or 'pos_transaction'
-    source_reference    TEXT,           -- Stripe invoice ID or POS transaction ID
+    -- Payment source (Square transaction or subscription)
+    source_type         TEXT NOT NULL DEFAULT 'square_payment',
+    source_reference    TEXT,           -- Square payment ID or invoice reference
     
     -- Amounts
     gross_amount        DECIMAL(12, 2) NOT NULL,  -- total payment received from client
     commission_rate     DECIMAL(5, 2) NOT NULL,    -- rate applied (snapshot)
     commission_amount   DECIMAL(12, 2) NOT NULL,   -- rep's cut
     
-    status              commission_status NOT NULL DEFAULT 'pending',
-    payout_id           UUID,           -- linked when included in a payout batch
+    status              commission_status NOT NULL DEFAULT 'earned',
+    payout_id           UUID,           -- linked when marked as paid
     
-    period_start        TIMESTAMPTZ,    -- billing period this covers
+    period_start        TIMESTAMPTZ,
     period_end          TIMESTAMPTZ,
     
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -84,34 +82,22 @@ CREATE INDEX idx_commissions_payout ON commissions(payout_id);
 CREATE INDEX idx_commissions_created ON commissions(created_at);
 
 -- ============================================================
--- PAYOUTS (batched disbursements to reps)
+-- PAYOUTS (manual disbursement records)
 -- ============================================================
 CREATE TABLE payouts (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     rep_id              UUID NOT NULL REFERENCES sales_reps(id) ON DELETE CASCADE,
     
     amount              DECIMAL(12, 2) NOT NULL,
-    currency            TEXT DEFAULT 'usd',
-    method              payout_method NOT NULL DEFAULT 'stripe_connect',
+    method              TEXT DEFAULT 'manual',  -- 'venmo', 'zelle', 'bank_transfer', 'cash', etc.
     status              payout_status NOT NULL DEFAULT 'pending',
     
-    -- Stripe Connect details
-    stripe_transfer_id  TEXT,           -- Stripe Transfer object ID
-    stripe_payout_id    TEXT,           -- Stripe Payout object ID (to rep's bank)
-    
     -- Breakdown
-    commission_count    INTEGER DEFAULT 0,  -- how many commissions in this batch
-    period_start        TIMESTAMPTZ,
-    period_end          TIMESTAMPTZ,
+    commission_count    INTEGER DEFAULT 0,
     
     -- Processing
-    initiated_at        TIMESTAMPTZ,
     completed_at        TIMESTAMPTZ,
-    failed_at           TIMESTAMPTZ,
-    failure_reason      TEXT,
-    
     notes               TEXT,
-    metadata            JSONB DEFAULT '{}',
     
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -119,19 +105,19 @@ CREATE TABLE payouts (
 
 CREATE INDEX idx_payouts_rep ON payouts(rep_id);
 CREATE INDEX idx_payouts_status ON payouts(status);
-CREATE INDEX idx_payouts_created ON payouts(created_at);
 
--- Add foreign key from commissions to payouts (after payouts table exists)
+-- Add foreign key from commissions to payouts
 ALTER TABLE commissions ADD CONSTRAINT fk_commissions_payout 
     FOREIGN KEY (payout_id) REFERENCES payouts(id);
 
 -- ============================================================
 -- FUNCTION: Calculate commission on inbound payment
+-- Called by webhook handler when Square/Clover payment arrives
 -- ============================================================
 CREATE OR REPLACE FUNCTION calculate_commission(
     p_org_id UUID,
     p_gross_amount DECIMAL,
-    p_source_type TEXT DEFAULT 'subscription',
+    p_source_type TEXT DEFAULT 'square_payment',
     p_source_reference TEXT DEFAULT NULL,
     p_period_start TIMESTAMPTZ DEFAULT NULL,
     p_period_end TIMESTAMPTZ DEFAULT NULL
@@ -180,10 +166,13 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
--- FUNCTION: Process payout batch for a rep
+-- FUNCTION: Record a manual payout to a rep
+-- Batches all unpaid earned commissions, marks them paid
 -- ============================================================
-CREATE OR REPLACE FUNCTION create_payout_batch(
-    p_rep_id UUID
+CREATE OR REPLACE FUNCTION record_manual_payout(
+    p_rep_id UUID,
+    p_method TEXT DEFAULT 'manual',
+    p_notes TEXT DEFAULT NULL
 ) RETURNS UUID AS $$
 DECLARE
     v_total DECIMAL(12, 2);
@@ -203,16 +192,22 @@ BEGIN
     END IF;
     
     -- Create payout record
-    INSERT INTO payouts (rep_id, amount, commission_count, status)
-    VALUES (p_rep_id, v_total, v_count, 'pending')
+    INSERT INTO payouts (rep_id, amount, method, commission_count, status, completed_at, notes)
+    VALUES (p_rep_id, v_total, p_method, v_count, 'completed', NOW(), p_notes)
     RETURNING id INTO v_payout_id;
     
-    -- Link commissions to this payout
+    -- Link commissions to this payout and mark paid
     UPDATE commissions
-    SET payout_id = v_payout_id, updated_at = NOW()
+    SET payout_id = v_payout_id, status = 'paid', updated_at = NOW()
     WHERE rep_id = p_rep_id
       AND status = 'earned'
       AND payout_id IS NULL;
+    
+    -- Update rep's total_paid
+    UPDATE sales_reps
+    SET total_paid = total_paid + v_total,
+        updated_at = NOW()
+    WHERE id = p_rep_id;
     
     RETURN v_payout_id;
 END;
