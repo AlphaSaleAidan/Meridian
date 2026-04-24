@@ -61,13 +61,13 @@ class MoneyLeftCalculator:
         components = {}
 
         # ── Component 1: Underpriced Products ─────────────────
-        components["underpriced"] = self._calc_underpriced(products)
+        components["underpriced_products"] = self._calc_underpriced(products)
 
         # ── Component 2: Dead Stock ───────────────────────────
         components["dead_stock"] = self._calc_dead_stock(products)
 
         # ── Component 3: Peak Hour Revenue Loss ───────────────
-        components["peak_hour_waste"] = self._calc_peak_hour_waste(
+        components["peak_hour_missed"] = self._calc_peak_hour_waste(
             patterns, revenue
         )
 
@@ -75,7 +75,7 @@ class MoneyLeftCalculator:
         components["discount_leakage"] = self._calc_discount_leakage(revenue)
 
         # ── Component 5: Scheduling Gaps ──────────────────────
-        components["scheduling_gaps"] = self._calc_scheduling_gaps(patterns)
+        components["staffing_waste"] = self._calc_scheduling_gaps(patterns)
 
         # ── Total Score ───────────────────────────────────────
         total_cents = sum(
