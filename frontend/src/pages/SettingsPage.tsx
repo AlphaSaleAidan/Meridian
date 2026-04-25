@@ -50,14 +50,16 @@ export default function SettingsPage() {
         <div className="card overflow-hidden">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-[#F5F5F7]">POS Connections</h3>
+{connections.length === 0 && (
             <a
               href={basePath === '/demo' ? '#' : `${API_URL}/api/square/authorize?org_id=${ORG_ID}`}
-              onClick={basePath === '/demo' ? (e) => { e.preventDefault(); alert('Connect Square is disabled in demo mode. Sign up to connect your real POS!') } : undefined}
+              onClick={basePath === '/demo' ? (e: React.MouseEvent) => { e.preventDefault(); alert('Connect Square is disabled in demo mode. Sign up to connect your real POS!') } : undefined}
               className="px-4 py-2.5 sm:py-2 text-xs font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#6B4FE0] transition-all shadow-[0_0_16px_rgba(124,92,255,0.25)] hover:shadow-[0_0_24px_rgba(124,92,255,0.35)] inline-flex items-center gap-2"
             >
               <ExternalLink size={14} />
-              Connect Square
+              Connect POS
             </a>
+            )}
           </div>
 
           {connections.length > 0 ? (
