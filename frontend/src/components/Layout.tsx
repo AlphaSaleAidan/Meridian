@@ -22,7 +22,7 @@ const navItems = [
   { path: 'inventory', icon: Layers, label: 'Inventory' },
   { path: 'insights', icon: Lightbulb, label: 'Insights' },
   { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
-  { path: 'notifications', icon: Bell, label: 'Alerts' },
+  { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },
 ]
 
