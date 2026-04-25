@@ -46,19 +46,23 @@ export default function RevenueChart({ data, height = 300 }: Props) {
             tick={{ fill: '#A1A1A8', fontSize: 11, fontFamily: 'Geist Mono, monospace' }}
             axisLine={false}
             tickLine={false}
-            interval="preserveStartEnd"
+            interval={0}
+            angle={-35}
+            textAnchor="end"
+            height={50}
           />
           <YAxis
             tick={{ fill: '#A1A1A8', fontSize: 11, fontFamily: 'Geist Mono, monospace' }}
             axisLine={false}
             tickLine={false}
-            tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`}
-            width={50}
+            tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(1)}K` : v}`}
+            width={55}
+            tickCount={5}
           />
           <Tooltip
             contentStyle={tooltipStyle}
             labelStyle={{ color: '#A1A1A8' }}
-            formatter={(value: number) => [formatCents(value * 100), 'Revenue']}
+            formatter={(value: number) => [`${formatCents(value * 100)}`, 'Revenue']}
             cursor={{ stroke: '#7C5CFF', strokeWidth: 1, strokeDasharray: '4 4' }}
           />
           <Area
