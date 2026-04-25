@@ -90,9 +90,9 @@ export default function CareersPage() {
             <MeridianEmblem size={56} />
           </motion.div>
           <motion.h1
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: EASE, delay: 0.1 }}
+            transition={{ duration: 0.5, ease: EASE, delay: 0.05 }}
             className="text-4xl md:text-6xl font-bold text-[#F5F5F7] tracking-tight"
           >
             Join the{' '}
@@ -102,9 +102,9 @@ export default function CareersPage() {
             team
           </motion.h1>
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: EASE, delay: 0.2 }}
+            transition={{ duration: 0.5, ease: EASE, delay: 0.1 }}
             className="mt-4 text-[#A1A1A8] text-[16px] max-w-lg mx-auto leading-relaxed"
           >
             We're building the future of small business intelligence. Help local businesses thrive and earn great money doing it.
