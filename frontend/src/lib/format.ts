@@ -3,11 +3,8 @@
  */
 
 export function formatCents(cents: number | null | undefined): string {
-  if (cents == null) return '$0'
+  if (cents == null) return '$0.00'
   const dollars = cents / 100
-  if (Math.abs(dollars) >= 1000) {
-    return '$' + dollars.toLocaleString('en-US', { maximumFractionDigits: 0 })
-  }
   return '$' + dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
