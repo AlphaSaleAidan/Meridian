@@ -1,4 +1,16 @@
 import { clsx } from 'clsx'
+
+function parseMarkdown(text: string) {
+  // Parse *bold* text and \n newlines
+  const parts = text.split(/(\*[^*]+\*|\n)/g)
+  return parts.map((part, i) => {
+    if (part === '\n') return <br key={i} />
+    if (part.startsWith('*') && part.endsWith('*')) {
+      return <strong key={i} className="text-[#F5F5F7] font-semibold">{part.slice(1, -1)}</strong>
+    }
+    return <span key={i}>{part}</span>
+  })
+}
 import {
   Lightbulb, TrendingUp, Users, Tag, Package, AlertTriangle,
   BarChart3, Thermometer,
@@ -52,7 +64,7 @@ export default function InsightCard({ insight, compact = false }: Props) {
           </div>
           {!compact && (
             <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-              {insight.summary}
+              {parseMarkdown(insight.summary)}
             </p>
           )}
           <div className="flex items-center gap-3 mt-2">
