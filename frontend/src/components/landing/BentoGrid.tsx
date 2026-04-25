@@ -107,8 +107,8 @@ const features = [
   {
     icon: Zap,
     title: '60-Second Setup',
-    desc: 'One-click Square OAuth. No API keys, no config files.',
-    span: 'md:col-span-2',
+    desc: 'One-click Square, Clover, or Toast connection. No API keys, no config files.',
+    span: 'md:col-span-2 md:col-start-2',
     visual: (
       <div className="mt-4 flex items-center gap-4">
         {['Connect', 'Analyze', 'Profit'].map((step, i) => (
