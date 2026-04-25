@@ -524,7 +524,7 @@ export default function OnboardingPage() {
                     <span className="text-[#A1A1A8] text-sm">/first month</span>
                   </div>
                   <p className="text-sm text-[#A1A1A8]">
-                    Then <span className="text-[#F5F5F7] font-semibold">$250/mo</span> or <span className="text-[#F5F5F7] font-semibold">$62.50/wk</span> · 3-month commitment · <span className="text-[#17C5B0] font-semibold">$500 total</span>
+                    Then <span className="text-[#F5F5F7] font-semibold">$250/mo</span> or <span className="text-[#F5F5F7] font-semibold">$65/wk</span> · First month free
                   </p>
                 </div>
 
@@ -617,7 +617,7 @@ export default function OnboardingPage() {
                         : 'border-[#1F1F23] bg-[#111113] hover:border-[#2A2A30]'
                     }`}
                   >
-                    <p className="text-lg font-bold text-[#F5F5F7] font-mono">$62.50</p>
+                    <p className="text-lg font-bold text-[#F5F5F7] font-mono">$65</p>
                     <p className="text-xs text-[#A1A1A8]">/week</p>
                     {billingCycle === 'weekly' && (
                       <div className="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1A8FD6]/10 text-[#1A8FD6] text-[10px] font-semibold">
@@ -633,13 +633,9 @@ export default function OnboardingPage() {
                     <>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Month 1 (today)</span>
-                        {couponApplied ? (
-                          <span className="text-[#17C5B0] font-semibold">
-                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
-                          </span>
-                        ) : (
-                          <span className="text-[#F5F5F7] font-mono">$250</span>
-                        )}
+                        <span className="text-[#17C5B0] font-semibold">
+                          <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Month 2</span>
@@ -651,35 +647,31 @@ export default function OnboardingPage() {
                       </div>
                       <div className="flex justify-between text-sm pt-3 border-t border-[#1F1F23]">
                         <span className="text-[#F5F5F7] font-semibold">3-month total</span>
-                        <span className="text-[#F5F5F7] font-bold font-mono">{couponApplied ? '$500' : '$750'}</span>
+                        <span className="text-[#F5F5F7] font-bold font-mono">$500</span>
                       </div>
-                      <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $250/mo · Cancel anytime after 3 months</p>
+                      <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $250/mo · Cancel anytime after commitment</p>
                     </>
                   ) : (
                     <>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Weeks 1–4 (first 30 days)</span>
-                        {couponApplied ? (
-                          <span className="text-[#17C5B0] font-semibold">
-                            <span className="line-through text-[#A1A1A8]/40 mr-1.5">$250</span> FREE
-                          </span>
-                        ) : (
-                          <span className="text-[#F5F5F7] font-mono">4 × $62.50</span>
-                        )}
+                        <span className="text-[#17C5B0] font-semibold">
+                          <span className="line-through text-[#A1A1A8]/40 mr-1.5">$260</span> FREE
+                        </span>
                       </div>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-[#A1A1A8]">Weeks 5–8</span>
-                        <span className="text-[#F5F5F7] font-mono">$62.50/wk</span>
+                        <span className="text-[#F5F5F7] font-mono">$65/wk</span>
                       </div>
                       <div className="flex justify-between text-sm mb-3">
                         <span className="text-[#A1A1A8]">Weeks 9–12</span>
-                        <span className="text-[#F5F5F7] font-mono">$62.50/wk</span>
+                        <span className="text-[#F5F5F7] font-mono">$65/wk</span>
                       </div>
                       <div className="flex justify-between text-sm pt-3 border-t border-[#1F1F23]">
                         <span className="text-[#F5F5F7] font-semibold">3-month total</span>
-                        <span className="text-[#F5F5F7] font-bold font-mono">{couponApplied ? '$500' : '$750'}</span>
+                        <span className="text-[#F5F5F7] font-bold font-mono">$520</span>
                       </div>
-                      <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $62.50/wk · Cancel anytime after 3 months</p>
+                      <p className="text-xs text-[#A1A1A8]/40 mt-2">Auto-renews at $65/wk · Cancel anytime after commitment</p>
                     </>
                   )}
                 </div>
