@@ -1,5 +1,5 @@
 """
-Square Webhook Handlers — Process real-time events from Square.
+Square Webhook Handlers â Process real-time events from Square.
 
 Square sends webhooks for:
   - order.created / order.updated
@@ -20,6 +20,7 @@ from typing import Any, Callable, Optional
 
 from .client import SquareClient
 from .mappers import DataMapper
+from src.payouts.webhook_hook import on_payment_received
 
 logger = logging.getLogger("meridian.square.webhooks")
 
@@ -114,12 +115,12 @@ class WebhookProcessor:
             logger.error(f"Webhook {event_type} handler failed: {e}", exc_info=True)
             return {"action": "error", "error": str(e)}
 
-    # ─── Order Handlers ───────────────────────────────────────
+    # âââ Order Handlers âââââââââââââââââââââââââââââââââââââââ
 
     async def _handle_order_created(
         self, event: dict, connection: dict | None
     ) -> dict:
-        """New order — fetch full details and insert."""
+        """New order â fetch full details and insert."""
         order_id = event.get("data", {}).get("id")
         if not order_id or not connection:
             return {"action": "skipped", "reason": "Missing order_id or connection"}
@@ -153,21 +154,36 @@ class WebhookProcessor:
     async def _handle_order_updated(
         self, event: dict, connection: dict | None
     ) -> dict:
-        """Order updated — re-fetch and upsert (same logic as created)."""
+        """Order updated â re-fetch and upsert (same logic as created)."""
         return await self._handle_order_created(event, connection)
 
-    # ─── Payment Handlers ─────────────────────────────────────
+    # âââ Payment Handlers âââââââââââââââââââââââââââââââââââââ
 
     async def _handle_payment_created(
         self, event: dict, connection: dict | None
     ) -> dict:
-        """Payment created — enrich corresponding transaction with card details."""
-        return await self._enrich_payment(event, connection)
+        """Payment created â enrich corresponding transaction with card details."""
+        result = await self._enrich_payment(event, connection)
+
+        # Auto-track commission via webhook hook
+        if connection:
+            payment_id = (event.get("data", {}).get("object", {})
+                          .get("payment", {}).get("id"))
+            payment_data = event.get("data", {}).get("object", {}).get("payment", {})
+            amount_cents = payment_data.get("total_money", {}).get("amount", 0)
+            await on_payment_received(
+                org_id=connection.get("org_id", ""),
+                amount=amount_cents / 100,
+                payment_id=payment_id,
+                source="square",
+            )
+
+        return result
 
     async def _handle_payment_updated(
         self, event: dict, connection: dict | None
     ) -> dict:
-        """Payment updated — re-enrich transaction."""
+        """Payment updated â re-enrich transaction."""
         return await self._enrich_payment(event, connection)
 
     async def _enrich_payment(
@@ -196,12 +212,12 @@ class WebhookProcessor:
             "fields_updated": list(enrichment.get("metadata_updates", {}).keys()),
         }
 
-    # ─── Catalog Handler ──────────────────────────────────────
+    # âââ Catalog Handler ââââââââââââââââââââââââââââââââââââââ
 
     async def _handle_catalog_updated(
         self, event: dict, connection: dict | None
     ) -> dict:
-        """Catalog changed — resync affected items."""
+        """Catalog changed â resync affected items."""
         if not connection:
             return {"action": "skipped", "reason": "No connection"}
 
@@ -236,12 +252,12 @@ class WebhookProcessor:
             "products": len(mapped_products),
         }
 
-    # ─── Inventory Handler ────────────────────────────────────
+    # âââ Inventory Handler ââââââââââââââââââââââââââââââââââââ
 
     async def _handle_inventory_updated(
         self, event: dict, connection: dict | None
     ) -> dict:
-        """Inventory count changed — upsert snapshot."""
+        """Inventory count changed â upsert snapshot."""
         if not connection:
             return {"action": "skipped", "reason": "No connection"}
 
@@ -263,7 +279,7 @@ class WebhookProcessor:
             "snapshots": len(snapshots),
         }
 
-    # ─── Auth Revocation Handler ──────────────────────────────
+    # âââ Auth Revocation Handler ââââââââââââââââââââââââââââââ
 
     async def _handle_auth_revoked(
         self, event: dict, connection: dict | None
@@ -293,7 +309,7 @@ class WebhookProcessor:
             "merchant_id": merchant_id,
         }
 
-    # ─── Helpers ──────────────────────────────────────────────
+    # âââ Helpers ââââââââââââââââââââââââââââââââââââââââââââââ
 
     def _build_mapper(self, connection: dict) -> DataMapper:
         """Build a DataMapper from connection context."""
