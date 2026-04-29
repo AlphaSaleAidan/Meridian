@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
@@ -28,9 +28,15 @@ type Tab = 'businesses' | 'provision'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout>>()
   return (
     <button
-      onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+      onClick={() => {
+        navigator.clipboard.writeText(text)
+        setCopied(true)
+        clearTimeout(timer.current)
+        timer.current = setTimeout(() => setCopied(false), 2000)
+      }}
       className="p-1 rounded hover:bg-[#1F1F23] transition-colors"
     >
       {copied ? <Check size={12} className="text-[#17C5B0]" /> : <Copy size={12} className="text-[#A1A1A8]/40" />}

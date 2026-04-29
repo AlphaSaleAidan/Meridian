@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/lib/auth'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import PortalPage from '@/pages/PortalPage'
@@ -61,6 +62,7 @@ function DashboardRoutes() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <Suspense fallback={<LazyFallback />}>
         <Routes>
@@ -70,7 +72,11 @@ export default function App() {
           <Route path="/portal" element={<PortalPage />} />
           <Route path="/portal/*" element={<PortalPage />} />
 
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/admin" element={
+            <ProtectedRoute>
+              <AdminPage />
+            </ProtectedRoute>
+          } />
 
           {/* Demo — open access, no auth required */}
           <Route path="/demo" element={<Layout />}>
@@ -91,5 +97,6 @@ export default function App() {
         </Routes>
       </Suspense>
     </AuthProvider>
+    </ErrorBoundary>
   )
 }

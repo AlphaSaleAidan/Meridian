@@ -69,7 +69,6 @@ export default function PortalPage() {
       return
     }
     setSuccess('Account created! Redirecting to your dashboard...')
-    setTimeout(() => navigate('/app', { replace: true }), 1200)
   }
 
   async function handleToken(e: React.FormEvent) {
