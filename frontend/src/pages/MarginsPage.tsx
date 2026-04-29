@@ -14,6 +14,7 @@ const tooltipStyle = {
   border: '1px solid #1F1F23',
   borderRadius: '10px',
   fontSize: '12px',
+  color: '#F5F5F7',
   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
 }
 
@@ -81,12 +82,6 @@ export default function MarginsPage() {
     leakage: i.leakageCents / 100,
   }))
 
-  const waterfallData = [
-    { name: 'Revenue', value: totalRevenue / 100, fill: '#1A8FD6' },
-    { name: 'COGS', value: -totalCost / 100, fill: '#EF4444' },
-    { name: 'Leakage', value: -totalLeakage / 100, fill: '#F97316' },
-    { name: 'Net Margin', value: (totalMargin - totalLeakage) / 100, fill: '#17C5B0' },
-  ]
 
   return (
     <div className="space-y-6">
@@ -180,32 +175,6 @@ export default function MarginsPage() {
       </ScrollReveal>
 
       <ScrollReveal variant="fadeUp" delay={0.1}>
-        <div className="card p-4 sm:p-5">
-          <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Margin Waterfall</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={waterfallData} margin={{ top: 20, right: 5, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
-              <XAxis dataKey="name" tick={{ fill: '#F5F5F7', fontSize: 11, fontFamily: 'Geist Mono, monospace' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#F5F5F7', fontSize: 10, fontFamily: 'Geist Mono, monospace' }} axisLine={false} tickLine={false}
-                tickFormatter={v => `$${Math.abs(v) >= 1000 ? `${(Math.abs(v)/1000).toFixed(0)}K` : Math.abs(v)}`} width={50} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatCents(Math.abs(v) * 100), '']} />
-              <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                {waterfallData.map((entry, i) => (
-                  <Cell key={i} fill={entry.fill} fillOpacity={0.85} />
-                ))}
-                <LabelList
-                  dataKey="value"
-                  position="top"
-                  formatter={(v: number) => `$${Math.abs(v) >= 1000 ? `${(Math.abs(v)/1000).toFixed(1)}K` : Math.abs(v).toFixed(0)}`}
-                  style={{ fill: '#F5F5F7', fontSize: 11, fontFamily: 'Geist Mono, monospace', fontWeight: 600 }}
-                />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </ScrollReveal>
-
-      <ScrollReveal variant="fadeUp" delay={0.15}>
         <div className="card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Margin by Product</h3>
           <ResponsiveContainer width="100%" height={300}>

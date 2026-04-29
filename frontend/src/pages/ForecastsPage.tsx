@@ -15,6 +15,7 @@ const tooltipStyle = {
   border: '1px solid #1F1F23',
   borderRadius: '10px',
   fontSize: '12px',
+  color: '#F5F5F7',
   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
 }
 
