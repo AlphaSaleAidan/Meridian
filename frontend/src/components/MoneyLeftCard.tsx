@@ -44,9 +44,8 @@ export default function MoneyLeftCard({ score }: Props) {
     ([, a], [, b]) => (b.amount_cents || 0) - (a.amount_cents || 0)
   )
 
-  // Extract top actions if available
   const topActions: Array<{ description: string; impact_cents?: number }> =
-    (score as Record<string, unknown>).top_actions as Array<{ description: string; impact_cents?: number }> || []
+    (score as unknown as Record<string, unknown>).top_actions as Array<{ description: string; impact_cents?: number }> || []
 
   return (
     <DashboardTiltCard

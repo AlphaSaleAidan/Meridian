@@ -60,7 +60,7 @@ const QUESTIONS: {
   },
   {
     key: 'revenue',
-    label: 'What's your approximate monthly revenue?',
+    label: "What's your approximate monthly revenue?",
     options: [
       { value: '<25k', label: 'Under $25K' },
       { value: '25-75k', label: '$25K – $75K' },
@@ -70,7 +70,7 @@ const QUESTIONS: {
   },
   {
     key: 'painPoint',
-    label: 'What's your biggest challenge right now?',
+    label: "What's your biggest challenge right now?",
     options: [
       { value: 'pricing', label: 'Not sure if my prices are right', icon: <DollarSign size={18} /> },
       { value: 'staffing', label: 'Staffing & labor costs', icon: <Users size={18} /> },
