@@ -87,7 +87,7 @@ export default function ProductsPage() {
                   tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#A1A1A8', fontSize: 10 }} axisLine={false}
                   tickLine={false} width={110} />
-                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [formatCents(v * 100), 'Revenue']}
+                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number) => [formatCents(v * 100), 'Revenue']}
                   cursor={{ fill: 'rgba(26, 143, 214, 0.04)' }} />
                 <Bar dataKey="revenue" fill="#1A8FD6" radius={[0, 4, 4, 0]} fillOpacity={0.8} />
               </BarChart>

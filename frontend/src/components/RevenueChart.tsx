@@ -62,6 +62,7 @@ export default function RevenueChart({ data, height = 300 }: Props) {
           />
           <Tooltip
             contentStyle={tooltipStyle}
+            itemStyle={{ color: '#F5F5F7' }}
             labelStyle={{ color: '#A1A1A8' }}
             formatter={(value: number) => [`${formatCents(value * 100)}`, 'Revenue']}
             cursor={{ stroke: '#7C5CFF', strokeWidth: 1, strokeDasharray: '4 4' }}

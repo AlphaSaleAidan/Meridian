@@ -183,7 +183,7 @@ export default function MarginsPage() {
               <XAxis type="number" tick={{ fill: '#F5F5F7', fontSize: 10, fontFamily: 'Geist Mono, monospace' }} axisLine={false} tickLine={false}
                 tickFormatter={v => `${v}%`} domain={[0, 100]} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#F5F5F7', fontSize: 10, fontFamily: 'Geist Mono, monospace' }} axisLine={false} tickLine={false} width={90} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v}%`, 'Margin']} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number) => [`${v}%`, 'Margin']} />
               <Bar dataKey="margin" radius={[0, 4, 4, 0]} fillOpacity={0.85}>
                 {chartData.map((entry, i) => (
                   <Cell key={i} fill={entry.margin >= 70 ? '#17C5B0' : entry.margin >= 60 ? '#1A8FD6' : '#F97316'} />

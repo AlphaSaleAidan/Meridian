@@ -116,7 +116,7 @@ export default function ForecastsPage() {
                   interval="preserveStartEnd" />
                 <YAxis tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
                   tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`} width={45} />
-                <Tooltip contentStyle={tooltipStyle}
+                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }}
                   formatter={(v: any, name: string) => [v != null ? formatCents(v * 100) : '—', name]}
                   cursor={{ stroke: '#1A8FD6', strokeWidth: 1, strokeDasharray: '4 4' }} />
                 <Area type="monotone" dataKey="actual" stroke="#1A8FD6" strokeWidth={2} fill="url(#actualGrad)" dot={false}
