@@ -455,6 +455,213 @@ export function generateForecastPeriods(): ForecastPeriod[] {
   ]
 }
 
+// ─── #1 Menu Engineering BCG Matrix ─────────────────────────
+
+export type MenuQuadrant = 'star' | 'puzzle' | 'plowhorse' | 'dog'
+
+export interface MenuEngItem {
+  name: string
+  category: string
+  monthlySales: number
+  marginPct: number
+  popularityIndex: number
+  profitabilityIndex: number
+  quadrant: MenuQuadrant
+  recommendation: string
+  revenueCents: number
+  marginCents: number
+}
+
+export function generateMenuEngineering(): MenuEngItem[] {
+  const avgSales = 290
+  const avgMargin = 68
+
+  function classify(sales: number, margin: number): MenuQuadrant {
+    if (sales >= avgSales && margin >= avgMargin) return 'star'
+    if (sales < avgSales && margin >= avgMargin) return 'puzzle'
+    if (sales >= avgSales && margin < avgMargin) return 'plowhorse'
+    return 'dog'
+  }
+
+  const items: Omit<MenuEngItem, 'quadrant' | 'popularityIndex' | 'profitabilityIndex' | 'recommendation'>[] = [
+    { name: 'Espresso', category: 'drinks', monthlySales: 330, marginPct: 80, revenueCents: 148500, marginCents: 118800 },
+    { name: 'Cappuccino', category: 'drinks', monthlySales: 450, marginPct: 75, revenueCents: 236250, marginCents: 177190 },
+    { name: 'Iced Latte', category: 'drinks', monthlySales: 340, marginPct: 72, revenueCents: 195500, marginCents: 140760 },
+    { name: 'Cold Brew', category: 'drinks', monthlySales: 300, marginPct: 70, revenueCents: 165000, marginCents: 115500 },
+    { name: 'Matcha Latte', category: 'drinks', monthlySales: 190, marginPct: 62, revenueCents: 118750, marginCents: 73625 },
+    { name: 'Drip Coffee', category: 'drinks', monthlySales: 300, marginPct: 82, revenueCents: 82500, marginCents: 67650 },
+    { name: 'Croissant', category: 'food', monthlySales: 360, marginPct: 65, revenueCents: 153000, marginCents: 99450 },
+    { name: 'Avocado Toast', category: 'food', monthlySales: 140, marginPct: 55, revenueCents: 125300, marginCents: 68915 },
+    { name: 'Breakfast Sandwich', category: 'food', monthlySales: 180, marginPct: 60, revenueCents: 135150, marginCents: 81090 },
+    { name: 'Blueberry Muffin', category: 'food', monthlySales: 270, marginPct: 65, revenueCents: 106650, marginCents: 69322 },
+  ]
+
+  const recommendations: Record<MenuQuadrant, string> = {
+    star: 'Protect and promote — premium menu placement, never discount',
+    puzzle: 'High profit but low sales — increase visibility, add to combos, train staff to upsell',
+    plowhorse: 'Popular but low margin — raise price incrementally or reduce portion cost',
+    dog: 'Low profit, low popularity — consider removing or completely reinventing',
+  }
+
+  return items.map(item => {
+    const q = classify(item.monthlySales, item.marginPct)
+    return {
+      ...item,
+      quadrant: q,
+      popularityIndex: Math.round((item.monthlySales / avgSales) * 100),
+      profitabilityIndex: Math.round((item.marginPct / avgMargin) * 100),
+      recommendation: recommendations[q],
+    }
+  })
+}
+
+// ─── #2 Anomaly Detection ───────────────────────────────────
+
+export interface Anomaly {
+  id: string
+  type: 'void_spike' | 'refund_surge' | 'revenue_drop' | 'cost_spike' | 'traffic_anomaly' | 'register_shortage'
+  severity: 'critical' | 'warning' | 'info'
+  title: string
+  description: string
+  detectedAt: string
+  metric: string
+  expected: number
+  actual: number
+  deviationPct: number
+  agentSource: string
+  acknowledged: boolean
+}
+
+export function generateAnomalies(): Anomaly[] {
+  return [
+    { id: 'a1', type: 'void_spike', severity: 'critical', title: 'Void transactions 3x normal', description: 'Tuesday 6-9PM saw 14 void transactions vs. 4-5 average. Concentrated on Register 2. Possible training issue or policy abuse.', detectedAt: minutesAgo(45), metric: 'void_count', expected: 5, actual: 14, deviationPct: 180, agentSource: 'transaction-analyst', acknowledged: false },
+    { id: 'a2', type: 'revenue_drop', severity: 'warning', title: 'Morning revenue down 22%', description: 'Revenue between 7-9AM dropped 22% vs. prior 4-week average. Weather was clear, no holidays. Possible competitor event or staffing issue.', detectedAt: hoursAgo(3), metric: 'peak_revenue', expected: 48000, actual: 37440, deviationPct: -22, agentSource: 'peak-hour-optimizer', acknowledged: false },
+    { id: 'a3', type: 'cost_spike', severity: 'warning', title: 'Oat milk usage up 40%', description: 'Oat milk consumption jumped 40% without corresponding sales increase. Possible over-portioning or waste issue.', detectedAt: hoursAgo(8), metric: 'ingredient_usage_oz', expected: 320, actual: 448, deviationPct: 40, agentSource: 'inventory-intelligence', acknowledged: true },
+    { id: 'a4', type: 'traffic_anomaly', severity: 'info', title: 'Unusual Saturday surge', description: 'Transactions 35% above Saturday average. Nearby event (farmers market) likely driving foot traffic. Consider staffing up for recurring events.', detectedAt: hoursAgo(26), metric: 'transaction_count', expected: 180, actual: 243, deviationPct: 35, agentSource: 'peak-hour-optimizer', acknowledged: true },
+    { id: 'a5', type: 'refund_surge', severity: 'warning', title: 'Refund rate doubled this week', description: 'Refund rate hit 4.2% vs. 2.1% trailing average. 6 of 8 refunds were on Breakfast Sandwich — possible quality issue with current batch.', detectedAt: hoursAgo(5), metric: 'refund_rate_pct', expected: 2.1, actual: 4.2, deviationPct: 100, agentSource: 'transaction-analyst', acknowledged: false },
+  ]
+}
+
+// ─── #3 Cohort Analysis ─────────────────────────────────────
+
+export interface CohortRow {
+  cohort: string
+  totalCustomers: number
+  retentionByMonth: number[]
+}
+
+export function generateCohorts(): CohortRow[] {
+  return [
+    { cohort: 'Jan 2026', totalCustomers: 42, retentionByMonth: [100, 74, 62, 55] },
+    { cohort: 'Feb 2026', totalCustomers: 38, retentionByMonth: [100, 71, 58] },
+    { cohort: 'Mar 2026', totalCustomers: 51, retentionByMonth: [100, 78] },
+    { cohort: 'Apr 2026', totalCustomers: 47, retentionByMonth: [100] },
+  ]
+}
+
+// ─── #4 Agent Chaining ──────���───────────────────────────────
+
+export interface AgentChainLink {
+  from: string
+  to: string
+  trigger: string
+  dataPassed: string
+}
+
+export function generateAgentChains(): AgentChainLink[] {
+  return [
+    { from: 'transaction-analyst', to: 'product-intelligence', trigger: 'new_transactions_batch', dataPassed: 'Transaction line items + timestamps' },
+    { from: 'transaction-analyst', to: 'customer-segmentor', trigger: 'new_transactions_batch', dataPassed: 'Customer IDs + spend amounts' },
+    { from: 'product-intelligence', to: 'margin-optimizer', trigger: 'sku_velocity_updated', dataPassed: 'SKU rankings + co-purchase rates' },
+    { from: 'margin-optimizer', to: 'revenue-forecaster', trigger: 'pricing_opportunity_found', dataPassed: 'Price change proposals + elasticity data' },
+    { from: 'customer-segmentor', to: 'retention-strategist', trigger: 'segments_updated', dataPassed: 'RFM segments + churn risk scores' },
+    { from: 'peak-hour-optimizer', to: 'staff-performance-analyst', trigger: 'staffing_gap_detected', dataPassed: 'Peak hours + current schedules' },
+    { from: 'inventory-intelligence', to: 'margin-optimizer', trigger: 'cost_anomaly_detected', dataPassed: 'Ingredient cost changes + usage rates' },
+    { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'All findings from all agents' },
+    { from: 'action-prioritizer', to: 'revenue-forecaster', trigger: 'action_ranked', dataPassed: 'Top actions for impact projection' },
+    { from: 'revenue-forecaster', to: 'insight-narrator', trigger: 'forecast_updated', dataPassed: 'Updated projections for narrative' },
+  ]
+}
+
+// ─── #5 Confidence Calibration ──────────────────────────────
+
+export interface CalibrationPoint {
+  agentId: string
+  agentName: string
+  predictionDate: string
+  predictedValue: number
+  actualValue: number | null
+  confidenceScore: number
+  accuracyPct: number | null
+  category: string
+}
+
+export function generateCalibrationHistory(): CalibrationPoint[] {
+  return [
+    { agentId: 'revenue-forecaster', agentName: 'Revenue Forecaster', predictionDate: '2026-03-01', predictedValue: 52000, actualValue: 54200, confidenceScore: 82, accuracyPct: 96, category: '30-day revenue' },
+    { agentId: 'revenue-forecaster', agentName: 'Revenue Forecaster', predictionDate: '2026-02-01', predictedValue: 48000, actualValue: 47100, confidenceScore: 79, accuracyPct: 98, category: '30-day revenue' },
+    { agentId: 'margin-optimizer', agentName: 'Margin Optimizer', predictionDate: '2026-03-15', predictedValue: 840, actualValue: 720, confidenceScore: 82, accuracyPct: 86, category: 'price change impact' },
+    { agentId: 'peak-hour-optimizer', agentName: 'Peak Hour Optimizer', predictionDate: '2026-03-10', predictedValue: 520, actualValue: 580, confidenceScore: 88, accuracyPct: 90, category: 'staffing ROI' },
+    { agentId: 'customer-segmentor', agentName: 'Customer Segmentor', predictionDate: '2026-03-01', predictedValue: 4, actualValue: 3, confidenceScore: 79, accuracyPct: 75, category: 'churn prediction' },
+    { agentId: 'product-intelligence', agentName: 'Product Intelligence', predictionDate: '2026-03-20', predictedValue: 380, actualValue: 410, confidenceScore: 78, accuracyPct: 92, category: 'bundle uplift' },
+    { agentId: 'inventory-intelligence', agentName: 'Inventory Intelligence', predictionDate: '2026-04-01', predictedValue: 2, actualValue: 2, confidenceScore: 85, accuracyPct: 100, category: 'stockout prediction' },
+    { agentId: 'retention-strategist', agentName: 'Retention Strategist', predictionDate: '2026-04-10', predictedValue: 840, actualValue: null, confidenceScore: 79, accuracyPct: null, category: 'winback revenue' },
+  ]
+}
+
+// ─── #6 Business Type Profiles ──────────────────────────────
+
+export interface BusinessTypeProfile {
+  type: string
+  label: string
+  benchmarks: {
+    avgTicketCents: number
+    marginPct: number
+    peakHours: string
+    topCategory: string
+    wastePct: number
+    staffingRatio: string
+  }
+  agentThresholds: {
+    voidAlertPct: number
+    refundAlertPct: number
+    revenueDropAlertPct: number
+    lowMarginPct: number
+    highMarginPct: number
+    peakStaffingMin: number
+  }
+}
+
+export function generateBusinessProfiles(): BusinessTypeProfile[] {
+  return [
+    {
+      type: 'coffee_shop', label: 'Coffee Shop',
+      benchmarks: { avgTicketCents: 880, marginPct: 72, peakHours: '7-9AM', topCategory: 'Hot drinks', wastePct: 6, staffingRatio: '1 per $400/hr' },
+      agentThresholds: { voidAlertPct: 2, refundAlertPct: 3, revenueDropAlertPct: 15, lowMarginPct: 60, highMarginPct: 80, peakStaffingMin: 3 },
+    },
+    {
+      type: 'restaurant', label: 'Full-Service Restaurant',
+      benchmarks: { avgTicketCents: 3200, marginPct: 62, peakHours: '6-9PM', topCategory: 'Entrees', wastePct: 10, staffingRatio: '1 per $600/hr' },
+      agentThresholds: { voidAlertPct: 1.5, refundAlertPct: 2, revenueDropAlertPct: 20, lowMarginPct: 55, highMarginPct: 70, peakStaffingMin: 5 },
+    },
+    {
+      type: 'fast_casual', label: 'Fast Casual',
+      benchmarks: { avgTicketCents: 1400, marginPct: 65, peakHours: '11:30AM-1:30PM', topCategory: 'Bowls/Wraps', wastePct: 8, staffingRatio: '1 per $500/hr' },
+      agentThresholds: { voidAlertPct: 1.5, refundAlertPct: 2.5, revenueDropAlertPct: 18, lowMarginPct: 58, highMarginPct: 75, peakStaffingMin: 4 },
+    },
+    {
+      type: 'bakery', label: 'Bakery',
+      benchmarks: { avgTicketCents: 1100, marginPct: 68, peakHours: '8-11AM', topCategory: 'Pastries', wastePct: 12, staffingRatio: '1 per $350/hr' },
+      agentThresholds: { voidAlertPct: 2, refundAlertPct: 3, revenueDropAlertPct: 15, lowMarginPct: 55, highMarginPct: 75, peakStaffingMin: 2 },
+    },
+    {
+      type: 'retail', label: 'Retail Store',
+      benchmarks: { avgTicketCents: 2800, marginPct: 45, peakHours: '12-3PM', topCategory: 'Merchandise', wastePct: 2, staffingRatio: '1 per $800/hr' },
+      agentThresholds: { voidAlertPct: 1, refundAlertPct: 5, revenueDropAlertPct: 20, lowMarginPct: 35, highMarginPct: 55, peakStaffingMin: 2 },
+    },
+  ]
+}
+
 export function generateInsightsWithReasoning(): (Insight & { reasoning: ReasoningChain })[] {
   return generateTopActions().map((action, i) => ({
     id: `agent-insight-${i}`,

@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import {
   Bot, Activity, Zap, Clock, ChevronDown, ChevronRight,
-  TrendingUp, AlertTriangle, Target, Brain,
+  TrendingUp, AlertTriangle, Target, Brain, ArrowRight,
+  CheckCircle2, XCircle, Minus,
 } from 'lucide-react'
-import { generateAgents, type AgentInfo } from '@/lib/agent-data'
+import { generateAgents, generateAgentChains, generateCalibrationHistory, type AgentInfo } from '@/lib/agent-data'
 import { formatRelative } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
@@ -96,6 +97,8 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
 
 export default function AgentDashboardPage() {
   const agents = generateAgents()
+  const chains = generateAgentChains()
+  const calibration = generateCalibrationHistory()
   const [filter, setFilter] = useState<string>('')
 
   const activeCount = agents.filter(a => a.status === 'active' || a.status === 'running').length
@@ -202,6 +205,101 @@ export default function AgentDashboardPage() {
           {filtered.map(agent => (
             <AgentCard key={agent.id} agent={agent} />
           ))}
+        </div>
+      </ScrollReveal>
+
+      {/* Agent Chaining — Feedback Loops */}
+      <ScrollReveal variant="fadeUp" delay={0.15}>
+        <div className="card overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
+            <div className="flex items-center gap-2">
+              <ArrowRight size={14} className="text-[#7C5CFF]" />
+              <h3 className="text-sm font-semibold text-[#F5F5F7]">Agent Chaining</h3>
+            </div>
+            <p className="text-[10px] text-[#A1A1A8] mt-0.5">When one agent finds something, it automatically triggers the next</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="pm-table min-w-[600px]">
+              <thead>
+                <tr>
+                  <th className="text-left">Source Agent</th>
+                  <th className="text-center"></th>
+                  <th className="text-left">Target Agent</th>
+                  <th className="text-left">Trigger</th>
+                  <th className="text-left">Data Passed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {chains.map((chain, i) => (
+                  <tr key={i}>
+                    <td className="font-medium text-[#1A8FD6] text-xs">{chain.from}</td>
+                    <td className="text-center"><ArrowRight size={12} className="text-[#7C5CFF] mx-auto" /></td>
+                    <td className="font-medium text-[#17C5B0] text-xs">{chain.to}</td>
+                    <td className="text-xs text-[#F5F5F7] font-mono">{chain.trigger}</td>
+                    <td className="text-xs text-[#A1A1A8] max-w-[200px] truncate">{chain.dataPassed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      {/* Confidence Calibration */}
+      <ScrollReveal variant="fadeUp" delay={0.2}>
+        <div className="card overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
+            <div className="flex items-center gap-2">
+              <Target size={14} className="text-[#17C5B0]" />
+              <h3 className="text-sm font-semibold text-[#F5F5F7]">Confidence Calibration</h3>
+            </div>
+            <p className="text-[10px] text-[#A1A1A8] mt-0.5">How accurate were past predictions? Agents improve as more data flows in.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="pm-table min-w-[650px]">
+              <thead>
+                <tr>
+                  <th className="text-left">Agent</th>
+                  <th className="text-left">Category</th>
+                  <th className="text-right">Predicted</th>
+                  <th className="text-right">Actual</th>
+                  <th className="text-right">Confidence</th>
+                  <th className="text-right">Accuracy</th>
+                  <th className="text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {calibration.map((c, i) => (
+                  <tr key={i}>
+                    <td className="text-xs font-medium text-[#F5F5F7]">{c.agentName}</td>
+                    <td className="text-xs text-[#A1A1A8]">{c.category}</td>
+                    <td className="text-right font-mono text-xs text-[#F5F5F7]">{c.predictedValue}</td>
+                    <td className="text-right font-mono text-xs text-[#F5F5F7]">{c.actualValue ?? '—'}</td>
+                    <td className="text-right font-mono text-xs text-[#A1A1A8]">{c.confidenceScore}%</td>
+                    <td className="text-right">
+                      {c.accuracyPct != null ? (
+                        <span className={clsx('font-mono text-xs font-semibold', c.accuracyPct >= 90 ? 'text-[#17C5B0]' : c.accuracyPct >= 75 ? 'text-amber-400' : 'text-red-400')}>
+                          {c.accuracyPct}%
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#A1A1A8]/40">pending</span>
+                      )}
+                    </td>
+                    <td className="text-center">
+                      {c.accuracyPct == null ? <Minus size={12} className="mx-auto text-[#A1A1A8]/30" /> :
+                       c.accuracyPct >= 90 ? <CheckCircle2 size={12} className="mx-auto text-[#17C5B0]" /> :
+                       c.accuracyPct >= 75 ? <AlertTriangle size={12} className="mx-auto text-amber-400" /> :
+                       <XCircle size={12} className="mx-auto text-red-400" />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="px-4 py-3 border-t border-[#1F1F23] flex items-center gap-4 text-[10px] text-[#A1A1A8]/40">
+            <span>Avg accuracy: <span className="font-mono text-[#17C5B0]">{Math.round(calibration.filter(c => c.accuracyPct != null).reduce((s, c) => s + (c.accuracyPct || 0), 0) / calibration.filter(c => c.accuracyPct != null).length)}%</span></span>
+            <span>{calibration.filter(c => c.accuracyPct == null).length} predictions pending verification</span>
+          </div>
         </div>
       </ScrollReveal>
     </div>

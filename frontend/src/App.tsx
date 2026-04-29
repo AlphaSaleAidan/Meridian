@@ -20,6 +20,8 @@ import CustomersPage from '@/pages/CustomersPage'
 import StaffPage from '@/pages/StaffPage'
 import PeakHoursPage from '@/pages/PeakHoursPage'
 import MarginsPage from '@/pages/MarginsPage'
+import MenuEngineeringPage from '@/pages/MenuEngineeringPage'
+import AnomaliesPage from '@/pages/AnomaliesPage'
 
 function DashboardRoutes() {
   return (
@@ -36,6 +38,8 @@ function DashboardRoutes() {
       <Route path="staff" element={<StaffPage />} />
       <Route path="peak-hours" element={<PeakHoursPage />} />
       <Route path="margins" element={<MarginsPage />} />
+      <Route path="menu-matrix" element={<MenuEngineeringPage />} />
+      <Route path="anomalies" element={<AnomaliesPage />} />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>
