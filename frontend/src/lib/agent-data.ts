@@ -77,6 +77,14 @@ export interface PeakHourCell {
   intensity: number
 }
 
+export interface IngredientCost {
+  name: string
+  batchCostCents: number
+  batchServings: number
+  amountUsedOz: number
+  wastePct: number
+}
+
 export interface MarginItem {
   name: string
   revenueCents: number
@@ -85,6 +93,28 @@ export interface MarginItem {
   marginPct: number
   leakageCents: number
   category: string
+  sellingPriceCents: number
+  monthlySales: number
+  rawCostPerServingCents: number
+  wasteAdjustedCostCents: number
+  pourCostPct: number
+  marginPerUnitCents: number
+  wasteFactor: number
+  ingredients: IngredientCost[]
+}
+
+export interface CustomerProfile {
+  id: string
+  name: string
+  segment: string
+  segmentColor: string
+  avgOrderCents: number
+  totalSpentCents: number
+  visitsPerMonth: number
+  lastVisit: string
+  daysSinceVisit: number
+  topItem: string
+  retentionRisk: 'low' | 'medium' | 'high'
 }
 
 export interface ForecastPeriod {
@@ -284,18 +314,136 @@ export function generatePeakHourHeatmap(): PeakHourCell[] {
   return cells
 }
 
+function calcMarginItem(
+  name: string,
+  category: string,
+  sellingPriceCents: number,
+  monthlySales: number,
+  ingredients: IngredientCost[],
+  externalLeakageCents: number,
+): MarginItem {
+  // Raw Cost Per Serving = sum of (batch cost / batch servings) for each ingredient
+  const rawCostPerServingCents = ingredients.reduce((sum, ing) => {
+    return sum + Math.round(ing.batchCostCents / ing.batchServings)
+  }, 0)
+
+  // Waste Factor = weighted average of ingredient waste percentages
+  const totalIngredientCost = ingredients.reduce((s, ing) => s + ing.batchCostCents, 0)
+  const wasteFactor = totalIngredientCost > 0
+    ? ingredients.reduce((s, ing) => s + (ing.wastePct / 100) * ing.batchCostCents, 0) / totalIngredientCost
+    : 0
+
+  // Waste-Adjusted Cost = Raw Cost / (1 - Waste Factor)
+  const wasteAdjustedCostCents = wasteFactor < 1
+    ? Math.round(rawCostPerServingCents / (1 - wasteFactor))
+    : rawCostPerServingCents
+
+  // Pour Cost % = COGS / Revenue
+  const pourCostPct = sellingPriceCents > 0
+    ? Math.round((wasteAdjustedCostCents / sellingPriceCents) * 100)
+    : 0
+
+  // Margin Per Unit = Selling Price - Waste-Adjusted Cost
+  const marginPerUnitCents = sellingPriceCents - wasteAdjustedCostCents
+
+  // Monthly aggregates
+  const revenueCents = sellingPriceCents * monthlySales
+  const costCents = wasteAdjustedCostCents * monthlySales
+  const marginCents = marginPerUnitCents * monthlySales
+  const marginPct = revenueCents > 0 ? Math.round((marginCents / revenueCents) * 100) : 0
+
+  // Leakage = waste cost delta + external leakage (discounts, comps, spoilage)
+  const wasteCostDelta = (wasteAdjustedCostCents - rawCostPerServingCents) * monthlySales
+  const leakageCents = wasteCostDelta + externalLeakageCents
+
+  return {
+    name, category, sellingPriceCents, monthlySales,
+    revenueCents, costCents, marginCents, marginPct, leakageCents,
+    rawCostPerServingCents, wasteAdjustedCostCents, pourCostPct,
+    marginPerUnitCents, wasteFactor, ingredients,
+  }
+}
+
 export function generateMarginWaterfall(): MarginItem[] {
   return [
-    { name: 'Espresso', revenueCents: 148500, costCents: 29700, marginCents: 118800, marginPct: 80, leakageCents: 0, category: 'drinks' },
-    { name: 'Cappuccino', revenueCents: 236250, costCents: 59060, marginCents: 177190, marginPct: 75, leakageCents: 0, category: 'drinks' },
-    { name: 'Iced Latte', revenueCents: 195500, costCents: 52785, marginCents: 142715, marginPct: 73, leakageCents: 0, category: 'drinks' },
-    { name: 'Cold Brew', revenueCents: 165000, costCents: 46200, marginCents: 118800, marginPct: 72, leakageCents: 0, category: 'drinks' },
-    { name: 'Matcha Latte', revenueCents: 118750, costCents: 45125, marginCents: 73625, marginPct: 62, leakageCents: 15400, category: 'drinks' },
-    { name: 'Croissant', revenueCents: 153000, costCents: 53550, marginCents: 99450, marginPct: 65, leakageCents: 8200, category: 'food' },
-    { name: 'Avocado Toast', revenueCents: 125300, costCents: 56385, marginCents: 68915, marginPct: 55, leakageCents: 12600, category: 'food' },
-    { name: 'Breakfast Sandwich', revenueCents: 135150, costCents: 54060, marginCents: 81090, marginPct: 60, leakageCents: 6800, category: 'food' },
-    { name: 'Blueberry Muffin', revenueCents: 106650, costCents: 37328, marginCents: 69322, marginPct: 65, leakageCents: 4200, category: 'food' },
-    { name: 'Drip Coffee', revenueCents: 82500, costCents: 14850, marginCents: 67650, marginPct: 82, leakageCents: 0, category: 'drinks' },
+    calcMarginItem('Espresso', 'drinks', 450, 330, [
+      { name: 'Coffee beans', batchCostCents: 1800, batchServings: 60, amountUsedOz: 0.5, wastePct: 3 },
+      { name: 'Water/filtration', batchCostCents: 200, batchServings: 100, amountUsedOz: 2, wastePct: 0 },
+      { name: 'Cup/lid', batchCostCents: 1500, batchServings: 100, amountUsedOz: 0, wastePct: 1 },
+    ], 0),
+    calcMarginItem('Cappuccino', 'drinks', 525, 450, [
+      { name: 'Coffee beans', batchCostCents: 1800, batchServings: 60, amountUsedOz: 0.5, wastePct: 3 },
+      { name: 'Whole milk', batchCostCents: 450, batchServings: 16, amountUsedOz: 6, wastePct: 8 },
+      { name: 'Cup/lid', batchCostCents: 1500, batchServings: 100, amountUsedOz: 0, wastePct: 1 },
+    ], 0),
+    calcMarginItem('Iced Latte', 'drinks', 575, 340, [
+      { name: 'Coffee beans', batchCostCents: 1800, batchServings: 60, amountUsedOz: 0.5, wastePct: 3 },
+      { name: 'Whole milk', batchCostCents: 450, batchServings: 16, amountUsedOz: 8, wastePct: 8 },
+      { name: 'Ice', batchCostCents: 800, batchServings: 100, amountUsedOz: 8, wastePct: 5 },
+      { name: 'Cup/lid/straw', batchCostCents: 2000, batchServings: 100, amountUsedOz: 0, wastePct: 1 },
+    ], 0),
+    calcMarginItem('Cold Brew', 'drinks', 550, 300, [
+      { name: 'Coffee beans (coarse)', batchCostCents: 2200, batchServings: 40, amountUsedOz: 1.0, wastePct: 5 },
+      { name: 'Filtration/water', batchCostCents: 200, batchServings: 100, amountUsedOz: 12, wastePct: 0 },
+      { name: 'Cup/lid/straw', batchCostCents: 2000, batchServings: 100, amountUsedOz: 0, wastePct: 1 },
+    ], 0),
+    calcMarginItem('Matcha Latte', 'drinks', 625, 190, [
+      { name: 'Matcha powder', batchCostCents: 3200, batchServings: 30, amountUsedOz: 0.14, wastePct: 6 },
+      { name: 'Oat milk', batchCostCents: 650, batchServings: 12, amountUsedOz: 8, wastePct: 12 },
+      { name: 'Cup/lid', batchCostCents: 1500, batchServings: 100, amountUsedOz: 0, wastePct: 1 },
+    ], 8400),
+    calcMarginItem('Croissant', 'food', 425, 360, [
+      { name: 'Frozen croissants (case)', batchCostCents: 4800, batchServings: 48, amountUsedOz: 3, wastePct: 5 },
+      { name: 'Butter glaze', batchCostCents: 600, batchServings: 48, amountUsedOz: 0.25, wastePct: 3 },
+      { name: 'Bag/tissue', batchCostCents: 800, batchServings: 100, amountUsedOz: 0, wastePct: 0 },
+    ], 6800),
+    calcMarginItem('Avocado Toast', 'food', 895, 140, [
+      { name: 'Sourdough loaf', batchCostCents: 550, batchServings: 12, amountUsedOz: 2.5, wastePct: 8 },
+      { name: 'Avocado', batchCostCents: 200, batchServings: 2, amountUsedOz: 4, wastePct: 15 },
+      { name: 'Toppings (egg, seasoning)', batchCostCents: 1200, batchServings: 20, amountUsedOz: 2, wastePct: 5 },
+      { name: 'Plate/napkin', batchCostCents: 1000, batchServings: 100, amountUsedOz: 0, wastePct: 0 },
+    ], 9200),
+    calcMarginItem('Breakfast Sandwich', 'food', 750, 180, [
+      { name: 'English muffin (case)', batchCostCents: 1200, batchServings: 24, amountUsedOz: 2, wastePct: 4 },
+      { name: 'Egg', batchCostCents: 500, batchServings: 12, amountUsedOz: 2, wastePct: 6 },
+      { name: 'Cheese/bacon', batchCostCents: 2400, batchServings: 20, amountUsedOz: 2, wastePct: 8 },
+      { name: 'Wrapper', batchCostCents: 600, batchServings: 100, amountUsedOz: 0, wastePct: 0 },
+    ], 4200),
+    calcMarginItem('Blueberry Muffin', 'food', 395, 270, [
+      { name: 'Muffin batter (batch)', batchCostCents: 1800, batchServings: 24, amountUsedOz: 4, wastePct: 4 },
+      { name: 'Blueberries', batchCostCents: 600, batchServings: 24, amountUsedOz: 0.75, wastePct: 6 },
+      { name: 'Bag/tissue', batchCostCents: 800, batchServings: 100, amountUsedOz: 0, wastePct: 0 },
+    ], 3100),
+    calcMarginItem('Drip Coffee', 'drinks', 275, 300, [
+      { name: 'Coffee beans', batchCostCents: 1800, batchServings: 80, amountUsedOz: 0.35, wastePct: 2 },
+      { name: 'Filter/water', batchCostCents: 300, batchServings: 100, amountUsedOz: 10, wastePct: 0 },
+      { name: 'Cup/lid', batchCostCents: 1200, batchServings: 100, amountUsedOz: 0, wastePct: 1 },
+    ], 0),
+  ]
+}
+
+export function generateCustomerRankings(): CustomerProfile[] {
+  const daysAgo = (d: number) => {
+    const dt = new Date()
+    dt.setDate(dt.getDate() - d)
+    return dt.toISOString()
+  }
+  return [
+    { id: 'c1', name: 'Rachel M.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1580, totalSpentCents: 284400, visitsPerMonth: 18, lastVisit: daysAgo(1), daysSinceVisit: 1, topItem: 'Iced Latte + Avocado Toast', retentionRisk: 'low' },
+    { id: 'c2', name: 'David K.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1420, totalSpentCents: 255600, visitsPerMonth: 16, lastVisit: daysAgo(1), daysSinceVisit: 1, topItem: 'Cold Brew + Croissant', retentionRisk: 'low' },
+    { id: 'c3', name: 'Sarah T.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 1250, totalSpentCents: 150000, visitsPerMonth: 12, lastVisit: daysAgo(2), daysSinceVisit: 2, topItem: 'Cappuccino + Blueberry Muffin', retentionRisk: 'low' },
+    { id: 'c4', name: 'Michael B.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1680, totalSpentCents: 302400, visitsPerMonth: 20, lastVisit: daysAgo(0), daysSinceVisit: 0, topItem: 'Matcha Latte + Breakfast Sandwich', retentionRisk: 'low' },
+    { id: 'c5', name: 'Lisa W.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 1180, totalSpentCents: 141600, visitsPerMonth: 10, lastVisit: daysAgo(3), daysSinceVisit: 3, topItem: 'Espresso + Croissant', retentionRisk: 'low' },
+    { id: 'c6', name: 'James P.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 980, totalSpentCents: 117600, visitsPerMonth: 8, lastVisit: daysAgo(4), daysSinceVisit: 4, topItem: 'Drip Coffee x2', retentionRisk: 'low' },
+    { id: 'c7', name: 'Amanda R.', segment: 'Potential', segmentColor: '#7C5CFF', avgOrderCents: 1340, totalSpentCents: 80400, visitsPerMonth: 6, lastVisit: daysAgo(5), daysSinceVisit: 5, topItem: 'Iced Latte + Avocado Toast', retentionRisk: 'low' },
+    { id: 'c8', name: 'Chris H.', segment: 'Potential', segmentColor: '#7C5CFF', avgOrderCents: 890, totalSpentCents: 53400, visitsPerMonth: 5, lastVisit: daysAgo(6), daysSinceVisit: 6, topItem: 'Cappuccino', retentionRisk: 'medium' },
+    { id: 'c9', name: 'Nicole F.', segment: 'Needs Attention', segmentColor: '#FBBF24', avgOrderCents: 1560, totalSpentCents: 46800, visitsPerMonth: 3, lastVisit: daysAgo(14), daysSinceVisit: 14, topItem: 'Matcha Latte + Avocado Toast', retentionRisk: 'medium' },
+    { id: 'c10', name: 'Robert G.', segment: 'At Risk', segmentColor: '#F97316', avgOrderCents: 1450, totalSpentCents: 174000, visitsPerMonth: 1, lastVisit: daysAgo(28), daysSinceVisit: 28, topItem: 'Cold Brew + Breakfast Sandwich', retentionRisk: 'high' },
+    { id: 'c11', name: 'Emily S.', segment: 'Promising', segmentColor: '#60A5FA', avgOrderCents: 720, totalSpentCents: 28800, visitsPerMonth: 4, lastVisit: daysAgo(7), daysSinceVisit: 7, topItem: 'Drip Coffee + Muffin', retentionRisk: 'low' },
+    { id: 'c12', name: 'Tom L.', segment: 'At Risk', segmentColor: '#F97316', avgOrderCents: 1320, totalSpentCents: 158400, visitsPerMonth: 1, lastVisit: daysAgo(35), daysSinceVisit: 35, topItem: 'Iced Latte + Croissant', retentionRisk: 'high' },
+    { id: 'c13', name: 'Jennifer C.', segment: 'Recent', segmentColor: '#4FE3C1', avgOrderCents: 650, totalSpentCents: 13000, visitsPerMonth: 2, lastVisit: daysAgo(3), daysSinceVisit: 3, topItem: 'Cappuccino', retentionRisk: 'medium' },
+    { id: 'c14', name: 'Brian N.', segment: 'Hibernating', segmentColor: '#EF4444', avgOrderCents: 980, totalSpentCents: 58800, visitsPerMonth: 0, lastVisit: daysAgo(62), daysSinceVisit: 62, topItem: 'Espresso + Croissant', retentionRisk: 'high' },
+    { id: 'c15', name: 'Karen A.', segment: 'Recent', segmentColor: '#4FE3C1', avgOrderCents: 480, totalSpentCents: 9600, visitsPerMonth: 2, lastVisit: daysAgo(5), daysSinceVisit: 5, topItem: 'Drip Coffee', retentionRisk: 'medium' },
   ]
 }
 
