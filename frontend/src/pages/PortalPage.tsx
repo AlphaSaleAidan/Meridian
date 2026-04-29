@@ -239,23 +239,39 @@ export default function PortalPage() {
           )}
         </div>
 
-        {/* SOP Steps */}
-        <div className="mt-6 space-y-2">
-          <p className="text-[10px] font-semibold text-[#A1A1A8]/60 text-center uppercase tracking-wider">How it works</p>
-          <div className="grid grid-cols-3 gap-2">
+        {/* Full Onboarding Roadmap */}
+        <div className="mt-6 space-y-3">
+          <p className="text-[10px] font-semibold text-[#A1A1A8]/60 text-center uppercase tracking-wider">Getting Your POS Online</p>
+          <div className="space-y-0">
             {[
-              { step: '1', label: 'Sign Up', desc: 'Create account or use token' },
-              { step: '2', label: 'Connect POS', desc: 'Link Square, Clover, or Toast' },
-              { step: '3', label: 'Get Insights', desc: 'AI agents start analyzing' },
-            ].map(s => (
-              <div key={s.step} className="text-center">
-                <div className="w-6 h-6 rounded-full bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center mx-auto mb-1">
-                  <span className="text-[10px] font-bold text-[#1A8FD6] font-mono">{s.step}</span>
+              { step: '1', label: 'Activate Account', desc: 'Use your access token or create an account directly', color: '#1A8FD6' },
+              { step: '2', label: 'Connect POS System', desc: 'Link Square, Clover, or Toast via secure OAuth', color: '#1A8FD6' },
+              { step: '3', label: 'Historical Import', desc: 'We pull up to 18 months of transaction history automatically', color: '#7C5CFF' },
+              { step: '4', label: 'Agent Calibration', desc: '15 AI agents analyze your data and tune to your business type', color: '#7C5CFF' },
+              { step: '5', label: 'Insights Go Live', desc: 'Revenue forecasts, margin analysis, customer segments, and top actions', color: '#17C5B0' },
+              { step: '6', label: 'Ongoing Intelligence', desc: 'Agents run continuously — new findings every hour, alerts in real time', color: '#17C5B0' },
+            ].map((s, i, arr) => (
+              <div key={s.step} className="flex items-start gap-3 relative">
+                <div className="flex flex-col items-center flex-shrink-0">
+                  <div
+                    className="w-6 h-6 rounded-full flex items-center justify-center border"
+                    style={{ backgroundColor: `${s.color}15`, borderColor: `${s.color}30` }}
+                  >
+                    <span className="text-[10px] font-bold font-mono" style={{ color: s.color }}>{s.step}</span>
+                  </div>
+                  {i < arr.length - 1 && (
+                    <div className="w-px h-4 bg-[#1F1F23]" />
+                  )}
                 </div>
-                <p className="text-[10px] font-medium text-[#F5F5F7]">{s.label}</p>
-                <p className="text-[9px] text-[#A1A1A8]/40">{s.desc}</p>
+                <div className="pt-0.5 pb-3">
+                  <p className="text-[10px] font-semibold text-[#F5F5F7]">{s.label}</p>
+                  <p className="text-[9px] text-[#A1A1A8]/50 leading-relaxed">{s.desc}</p>
+                </div>
               </div>
             ))}
+          </div>
+          <div className="text-center pt-1">
+            <p className="text-[9px] text-[#A1A1A8]/30">Most businesses are fully live within 24 hours of connecting their POS</p>
           </div>
         </div>
 
