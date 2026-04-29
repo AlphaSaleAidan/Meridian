@@ -1,10 +1,25 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/lib/auth'
+import { SalesAuthProvider } from '@/lib/sales-auth'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
+import SalesProtectedRoute from '@/components/SalesProtectedRoute'
 import Layout from '@/components/Layout'
-import PortalPage from '@/pages/PortalPage'
+import SalesLayout from '@/components/SalesLayout'
+
+import SalesLoginPage from '@/pages/sales/SalesLoginPage'
+import SalesSignupPage from '@/pages/sales/SalesSignupPage'
+import SalesDashboardPage from '@/pages/sales/SalesDashboardPage'
+import LeadsPage from '@/pages/sales/LeadsPage'
+import AccountsPage from '@/pages/sales/AccountsPage'
+import TrainingPage from '@/pages/sales/TrainingPage'
+import TeamManagementPage from '@/pages/sales/TeamManagementPage'
+import SalesSettingsPage from '@/pages/sales/SalesSettingsPage'
+
+import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
+import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
+
 import OverviewPage from '@/pages/OverviewPage'
 import RevenuePage from '@/pages/RevenuePage'
 import ProductsPage from '@/pages/ProductsPage'
@@ -37,7 +52,7 @@ function LazyFallback() {
   )
 }
 
-function DashboardRoutes() {
+function CustomerDashboardRoutes() {
   return (
     <>
       <Route index element={<OverviewPage />} />
@@ -63,40 +78,88 @@ function DashboardRoutes() {
 export default function App() {
   return (
     <ErrorBoundary>
-    <AuthProvider>
-      <Suspense fallback={<LazyFallback />}>
-        <Routes>
-          <Route path="/landing" element={<LandingPage />} />
-          <Route path="/onboarding" element={<OnboardingPage />} />
-          <Route path="/careers" element={<CareersPage />} />
-          <Route path="/portal" element={<PortalPage />} />
-          <Route path="/portal/*" element={<PortalPage />} />
+      <AuthProvider>
+        <SalesAuthProvider>
+          <Suspense fallback={<LazyFallback />}>
+            <Routes>
+              {/* ══════════════════════════════════════════════
+                  SALES CRM (Internal — Sales Reps)
+                  ══════════════════════════════════════════════ */}
+              <Route path="/login" element={<SalesLoginPage />} />
+              <Route path="/signup" element={<SalesSignupPage />} />
 
-          <Route path="/admin" element={
-            <ProtectedRoute>
-              <AdminPage />
-            </ProtectedRoute>
-          } />
+              <Route element={
+                <SalesProtectedRoute>
+                  <SalesLayout />
+                </SalesProtectedRoute>
+              }>
+                <Route path="/dashboard" element={<SalesDashboardPage />} />
+                <Route path="/leads" element={<LeadsPage />} />
+                <Route path="/accounts" element={<AccountsPage />} />
+                <Route path="/training" element={<TrainingPage />} />
+                <Route path="/settings" element={<SalesSettingsPage />} />
+                <Route path="/admin" element={<TeamManagementPage />} />
+              </Route>
 
-          {/* Demo — open access, no auth required */}
-          <Route path="/demo" element={<Layout />}>
-            {DashboardRoutes()}
-          </Route>
+              <Route path="/onboarding" element={
+                <SalesProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <OnboardingPage />
+                  </Suspense>
+                </SalesProtectedRoute>
+              } />
 
-          {/* App — protected, requires login */}
-          <Route path="/app" element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }>
-            {DashboardRoutes()}
-          </Route>
+              <Route path="/setup" element={
+                <SalesProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <OnboardingPage />
+                  </Suspense>
+                </SalesProtectedRoute>
+              } />
 
-          <Route path="/" element={<Navigate to="/landing" replace />} />
-          <Route path="*" element={<Navigate to="/landing" replace />} />
-        </Routes>
-      </Suspense>
-    </AuthProvider>
+              {/* ══════════════════════════════════════════════
+                  CUSTOMER APP (Business Owners)
+                  ══════════════════════════════════════════════ */}
+              <Route path="/customer/login" element={<CustomerLoginPage />} />
+              <Route path="/customer/signup" element={<CustomerSignupPage />} />
+
+              {/* Legacy /portal route — redirect to customer login */}
+              <Route path="/portal" element={<Navigate to="/customer/login" replace />} />
+              <Route path="/portal/*" element={<Navigate to="/customer/login" replace />} />
+
+              <Route path="/customer/admin" element={
+                <ProtectedRoute>
+                  <AdminPage />
+                </ProtectedRoute>
+              } />
+
+              {/* Customer dashboard — protected, requires customer auth */}
+              <Route path="/app" element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }>
+                {CustomerDashboardRoutes()}
+              </Route>
+
+              {/* Demo — open access, no auth required */}
+              <Route path="/demo" element={<Layout />}>
+                {CustomerDashboardRoutes()}
+              </Route>
+
+              {/* ══════════════════════════════════════════════
+                  PUBLIC PAGES
+                  ══════════════════════════════════════════════ */}
+              <Route path="/landing" element={<LandingPage />} />
+              <Route path="/careers" element={<CareersPage />} />
+
+              {/* Default: sales reps go to login */}
+              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </Suspense>
+        </SalesAuthProvider>
+      </AuthProvider>
     </ErrorBoundary>
   )
 }

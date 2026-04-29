@@ -56,7 +56,7 @@ export default function Layout() {
 
   async function handleLogout() {
     await logout()
-    navigate('/portal', { replace: true })
+    navigate('/customer/login', { replace: true })
   }
 
   // Close sidebar on route change (mobile)

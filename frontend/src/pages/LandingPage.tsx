@@ -85,13 +85,13 @@ export default function LandingPage() {
               Careers
             </MagneticButton>
             <MagneticButton
-              onClick={() => navigate('/portal')}
+              onClick={() => navigate('/customer/login')}
               className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200"
             >
-              Sales Rep Login
+              Customer Login
             </MagneticButton>
             <MagneticButton
-              onClick={() => navigate('/onboarding')}
+              onClick={() => navigate('/customer/signup')}
               className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] bg-[#1A8FD6] rounded-md hover:bg-[#1574B8] transition-colors duration-200"
             >
               Get Started
@@ -167,7 +167,7 @@ export default function LandingPage() {
             className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
           >
             <MagneticButton
-              onClick={() => navigate('/onboarding')}
+              onClick={() => navigate('/customer/signup')}
               className="group px-6 py-3 text-[14px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(26,143,214,0.3)] flex items-center gap-2"
             >
               Get Started Free
@@ -409,7 +409,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-10">
               <MagneticButton
-                onClick={() => navigate('/onboarding')}
+                onClick={() => navigate('/customer/signup')}
                 className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(26,143,214,0.35)] inline-flex items-center gap-2"
               >
                 Get Started Free
@@ -436,7 +436,7 @@ export default function LandingPage() {
                 <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
                 <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
                 <a onClick={() => navigate('/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
-                <a onClick={() => navigate('/portal')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
+                <a onClick={() => navigate('/customer/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>
               </div>
               <p className="text-[11px] text-[#A1A1A8]/30">© 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>
             </div>

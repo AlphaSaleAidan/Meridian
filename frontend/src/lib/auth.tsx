@@ -19,6 +19,7 @@ export interface AuthState {
   isAdmin: boolean
   user: { id: string; email: string } | null
   org: OrgProfile | null
+  isSalesRep: boolean
   pendingBusiness: { id: string; name: string; ownerName: string; email: string } | null
   login: (email: string, password: string) => Promise<string | null>
   signup: (email: string, password: string, fullName: string, businessName: string) => Promise<string | null>
@@ -87,11 +88,34 @@ async function checkAdmin(): Promise<boolean> {
   return !!data
 }
 
+async function checkIsSalesRep(email: string): Promise<boolean> {
+  if (!supabase) {
+    try {
+      const raw = localStorage.getItem('meridian_sales_rep')
+      if (raw) {
+        const rep = JSON.parse(raw)
+        return rep.email === email
+      }
+    } catch {}
+    return false
+  }
+
+  const { data } = await supabase
+    .from('sales_reps')
+    .select('id')
+    .eq('email', email)
+    .eq('is_active', true)
+    .single()
+
+  return !!data
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [user, setUser] = useState<{ id: string; email: string } | null>(null)
   const [org, setOrg] = useState<OrgProfile | null>(loadOrg)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isSalesRep, setIsSalesRep] = useState(false)
   const [pendingBusiness, setPendingBusiness] = useState<{
     id: string; name: string; ownerName: string; email: string
   } | null>(null)
@@ -108,12 +132,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
-        const [o, admin] = await Promise.all([
+        const [o, admin, salesRep] = await Promise.all([
           fetchBusinessForUser(u.id, u.email),
           checkAdmin(),
+          checkIsSalesRep(u.email),
         ])
         if (o) setOrg(o)
         setIsAdmin(admin)
+        setIsSalesRep(salesRep)
       }
       setReady(true)
     })
@@ -122,16 +148,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
-        const [o, admin] = await Promise.all([
+        const [o, admin, salesRep] = await Promise.all([
           fetchBusinessForUser(u.id, u.email),
           checkAdmin(),
+          checkIsSalesRep(u.email),
         ])
         if (o) setOrg(o)
         setIsAdmin(admin)
+        setIsSalesRep(salesRep)
       } else {
         setUser(null)
         setOrg(null)
         setIsAdmin(false)
+        setIsSalesRep(false)
         clearAuth()
       }
     })
@@ -141,6 +170,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     if (!supabase) {
+      const repData = localStorage.getItem('meridian_sales_rep')
+      if (repData) {
+        try {
+          const rep = JSON.parse(repData)
+          if (rep.email === email) {
+            return 'This email is registered as a sales rep. Please use the sales portal at /login'
+          }
+        } catch {}
+      }
+
       const stored = loadOrg()
       if (stored) { setOrg(stored); setUser({ id: 'local', email }) }
       return null
@@ -151,12 +190,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.user) {
       const u = { id: data.user.id, email: data.user.email || email }
       setUser(u)
+
+      const salesRep = await checkIsSalesRep(u.email)
+      if (salesRep) {
+        const o = await fetchBusinessForUser(u.id, u.email)
+        if (!o) {
+          await supabase.auth.signOut()
+          setUser(null)
+          setIsSalesRep(false)
+          return 'This account belongs to a sales rep. Please use the sales portal at /login'
+        }
+      }
+
       const [o, admin] = await Promise.all([
         fetchBusinessForUser(u.id, u.email),
         checkAdmin(),
       ])
       if (o) setOrg(o)
       setIsAdmin(admin)
+      setIsSalesRep(salesRep)
     }
     return null
   }, [])
@@ -182,7 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password,
       options: {
         data: { full_name: fullName, business_name: businessName },
-        emailRedirectTo: window.location.origin + '/portal',
+        emailRedirectTo: window.location.origin + '/customer/login',
       },
     })
     if (error) return error.message
@@ -224,6 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
     setOrg(null)
     setIsAdmin(false)
+    setIsSalesRep(false)
     clearAuth()
   }, [])
 
@@ -267,7 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string): Promise<string | null> => {
     if (!supabase) return null
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/portal',
+      redirectTo: window.location.origin + '/customer/login',
     })
     return error ? error.message : null
   }, [])
@@ -275,10 +328,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       ready,
-      authenticated: supabase ? !!user : (!!user || !!org),
+      authenticated: !!org,
       isAdmin,
       user,
       org,
+      isSalesRep,
       pendingBusiness,
       login,
       signup,
