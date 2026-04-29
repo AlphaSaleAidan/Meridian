@@ -8,6 +8,7 @@ export interface OrgProfile {
   email: string
   plan: 'trial' | 'starter' | 'growth' | 'enterprise'
   pos_provider: string | null
+  pos_connected: boolean
   created_at: string
   onboarded: boolean
 }
@@ -15,6 +16,7 @@ export interface OrgProfile {
 export interface AuthState {
   ready: boolean
   authenticated: boolean
+  isAdmin: boolean
   user: { id: string; email: string } | null
   org: OrgProfile | null
   pendingBusiness: { id: string; name: string; ownerName: string; email: string } | null
@@ -22,6 +24,8 @@ export interface AuthState {
   signup: (email: string, password: string, fullName: string, businessName: string) => Promise<string | null>
   logout: () => Promise<void>
   validateToken: (token: string) => Promise<string | null>
+  connectPos: (provider: string, apiKey: string) => Promise<string | null>
+  resetPassword: (email: string) => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -53,6 +57,7 @@ function orgFromBusiness(data: Record<string, unknown>, fallbackEmail: string): 
     email: (data.email as string) || fallbackEmail,
     plan: (data.plan_tier as OrgProfile['plan']) || 'trial',
     pos_provider: (data.pos_provider as string) || null,
+    pos_connected: (data.pos_connected as boolean) || false,
     created_at: data.created_at as string,
     onboarded: (data.onboarded as boolean) || false,
   }
@@ -76,10 +81,17 @@ async function fetchBusinessForUser(userId: string, email: string): Promise<OrgP
   return loadOrg()
 }
 
+async function checkAdmin(): Promise<boolean> {
+  if (!supabase) return false
+  const { data } = await supabase.rpc('is_admin')
+  return !!data
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [user, setUser] = useState<{ id: string; email: string } | null>(null)
   const [org, setOrg] = useState<OrgProfile | null>(loadOrg)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [pendingBusiness, setPendingBusiness] = useState<{
     id: string; name: string; ownerName: string; email: string
   } | null>(null)
@@ -92,27 +104,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
-        fetchBusinessForUser(u.id, u.email).then(o => {
-          if (o) setOrg(o)
-          setReady(true)
-        })
-      } else {
-        setReady(true)
+        const [o, admin] = await Promise.all([
+          fetchBusinessForUser(u.id, u.email),
+          checkAdmin(),
+        ])
+        if (o) setOrg(o)
+        setIsAdmin(admin)
       }
+      setReady(true)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
-        fetchBusinessForUser(u.id, u.email).then(o => { if (o) setOrg(o) })
+        const [o, admin] = await Promise.all([
+          fetchBusinessForUser(u.id, u.email),
+          checkAdmin(),
+        ])
+        if (o) setOrg(o)
+        setIsAdmin(admin)
       } else {
         setUser(null)
         setOrg(null)
+        setIsAdmin(false)
         clearAuth()
       }
     })
@@ -132,8 +151,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.user) {
       const u = { id: data.user.id, email: data.user.email || email }
       setUser(u)
-      const o = await fetchBusinessForUser(u.id, u.email)
+      const [o, admin] = await Promise.all([
+        fetchBusinessForUser(u.id, u.email),
+        checkAdmin(),
+      ])
       if (o) setOrg(o)
+      setIsAdmin(admin)
     }
     return null
   }, [])
@@ -145,7 +168,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const org: OrgProfile = {
         org_id: 'biz_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16),
         business_name: businessName, owner_name: fullName, email,
-        plan: 'trial', pos_provider: null, created_at: new Date().toISOString(), onboarded: false,
+        plan: 'trial', pos_provider: null, pos_connected: false,
+        created_at: new Date().toISOString(), onboarded: false,
       }
       saveOrg(org)
       setUser({ id: 'local', email })
@@ -199,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (supabase) await supabase.auth.signOut()
     setUser(null)
     setOrg(null)
+    setIsAdmin(false)
     clearAuth()
   }, [])
 
@@ -221,10 +246,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null
   }, [])
 
+  const connectPos = useCallback(async (provider: string, apiKey: string): Promise<string | null> => {
+    if (!supabase) {
+      if (org) {
+        const updated = { ...org, pos_provider: provider, pos_connected: true, onboarded: true }
+        saveOrg(updated)
+        setOrg(updated)
+      }
+      return null
+    }
+
+    const { error } = await supabase.rpc('connect_pos', { p_provider: provider, p_api_key: apiKey })
+    if (error) return error.message
+
+    const o = user ? await fetchBusinessForUser(user.id, user.email) : null
+    if (o) setOrg(o)
+    return null
+  }, [user, org])
+
+  const resetPassword = useCallback(async (email: string): Promise<string | null> => {
+    if (!supabase) return null
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/portal',
+    })
+    return error ? error.message : null
+  }, [])
+
   return (
     <AuthContext.Provider value={{
       ready,
       authenticated: supabase ? !!user : (!!user || !!org),
+      isAdmin,
       user,
       org,
       pendingBusiness,
@@ -232,6 +284,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signup,
       logout,
       validateToken,
+      connectPos,
+      resetPassword,
     }}>
       {children}
     </AuthContext.Provider>

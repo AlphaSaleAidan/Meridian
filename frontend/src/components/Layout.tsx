@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useAuth } from '@/lib/auth'
+import OnboardingWizard from '@/pages/OnboardingWizard'
 
 const navItems = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
@@ -51,6 +52,7 @@ export default function Layout() {
   const { org, logout } = useAuth()
   const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
   const isApp = basePath === '/app'
+  const needsOnboarding = isApp && org && !org.pos_connected && !org.onboarded
 
   async function handleLogout() {
     await logout()
@@ -188,9 +190,13 @@ export default function Layout() {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-            <Outlet />
-          </div>
+          {needsOnboarding ? (
+            <OnboardingWizard />
+          ) : (
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+              <Outlet />
+            </div>
+          )}
         </main>
       </div>
     </div>

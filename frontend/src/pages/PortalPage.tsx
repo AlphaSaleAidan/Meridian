@@ -9,7 +9,7 @@ export default function PortalPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const { authenticated, login, signup, validateToken, pendingBusiness } = useAuth()
+  const { authenticated, login, signup, validateToken, resetPassword, pendingBusiness } = useAuth()
 
   const from = (location.state as { from?: string })?.from || '/app'
   const inviteToken = searchParams.get('token')
@@ -94,10 +94,10 @@ export default function PortalPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      setSuccess('If that email exists, a reset link has been sent.')
-    }, 800)
+    const err = await resetPassword(email)
+    setLoading(false)
+    if (err) { setError(err); return }
+    setSuccess('If that email exists, a reset link has been sent.')
   }
 
   function switchMode(m: AuthMode) {
