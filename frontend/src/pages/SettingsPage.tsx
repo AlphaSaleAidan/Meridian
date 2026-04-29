@@ -1,11 +1,14 @@
+import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
-import { formatDateTime, formatRelative } from '@/lib/format'
+import { formatDateTime, formatRelative, formatCents } from '@/lib/format'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import { generateBusinessProfiles, type BusinessTypeProfile } from '@/lib/agent-data'
 import ScrollReveal from '@/components/ScrollReveal'
+import DashboardTiltCard from '@/components/DashboardTiltCard'
 
 const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -24,6 +27,84 @@ const statusColors: Record<string, string> = {
   error: 'text-red-400',
   pending: 'text-[#A1A1A8]',
   disconnected: 'text-[#A1A1A8]/50',
+}
+
+function BusinessTuningPanel() {
+  const profiles = generateBusinessProfiles()
+  const [selected, setSelected] = useState<string>('coffee_shop')
+  const profile = profiles.find(p => p.type === selected)!
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center gap-2">
+        <SlidersHorizontal size={14} className="text-[#7C5CFF]" />
+        <div>
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Business Type Tuning</h3>
+          <p className="text-[10px] text-[#A1A1A8] mt-0.5">Agent thresholds adapt to your business category</p>
+        </div>
+      </div>
+      <div className="p-4 sm:p-5 space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {profiles.map(p => (
+            <button
+              key={p.type}
+              onClick={() => setSelected(p.type)}
+              className={clsx(
+                'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-all',
+                selected === p.type
+                  ? 'bg-[#7C5CFF]/10 text-[#7C5CFF] border-[#7C5CFF]/20'
+                  : 'text-[#A1A1A8] border-[#1F1F23] hover:text-[#F5F5F7] hover:border-[#A1A1A8]/20'
+              )}
+            >
+              {selected === p.type && <Check size={12} />}
+              <Building2 size={12} />
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <DashboardTiltCard className="card p-4 space-y-3">
+            <h4 className="text-xs font-semibold text-[#F5F5F7]">Industry Benchmarks</h4>
+            <div className="space-y-2 text-xs">
+              {([
+                ['Avg Ticket', formatCents(profile.benchmarks.avgTicketCents)],
+                ['Target Margin', `${profile.benchmarks.marginPct}%`],
+                ['Peak Hours', profile.benchmarks.peakHours],
+                ['Top Category', profile.benchmarks.topCategory],
+                ['Typical Waste', `${profile.benchmarks.wastePct}%`],
+                ['Staffing Ratio', profile.benchmarks.staffingRatio],
+              ] as const).map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between py-1 border-b border-[#1F1F23]/50 last:border-0">
+                  <span className="text-[#A1A1A8]/60">{label}</span>
+                  <span className="font-mono text-[#F5F5F7]">{value}</span>
+                </div>
+              ))}
+            </div>
+          </DashboardTiltCard>
+
+          <DashboardTiltCard className="card p-4 space-y-3">
+            <h4 className="text-xs font-semibold text-[#F5F5F7]">Agent Alert Thresholds</h4>
+            <div className="space-y-2 text-xs">
+              {([
+                ['Void Alert', `>${profile.agentThresholds.voidAlertPct}%`, profile.agentThresholds.voidAlertPct > 1.5 ? 'text-amber-400' : 'text-[#17C5B0]'],
+                ['Refund Alert', `>${profile.agentThresholds.refundAlertPct}%`, profile.agentThresholds.refundAlertPct > 3 ? 'text-amber-400' : 'text-[#17C5B0]'],
+                ['Revenue Drop Alert', `>${profile.agentThresholds.revenueDropAlertPct}%`, 'text-red-400'],
+                ['Low Margin Flag', `<${profile.agentThresholds.lowMarginPct}%`, 'text-amber-400'],
+                ['High Margin Target', `>${profile.agentThresholds.highMarginPct}%`, 'text-[#17C5B0]'],
+                ['Peak Staffing Min', `${profile.agentThresholds.peakStaffingMin} staff`, 'text-[#1A8FD6]'],
+              ] as const).map(([label, value, color]) => (
+                <div key={label} className="flex items-center justify-between py-1 border-b border-[#1F1F23]/50 last:border-0">
+                  <span className="text-[#A1A1A8]/60">{label}</span>
+                  <span className={clsx('font-mono font-semibold', color)}>{value}</span>
+                </div>
+              ))}
+            </div>
+          </DashboardTiltCard>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function SettingsPage() {
@@ -131,8 +212,13 @@ export default function SettingsPage() {
         </div>
       </ScrollReveal>
 
-      {/* API Info */}
+      {/* Business Type Tuning */}
       <ScrollReveal variant="fadeUp" delay={0.15}>
+        <BusinessTuningPanel />
+      </ScrollReveal>
+
+      {/* API Info */}
+      <ScrollReveal variant="fadeUp" delay={0.2}>
         <div className="card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-[#F5F5F7] mb-3">API Configuration</h3>
           <div className="space-y-2 text-xs">

@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import {
   Users, Shield, AlertTriangle, Heart, ArrowUpDown,
-  TrendingUp, TrendingDown, Minus, Search,
+  TrendingUp, TrendingDown, Minus, Search, CalendarDays,
 } from 'lucide-react'
-import { generateRFMSegments, generateCustomerRankings, type RFMSegment, type CustomerProfile } from '@/lib/agent-data'
+import { generateRFMSegments, generateCustomerRankings, generateCohorts, type RFMSegment, type CustomerProfile, type CohortRow } from '@/lib/agent-data'
 import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
@@ -122,9 +122,65 @@ function CustomerValueTiers({ segments }: { segments: RFMSegment[] }) {
   )
 }
 
+function CohortTable({ cohorts }: { cohorts: CohortRow[] }) {
+  const maxMonths = Math.max(...cohorts.map(c => c.retentionByMonth.length))
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center gap-2">
+        <CalendarDays size={14} className="text-[#7C5CFF]" />
+        <div>
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Cohort Retention</h3>
+          <p className="text-[10px] text-[#A1A1A8] mt-0.5">How well each signup cohort retains over time</p>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="pm-table min-w-[500px]">
+          <thead>
+            <tr>
+              <th className="text-left">Cohort</th>
+              <th className="text-right">Customers</th>
+              {Array.from({ length: maxMonths }, (_, i) => (
+                <th key={i} className="text-center">M{i}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {cohorts.map(row => (
+              <tr key={row.cohort}>
+                <td className="text-xs font-medium text-[#F5F5F7] whitespace-nowrap">{row.cohort}</td>
+                <td className="text-right font-mono text-xs text-[#A1A1A8]">{row.totalCustomers}</td>
+                {Array.from({ length: maxMonths }, (_, i) => {
+                  const val = row.retentionByMonth[i]
+                  if (val == null) return <td key={i} />
+                  const opacity = Math.max(0.1, val / 100)
+                  const color = val >= 70 ? '#17C5B0' : val >= 50 ? '#1A8FD6' : val >= 30 ? '#FBBF24' : '#EF4444'
+                  return (
+                    <td key={i} className="text-center p-0">
+                      <div
+                        className="mx-auto w-full h-full flex items-center justify-center py-2"
+                        style={{ backgroundColor: `${color}${Math.round(opacity * 40).toString(16).padStart(2, '0')}` }}
+                      >
+                        <span className="text-[11px] font-mono font-semibold" style={{ color }}>{val}%</span>
+                      </div>
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-4 py-3 border-t border-[#1F1F23] text-[10px] text-[#A1A1A8]/40">
+        M0 = signup month (always 100%) • Colors indicate retention health
+      </div>
+    </div>
+  )
+}
+
 export default function CustomersPage() {
   const segments = generateRFMSegments()
   const customers = generateCustomerRankings()
+  const cohorts = generateCohorts()
   const [sortBy, setSortBy] = useState<SortKey>('totalSpent')
   const [search, setSearch] = useState('')
 
@@ -226,8 +282,13 @@ export default function CustomersPage() {
         <SegmentBar segments={segments} />
       </ScrollReveal>
 
-      {/* Customer Rankings Table */}
+      {/* Cohort Retention */}
       <ScrollReveal variant="fadeUp" delay={0.15}>
+        <CohortTable cohorts={cohorts} />
+      </ScrollReveal>
+
+      {/* Customer Rankings Table */}
+      <ScrollReveal variant="fadeUp" delay={0.2}>
         <div className="card overflow-hidden">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="flex-1">
