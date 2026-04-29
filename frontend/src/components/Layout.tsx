@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard,
@@ -18,8 +18,10 @@ import {
   UserCheck,
   Clock,
   DollarSign,
+  LogOut,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
+import { useAuth } from '@/lib/auth'
 
 const navItems = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
@@ -41,7 +43,15 @@ const navItems = [
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { org, logout } = useAuth()
   const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
+  const isApp = basePath === '/app'
+
+  async function handleLogout() {
+    await logout()
+    navigate('/portal', { replace: true })
+  }
 
   // Close sidebar on route change (mobile)
   useEffect(() => {
@@ -104,9 +114,25 @@ export default function Layout() {
 
       {/* Footer */}
       <div className="p-4 border-t border-[#1F1F23] flex-shrink-0">
-        <div className="text-[11px] text-[#A1A1A8]/40 font-mono">
-          v0.2.0
-        </div>
+        {isApp && org ? (
+          <div className="space-y-2">
+            <div>
+              <p className="text-[11px] font-medium text-[#F5F5F7] truncate">{org.business_name}</p>
+              <p className="text-[10px] text-[#A1A1A8]/40 truncate">{org.email}</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 text-[10px] text-[#A1A1A8]/50 hover:text-red-400 transition-colors"
+            >
+              <LogOut size={10} />
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <div className="text-[11px] text-[#A1A1A8]/40 font-mono">
+            v0.2.0
+          </div>
+        )}
       </div>
     </>
   )

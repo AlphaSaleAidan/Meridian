@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from '@/lib/auth'
+import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import LandingPage from '@/pages/LandingPage'
 import OnboardingPage from '@/pages/OnboardingPage'
@@ -42,23 +44,31 @@ function DashboardRoutes() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/landing" element={<LandingPage />} />
-      <Route path="/onboarding" element={<OnboardingPage />} />
-      <Route path="/careers" element={<CareersPage />} />
-      <Route path="/portal" element={<PortalPage />} />
-      <Route path="/portal/*" element={<PortalPage />} />
+    <AuthProvider>
+      <Routes>
+        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
+        <Route path="/careers" element={<CareersPage />} />
+        <Route path="/portal" element={<PortalPage />} />
+        <Route path="/portal/*" element={<PortalPage />} />
 
-      <Route path="/demo" element={<Layout />}>
-        {DashboardRoutes()}
-      </Route>
+        {/* Demo — open access, no auth required */}
+        <Route path="/demo" element={<Layout />}>
+          {DashboardRoutes()}
+        </Route>
 
-      <Route path="/app" element={<Layout />}>
-        {DashboardRoutes()}
-      </Route>
+        {/* App — protected, requires login */}
+        <Route path="/app" element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
+          {DashboardRoutes()}
+        </Route>
 
-      <Route path="/" element={<Navigate to="/landing" replace />} />
-      <Route path="*" element={<Navigate to="/landing" replace />} />
-    </Routes>
+        <Route path="/" element={<Navigate to="/landing" replace />} />
+        <Route path="*" element={<Navigate to="/landing" replace />} />
+      </Routes>
+    </AuthProvider>
   )
 }
