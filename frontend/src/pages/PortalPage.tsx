@@ -9,7 +9,7 @@ export default function PortalPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const { authenticated, login, signup, redeemToken } = useAuth()
+  const { authenticated, login, signup, validateToken, pendingBusiness } = useAuth()
 
   const from = (location.state as { from?: string })?.from || '/app'
   const inviteToken = searchParams.get('token')
@@ -35,6 +35,13 @@ export default function PortalPage() {
     }
   }, [inviteToken])
 
+  useEffect(() => {
+    if (pendingBusiness) {
+      setBusinessName(pendingBusiness.name)
+      if (pendingBusiness.email) setEmail(pendingBusiness.email)
+    }
+  }, [pendingBusiness])
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
@@ -50,14 +57,19 @@ export default function PortalPage() {
     setError(null)
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
-    const err = await signup(email, password, fullName, businessName)
+    const result = await signup(email, password, fullName, businessName)
     setLoading(false)
-    if (err) {
-      setError(err)
-    } else {
-      setSuccess('Account created! Redirecting to your dashboard...')
-      setTimeout(() => navigate('/app', { replace: true }), 1200)
+
+    if (result === '__confirm_email__') {
+      setSuccess('Account created! Check your email and click the confirmation link, then come back and sign in.')
+      return
     }
+    if (result) {
+      setError(result)
+      return
+    }
+    setSuccess('Account created! Redirecting to your dashboard...')
+    setTimeout(() => navigate('/app', { replace: true }), 1200)
   }
 
   async function handleToken(e: React.FormEvent) {
@@ -65,14 +77,16 @@ export default function PortalPage() {
     setError(null)
     if (!token.trim()) { setError('Please enter your access token'); return }
     setLoading(true)
-    const err = await redeemToken(token.trim())
+    const err = await validateToken(token.trim())
     setLoading(false)
     if (err) {
       setError(err)
     } else {
-      setSuccess('Token verified! Setting up your portal...')
-      setTimeout(() => navigate('/portal', { replace: true }), 800)
-      setTimeout(() => setMode('signup'), 900)
+      setSuccess('Token verified! Create your account to get started.')
+      setTimeout(() => {
+        setSuccess(null)
+        setMode('signup')
+      }, 600)
     }
   }
 
@@ -106,15 +120,15 @@ export default function PortalPage() {
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
           <h2 className="text-lg font-bold text-[#F5F5F7] text-center mb-1">
             {mode === 'login' && 'Welcome back'}
-            {mode === 'signup' && 'Create your account'}
+            {mode === 'signup' && (pendingBusiness ? `Welcome, ${pendingBusiness.ownerName.split(' ')[0]}` : 'Create your account')}
             {mode === 'forgot' && 'Reset password'}
             {mode === 'token' && 'Activate your portal'}
           </h2>
           <p className="text-xs text-[#A1A1A8] text-center mb-6">
             {mode === 'login' && 'Sign in to access your POS intelligence dashboard'}
-            {mode === 'signup' && 'Get started with Meridian in under 2 minutes'}
+            {mode === 'signup' && (pendingBusiness ? `Finish setting up ${pendingBusiness.name}` : 'Get started with Meridian in under 2 minutes')}
             {mode === 'forgot' && "We'll send a reset link to your email"}
-            {mode === 'token' && 'Enter the access token provided during your setup'}
+            {mode === 'token' && 'Enter the access token from your welcome email'}
           </p>
 
           {error && (
@@ -124,7 +138,7 @@ export default function PortalPage() {
             <div className="mb-4 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-xs text-[#17C5B0]">{success}</div>
           )}
 
-          {/* ── Login ── */}
+          {/* Login */}
           {mode === 'login' && (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
@@ -150,7 +164,7 @@ export default function PortalPage() {
             </form>
           )}
 
-          {/* ── Signup ── */}
+          {/* Signup */}
           {mode === 'signup' && (
             <form onSubmit={handleSignup} className="space-y-4">
               <div>
@@ -159,7 +173,15 @@ export default function PortalPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Business Name</label>
-                <input type="text" required value={businessName} onChange={e => setBusinessName(e.target.value)} className={inputClass} placeholder="The Daily Grind Coffee" />
+                <input
+                  type="text" required value={businessName} onChange={e => setBusinessName(e.target.value)}
+                  className={inputClass}
+                  placeholder="The Daily Grind Coffee"
+                  readOnly={!!pendingBusiness}
+                />
+                {pendingBusiness && (
+                  <p className="text-[10px] text-[#17C5B0] mt-1">Pre-filled from your access token</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
@@ -170,7 +192,7 @@ export default function PortalPage() {
                 <input type="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Min 8 characters" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
-                {loading ? 'Creating account...' : 'Get Started Free'}
+                {loading ? 'Creating account...' : pendingBusiness ? 'Activate & Get Started' : 'Get Started Free'}
               </button>
               <p className="text-center text-[11px] text-[#A1A1A8]">
                 Already have an account?{' '}
@@ -179,7 +201,7 @@ export default function PortalPage() {
             </form>
           )}
 
-          {/* ── Token Activation ── */}
+          {/* Token Activation */}
           {mode === 'token' && (
             <form onSubmit={handleToken} className="space-y-4">
               <div>
@@ -200,7 +222,7 @@ export default function PortalPage() {
             </form>
           )}
 
-          {/* ── Forgot Password ── */}
+          {/* Forgot Password */}
           {mode === 'forgot' && (
             <form onSubmit={handleForgot} className="space-y-4">
               <div>

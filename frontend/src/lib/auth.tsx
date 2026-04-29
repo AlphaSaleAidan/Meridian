@@ -17,16 +17,17 @@ export interface AuthState {
   authenticated: boolean
   user: { id: string; email: string } | null
   org: OrgProfile | null
+  pendingBusiness: { id: string; name: string; ownerName: string; email: string } | null
   login: (email: string, password: string) => Promise<string | null>
   signup: (email: string, password: string, fullName: string, businessName: string) => Promise<string | null>
   logout: () => Promise<void>
-  redeemToken: (token: string) => Promise<string | null>
+  validateToken: (token: string) => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
 
 const ORG_STORAGE_KEY = 'meridian_org'
-const TOKEN_STORAGE_KEY = 'meridian_access_token'
+const TOKEN_STORAGE_KEY = 'meridian_pending_token'
 
 function loadOrg(): OrgProfile | null {
   try {
@@ -39,83 +40,35 @@ function saveOrg(org: OrgProfile) {
   localStorage.setItem(ORG_STORAGE_KEY, JSON.stringify(org))
 }
 
-function clearOrg() {
+function clearAuth() {
   localStorage.removeItem(ORG_STORAGE_KEY)
   localStorage.removeItem(TOKEN_STORAGE_KEY)
 }
 
-function generateOrgId(): string {
-  return 'org_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+function orgFromBusiness(data: Record<string, unknown>, fallbackEmail: string): OrgProfile {
+  return {
+    org_id: data.id as string,
+    business_name: (data.name as string) || '',
+    owner_name: (data.owner_name as string) || '',
+    email: (data.email as string) || fallbackEmail,
+    plan: (data.plan_tier as OrgProfile['plan']) || 'trial',
+    pos_provider: (data.pos_provider as string) || null,
+    created_at: data.created_at as string,
+    onboarded: (data.onboarded as boolean) || false,
+  }
 }
 
-async function provisionOrg(
-  userId: string,
-  email: string,
-  fullName: string,
-  businessName: string,
-): Promise<OrgProfile> {
-  const org: OrgProfile = {
-    org_id: generateOrgId(),
-    business_name: businessName,
-    owner_name: fullName,
-    email,
-    plan: 'trial',
-    pos_provider: null,
-    created_at: new Date().toISOString(),
-    onboarded: false,
-  }
-
-  if (supabase) {
-    await supabase.from('organizations').upsert({
-      id: org.org_id,
-      owner_user_id: userId,
-      business_name: businessName,
-      owner_name: fullName,
-      email,
-      plan: 'trial',
-      created_at: org.created_at,
-    }, { onConflict: 'owner_user_id' }).select().single()
-
-    const { data } = await supabase
-      .from('organizations')
-      .select('*')
-      .eq('owner_user_id', userId)
-      .single()
-
-    if (data) {
-      org.org_id = data.id
-      org.business_name = data.business_name
-      org.plan = data.plan || 'trial'
-      org.pos_provider = data.pos_provider || null
-      org.onboarded = data.onboarded || false
-      org.created_at = data.created_at
-    }
-  }
-
-  saveOrg(org)
-  return org
-}
-
-async function fetchOrgForUser(userId: string, email: string): Promise<OrgProfile | null> {
+async function fetchBusinessForUser(userId: string, email: string): Promise<OrgProfile | null> {
   if (!supabase) return loadOrg()
 
   const { data } = await supabase
-    .from('organizations')
+    .from('businesses')
     .select('*')
     .eq('owner_user_id', userId)
     .single()
 
   if (data) {
-    const org: OrgProfile = {
-      org_id: data.id,
-      business_name: data.business_name,
-      owner_name: data.owner_name || '',
-      email: data.email || email,
-      plan: data.plan || 'trial',
-      pos_provider: data.pos_provider || null,
-      created_at: data.created_at,
-      onboarded: data.onboarded || false,
-    }
+    const org = orgFromBusiness(data, email)
     saveOrg(org)
     return org
   }
@@ -127,6 +80,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [user, setUser] = useState<{ id: string; email: string } | null>(null)
   const [org, setOrg] = useState<OrgProfile | null>(loadOrg)
+  const [pendingBusiness, setPendingBusiness] = useState<{
+    id: string; name: string; ownerName: string; email: string
+  } | null>(null)
 
   useEffect(() => {
     if (!supabase) {
@@ -140,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
-        fetchOrgForUser(u.id, u.email).then(o => {
+        fetchBusinessForUser(u.id, u.email).then(o => {
           if (o) setOrg(o)
           setReady(true)
         })
@@ -153,11 +109,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
-        fetchOrgForUser(u.id, u.email).then(o => { if (o) setOrg(o) })
+        fetchBusinessForUser(u.id, u.email).then(o => { if (o) setOrg(o) })
       } else {
         setUser(null)
         setOrg(null)
-        clearOrg()
+        clearAuth()
       }
     })
 
@@ -167,10 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     if (!supabase) {
       const stored = loadOrg()
-      if (stored) {
-        setOrg(stored)
-        setUser({ id: 'local', email })
-      }
+      if (stored) { setOrg(stored); setUser({ id: 'local', email }) }
       return null
     }
 
@@ -179,17 +132,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.user) {
       const u = { id: data.user.id, email: data.user.email || email }
       setUser(u)
-      const o = await fetchOrgForUser(u.id, u.email)
+      const o = await fetchBusinessForUser(u.id, u.email)
       if (o) setOrg(o)
     }
     return null
   }, [])
 
   const signup = useCallback(async (
-    email: string, password: string, fullName: string, businessName: string
+    email: string, password: string, fullName: string, businessName: string,
   ): Promise<string | null> => {
     if (!supabase) {
-      const org = await provisionOrg('local', email, fullName, businessName)
+      const org: OrgProfile = {
+        org_id: 'biz_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16),
+        business_name: businessName, owner_name: fullName, email,
+        plan: 'trial', pos_provider: null, created_at: new Date().toISOString(), onboarded: false,
+      }
+      saveOrg(org)
       setUser({ id: 'local', email })
       setOrg(org)
       return null
@@ -198,70 +156,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, business_name: businessName } },
+      options: {
+        data: { full_name: fullName, business_name: businessName },
+        emailRedirectTo: window.location.origin + '/portal',
+      },
     })
     if (error) return error.message
+    if (!data.user) return 'Signup failed — please try again'
 
-    if (data.user) {
-      const u = { id: data.user.id, email: data.user.email || email }
-      setUser(u)
-      const org = await provisionOrg(u.id, email, fullName, businessName)
-      setOrg(org)
+    const userId = data.user.id
+    const userEmail = data.user.email || email
+
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY)
+    if (storedToken) {
+      await supabase.rpc('redeem_access_token', {
+        input_token: storedToken,
+        redeeming_user_id: userId,
+      })
+      localStorage.removeItem(TOKEN_STORAGE_KEY)
+      setPendingBusiness(null)
+    } else {
+      await supabase.rpc('create_business_for_user', {
+        user_id: userId,
+        biz_name: businessName,
+        biz_owner_name: fullName,
+        biz_email: userEmail,
+      })
     }
-    return null
+
+    if (data.session) {
+      const u = { id: userId, email: userEmail }
+      setUser(u)
+      const o = await fetchBusinessForUser(u.id, u.email)
+      if (o) setOrg(o)
+      return null
+    }
+
+    return '__confirm_email__'
   }, [])
 
   const logout = useCallback(async () => {
     if (supabase) await supabase.auth.signOut()
     setUser(null)
     setOrg(null)
-    clearOrg()
+    clearAuth()
   }, [])
 
-  const redeemToken = useCallback(async (token: string): Promise<string | null> => {
+  const validateToken = useCallback(async (token: string): Promise<string | null> => {
     if (!supabase) {
       localStorage.setItem(TOKEN_STORAGE_KEY, token)
       return null
     }
 
-    const { data, error } = await supabase
-      .from('access_tokens')
-      .select('*, organizations(*)')
-      .eq('token', token)
-      .eq('redeemed', false)
-      .single()
+    const { data, error } = await supabase.rpc('validate_access_token', { input_token: token })
+    if (error || !data?.valid) return 'Invalid or expired access token'
 
-    if (error || !data) return 'Invalid or expired access token'
-
-    await supabase.from('access_tokens').update({ redeemed: true, redeemed_at: new Date().toISOString() }).eq('id', data.id)
-
-    if (data.organizations) {
-      const o: OrgProfile = {
-        org_id: data.organizations.id,
-        business_name: data.organizations.business_name,
-        owner_name: data.organizations.owner_name || '',
-        email: data.organizations.email || '',
-        plan: data.organizations.plan || 'trial',
-        pos_provider: data.organizations.pos_provider || null,
-        created_at: data.organizations.created_at,
-        onboarded: data.organizations.onboarded || false,
-      }
-      saveOrg(o)
-      setOrg(o)
-    }
+    localStorage.setItem(TOKEN_STORAGE_KEY, token)
+    setPendingBusiness({
+      id: data.business_id,
+      name: data.business_name,
+      ownerName: data.owner_name,
+      email: data.email || '',
+    })
     return null
   }, [])
 
   return (
     <AuthContext.Provider value={{
       ready,
-      authenticated: !!user || !!org,
+      authenticated: supabase ? !!user : (!!user || !!org),
       user,
       org,
+      pendingBusiness,
       login,
       signup,
       logout,
-      redeemToken,
+      validateToken,
     }}>
       {children}
     </AuthContext.Provider>
