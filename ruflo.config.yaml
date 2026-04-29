@@ -1,0 +1,223 @@
+name: meridian-pos-intelligence
+version: 1.0.0
+description: 15-agent POS Intelligence swarm for Meridian analytics platform
+
+model: claude-haiku-3-5-20251001
+max_tokens: 4096
+
+topology: hierarchical
+max_agents: 15
+strategy: specialized
+consensus: raft
+
+memory:
+  backend: supabase
+  namespace: meridian-agents
+  shared_context: true
+
+schedule:
+  trigger: on_data_upload
+  daily_run: "06:00"
+  timezone: America/New_York
+
+agents:
+  - id: transaction-analyst
+    name: Transaction Analyst
+    role: >
+      Deep dives into every transaction: ticket size, frequency, payment methods,
+      voids, refunds, discounts. Finds anomalies and fraud signals.
+    inputs: [transactions, payments, refunds]
+    outputs: [transaction_patterns, anomaly_alerts, fraud_signals]
+    priority: high
+    schedule: on_data
+    dependencies: []
+
+  - id: revenue-forecaster
+    name: Revenue Forecaster
+    role: >
+      Uses historical POS data to predict next 7, 30, and 90 day revenue.
+      Identifies seasonal patterns, growth trajectory, and revenue ceiling.
+    inputs: [daily_revenue, weekly_revenue, seasonal_data]
+    outputs: [forecast_7d, forecast_30d, forecast_90d, seasonal_patterns]
+    priority: high
+    schedule: daily
+    dependencies: [transaction-analyst]
+
+  - id: product-intelligence
+    name: Product Intelligence
+    role: >
+      Ranks every SKU by margin, velocity, attachment rate, and cannibalization.
+      Identifies hero products, dead inventory, and bundle opportunities.
+    inputs: [products, transactions, inventory]
+    outputs: [product_rankings, dead_stock, bundle_opportunities, hero_products]
+    priority: high
+    schedule: daily
+    dependencies: [transaction-analyst]
+
+  - id: customer-segmentor
+    name: Customer Segmentor
+    role: >
+      Segments customers into RFM buckets (Recency, Frequency, Monetary).
+      Identifies VIPs, at-risk customers, one-time buyers, and lapsed customers.
+    inputs: [transactions, customers]
+    outputs: [rfm_segments, vip_list, at_risk_customers, churn_signals]
+    priority: high
+    schedule: daily
+    dependencies: [transaction-analyst]
+
+  - id: retention-strategist
+    name: Retention Strategist
+    role: >
+      Analyzes churn signals and recommends specific retention plays: when to send
+      a winback offer, who to call, what discount threshold works per segment.
+    inputs: [rfm_segments, churn_signals, transaction_patterns]
+    outputs: [retention_plays, winback_offers, segment_strategies]
+    priority: medium
+    schedule: daily
+    dependencies: [customer-segmentor]
+
+  - id: staff-performance-analyst
+    name: Staff Performance Analyst
+    role: >
+      Correlates staff schedules with transaction volume, average ticket size,
+      and upsell rate. Identifies top performers and coaching opportunities.
+    inputs: [transactions, staff_schedules, shifts]
+    outputs: [staff_rankings, coaching_opportunities, performance_metrics]
+    priority: medium
+    schedule: daily
+    dependencies: [transaction-analyst]
+
+  - id: peak-hour-optimizer
+    name: Peak Hour Optimizer
+    role: >
+      Maps transaction density by hour, day, week, and season. Recommends
+      staffing levels, inventory prep, and promotional timing.
+    inputs: [hourly_revenue, transactions, staff_schedules]
+    outputs: [peak_hours_map, staffing_recommendations, prep_schedule]
+    priority: high
+    schedule: daily
+    dependencies: [transaction-analyst, staff-performance-analyst]
+
+  - id: inventory-intelligence
+    name: Inventory Intelligence
+    role: >
+      Tracks stock velocity against sales patterns. Predicts stockout risk,
+      overstock cost, and optimal reorder points per product.
+    inputs: [inventory, products, transactions]
+    outputs: [stockout_risks, overstock_alerts, reorder_recommendations]
+    priority: high
+    schedule: daily
+    dependencies: [product-intelligence]
+
+  - id: competitor-benchmarker
+    name: Competitor Benchmarker
+    role: >
+      Compares key metrics against industry benchmarks for the business category.
+      Flags where the business is underperforming the market average.
+    inputs: [overview, industry_benchmarks]
+    outputs: [benchmark_comparisons, underperformance_flags, market_position]
+    priority: low
+    schedule: weekly
+    dependencies: [transaction-analyst, product-intelligence]
+
+  - id: margin-optimizer
+    name: Margin Optimizer
+    role: >
+      Analyzes every product and category for margin leakage. Identifies pricing
+      opportunities, discount abuse, and cost reduction targets.
+    inputs: [products, transactions, costs]
+    outputs: [margin_analysis, pricing_opportunities, discount_abuse_flags]
+    priority: high
+    schedule: daily
+    dependencies: [product-intelligence, transaction-analyst]
+
+  - id: loyalty-architect
+    name: Loyalty Architect
+    role: >
+      Designs and monitors loyalty program performance. Tracks redemption rates,
+      program ROI, and recommends reward structure changes.
+    inputs: [customers, transactions, loyalty_data]
+    outputs: [loyalty_metrics, reward_recommendations, program_roi]
+    priority: low
+    schedule: weekly
+    dependencies: [customer-segmentor, retention-strategist]
+
+  - id: location-analyst
+    name: Location Analyst
+    role: >
+      If multi-location, compares performance across locations. Identifies best
+      practices from top locations to apply to underperformers.
+    inputs: [locations, transactions, staff_data]
+    outputs: [location_rankings, best_practices, improvement_plans]
+    priority: low
+    schedule: weekly
+    dependencies: [transaction-analyst, staff-performance-analyst]
+
+  - id: insight-narrator
+    name: Insight Narrator
+    role: >
+      Takes all agent findings and writes plain English summaries with clear
+      reasoning chains: what happened, why it happened, what to do about it,
+      expected impact.
+    inputs: [all_agent_outputs]
+    outputs: [narrative_summaries, reasoning_chains, executive_brief]
+    priority: critical
+    schedule: after_all_agents
+    dependencies:
+      - transaction-analyst
+      - revenue-forecaster
+      - product-intelligence
+      - customer-segmentor
+      - retention-strategist
+      - staff-performance-analyst
+      - peak-hour-optimizer
+      - inventory-intelligence
+      - competitor-benchmarker
+      - margin-optimizer
+      - loyalty-architect
+      - location-analyst
+
+  - id: action-prioritizer
+    name: Action Prioritizer
+    role: >
+      Ranks all agent recommendations by ROI potential and effort required.
+      Outputs a daily "Top 3 Actions" for the business owner to take today.
+    inputs: [narrative_summaries, all_recommendations]
+    outputs: [top_3_actions, prioritized_backlog, roi_estimates]
+    priority: critical
+    schedule: after_narrator
+    dependencies: [insight-narrator]
+
+  - id: feature-engineer
+    name: Feature Engineer
+    role: >
+      Continuously identifies the highest-value features to add based on agent
+      findings and industry trends. Builds a prioritized product roadmap.
+    inputs: [all_agent_outputs, user_feedback, industry_trends]
+    outputs: [feature_roadmap, priority_scores, trend_analysis]
+    priority: low
+    schedule: weekly
+    dependencies: [insight-narrator, action-prioritizer]
+
+coordination:
+  shared_context:
+    - All agents share a common data context to avoid duplicate analysis
+    - insight-narrator reads ALL other agent outputs before writing
+    - action-prioritizer reads insight-narrator output and ranks by ROI
+  storage: supabase
+  execution_order:
+    level_0: [transaction-analyst]
+    level_1: [revenue-forecaster, product-intelligence, customer-segmentor, staff-performance-analyst]
+    level_2: [retention-strategist, peak-hour-optimizer, inventory-intelligence, margin-optimizer]
+    level_3: [competitor-benchmarker, loyalty-architect, location-analyst]
+    level_4: [insight-narrator]
+    level_5: [action-prioritizer]
+    level_6: [feature-engineer]
+
+reasoning:
+  required_fields:
+    - raw_data: The data points supporting the insight
+    - reasoning_chain: "If X then Y because Z" logic
+    - expected_impact: Revenue, retention, or efficiency impact
+    - confidence_score: 0-100 percentage
+    - priority_level: Critical | High | Medium | Low

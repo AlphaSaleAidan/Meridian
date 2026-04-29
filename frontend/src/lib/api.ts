@@ -52,11 +52,6 @@ async function apiFetch<T>(path: string, opts?: ApiOptions): Promise<T> {
   return res.json()
 }
 
-// Simulate network delay for realism
-function delay<T>(data: T, ms = 400): Promise<T> {
-  return new Promise(resolve => setTimeout(() => resolve(data), ms + Math.random() * 200))
-}
-// Simulate network delay for realism
 function delay<T>(data: T, ms = 400): Promise<T> {
   return new Promise(resolve => setTimeout(() => resolve(data), ms + Math.random() * 200))
 }

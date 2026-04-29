@@ -12,42 +12,51 @@ import SettingsPage from '@/pages/SettingsPage'
 import InventoryPage from '@/pages/InventoryPage'
 import CareersPage from '@/pages/CareersPage'
 import PortalPage from '@/pages/PortalPage'
+import AgentDashboardPage from '@/pages/AgentDashboardPage'
+import ActionsPage from '@/pages/ActionsPage'
+import CustomersPage from '@/pages/CustomersPage'
+import StaffPage from '@/pages/StaffPage'
+import PeakHoursPage from '@/pages/PeakHoursPage'
+import MarginsPage from '@/pages/MarginsPage'
+
+function DashboardRoutes() {
+  return (
+    <>
+      <Route index element={<OverviewPage />} />
+      <Route path="revenue" element={<RevenuePage />} />
+      <Route path="products" element={<ProductsPage />} />
+      <Route path="inventory" element={<InventoryPage />} />
+      <Route path="insights" element={<InsightsPage />} />
+      <Route path="forecasts" element={<ForecastsPage />} />
+      <Route path="agents" element={<AgentDashboardPage />} />
+      <Route path="actions" element={<ActionsPage />} />
+      <Route path="customers" element={<CustomersPage />} />
+      <Route path="staff" element={<StaffPage />} />
+      <Route path="peak-hours" element={<PeakHoursPage />} />
+      <Route path="margins" element={<MarginsPage />} />
+      <Route path="notifications" element={<NotificationsPage />} />
+      <Route path="settings" element={<SettingsPage />} />
+    </>
+  )
+}
 
 export default function App() {
   return (
     <Routes>
-      {/* Public pages */}
       <Route path="/landing" element={<LandingPage />} />
       <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/careers" element={<CareersPage />} />
       <Route path="/portal" element={<PortalPage />} />
       <Route path="/portal/*" element={<PortalPage />} />
 
-      {/* Dashboard (demo mode) */}
       <Route path="/demo" element={<Layout />}>
-        <Route index element={<OverviewPage />} />
-        <Route path="revenue" element={<RevenuePage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="inventory" element={<InventoryPage />} />
-        <Route path="insights" element={<InsightsPage />} />
-        <Route path="forecasts" element={<ForecastsPage />} />
-        <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        {DashboardRoutes()}
       </Route>
 
-      {/* Dashboard (authenticated - future) */}
       <Route path="/app" element={<Layout />}>
-        <Route index element={<OverviewPage />} />
-        <Route path="revenue" element={<RevenuePage />} />
-        <Route path="products" element={<ProductsPage />} />
-        <Route path="inventory" element={<InventoryPage />} />
-        <Route path="insights" element={<InsightsPage />} />
-        <Route path="forecasts" element={<ForecastsPage />} />
-        <Route path="notifications" element={<NotificationsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
+        {DashboardRoutes()}
       </Route>
 
-      {/* Root → landing page */}
       <Route path="/" element={<Navigate to="/landing" replace />} />
       <Route path="*" element={<Navigate to="/landing" replace />} />
     </Routes>

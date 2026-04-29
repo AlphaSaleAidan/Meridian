@@ -12,16 +12,28 @@ import {
   Settings,
   Menu,
   X,
+  Bot,
+  Target,
+  Users,
+  UserCheck,
+  Clock,
+  DollarSign,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 
 const navItems = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
+  { path: 'agents', icon: Bot, label: 'Agents' },
+  { path: 'actions', icon: Target, label: 'Top Actions' },
   { path: 'revenue', icon: TrendingUp, label: 'Revenue' },
+  { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
   { path: 'products', icon: Package, label: 'Products' },
+  { path: 'margins', icon: DollarSign, label: 'Margins' },
+  { path: 'customers', icon: Users, label: 'Customers' },
+  { path: 'staff', icon: UserCheck, label: 'Staff' },
+  { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },
   { path: 'inventory', icon: Layers, label: 'Inventory' },
   { path: 'insights', icon: Lightbulb, label: 'Insights' },
-  { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },
 ]
@@ -102,7 +114,7 @@ export default function Layout() {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-[220px] flex-shrink-0 bg-[#0A0A0B] border-r border-[#1F1F23] flex-col">
+      <aside className="hidden lg:flex w-[230px] flex-shrink-0 bg-[#0A0A0B] border-r border-[#1F1F23] flex-col">
         {sidebarContent}
       </aside>
 
