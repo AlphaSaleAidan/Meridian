@@ -24,6 +24,7 @@ from .square.sync_engine import SyncEngine, SyncResult
 from .square.mappers import DataMapper
 from .db.supabase_rest import SupabaseREST
 from .ai.engine import MeridianAI, AnalysisContext
+from .sync.customer_app import sync_to_customer_app
 
 logger = logging.getLogger("meridian.pipeline")
 
@@ -148,6 +149,14 @@ class MeridianPipeline:
                 "money_left_score": ai_result.get("money_left_cents", 0),
                 "anomalies": ai_result.get("anomalies", 0),
             })
+            
+            # Phase 6: Sync to customer portal
+            try:
+                customer_sync = await self._sync_to_customer_app(ai_result)
+                result.record_phase("customer_app_sync", customer_sync)
+            except Exception as e:
+                logger.warning(f"Customer app sync failed (non-fatal): {e}")
+                result.record_phase("customer_app_sync", {"status": "failed", "error": str(e)})
             
             result.completed_at = datetime.now(timezone.utc)
             logger.info(f"✅ Full sync complete: {result.summary}")
@@ -448,6 +457,78 @@ class MeridianPipeline:
                      f"${summary['money_left_cents']/100:.0f}/mo money left")
         
         return summary
+
+    async def _sync_to_customer_app(self, ai_result: dict) -> dict:
+        """
+        Phase 6: Push processed data to the customer-facing portal.
+        
+        Sends org info, AI insights, forecasts, and revenue data
+        to the customer app's HTTP ingest API.
+        """
+        logger.info("📱 Syncing to customer portal...")
+        
+        # Load data for customer app
+        insights_raw = await self.db.get_insights(self.org_id)
+        forecasts_raw = await self.db.get_forecasts(self.org_id)
+        daily_revenue = await self.db.get_daily_revenue(self.org_id, days=90)
+        products = await self.db.get_products(self.org_id)
+        transactions = await self.db.get_recent_transactions(self.org_id, days=30)
+        
+        # Format insights for customer app
+        insights = []
+        for i in (insights_raw or []):
+            insights.append({
+                "type": i.get("type", "general"),
+                "title": i.get("title", "Insight"),
+                "summary": i.get("summary", i.get("description", "")),
+                "impact": i.get("impact_cents", i.get("impact")),
+                "confidence": i.get("confidence"),
+                "priority": i.get("priority"),
+                "actions": i.get("actions", i.get("recommended_actions")),
+                "generatedAt": i.get("generated_at", datetime.now(timezone.utc).isoformat()),
+            })
+        
+        # Format forecasts for customer app
+        forecasts = []
+        for f in (forecasts_raw or []):
+            forecasts.append({
+                "forecastType": f.get("forecast_type", "revenue"),
+                "periodStart": f.get("period_start", ""),
+                "periodEnd": f.get("period_end"),
+                "predictedCents": f.get("predicted_cents", 0),
+                "lowerBound": f.get("lower_bound", 0),
+                "upperBound": f.get("upper_bound", 0),
+                "confidence": f.get("confidence"),
+                "generatedAt": f.get("generated_at", datetime.now(timezone.utc).isoformat()),
+            })
+        
+        # Format revenue data for customer app
+        revenue_data = []
+        for d in (daily_revenue or []):
+            revenue_data.append({
+                "date": d.get("date", ""),
+                "revenueCents": d.get("revenue_cents", 0),
+                "transactionCount": d.get("transaction_count", 0),
+                "avgTicketCents": d.get("avg_ticket_cents"),
+            })
+        
+        # Sync to customer app
+        sync_result = await sync_to_customer_app(
+            org_id=self.org_id,
+            org_name=self.org_name,
+            business_type=self.business_vertical,
+            plan="starter",
+            status="active",
+            locations_count=len(self._location_lookup),
+            products_count=len(products or []),
+            transactions_count=len(transactions or []),
+            insights=insights,
+            forecasts=forecasts,
+            revenue_data=revenue_data,
+        )
+        
+        logger.info(f"  📱 Customer app sync: {sync_result.get('success', False)}")
+        return sync_result
 
     async def close(self):
         """Cleanup connections."""
