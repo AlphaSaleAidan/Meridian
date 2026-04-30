@@ -16,7 +16,7 @@ export default function SalesSignupPage() {
   const [success, setSuccess] = useState(false)
 
   useEffect(() => {
-    if (authenticated) navigate('/dashboard', { replace: true })
+    if (authenticated) navigate('/sales/dashboard', { replace: true })
   }, [authenticated, navigate])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -84,7 +84,7 @@ export default function SalesSignupPage() {
 
           <p className="text-center text-[11px] text-[#A1A1A8] mt-5">
             Already have an account?{' '}
-            <Link to="/login" className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors font-medium">
+            <Link to="/sales/login" className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors font-medium">
               Sign in
             </Link>
           </p>

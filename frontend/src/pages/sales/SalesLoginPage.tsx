@@ -8,7 +8,7 @@ export default function SalesLoginPage() {
   const location = useLocation()
   const { authenticated, login } = useSalesAuth()
 
-  const from = (location.state as { from?: string })?.from || '/dashboard'
+  const from = (location.state as { from?: string })?.from || '/sales/dashboard'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -66,7 +66,7 @@ export default function SalesLoginPage() {
 
           <p className="text-center text-[11px] text-[#A1A1A8] mt-5">
             New sales rep?{' '}
-            <Link to="/signup" className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors font-medium">
+            <Link to="/sales/signup" className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors font-medium">
               Create your account
             </Link>
           </p>

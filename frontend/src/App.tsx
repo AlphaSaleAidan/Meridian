@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { AuthProvider } from '@/lib/auth'
 import { SalesAuthProvider } from '@/lib/sales-auth'
 import ErrorBoundary from '@/components/ErrorBoundary'
@@ -83,49 +83,17 @@ export default function App() {
           <Suspense fallback={<LazyFallback />}>
             <Routes>
               {/* ══════════════════════════════════════════════
-                  SALES CRM (Internal — Sales Reps)
+                  PUBLIC PAGES — no auth required
                   ══════════════════════════════════════════════ */}
-              <Route path="/login" element={<SalesLoginPage />} />
-              <Route path="/signup" element={<SalesSignupPage />} />
-
-              <Route element={
-                <SalesProtectedRoute>
-                  <SalesLayout />
-                </SalesProtectedRoute>
-              }>
-                <Route path="/dashboard" element={<SalesDashboardPage />} />
-                <Route path="/leads" element={<LeadsPage />} />
-                <Route path="/accounts" element={<AccountsPage />} />
-                <Route path="/training" element={<TrainingPage />} />
-                <Route path="/settings" element={<SalesSettingsPage />} />
-                <Route path="/admin" element={<TeamManagementPage />} />
-              </Route>
-
-              <Route path="/onboarding" element={
-                <SalesProtectedRoute>
-                  <Suspense fallback={<LazyFallback />}>
-                    <OnboardingPage />
-                  </Suspense>
-                </SalesProtectedRoute>
-              } />
-
-              <Route path="/setup" element={
-                <SalesProtectedRoute>
-                  <Suspense fallback={<LazyFallback />}>
-                    <OnboardingPage />
-                  </Suspense>
-                </SalesProtectedRoute>
-              } />
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/landing" element={<LandingPage />} />
+              <Route path="/careers" element={<CareersPage />} />
 
               {/* ══════════════════════════════════════════════
-                  CUSTOMER APP (Business Owners)
+                  CUSTOMER AUTH — business owners
                   ══════════════════════════════════════════════ */}
               <Route path="/customer/login" element={<CustomerLoginPage />} />
               <Route path="/customer/signup" element={<CustomerSignupPage />} />
-
-              {/* Legacy /portal route — redirect to customer login */}
-              <Route path="/portal" element={<Navigate to="/customer/login" replace />} />
-              <Route path="/portal/*" element={<Navigate to="/customer/login" replace />} />
 
               <Route path="/customer/admin" element={
                 <ProtectedRoute>
@@ -133,7 +101,7 @@ export default function App() {
                 </ProtectedRoute>
               } />
 
-              {/* Customer dashboard — protected, requires customer auth */}
+              {/* Customer dashboard — protected, requires business owner auth */}
               <Route path="/app" element={
                 <ProtectedRoute>
                   <Layout />
@@ -148,14 +116,43 @@ export default function App() {
               </Route>
 
               {/* ══════════════════════════════════════════════
-                  PUBLIC PAGES
+                  SALES CRM — internal, sales reps only
                   ══════════════════════════════════════════════ */}
-              <Route path="/landing" element={<LandingPage />} />
-              <Route path="/careers" element={<CareersPage />} />
+              <Route path="/sales/login" element={<SalesLoginPage />} />
+              <Route path="/sales/signup" element={<SalesSignupPage />} />
 
-              {/* Default: sales reps go to login */}
-              <Route path="/" element={<Navigate to="/login" replace />} />
-              <Route path="*" element={<Navigate to="/login" replace />} />
+              <Route element={
+                <SalesProtectedRoute>
+                  <SalesLayout />
+                </SalesProtectedRoute>
+              }>
+                <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
+                <Route path="/sales/leads" element={<LeadsPage />} />
+                <Route path="/sales/accounts" element={<AccountsPage />} />
+                <Route path="/sales/training" element={<TrainingPage />} />
+                <Route path="/sales/settings" element={<SalesSettingsPage />} />
+                <Route path="/sales/admin" element={<TeamManagementPage />} />
+              </Route>
+
+              <Route path="/sales/onboarding" element={
+                <SalesProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <OnboardingPage />
+                  </Suspense>
+                </SalesProtectedRoute>
+              } />
+
+              {/* ══════════════════════════════════════════════
+                  LEGACY REDIRECTS
+                  ══════════════════════════════════════════════ */}
+              <Route path="/portal" element={<Navigate to="/customer/login" replace />} />
+              <Route path="/portal/*" element={<Navigate to="/customer/login" replace />} />
+              <Route path="/login" element={<Navigate to="/customer/login" replace />} />
+              <Route path="/signup" element={<Navigate to="/customer/signup" replace />} />
+              <Route path="/onboarding" element={<Navigate to="/customer/signup" replace />} />
+
+              {/* Catch-all → landing page */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </SalesAuthProvider>

@@ -82,7 +82,7 @@ export default function SalesDashboardPage() {
       <div className="card border border-[#1F1F23]">
         <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[#F5F5F7]">Deal Pipeline</h2>
-          <Link to="/leads" className="text-[11px] text-[#17C5B0] hover:text-[#17C5B0]/80 flex items-center gap-1 transition-colors">
+          <Link to="/sales/leads" className="text-[11px] text-[#17C5B0] hover:text-[#17C5B0]/80 flex items-center gap-1 transition-colors">
             View all <ArrowUpRight size={12} />
           </Link>
         </div>
@@ -119,7 +119,7 @@ export default function SalesDashboardPage() {
         <div className="card border border-[#1F1F23]">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[#F5F5F7]">Recent Wins</h2>
-            <Link to="/accounts" className="text-[11px] text-[#17C5B0] hover:text-[#17C5B0]/80 flex items-center gap-1 transition-colors">
+            <Link to="/sales/accounts" className="text-[11px] text-[#17C5B0] hover:text-[#17C5B0]/80 flex items-center gap-1 transition-colors">
               All accounts <ArrowUpRight size={12} />
             </Link>
           </div>

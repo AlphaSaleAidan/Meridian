@@ -17,15 +17,15 @@ import { useSalesAuth } from '@/lib/sales-auth'
 
 const salesNavItems = [
   { heading: 'Sales' },
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/leads', icon: UserPlus, label: 'Leads' },
-  { path: '/accounts', icon: Building2, label: 'Accounts' },
-  { path: '/training', icon: GraduationCap, label: 'Training' },
+  { path: '/sales/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/sales/leads', icon: UserPlus, label: 'Leads' },
+  { path: '/sales/accounts', icon: Building2, label: 'Accounts' },
+  { path: '/sales/training', icon: GraduationCap, label: 'Training' },
 ] as const
 
 const adminNavItems = [
   { heading: 'Admin' },
-  { path: '/admin', icon: Users, label: 'Team Management' },
+  { path: '/sales/admin', icon: Users, label: 'Team Management' },
 ] as const
 
 type NavHeading = { heading: string }
@@ -44,7 +44,7 @@ export default function SalesLayout() {
 
   async function handleLogout() {
     logout()
-    navigate('/login', { replace: true })
+    navigate('/sales/login', { replace: true })
   }
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function SalesLayout() {
             </div>
             <div className="flex items-center gap-3">
               <NavLink
-                to="/settings"
+                to="/sales/settings"
                 className={({ isActive }) =>
                   clsx('flex items-center gap-1.5 text-[10px] transition-colors', isActive ? 'text-[#17C5B0]' : 'text-[#A1A1A8]/50 hover:text-[#A1A1A8]')
                 }

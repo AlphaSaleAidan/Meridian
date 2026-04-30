@@ -24,7 +24,7 @@ export default function SalesProtectedRoute({ children }: { children: React.Reac
   }
 
   if (!authenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    return <Navigate to="/sales/login" state={{ from: location.pathname }} replace />
   }
 
   return <>{children}</>
