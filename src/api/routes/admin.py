@@ -1,7 +1,8 @@
 """
-Admin Routes — One-time setup helpers (should be removed or locked down in production).
+Admin Routes — One-time setup helpers.
 """
 import logging
+import traceback
 from uuid import uuid4
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
@@ -21,31 +22,37 @@ class CreateRepRequest(BaseModel):
 
 @router.post("/create-rep")
 async def create_rep(req: CreateRepRequest):
-    """Create a sales rep record (admin only — lock down in production)."""
-    db = get_db()
-    rep_id = str(uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    """Create a sales rep record."""
+    try:
+        db = get_db()
+        rep_id = str(uuid4())
+        now = datetime.now(timezone.utc).isoformat()
 
-    existing = await db.select(
-        "sales_reps",
-        filters={"email": f"eq.{req.email}"},
-        limit=1,
-    )
-    if existing:
-        return {"status": "exists", "rep_id": existing[0]["id"]}
+        # Check if exists
+        existing = await db.select(
+            "sales_reps",
+            filters={"email": f"eq.{req.email}"},
+            limit=1,
+        )
+        if existing:
+            return {"status": "exists", "rep_id": existing[0].get("id")}
 
-    await db.insert("sales_reps", {
-        "id": rep_id,
-        "name": req.name,
-        "email": req.email,
-        "phone": req.phone,
-        "commission_rate": req.commission_rate,
-        "is_active": True,
-        "total_earned": 0,
-        "total_paid": 0,
-        "created_at": now,
-        "updated_at": now,
-    })
+        await db.insert("sales_reps", {
+            "id": rep_id,
+            "name": req.name,
+            "email": req.email,
+            "phone": req.phone,
+            "commission_rate": req.commission_rate,
+            "is_active": True,
+            "total_earned": 0,
+            "total_paid": 0,
+            "created_at": now,
+            "updated_at": now,
+        })
 
-    logger.info(f"Created sales rep: {req.name} ({req.email})")
-    return {"status": "created", "rep_id": rep_id}
+        logger.info(f"Created sales rep: {req.name} ({req.email})")
+        return {"status": "created", "rep_id": rep_id}
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"create-rep failed: {e}\n{tb}")
+        return {"status": "error", "error": str(e), "traceback": tb}
