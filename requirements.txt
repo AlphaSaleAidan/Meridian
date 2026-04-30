@@ -11,6 +11,7 @@ asyncpg>=0.30.0
 
 # Security
 cryptography>=42.0.0
+bcrypt>=4.0.0
 
 # AI
 openai>=1.40.0
