@@ -66,6 +66,8 @@ _allowed_origins = [
     "https://meridian-dun-nu.vercel.app",
     "https://meridian-app-c9cd32f1.viktor.space",
     "https://industrious-rabbit-343.convex.site",
+    "https://meridian.tips",
+    "https://www.meridian.tips",
 ]
 
 # Allow custom origin from env (e.g. Vercel preview deploys)
