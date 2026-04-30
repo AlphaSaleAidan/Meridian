@@ -15,20 +15,22 @@ import ConnectionBadge from '@/components/ConnectionBadge'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import { generateTopActions, generateForecastPeriods, generateAgents, generateRFMSegments } from '@/lib/agent-data'
-
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
+import { generateTopActions, generateAgents, generateRFMSegments } from '@/lib/agent-data'
+import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
 
 export default function OverviewPage() {
   const location = useLocation()
   const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
+  const orgId = useOrgId()
+  const tier = useTier()
+  const limits = tierLimits[tier]
 
-  const overview = useApi(() => api.overview(ORG_ID), [])
-  const revenue = useApi(() => api.revenue(ORG_ID, 30), [])
-  const insights = useApi(() => api.insights(ORG_ID, 5), [])
+  const overview = useApi(() => api.overview(orgId), [orgId])
+  const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
+  const insights = useApi(() => api.insights(orgId, 5), [orgId])
+  const forecastData = useApi(() => api.forecasts(orgId), [orgId])
 
   const topActions = generateTopActions()
-  const forecasts = generateForecastPeriods()
   const agents = generateAgents()
   const segments = generateRFMSegments()
   const activeAgents = agents.filter(a => a.status === 'active' || a.status === 'running').length
@@ -141,32 +143,54 @@ export default function OverviewPage() {
       </ScrollReveal>
 
       {/* Revenue Forecast Widget + Money Left */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">
-        <ScrollReveal variant="fadeUp" delay={0.1} className="lg:col-span-2">
-          <MoneyLeftCard score={data.money_left_score} />
-        </ScrollReveal>
-        <ScrollReveal variant="fadeUp" delay={0.15} className="lg:col-span-3">
+      <div className={clsx('grid grid-cols-1 gap-4 sm:gap-6', limits.moneyLeft ? 'lg:grid-cols-5' : '')}>
+        {limits.moneyLeft && (
+          <ScrollReveal variant="fadeUp" delay={0.1} className="lg:col-span-2">
+            <MoneyLeftCard score={data.money_left_score} />
+          </ScrollReveal>
+        )}
+        <ScrollReveal variant="fadeUp" delay={0.15} className={limits.moneyLeft ? 'lg:col-span-3' : ''}>
           <DashboardTiltCard className="card p-5" glowColor="rgba(26, 143, 214, 0.06)">
             <div className="flex items-center gap-2 mb-4">
               <LineChart size={16} className="text-[#1A8FD6]" />
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Revenue Forecast</h3>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {forecasts.map(f => (
-                <div key={f.label} className="text-center">
-                  <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{f.label}</p>
-                  <p className="text-lg sm:text-xl font-bold font-mono text-[#F5F5F7] mt-1">{formatCentsCompact(f.predictedCents)}</p>
-                  <div className="flex items-center justify-center gap-1 mt-1">
-                    <span className="text-[10px] font-mono text-[#17C5B0]">+{f.growthPct}%</span>
-                    <TrendingUp size={10} className="text-[#17C5B0]" />
-                  </div>
-                  <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">{f.confidence}% conf</p>
-                  <p className="text-[9px] text-[#A1A1A8]/30 font-mono">
-                    {formatCentsCompact(f.lowerCents)} – {formatCentsCompact(f.upperCents)}
-                  </p>
+            {forecastData.data && forecastData.data.forecasts.length > 0 ? (() => {
+              const fc = forecastData.data!.forecasts.filter(f => f.type === 'daily_revenue')
+              const now = new Date()
+              const buckets = [
+                { label: '7-Day', days: 7 },
+                ...(limits.forecastDays >= 30 ? [{ label: '30-Day', days: 30 }] : []),
+                ...(limits.forecastDays >= 90 ? [{ label: '90-Day', days: 90 }] : []),
+              ]
+              return (
+                <div className={clsx('grid gap-3', `grid-cols-${buckets.length}`)}>
+                  {buckets.map(b => {
+                    const cutoff = new Date(now)
+                    cutoff.setDate(cutoff.getDate() + b.days)
+                    const inRange = fc.filter(f => new Date(f.period_start) <= cutoff)
+                    const total = inRange.reduce((s, f) => s + f.predicted_cents, 0)
+                    const lower = inRange.reduce((s, f) => s + (f.lower_bound_cents || f.predicted_cents * 0.85), 0)
+                    const upper = inRange.reduce((s, f) => s + (f.upper_bound_cents || f.predicted_cents * 1.15), 0)
+                    const avgConf = inRange.length > 0
+                      ? Math.round(inRange.reduce((s, f) => s + (f.confidence || 0.7) * 100, 0) / inRange.length)
+                      : 0
+                    return (
+                      <div key={b.label} className="text-center">
+                        <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{b.label}</p>
+                        <p className="text-lg sm:text-xl font-bold font-mono text-[#F5F5F7] mt-1">{formatCentsCompact(total)}</p>
+                        <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">{avgConf}% conf</p>
+                        <p className="text-[9px] text-[#A1A1A8]/30 font-mono">
+                          {formatCentsCompact(lower)} – {formatCentsCompact(upper)}
+                        </p>
+                      </div>
+                    )
+                  })}
                 </div>
-              ))}
-            </div>
+              )
+            })() : (
+              <p className="text-sm text-[#A1A1A8]/50">Forecasts will appear after enough data is analyzed.</p>
+            )}
           </DashboardTiltCard>
         </ScrollReveal>
       </div>

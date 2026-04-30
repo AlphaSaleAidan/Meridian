@@ -107,11 +107,21 @@ class InsightGenerator:
         if self.models:
             insights.extend(self._economic_model_insights(ctx, revenue, products, patterns))
 
-        # Sort by estimated impact (highest first)
-        insights.sort(
-            key=lambda x: abs(x.get("estimated_monthly_impact_cents", 0)),
-            reverse=True,
-        )
+        # Score and rank by composite priority
+        for insight in insights:
+            insight["priority_score"] = self._score_priority(insight)
+
+        insights.sort(key=lambda x: x.get("priority_score", 0), reverse=True)
+
+        # Deduplicate: max 5 insights per type
+        seen_types: dict[str, int] = {}
+        deduped = []
+        for insight in insights:
+            itype = insight.get("type", "general")
+            seen_types[itype] = seen_types.get(itype, 0) + 1
+            if seen_types[itype] <= 5:
+                deduped.append(insight)
+        insights = deduped
 
         # Limit to top 25 insights per run
         insights = insights[:25]
@@ -908,3 +918,13 @@ class InsightGenerator:
             },
         }
         return insight
+
+    def _score_priority(self, insight: dict) -> float:
+        """Composite priority: abs(impact) * confidence * (1/effort) * novelty."""
+        impact = abs(insight.get("estimated_monthly_impact_cents", 0))
+        confidence = insight.get("confidence_score", 0.5)
+        effort = insight.get("details", {}).get("effort_to_fix", 1.0)
+        if effort <= 0:
+            effort = 1.0
+        novelty = 1.0
+        return impact * confidence * (1.0 / effort) * novelty

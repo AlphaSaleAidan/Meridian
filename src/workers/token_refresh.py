@@ -1,45 +1,47 @@
 """
 Token Refresh Worker — Daily cron job.
 
-Refreshes Square OAuth tokens expiring within 5 days.
+Refreshes Square OAuth tokens expiring within 7 days.
 Square access tokens expire after 30 days.
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
+from ..db import get_db
+from ..security.encryption import decrypt_token, encrypt_token
 from ..square.oauth import OAuthManager, OAuthError
 
 logger = logging.getLogger("meridian.workers.token_refresh")
 
 
-async def refresh_expiring_tokens(
-    connections: list[dict] | None = None,
-) -> dict:
+async def refresh_expiring_tokens() -> dict:
     """
-    Refresh tokens for all connections expiring within 5 days.
-    
-    In production:
-        connections = await db.query(GET_CONNECTIONS_NEEDING_REFRESH)
-    
-    Args:
-        connections: List of pos_connection rows with refresh_token_enc
-    
+    Refresh tokens for all connections expiring within 7 days.
+
     Returns:
         {"refreshed": count, "failed": count, "errors": [...]}
     """
     oauth = OAuthManager()
-    connections = connections or []
-    
+    db = get_db()
+
+    cutoff = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    connections = await db.select(
+        "pos_connections",
+        filters={
+            "status": "eq.connected",
+            "token_expires_at": f"lt.{cutoff}",
+        },
+    )
+
     stats = {"refreshed": 0, "failed": 0, "errors": []}
 
     for conn in connections:
         connection_id = conn.get("id", "unknown")
         org_id = conn.get("org_id", "unknown")
-        
+
         try:
-            # In production: decrypt(conn["refresh_token_enc"])
-            refresh_token = conn.get("refresh_token_enc", "")
-            
+            refresh_token = decrypt_token(conn.get("refresh_token_encrypted", ""))
+
             if not refresh_token:
                 logger.warning(f"No refresh token for connection {connection_id}")
                 stats["errors"].append(f"{connection_id}: no refresh token")
@@ -47,19 +49,19 @@ async def refresh_expiring_tokens(
                 continue
 
             tokens = await oauth.refresh_token(refresh_token)
-            
-            # In production: update pos_connections table
-            # await db.execute(UPDATE_CONNECTION_TOKENS, {
-            #     "id": connection_id,
-            #     "access_token_enc": encrypt(tokens["access_token"]),
-            #     "refresh_token_enc": encrypt(tokens["refresh_token"]),
-            #     "token_expires_at": tokens["expires_at"],
-            # })
-            
-            logger.info(
-                f"Refreshed token for org={org_id} connection={connection_id}, "
-                f"new expiry: {tokens['expires_at']}"
+
+            await db.update(
+                "pos_connections",
+                {
+                    "access_token_encrypted": encrypt_token(tokens["access_token"]),
+                    "refresh_token_encrypted": encrypt_token(tokens.get("refresh_token", "")),
+                    "token_expires_at": tokens.get("expires_at"),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                filters={"id": f"eq.{connection_id}"},
             )
+
+            logger.info(f"Refreshed token for org={org_id} connection={connection_id}, new expiry: {tokens['expires_at']}")
             stats["refreshed"] += 1
 
         except OAuthError as e:
@@ -72,8 +74,5 @@ async def refresh_expiring_tokens(
             stats["errors"].append(f"{connection_id}: {str(e)}")
             stats["failed"] += 1
 
-    logger.info(
-        f"Token refresh complete: {stats['refreshed']} refreshed, "
-        f"{stats['failed']} failed"
-    )
+    logger.info(f"Token refresh complete: {stats['refreshed']} refreshed, {stats['failed']} failed")
     return stats

@@ -21,6 +21,7 @@ from typing import Any, Callable, Optional
 from .client import SquareClient
 from .mappers import DataMapper
 from src.payouts.webhook_hook import on_payment_received
+from src.security.encryption import decrypt_token
 
 logger = logging.getLogger("meridian.square.webhooks")
 
@@ -125,7 +126,8 @@ class WebhookProcessor:
         if not order_id or not connection:
             return {"action": "skipped", "reason": "Missing order_id or connection"}
 
-        client = SquareClient(access_token=connection.get("access_token", ""))
+        access_token = decrypt_token(connection.get("access_token_encrypted", ""))
+        client = SquareClient(access_token=access_token)
         mapper = self._build_mapper(connection)
 
         # Fetch full order (webhook only has summary)
@@ -195,7 +197,8 @@ class WebhookProcessor:
         if not payment_id or not connection:
             return {"action": "skipped", "reason": "Missing payment_id or connection"}
 
-        client = SquareClient(access_token=connection.get("access_token", ""))
+        access_token = decrypt_token(connection.get("access_token_encrypted", ""))
+        client = SquareClient(access_token=access_token)
         mapper = self._build_mapper(connection)
 
         try:
@@ -221,7 +224,8 @@ class WebhookProcessor:
         if not connection:
             return {"action": "skipped", "reason": "No connection"}
 
-        client = SquareClient(access_token=connection.get("access_token", ""))
+        access_token = decrypt_token(connection.get("access_token_encrypted", ""))
+        client = SquareClient(access_token=access_token)
         mapper = self._build_mapper(connection)
 
         try:

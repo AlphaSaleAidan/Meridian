@@ -8,11 +8,12 @@ transaction volume (18 months of history).
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 from ..square.client import SquareClient
 from ..square.sync_engine import SyncEngine, SyncResult
-from ..db.client import InMemoryDB
+from ..db import get_db
 
 logger = logging.getLogger("meridian.workers.backfill")
 
@@ -21,26 +22,23 @@ async def run_backfill(
     access_token: str,
     org_id: str,
     connection_id: str,
-    db: InMemoryDB | None = None,
 ) -> SyncResult:
     """
     Execute full initial backfill for a merchant.
-    
+
     Args:
         access_token: Square OAuth access token
         org_id: Meridian organization UUID
         connection_id: POS connection UUID
-        db: Database client (InMemoryDB for testing)
-    
+
     Returns:
         SyncResult with all synced data and statistics
     """
-    db = db or InMemoryDB()
-    
     logger.info(f"Starting backfill for org={org_id}, connection={connection_id}")
 
+    db = get_db()
+
     def on_progress(progress):
-        """Log progress updates (in production, push to WebSocket/SSE)."""
         logger.info(
             f"Backfill progress: {progress.phase} — "
             f"{progress.detail} ({progress.progress_pct:.0f}%)"
@@ -56,28 +54,79 @@ async def run_backfill(
 
         result = await engine.run_initial_backfill()
 
-    # ── Persist to database ──────────────────────────────
-    for loc in result.locations:
-        await db.upsert_location(loc)
+    # ── Persist to Supabase ──────────────────────────────
+    if result.locations:
+        await db.batch_upsert(
+            "locations",
+            result.locations,
+            on_conflict="org_id,external_id",
+        )
 
-    for cat in result.categories:
-        await db.upsert_category(cat)
+    if result.categories:
+        await db.batch_upsert(
+            "categories",
+            result.categories,
+            on_conflict="org_id,external_id",
+        )
 
-    for product in result.products:
-        await db.upsert_product(product)
+    if result.products:
+        await db.batch_upsert(
+            "products",
+            result.products,
+            on_conflict="org_id,external_id",
+        )
 
-    for txn in result.transactions:
-        items = [
-            item for item in result.transaction_items
-            if item["transaction_id"] == txn["id"]
-        ]
-        await db.upsert_transaction(txn, items)
+    if result.transactions:
+        await db.batch_upsert(
+            "transactions",
+            result.transactions,
+            on_conflict="org_id,external_id",
+        )
 
-    for snapshot in result.inventory_snapshots:
-        await db.upsert_inventory(snapshot)
+    if result.transaction_items:
+        await db.batch_upsert(
+            "transaction_items",
+            result.transaction_items,
+            on_conflict="transaction_id,external_id",
+        )
 
-    logger.info(f"Backfill complete for org={org_id}: {result.summary}")
-    logger.info(f"DB stats: {db.stats()}")
+    if result.inventory_snapshots:
+        await db.batch_upsert(
+            "inventory_snapshots",
+            result.inventory_snapshots,
+            on_conflict="org_id,product_id,location_id,snapshot_date",
+        )
+
+    logger.info(f"Backfill persisted for org={org_id}: {result.summary}")
+
+    # ── Mark import complete ─────────────────────────────
+    await db.update(
+        "pos_connections",
+        {
+            "historical_import_complete": True,
+            "last_sync_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        filters={"id": f"eq.{connection_id}"},
+    )
+    logger.info(f"Marked connection {connection_id} historical_import_complete=True")
+
+    # ── Trigger AI pipeline ──────────────────────────────
+    try:
+        from ..pipeline import MeridianPipeline
+
+        pipeline = MeridianPipeline(
+            org_id=org_id,
+            square_token=access_token,
+            supabase_url=os.environ.get("SUPABASE_URL", ""),
+            supabase_key=os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+                or os.environ.get("SUPABASE_SERVICE_KEY", ""),
+            pos_connection_id=connection_id,
+        )
+        await pipeline.run_full_sync()
+        logger.info(f"AI pipeline completed for org={org_id}")
+    except Exception as e:
+        logger.error(f"AI pipeline failed for org={org_id}: {e}", exc_info=True)
 
     return result
 
@@ -85,25 +134,19 @@ async def run_backfill(
 async def run_backfill_cli():
     """CLI entry point for manual backfill testing."""
     from ..config import square as sq_config
+    from ..db import init_db
 
-    db = InMemoryDB()
+    await init_db()
+
     result = await run_backfill(
         access_token=sq_config.access_token,
         org_id="test-org-001",
         connection_id="test-conn-001",
-        db=db,
     )
 
     print("\n" + "=" * 60)
     print("BACKFILL RESULTS")
     print("=" * 60)
     print(json.dumps(result.summary, indent=2))
-    print("\nDB Stats:")
-    print(json.dumps(db.stats(), indent=2))
 
-    if db.transactions:
-        print("\nTop Products:")
-        for p in db.top_products(5):
-            print(f"  {p['name']}: {p['times_sold']} sold, ${p['revenue_cents']/100:,.2f}")
-
-    return result, db
+    return result

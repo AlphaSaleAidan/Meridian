@@ -7,8 +7,7 @@ import { formatCents, formatCentsCompact, formatDate, formatConfidence } from '@
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
-
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
+import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -20,13 +19,22 @@ const tooltipStyle = {
 }
 
 export default function ForecastsPage() {
-  const forecasts = useApi(() => api.forecasts(ORG_ID), [])
-  const revenue = useApi(() => api.revenue(ORG_ID, 30), [])
+  const orgId = useOrgId()
+  const tier = useTier()
+  const limits = tierLimits[tier]
+  const forecasts = useApi(() => api.forecasts(orgId), [orgId])
+  const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
 
   if (forecasts.loading) return <LoadingPage />
   if (forecasts.error) return <ErrorState message={forecasts.error} onRetry={forecasts.refetch} />
 
-  const data = forecasts.data!
+  const raw = forecasts.data!
+  const cutoff = new Date()
+  cutoff.setDate(cutoff.getDate() + limits.forecastDays)
+  const gatedForecasts = limits.forecastDays >= 999
+    ? raw.forecasts
+    : raw.forecasts.filter(f => new Date(f.period_start) <= cutoff)
+  const data = { ...raw, forecasts: gatedForecasts, total: gatedForecasts.length }
 
   const historicalData = (revenue.data?.daily || []).map(d => ({
     date: d.date.slice(0, 10),

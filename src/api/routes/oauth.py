@@ -13,10 +13,11 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Request, HTTPException
 from fastapi.responses import RedirectResponse, JSONResponse
 
 from ...square.oauth import OAuthManager, OAuthError
+from ...security.encryption import encrypt_token
 from ...config import app as app_config
 
 logger = logging.getLogger("meridian.api.oauth")
@@ -99,6 +100,7 @@ async def authorize(request: Request, org_id: str | None = None):
 @router.get("/callback")
 async def callback(
     request: Request,
+    background_tasks: BackgroundTasks,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -172,8 +174,8 @@ async def callback(
                 "provider": "square",
                 "status": "connected",
                 "merchant_id": tokens["merchant_id"],
-                "access_token_encrypted": tokens["access_token"],
-                "refresh_token_encrypted": tokens.get("refresh_token", ""),
+                "access_token_encrypted": encrypt_token(tokens["access_token"]),
+                "refresh_token_encrypted": encrypt_token(tokens.get("refresh_token", "")),
                 "token_expires_at": tokens.get("expires_at"),
                 "location_ids": [],
                 "historical_import_complete": False,
@@ -197,8 +199,8 @@ async def callback(
                     "pos_connections",
                     {
                         "status": "connected",
-                        "access_token_encrypted": tokens["access_token"],
-                        "refresh_token_encrypted": tokens.get("refresh_token", ""),
+                        "access_token_encrypted": encrypt_token(tokens["access_token"]),
+                        "refresh_token_encrypted": encrypt_token(tokens.get("refresh_token", "")),
                         "token_expires_at": tokens.get("expires_at"),
                         "last_error": None,
                         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -222,6 +224,17 @@ async def callback(
                 "status": "active",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
+
+            # Kick off historical backfill in background
+            conn_id = existing[0]["id"] if existing else connection_data["id"]
+            from ...workers.backfill import run_backfill
+            background_tasks.add_task(
+                run_backfill,
+                access_token=tokens["access_token"],
+                org_id=org_id,
+                connection_id=conn_id,
+            )
+            logger.info(f"Queued backfill task for org={org_id}, connection={conn_id}")
 
         else:
             logger.warning("DB not initialized — tokens returned but not persisted")

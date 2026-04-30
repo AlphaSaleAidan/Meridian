@@ -1,0 +1,178 @@
+"""
+Base Agent — Foundation for all Meridian AI analysis agents.
+
+Every agent inherits from BaseAgent and implements analyze().
+Agents are organized in tiers (1-5) that determine execution order:
+  Tiers 1-4 run in parallel, Tier 5 runs after (needs all outputs).
+
+3-Phase Pattern:
+  Phase 1 — Data Discovery: get_data_availability() checks what's populated
+  Phase 2 — Formula Selection: FULL / PARTIAL / MINIMAL path
+  Phase 3 — Dynamic Calculation: real values, derived estimates, or LLM fallback
+"""
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any
+
+logger = logging.getLogger("meridian.ai.agents")
+
+
+@dataclass
+class DataAvailability:
+    has_transactions: bool = False
+    has_items: bool = False
+    has_products: bool = False
+    has_inventory: bool = False
+    has_employees: bool = False
+    has_categories: bool = False
+    transaction_count: int = 0
+    item_count: int = 0
+    date_range_days: int = 0
+    quality: str = "minimal"
+    quality_score: float = 0.0
+
+    @property
+    def is_full(self) -> bool:
+        return self.quality == "full"
+
+    @property
+    def is_partial(self) -> bool:
+        return self.quality == "partial"
+
+    @property
+    def is_minimal(self) -> bool:
+        return self.quality == "minimal"
+
+
+class BaseAgent(ABC):
+
+    name: str = "base"
+    description: str = ""
+    tier: int = 1
+
+    def __init__(self, ctx):
+        self.ctx = ctx
+        self._data_avail: DataAvailability | None = None
+
+    @abstractmethod
+    async def analyze(self) -> dict:
+        ...
+
+    def get_data_availability(self) -> DataAvailability:
+        if self._data_avail is not None:
+            return self._data_avail
+
+        ctx = self.ctx
+        txns = getattr(ctx, "transactions", []) or []
+        products = getattr(ctx, "product_performance", []) or []
+        inventory = getattr(ctx, "inventory", []) or []
+        daily = getattr(ctx, "daily_revenue", []) or []
+        hourly = getattr(ctx, "hourly_revenue", []) or []
+
+        has_items = any(t.get("items") or t.get("line_items") for t in txns[:50])
+        has_employees = any(t.get("employee_name") or t.get("employee_id") for t in txns[:50])
+        has_categories = any(p.get("category") for p in products[:50])
+
+        dates = sorted(d.get("date", "") for d in daily if d.get("date"))
+        if len(dates) >= 2:
+            try:
+                d0 = datetime.fromisoformat(dates[0])
+                d1 = datetime.fromisoformat(dates[-1])
+                date_range_days = max((d1 - d0).days + 1, len(daily))
+            except (ValueError, TypeError):
+                date_range_days = len(daily)
+        else:
+            date_range_days = len(daily)
+
+        has_transactions = len(txns) > 0 or len(daily) > 0
+        has_products = len(products) > 0
+        has_inventory = len(inventory) > 0
+
+        if has_transactions and has_items and has_products and has_inventory:
+            quality = "full"
+            quality_score = 1.0
+        elif has_transactions and (has_items or has_products):
+            quality = "partial"
+            quality_score = 0.6
+        elif has_transactions:
+            quality = "partial"
+            quality_score = 0.5
+        else:
+            quality = "minimal"
+            quality_score = 0.2
+
+        if date_range_days >= 30:
+            quality_score = min(1.0, quality_score + 0.1)
+        elif date_range_days < 7:
+            quality_score = max(0.1, quality_score - 0.2)
+
+        self._data_avail = DataAvailability(
+            has_transactions=has_transactions,
+            has_items=has_items,
+            has_products=has_products,
+            has_inventory=has_inventory,
+            has_employees=has_employees,
+            has_categories=has_categories,
+            transaction_count=len(txns),
+            item_count=sum(len(t.get("items", []) or t.get("line_items", [])) for t in txns[:200]),
+            date_range_days=date_range_days,
+            quality=quality,
+            quality_score=round(quality_score, 2),
+        )
+        return self._data_avail
+
+    def get_benchmark(self, metric: str) -> Any:
+        from ..economics.benchmarks import IndustryBenchmarks
+        bench = IndustryBenchmarks(getattr(self.ctx, "business_vertical", "other"))
+        return bench.get(metric)
+
+    def get_benchmark_range(self, metric: str):
+        from ..economics.benchmarks import IndustryBenchmarks
+        bench = IndustryBenchmarks(getattr(self.ctx, "business_vertical", "other"))
+        return bench.get_range(metric)
+
+    def _insufficient_data(self, reason: str) -> dict:
+        return {
+            "agent_name": self.name,
+            "status": "insufficient_data",
+            "minimum_required": reason,
+            "summary": f"Not enough data for {self.name} analysis",
+            "score": 0,
+            "insights": [],
+            "recommendations": [],
+            "data": {},
+            "data_quality": 0.0,
+            "calculation_path": "none",
+        }
+
+    def _result(
+        self,
+        summary: str,
+        score: float,
+        insights: list[dict],
+        recommendations: list[dict],
+        data: dict,
+        confidence: float | None = None,
+        calculation_path: str = "full",
+    ) -> dict:
+        avail = self.get_data_availability()
+        dq = confidence if confidence is not None else avail.quality_score
+        for insight in insights:
+            if "data_quality" not in insight:
+                insight["data_quality"] = dq
+            if "estimated" not in insight:
+                insight["estimated"] = calculation_path != "full"
+        return {
+            "agent_name": self.name,
+            "status": "complete",
+            "summary": summary,
+            "score": round(max(0, min(100, score))),
+            "insights": insights,
+            "recommendations": recommendations,
+            "data": data,
+            "data_quality": round(dq, 2),
+            "calculation_path": calculation_path,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }

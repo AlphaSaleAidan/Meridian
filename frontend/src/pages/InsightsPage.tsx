@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Filter } from 'lucide-react'
+import { Filter, Lock } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { formatCentsCompact } from '@/lib/format'
 import InsightCard from '@/components/InsightCard'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
-
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
+import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
 
 const insightTypes = [
   { key: '', label: 'All' },
@@ -25,15 +24,20 @@ const insightTypes = [
 
 export default function InsightsPage() {
   const [typeFilter, setTypeFilter] = useState('')
-  const insights = useApi(() => api.insights(ORG_ID, 50), [])
+  const orgId = useOrgId()
+  const tier = useTier()
+  const limits = tierLimits[tier]
+  const insights = useApi(() => api.insights(orgId, 50), [orgId])
 
   if (insights.loading) return <LoadingPage />
   if (insights.error) return <ErrorState message={insights.error} onRetry={insights.refetch} />
 
   const data = insights.data!
-  const filtered = typeFilter
+  const allFiltered = typeFilter
     ? data.insights.filter(i => i.type === typeFilter)
     : data.insights
+  const isLimited = limits.insightLimit < allFiltered.length
+  const filtered = allFiltered.slice(0, limits.insightLimit)
 
   const totalImpact = filtered.reduce((s, i) => s + (i.impact_cents || 0), 0)
   const actionable = filtered.filter(i => i.action_status === 'pending').length
@@ -79,6 +83,17 @@ export default function InsightsPage() {
               <InsightCard key={insight.id} insight={insight} />
             ))}
           </div>
+          {isLimited && (
+            <div className="mt-4 p-4 rounded-xl border border-[#7C5CFF]/20 bg-[#7C5CFF]/5 flex items-center gap-3">
+              <Lock size={16} className="text-[#7C5CFF] flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-[#F5F5F7]">
+                  {allFiltered.length - limits.insightLimit} more insights available
+                </p>
+                <p className="text-xs text-[#A1A1A8]">Upgrade to Growth to unlock all insights</p>
+              </div>
+            </div>
+          )}
         </ScrollReveal>
       ) : (
         <EmptyState

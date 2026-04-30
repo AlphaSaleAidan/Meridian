@@ -20,6 +20,7 @@ Architecture:
 """
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -60,7 +61,10 @@ class AnalysisContext:
     
     # Analysis period
     analysis_days: int = 30
-    
+
+    # Populated by run_agent_swarm after tier 1-4 agents complete
+    agent_outputs: dict = field(default_factory=dict)
+
     # Generated at runtime
     generated_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
@@ -222,6 +226,19 @@ class MeridianAI:
             logger.error(f"Money Left calculation failed: {e}", exc_info=True)
             result.errors.append(f"money_left: {str(e)}")
 
+        # ── Phase 2b: Industry-Specific Overlay ──────────────
+        try:
+            from .industry_templates import get_industry_analyzer
+            industry = get_industry_analyzer(ctx.business_vertical, ctx.org_id)
+            result.revenue_analysis["industry_overlay"] = industry.analyze_revenue(result.revenue_analysis)
+            result.product_analysis["industry_overlay"] = industry.analyze_products(result.product_analysis)
+            result.pattern_analysis["industry_overlay"] = industry.analyze_patterns(result.pattern_analysis)
+            result.money_left_score["industry_overlay"] = industry.calculate_money_left(result.money_left_score)
+            result.money_left_score["industry_benchmarks"] = industry.get_benchmarks()
+        except Exception as e:
+            logger.error(f"Industry template analysis failed: {e}", exc_info=True)
+            result.errors.append(f"industry_template: {str(e)}")
+
         # ── Phase 3: Generate Insights ────────────────────────
         try:
             result.insights = self.insight_gen.generate(
@@ -234,6 +251,22 @@ class MeridianAI:
         except Exception as e:
             logger.error(f"Insight generation failed: {e}", exc_info=True)
             result.errors.append(f"insights: {str(e)}")
+
+        # ── Phase 3b: LLM Enhancement (optional) ────────────
+        if os.environ.get("ENABLE_LLM_INSIGHTS", "").lower() in ("1", "true"):
+            try:
+                from .llm_layer import enhance_insights
+                result.insights = await enhance_insights(
+                    raw_insights=result.insights,
+                    business_context={
+                        "org_id": ctx.org_id,
+                        "business_vertical": ctx.business_vertical,
+                        "analysis_days": ctx.analysis_days,
+                    },
+                )
+            except Exception as e:
+                logger.error(f"LLM enhancement failed: {e}", exc_info=True)
+                result.errors.append(f"llm_enhancement: {str(e)}")
 
         # ── Phase 4: Forecasts (optional) ─────────────────────
         if include_forecasts:
@@ -335,3 +368,98 @@ class MeridianAI:
             f"{len(result.insights)} insights, "
             f"{len(result.forecasts)} forecasts"
         )
+
+
+async def run_agent_swarm(ctx: AnalysisContext) -> dict:
+    """Run all analysis agents in tiered parallel execution.
+
+    Phase 1: Tiers 1-4 run in parallel (foundation agents).
+    Phase 2: Tier 5 strategic agents run after, consuming tier 1-4 outputs.
+    """
+    from .agents.revenue_trend import RevenueTrendAgent
+    from .agents.cash_flow import CashFlowAgent
+    from .agents.pricing_power import PricingPowerAgent
+    from .agents.discount_analyzer import DiscountAnalyzerAgent
+    from .agents.product_velocity import ProductVelocityAgent
+    from .agents.basket_analysis import BasketAnalysisAgent
+    from .agents.category_mix import CategoryMixAgent
+    from .agents.inventory_intel import InventoryIntelAgent
+    from .agents.peak_hours import PeakHoursAgent
+    from .agents.seasonality import SeasonalityAgent
+    from .agents.day_of_week import DayOfWeekAgent
+    from .agents.employee_perf import EmployeePerformanceAgent
+    from .agents.payment_optimizer import PaymentOptimizerAgent
+    from .agents.waste_shrinkage import WasteShrinkageAgent
+    from .agents.staffing import StaffingAgent
+    from .agents.benchmark import BenchmarkAgent
+    from .agents.money_left import MoneyLeftAgent
+    from .agents.forecaster import ForecasterAgent
+    from .agents.customer_ltv import CustomerLTVAgent
+    from .agents.promo_roi import PromoROIAgent
+    from .agents.cashflow_forecast import CashFlowForecastAgent
+    from .agents.growth_score import GrowthScoreAgent
+
+    tier_1_4_agents = [
+        RevenueTrendAgent(ctx),
+        CashFlowAgent(ctx),
+        PricingPowerAgent(ctx),
+        DiscountAnalyzerAgent(ctx),
+        ProductVelocityAgent(ctx),
+        BasketAnalysisAgent(ctx),
+        CategoryMixAgent(ctx),
+        InventoryIntelAgent(ctx),
+        PeakHoursAgent(ctx),
+        SeasonalityAgent(ctx),
+        DayOfWeekAgent(ctx),
+        EmployeePerformanceAgent(ctx),
+        PaymentOptimizerAgent(ctx),
+        WasteShrinkageAgent(ctx),
+        StaffingAgent(ctx),
+    ]
+
+    results = await asyncio.gather(
+        *[agent.analyze() for agent in tier_1_4_agents],
+        return_exceptions=True,
+    )
+
+    agent_outputs: dict[str, Any] = {}
+    for agent, result in zip(tier_1_4_agents, results):
+        if isinstance(result, Exception):
+            logger.error(f"Agent {agent.name} failed: {result}")
+            agent_outputs[agent.name] = {"status": "error", "error": str(result)}
+        else:
+            agent_outputs[agent.name] = result
+
+    # Phase 2: Run tier 5 strategic agents (need tier 1-4 outputs)
+    ctx.agent_outputs = agent_outputs
+    strategic_agents = [
+        BenchmarkAgent(ctx),
+        MoneyLeftAgent(ctx),
+        ForecasterAgent(ctx),
+        CustomerLTVAgent(ctx),
+        PromoROIAgent(ctx),
+        CashFlowForecastAgent(ctx),
+        GrowthScoreAgent(ctx),
+    ]
+
+    strategic_results = await asyncio.gather(
+        *[agent.analyze() for agent in strategic_agents],
+        return_exceptions=True,
+    )
+
+    for agent, result in zip(strategic_agents, strategic_results):
+        if isinstance(result, Exception):
+            logger.error(f"Strategic agent {agent.name} failed: {result}")
+            agent_outputs[agent.name] = {"status": "error", "error": str(result)}
+        else:
+            agent_outputs[agent.name] = result
+
+    succeeded = sum(
+        1 for v in agent_outputs.values()
+        if isinstance(v, dict) and v.get("status") == "complete"
+    )
+    logger.info(
+        f"Agent swarm complete: {len(agent_outputs)} agents, "
+        f"{succeeded} succeeded"
+    )
+    return agent_outputs

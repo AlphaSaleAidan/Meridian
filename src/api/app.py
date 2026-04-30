@@ -19,6 +19,8 @@ from fastapi.staticfiles import StaticFiles
 from .routes.oauth import router as oauth_router
 from .routes.webhooks import router as webhook_router
 from .routes.dashboard import router as dashboard_router
+from .routes.payouts import router as payouts_router
+from .routes.onboarding import router as onboarding_router
 from ..config import app as app_config
 
 # Configure logging
@@ -37,6 +39,11 @@ async def lifespan(app: FastAPI):
     logger.info("Meridian server starting...")
     await init_db()
     logger.info("Database connection initialized")
+    from ..payouts.webhook_hook import init_commission_hook
+    from ..db import _db_instance
+    if _db_instance:
+        init_commission_hook(_db_instance)
+        logger.info("Commission webhook hook initialized")
     yield
     await close_db()
     logger.info("Meridian server shut down.")
@@ -56,6 +63,8 @@ _allowed_origins = [
     "https://app.meridianpos.ai",
     "https://meridian-dashboard.vercel.app",
     "https://meridian-dun-nu.vercel.app",
+    "https://meridian-app-c9cd32f1.viktor.space",
+    "https://industrious-rabbit-343.convex.site",
 ]
 
 # Allow custom origin from env (e.g. Vercel preview deploys)
@@ -75,6 +84,8 @@ app.add_middleware(
 app.include_router(oauth_router)
 app.include_router(webhook_router)
 app.include_router(dashboard_router)
+app.include_router(payouts_router)
+app.include_router(onboarding_router)
 
 
 @app.get("/health")
