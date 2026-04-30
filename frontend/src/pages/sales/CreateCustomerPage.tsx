@@ -11,9 +11,9 @@ import { supabase } from '@/lib/supabase'
 type Step = 'details' | 'plan' | 'confirm' | 'link'
 
 const PLANS = [
-  { id: 'insights', label: 'Insights', price: 500, desc: 'Core analytics + AI recommendations' },
-  { id: 'optimize', label: 'Optimize', price: 750, desc: '+ Forecasting + smart notifications' },
-  { id: 'command', label: 'Command', price: 1000, desc: '+ Benchmarking + what-if simulator' },
+  { id: 'starter', label: 'Starter', price: 500, desc: 'Core analytics + AI recommendations' },
+  { id: 'growth', label: 'Growth', price: 750, desc: '+ Forecasting + smart notifications' },
+  { id: 'enterprise', label: 'Enterprise', price: 1000, desc: '+ Benchmarking + what-if simulator' },
 ]
 
 function uuid(): string {
@@ -85,16 +85,11 @@ export default function CreateCustomerPage() {
         const { error: bizErr } = await supabase.from('organizations').insert({
           id: businessId,
           name: form.businessName,
-          owner_name: form.ownerName,
+          slug: form.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
           email: form.email,
-          phone: form.phone,
-          industry: form.vertical || null,
-          plan_tier: form.plan,
-          monthly_price: price,
-          onboarded: false,
-          created_by_rep: rep?.rep_id || null,
-          access_token: token,
-          pos_connected: false,
+          phone: form.phone || null,
+          vertical: (form.vertical as any) || 'other',
+          metadata: { plan_tier: form.plan, monthly_price: price, owner_name: form.ownerName, created_by_rep: rep?.rep_id || null },
         })
         if (bizErr) throw new Error(bizErr.message)
 
@@ -107,7 +102,7 @@ export default function CreateCustomerPage() {
           contact_phone: form.phone,
           vertical: form.vertical || 'Other',
           stage: 'proposal_sent',
-          monthly_value: price * 100,
+          monthly_value: price,
           commission_rate: rep?.commission_rate || 35,
           notes: form.notes || `Created via Sales Portal. Plan: ${selectedPlan.label} at $${price}/mo`,
           rep_id: rep?.rep_id || null,
