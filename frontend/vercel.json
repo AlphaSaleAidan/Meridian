@@ -2,14 +2,32 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "redirects": [
+    {
+      "source": "/sales/:path*",
+      "destination": "https://meridian-sales-f7df5b93.viktor.space/",
+      "permanent": false
+    },
+    {
+      "source": "/login",
+      "destination": "https://meridian-sales-f7df5b93.viktor.space/",
+      "permanent": false
+    }
+  ],
   "rewrites": [
-    { "source": "/((?!api|assets|meridian-icon\\.svg).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api|assets|meridian-icon\\.svg).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/assets/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     }
   ]
