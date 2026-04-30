@@ -81,12 +81,18 @@ class AnalysisResult:
     product_analysis: dict = field(default_factory=dict)
     pattern_analysis: dict = field(default_factory=dict)
     money_left_score: dict = field(default_factory=dict)
-    
+
+    # Agent swarm outputs (22 agents)
+    agent_outputs: dict = field(default_factory=dict)
+
+    # Alerts fired
+    alerts: list[dict] = field(default_factory=list)
+
     # Generated outputs
     insights: list[dict] = field(default_factory=list)
     forecasts: list[dict] = field(default_factory=list)
     weekly_report: dict | None = None
-    
+
     # Metadata
     generated_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
@@ -100,6 +106,11 @@ class AnalysisResult:
             "org_id": self.org_id,
             "insights_generated": len(self.insights),
             "forecasts_generated": len(self.forecasts),
+            "alerts_fired": len(self.alerts),
+            "agents_completed": sum(
+                1 for v in self.agent_outputs.values()
+                if isinstance(v, dict) and v.get("status") == "complete"
+            ),
             "has_weekly_report": self.weekly_report is not None,
             "money_left_total_cents": self.money_left_score.get(
                 "total_score_cents", 0
@@ -292,6 +303,39 @@ class MeridianAI:
                 logger.error(f"Report generation failed: {e}", exc_info=True)
                 result.errors.append(f"report: {str(e)}")
 
+        # ── Phase 5b: Agent Swarm (22 agents) ────────────────
+        try:
+            result.agent_outputs = await run_agent_swarm(ctx)
+            ctx.agent_outputs = result.agent_outputs
+
+            # Merge swarm insights into the main insights list
+            for agent_name, output in result.agent_outputs.items():
+                if isinstance(output, dict) and output.get("status") == "complete":
+                    for insight in output.get("insights", []):
+                        insight.setdefault("source_agent", agent_name)
+                        result.insights.append(insight)
+        except Exception as e:
+            logger.error(f"Agent swarm failed: {e}", exc_info=True)
+            result.errors.append(f"agent_swarm: {str(e)}")
+
+        # ── Phase 6: Alert Evaluation ────────────────────────
+        try:
+            from .alerts import ALL_ALERTS
+            for alert_cls in ALL_ALERTS:
+                try:
+                    alert = alert_cls(ctx, agent_outputs=result.agent_outputs)
+                    fired = await alert.evaluate()
+                    result.alerts.extend(fired)
+                except Exception as e:
+                    logger.error(f"Alert {alert_cls.__name__} failed: {e}")
+                    result.errors.append(f"alert_{alert_cls.__name__}: {str(e)}")
+
+            if result.alerts:
+                logger.info(f"Fired {len(result.alerts)} alerts for {ctx.org_id}")
+        except Exception as e:
+            logger.error(f"Alert engine failed: {e}", exc_info=True)
+            result.errors.append(f"alerts: {str(e)}")
+
         result.generated_at = datetime.now(timezone.utc)
         result.duration_seconds = (
             result.generated_at - start
@@ -363,10 +407,27 @@ class MeridianAI:
             except Exception as e:
                 logger.error(f"Failed to save weekly report: {e}")
 
+        # Save alerts
+        if result.alerts:
+            try:
+                if hasattr(self.db, "save_alerts"):
+                    await self.db.save_alerts(result.org_id, result.alerts)
+            except Exception as e:
+                logger.error(f"Failed to save alerts: {e}")
+
+        # Save agent outputs snapshot
+        if result.agent_outputs:
+            try:
+                if hasattr(self.db, "save_agent_outputs"):
+                    await self.db.save_agent_outputs(result.org_id, result.agent_outputs)
+            except Exception as e:
+                logger.error(f"Failed to save agent outputs: {e}")
+
         logger.info(
             f"Persisted results for {result.org_id}: "
             f"{len(result.insights)} insights, "
-            f"{len(result.forecasts)} forecasts"
+            f"{len(result.forecasts)} forecasts, "
+            f"{len(result.alerts)} alerts"
         )
 
 

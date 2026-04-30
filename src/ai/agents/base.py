@@ -60,6 +60,130 @@ class BaseAgent(ABC):
     async def analyze(self) -> dict:
         ...
 
+    # ─── ML Engine Methods (lazy-loaded, graceful fallback) ──
+
+    def forecast(self, series: list[dict], periods: int = 30) -> list[dict]:
+        """Forecast using Prophet (≥30 data points) or manual fallback."""
+        if len(series) >= 30:
+            try:
+                import pandas as pd
+                from prophet import Prophet
+
+                df = pd.DataFrame(series)
+                if "date" in df.columns:
+                    df = df.rename(columns={"date": "ds", "revenue_cents": "y"})
+                elif "ds" not in df.columns:
+                    df.columns = ["ds", "y"] + list(df.columns[2:])
+
+                m = Prophet(
+                    yearly_seasonality=True,
+                    weekly_seasonality=True,
+                    daily_seasonality=False,
+                )
+                m.fit(df[["ds", "y"]])
+                future = m.make_future_dataframe(periods=periods)
+                fc = m.predict(future)
+                return [
+                    {
+                        "date": row["ds"].strftime("%Y-%m-%d"),
+                        "predicted": round(row["yhat"]),
+                        "lower": round(row["yhat_lower"]),
+                        "upper": round(row["yhat_upper"]),
+                    }
+                    for _, row in fc.tail(periods).iterrows()
+                ]
+            except ImportError:
+                logger.debug("Prophet not installed — using manual forecast")
+            except Exception as e:
+                logger.warning(f"Prophet forecast failed: {e}")
+
+        return self._manual_forecast(series, periods)
+
+    def _manual_forecast(self, series: list[dict], periods: int) -> list[dict]:
+        """Simple linear extrapolation fallback."""
+        values = [s.get("revenue_cents", s.get("y", 0)) for s in series]
+        if not values:
+            return []
+        avg = sum(values) / len(values)
+        if len(values) >= 7:
+            recent = sum(values[-7:]) / 7
+            trend = (recent - avg) / max(avg, 1)
+        else:
+            trend = 0
+        return [
+            {"date": f"forecast_day_{i+1}", "predicted": round(avg * (1 + trend * i / periods))}
+            for i in range(periods)
+        ]
+
+    def detect_anomalies(self, values: list[float], contamination: float = 0.05) -> list[int]:
+        """Anomaly detection: PyOD IsolationForest or z-score fallback."""
+        if len(values) >= 20:
+            try:
+                import numpy as np
+                from pyod.models.iforest import IForest
+
+                arr = np.array(values).reshape(-1, 1)
+                clf = IForest(contamination=contamination, random_state=42)
+                clf.fit(arr)
+                return clf.labels_.tolist()
+            except ImportError:
+                logger.debug("PyOD not installed — using z-score fallback")
+            except Exception as e:
+                logger.warning(f"PyOD anomaly detection failed: {e}")
+
+        if not values:
+            return []
+        avg = sum(values) / len(values)
+        std = (sum((v - avg) ** 2 for v in values) / max(len(values) - 1, 1)) ** 0.5
+        if std == 0:
+            return [0] * len(values)
+        return [1 if abs(v - avg) / std > 2.5 else 0 for v in values]
+
+    def find_associations(
+        self, baskets: list[list[str]], min_support: float = 0.01, min_lift: float = 1.2
+    ) -> list[dict]:
+        """Basket analysis: mlxtend Apriori or manual pair counting."""
+        if len(baskets) >= 50:
+            try:
+                import pandas as pd
+                from mlxtend.frequent_patterns import apriori, association_rules
+                from mlxtend.preprocessing import TransactionEncoder
+
+                te = TransactionEncoder()
+                te_arr = te.fit(baskets).transform(baskets)
+                df = pd.DataFrame(te_arr, columns=te.columns_)
+                freq = apriori(df, min_support=min_support, use_colnames=True)
+                if freq.empty:
+                    return []
+                rules = association_rules(freq, metric="lift", min_threshold=min_lift)
+                return [
+                    {
+                        "antecedents": list(row["antecedents"]),
+                        "consequents": list(row["consequents"]),
+                        "support": round(row["support"], 4),
+                        "confidence": round(row["confidence"], 4),
+                        "lift": round(row["lift"], 3),
+                    }
+                    for _, row in rules.head(20).iterrows()
+                ]
+            except ImportError:
+                logger.debug("mlxtend not installed — using manual pair counting")
+            except Exception as e:
+                logger.warning(f"mlxtend basket analysis failed: {e}")
+
+        pairs: dict[tuple, int] = {}
+        for basket in baskets:
+            items = sorted(set(basket))
+            for i in range(len(items)):
+                for j in range(i + 1, len(items)):
+                    pair = (items[i], items[j])
+                    pairs[pair] = pairs.get(pair, 0) + 1
+        total = max(len(baskets), 1)
+        return [
+            {"antecedents": [a], "consequents": [b], "support": round(c / total, 4), "frequency": c}
+            for (a, b), c in sorted(pairs.items(), key=lambda x: x[1], reverse=True)[:20]
+        ]
+
     def get_data_availability(self) -> DataAvailability:
         if self._data_avail is not None:
             return self._data_avail
