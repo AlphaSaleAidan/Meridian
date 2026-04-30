@@ -16,6 +16,7 @@ import AccountsPage from '@/pages/sales/AccountsPage'
 import TrainingPage from '@/pages/sales/TrainingPage'
 import TeamManagementPage from '@/pages/sales/TeamManagementPage'
 import SalesSettingsPage from '@/pages/sales/SalesSettingsPage'
+import CreateCustomerPage from '@/pages/sales/CreateCustomerPage'
 
 import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
 import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
@@ -39,6 +40,7 @@ import AnomaliesPage from '@/pages/AnomaliesPage'
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
+const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazy(() => import('@/pages/CareersPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
 
@@ -90,6 +92,15 @@ export default function App() {
               <Route path="/careers" element={<CareersPage />} />
 
               {/* ══════════════════════════════════════════════
+                  CUSTOMER ONBOARDING — public link from sales rep
+                  ══════════════════════════════════════════════ */}
+              <Route path="/onboard" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <CustomerOnboardingWizard />
+                </Suspense>
+              } />
+
+              {/* ══════════════════════════════════════════════
                   CUSTOMER AUTH — business owners
                   ══════════════════════════════════════════════ */}
               <Route path="/customer/login" element={<CustomerLoginPage />} />
@@ -129,6 +140,7 @@ export default function App() {
                 <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
                 <Route path="/sales/leads" element={<LeadsPage />} />
                 <Route path="/sales/accounts" element={<AccountsPage />} />
+                <Route path="/sales/new-customer" element={<CreateCustomerPage />} />
                 <Route path="/sales/training" element={<TrainingPage />} />
                 <Route path="/sales/settings" element={<SalesSettingsPage />} />
                 <Route path="/sales/admin" element={<TeamManagementPage />} />
