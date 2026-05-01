@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install build dependencies for ML packages (prophet, shap, lightgbm)
+# Install build dependencies for ML packages (prophet, shap, lightgbm, paddlepaddle)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ cmake gfortran \
     libopenblas-dev liblapack-dev \
