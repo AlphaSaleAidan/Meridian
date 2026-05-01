@@ -44,9 +44,10 @@ CATALOG_ITEMS = {
 
 # Plan tier pricing (cents)
 PLAN_PRICES = {
-    "standard": 25000,   # $250
-    "premium": 50000,    # $500
-    "command": 100000,   # $1,000
+    "standard": 25000,   # $250/mo
+    "premium": 50000,    # $500/mo
+    "command": 100000,   # $1,000/mo
+    "weekly": 6500,      # $65/wk
 }
 
 # Map plan names to catalog keys
@@ -54,6 +55,7 @@ PLAN_CATALOG_KEY = {
     "standard": "standard_monthly",
     "premium": "premium_monthly",
     "command": "command_monthly",
+    "weekly": "weekly",
 }
 
 
