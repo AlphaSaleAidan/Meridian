@@ -24,7 +24,7 @@ from .routes.predictive import router as predictive_router
 from .routes.admin import router as admin_router
 from .routes.vision import router as vision_router
 from .routes.cline import router as cline_router
-from .routes.stripe_checkout import router as stripe_router
+# Stripe checkout route removed — billing is handled via Square (/api/billing/*)
 
 # Configure logging
 logging.basicConfig(
@@ -95,7 +95,7 @@ app.include_router(predictive_router)
 app.include_router(admin_router)
 app.include_router(vision_router)
 app.include_router(cline_router)
-app.include_router(stripe_router)
+# app.include_router(stripe_router)  # Replaced by Square billing
 
 
 @app.get("/health")
