@@ -650,3 +650,232 @@ NEVER skip phases. NEVER produce output without reasoning. Think deeply.
 | Owner confused by Cline responses | Keep language simple, offer "Talk to a human" escape hatch |
 | Token cost increase from reasoning | Cache reasoning chains, use cheaper models for repeat patterns |
 | Privacy — IT team sees owner conversations | RBAC scoping, audit logs on admin access |
+
+---
+
+## ADR-011-v2: Advanced Vision Intelligence — Palantir-Grade Customer Tracking & Insights
+
+### Status: Approved (supersedes ADR-011 camera section)
+### Date: 2026-05-01
+
+### Context
+
+ADR-011 established the foundation for in-store vision intelligence. This revision specifies the exact repository stack, camera topology, and analytics pipeline to deliver Palantir-grade customer tracking: passerby counting, walk-in conversion, gender/age demographics, repeat vs first-time detection, non-customer identification, and sentiment analysis.
+
+### Camera Topology
+
+```
+                    ┌──────────────────────────┐
+                    │      SIDEWALK/STREET      │
+                    │                           │
+                    │   Camera 1 (Exterior)     │
+                    │   ● Passerby counting     │
+                    │   ● Window shoppers        │
+                    │   ● "Looked but didn't    │
+                    │     enter" detection       │
+                    └────────────┬─────────────┘
+                                 │
+                    ┌────────────▼─────────────┐
+                    │       ENTRANCE            │
+                    │                           │
+                    │   Camera 2 (Door)         │
+                    │   ● Entry/exit counting   │
+                    │   ● Face capture (best    │
+                    │     quality, eye-level)    │
+                    │   ● Repeat detection      │
+                    │   ● Gender/age/emotion    │
+                    └────────────┬─────────────┘
+                                 │
+          ┌──────────────────────┼──────────────────────┐
+          │                      │                      │
+┌─────────▼──────────┐ ┌────────▼──────────┐ ┌────────▼──────────┐
+│   ZONE A (Bar)     │ │   ZONE B (Tables) │ │   ZONE C (Menu)   │
+│                    │ │                   │ │                   │
+│   Camera 3+        │ │   Camera 4+        │ │   Camera 5+        │
+│   ● Dwell time     │ │   ● Dwell time    │ │   ● Dwell time    │
+│   ● Path tracking  │ │   ● Group size    │ │   ● Conversion    │
+│   ● Heatmap        │ │   ● Sentiment     │ │     (looked at    │
+│                    │ │                   │ │      menu→ordered) │
+└────────────────────┘ └───────────────────┘ └───────────────────┘
+```
+
+### Technology Stack (Final Selections)
+
+| Layer | Repository | Stars | Role |
+|-------|-----------|-------|------|
+| Person Detection | `ultralytics/ultralytics` (YOLOv8) | 40K+ | Detect people in every frame |
+| Multi-Object Tracking | `mikel-brostrom/boxmot` | 8.1K | Track person across frames, assign track IDs |
+| Face Recognition | `deepinsight/insightface` (ArcFace/buffalo_l) | 25K+ | Primary face matching engine (99.8% accuracy) |
+| Face Analysis | `serengil/deepface` | 22.6K | Age, gender, emotion, ethnicity classification |
+| Zone Analytics | `roboflow/supervision` | 25K+ | Zone crossing, counting, heatmaps, dwell time |
+| Cross-Camera ReID | `mikel-brostrom/boxmot` ReID module | — | Re-identify same person across different cameras |
+| Identity Graph | `apache/age` (Postgres extension) | 3K+ | Customer knowledge graph on Supabase |
+| Edge Processing | NVIDIA Jetson / Raspberry Pi 5 | — | All inference on-premises |
+
+### Analytics Pipeline
+
+```
+Frame (30fps) ──┬──▶ YOLOv8 Person Detection
+                │      └──▶ BoxMOT Multi-Object Tracking
+                │             └──▶ Track ID per person per frame
+                │
+                ├──▶ InsightFace ArcFace (every 5th frame per track)
+                │      └──▶ 512-dim face embedding
+                │      └──▶ Match against customer_embeddings table
+                │      └──▶ Result: known_customer | returning_anonymous | new_face
+                │
+                ├──▶ DeepFace Analysis (on first clear face per track)
+                │      └──▶ age_range, gender, dominant_emotion
+                │
+                └──▶ Supervision Zone Analytics
+                       └──▶ zone_entered, zone_exited, dwell_seconds
+                       └──▶ path_coordinates (for heatmap)
+                       └──▶ zone_crossing_events (sidewalk→door→interior)
+
+Every 60 seconds, edge device sends batch to cloud:
+{
+  "store_id": "...",
+  "window_start": "2026-05-01T14:00:00Z",
+  "window_end": "2026-05-01T14:01:00Z",
+  "passerby_count": 34,
+  "window_shoppers": 8,      // looked toward store, slowed down
+  "walk_ins": 5,              // crossed door zone
+  "walk_outs": 3,
+  "demographics": {
+    "male": 18, "female": 14, "unknown": 2,
+    "age_buckets": {"18-25": 6, "26-35": 12, "36-50": 10, "51+": 6}
+  },
+  "returning_customers": 2,   // face matched from previous visits
+  "new_faces": 3,
+  "avg_dwell_seconds": {"entrance": 4.2, "bar": 840, "tables": 1200, "menu": 22},
+  "zone_heatmap": [[x, y, intensity], ...],
+  "sentiment_snapshot": {"happy": 3, "neutral": 1, "surprised": 1},
+  "tracks": [
+    {
+      "track_id": "t-4782",
+      "embedding_hash": "abc123",
+      "is_returning": true,
+      "visit_number": 14,
+      "gender": "female",
+      "age_range": "26-35",
+      "emotion_at_entry": "happy",
+      "emotion_at_exit": "neutral",
+      "zones_visited": ["entrance", "menu", "bar"],
+      "total_dwell_seconds": 2520,
+      "matched_pos_transaction": "$47.50"
+    }
+  ]
+}
+```
+
+### Database Schema Additions
+
+```sql
+-- Passerby / foot traffic events
+CREATE TABLE foot_traffic (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES organizations(id),
+    camera_id UUID REFERENCES cameras(id),
+    window_start TIMESTAMPTZ NOT NULL,
+    window_end TIMESTAMPTZ NOT NULL,
+    passerby_count INT DEFAULT 0,
+    window_shoppers INT DEFAULT 0,
+    walk_ins INT DEFAULT 0,
+    walk_outs INT DEFAULT 0,
+    male_count INT DEFAULT 0,
+    female_count INT DEFAULT 0,
+    age_buckets JSONB DEFAULT '{}',
+    returning_count INT DEFAULT 0,
+    new_face_count INT DEFAULT 0,
+    non_customer_count INT DEFAULT 0,    -- entered but no POS match
+    sentiment_summary JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Individual customer profiles (anonymous until opt-in)
+CREATE TABLE customer_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES organizations(id),
+    embedding_hash TEXT NOT NULL,         -- hash of face embedding (not the embedding itself)
+    visit_count INT DEFAULT 1,
+    first_seen_at TIMESTAMPTZ DEFAULT now(),
+    last_seen_at TIMESTAMPTZ DEFAULT now(),
+    avg_dwell_seconds FLOAT DEFAULT 0,
+    favorite_zone TEXT,
+    visit_pattern JSONB DEFAULT '{}',     -- {"weekday_counts": {}, "hour_counts": {}}
+    gender TEXT,                           -- male/female/unknown
+    age_range TEXT,                        -- "26-35"
+    avg_sentiment TEXT,                    -- happy/neutral/negative
+    total_pos_spend FLOAT DEFAULT 0,      -- linked from POS if opted in
+    predicted_ltv FLOAT DEFAULT 0,
+    is_opted_in BOOLEAN DEFAULT false,    -- linked to loyalty/name
+    opted_in_name TEXT,
+    opted_in_email TEXT,
+    tags TEXT[] DEFAULT '{}',             -- VIP, regular, window_shopper, etc.
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Visit log per customer
+CREATE TABLE customer_visits (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    profile_id UUID REFERENCES customer_profiles(id),
+    org_id UUID REFERENCES organizations(id),
+    entered_at TIMESTAMPTZ NOT NULL,
+    exited_at TIMESTAMPTZ,
+    dwell_seconds INT,
+    zones_visited TEXT[],
+    emotion_at_entry TEXT,
+    emotion_at_exit TEXT,
+    pos_transaction_id TEXT,              -- linked POS sale if any
+    pos_amount_cents INT,
+    was_window_shopper BOOLEAN DEFAULT false,  -- looked but didn't enter
+    converted_later BOOLEAN DEFAULT false,     -- window shopped, came back later
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Insights generated by Karpathy reasoning
+CREATE TABLE vision_insights (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES organizations(id),
+    insight_type TEXT NOT NULL,           -- conversion, demographic, timing, sentiment, loyalty
+    title TEXT NOT NULL,                  -- "21 people looked in but didn't enter"
+    body TEXT NOT NULL,                   -- full analysis
+    data JSONB DEFAULT '{}',
+    confidence TEXT DEFAULT 'MEDIUM',
+    reasoning_chain_id UUID,
+    period_start TIMESTAMPTZ,
+    period_end TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Apache AGE graph for identity resolution
+-- (run after installing AGE extension)
+-- SELECT create_graph('customer_graph');
+-- Nodes: Customer, Visit, Zone, Transaction, TimeSlot
+-- Edges: VISITED, BOUGHT, DWELLED_IN, RETURNED_AFTER, CONVERTED_FROM_WINDOW
+```
+
+### Insight Examples (Generated by Karpathy Reasoning Agents)
+
+```
+📊 "21 people looked into your store between 12-2pm but didn't walk in.
+    12 were women aged 25-35. Your lunch menu sign isn't visible from the sidewalk."
+
+🔄 "Customer #4782 has visited 14 times (every Fri/Sat). Average spend $47.
+    Last 2 visits she seemed less happy (neutral vs usual happy).
+    She hasn't been in for 9 days — longest gap in 3 months. Risk of churn."
+
+📈 "Walk-in conversion rate: 14.7% (up from 11.2% last month).
+    The new A-frame sign you added is working — window shoppers converting 31% more."
+
+👥 "Tuesday evenings are 73% male, 26-35. Friday nights flip to 58% female, 21-30.
+    Your Tuesday cocktail menu doesn't match Tuesday's demographic."
+
+⏱️ "Average dwell time dropped from 52min to 38min this week.
+    Customers spending 22% less time at tables. Possible causes:
+    service speed changed, or ambient temp (it hit 95°F this week)."
+
+🆕 "You had 34 first-time visitors this week (up 15%).
+    But only 8 came back for a second visit (23% retention).
+    Industry benchmark is 35% — consider a first-visit loyalty offer."
+```
