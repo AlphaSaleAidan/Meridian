@@ -212,8 +212,13 @@ async def handle_billing_webhook(request: Request):
 
         logger.info(f"Billing webhook: {event_type}")
 
-        if event_type == "payment.completed":
+        if event_type in ("payment.completed", "payment.updated"):
             payment = data.get("payment", {})
+
+            # For payment.updated, only process if status is COMPLETED
+            if event_type == "payment.updated" and payment.get("status") != "COMPLETED":
+                return {"status": "ignored", "reason": "payment not completed yet"}
+
             order_id = payment.get("order_id", "")
 
             if order_id:
