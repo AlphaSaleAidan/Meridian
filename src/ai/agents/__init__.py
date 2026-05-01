@@ -21,3 +21,8 @@ from .customer_ltv import CustomerLTVAgent
 from .promo_roi import PromoROIAgent
 from .cashflow_forecast import CashFlowForecastAgent
 from .growth_score import GrowthScoreAgent
+from .foot_traffic import FootTrafficAgent
+from .dwell_time import DwellTimeAgent
+from .customer_recognizer import CustomerRecognizerAgent
+from .demographic_profiler import DemographicProfilerAgent
+from .queue_monitor import QueueMonitorAgent

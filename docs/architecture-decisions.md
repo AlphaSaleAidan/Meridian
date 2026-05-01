@@ -140,32 +140,29 @@
 
 ---
 
-## ADR-011: In-Store Vision Intelligence (Camera-Based Customer Tracking)
+## ADR-011: In-Store Vision Intelligence
 
 **Date:** 2026-04-30
 
-**Status:** Accepted
+**Status:** Accepted (Implemented)
 
-**Decision:** Add a camera-based customer tracking system that enables face recognition, foot traffic analytics, dwell time analysis, demographic insights, and queue monitoring for merchants with physical locations.
+**Decision:** Add computer vision capabilities for foot traffic analytics, dwell time measurement, customer recognition, demographic profiling, and queue monitoring. Processing runs on-premise at the edge; only anonymized metrics flow to Meridian's cloud.
 
-### Architecture
+**Why:**
+- POS data alone misses the 70% of visitors who browse but don't buy (conversion rate, traffic patterns, dwell time)
+- Brick-and-mortar merchants have no equivalent of web analytics — vision fills that gap
+- Edge processing keeps video/images on merchant hardware, satisfying privacy requirements
+- Competitive advantage: most POS analytics platforms are transaction-only
+
+### Processing Pipeline
 
 ```
-In-Store Cameras (RTSP/USB/IP)
-    ↓ Stream
-Edge Processing Node (merchant's network)
-    ├── YOLOv8 (person detection)
-    ├── ByteTrack/BoxMOT (multi-object tracking)
-    └── DeepFace/InsightFace (face embedding + demographics)
-    ↓ API (encrypted)
-Meridian Backend (FastAPI)
-    ↓ Store
-Supabase (vision_customers, vision_visits, vision_zones, vision_traffic)
-    ↓ Analyze
-AI Agents (5 new agents)
-    ↓ Display
-React Dashboard → Customer Intelligence page
+Camera (RTSP) → YOLO v8 (person detection) → ByteTrack (multi-object tracking)
+  → DeepFace (optional: age/gender, repeat visitor embedding)
+  → Meridian DB (anonymized metrics only)
 ```
+
+**Runtime**: CompreFace self-hosted in Docker on merchant edge hardware. No cloud inference.
 
 ### Why Edge-First (Not Cloud)
 
@@ -176,8 +173,6 @@ React Dashboard → Customer Intelligence page
 
 ### Deployment Model: CompreFace on Edge
 
-**Decision:** Use CompreFace (self-hosted Docker) as the face recognition API running on the merchant's local hardware.
-
 **Why CompreFace over cloud APIs (AWS Rekognition, Azure Face):**
 - Self-hosted = zero per-call cost at scale
 - Data sovereignty — face data never leaves merchant's network
@@ -185,26 +180,21 @@ React Dashboard → Customer Intelligence page
 - REST API makes integration clean from our processing pipeline
 - Supports multiple recognition models (ArcFace, FaceNet, MobileFace)
 
-**Hardware requirements (per location):**
-- Minimum: NVIDIA Jetson Nano ($149) — handles 2-3 cameras at 15fps
-- Recommended: NVIDIA Jetson Orin Nano ($249) — handles 4-6 cameras at 30fps
-- Alternative: Any Linux box with NVIDIA GPU (GTX 1060+) or Apple Silicon Mac
+### Privacy Model
 
-### Privacy & Consent Model
+| Mode | What's stored | Embeddings | Use case |
+|------|--------------|------------|----------|
+| `anonymous` (default) | Aggregate counts only | None | Foot traffic, queue length |
+| `opt_in_identity` | Anonymized visit records | On-prem only, 90-day auto-delete | Repeat visitor detection, dwell time |
+| `disabled` | Nothing | Nothing | Camera connected but vision off |
 
-**This is non-negotiable. Every feature must respect these rules:**
-
-1. **Opt-in signage required.** Merchants must display a clearly visible sign: _"This business uses camera-based analytics. By entering, you consent to anonymous visit tracking. No personally identifiable images are stored."_
-
-2. **No image storage.** Raw camera frames are never saved to disk or cloud. Only 512-dimensional face embeddings (cannot be reversed to a face) are stored locally.
-
-3. **Anonymized by default.** Cloud analytics only receive: visitor count, estimated age range, estimated gender, dwell time per zone, queue length. No embeddings. No images.
-
-4. **Customer opt-in for identity.** If a merchant wants to link face embeddings to customer names/loyalty accounts, the customer must explicitly opt in (e.g., sign up at a kiosk). Without opt-in, visitors are tracked as anonymous recurring IDs.
-
-5. **Data retention:** Face embeddings auto-delete after 90 days of no visits. Zone/traffic data retained per standard data retention policy.
-
-6. **Compliance flags:** `organizations.vision_consent_model` field: `'anonymous'` (default), `'opt_in_identity'`, or `'disabled'`.
+**Hard rules:**
+- No raw images or video frames are ever stored or transmitted to cloud
+- Face embeddings never leave merchant hardware — cloud receives only visit IDs and timestamps
+- Consent signage is required in camera field of view (enforced during setup wizard)
+- 90-day automatic deletion of all embeddings and visit-level records
+- Customer can request immediate deletion (CCPA/GDPR right to erasure)
+- `vision_cameras.compliance_mode` field enforces the selected privacy level at the edge
 
 ### Camera Integration
 
@@ -215,107 +205,148 @@ React Dashboard → Customer Intelligence page
 - Amcrest IP8M-T2599EW ($70) — 4K, PoE, AI detection built-in
 - Hikvision DS-2CD2143G2-I ($90) — enterprise grade
 
-**Connection flow:**
-1. Merchant purchases/connects IP cameras to local network
-2. Merchant clicks "Connect Cameras" in Customer Intelligence page
-3. Meridian app shows setup wizard:
-   - Enter camera RTSP URL(s)
-   - Define zones (drag-to-draw on camera preview)
-   - Set operating hours
-   - Accept privacy/consent terms
-4. Edge processing node starts consuming camera streams
-5. Analytics appear in Customer Intelligence within minutes
-
-### Database Schema (New Tables)
+### Database Schema (4 tables — implemented)
 
 ```sql
--- Camera configurations per location
+-- Camera registration and health
 CREATE TABLE vision_cameras (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id UUID NOT NULL REFERENCES organizations(id),
-  location_id UUID REFERENCES locations(id),
-  name TEXT NOT NULL,           -- "Front Entrance", "Checkout Area"
-  rtsp_url TEXT NOT NULL,       -- encrypted at rest
-  zones JSONB DEFAULT '[]',     -- [{name, polygon_points}]
-  operating_hours JSONB,        -- {start: "08:00", end: "22:00"}
-  status TEXT DEFAULT 'active', -- active, paused, disconnected
-  created_at TIMESTAMPTZ DEFAULT now()
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id          UUID NOT NULL REFERENCES organizations(id),
+    location_id     UUID REFERENCES locations(id),
+    name            TEXT NOT NULL,
+    rtsp_url        TEXT NOT NULL,                    -- encrypted at rest
+    zone_config     JSONB DEFAULT '{}',              -- drawn zones (entry, checkout, browse)
+    compliance_mode TEXT NOT NULL DEFAULT 'anonymous', -- anonymous | opt_in_identity | disabled
+    active_hours    JSONB DEFAULT '{}',              -- {"start": "07:00", "end": "22:00"}
+    status          TEXT NOT NULL DEFAULT 'offline',  -- online | offline | error
+    last_heartbeat  TIMESTAMPTZ,
+    edge_device_id  TEXT,                            -- Jetson serial number
+    created_at      TIMESTAMPTZ DEFAULT now()
 );
 
--- Anonymous visitor profiles (face embeddings stored on-prem only)
+-- Anonymized visitor sessions (opt_in_identity mode only)
 CREATE TABLE vision_visitors (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id UUID NOT NULL REFERENCES organizations(id),
-  visitor_hash TEXT NOT NULL,    -- hash of on-prem embedding ID (not the embedding itself)
-  first_seen TIMESTAMPTZ NOT NULL,
-  last_seen TIMESTAMPTZ NOT NULL,
-  total_visits INTEGER DEFAULT 1,
-  est_age_range TEXT,            -- "25-34"
-  est_gender TEXT,               -- "M", "F", "unknown"
-  linked_customer_id UUID,       -- optional: if customer opts in to identity link
-  created_at TIMESTAMPTZ DEFAULT now()
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id          UUID NOT NULL REFERENCES organizations(id),
+    embedding_hash  TEXT NOT NULL,                    -- SHA-256 of on-prem embedding (NOT the embedding itself)
+    first_seen      TIMESTAMPTZ NOT NULL,
+    last_seen       TIMESTAMPTZ NOT NULL,
+    visit_count     INTEGER DEFAULT 1,
+    demographic     JSONB DEFAULT '{}',              -- {"age_range": "25-34", "gender_est": "F"}
+    expires_at      TIMESTAMPTZ NOT NULL             -- 90-day auto-delete
 );
 
 -- Individual visit records
 CREATE TABLE vision_visits (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id UUID NOT NULL REFERENCES organizations(id),
-  visitor_hash TEXT NOT NULL,
-  entered_at TIMESTAMPTZ NOT NULL,
-  exited_at TIMESTAMPTZ,
-  dwell_seconds INTEGER,
-  zones_visited JSONB DEFAULT '[]',  -- [{zone, entered_at, duration_sec}]
-  created_at TIMESTAMPTZ DEFAULT now()
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id          UUID NOT NULL REFERENCES organizations(id),
+    visitor_id      UUID REFERENCES vision_visitors(id) ON DELETE SET NULL,
+    camera_id       UUID NOT NULL REFERENCES vision_cameras(id),
+    entered_at      TIMESTAMPTZ NOT NULL,
+    exited_at       TIMESTAMPTZ,
+    dwell_seconds   INTEGER,
+    zones_visited   TEXT[],                          -- ["entry", "browse", "checkout"]
+    converted       BOOLEAN DEFAULT FALSE,           -- matched to a POS transaction?
+    created_at      TIMESTAMPTZ DEFAULT now()
 );
 
--- Aggregated traffic counts (hypertable)
+-- Aggregated traffic metrics (TimescaleDB hypertable for time-series queries)
 CREATE TABLE vision_traffic (
-  business_id UUID NOT NULL,
-  location_id UUID,
-  bucket TIMESTAMPTZ NOT NULL,   -- 15-minute buckets
-  visitors_in INTEGER DEFAULT 0,
-  visitors_out INTEGER DEFAULT 0,
-  avg_dwell_seconds NUMERIC,
-  avg_queue_length NUMERIC,
-  demographics JSONB,            -- {"age_ranges": {...}, "gender": {...}}
-  created_at TIMESTAMPTZ DEFAULT now()
+    org_id          UUID NOT NULL REFERENCES organizations(id),
+    location_id     UUID REFERENCES locations(id),
+    camera_id       UUID NOT NULL REFERENCES vision_cameras(id),
+    bucket          TIMESTAMPTZ NOT NULL,            -- 15-minute intervals
+    entries         INTEGER DEFAULT 0,
+    exits           INTEGER DEFAULT 0,
+    occupancy_avg   FLOAT DEFAULT 0,
+    occupancy_peak  INTEGER DEFAULT 0,
+    queue_length_avg FLOAT DEFAULT 0,
+    queue_wait_avg_sec FLOAT DEFAULT 0,
+    conversion_rate FLOAT DEFAULT 0,
+    demographic_breakdown JSONB DEFAULT '{}',
+    PRIMARY KEY (org_id, camera_id, bucket)
 );
-SELECT create_hypertable('vision_traffic', 'bucket');
 ```
 
-### New AI Agents
+**RLS:** All tables enforce `org_id = auth.uid()` — same pattern as existing tables.
 
-| Agent | Level | Input | Output |
-|-------|-------|-------|--------|
-| `foot_traffic_analyst` | 1 | vision_traffic | Hourly/daily/weekly visit trends, peak detection |
-| `dwell_time_optimizer` | 2 | vision_visits | Zone efficiency, layout recommendations |
-| `customer_recognizer` | 2 | vision_visitors | Repeat visit patterns, loyalty scoring without POS data |
-| `demographic_profiler` | 2 | vision_visitors | Age/gender distribution by time, marketing targeting |
-| `queue_monitor` | 1 | vision_traffic | Real-time wait times, staffing alerts |
+### 5 New AI Agents
+
+| Agent | Tier | Input | Output |
+|-------|------|-------|--------|
+| `foot_traffic` | 1 | `vision_traffic` | Hourly/daily footfall, entry patterns, conversion rate vs POS transactions |
+| `dwell_time` | 2 | `vision_visits` | Average dwell by zone, zone flow heatmaps, browse-to-buy funnel |
+| `customer_recognizer` | 2 | `vision_visitors` | Repeat visitor frequency, new vs returning ratio, loyalty without a card |
+| `demographic_profiler` | 3 | `vision_visitors.demographic` | Age/gender distribution, segment-specific conversion rates, daypart demographics |
+| `queue_monitor` | 1 | `vision_traffic.queue_*` | Real-time queue length, wait time estimates, staffing alert triggers |
+
+**Agent integration:** Agents follow existing 3-phase pattern (DataAvailability → path selection → dynamic calculation). Vision agents are Tier 1-3 and run in the same `asyncio.gather` swarm as existing agents. They contribute to `money_left` score: "You're losing $X/month from long queue wait times" etc.
+
+### Hardware Requirements
+
+| Tier | Device | Cost | Cameras | FPS | Use Case |
+|------|--------|------|---------|-----|----------|
+| Basic | Jetson Nano (8GB) | $149 | 2-3 | 10 | Small shop, single entrance |
+| Standard | Jetson Orin Nano | $249 | 4-6 | 15 | Restaurant, multiple zones |
+| Premium | Jetson Orin NX | $499 | 8-12 | 30 | Large retail, full coverage |
+
+Edge software is containerized (Docker Compose): CompreFace + YOLO + ByteTrack + Meridian edge agent. Auto-updates via Watchtower.
 
 ### Frontend: "Connect Cameras" Button
 
-Location: `CustomersPage.tsx` → header section, next to "Customer Intelligence" title.
+**Location:** Customer Intelligence page, top-right action area.
 
 **States:**
-1. **No cameras connected:** Show "Connect Cameras" button with camera icon → opens setup wizard
-2. **Cameras connected:** Show "3 cameras • Live" badge with green dot → click opens camera management
-3. **Camera offline:** Show "1 camera offline" warning badge → click opens troubleshooting
 
-### Alternative Considered
+1. **No cameras connected:**
+   - Button: `[Camera icon] Connect Cameras`
+   - Click → Setup Wizard modal (5 steps: Device → Camera → Zones → Privacy → Confirm)
+
+2. **Cameras connected and live:**
+   - Badge: `[Green dot] 3 cameras • Live`
+   - Click → Camera management panel
+
+3. **Camera offline:**
+   - Badge: `[Yellow warning] 2 of 3 cameras offline`
+   - Click → Troubleshooting panel
+
+**Tier gating:** Vision features available on Growth ($250/mo) and Enterprise plans only.
+
+### Libraries (edge only)
+
+| Library | Role | Package |
+|---------|------|---------|
+| ultralytics | YOLO v8 person detection | `ultralytics` (edge only) |
+| ByteTrack | Multi-object tracking | `boxmot` (edge only) |
+| DeepFace | Face embedding + demographics | `deepface` (edge only) |
+| CompreFace | Self-hosted face API | Docker container (edge only) |
+| supervision | Visual analytics toolkit | `supervision` (edge only) |
+| insightface | Alternative face embeddings | `insightface` (edge only) |
+
+**Note:** All CV libraries run on edge hardware only. No CV dependencies in the cloud `requirements.txt`.
+
+### Alternatives Considered
 
 **Cloud-based video analytics (AWS Rekognition, Google Cloud Vision):**
 - Rejected: $1-4 per 1,000 API calls. A single camera at 1fps = 86,400 calls/day = $86-345/day. Economically impossible for $250/mo merchants.
-- Rejected: Requires streaming video to cloud. Privacy nightmare + bandwidth costs.
 
 **No face recognition, just counting (thermal/IR sensors):**
 - Rejected: Misses the key insight — repeat vs. new visitors. Counting is commodity. Identity is the moat.
 
-### Implementation Priority
+### Trade-offs
 
-1. Schema migration + RLS policies
-2. Edge processing Docker image (YOLO + ByteTrack + CompreFace)
-3. Camera setup wizard in frontend
-4. Vision data ingestion API endpoint
-5. 5 new AI agents
-6. Customer Intelligence page integration
+- **Edge-first vs cloud:** Edge is harder to manage (firmware updates, hardware failures) but eliminates the privacy/bandwidth problem. Worth it for merchant trust.
+- **CompreFace vs raw DeepFace:** Adds Docker complexity but provides face collection CRUD we need without building our own.
+- **Anonymous default:** Limits analytics value but dramatically simplifies compliance.
+- **90-day auto-delete:** Reduces long-term analytics but keeps us CCPA/GDPR safe by default. Aggregate metrics in `vision_traffic` retained indefinitely (no PII).
+
+### Implementation Order
+
+1. Database migrations (4 tables + RLS policies + hypertable)
+2. Edge agent Docker image (YOLO + ByteTrack + heartbeat)
+3. `vision_traffic` agent + `/api/vision/traffic/{org_id}` endpoint
+4. `queue_monitor` agent + real-time alerting
+5. Frontend: Connect Cameras wizard + traffic dashboard
+6. DeepFace integration (opt_in_identity mode)
+7. `dwell_time`, `customer_recognizer`, `demographic_profiler` agents
+8. Frontend: Customer Intelligence page with vision data
