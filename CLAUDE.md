@@ -1145,6 +1145,16 @@ POS Data Stream
 | Webhook Delivery | `src/webhooks/` | Outbound webhooks with HMAC-SHA256, exponential backoff, dead letter |
 | Document OCR | `src/documents/ocr_service.py` | Receipt/invoice/menu scanning → structured JSON |
 
+### Mobile-First (Wave 5)
+| Module | Path | Purpose |
+|--------|------|---------|
+| useIsMobile Hook | `frontend/src/hooks/useIsMobile.ts` | useMediaQuery, useIsMobile, useBreakpoint (mobile <768, tablet 768-1024, desktop >1024) |
+| shadcn/ui Components | `frontend/src/components/ui/` | Button, Card, Sheet, Drawer, Dialog, DropdownMenu, Tabs, Table — New York style, Meridian dark theme, 44px touch targets |
+| ResponsiveLayout | `frontend/src/components/ResponsiveLayout.tsx` | Desktop sidebar + mobile bottom tab nav (Home, Revenue, Agents, Insights, More) + hamburger sheet |
+| InsightCarousel | `frontend/src/components/InsightCarousel.tsx` | Swiper touch carousel with lazy-loaded slides, responsive breakpoints |
+| Capacitor Native Shell | `frontend/capacitor.config.ts` | iOS + Android wrapper (splash, status bar, push, camera, haptics, keyboard) |
+| Tailwind Merge | `frontend/src/lib/utils.ts` | cn() utility for class merging (shadcn pattern) |
+
 ### New API Endpoints (Phase 3)
 | Endpoint | Method | Purpose |
 |----------|--------|---------|

@@ -6,6 +6,7 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import SalesProtectedRoute from '@/components/SalesProtectedRoute'
 import Layout from '@/components/Layout'
+import ResponsiveLayout from '@/components/ResponsiveLayout'
 import SalesLayout from '@/components/SalesLayout'
 
 import SalesLoginPage from '@/pages/sales/SalesLoginPage'
@@ -115,14 +116,14 @@ export default function App() {
               {/* Customer dashboard — protected, requires business owner auth */}
               <Route path="/app" element={
                 <ProtectedRoute>
-                  <Layout />
+                  <ResponsiveLayout />
                 </ProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}
               </Route>
 
               {/* Demo — open access, no auth required */}
-              <Route path="/demo" element={<Layout />}>
+              <Route path="/demo" element={<ResponsiveLayout />}>
                 {CustomerDashboardRoutes()}
               </Route>
 
