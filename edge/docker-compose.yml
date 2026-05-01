@@ -1,0 +1,62 @@
+# Meridian Vision Edge Stack
+# Deploy on Jetson Nano/Orin or any Linux box with GPU
+# Usage: docker compose up -d
+
+services:
+  compreface:
+    image: exadel/compreface:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_URL: jdbc:postgresql://compreface-db:5432/frs
+      POSTGRES_USER: frs
+      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD:-changeme}
+    depends_on:
+      - compreface-db
+
+  compreface-db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: frs
+      POSTGRES_USER: frs
+      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD:-changeme}
+    volumes:
+      - compreface-data:/var/lib/postgresql/data
+
+  meridian-edge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      MERIDIAN_API_URL: ${MERIDIAN_API_URL}
+      MERIDIAN_API_KEY: ${MERIDIAN_API_KEY}
+      MERIDIAN_ORG_ID: ${MERIDIAN_ORG_ID}
+      COMPREFACE_URL: http://compreface:8000
+      COMPREFACE_API_KEY: ${COMPREFACE_API_KEY}
+    volumes:
+      - ./config:/app/config
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - compreface
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_POLL_INTERVAL: 86400
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_INCLUDE_STOPPED: "true"
+
+volumes:
+  compreface-data:

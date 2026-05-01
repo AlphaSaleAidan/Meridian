@@ -7,6 +7,7 @@ Routes:
   GET  /api/square/callback           → OAuth callback
   POST /api/webhooks/square           → Square webhook receiver
   GET  /api/dashboard/*               → Dashboard data endpoints
+  */api/vision/*                      → Vision intelligence endpoints
 """
 import logging
 import os
@@ -22,6 +23,7 @@ from .routes.dashboard import router as dashboard_router
 from .routes.payouts import router as payouts_router
 from .routes.onboarding import router as onboarding_router
 from .routes.predictive import router as predictive_router
+from .routes.vision import router as vision_router
 from ..config import app as app_config
 
 # Configure logging
@@ -88,6 +90,7 @@ app.include_router(dashboard_router)
 app.include_router(payouts_router)
 app.include_router(onboarding_router)
 app.include_router(predictive_router)
+app.include_router(vision_router)
 
 
 @app.get("/health")

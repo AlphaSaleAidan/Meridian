@@ -1,0 +1,13 @@
+[
+  {
+    "id": "camera-uuid-from-api",
+    "name": "Front Door",
+    "rtsp_url": "rtsp://192.168.1.100:554/stream1",
+    "compliance_mode": "anonymous",
+    "zone_config": {
+      "entry": {"x1": 0, "y1": 0, "x2": 640, "y2": 480},
+      "checkout": {"x1": 400, "y1": 200, "x2": 640, "y2": 480}
+    },
+    "active_hours": {"start": "07:00", "end": "22:00"}
+  }
+]

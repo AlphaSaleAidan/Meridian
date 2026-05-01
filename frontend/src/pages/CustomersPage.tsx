@@ -3,11 +3,13 @@ import { clsx } from 'clsx'
 import {
   Users, Shield, AlertTriangle, Heart, ArrowUpDown,
   TrendingUp, TrendingDown, Minus, Search, CalendarDays,
+  Camera, Wifi, WifiOff,
 } from 'lucide-react'
 import { generateRFMSegments, generateCustomerRankings, generateCohorts, type RFMSegment, type CustomerProfile, type CohortRow } from '@/lib/agent-data'
 import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
 
 type SortKey = 'totalSpent' | 'avgOrder' | 'visits' | 'lastVisit'
 
@@ -177,12 +179,56 @@ function CohortTable({ cohorts }: { cohorts: CohortRow[] }) {
   )
 }
 
+type CameraStatus = 'none' | 'live' | 'offline'
+
+function ConnectCamerasButton({ status, cameraCount, onConnect }: {
+  status: CameraStatus
+  cameraCount: number
+  onConnect: () => void
+}) {
+  if (status === 'live') {
+    return (
+      <button
+        onClick={onConnect}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[#17C5B0] text-xs font-medium hover:bg-[#17C5B0]/15 transition-colors"
+      >
+        <Wifi size={14} />
+        <span>{cameraCount} camera{cameraCount !== 1 ? 's' : ''} &middot; Live</span>
+      </button>
+    )
+  }
+
+  if (status === 'offline') {
+    return (
+      <button
+        onClick={onConnect}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium hover:bg-red-500/15 transition-colors"
+      >
+        <WifiOff size={14} />
+        <span>{cameraCount} camera{cameraCount !== 1 ? 's' : ''} &middot; Offline</span>
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={onConnect}
+      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 text-[#1A8FD6] text-xs font-medium hover:bg-[#1A8FD6]/15 transition-colors"
+    >
+      <Camera size={14} />
+      <span>Connect Cameras</span>
+    </button>
+  )
+}
+
 export default function CustomersPage() {
   const segments = generateRFMSegments()
   const customers = generateCustomerRankings()
   const cohorts = generateCohorts()
   const [sortBy, setSortBy] = useState<SortKey>('totalSpent')
   const [search, setSearch] = useState('')
+  const [showCameraWizard, setShowCameraWizard] = useState(false)
+  const [cameraStatus] = useState<CameraStatus>('none')
 
   const totalCustomers = segments.reduce((s, seg) => s + seg.count, 0)
   const vipCount = segments.filter(s => s.name === 'Champions' || s.name === 'Loyal').reduce((s, seg) => s + seg.count, 0)
@@ -207,12 +253,27 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-6">
+      {showCameraWizard && (
+        <CameraSetupWizard
+          orgId=""
+          onComplete={() => setShowCameraWizard(false)}
+          onClose={() => setShowCameraWizard(false)}
+        />
+      )}
+
       <ScrollReveal variant="fadeUp">
-        <div>
-          <h1 className="text-2xl font-bold text-[#F5F5F7]">Customer Intelligence</h1>
-          <p className="text-sm text-[#A1A1A8] mt-1">
-            Customer rankings, spend analysis & retention insights powered by AI agents
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Customer Intelligence</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              Customer rankings, spend analysis & retention insights powered by AI agents
+            </p>
+          </div>
+          <ConnectCamerasButton
+            status={cameraStatus}
+            cameraCount={0}
+            onConnect={() => setShowCameraWizard(true)}
+          />
         </div>
       </ScrollReveal>
 
