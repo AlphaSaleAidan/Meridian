@@ -49,16 +49,18 @@ class ErrorReportResponse(BaseModel):
 
 # ── Helper: get DB + ClineAgent ──────────────────────────
 
-async def _get_cline():
+def _get_cline_sync():
+    """Get ClineAgent with the sync get_db() helper."""
     from ...cline.agent import ClineAgent
     from ...db import get_db
-    db = await get_db()
+    db = get_db()
     return ClineAgent(db=db)
 
-async def _get_detector():
+def _get_detector_sync():
+    """Get ErrorDetector with the sync get_db() helper."""
     from ...cline.error_detector import ErrorDetector
     from ...db import get_db
-    db = await get_db()
+    db = get_db()
     return ErrorDetector(db=db)
 
 
@@ -67,7 +69,7 @@ async def _get_detector():
 @router.post("/api/cline/chat", response_model=ChatResponse)
 async def cline_chat(req: ChatRequest):
     """Chat with the Cline IT agent about system health."""
-    cline = await _get_cline()
+    cline = _get_cline_sync()
     conv_id = req.conversation_id or str(uuid.uuid4())
 
     response = await cline.chat(
@@ -90,7 +92,7 @@ async def cline_chat(req: ChatRequest):
 @router.post("/api/cline/report-error", response_model=ErrorReportResponse)
 async def report_error(req: ErrorReport):
     """Report a frontend error for Cline to analyze and potentially auto-fix."""
-    detector = await _get_detector()
+    detector = _get_detector_sync()
 
     detected = await detector.report_frontend_error(
         business_id=req.org_id,
@@ -107,7 +109,7 @@ async def report_error(req: ErrorReport):
 
     if auto_remediate:
         try:
-            cline = await _get_cline()
+            cline = _get_cline_sync()
             diagnosis = await cline.diagnose(detected.to_error_context())
             result = await cline.auto_remediate(diagnosis)
             message = result.message if result.success else "Auto-remediation attempted but failed"
@@ -130,26 +132,26 @@ async def report_error(req: ErrorReport):
 async def get_conversations(org_id: str, limit: int = 20):
     """Get recent Cline conversations for an organization."""
     from ...db import get_db
-    db = await get_db()
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
+    db = get_db()
 
     try:
-        resp = await db.table("cline_conversations").select(
-            "id, agent_name, status, started_at, ended_at"
-        ).eq("business_id", org_id).order(
-            "created_at", desc=True
-        ).limit(limit).execute()
-
-        conversations = resp.data or []
+        conversations = await db.select(
+            "cline_conversations",
+            columns="id, agent_name, status, started_at, ended_at",
+            filters={"business_id": f"eq.{org_id}"},
+            order="created_at.desc",
+            limit=limit,
+        )
 
         for conv in conversations:
-            msgs = await db.table("cline_messages").select(
-                "role, content, phase, created_at"
-            ).eq("conversation_id", conv["id"]).order(
-                "created_at"
-            ).limit(50).execute()
-            conv["messages"] = msgs.data or []
+            msgs = await db.select(
+                "cline_messages",
+                columns="role, content, phase, created_at",
+                filters={"conversation_id": f"eq.{conv['id']}"},
+                order="created_at.asc",
+                limit=50,
+            )
+            conv["messages"] = msgs
 
         return {"org_id": org_id, "conversations": conversations}
     except Exception as e:
@@ -162,8 +164,8 @@ async def get_conversations(org_id: str, limit: int = 20):
 @router.get("/api/cline/health/{org_id}")
 async def get_health(org_id: str):
     """Get system health summary for an organization."""
-    cline = await _get_cline()
-    detector = await _get_detector()
+    cline = _get_cline_sync()
+    detector = _get_detector_sync()
 
     health = await cline._get_org_health(org_id)
     errors = await detector.scan_all(business_id=org_id)
@@ -192,16 +194,17 @@ async def get_health(org_id: str):
 async def get_errors(org_id: str, limit: int = 25):
     """Get recent Cline errors for an organization."""
     from ...db import get_db
-    db = await get_db()
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
+    db = get_db()
 
     try:
-        resp = await db.table("cline_errors").select("*").eq(
-            "business_id", org_id
-        ).order("created_at", desc=True).limit(limit).execute()
+        errors = await db.select(
+            "cline_errors",
+            filters={"business_id": f"eq.{org_id}"},
+            order="created_at.desc",
+            limit=limit,
+        )
 
-        return {"org_id": org_id, "errors": resp.data or []}
+        return {"org_id": org_id, "errors": errors}
     except Exception as e:
         logger.error("Failed to fetch errors: %s", e)
         raise HTTPException(status_code=500, detail="Failed to fetch errors")
@@ -217,26 +220,30 @@ async def it_dashboard():
     a global view for the engineering/IT team.
     """
     from ...db import get_db
-    db = await get_db()
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
+    db = get_db()
 
     try:
-        health_resp = await db.table("merchant_health").select(
-            "business_id, score, category, trend, measured_at"
-        ).eq("category", "overall").order("measured_at", desc=True).limit(100).execute()
+        health_data = await db.select(
+            "merchant_health",
+            columns="business_id, score, category, trend, measured_at",
+            filters={"category": "eq.overall"},
+            order="measured_at.desc",
+            limit=100,
+        )
 
-        errors_resp = await db.table("cline_errors").select(
-            "agent_name, error_type, business_id, created_at"
-        ).order("created_at", desc=True).limit(50).execute()
+        errors_data = await db.select(
+            "cline_errors",
+            columns="agent_name, error_type, business_id, created_at",
+            order="created_at.desc",
+            limit=50,
+        )
 
-        chains_resp = await db.table("agent_reasoning_chains").select(
-            "agent_name, verdict, final_confidence, error, created_at"
-        ).order("created_at", desc=True).limit(50).execute()
-
-        health_data = health_resp.data or []
-        errors_data = errors_resp.data or []
-        chains_data = chains_resp.data or []
+        chains_data = await db.select(
+            "agent_reasoning_chains",
+            columns="agent_name, verdict, final_confidence, error, created_at",
+            order="created_at.desc",
+            limit=50,
+        )
 
         total_orgs = len(set(h["business_id"] for h in health_data))
         avg_score = (
