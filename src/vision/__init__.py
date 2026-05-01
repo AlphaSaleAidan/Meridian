@@ -12,6 +12,7 @@ from .tracker import PersonTracker
 from .face_engine import FaceEngine
 from .zone_analytics import ZoneAnalytics
 from .pipeline import VisionPipeline
+from .insight_generator import VisionInsightGenerator
 
 __all__ = [
     "PersonDetector",
@@ -19,4 +20,5 @@ __all__ = [
     "FaceEngine",
     "ZoneAnalytics",
     "VisionPipeline",
+    "VisionInsightGenerator",
 ]
