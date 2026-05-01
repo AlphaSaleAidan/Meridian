@@ -350,3 +350,140 @@ Edge software is containerized (Docker Compose): CompreFace + YOLO + ByteTrack +
 6. DeepFace integration (opt_in_identity mode)
 7. `dwell_time`, `customer_recognizer`, `demographic_profiler` agents
 8. Frontend: Customer Intelligence page with vision data
+
+## ADR-013: Backend Architecture Refactor — DRY, Performance, Scalability
+
+**Status:** Accepted  
+**Date:** 2026-05-01  
+**Author:** Viktor (AI Architect)  
+**Scope:** `src/` — all backend modules (~47,000 lines, 128 files)
+
+### Context
+
+The Meridian backend has grown rapidly from 5 agents to 27 agents, added Clover alongside Square, layered in vision intelligence, Cline self-healing, Karpathy reasoning, and beast-mode integrations. The architecture is fundamentally sound but has accumulated significant duplication and a few god files that will slow future development.
+
+Key metrics before refactor:
+- 27 agents × ~20 lines duplicated boilerplate = ~540 lines of identical code
+- 2 sync engines (Square + Clover) with ~70% shared logic = ~350 duplicated lines
+- 2 DB client files with 8+ overlapping methods = confusion about which to use
+- 1 insight generator at 931 lines = untestable monolith
+- 1 DB client at 777 lines = 5 different concerns in 1 file
+- 0 caching layer = every dashboard hit re-queries the database
+- 0 POS abstraction = adding Toast means copy-pasting 400+ lines
+
+### Decision
+
+Execute a 3-tier refactor prioritized by impact-to-effort ratio. Preserve ALL working logic, ALL API contracts, ALL DB schemas. Zero breaking changes.
+
+### Tier 1 — Immediate (highest ROI)
+
+#### 1A. Agent Base Class DRY
+Add to `BaseAgent`:
+- `_select_path() → tuple[str, float]` — replaces 27 copies of path-selection block
+- `_benchmark_fallback(metric_key, summary) → dict` — replaces 27 copies of minimal-data response builder
+- `_insufficient_data(reason) → dict` — already exists, ensure all agents use it
+
+Impact: -1,350 lines of duplicated boilerplate. Every agent drops ~50 lines.
+
+#### 1B. TTL Cache for Dashboard
+New `src/db/cache.py` — simple TTL cache wrapping dashboard queries.
+- 30-second TTL for overview, revenue, products
+- 5-minute TTL for forecasts, insights (computed less frequently)
+- Cache key: `{endpoint}:{org_id}:{params_hash}`
+- Invalidation: on webhook sync completion + manual flush endpoint
+
+Impact: 80%+ reduction in dashboard DB queries. Sub-50ms response times.
+
+#### 1C. Parallel Context Loading
+`engine.py._load_context()` currently makes 5 sequential DB calls. Wrap in `asyncio.gather()`.
+
+Impact: Context loading 3-5x faster (5 parallel queries vs 5 sequential).
+
+### Tier 2 — This Sprint
+
+#### 2A. POS Integration Abstraction Layer
+```
+src/integrations/
+├── base/
+│   ├── sync_engine.py    # BaseSyncEngine ABC
+│   ├── mapper.py         # BaseMapper ABC  
+│   ├── client.py         # BasePOSClient ABC
+│   └── models.py         # SyncProgress, SyncResult (shared)
+├── square/               # SquareSyncEngine(BaseSyncEngine)
+├── clover/               # CloverSyncEngine(BaseSyncEngine)
+└── registry.py           # get_sync_engine(pos_type) factory
+```
+
+`BaseSyncEngine` owns `run_initial_backfill()` and `run_incremental_sync()` (shared orchestration). POS-specific engines only implement `fetch_locations()`, `fetch_catalog()`, `fetch_orders()`, `fetch_inventory()`.
+
+`pipeline.py` calls `registry.get_sync_engine(connection.pos_type)` instead of importing Square directly.
+
+Impact: Adding Toast POS = 1 new folder (~120 lines) instead of copy-pasting 400+. Zero changes to pipeline/engine.
+
+#### 2B. Split SupabaseDB (777 lines → 4 focused files)
+```
+src/db/
+├── pool.py           # ConnectionPool class (~80 lines)
+├── repos/
+│   ├── sync_repo.py      # Bulk upserts for sync engine (~300 lines)
+│   ├── query_repo.py     # Dashboard read queries (~200 lines)
+│   └── persist_repo.py   # AI output persistence (~150 lines)
+├── queries.py        # SQL templates (unchanged)
+├── rest_client.py    # PostgREST (unchanged, rename from supabase_rest.py)
+└── adapter.py        # AI adapter (unchanged)
+```
+
+#### 2C. InsightGenerator Decomposition (931 lines → 7 files)
+```
+src/ai/generators/
+├── __init__.py
+├── orchestrator.py         # Thin coordinator (~100 lines)
+├── revenue_insights.py     # ~220 lines
+├── product_insights.py     # ~180 lines
+├── pattern_insights.py     # ~130 lines
+├── money_left_insights.py  # ~70 lines
+├── anomaly_insights.py     # ~60 lines
+└── economic_insights.py    # ~90 lines
+```
+
+### Tier 3 — Next Sprint
+
+#### 3A. Benchmark Data Extraction
+Move 400 lines of hardcoded benchmark dicts from `economics/benchmarks.py` to `economics/benchmarks.yaml`. Load at startup. Non-engineers can update benchmarks without touching code.
+
+#### 3B. Custom Error Hierarchy
+```python
+class MeridianError(Exception): ...
+class DataError(MeridianError): ...
+class IntegrationError(MeridianError): ...
+class AuthError(MeridianError): ...
+```
+Global exception handler in `app.py` for consistent JSON error responses.
+
+#### 3C. Typed Agent Results
+Replace `dict` return type with `AgentResult` dataclass. IDE autocomplete, compile-time catches.
+
+#### 3D. Dead Code Cleanup
+- Remove duplicate migration `src/db/migrations/005_reasoning_chains.sql`
+- Audit unused imports across all agent files
+- Remove any unreachable code paths
+
+### Consequences
+
+**Positive:**
+- ~2,000 lines removed (pure duplication)
+- Dashboard 80% faster (cache)
+- AI engine 3-5x faster startup (parallel loading)
+- New POS integration: 120 lines vs 400+
+- Each module independently testable
+- Onboarding new devs faster (clear separation of concerns)
+
+**Negative:**
+- Import paths change (but all internal — no external API changes)
+- Short-term risk during refactor (mitigated by test suite)
+- More files to navigate (but each is focused and clear)
+
+**Neutral:**
+- All API contracts preserved
+- All DB schemas untouched
+- All frontend code unaffected
