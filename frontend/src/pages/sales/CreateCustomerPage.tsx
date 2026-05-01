@@ -48,7 +48,7 @@ export default function CreateCustomerPage() {
   const [error, setError] = useState<string | null>(null)
   const [proposalGenerated, setProposalGenerated] = useState(false)
 
-  // Stripe checkout state
+  // Square checkout state
   const [creatingCheckout, setCreatingCheckout] = useState(false)
   const [checkoutUrl, setCheckoutUrl] = useState('')
   const [checkoutSessionId, setCheckoutSessionId] = useState('')
@@ -120,21 +120,24 @@ export default function CreateCustomerPage() {
     setCreatingCheckout(true)
     setError(null)
     try {
+      // Build a temporary org_id for the checkout (will be linked to real org on save)
+      const tempOrgId = uuid()
+
       const body = {
+        org_id: tempOrgId,
         plan: form.plan,
-        custom_price_cents: form.customPrice ? parseInt(form.customPrice) * 100 : null,
+        monthly_price_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
         setup_fee_cents: setupFee * 100,
         first_month_free: form.firstMonthFree,
         customer_email: form.email,
         customer_name: form.ownerName,
         business_name: form.businessName,
-        rep_id: rep?.rep_id || null,
-        rep_name: rep?.name || null,
-        success_url: `${window.location.origin}/onboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${window.location.origin}/onboard?checkout=cancelled`,
+        rep_id: rep?.rep_id || '',
+        rep_name: rep?.name || '',
+        return_url: `${window.location.origin}/onboard?checkout=success`,
       }
 
-      const res = await fetch(`${API_URL}/api/stripe/create-checkout`, {
+      const res = await fetch(`${API_URL}/api/billing/create-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -147,7 +150,7 @@ export default function CreateCustomerPage() {
 
       const data = await res.json()
       setCheckoutUrl(data.checkout_url)
-      setCheckoutSessionId(data.session_id)
+      setCheckoutSessionId(data.checkout_id || data.order_id || '')
     } catch (err: any) {
       setError(err.message || 'Failed to create checkout session')
     } finally {
@@ -177,7 +180,7 @@ export default function CreateCustomerPage() {
             first_month_free: form.firstMonthFree,
             owner_name: form.ownerName,
             created_by_rep: rep?.rep_id || null,
-            stripe_session_id: checkoutSessionId || null,
+            square_checkout_id: checkoutSessionId || null,
           },
         })
         if (bizErr) throw new Error(bizErr.message)
@@ -570,7 +573,7 @@ export default function CreateCustomerPage() {
             </div>
           </div>
 
-          {/* Stripe Checkout — Generate Payment Link + QR */}
+          {/* Square Checkout — Generate Payment Link + QR */}
           <div className="bg-[#111113] rounded-xl p-6 border border-[#7C5CFF]/20 bg-gradient-to-b from-[#7C5CFF]/5 to-transparent">
             <div className="flex items-center gap-2 mb-4">
               <QrCode size={16} className="text-[#7C5CFF]" />
@@ -580,7 +583,7 @@ export default function CreateCustomerPage() {
             {!checkoutUrl ? (
               <div>
                 <p className="text-[12px] text-[#A1A1A8] mb-3">
-                  Generate a unique Stripe checkout link for this customer. Includes the {selectedPlan.label} subscription
+                  Generate a unique Square checkout link for this customer. Includes the {selectedPlan.label} subscription
                   {setupFee > 0 ? ` + $${setupFee} setup fee` : ''}
                   {form.firstMonthFree ? ' with first month free' : ''}.
                 </p>
