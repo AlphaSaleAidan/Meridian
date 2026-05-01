@@ -23,12 +23,7 @@ from .routes.dashboard import router as dashboard_router
 from .routes.payouts import router as payouts_router
 from .routes.onboarding import router as onboarding_router
 from .routes.predictive import router as predictive_router
-from .routes.admin import router as admin_router
 from .routes.vision import router as vision_router
-from ..auth.router import router as auth_router
-from .routes.scheduling import router as scheduling_router
-from .routes.webhook_mgmt import router as webhook_mgmt_router
-from .routes.documents import router as documents_router
 from ..config import app as app_config
 
 # Configure logging
@@ -45,8 +40,6 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle — initializes DB connection."""
     from ..db import init_db, close_db
     logger.info("Meridian server starting...")
-    from ..monitoring.highlight_service import init_highlight
-    init_highlight()
     await init_db()
     logger.info("Database connection initialized")
     from ..payouts.webhook_hook import init_commission_hook
@@ -55,8 +48,6 @@ async def lifespan(app: FastAPI):
         init_commission_hook(_db_instance)
         logger.info("Commission webhook hook initialized")
     yield
-    from ..analytics.posthog_service import shutdown as posthog_shutdown
-    posthog_shutdown()
     await close_db()
     logger.info("Meridian server shut down.")
 
@@ -77,8 +68,6 @@ _allowed_origins = [
     "https://meridian-dun-nu.vercel.app",
     "https://meridian-app-c9cd32f1.viktor.space",
     "https://industrious-rabbit-343.convex.site",
-    "https://meridian.tips",
-    "https://www.meridian.tips",
 ]
 
 # Allow custom origin from env (e.g. Vercel preview deploys)
@@ -101,16 +90,7 @@ app.include_router(dashboard_router)
 app.include_router(payouts_router)
 app.include_router(onboarding_router)
 app.include_router(predictive_router)
-app.include_router(admin_router)
 app.include_router(vision_router)
-app.include_router(auth_router)
-app.include_router(scheduling_router)
-app.include_router(webhook_mgmt_router)
-app.include_router(documents_router)
-
-# Highlight.io middleware (after app creation)
-from ..monitoring.highlight_service import init_highlight as _init_hl
-_init_hl(app)
 
 
 @app.get("/health")

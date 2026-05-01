@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Swiper core + pagination */
-@import 'swiper/css';
-@import 'swiper/css/pagination';
-
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
@@ -233,19 +229,4 @@
   input, select, textarea {
     font-size: 16px !important;
   }
-}
-
-/* ─── Capacitor safe-area insets ──────────────── */
-.safe-area-inset-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-/* Swiper pagination bullets — Meridian theme */
-.swiper-pagination-bullet {
-  background: #A1A1A8 !important;
-  opacity: 0.3 !important;
-}
-.swiper-pagination-bullet-active {
-  background: #1A8FD6 !important;
-  opacity: 1 !important;
 }

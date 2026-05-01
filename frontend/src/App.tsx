@@ -6,7 +6,6 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import SalesProtectedRoute from '@/components/SalesProtectedRoute'
 import Layout from '@/components/Layout'
-import ResponsiveLayout from '@/components/ResponsiveLayout'
 import SalesLayout from '@/components/SalesLayout'
 
 import SalesLoginPage from '@/pages/sales/SalesLoginPage'
@@ -39,6 +38,7 @@ import MarginsPage from '@/pages/MarginsPage'
 import MenuEngineeringPage from '@/pages/MenuEngineeringPage'
 import AnomaliesPage from '@/pages/AnomaliesPage'
 
+const CustomerIntelligencePage = lazy(() => import('@/pages/CustomerIntelligencePage'))
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
 const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnboardingWizard'))
@@ -72,6 +72,11 @@ function CustomerDashboardRoutes() {
       <Route path="margins" element={<MarginsPage />} />
       <Route path="menu-matrix" element={<MenuEngineeringPage />} />
       <Route path="anomalies" element={<AnomaliesPage />} />
+      <Route path="intelligence" element={
+        <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/15 border border-[#1A8FD6]/30 flex items-center justify-center animate-pulse"><span className="text-[#1A8FD6] font-bold text-sm">M</span></div></div>}>
+          <CustomerIntelligencePage />
+        </Suspense>
+      } />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>
@@ -116,14 +121,14 @@ export default function App() {
               {/* Customer dashboard — protected, requires business owner auth */}
               <Route path="/app" element={
                 <ProtectedRoute>
-                  <ResponsiveLayout />
+                  <Layout />
                 </ProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}
               </Route>
 
               {/* Demo — open access, no auth required */}
-              <Route path="/demo" element={<ResponsiveLayout />}>
+              <Route path="/demo" element={<Layout />}>
                 {CustomerDashboardRoutes()}
               </Route>
 

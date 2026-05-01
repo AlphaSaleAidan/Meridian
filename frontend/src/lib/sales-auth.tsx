@@ -19,7 +19,6 @@ export interface SalesAuthState {
   authenticated: boolean
   rep: SalesRepProfile | null
   login: (email: string, password: string) => Promise<string | null>
-  signup: (name: string, email: string, password: string, phone?: string) => Promise<string | null>
   logout: () => void
 }
 
@@ -42,52 +41,6 @@ function clearRep() {
   localStorage.removeItem(REP_STORAGE_KEY)
 }
 
-/** Try to fetch or auto-provision a sales_reps row for the authenticated user. */
-async function resolveRepProfile(email: string): Promise<SalesRepProfile | null> {
-  if (!supabase) return null
-
-  // 1. Try to find existing record
-  const { data: repData } = await supabase
-    .from('sales_reps')
-    .select('*')
-    .eq('email', email)
-    .eq('is_active', true)
-    .single()
-
-  if (repData) return repFromRow(repData)
-
-  // 2. No record — try to auto-create one
-  const { data: inserted, error: insertErr } = await supabase
-    .from('sales_reps')
-    .insert({
-      name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      email,
-      commission_rate: 35,
-      is_active: true,
-      total_earned: 0,
-      total_paid: 0,
-    })
-    .select()
-    .single()
-
-  if (inserted && !insertErr) return repFromRow(inserted)
-
-  // 3. INSERT blocked by RLS — create a local-only profile so the CRM is usable
-  const localProfile: SalesRepProfile = {
-    rep_id: 'local_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
-    name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-    email,
-    phone: null,
-    commission_rate: 35,
-    recruiter: null,
-    is_active: true,
-    total_earned: 0,
-    total_paid: 0,
-    created_at: new Date().toISOString(),
-  }
-  return localProfile
-}
-
 export function SalesAuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false)
   const [rep, setRep] = useState<SalesRepProfile | null>(loadRep)
@@ -102,9 +55,16 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
 
     const sb = supabase
     sb.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user?.email) {
-        const profile = await resolveRepProfile(session.user.email)
-        if (profile) {
+      if (session?.user) {
+        const { data } = await sb
+          .from('sales_reps')
+          .select('*')
+          .eq('email', session.user.email)
+          .eq('is_active', true)
+          .single()
+
+        if (data) {
+          const profile = repFromRow(data)
           saveRep(profile)
           setRep(profile)
         }
@@ -113,9 +73,16 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user?.email) {
-        const profile = await resolveRepProfile(session.user.email)
-        if (profile) {
+      if (session?.user) {
+        const { data } = await sb
+          .from('sales_reps')
+          .select('*')
+          .eq('email', session.user.email)
+          .eq('is_active', true)
+          .single()
+
+        if (data) {
+          const profile = repFromRow(data)
           saveRep(profile)
           setRep(profile)
         }
@@ -161,57 +128,21 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     if (error) return error.message
     if (!data.user) return 'Login failed'
 
-    const profile = await resolveRepProfile(data.user.email!)
-    if (!profile) {
+    const { data: repData, error: repErr } = await supabase
+      .from('sales_reps')
+      .select('*')
+      .eq('email', data.user.email)
+      .eq('is_active', true)
+      .single()
+
+    if (repErr || !repData) {
       await supabase.auth.signOut()
-      return 'Could not create sales rep profile'
+      return 'No active sales rep account found for this email'
     }
 
+    const profile = repFromRow(repData)
     saveRep(profile)
     setRep(profile)
-    return null
-  }, [])
-
-  const signup = useCallback(async (name: string, email: string, password: string, phone?: string): Promise<string | null> => {
-    if (!supabase) {
-      // No Supabase — demo mode, just create local rep
-      const demoRep: SalesRepProfile = {
-        rep_id: 'rep_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
-        name,
-        email,
-        phone: phone || null,
-        commission_rate: 35,
-        recruiter: null,
-        is_active: true,
-        total_earned: 0,
-        total_paid: 0,
-        created_at: new Date().toISOString(),
-      }
-      saveRep(demoRep)
-      setRep(demoRep)
-      return null
-    }
-
-    // 1. Create Supabase auth account
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (error) return error.message
-    if (!data.user) return 'Signup failed'
-
-    // 2. Try to create sales_reps record
-    const { error: insertErr } = await supabase
-      .from('sales_reps')
-      .insert({ name, email, phone: phone || null, commission_rate: 35, is_active: true, total_earned: 0, total_paid: 0 })
-
-    // 3. Resolve profile (handles INSERT failure gracefully)
-    const profile = await resolveRepProfile(email)
-    if (profile) {
-      // Override name from the signup form
-      profile.name = name
-      if (phone) profile.phone = phone
-      saveRep(profile)
-      setRep(profile)
-    }
-
     return null
   }, [])
 
@@ -227,7 +158,6 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
       authenticated: !!rep,
       rep,
       login,
-      signup,
       logout,
     }}>
       {children}

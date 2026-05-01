@@ -21,6 +21,7 @@ import {
   LogOut,
   ChefHat,
   AlertTriangle,
+  Camera,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useAuth } from '@/lib/auth'
@@ -36,6 +37,7 @@ const navItems = [
   { path: 'margins', icon: DollarSign, label: 'Margins' },
   { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix' },
   { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
+  { path: 'intelligence', icon: Camera, label: 'Vision Intel' },
   { path: 'customers', icon: Users, label: 'Customers' },
   { path: 'staff', icon: UserCheck, label: 'Staff' },
   { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },

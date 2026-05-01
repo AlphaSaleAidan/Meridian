@@ -142,10 +142,6 @@
 
 ## ADR-011: In-Store Vision Intelligence
 
-**Date:** 2026-04-30
-
-**Status:** Accepted (Implemented)
-
 **Decision:** Add computer vision capabilities for foot traffic analytics, dwell time measurement, customer recognition, demographic profiling, and queue monitoring. Processing runs on-premise at the edge; only anonymized metrics flow to Meridian's cloud.
 
 **Why:**
@@ -154,31 +150,27 @@
 - Edge processing keeps video/images on merchant hardware, satisfying privacy requirements
 - Competitive advantage: most POS analytics platforms are transaction-only
 
-### Processing Pipeline
+### Processing Pipeline (v2 — Palantir-Grade)
 
 ```
-Camera (RTSP) → YOLO v8 (person detection) → ByteTrack (multi-object tracking)
-  → DeepFace (optional: age/gender, repeat visitor embedding)
-  → Meridian DB (anonymized metrics only)
+Camera (RTSP)
+  → YOLO v8 nano (person detection, bounding boxes)
+  → BoxMOT/DeepOCSORT (multi-object tracking, persistent track_id)
+  → InsightFace ArcFace buffalo_l (512-dim face embeddings, match/recognize)
+  → DeepFace (demographics: age, gender, emotion)
+  → Supervision (zone polygons, crossings, dwell time, heatmaps)
+  → Apache AGE (customer identity graph in Postgres)
+  → Karpathy Reasoning ("what does this mean for the business?")
+  → Meridian DB (anonymized metrics only — embeddings stay on-prem)
 ```
 
-**Runtime**: CompreFace self-hosted in Docker on merchant edge hardware. No cloud inference.
+**Primary face engine:** InsightFace ArcFace (buffalo_l model, 512-dim embeddings). Chosen over DeepFace embeddings for superior accuracy on LFW benchmark (99.83%) and speed (single-pass detection+embedding).
 
-### Why Edge-First (Not Cloud)
+**Graph layer:** Apache AGE (A Graph Extension for PostgreSQL). Customer identity graph lives in the same Supabase Postgres — no separate graph DB needed. Edges model relationships: VISITED_ZONE, PURCHASED_WITH, VISITED_SAME_DAY_AS, RETURNED_AFTER.
 
-- **Privacy:** Face embeddings stay on the merchant's local network. Only anonymized analytics (counts, demographics, dwell times) are sent to Meridian's cloud.
-- **Latency:** Real-time tracking requires <100ms inference. Edge GPU delivers this; cloud roundtrip cannot.
-- **Bandwidth:** Streaming raw video to cloud is expensive and unreliable. Processing locally and sending only metadata is 1000x cheaper.
-- **Compliance:** GDPR/CCPA require data minimization. Face embeddings never leave the premise.
+**Demographics:** DeepFace handles age/gender/emotion classification only (not embeddings). Runs on face crops extracted by InsightFace.
 
-### Deployment Model: CompreFace on Edge
-
-**Why CompreFace over cloud APIs (AWS Rekognition, Azure Face):**
-- Self-hosted = zero per-call cost at scale
-- Data sovereignty — face data never leaves merchant's network
-- Docker deployment = consistent setup across merchants
-- REST API makes integration clean from our processing pipeline
-- Supports multiple recognition models (ArcFace, FaceNet, MobileFace)
+**Runtime**: Edge Docker stack (YOLO + BoxMOT + InsightFace + DeepFace + Supervision). No cloud inference.
 
 ### Privacy Model
 
@@ -196,16 +188,7 @@ Camera (RTSP) → YOLO v8 (person detection) → ByteTrack (multi-object trackin
 - Customer can request immediate deletion (CCPA/GDPR right to erasure)
 - `vision_cameras.compliance_mode` field enforces the selected privacy level at the edge
 
-### Camera Integration
-
-**Protocol:** RTSP (Real Time Streaming Protocol) — industry standard for IP cameras.
-
-**Supported cameras:** Any IP camera with RTSP output. Recommended:
-- Reolink RLC-810A ($55) — 4K, PoE, RTSP native
-- Amcrest IP8M-T2599EW ($70) — 4K, PoE, AI detection built-in
-- Hikvision DS-2CD2143G2-I ($90) — enterprise grade
-
-### Database Schema (4 tables — implemented)
+### Database Schema (4 new tables)
 
 ```sql
 -- Camera registration and health
@@ -213,7 +196,7 @@ CREATE TABLE vision_cameras (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id          UUID NOT NULL REFERENCES organizations(id),
     location_id     UUID REFERENCES locations(id),
-    name            TEXT NOT NULL,
+    name            TEXT NOT NULL,                    -- "Front Door", "Checkout Area"
     rtsp_url        TEXT NOT NULL,                    -- encrypted at rest
     zone_config     JSONB DEFAULT '{}',              -- drawn zones (entry, checkout, browse)
     compliance_mode TEXT NOT NULL DEFAULT 'anonymous', -- anonymous | opt_in_identity | disabled
@@ -262,10 +245,11 @@ CREATE TABLE vision_traffic (
     occupancy_peak  INTEGER DEFAULT 0,
     queue_length_avg FLOAT DEFAULT 0,
     queue_wait_avg_sec FLOAT DEFAULT 0,
-    conversion_rate FLOAT DEFAULT 0,
+    conversion_rate FLOAT DEFAULT 0,                 -- entries that led to POS transaction
     demographic_breakdown JSONB DEFAULT '{}',
     PRIMARY KEY (org_id, camera_id, bucket)
 );
+-- SELECT create_hypertable('vision_traffic', 'bucket');
 ```
 
 **RLS:** All tables enforce `org_id = auth.uid()` — same pattern as existing tables.
@@ -292,590 +276,135 @@ CREATE TABLE vision_traffic (
 
 Edge software is containerized (Docker Compose): CompreFace + YOLO + ByteTrack + Meridian edge agent. Auto-updates via Watchtower.
 
-### Frontend: "Connect Cameras" Button
+### Frontend: "Connect Cameras" Button Spec
 
-**Location:** Customer Intelligence page, top-right action area.
+**Location:** Customer Intelligence page, top-right action area (next to existing "Connect POS" button)
 
 **States:**
 
 1. **No cameras connected:**
    - Button: `[Camera icon] Connect Cameras`
-   - Click → Setup Wizard modal (5 steps: Device → Camera → Zones → Privacy → Confirm)
+   - Click → Setup Wizard modal:
+     - Step 1: Select edge device (auto-detect or manual)
+     - Step 2: Add camera (RTSP URL, test connection, name it)
+     - Step 3: Draw zones on preview frame (entry, checkout, browse areas)
+     - Step 4: Set active hours and compliance mode
+     - Step 5: Confirm consent signage placement → activate
 
 2. **Cameras connected and live:**
    - Badge: `[Green dot] 3 cameras • Live`
-   - Click → Camera management panel
+   - Click → Camera management panel (status, zone editor, compliance settings)
 
 3. **Camera offline:**
    - Badge: `[Yellow warning] 2 of 3 cameras offline`
-   - Click → Troubleshooting panel
+   - Click → Troubleshooting panel (last heartbeat, connection test, edge device status)
 
-**Tier gating:** Vision features available on Growth ($250/mo) and Enterprise plans only.
+**Tier gating:** Vision features available on Growth ($250/mo) and Enterprise plans only. Trial/Starter see a locked preview with sample data.
 
-### Libraries (edge only)
+### Libraries (Locked-In Choices)
 
-| Library | Role | Package |
-|---------|------|---------|
-| ultralytics | YOLO v8 person detection | `ultralytics` (edge only) |
-| ByteTrack | Multi-object tracking | `boxmot` (edge only) |
-| DeepFace | Face embedding + demographics | `deepface` (edge only) |
-| CompreFace | Self-hosted face API | Docker container (edge only) |
-| supervision | Visual analytics toolkit | `supervision` (edge only) |
-| insightface | Alternative face embeddings | `insightface` (edge only) |
+| Library | Role | Package | Status |
+|---------|------|---------|--------|
+| ultralytics | YOLO v8 nano person detection | `ultralytics` (edge only) | **Primary** |
+| BoxMOT | DeepOCSORT multi-object tracking | `boxmot` (edge only) | **Primary** — replaces ByteTrack |
+| InsightFace | ArcFace buffalo_l 512-dim face embeddings | `insightface` (edge only) | **Primary face engine** |
+| DeepFace | Demographics only (age, gender, emotion) | `deepface` (edge only) | **Secondary** — demographics only |
+| supervision | Zone analytics, heatmaps, counting | `supervision` (edge only) | **Primary** |
+| Apache AGE | Customer identity graph in Postgres | `age` (Postgres extension) | **Primary graph layer** |
+| httpx | Async batch upload from edge | `httpx` (edge only) | **Transport** |
+| opencv | Frame capture from RTSP | `opencv-python-headless` (edge only) | **Capture** |
 
-**Note:** All CV libraries run on edge hardware only. No CV dependencies in the cloud `requirements.txt`.
-
-### Alternatives Considered
-
-**Cloud-based video analytics (AWS Rekognition, Google Cloud Vision):**
-- Rejected: $1-4 per 1,000 API calls. A single camera at 1fps = 86,400 calls/day = $86-345/day. Economically impossible for $250/mo merchants.
-
-**No face recognition, just counting (thermal/IR sensors):**
-- Rejected: Misses the key insight — repeat vs. new visitors. Counting is commodity. Identity is the moat.
+**Note:** All CV libraries run on edge hardware only. The Meridian cloud backend receives only structured metrics via the edge agent's HTTPS push. No CV dependencies in the cloud `requirements.txt`. Apache AGE runs as a Postgres extension in Supabase.
 
 ### Trade-offs
 
-- **Edge-first vs cloud:** Edge is harder to manage (firmware updates, hardware failures) but eliminates the privacy/bandwidth problem. Worth it for merchant trust.
-- **CompreFace vs raw DeepFace:** Adds Docker complexity but provides face collection CRUD we need without building our own.
-- **Anonymous default:** Limits analytics value but dramatically simplifies compliance.
-- **90-day auto-delete:** Reduces long-term analytics but keeps us CCPA/GDPR safe by default. Aggregate metrics in `vision_traffic` retained indefinitely (no PII).
+- **Edge-first vs cloud:** Edge is harder to manage (firmware updates, hardware failures) but eliminates the privacy/bandwidth problem of streaming video to cloud. Worth it for merchant trust.
+- **CompreFace vs raw DeepFace:** CompreFace adds a REST API layer with collection management, but adds Docker complexity. Chose it because it provides the face collection CRUD we need without building our own.
+- **Anonymous default:** Limits analytics value (no repeat visitor tracking) but dramatically simplifies compliance. Merchants who want identity features explicitly opt in.
+- **90-day auto-delete:** Reduces long-term analytics but keeps us CCPA/GDPR safe by default. Aggregate metrics in `vision_traffic` are retained indefinitely since they contain no PII.
+
+### Customer Profile Builder (Layer 4)
+
+Each recognized face gets an indexed profile that grows over time:
+
+```
+Customer #4782 (anonymous until opt-in)
+├── Visit count: 14
+├── Avg dwell time: 42 min
+├── Favorite zone: Bar area (68% of time)
+├── Visit pattern: Fri/Sat evenings, 7-10pm
+├── Estimated age: 28-35
+├── Sentiment trend: happy → happy → neutral (last visit neutral)
+├── Spend correlation: $47 avg (from POS data)
+└── Predicted LTV: $2,340/year
+```
+
+**Privacy model:**
+- Cameras detect faces but store only anonymous 512-dim embeddings by default
+- Identity linking: Only when customer opts in (loyalty program, QR scan) does face → name
+- Right to forget: One click deletes all face embeddings for a customer
+- Consent signage: Auto-generated signs for the store ("This location uses AI analytics")
+- Data retention: Embeddings auto-purge after configurable period (90 days default)
+
+### Vision Insights Matrix (20 Insights)
+
+| # | Insight | How We Build It | Stack |
+|---|---------|----------------|-------|
+| 1 | **Passerby count** — "21 people looked in but didn't walk in" | Sidewalk camera + YOLO person detection + Supervision zone crossing (sidewalk → did NOT cross door zone) | YOLO + Supervision |
+| 2 | **Walk-in conversion** — "38% of passersby entered today" | Zone crossing: sidewalk→entrance events / total sidewalk detections | Supervision zones |
+| 3 | **Men vs Women breakdown** | DeepFace gender classification on every detected person | DeepFace |
+| 4 | **Age demographic split** | DeepFace age estimation bucketed into ranges (18-24, 25-34, etc.) | DeepFace |
+| 5 | **Peak foot traffic times** | Hourly person count aggregation from YOLO + BoxMOT tracking | YOLO + BoxMOT |
+| 6 | **Repeat vs first-time visitors** | InsightFace ArcFace embeddings matched against on-prem customer index | InsightFace |
+| 7 | **Non-customers (browsed, didn't buy)** | Face seen by camera but no matching POS transaction in time window | InsightFace + POS correlation |
+| 8 | **Window shoppers who later convert** | "Looked in Tuesday, came in Friday" via embedding match over time | InsightFace + temporal matching |
+| 9 | **Dwell time by zone** | Supervision zone tracking per track_id (bar, entrance, menu board, etc.) | BoxMOT + Supervision |
+| 10 | **Sentiment at entry vs exit** | DeepFace emotion detection comparing first and last detection per visit | DeepFace |
+| 11 | **Queue length + wait time** | Person count in checkout zone over time, correlated with POS transaction timestamps | YOLO + Supervision + POS |
+| 12 | **Staff-to-customer ratio** | Detect staff (uniform/badge zone) vs customers, alert when ratio drops below threshold | YOLO + zone classification |
+| 13 | **Menu board engagement** | Dwell time in menu_board zone — how long do people stare at the menu before ordering? | Supervision zone dwell |
+| 14 | **Group size detection** | Track proximity clustering — solo, pair, group (3+), family (mixed age) | BoxMOT + DeepFace age |
+| 15 | **Table turnover rate** | Dwell time in table zones: seated→departed cycles per table area per hour | Supervision zone timing |
+| 16 | **Loyalty without a card** | Repeat visitor frequency + spend correlation via POS match, no physical card needed | InsightFace + POS |
+| 17 | **Lost customer alerts** | Regular visitor (4+ visits) not seen in 2+ weeks → churn risk notification | InsightFace temporal + alerting |
+| 18 | **Zone flow heatmaps** | Aggregate movement paths across all tracks → visual heatmap overlay | Supervision + numpy |
+| 19 | **Daypart demographics** | Which age/gender groups visit at which hours? Lunch crowd vs dinner crowd profiling | DeepFace + temporal bucketing |
+| 20 | **Cross-location visitor overlap** | Same embedding hash seen at multiple locations → multi-location customer mapping | InsightFace + Apache AGE graph |
+
+### Customer Graph (Apache AGE)
+
+```cypher
+-- Customer identity graph in Postgres via Apache AGE
+SELECT * FROM cypher('meridian', $$
+  MATCH (c:Customer {hash: '4a7b2c...'})-[:VISITED]->(z:Zone)
+  RETURN z.name, count(*) AS visits
+  ORDER BY visits DESC
+$$) AS (zone agtype, visits agtype);
+
+-- Find customers who visit the same zones
+SELECT * FROM cypher('meridian', $$
+  MATCH (c1:Customer)-[:VISITED]->(z:Zone)<-[:VISITED]-(c2:Customer)
+  WHERE c1 <> c2
+  RETURN c1.hash, c2.hash, collect(z.name) AS shared_zones
+$$) AS (c1 agtype, c2 agtype, zones agtype);
+```
+
+Graph edges:
+- `VISITED_ZONE` — customer→zone with timestamp + dwell
+- `PURCHASED` — customer→product (from POS correlation)
+- `VISITED_SAME_DAY_AS` — customer→customer (co-occurrence)
+- `RETURNED_AFTER` — customer→self (gap between visits)
 
 ### Implementation Order
 
 1. Database migrations (4 tables + RLS policies + hypertable)
-2. Edge agent Docker image (YOLO + ByteTrack + heartbeat)
-3. `vision_traffic` agent + `/api/vision/traffic/{org_id}` endpoint
-4. `queue_monitor` agent + real-time alerting
-5. Frontend: Connect Cameras wizard + traffic dashboard
-6. DeepFace integration (opt_in_identity mode)
-7. `dwell_time`, `customer_recognizer`, `demographic_profiler` agents
-8. Frontend: Customer Intelligence page with vision data
-# ADR-012: Cline — Self-Healing IT Agent + Karpathy Reasoning Framework
-
-## Status: Proposed
-## Date: 2026-05-01
-## Authors: Viktor AI, Aidan Pierce
-
----
-
-## Context
-
-Meridian business owners (restaurant/retail operators) are not technical. When something goes wrong — a dashboard page fails to load, a POS sync stalls, an agent produces stale data — they have no way to fix it. Today, they'd need to contact IT, file a ticket, and wait. This is unacceptable for a premium analytics platform.
-
-We also want our 27 AI agents to reason more deeply about their analyses — not just pattern-match, but think step-by-step like a researcher. Inspired by Andrej Karpathy's autoresearch loop architecture, we'll embed a structured reasoning framework into every agent.
-
-## Decision
-
-### Part 1: Cline — The Self-Healing IT Agent
-
-A persistent, always-on AI agent embedded in the Meridian dashboard that:
-1. **Detects errors** before the business owner even notices
-2. **Auto-patches** what it can (config, cache, retry, resync)
-3. **Communicates** with the owner in plain English
-4. **Escalates** to the Meridian IT team only when necessary
-
-#### Architecture
-
-```
-┌─────────────────────────────────────────────────┐
-│                  Business Owner                  │
-│              "Hey, my revenue page               │
-│               isn't loading today"                │
-└─────────────┬───────────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────────────┐
-│              Cline Chat Widget                   │
-│        (floating button, every page)             │
-│                                                  │
-│  • Natural language conversation                 │
-│  • Screenshot capture (owner can paste image)    │
-│  • Error context auto-attached                   │
-│  • Proactive alerts pushed to owner              │
-└─────────────┬───────────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────────────┐
-│           Cline Reasoning Engine                 │
-│        (Karpathy-style deep thinking)            │
-│                                                  │
-│  THINK → PLAN → ACT → OBSERVE → REFLECT         │
-│                                                  │
-│  1. THINK: What is the root cause?               │
-│  2. PLAN: What remediation steps exist?           │
-│  3. ACT: Execute the safest fix                  │
-│  4. OBSERVE: Did the fix work?                   │
-│  5. REFLECT: What should we learn?               │
-└─────────────┬───────────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────────────┐
-│           Remediation Actions                    │
-│                                                  │
-│  Level 1 — Auto-Fix (no human needed):           │
-│    • Clear stale cache / retry failed request    │
-│    • Re-trigger POS sync                         │
-│    • Restart failed agent run                    │
-│    • Reset user session                          │
-│    • Fix corrupt/missing data records            │
-│                                                  │
-│  Level 2 — Fix + Notify:                         │
-│    • Patch config values                         │
-│    • Adjust agent parameters                     │
-│    • Re-run full analysis pipeline               │
-│    • Log + notify IT dashboard                   │
-│                                                  │
-│  Level 3 — Escalate to IT:                       │
-│    • Create GitHub issue with repro steps        │
-│    • Suggest code fix in issue body              │
-│    • Alert IT team via Slack/webhook             │
-│    • Provide full diagnostic bundle              │
-│                                                  │
-│  Level 4 — Page Human:                           │
-│    • PagerDuty/SMS alert to on-call engineer     │
-│    • Include all context + attempted fixes       │
-└─────────────────────────────────────────────────┘
-```
-
-#### Error Detection Sources
-
-| Source | What It Catches | Collection Method |
-|--------|----------------|-------------------|
-| Frontend Error Boundary | React crashes, white screens | `window.onerror` + ErrorBoundary component |
-| Console Error Interceptor | JS errors, failed imports | `console.error` override |
-| Network Monitor | Failed API calls, timeouts, 4xx/5xx | `fetch` wrapper + Highlight.io |
-| Agent Health Monitor | Stale/failed agent runs | Cron check on `agent_runs` table |
-| POS Sync Watchdog | Sync failures, stale data | Celery task monitoring |
-| Performance Monitor | Slow page loads, memory leaks | Performance Observer API |
-| User Behavior | Rage clicks, rapid refreshes | PostHog + custom events |
-
-#### Database Schema
-
-```sql
--- Cline conversation history
-CREATE TABLE cline_conversations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID REFERENCES organizations(id),
-    user_id UUID REFERENCES auth.users(id),
-    started_at TIMESTAMPTZ DEFAULT now(),
-    resolved_at TIMESTAMPTZ,
-    status TEXT DEFAULT 'open', -- open, resolved, escalated
-    satisfaction_rating INT, -- 1-5 after resolution
-    summary TEXT
-);
-
--- Individual messages in a Cline conversation
-CREATE TABLE cline_messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    conversation_id UUID REFERENCES cline_conversations(id),
-    role TEXT NOT NULL, -- 'user', 'cline', 'system'
-    content TEXT NOT NULL,
-    thinking TEXT, -- Karpathy-style inner monologue (hidden from user)
-    attachments JSONB DEFAULT '[]', -- screenshots, error logs
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Auto-detected errors
-CREATE TABLE cline_errors (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID REFERENCES organizations(id),
-    error_type TEXT NOT NULL, -- 'frontend', 'api', 'agent', 'sync', 'performance'
-    severity TEXT DEFAULT 'medium', -- low, medium, high, critical
-    source TEXT, -- page URL, agent name, endpoint
-    error_message TEXT,
-    stack_trace TEXT,
-    context JSONB DEFAULT '{}',
-    remediation_level INT, -- 1-4
-    remediation_action TEXT,
-    remediation_result TEXT, -- 'success', 'failed', 'escalated'
-    detected_at TIMESTAMPTZ DEFAULT now(),
-    resolved_at TIMESTAMPTZ
-);
-
--- IT Dashboard aggregate health
-CREATE TABLE merchant_health (
-    org_id UUID PRIMARY KEY REFERENCES organizations(id),
-    health_score INT DEFAULT 100, -- 0-100
-    open_errors INT DEFAULT 0,
-    auto_fixed_today INT DEFAULT 0,
-    escalated_today INT DEFAULT 0,
-    last_sync_at TIMESTAMPTZ,
-    last_agent_run_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-```
-
-#### Frontend Components
-
-1. **ClineChatWidget** — Floating button (bottom-right), expands to chat panel
-   - Auto-attaches current page URL, recent console errors, user context
-   - Owner types in plain English
-   - Cline responds with diagnosis + fix status
-   - "Was this helpful?" rating after resolution
-
-2. **ClineProactiveAlert** — Toast notification
-   - "I noticed your Square sync hasn't run in 6 hours. I'm restarting it now."
-   - "Your revenue forecast agent found unusual data — I'm re-running with cleaned inputs."
-
-3. **ITDashboard** — Admin-only page (`/admin/it-health`)
-   - Health scores per merchant
-   - Error timeline
-   - Auto-fix success rate
-   - Escalation queue
-   - Cline conversation history (for IT team review)
-
-### Part 2: Karpathy Reasoning Framework for All Agents
-
-Inspired by Karpathy's autoresearch loop and his emphasis on "thinking before acting," we embed a structured reasoning framework into every Meridian AI agent.
-
-#### The Karpathy Loop
-
-```python
-class KarpathyReasoning:
-    """
-    5-phase reasoning loop for deep analysis.
-    Every agent runs this before producing output.
-    """
-    
-    async def reason(self, context: AnalysisContext) -> AgentOutput:
-        # Phase 1: THINK — Understand the data landscape
-        thinking = await self.think(context)
-        # "What patterns exist? What's unusual? What's missing?"
-        
-        # Phase 2: HYPOTHESIZE — Form testable theories
-        hypotheses = await self.hypothesize(thinking, context)
-        # "Revenue dropped 15% — could be: seasonal, menu change, competitor, data error"
-        
-        # Phase 3: EXPERIMENT — Test each hypothesis against data
-        experiments = await self.experiment(hypotheses, context)
-        # "Seasonal? No — same period last year was flat."
-        # "Menu change? Yes — removed top seller 3 days ago."
-        
-        # Phase 4: SYNTHESIZE — Combine findings into actionable insight
-        synthesis = await self.synthesize(experiments, context)
-        # "Revenue dropped because item X was removed. It was 12% of sales."
-        
-        # Phase 5: REFLECT — Meta-cognition
-        reflection = await self.reflect(synthesis, context)
-        # "Confidence: HIGH. Data quality: GOOD. Suggestion: restore item X."
-        # "What I might be wrong about: could also be a POS reporting delay."
-        
-        return AgentOutput(
-            data=synthesis.findings,
-            thinking=thinking.inner_monologue,  # Stored but hidden from dashboard
-            confidence=reflection.confidence,
-            caveats=reflection.caveats,
-            reasoning_chain=self._build_chain(thinking, hypotheses, experiments, synthesis, reflection),
-        )
-```
-
-#### Agent System Prompt Template (Karpathy-Enhanced)
-
-```
-You are {agent_name}, a specialized Meridian AI agent for {domain}.
-
-## Reasoning Protocol (MANDATORY)
-
-Before producing ANY output, you MUST complete all 5 phases:
-
-### Phase 1: THINK (Inner Monologue)
-- What data am I looking at? How much? What time range?
-- What's the baseline/expected behavior?
-- What immediately stands out? What DOESN'T stand out but should?
-- What data quality issues might affect my analysis?
-- Rate data quality: EXCELLENT / GOOD / FAIR / POOR / INSUFFICIENT
-
-### Phase 2: HYPOTHESIZE
-- Generate at least 3 competing hypotheses for any significant finding
-- Rank hypotheses by prior probability
-- Identify what evidence would confirm/refute each
-- Include at least 1 "null hypothesis" (nothing is actually wrong)
-
-### Phase 3: EXPERIMENT
-- Test each hypothesis against the actual data
-- Use specific numbers, not vague trends
-- Cross-reference with other data sources when available
-- Document which hypotheses survived and which were eliminated
-
-### Phase 4: SYNTHESIZE
-- Combine surviving hypotheses into a coherent narrative
-- Quantify impact: revenue, customers, time, percentage
-- Generate specific, actionable recommendations
-- Rank recommendations by expected impact and effort
-
-### Phase 5: REFLECT (Meta-Cognition)
-- Confidence level: HIGH / MEDIUM / LOW
-- What could I be wrong about?
-- What additional data would increase my confidence?
-- What assumptions am I making?
-- If my confidence is LOW, say so explicitly — never fake certainty
-
-## Output Format
-Provide your analysis in structured JSON with ALL phases documented.
-The 'thinking' field contains your full inner monologue (Phases 1-3).
-The 'data' field contains your synthesized findings (Phase 4).
-The 'confidence' and 'caveats' fields contain your reflection (Phase 5).
-
-NEVER skip phases. NEVER produce output without reasoning. Think deeply.
-```
-
-#### Benefits
-
-1. **Transparency** — Every insight has a reasoning chain. If an owner asks "why did you recommend this?", the chain is right there.
-2. **Accuracy** — Forced hypothesis testing catches false positives. Agents that consider "maybe nothing is wrong" produce fewer false alarms.
-3. **Learning** — Stored reasoning chains become training data. Over time, agents get better at each domain.
-4. **Debugging** — When an agent is wrong, the reasoning chain shows exactly where the logic broke down.
-5. **Trust** — Business owners see that the AI actually "thought about it" rather than pattern-matching.
-
-## Consequences
-
-### Positive
-- Business owners get instant IT support without calling anyone
-- Error resolution time drops from hours/days to seconds/minutes
-- Meridian appears "intelligent" — it fixes itself and communicates
-- IT team focuses on real issues, not "my page won't load" tickets
-- Agent outputs become dramatically more reliable and trustworthy
-- Reasoning chains provide audit trail for compliance-heavy industries
-
-### Negative
-- Cline's auto-fix actions need careful guardrails to prevent cascading failures
-- Karpathy reasoning adds ~2-3x to agent token usage (but dramatically improves quality)
-- Need to handle the edge case where Cline itself has a bug
-- IT dashboard is a new surface to maintain
-
-### Risks & Mitigations
-| Risk | Mitigation |
-|------|-----------|
-| Cline auto-fix breaks something worse | Rollback mechanism + dry-run mode for Level 2+ |
-| Owner confused by Cline responses | Keep language simple, offer "Talk to a human" escape hatch |
-| Token cost increase from reasoning | Cache reasoning chains, use cheaper models for repeat patterns |
-| Privacy — IT team sees owner conversations | RBAC scoping, audit logs on admin access |
-
----
-
-## ADR-011-v2: Advanced Vision Intelligence — Palantir-Grade Customer Tracking & Insights
-
-### Status: Approved (supersedes ADR-011 camera section)
-### Date: 2026-05-01
-
-### Context
-
-ADR-011 established the foundation for in-store vision intelligence. This revision specifies the exact repository stack, camera topology, and analytics pipeline to deliver Palantir-grade customer tracking: passerby counting, walk-in conversion, gender/age demographics, repeat vs first-time detection, non-customer identification, and sentiment analysis.
-
-### Camera Topology
-
-```
-                    ┌──────────────────────────┐
-                    │      SIDEWALK/STREET      │
-                    │                           │
-                    │   Camera 1 (Exterior)     │
-                    │   ● Passerby counting     │
-                    │   ● Window shoppers        │
-                    │   ● "Looked but didn't    │
-                    │     enter" detection       │
-                    └────────────┬─────────────┘
-                                 │
-                    ┌────────────▼─────────────┐
-                    │       ENTRANCE            │
-                    │                           │
-                    │   Camera 2 (Door)         │
-                    │   ● Entry/exit counting   │
-                    │   ● Face capture (best    │
-                    │     quality, eye-level)    │
-                    │   ● Repeat detection      │
-                    │   ● Gender/age/emotion    │
-                    └────────────┬─────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          │                      │                      │
-┌─────────▼──────────┐ ┌────────▼──────────┐ ┌────────▼──────────┐
-│   ZONE A (Bar)     │ │   ZONE B (Tables) │ │   ZONE C (Menu)   │
-│                    │ │                   │ │                   │
-│   Camera 3+        │ │   Camera 4+        │ │   Camera 5+        │
-│   ● Dwell time     │ │   ● Dwell time    │ │   ● Dwell time    │
-│   ● Path tracking  │ │   ● Group size    │ │   ● Conversion    │
-│   ● Heatmap        │ │   ● Sentiment     │ │     (looked at    │
-│                    │ │                   │ │      menu→ordered) │
-└────────────────────┘ └───────────────────┘ └───────────────────┘
-```
-
-### Technology Stack (Final Selections)
-
-| Layer | Repository | Stars | Role |
-|-------|-----------|-------|------|
-| Person Detection | `ultralytics/ultralytics` (YOLOv8) | 40K+ | Detect people in every frame |
-| Multi-Object Tracking | `mikel-brostrom/boxmot` | 8.1K | Track person across frames, assign track IDs |
-| Face Recognition | `deepinsight/insightface` (ArcFace/buffalo_l) | 25K+ | Primary face matching engine (99.8% accuracy) |
-| Face Analysis | `serengil/deepface` | 22.6K | Age, gender, emotion, ethnicity classification |
-| Zone Analytics | `roboflow/supervision` | 25K+ | Zone crossing, counting, heatmaps, dwell time |
-| Cross-Camera ReID | `mikel-brostrom/boxmot` ReID module | — | Re-identify same person across different cameras |
-| Identity Graph | `apache/age` (Postgres extension) | 3K+ | Customer knowledge graph on Supabase |
-| Edge Processing | NVIDIA Jetson / Raspberry Pi 5 | — | All inference on-premises |
-
-### Analytics Pipeline
-
-```
-Frame (30fps) ──┬──▶ YOLOv8 Person Detection
-                │      └──▶ BoxMOT Multi-Object Tracking
-                │             └──▶ Track ID per person per frame
-                │
-                ├──▶ InsightFace ArcFace (every 5th frame per track)
-                │      └──▶ 512-dim face embedding
-                │      └──▶ Match against customer_embeddings table
-                │      └──▶ Result: known_customer | returning_anonymous | new_face
-                │
-                ├──▶ DeepFace Analysis (on first clear face per track)
-                │      └──▶ age_range, gender, dominant_emotion
-                │
-                └──▶ Supervision Zone Analytics
-                       └──▶ zone_entered, zone_exited, dwell_seconds
-                       └──▶ path_coordinates (for heatmap)
-                       └──▶ zone_crossing_events (sidewalk→door→interior)
-
-Every 60 seconds, edge device sends batch to cloud:
-{
-  "store_id": "...",
-  "window_start": "2026-05-01T14:00:00Z",
-  "window_end": "2026-05-01T14:01:00Z",
-  "passerby_count": 34,
-  "window_shoppers": 8,      // looked toward store, slowed down
-  "walk_ins": 5,              // crossed door zone
-  "walk_outs": 3,
-  "demographics": {
-    "male": 18, "female": 14, "unknown": 2,
-    "age_buckets": {"18-25": 6, "26-35": 12, "36-50": 10, "51+": 6}
-  },
-  "returning_customers": 2,   // face matched from previous visits
-  "new_faces": 3,
-  "avg_dwell_seconds": {"entrance": 4.2, "bar": 840, "tables": 1200, "menu": 22},
-  "zone_heatmap": [[x, y, intensity], ...],
-  "sentiment_snapshot": {"happy": 3, "neutral": 1, "surprised": 1},
-  "tracks": [
-    {
-      "track_id": "t-4782",
-      "embedding_hash": "abc123",
-      "is_returning": true,
-      "visit_number": 14,
-      "gender": "female",
-      "age_range": "26-35",
-      "emotion_at_entry": "happy",
-      "emotion_at_exit": "neutral",
-      "zones_visited": ["entrance", "menu", "bar"],
-      "total_dwell_seconds": 2520,
-      "matched_pos_transaction": "$47.50"
-    }
-  ]
-}
-```
-
-### Database Schema Additions
-
-```sql
--- Passerby / foot traffic events
-CREATE TABLE foot_traffic (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID REFERENCES organizations(id),
-    camera_id UUID REFERENCES cameras(id),
-    window_start TIMESTAMPTZ NOT NULL,
-    window_end TIMESTAMPTZ NOT NULL,
-    passerby_count INT DEFAULT 0,
-    window_shoppers INT DEFAULT 0,
-    walk_ins INT DEFAULT 0,
-    walk_outs INT DEFAULT 0,
-    male_count INT DEFAULT 0,
-    female_count INT DEFAULT 0,
-    age_buckets JSONB DEFAULT '{}',
-    returning_count INT DEFAULT 0,
-    new_face_count INT DEFAULT 0,
-    non_customer_count INT DEFAULT 0,    -- entered but no POS match
-    sentiment_summary JSONB DEFAULT '{}',
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Individual customer profiles (anonymous until opt-in)
-CREATE TABLE customer_profiles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID REFERENCES organizations(id),
-    embedding_hash TEXT NOT NULL,         -- hash of face embedding (not the embedding itself)
-    visit_count INT DEFAULT 1,
-    first_seen_at TIMESTAMPTZ DEFAULT now(),
-    last_seen_at TIMESTAMPTZ DEFAULT now(),
-    avg_dwell_seconds FLOAT DEFAULT 0,
-    favorite_zone TEXT,
-    visit_pattern JSONB DEFAULT '{}',     -- {"weekday_counts": {}, "hour_counts": {}}
-    gender TEXT,                           -- male/female/unknown
-    age_range TEXT,                        -- "26-35"
-    avg_sentiment TEXT,                    -- happy/neutral/negative
-    total_pos_spend FLOAT DEFAULT 0,      -- linked from POS if opted in
-    predicted_ltv FLOAT DEFAULT 0,
-    is_opted_in BOOLEAN DEFAULT false,    -- linked to loyalty/name
-    opted_in_name TEXT,
-    opted_in_email TEXT,
-    tags TEXT[] DEFAULT '{}',             -- VIP, regular, window_shopper, etc.
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Visit log per customer
-CREATE TABLE customer_visits (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    profile_id UUID REFERENCES customer_profiles(id),
-    org_id UUID REFERENCES organizations(id),
-    entered_at TIMESTAMPTZ NOT NULL,
-    exited_at TIMESTAMPTZ,
-    dwell_seconds INT,
-    zones_visited TEXT[],
-    emotion_at_entry TEXT,
-    emotion_at_exit TEXT,
-    pos_transaction_id TEXT,              -- linked POS sale if any
-    pos_amount_cents INT,
-    was_window_shopper BOOLEAN DEFAULT false,  -- looked but didn't enter
-    converted_later BOOLEAN DEFAULT false,     -- window shopped, came back later
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Insights generated by Karpathy reasoning
-CREATE TABLE vision_insights (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID REFERENCES organizations(id),
-    insight_type TEXT NOT NULL,           -- conversion, demographic, timing, sentiment, loyalty
-    title TEXT NOT NULL,                  -- "21 people looked in but didn't enter"
-    body TEXT NOT NULL,                   -- full analysis
-    data JSONB DEFAULT '{}',
-    confidence TEXT DEFAULT 'MEDIUM',
-    reasoning_chain_id UUID,
-    period_start TIMESTAMPTZ,
-    period_end TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Apache AGE graph for identity resolution
--- (run after installing AGE extension)
--- SELECT create_graph('customer_graph');
--- Nodes: Customer, Visit, Zone, Transaction, TimeSlot
--- Edges: VISITED, BOUGHT, DWELLED_IN, RETURNED_AFTER, CONVERTED_FROM_WINDOW
-```
-
-### Insight Examples (Generated by Karpathy Reasoning Agents)
-
-```
-📊 "21 people looked into your store between 12-2pm but didn't walk in.
-    12 were women aged 25-35. Your lunch menu sign isn't visible from the sidewalk."
-
-🔄 "Customer #4782 has visited 14 times (every Fri/Sat). Average spend $47.
-    Last 2 visits she seemed less happy (neutral vs usual happy).
-    She hasn't been in for 9 days — longest gap in 3 months. Risk of churn."
-
-📈 "Walk-in conversion rate: 14.7% (up from 11.2% last month).
-    The new A-frame sign you added is working — window shoppers converting 31% more."
-
-👥 "Tuesday evenings are 73% male, 26-35. Friday nights flip to 58% female, 21-30.
-    Your Tuesday cocktail menu doesn't match Tuesday's demographic."
-
-⏱️ "Average dwell time dropped from 52min to 38min this week.
-    Customers spending 22% less time at tables. Possible causes:
-    service speed changed, or ambient temp (it hit 95°F this week)."
-
-🆕 "You had 34 first-time visitors this week (up 15%).
-    But only 8 came back for a second visit (23% retention).
-    Industry benchmark is 35% — consider a first-visit loyalty offer."
-```
+2. Edge vision engine (detector, tracker, face engine, zones, pipeline)
+3. Edge agent Docker image (YOLO + BoxMOT + InsightFace + heartbeat)
+4. `vision_traffic` agent + `/api/vision/traffic/{org_id}` endpoint
+5. `queue_monitor` agent + real-time alerting
+6. Frontend: Connect Cameras wizard + traffic dashboard
+7. InsightFace/DeepFace integration (opt_in_identity mode)
+8. Apache AGE graph schema + customer profile builder
+9. `dwell_time`, `customer_recognizer`, `demographic_profiler` agents
+10. Frontend: Customer Intelligence page with vision data
+11. Cross-location visitor mapping + advanced graph queries

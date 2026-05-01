@@ -162,12 +162,6 @@ export function generateAgents(): AgentInfo[] {
     { id: 'insight-narrator', name: 'Insight Narrator', status: 'active', lastRun: minutesAgo(30), nextRun: hoursFromNow(2), findings: 10, confidence: 87, category: 'coordination', description: 'Synthesizes all agent findings into plain English narratives', latestFinding: 'Generated executive brief: 3 critical actions, $3,200/mo combined impact potential' },
     { id: 'action-prioritizer', name: 'Action Prioritizer', status: 'active', lastRun: minutesAgo(25), nextRun: hoursFromNow(2), findings: 3, confidence: 85, category: 'coordination', description: 'Ranks all recommendations by ROI and effort', latestFinding: 'Top action: Matcha Latte price increase — $840/mo impact, 15 minutes effort' },
     { id: 'feature-engineer', name: 'Feature Engineer', status: 'idle', lastRun: hoursAgo(72), nextRun: hoursFromNow(96), findings: 2, confidence: 74, category: 'strategy', description: 'Identifies highest-value features from agent findings', latestFinding: 'Priority feature: Automated reorder alerts via SMS when stock hits reorder point' },
-    { id: 'menu-engineer', name: 'Menu Engineer', status: 'active', lastRun: minutesAgo(18), nextRun: hoursFromNow(6), findings: 7, confidence: 89, category: 'optimization', description: 'Classifies every menu item into Stars, Puzzles, Plowhorses, and Dogs using the BCG matrix — recommends pricing and placement changes', latestFinding: 'Cold Brew reclassified from Plowhorse → Star after 22% margin improvement. 3 Dogs flagged for removal or repositioning.' },
-    { id: 'anomaly-detector', name: 'Anomaly Detector', status: 'running', lastRun: minutesAgo(3), nextRun: hoursFromNow(1), findings: 4, confidence: 92, category: 'analysis', description: 'Real-time anomaly detection across transactions, voids, refunds, and revenue — flags deviations from rolling baselines with severity scoring', latestFinding: 'Critical: Refund rate spiked to 8.4% today (baseline 2.1%) — 6 refunds from a single staff member in 90 minutes' },
-    { id: 'pricing-strategist', name: 'Pricing Strategist', status: 'active', lastRun: hoursAgo(1), nextRun: hoursFromNow(4), findings: 5, confidence: 86, category: 'strategy', description: 'Runs price elasticity estimation, break-even analysis, and revenue concentration scoring to find optimal price points', latestFinding: 'Break-even analysis: Iced Latte covers fixed costs at 8 units/day — currently selling 11. Safe to test $0.50 increase.' },
-    { id: 'cohort-tracker', name: 'Cohort Tracker', status: 'active', lastRun: hoursAgo(2), nextRun: hoursFromNow(6), findings: 4, confidence: 81, category: 'analysis', description: 'Tracks customer cohort retention month-over-month — identifies which acquisition channels and time periods produce the stickiest customers', latestFinding: 'March cohort showing 78% M1 retention — best in 6 months. January cohort dropping to 55% at M3, needs intervention.' },
-    { id: 'seasonal-analyst', name: 'Seasonal Analyst', status: 'active', lastRun: hoursAgo(4), nextRun: hoursFromNow(12), findings: 3, confidence: 83, category: 'forecasting', description: 'Decomposes revenue into trend, seasonal, and residual components — generates seasonal indices and holiday playbooks', latestFinding: 'Seasonal index for May: 1.12 (12% above baseline). Recommend increasing espresso bean order by 15% to avoid stockout.' },
-    { id: 'discount-optimizer', name: 'Discount Optimizer', status: 'idle', lastRun: hoursAgo(24), nextRun: hoursFromNow(24), findings: 2, confidence: 77, category: 'optimization', description: 'Calculates ROI on every active discount and promotion — tracks cannibalization, measures incremental lift vs organic demand', latestFinding: 'Happy Hour 20% off drives 34 extra transactions but only $12 net profit after discount cost. Recommend reducing to 15%.' },
   ]
 }
 
@@ -586,13 +580,6 @@ export function generateAgentChains(): AgentChainLink[] {
     { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'All findings from all agents' },
     { from: 'action-prioritizer', to: 'revenue-forecaster', trigger: 'action_ranked', dataPassed: 'Top actions for impact projection' },
     { from: 'revenue-forecaster', to: 'insight-narrator', trigger: 'forecast_updated', dataPassed: 'Updated projections for narrative' },
-    { from: 'product-intelligence', to: 'menu-engineer', trigger: 'sku_velocity_updated', dataPassed: 'Item popularity + margin data for BCG classification' },
-    { from: 'menu-engineer', to: 'pricing-strategist', trigger: 'quadrant_reclassified', dataPassed: 'Items moving between quadrants + elasticity signals' },
-    { from: 'transaction-analyst', to: 'anomaly-detector', trigger: 'new_transactions_batch', dataPassed: 'Raw transaction stream for real-time baseline comparison' },
-    { from: 'anomaly-detector', to: 'insight-narrator', trigger: 'anomaly_severity_critical', dataPassed: 'Critical anomaly details + affected metrics' },
-    { from: 'customer-segmentor', to: 'cohort-tracker', trigger: 'segments_updated', dataPassed: 'Customer acquisition dates + current segment assignments' },
-    { from: 'seasonal-analyst', to: 'inventory-intelligence', trigger: 'seasonal_index_updated', dataPassed: 'Upcoming seasonal multipliers for demand forecasting' },
-    { from: 'pricing-strategist', to: 'discount-optimizer', trigger: 'elasticity_calculated', dataPassed: 'Price sensitivity data per item for discount ceiling estimation' },
   ]
 }
 
@@ -619,12 +606,6 @@ export function generateCalibrationHistory(): CalibrationPoint[] {
     { agentId: 'product-intelligence', agentName: 'Product Intelligence', predictionDate: '2026-03-20', predictedValue: 380, actualValue: 410, confidenceScore: 78, accuracyPct: 92, category: 'bundle uplift' },
     { agentId: 'inventory-intelligence', agentName: 'Inventory Intelligence', predictionDate: '2026-04-01', predictedValue: 2, actualValue: 2, confidenceScore: 85, accuracyPct: 100, category: 'stockout prediction' },
     { agentId: 'retention-strategist', agentName: 'Retention Strategist', predictionDate: '2026-04-10', predictedValue: 840, actualValue: null, confidenceScore: 79, accuracyPct: null, category: 'winback revenue' },
-    { agentId: 'menu-engineer', agentName: 'Menu Engineer', predictionDate: '2026-03-20', predictedValue: 620, actualValue: 590, confidenceScore: 89, accuracyPct: 95, category: 'quadrant reclassification lift' },
-    { agentId: 'anomaly-detector', agentName: 'Anomaly Detector', predictionDate: '2026-04-05', predictedValue: 7, actualValue: 8, confidenceScore: 92, accuracyPct: 88, category: 'anomaly count (weekly)' },
-    { agentId: 'pricing-strategist', agentName: 'Pricing Strategist', predictionDate: '2026-04-12', predictedValue: 460, actualValue: null, confidenceScore: 86, accuracyPct: null, category: 'price optimization lift' },
-    { agentId: 'cohort-tracker', agentName: 'Cohort Tracker', predictionDate: '2026-03-01', predictedValue: 62, actualValue: 58, confidenceScore: 81, accuracyPct: 94, category: 'M3 retention %' },
-    { agentId: 'seasonal-analyst', agentName: 'Seasonal Analyst', predictionDate: '2026-04-01', predictedValue: 108, actualValue: 112, confidenceScore: 83, accuracyPct: 96, category: 'seasonal index accuracy' },
-    { agentId: 'discount-optimizer', agentName: 'Discount Optimizer', predictionDate: '2026-04-15', predictedValue: 12, actualValue: null, confidenceScore: 77, accuracyPct: null, category: 'discount ROI ($)' },
   ]
 }
 

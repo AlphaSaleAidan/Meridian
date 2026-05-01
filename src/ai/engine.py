@@ -374,20 +374,6 @@ class MeridianAI:
         )
         return ctx
 
-    async def trigger_realtime_anomaly(
-        self,
-        org_id: str,
-        event_type: str,
-        payload: dict,
-    ) -> dict:
-        """Trigger real-time anomaly detection via Prefect flow."""
-        from ..workflows.realtime_anomaly import realtime_anomaly
-        return await realtime_anomaly(
-            org_id=org_id,
-            event_type=event_type,
-            payload=payload,
-        )
-
     async def _persist_results(self, result: AnalysisResult):
         """Save analysis results to database."""
         if not self.db:
