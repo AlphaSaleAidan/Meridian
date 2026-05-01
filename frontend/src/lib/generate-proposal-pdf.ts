@@ -231,7 +231,7 @@ function buildSlides(input: ProposalInput): string[] {
   // ═══════════════════════════════════════════════════════════════
   // Slide 3: Plan Features
   // ═══════════════════════════════════════════════════════════════
-  const featureHtml = plan.features.map(f => `<div class="check">${f}</div>`).join('')
+  const featureHtml = plan.features.map((f: string) => `<div class="check">${f}</div>`).join('')
   slides.push(slideWrapper(3, `
     <div class="mb-16"><span class="eyebrow">YOUR PLAN</span></div>
     <div class="title">Meridian ${plan.label}</div>
