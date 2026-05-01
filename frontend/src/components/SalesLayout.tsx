@@ -11,7 +11,7 @@ import {
   Menu,
   X,
   LogOut,
-  PlusCircle,
+  FileDown,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -20,7 +20,7 @@ const salesNavItems = [
   { heading: 'Sales' },
   { path: '/sales/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/sales/leads', icon: UserPlus, label: 'Leads' },
-  { path: '/sales/new-customer', icon: PlusCircle, label: 'New Customer' },
+  { path: '/sales/new-customer', icon: FileDown, label: 'Generate Proposal' },
   { path: '/sales/accounts', icon: Building2, label: 'Accounts' },
   { path: '/sales/training', icon: GraduationCap, label: 'Training' },
 ] as const
