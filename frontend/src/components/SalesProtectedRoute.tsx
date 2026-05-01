@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { useAuth } from '@/lib/auth'
@@ -9,12 +10,32 @@ export default function SalesProtectedRoute({ children }: { children: React.Reac
   const customerAuth = useAuth()
   const location = useLocation()
 
+  const [showRetry, setShowRetry] = useState(false)
+
+  useEffect(() => {
+    if (!ready) {
+      const timer = setTimeout(() => setShowRetry(true), 4000)
+      return () => clearTimeout(timer)
+    }
+  }, [ready])
+
   if (!ready) {
     return (
-      <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center gap-4">
         <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
           <span className="text-[#17C5B0] font-bold text-sm">S</span>
         </div>
+        {showRetry && (
+          <div className="text-center">
+            <p className="text-[#A1A1A8] text-xs mb-2">Taking longer than expected...</p>
+            <button
+              onClick={() => window.location.href = '/sales/login'}
+              className="text-[#17C5B0] text-xs font-medium hover:text-[#17C5B0]/80 underline underline-offset-2 transition-colors"
+            >
+              Go to login
+            </button>
+          </div>
+        )}
       </div>
     )
   }

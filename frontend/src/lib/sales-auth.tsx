@@ -101,15 +101,38 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     }
 
     const sb = supabase
-    sb.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user?.email) {
-        const profile = await resolveRepProfile(session.user.email)
-        if (profile) {
-          saveRep(profile)
-          setRep(profile)
-        }
+
+    // Timeout guard: if Supabase session check hangs (stale token, network),
+    // force ready after 5s so the app doesn't stay on the "S" loading screen.
+    let resolved = false
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        console.warn('[SalesAuth] Session check timed out — proceeding as unauthenticated')
+        setReady(true)
       }
-      setReady(true)
+    }, 5000)
+
+    sb.auth.getSession().then(async ({ data: { session } }) => {
+      if (!resolved) {
+        clearTimeout(timeoutId)
+        resolved = true
+        if (session?.user?.email) {
+          const profile = await resolveRepProfile(session.user.email)
+          if (profile) {
+            saveRep(profile)
+            setRep(profile)
+          }
+        }
+        setReady(true)
+      }
+    }).catch(() => {
+      if (!resolved) {
+        clearTimeout(timeoutId)
+        resolved = true
+        console.warn('[SalesAuth] Session check failed — proceeding as unauthenticated')
+        setReady(true)
+      }
     })
 
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (_event, session) => {

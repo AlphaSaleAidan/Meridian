@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useState, useCallback } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -125,6 +125,35 @@ function MeshGradientScene() {
 }
 
 export default function MeshGradient() {
+  const [contextLost, setContextLost] = useState(false)
+
+  const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
+    const canvas = gl.domElement
+    canvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault()
+      setContextLost(true)
+      console.warn('[MeshGradient] WebGL context lost — hiding 3D background')
+    })
+    canvas.addEventListener('webglcontextrestored', () => {
+      setContextLost(false)
+      console.info('[MeshGradient] WebGL context restored')
+    })
+  }, [])
+
+  // Graceful fallback when WebGL context is lost
+  if (contextLost) {
+    return (
+      <div
+        className="absolute inset-0 overflow-hidden"
+        style={{
+          background: 'radial-gradient(ellipse at 50% 40%, #0D2A4A 0%, #0A0A0B 70%)',
+          filter: 'blur(40px)',
+          opacity: 0.6,
+        }}
+      />
+    )
+  }
+
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ filter: 'blur(40px)' }}>
       <Canvas
@@ -132,6 +161,7 @@ export default function MeshGradient() {
         dpr={[1, 1.5]}
         gl={{ alpha: true, antialias: false, powerPreference: 'low-power' }}
         style={{ background: 'transparent' }}
+        onCreated={handleCreated}
       >
         <MeshGradientScene />
       </Canvas>
