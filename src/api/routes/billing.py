@@ -2,7 +2,7 @@
 Billing API routes — Square checkout, invoicing, and subscription management.
 
 Endpoints:
-  POST /api/billing/create-checkout  → Create Square payment link for onboarding
+  POST /api/billing/create-checkout  → Create Square payment link for onboarding/proposals
   POST /api/billing/create-invoice   → Create custom invoice via Square
   POST /api/billing/cancel           → Cancel a subscription
   POST /api/billing/webhook          → Handle Square payment webhooks
@@ -30,6 +30,10 @@ class CheckoutRequest(BaseModel):
     customer_name: str
     business_name: str
     return_url: str = ""
+    setup_fee_cents: int = 0          # One-time setup fee (rep keeps 100%)
+    first_month_free: bool = False    # Apply 100% discount to first month
+    rep_id: str = ""                  # Sales rep ID for commission tracking
+    rep_name: str = ""                # Sales rep name
 
 
 class InvoiceRequest(BaseModel):
@@ -51,7 +55,14 @@ class CancelRequest(BaseModel):
 async def create_checkout(req: CheckoutRequest, request: Request):
     """
     Create a Square Checkout (Payment Link) for a new customer subscription.
-    Called by the onboarding wizard's payment step.
+    Called by the proposal wizard's payment step.
+
+    Supports:
+    - Plan tier selection (standard/premium/command)
+    - Custom setup fee as a one-time line item
+    - First month free via Square discount
+    - Sales rep tracking for commissions
+
     Returns a checkout_url to redirect the customer to.
     """
     try:
@@ -68,6 +79,10 @@ async def create_checkout(req: CheckoutRequest, request: Request):
             business_name=req.business_name,
             plan=req.plan,
             return_url=req.return_url,
+            setup_fee_cents=req.setup_fee_cents,
+            first_month_free=req.first_month_free,
+            rep_id=req.rep_id,
+            rep_name=req.rep_name,
         )
 
         if result.success:
@@ -158,14 +173,19 @@ async def get_billing_status(org_id: str, request: Request):
 
         if result.data:
             sub = result.data
+            metadata = sub.get("metadata") or {}
             return {
                 "status": sub.get("status"),
                 "tier": sub.get("tier"),
                 "monthly_price_cents": sub.get("monthly_price_cents"),
                 "current_period_start": sub.get("current_period_start"),
                 "current_period_end": sub.get("current_period_end"),
-                "auto_renew": sub.get("metadata", {}).get("auto_renew", True),
+                "auto_renew": metadata.get("auto_renew", True),
                 "canceled_at": sub.get("canceled_at"),
+                "setup_fee_cents": metadata.get("setup_fee_cents", 0),
+                "first_month_free": metadata.get("first_month_free", False),
+                "rep_id": metadata.get("rep_id", ""),
+                "rep_name": metadata.get("rep_name", ""),
             }
         else:
             return {"status": "none", "tier": None}
@@ -182,7 +202,7 @@ async def handle_billing_webhook(request: Request):
     Activated when a customer completes a checkout payment.
 
     Key events:
-    - payment.completed → Activate subscription
+    - payment.completed → Activate subscription, record setup fee commission
     - invoice.payment_made → Record renewal payment
     """
     try:
@@ -205,14 +225,39 @@ async def handle_billing_webhook(request: Request):
                     meta = sub.get("metadata") or {}
                     if meta.get("square_order_id") == order_id:
                         # Activate the subscription
+                        updated_meta = {
+                            **meta,
+                            "payment_completed_at": datetime.utcnow().isoformat(),
+                            "square_payment_id": payment.get("id"),
+                        }
+
+                        # If first month free, mark trial active
+                        if meta.get("first_month_free"):
+                            updated_meta["trial_status"] = "active"
+
                         db.table("subscriptions").update({
                             "status": "active",
-                            "metadata": {
-                                **meta,
-                                "payment_completed_at": datetime.utcnow().isoformat(),
-                                "square_payment_id": payment.get("id"),
-                            },
+                            "metadata": updated_meta,
                         }).eq("id", sub["id"]).execute()
+
+                        # Record setup fee commission if applicable
+                        setup_fee = meta.get("setup_fee_cents", 0)
+                        rep_id = meta.get("setup_fee_rep_id") or meta.get("rep_id")
+                        if setup_fee and rep_id:
+                            try:
+                                db.table("commissions").insert({
+                                    "rep_id": rep_id,
+                                    "org_id": sub["org_id"],
+                                    "type": "setup_fee",
+                                    "amount_cents": setup_fee,
+                                    "commission_rate": 1.0,  # 100% to rep
+                                    "commission_cents": setup_fee,
+                                    "status": "earned",
+                                    "notes": f"Setup fee for {sub.get('tier', 'standard')} plan",
+                                }).execute()
+                                logger.info(f"Recorded setup fee commission: ${setup_fee/100:.2f} for rep {rep_id}")
+                            except Exception as e:
+                                logger.warning(f"Failed to record setup fee commission: {e}")
 
                         logger.info(f"Activated subscription for order {order_id}")
                         break
