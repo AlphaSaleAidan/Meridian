@@ -1,9 +1,14 @@
-FROM python:3.12-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install core requirements only (fast boot, Railway-friendly)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install ML requirements separately (optional heavy packages)
+COPY requirements-ml.txt .
+RUN pip install --no-cache-dir -r requirements-ml.txt || echo "ML packages skipped (non-critical)"
 
 COPY src/ ./src/
 
