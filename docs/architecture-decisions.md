@@ -350,3 +350,303 @@ Edge software is containerized (Docker Compose): CompreFace + YOLO + ByteTrack +
 6. DeepFace integration (opt_in_identity mode)
 7. `dwell_time`, `customer_recognizer`, `demographic_profiler` agents
 8. Frontend: Customer Intelligence page with vision data
+# ADR-012: Cline — Self-Healing IT Agent + Karpathy Reasoning Framework
+
+## Status: Proposed
+## Date: 2026-05-01
+## Authors: Viktor AI, Aidan Pierce
+
+---
+
+## Context
+
+Meridian business owners (restaurant/retail operators) are not technical. When something goes wrong — a dashboard page fails to load, a POS sync stalls, an agent produces stale data — they have no way to fix it. Today, they'd need to contact IT, file a ticket, and wait. This is unacceptable for a premium analytics platform.
+
+We also want our 27 AI agents to reason more deeply about their analyses — not just pattern-match, but think step-by-step like a researcher. Inspired by Andrej Karpathy's autoresearch loop architecture, we'll embed a structured reasoning framework into every agent.
+
+## Decision
+
+### Part 1: Cline — The Self-Healing IT Agent
+
+A persistent, always-on AI agent embedded in the Meridian dashboard that:
+1. **Detects errors** before the business owner even notices
+2. **Auto-patches** what it can (config, cache, retry, resync)
+3. **Communicates** with the owner in plain English
+4. **Escalates** to the Meridian IT team only when necessary
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                  Business Owner                  │
+│              "Hey, my revenue page               │
+│               isn't loading today"                │
+└─────────────┬───────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────┐
+│              Cline Chat Widget                   │
+│        (floating button, every page)             │
+│                                                  │
+│  • Natural language conversation                 │
+│  • Screenshot capture (owner can paste image)    │
+│  • Error context auto-attached                   │
+│  • Proactive alerts pushed to owner              │
+└─────────────┬───────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────┐
+│           Cline Reasoning Engine                 │
+│        (Karpathy-style deep thinking)            │
+│                                                  │
+│  THINK → PLAN → ACT → OBSERVE → REFLECT         │
+│                                                  │
+│  1. THINK: What is the root cause?               │
+│  2. PLAN: What remediation steps exist?           │
+│  3. ACT: Execute the safest fix                  │
+│  4. OBSERVE: Did the fix work?                   │
+│  5. REFLECT: What should we learn?               │
+└─────────────┬───────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────┐
+│           Remediation Actions                    │
+│                                                  │
+│  Level 1 — Auto-Fix (no human needed):           │
+│    • Clear stale cache / retry failed request    │
+│    • Re-trigger POS sync                         │
+│    • Restart failed agent run                    │
+│    • Reset user session                          │
+│    • Fix corrupt/missing data records            │
+│                                                  │
+│  Level 2 — Fix + Notify:                         │
+│    • Patch config values                         │
+│    • Adjust agent parameters                     │
+│    • Re-run full analysis pipeline               │
+│    • Log + notify IT dashboard                   │
+│                                                  │
+│  Level 3 — Escalate to IT:                       │
+│    • Create GitHub issue with repro steps        │
+│    • Suggest code fix in issue body              │
+│    • Alert IT team via Slack/webhook             │
+│    • Provide full diagnostic bundle              │
+│                                                  │
+│  Level 4 — Page Human:                           │
+│    • PagerDuty/SMS alert to on-call engineer     │
+│    • Include all context + attempted fixes       │
+└─────────────────────────────────────────────────┘
+```
+
+#### Error Detection Sources
+
+| Source | What It Catches | Collection Method |
+|--------|----------------|-------------------|
+| Frontend Error Boundary | React crashes, white screens | `window.onerror` + ErrorBoundary component |
+| Console Error Interceptor | JS errors, failed imports | `console.error` override |
+| Network Monitor | Failed API calls, timeouts, 4xx/5xx | `fetch` wrapper + Highlight.io |
+| Agent Health Monitor | Stale/failed agent runs | Cron check on `agent_runs` table |
+| POS Sync Watchdog | Sync failures, stale data | Celery task monitoring |
+| Performance Monitor | Slow page loads, memory leaks | Performance Observer API |
+| User Behavior | Rage clicks, rapid refreshes | PostHog + custom events |
+
+#### Database Schema
+
+```sql
+-- Cline conversation history
+CREATE TABLE cline_conversations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES organizations(id),
+    user_id UUID REFERENCES auth.users(id),
+    started_at TIMESTAMPTZ DEFAULT now(),
+    resolved_at TIMESTAMPTZ,
+    status TEXT DEFAULT 'open', -- open, resolved, escalated
+    satisfaction_rating INT, -- 1-5 after resolution
+    summary TEXT
+);
+
+-- Individual messages in a Cline conversation
+CREATE TABLE cline_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    conversation_id UUID REFERENCES cline_conversations(id),
+    role TEXT NOT NULL, -- 'user', 'cline', 'system'
+    content TEXT NOT NULL,
+    thinking TEXT, -- Karpathy-style inner monologue (hidden from user)
+    attachments JSONB DEFAULT '[]', -- screenshots, error logs
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Auto-detected errors
+CREATE TABLE cline_errors (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id UUID REFERENCES organizations(id),
+    error_type TEXT NOT NULL, -- 'frontend', 'api', 'agent', 'sync', 'performance'
+    severity TEXT DEFAULT 'medium', -- low, medium, high, critical
+    source TEXT, -- page URL, agent name, endpoint
+    error_message TEXT,
+    stack_trace TEXT,
+    context JSONB DEFAULT '{}',
+    remediation_level INT, -- 1-4
+    remediation_action TEXT,
+    remediation_result TEXT, -- 'success', 'failed', 'escalated'
+    detected_at TIMESTAMPTZ DEFAULT now(),
+    resolved_at TIMESTAMPTZ
+);
+
+-- IT Dashboard aggregate health
+CREATE TABLE merchant_health (
+    org_id UUID PRIMARY KEY REFERENCES organizations(id),
+    health_score INT DEFAULT 100, -- 0-100
+    open_errors INT DEFAULT 0,
+    auto_fixed_today INT DEFAULT 0,
+    escalated_today INT DEFAULT 0,
+    last_sync_at TIMESTAMPTZ,
+    last_agent_run_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+#### Frontend Components
+
+1. **ClineChatWidget** — Floating button (bottom-right), expands to chat panel
+   - Auto-attaches current page URL, recent console errors, user context
+   - Owner types in plain English
+   - Cline responds with diagnosis + fix status
+   - "Was this helpful?" rating after resolution
+
+2. **ClineProactiveAlert** — Toast notification
+   - "I noticed your Square sync hasn't run in 6 hours. I'm restarting it now."
+   - "Your revenue forecast agent found unusual data — I'm re-running with cleaned inputs."
+
+3. **ITDashboard** — Admin-only page (`/admin/it-health`)
+   - Health scores per merchant
+   - Error timeline
+   - Auto-fix success rate
+   - Escalation queue
+   - Cline conversation history (for IT team review)
+
+### Part 2: Karpathy Reasoning Framework for All Agents
+
+Inspired by Karpathy's autoresearch loop and his emphasis on "thinking before acting," we embed a structured reasoning framework into every Meridian AI agent.
+
+#### The Karpathy Loop
+
+```python
+class KarpathyReasoning:
+    """
+    5-phase reasoning loop for deep analysis.
+    Every agent runs this before producing output.
+    """
+    
+    async def reason(self, context: AnalysisContext) -> AgentOutput:
+        # Phase 1: THINK — Understand the data landscape
+        thinking = await self.think(context)
+        # "What patterns exist? What's unusual? What's missing?"
+        
+        # Phase 2: HYPOTHESIZE — Form testable theories
+        hypotheses = await self.hypothesize(thinking, context)
+        # "Revenue dropped 15% — could be: seasonal, menu change, competitor, data error"
+        
+        # Phase 3: EXPERIMENT — Test each hypothesis against data
+        experiments = await self.experiment(hypotheses, context)
+        # "Seasonal? No — same period last year was flat."
+        # "Menu change? Yes — removed top seller 3 days ago."
+        
+        # Phase 4: SYNTHESIZE — Combine findings into actionable insight
+        synthesis = await self.synthesize(experiments, context)
+        # "Revenue dropped because item X was removed. It was 12% of sales."
+        
+        # Phase 5: REFLECT — Meta-cognition
+        reflection = await self.reflect(synthesis, context)
+        # "Confidence: HIGH. Data quality: GOOD. Suggestion: restore item X."
+        # "What I might be wrong about: could also be a POS reporting delay."
+        
+        return AgentOutput(
+            data=synthesis.findings,
+            thinking=thinking.inner_monologue,  # Stored but hidden from dashboard
+            confidence=reflection.confidence,
+            caveats=reflection.caveats,
+            reasoning_chain=self._build_chain(thinking, hypotheses, experiments, synthesis, reflection),
+        )
+```
+
+#### Agent System Prompt Template (Karpathy-Enhanced)
+
+```
+You are {agent_name}, a specialized Meridian AI agent for {domain}.
+
+## Reasoning Protocol (MANDATORY)
+
+Before producing ANY output, you MUST complete all 5 phases:
+
+### Phase 1: THINK (Inner Monologue)
+- What data am I looking at? How much? What time range?
+- What's the baseline/expected behavior?
+- What immediately stands out? What DOESN'T stand out but should?
+- What data quality issues might affect my analysis?
+- Rate data quality: EXCELLENT / GOOD / FAIR / POOR / INSUFFICIENT
+
+### Phase 2: HYPOTHESIZE
+- Generate at least 3 competing hypotheses for any significant finding
+- Rank hypotheses by prior probability
+- Identify what evidence would confirm/refute each
+- Include at least 1 "null hypothesis" (nothing is actually wrong)
+
+### Phase 3: EXPERIMENT
+- Test each hypothesis against the actual data
+- Use specific numbers, not vague trends
+- Cross-reference with other data sources when available
+- Document which hypotheses survived and which were eliminated
+
+### Phase 4: SYNTHESIZE
+- Combine surviving hypotheses into a coherent narrative
+- Quantify impact: revenue, customers, time, percentage
+- Generate specific, actionable recommendations
+- Rank recommendations by expected impact and effort
+
+### Phase 5: REFLECT (Meta-Cognition)
+- Confidence level: HIGH / MEDIUM / LOW
+- What could I be wrong about?
+- What additional data would increase my confidence?
+- What assumptions am I making?
+- If my confidence is LOW, say so explicitly — never fake certainty
+
+## Output Format
+Provide your analysis in structured JSON with ALL phases documented.
+The 'thinking' field contains your full inner monologue (Phases 1-3).
+The 'data' field contains your synthesized findings (Phase 4).
+The 'confidence' and 'caveats' fields contain your reflection (Phase 5).
+
+NEVER skip phases. NEVER produce output without reasoning. Think deeply.
+```
+
+#### Benefits
+
+1. **Transparency** — Every insight has a reasoning chain. If an owner asks "why did you recommend this?", the chain is right there.
+2. **Accuracy** — Forced hypothesis testing catches false positives. Agents that consider "maybe nothing is wrong" produce fewer false alarms.
+3. **Learning** — Stored reasoning chains become training data. Over time, agents get better at each domain.
+4. **Debugging** — When an agent is wrong, the reasoning chain shows exactly where the logic broke down.
+5. **Trust** — Business owners see that the AI actually "thought about it" rather than pattern-matching.
+
+## Consequences
+
+### Positive
+- Business owners get instant IT support without calling anyone
+- Error resolution time drops from hours/days to seconds/minutes
+- Meridian appears "intelligent" — it fixes itself and communicates
+- IT team focuses on real issues, not "my page won't load" tickets
+- Agent outputs become dramatically more reliable and trustworthy
+- Reasoning chains provide audit trail for compliance-heavy industries
+
+### Negative
+- Cline's auto-fix actions need careful guardrails to prevent cascading failures
+- Karpathy reasoning adds ~2-3x to agent token usage (but dramatically improves quality)
+- Need to handle the edge case where Cline itself has a bug
+- IT dashboard is a new surface to maintain
+
+### Risks & Mitigations
+| Risk | Mitigation |
+|------|-----------|
+| Cline auto-fix breaks something worse | Rollback mechanism + dry-run mode for Level 2+ |
+| Owner confused by Cline responses | Keep language simple, offer "Talk to a human" escape hatch |
+| Token cost increase from reasoning | Cache reasoning chains, use cheaper models for repeat patterns |
+| Privacy — IT team sees owner conversations | RBAC scoping, audit logs on admin access |
