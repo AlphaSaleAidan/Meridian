@@ -8,10 +8,9 @@ Three modes:
 
 Mirrors the Square SyncEngine pattern exactly.
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from .client import CloverClient
 from .mappers import CloverDataMapper

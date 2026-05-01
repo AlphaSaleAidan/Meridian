@@ -5,7 +5,6 @@ This is triggered after a merchant completes the OAuth flow.
 Runs as a background task — can take 1-30 minutes depending on
 transaction volume (18 months of history).
 """
-import asyncio
 import json
 import logging
 import os

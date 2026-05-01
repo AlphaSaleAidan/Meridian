@@ -6,7 +6,6 @@ Data loaded from YAML files in data/ directory.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 import yaml
 

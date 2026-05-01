@@ -1,5 +1,4 @@
 from .base import BaseAgent
-from collections import defaultdict
 
 class ProductVelocityAgent(BaseAgent):
     name = "product_velocity"

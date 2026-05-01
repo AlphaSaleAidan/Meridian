@@ -13,10 +13,8 @@ All handlers are async and designed to be enqueued (respond 200 first, process l
 import base64
 import hashlib
 import hmac
-import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from .client import SquareClient
 from .mappers import DataMapper

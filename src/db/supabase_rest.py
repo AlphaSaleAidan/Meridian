@@ -7,7 +7,7 @@ Supports upserts, batch inserts, filtered queries, and RPC function calls.
 """
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 

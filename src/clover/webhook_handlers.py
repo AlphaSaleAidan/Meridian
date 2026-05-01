@@ -16,10 +16,8 @@ All handlers are async and designed to be enqueued (respond 200 first, process l
 """
 import hashlib
 import hmac
-import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from .client import CloverClient
 from .mappers import CloverDataMapper

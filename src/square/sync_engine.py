@@ -6,10 +6,9 @@ Three modes:
   2. INCREMENTAL SYNC — Every 15 min (new/updated orders since last sync)
   3. REAL-TIME WEBHOOKS — Instant (handled by webhook_handlers.py)
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from .client import SquareClient
 from .mappers import DataMapper

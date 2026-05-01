@@ -9,7 +9,6 @@ We acknowledge immediately and process async.
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Request, Response, BackgroundTasks

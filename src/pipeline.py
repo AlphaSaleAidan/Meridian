@@ -13,17 +13,13 @@ Usage:
     pipeline = MeridianPipeline(org_id="...", square_token="...", supabase_url="...", supabase_key="...")
     result = await pipeline.run_full_sync()
 """
-import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any
 from uuid import uuid4
 
 from .square.client import SquareClient
 from .square.sync_engine import SyncEngine
 from .square.mappers import DataMapper
-from .integrations.base.models import SyncResult
-from .integrations.registry import get_sync_engine
 from .db.supabase_rest import SupabaseREST
 from .ai.engine import MeridianAI, AnalysisContext
 from .sync.customer_app import sync_to_customer_app

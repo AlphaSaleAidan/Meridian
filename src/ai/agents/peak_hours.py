@@ -1,6 +1,5 @@
 from .base import BaseAgent
 from collections import defaultdict
-import math
 
 
 class PeakHoursAgent(BaseAgent):

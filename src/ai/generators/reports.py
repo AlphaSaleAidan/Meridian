@@ -13,9 +13,8 @@ These are stored as JSON in the weekly_reports table and can be
 rendered as email, PDF, or dashboard view.
 """
 import logging
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.generators.reports")
 

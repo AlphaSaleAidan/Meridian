@@ -17,7 +17,7 @@ Agents are organized in tiers (1-5) that determine execution order:
 """
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 

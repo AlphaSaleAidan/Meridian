@@ -13,7 +13,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger("meridian.api.cline")
 

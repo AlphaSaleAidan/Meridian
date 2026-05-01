@@ -18,7 +18,6 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
 from typing import Optional
 from uuid import uuid4
 

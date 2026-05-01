@@ -14,8 +14,7 @@ Key Clover ↔ Square differences:
 """
 import logging
 from datetime import datetime, timezone
-from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger("meridian.clover.mappers")

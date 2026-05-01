@@ -1,6 +1,4 @@
 from .base import BaseAgent
-from collections import defaultdict
-from datetime import datetime
 
 class RevenueTrendAgent(BaseAgent):
     name = "revenue_trend"

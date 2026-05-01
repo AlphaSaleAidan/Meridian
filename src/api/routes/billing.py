@@ -10,7 +10,6 @@ Endpoints:
 """
 
 import logging
-import os
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request

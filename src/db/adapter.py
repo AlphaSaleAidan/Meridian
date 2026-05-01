@@ -14,7 +14,6 @@ Usage:
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger("meridian.db.adapter")

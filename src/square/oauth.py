@@ -7,12 +7,10 @@ Flow:
   3. Token refresh → automatic via daily cron
   4. Token revocation → disconnect + notify on webhook
 """
-import hashlib
 import hmac
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx

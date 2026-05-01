@@ -1,6 +1,5 @@
 """POS integration registry — factory for sync engines."""
 import logging
-from typing import Any
 
 from .base import BaseSyncEngine
 

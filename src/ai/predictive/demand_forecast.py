@@ -6,7 +6,6 @@ EACH product individually for prep guides and inventory ordering.
 """
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.predictive.demand")
 

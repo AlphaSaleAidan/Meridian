@@ -4,9 +4,7 @@ Insight Generator v2 — Doctorate-Level Financial Intelligence.
 Thin facade over per-category insight modules. All public API preserved.
 """
 import logging
-from typing import Any
-
-from ._insight_helpers import make_insight, score_priority, MODEL_VERSION
+from ._insight_helpers import score_priority, MODEL_VERSION
 from . import revenue_insights
 from . import product_insights
 from . import pattern_insights

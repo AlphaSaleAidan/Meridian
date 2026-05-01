@@ -4,13 +4,11 @@ Incremental Sync Worker — Runs every 15 minutes.
 Fetches new/updated orders since last sync timestamp.
 Only runs for connections where historical_import_complete = TRUE.
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 
 from ..square.client import SquareClient
 from ..square.sync_engine import SyncEngine
-from ..integrations.base.models import SyncResult
 from ..db import get_db
 
 logger = logging.getLogger("meridian.workers.incremental")

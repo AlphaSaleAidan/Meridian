@@ -19,7 +19,6 @@ import logging
 import math
 from datetime import datetime, date, timedelta, timezone
 from uuid import uuid4
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.generators.forecasts")
 

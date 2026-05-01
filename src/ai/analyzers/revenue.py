@@ -11,9 +11,6 @@ Analyzes daily revenue data to produce:
 """
 import logging
 import math
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.analyzers.revenue")
 

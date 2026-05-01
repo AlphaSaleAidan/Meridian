@@ -4,7 +4,6 @@ Every agent runs: THINK → HYPOTHESIZE → EXPERIMENT → SYNTHESIZE → REFLEC
 The loop works with or without an LLM — pure-data agents get structured
 reasoning from statistical analysis; LLM-backed agents get richer chains.
 """
-import json
 import logging
 import time
 import uuid
