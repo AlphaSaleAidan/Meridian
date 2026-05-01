@@ -14,6 +14,7 @@ Routes:
   GET /api/dashboard/notifications  → User notifications
   GET /api/dashboard/connection     → POS connection status
 """
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -59,14 +60,16 @@ async def get_overview(
     if cached is not None:
         return cached
 
-    daily = await db.get_daily_revenue(org_id, days=60)
-    money_left = await db.select(
-        "money_left_scores",
-        filters={"org_id": f"eq.{org_id}"},
-        order="scored_at.desc",
-        limit=1,
+    daily, money_left, connection = await asyncio.gather(
+        db.get_daily_revenue(org_id, days=60),
+        db.select(
+            "money_left_scores",
+            filters={"org_id": f"eq.{org_id}"},
+            order="scored_at.desc",
+            limit=1,
+        ),
+        db.get_pos_connection(org_id),
     )
-    connection = await db.get_pos_connection(org_id)
 
     # Split into current 30d and prior 30d
     now = datetime.now(timezone.utc)
@@ -115,14 +118,16 @@ async def get_revenue(
     if cached is not None:
         return cached
 
-    daily = await db.get_daily_revenue(org_id, days=days)
-    weekly = await db.select(
-        "weekly_revenue",
-        filters={
-            "org_id": f"eq.{org_id}",
-            "week_bucket": f"gte.{(datetime.now(timezone.utc) - timedelta(days=days)).isoformat()}",
-        },
-        order="week_bucket.asc",
+    daily, weekly = await asyncio.gather(
+        db.get_daily_revenue(org_id, days=days),
+        db.select(
+            "weekly_revenue",
+            filters={
+                "org_id": f"eq.{org_id}",
+                "week_bucket": f"gte.{(datetime.now(timezone.utc) - timedelta(days=days)).isoformat()}",
+            },
+            order="week_bucket.asc",
+        ),
     )
 
     result = {
@@ -201,8 +206,10 @@ async def get_products(
     if cached is not None:
         return cached
 
-    products = await db.get_products(org_id)
-    performance = await db.get_product_performance(org_id, days=days)
+    products, performance = await asyncio.gather(
+        db.get_products(org_id),
+        db.get_product_performance(org_id, days=days),
+    )
 
     # Aggregate performance by product
     product_map = {p["id"]: p for p in products}
