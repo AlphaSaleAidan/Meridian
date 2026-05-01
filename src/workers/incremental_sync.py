@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 from ..square.client import SquareClient
 from ..square.sync_engine import SyncEngine
+from ..integrations.base.models import SyncResult
 from ..db import get_db
 
 logger = logging.getLogger("meridian.workers.incremental")
