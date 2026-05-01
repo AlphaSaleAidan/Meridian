@@ -128,20 +128,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const u = { id: session.user.id, email: session.user.email || '' }
-        setUser(u)
-        const [o, admin, salesRep] = await Promise.all([
-          fetchBusinessForUser(u.id, u.email),
-          checkAdmin(),
-          checkIsSalesRep(u.email),
-        ])
-        if (o) setOrg(o)
-        setIsAdmin(admin)
-        setIsSalesRep(salesRep)
+    // Timeout guard: if Supabase session check hangs (stale token, network),
+    // force ready after 5s so the app renders instead of showing a blank screen.
+    let resolved = false
+    const timeoutId = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        console.warn('[Auth] Session check timed out — proceeding as unauthenticated')
+        setReady(true)
       }
-      setReady(true)
+    }, 5000)
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!resolved) {
+        clearTimeout(timeoutId)
+        resolved = true
+        if (session?.user) {
+          const u = { id: session.user.id, email: session.user.email || '' }
+          setUser(u)
+          const [o, admin, salesRep] = await Promise.all([
+            fetchBusinessForUser(u.id, u.email),
+            checkAdmin(),
+            checkIsSalesRep(u.email),
+          ])
+          if (o) setOrg(o)
+          setIsAdmin(admin)
+          setIsSalesRep(salesRep)
+        }
+        setReady(true)
+      }
+    }).catch(() => {
+      if (!resolved) {
+        clearTimeout(timeoutId)
+        resolved = true
+        console.warn('[Auth] Session check failed — proceeding as unauthenticated')
+        setReady(true)
+      }
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
