@@ -150,15 +150,27 @@
 - Edge processing keeps video/images on merchant hardware, satisfying privacy requirements
 - Competitive advantage: most POS analytics platforms are transaction-only
 
-### Processing Pipeline
+### Processing Pipeline (v2 — Palantir-Grade)
 
 ```
-Camera (RTSP) → YOLO v8 (person detection) → ByteTrack (multi-object tracking)
-  → DeepFace (optional: age/gender, repeat visitor embedding)
-  → Meridian DB (anonymized metrics only)
+Camera (RTSP)
+  → YOLO v8 nano (person detection, bounding boxes)
+  → BoxMOT/DeepOCSORT (multi-object tracking, persistent track_id)
+  → InsightFace ArcFace buffalo_l (512-dim face embeddings, match/recognize)
+  → DeepFace (demographics: age, gender, emotion)
+  → Supervision (zone polygons, crossings, dwell time, heatmaps)
+  → Apache AGE (customer identity graph in Postgres)
+  → Karpathy Reasoning ("what does this mean for the business?")
+  → Meridian DB (anonymized metrics only — embeddings stay on-prem)
 ```
 
-**Runtime**: CompreFace self-hosted in Docker on merchant edge hardware. No cloud inference.
+**Primary face engine:** InsightFace ArcFace (buffalo_l model, 512-dim embeddings). Chosen over DeepFace embeddings for superior accuracy on LFW benchmark (99.83%) and speed (single-pass detection+embedding).
+
+**Graph layer:** Apache AGE (A Graph Extension for PostgreSQL). Customer identity graph lives in the same Supabase Postgres — no separate graph DB needed. Edges model relationships: VISITED_ZONE, PURCHASED_WITH, VISITED_SAME_DAY_AS, RETURNED_AFTER.
+
+**Demographics:** DeepFace handles age/gender/emotion classification only (not embeddings). Runs on face crops extracted by InsightFace.
+
+**Runtime**: Edge Docker stack (YOLO + BoxMOT + InsightFace + DeepFace + Supervision). No cloud inference.
 
 ### Privacy Model
 
@@ -289,18 +301,20 @@ Edge software is containerized (Docker Compose): CompreFace + YOLO + ByteTrack +
 
 **Tier gating:** Vision features available on Growth ($250/mo) and Enterprise plans only. Trial/Starter see a locked preview with sample data.
 
-### Libraries (Phase 2 — documented separately)
+### Libraries (Locked-In Choices)
 
-| Library | Role | Package |
-|---------|------|---------|
-| ultralytics | YOLO v8 person detection | `ultralytics` (edge only) |
-| ByteTrack | Multi-object tracking | `boxmot` (edge only) |
-| DeepFace | Face embedding + demographics | `deepface` (edge only) |
-| CompreFace | Self-hosted face API | Docker container (edge only) |
-| supervision | Visual analytics toolkit | `supervision` (edge only) |
-| insightface | Alternative face embeddings | `insightface` (edge only) |
+| Library | Role | Package | Status |
+|---------|------|---------|--------|
+| ultralytics | YOLO v8 nano person detection | `ultralytics` (edge only) | **Primary** |
+| BoxMOT | DeepOCSORT multi-object tracking | `boxmot` (edge only) | **Primary** — replaces ByteTrack |
+| InsightFace | ArcFace buffalo_l 512-dim face embeddings | `insightface` (edge only) | **Primary face engine** |
+| DeepFace | Demographics only (age, gender, emotion) | `deepface` (edge only) | **Secondary** — demographics only |
+| supervision | Zone analytics, heatmaps, counting | `supervision` (edge only) | **Primary** |
+| Apache AGE | Customer identity graph in Postgres | `age` (Postgres extension) | **Primary graph layer** |
+| httpx | Async batch upload from edge | `httpx` (edge only) | **Transport** |
+| opencv | Frame capture from RTSP | `opencv-python-headless` (edge only) | **Capture** |
 
-**Note:** All CV libraries run on edge hardware only. The Meridian cloud backend receives only structured metrics via the edge agent's HTTPS push. No CV dependencies in the cloud `requirements.txt`.
+**Note:** All CV libraries run on edge hardware only. The Meridian cloud backend receives only structured metrics via the edge agent's HTTPS push. No CV dependencies in the cloud `requirements.txt`. Apache AGE runs as a Postgres extension in Supabase.
 
 ### Trade-offs
 
@@ -309,13 +323,88 @@ Edge software is containerized (Docker Compose): CompreFace + YOLO + ByteTrack +
 - **Anonymous default:** Limits analytics value (no repeat visitor tracking) but dramatically simplifies compliance. Merchants who want identity features explicitly opt in.
 - **90-day auto-delete:** Reduces long-term analytics but keeps us CCPA/GDPR safe by default. Aggregate metrics in `vision_traffic` are retained indefinitely since they contain no PII.
 
+### Customer Profile Builder (Layer 4)
+
+Each recognized face gets an indexed profile that grows over time:
+
+```
+Customer #4782 (anonymous until opt-in)
+├── Visit count: 14
+├── Avg dwell time: 42 min
+├── Favorite zone: Bar area (68% of time)
+├── Visit pattern: Fri/Sat evenings, 7-10pm
+├── Estimated age: 28-35
+├── Sentiment trend: happy → happy → neutral (last visit neutral)
+├── Spend correlation: $47 avg (from POS data)
+└── Predicted LTV: $2,340/year
+```
+
+**Privacy model:**
+- Cameras detect faces but store only anonymous 512-dim embeddings by default
+- Identity linking: Only when customer opts in (loyalty program, QR scan) does face → name
+- Right to forget: One click deletes all face embeddings for a customer
+- Consent signage: Auto-generated signs for the store ("This location uses AI analytics")
+- Data retention: Embeddings auto-purge after configurable period (90 days default)
+
+### Vision Insights Matrix (20 Insights)
+
+| # | Insight | How We Build It | Stack |
+|---|---------|----------------|-------|
+| 1 | **Passerby count** — "21 people looked in but didn't walk in" | Sidewalk camera + YOLO person detection + Supervision zone crossing (sidewalk → did NOT cross door zone) | YOLO + Supervision |
+| 2 | **Walk-in conversion** — "38% of passersby entered today" | Zone crossing: sidewalk→entrance events / total sidewalk detections | Supervision zones |
+| 3 | **Men vs Women breakdown** | DeepFace gender classification on every detected person | DeepFace |
+| 4 | **Age demographic split** | DeepFace age estimation bucketed into ranges (18-24, 25-34, etc.) | DeepFace |
+| 5 | **Peak foot traffic times** | Hourly person count aggregation from YOLO + BoxMOT tracking | YOLO + BoxMOT |
+| 6 | **Repeat vs first-time visitors** | InsightFace ArcFace embeddings matched against on-prem customer index | InsightFace |
+| 7 | **Non-customers (browsed, didn't buy)** | Face seen by camera but no matching POS transaction in time window | InsightFace + POS correlation |
+| 8 | **Window shoppers who later convert** | "Looked in Tuesday, came in Friday" via embedding match over time | InsightFace + temporal matching |
+| 9 | **Dwell time by zone** | Supervision zone tracking per track_id (bar, entrance, menu board, etc.) | BoxMOT + Supervision |
+| 10 | **Sentiment at entry vs exit** | DeepFace emotion detection comparing first and last detection per visit | DeepFace |
+| 11 | **Queue length + wait time** | Person count in checkout zone over time, correlated with POS transaction timestamps | YOLO + Supervision + POS |
+| 12 | **Staff-to-customer ratio** | Detect staff (uniform/badge zone) vs customers, alert when ratio drops below threshold | YOLO + zone classification |
+| 13 | **Menu board engagement** | Dwell time in menu_board zone — how long do people stare at the menu before ordering? | Supervision zone dwell |
+| 14 | **Group size detection** | Track proximity clustering — solo, pair, group (3+), family (mixed age) | BoxMOT + DeepFace age |
+| 15 | **Table turnover rate** | Dwell time in table zones: seated→departed cycles per table area per hour | Supervision zone timing |
+| 16 | **Loyalty without a card** | Repeat visitor frequency + spend correlation via POS match, no physical card needed | InsightFace + POS |
+| 17 | **Lost customer alerts** | Regular visitor (4+ visits) not seen in 2+ weeks → churn risk notification | InsightFace temporal + alerting |
+| 18 | **Zone flow heatmaps** | Aggregate movement paths across all tracks → visual heatmap overlay | Supervision + numpy |
+| 19 | **Daypart demographics** | Which age/gender groups visit at which hours? Lunch crowd vs dinner crowd profiling | DeepFace + temporal bucketing |
+| 20 | **Cross-location visitor overlap** | Same embedding hash seen at multiple locations → multi-location customer mapping | InsightFace + Apache AGE graph |
+
+### Customer Graph (Apache AGE)
+
+```cypher
+-- Customer identity graph in Postgres via Apache AGE
+SELECT * FROM cypher('meridian', $$
+  MATCH (c:Customer {hash: '4a7b2c...'})-[:VISITED]->(z:Zone)
+  RETURN z.name, count(*) AS visits
+  ORDER BY visits DESC
+$$) AS (zone agtype, visits agtype);
+
+-- Find customers who visit the same zones
+SELECT * FROM cypher('meridian', $$
+  MATCH (c1:Customer)-[:VISITED]->(z:Zone)<-[:VISITED]-(c2:Customer)
+  WHERE c1 <> c2
+  RETURN c1.hash, c2.hash, collect(z.name) AS shared_zones
+$$) AS (c1 agtype, c2 agtype, zones agtype);
+```
+
+Graph edges:
+- `VISITED_ZONE` — customer→zone with timestamp + dwell
+- `PURCHASED` — customer→product (from POS correlation)
+- `VISITED_SAME_DAY_AS` — customer→customer (co-occurrence)
+- `RETURNED_AFTER` — customer→self (gap between visits)
+
 ### Implementation Order
 
 1. Database migrations (4 tables + RLS policies + hypertable)
-2. Edge agent Docker image (YOLO + ByteTrack + heartbeat)
-3. `vision_traffic` agent + `/api/vision/traffic/{org_id}` endpoint
-4. `queue_monitor` agent + real-time alerting
-5. Frontend: Connect Cameras wizard + traffic dashboard
-6. DeepFace integration (opt_in_identity mode)
-7. `dwell_time`, `customer_recognizer`, `demographic_profiler` agents
-8. Frontend: Customer Intelligence page with vision data
+2. Edge vision engine (detector, tracker, face engine, zones, pipeline)
+3. Edge agent Docker image (YOLO + BoxMOT + InsightFace + heartbeat)
+4. `vision_traffic` agent + `/api/vision/traffic/{org_id}` endpoint
+5. `queue_monitor` agent + real-time alerting
+6. Frontend: Connect Cameras wizard + traffic dashboard
+7. InsightFace/DeepFace integration (opt_in_identity mode)
+8. Apache AGE graph schema + customer profile builder
+9. `dwell_time`, `customer_recognizer`, `demographic_profiler` agents
+10. Frontend: Customer Intelligence page with vision data
+11. Cross-location visitor mapping + advanced graph queries
