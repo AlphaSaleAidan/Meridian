@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send,
   Store, User, Mail, Phone, DollarSign, FileDown,
-  Loader2, Eye, Gift, Sparkles,
+  Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -27,6 +27,16 @@ function generateToken(): string {
   return token
 }
 
+// ── QR Code Generator (canvas-based, no deps) ──
+function generateQrSvg(text: string, size: number = 256): string {
+  // Use a simple QR encoding via the Google Charts API as an inline image
+  // For production, swap this out for a proper client-side QR lib
+  const encoded = encodeURIComponent(text)
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encoded}&bgcolor=0A0A0B&color=F5F5F7&format=svg`
+}
+
+const API_URL = import.meta.env.VITE_API_URL || ''
+
 export default function CreateCustomerPage() {
   const navigate = useNavigate()
   const { rep } = useSalesAuth()
@@ -37,6 +47,12 @@ export default function CreateCustomerPage() {
   const [onboardingLink, setOnboardingLink] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [proposalGenerated, setProposalGenerated] = useState(false)
+
+  // Stripe checkout state
+  const [creatingCheckout, setCreatingCheckout] = useState(false)
+  const [checkoutUrl, setCheckoutUrl] = useState('')
+  const [checkoutSessionId, setCheckoutSessionId] = useState('')
+  const [copiedCheckout, setCopiedCheckout] = useState(false)
 
   const [form, setForm] = useState({
     businessName: '',
@@ -81,8 +97,9 @@ export default function CreateCustomerPage() {
       setupFee,
       firstMonthFree: form.firstMonthFree,
       rep,
+      checkoutUrl: checkoutUrl || undefined,
     }
-  }, [form, selectedPlan, setupFee, rep])
+  }, [form, selectedPlan, setupFee, rep, checkoutUrl])
 
   async function handleGenerateProposal() {
     const input = buildProposalInput()
@@ -96,6 +113,45 @@ export default function CreateCustomerPage() {
       setError(err.message || 'Failed to generate proposal PDF')
     } finally {
       setGenerating(false)
+    }
+  }
+
+  async function handleCreateCheckout() {
+    setCreatingCheckout(true)
+    setError(null)
+    try {
+      const body = {
+        plan: form.plan,
+        custom_price_cents: form.customPrice ? parseInt(form.customPrice) * 100 : null,
+        setup_fee_cents: setupFee * 100,
+        first_month_free: form.firstMonthFree,
+        customer_email: form.email,
+        customer_name: form.ownerName,
+        business_name: form.businessName,
+        rep_id: rep?.rep_id || null,
+        rep_name: rep?.name || null,
+        success_url: `${window.location.origin}/onboard?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${window.location.origin}/onboard?checkout=cancelled`,
+      }
+
+      const res = await fetch(`${API_URL}/api/stripe/create-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Checkout service unavailable' }))
+        throw new Error(err.detail || `Server error ${res.status}`)
+      }
+
+      const data = await res.json()
+      setCheckoutUrl(data.checkout_url)
+      setCheckoutSessionId(data.session_id)
+    } catch (err: any) {
+      setError(err.message || 'Failed to create checkout session')
+    } finally {
+      setCreatingCheckout(false)
     }
   }
 
@@ -121,6 +177,7 @@ export default function CreateCustomerPage() {
             first_month_free: form.firstMonthFree,
             owner_name: form.ownerName,
             created_by_rep: rep?.rep_id || null,
+            stripe_session_id: checkoutSessionId || null,
           },
         })
         if (bizErr) throw new Error(bizErr.message)
@@ -175,6 +232,17 @@ export default function CreateCustomerPage() {
     }
   }
 
+  async function copyCheckoutUrl() {
+    try {
+      await navigator.clipboard.writeText(checkoutUrl)
+      setCopiedCheckout(true)
+      setTimeout(() => setCopiedCheckout(false), 2000)
+    } catch {
+      setCopiedCheckout(true)
+      setTimeout(() => setCopiedCheckout(false), 2000)
+    }
+  }
+
   function sendViaSms() {
     const msg = `Hey ${form.ownerName.split(' ')[0]}! Here's your Meridian setup link — takes about 3 minutes to get your analytics live: ${onboardingLink}`
     window.open(`sms:${form.phone}?body=${encodeURIComponent(msg)}`, '_blank')
@@ -200,7 +268,7 @@ export default function CreateCustomerPage() {
         </button>
         <div>
           <h1 className="text-xl font-bold text-[#F5F5F7]">Generate Proposal</h1>
-          <p className="text-[12px] text-[#A1A1A8]">Create a branded proposal and onboarding link for your customer</p>
+          <p className="text-[12px] text-[#A1A1A8]">Create a branded proposal and checkout link for your customer</p>
         </div>
       </div>
 
@@ -502,7 +570,76 @@ export default function CreateCustomerPage() {
             </div>
           </div>
 
-          {/* Action buttons */}
+          {/* Stripe Checkout — Generate Payment Link + QR */}
+          <div className="bg-[#111113] rounded-xl p-6 border border-[#7C5CFF]/20 bg-gradient-to-b from-[#7C5CFF]/5 to-transparent">
+            <div className="flex items-center gap-2 mb-4">
+              <QrCode size={16} className="text-[#7C5CFF]" />
+              <h2 className="text-[14px] font-semibold text-[#F5F5F7]">Payment Checkout Link</h2>
+            </div>
+
+            {!checkoutUrl ? (
+              <div>
+                <p className="text-[12px] text-[#A1A1A8] mb-3">
+                  Generate a unique Stripe checkout link for this customer. Includes the {selectedPlan.label} subscription
+                  {setupFee > 0 ? ` + $${setupFee} setup fee` : ''}
+                  {form.firstMonthFree ? ' with first month free' : ''}.
+                </p>
+                <button
+                  onClick={handleCreateCheckout}
+                  disabled={creatingCheckout}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 text-[13px] font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] disabled:opacity-50 transition-colors"
+                >
+                  {creatingCheckout ? (
+                    <><Loader2 size={14} className="animate-spin" /> Creating Checkout Session...</>
+                  ) : (
+                    <><QrCode size={14} /> Generate Checkout Link & QR Code</>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-[13px] text-[#4FE3C1]">
+                  <CheckCircle2 size={14} /> Checkout session created!
+                </div>
+
+                {/* QR Code Display */}
+                <div className="flex justify-center">
+                  <div className="relative p-4 bg-white rounded-xl">
+                    <img
+                      src={generateQrSvg(checkoutUrl, 200)}
+                      alt="Checkout QR Code"
+                      className="w-[200px] h-[200px]"
+                      crossOrigin="anonymous"
+                    />
+                  </div>
+                </div>
+                <p className="text-center text-[11px] text-[#A1A1A8]">
+                  Customer scans to pay — {selectedPlan.label} ${price}/mo
+                  {setupFee > 0 ? ` + $${setupFee} setup` : ''}
+                  {form.firstMonthFree ? ' · 30-day free trial' : ''}
+                </p>
+
+                {/* Checkout URL copy */}
+                <div className="flex gap-2">
+                  <input type="text" value={checkoutUrl} readOnly
+                    className="flex-1 px-3 py-2.5 text-[11px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-[#A1A1A8] font-mono truncate" />
+                  <button onClick={copyCheckoutUrl}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium rounded-lg border transition-all duration-200 ${
+                      copiedCheckout ? 'bg-[#4FE3C1]/10 border-[#4FE3C1]/30 text-[#4FE3C1]' : 'bg-[#1F1F23] border-[#2A2A2E] text-[#F5F5F7] hover:bg-[#2A2A2E]'
+                    }`}>
+                    {copiedCheckout ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                    {copiedCheckout ? 'Copied!' : 'Copy'}
+                  </button>
+                  <a href={checkoutUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium rounded-lg border border-[#2A2A2E] bg-[#1F1F23] text-[#F5F5F7] hover:bg-[#2A2A2E] transition-colors">
+                    <ExternalLink size={14} />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Download Proposal PDF */}
           <div className="grid grid-cols-1 gap-3">
             <button
               onClick={handleGenerateProposal}
@@ -514,13 +651,13 @@ export default function CreateCustomerPage() {
               ) : proposalGenerated ? (
                 <><CheckCircle2 size={18} /> Download Again</>
               ) : (
-                <><FileDown size={18} /> Generate Proposal PDF</>
+                <><FileDown size={18} /> {checkoutUrl ? 'Generate Proposal PDF (with QR Code)' : 'Generate Proposal PDF'}</>
               )}
             </button>
 
             {proposalGenerated && (
               <div className="text-center text-[12px] text-[#4FE3C1]">
-                ✓ Proposal downloaded! The 7-slide PDF includes your pricing, plan details, and contact info.
+                ✓ Proposal downloaded!{checkoutUrl ? ' Includes the checkout QR code on the pricing slide.' : ' Generate a checkout link above to include the QR code.'}
               </div>
             )}
           </div>
@@ -563,7 +700,7 @@ export default function CreateCustomerPage() {
                   </button>
                   <button onClick={() => {
                     const subject = `Your Meridian Account is Ready!`
-                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up! Click the link below to complete your onboarding — it only takes about 3 minutes:\n\n${onboardingLink}\n\nYou'll connect your POS and your dashboard will start lighting up with insights.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
+                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up! Click the link below to complete your onboarding — it only takes about 3 minutes:\n\n${onboardingLink}\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
                     window.open(`mailto:${form.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-[#F5F5F7] bg-[#1F1F23] rounded-lg hover:bg-[#2A2A2E] border border-[#2A2A2E] transition-colors">
@@ -584,6 +721,8 @@ export default function CreateCustomerPage() {
               setStep('details')
               setOnboardingLink('')
               setProposalGenerated(false)
+              setCheckoutUrl('')
+              setCheckoutSessionId('')
             }}
               className="text-[12px] text-[#7C5CFF] hover:text-[#F5F5F7] transition-colors">
               + Create Another Proposal
