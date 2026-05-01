@@ -25,6 +25,8 @@ import {
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import OnboardingWizard from '@/pages/OnboardingWizard'
+import ClineChatWidget from './ClineChatWidget'
+import ClineErrorBoundary from './ClineErrorBoundary'
 
 const navItems = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
@@ -193,11 +195,16 @@ export default function Layout() {
           {needsOnboarding ? (
             <OnboardingWizard />
           ) : (
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-              <Outlet />
-            </div>
+            <ClineErrorBoundary orgId={org?.org_id}>
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                <Outlet />
+              </div>
+            </ClineErrorBoundary>
           )}
         </main>
+
+        {/* Cline IT assistant */}
+        <ClineChatWidget />
       </div>
     </div>
   )
