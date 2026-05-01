@@ -43,6 +43,7 @@ const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
 const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazy(() => import('@/pages/CareersPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
+const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
 
 function LazyFallback() {
   return (
@@ -111,6 +112,21 @@ export default function App() {
                   <AdminPage />
                 </ProtectedRoute>
               } />
+
+              {/* IT Health Dashboard — admin/owner only */}
+              <Route path="/admin/it-health" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <Layout />
+                  </Suspense>
+                </ProtectedRoute>
+              }>
+                <Route index element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <ITDashboardPage />
+                  </Suspense>
+                } />
+              </Route>
 
               {/* Customer dashboard — protected, requires business owner auth */}
               <Route path="/app" element={
