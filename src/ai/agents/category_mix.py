@@ -7,46 +7,18 @@ class CategoryMixAgent(BaseAgent):
     tier = 2
 
     async def analyze(self) -> dict:
-        avail = self.get_data_availability()
+        path, confidence = self._select_path()
         products = self.ctx.product_performance
 
-        # Choose calculation path
-        if avail.is_full:
-            # FULL: real category revenue from items + products
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            # PARTIAL: estimate from product_performance categories
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            # MINIMAL: industry category mix benchmarks
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
-        # MINIMAL: no product data, use industry mix
         if path == "minimal" or len(products) < 3:
             if len(products) < 3 and path != "minimal":
                 return self._insufficient_data("At least 3 products with category data")
-            mix_range = self.get_benchmark_range("category_concentration_max_pct")
-            bench_conc = mix_range.mid if mix_range else 40.0
-            insights = [{"type": "benchmark_estimate", "detail": f"Using industry benchmark: top category should be under {bench_conc}% of revenue"}]
-            if mix_range:
-                insights[0]["benchmark"] = {"low": mix_range.low, "mid": mix_range.mid, "high": mix_range.high, "source": mix_range.source}
-                insights[0]["estimated"] = True
-            recommendations = [{
-                "action": "Connect POS line-item data for precise analysis",
-                "impact": "Improves accuracy from estimated to actual values",
-                "effort": "low",
-            }]
-            return self._result(
-                summary=f"Estimated healthy category concentration under {bench_conc}% (industry benchmark)",
-                score=50,
-                insights=insights,
-                recommendations=recommendations,
-                data={"benchmark_concentration_max_pct": bench_conc, "source": "benchmark", "product_count": len(products)},
-                confidence=confidence,
-                calculation_path=path,
+            bench = self.get_benchmark_range("category_concentration_max_pct")
+            bench_conc = bench.mid if bench else 40.0
+            return self._benchmark_fallback(
+                "category_concentration_max_pct",
+                f"Estimated healthy category concentration under {bench_conc}% (industry benchmark)",
+                {"benchmark_concentration_max_pct": bench_conc, "product_count": len(products)},
             )
 
         cat_revenue = defaultdict(int)

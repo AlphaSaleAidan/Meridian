@@ -8,43 +8,18 @@ class RevenueTrendAgent(BaseAgent):
     tier = 1
 
     async def analyze(self) -> dict:
-        avail = self.get_data_availability()
+        path, confidence = self._select_path()
         daily = self.ctx.daily_revenue
 
-        # Choose calculation path
-        if avail.is_full:
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
-        # MINIMAL: use benchmark growth rates when no daily data
         if path == "minimal" or len(daily) < 7:
             if len(daily) < 7 and path != "minimal":
                 return self._insufficient_data("At least 7 days of revenue data")
-            growth_range = self.get_benchmark_range("healthy_wow_growth_pct")
-            bench_growth = growth_range.mid if growth_range else 2.0
-            insights = [{"type": "benchmark_estimate", "detail": f"Using industry benchmark WoW growth of {bench_growth}% (no sufficient daily data)"}]
-            if growth_range:
-                insights[0]["benchmark"] = {"low": growth_range.low, "mid": growth_range.mid, "high": growth_range.high, "source": growth_range.source}
-                insights[0]["estimated"] = True
-            recommendations = [{
-                "action": "Connect POS line-item data for precise analysis",
-                "impact": "Improves accuracy from estimated to actual values",
-                "effort": "low",
-            }]
-            return self._result(
-                summary=f"Estimated WoW growth ~{bench_growth}% (industry benchmark)",
-                score=50,
-                insights=insights,
-                recommendations=recommendations,
-                data={"wow_growth_pct": bench_growth, "source": "benchmark", "days_analyzed": len(daily)},
-                confidence=confidence,
-                calculation_path=path,
+            bench = self.get_benchmark_range("healthy_wow_growth_pct")
+            bench_growth = bench.mid if bench else 2.0
+            return self._benchmark_fallback(
+                "healthy_wow_growth_pct",
+                f"Estimated WoW growth ~{bench_growth}% (industry benchmark)",
+                {"wow_growth_pct": bench_growth, "days_analyzed": len(daily)},
             )
 
         sorted_days = sorted(daily, key=lambda d: d.get("date", ""))

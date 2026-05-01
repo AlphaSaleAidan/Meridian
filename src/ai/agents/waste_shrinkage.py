@@ -9,19 +9,9 @@ class WasteShrinkageAgent(BaseAgent):
     tier = 4
 
     async def analyze(self) -> dict:
+        path, confidence = self._select_path()
         avail = self.get_data_availability()
 
-        if avail.is_full:
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
-        # --- MINIMAL path: cannot calculate without inventory ---
         if path == "minimal" or not avail.has_transactions:
             return self._insufficient_data(
                 "Connect inventory to track waste — need transaction or inventory data for shrinkage analysis"

@@ -8,18 +8,7 @@ class PaymentOptimizerAgent(BaseAgent):
     tier = 4
 
     async def analyze(self) -> dict:
-        avail = self.get_data_availability()
-
-        if avail.is_full:
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
+        path, confidence = self._select_path()
         txns = self.ctx.transactions
         if len(txns) < 10:
             return self._insufficient_data("At least 10 transactions")

@@ -9,19 +9,9 @@ class DayOfWeekAgent(BaseAgent):
     tier = 3
 
     async def analyze(self) -> dict:
+        path, confidence = self._select_path()
         avail = self.get_data_availability()
 
-        if avail.is_full:
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
-        # Adjust confidence based on weeks of data
         if avail.date_range_days >= 28:
             confidence = max(confidence, 0.9)
         elif avail.date_range_days < 14:

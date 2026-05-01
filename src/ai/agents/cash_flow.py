@@ -7,44 +7,20 @@ class CashFlowAgent(BaseAgent):
     tier = 1
 
     async def analyze(self) -> dict:
+        path, confidence = self._select_path()
         avail = self.get_data_availability()
         daily = self.ctx.daily_revenue
         txns = self.ctx.transactions
 
-        # Choose calculation path
-        if avail.is_full:
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
-        # MINIMAL: not enough data for meaningful forecast
         if path == "minimal" or len(daily) < 14:
             if len(daily) < 14 and path != "minimal":
                 return self._insufficient_data("At least 14 days of revenue data")
             fee_range = self.get_benchmark_range("processing_fee_pct")
             bench_fee = fee_range.mid if fee_range else 2.6
-            insights = [{"type": "benchmark_estimate", "detail": f"Using industry benchmark processing fee rate of {bench_fee}%"}]
-            if fee_range:
-                insights[0]["benchmark"] = {"low": fee_range.low, "mid": fee_range.mid, "high": fee_range.high, "source": fee_range.source}
-                insights[0]["estimated"] = True
-            recommendations = [{
-                "action": "Connect POS line-item data for precise analysis",
-                "impact": "Improves accuracy from estimated to actual values",
-                "effort": "low",
-            }]
-            return self._result(
-                summary=f"Insufficient data for cash flow forecast (need 14+ days)",
-                score=50,
-                insights=insights,
-                recommendations=recommendations,
-                data={"days_available": len(daily), "benchmark_fee_pct": bench_fee, "source": "benchmark"},
-                confidence=confidence,
-                calculation_path=path,
+            return self._benchmark_fallback(
+                "processing_fee_pct",
+                f"Insufficient data for cash flow forecast (need 14+ days)",
+                {"days_available": len(daily), "benchmark_fee_pct": bench_fee},
             )
 
         # Forecast quality depends on date range
