@@ -5,10 +5,15 @@ Every agent inherits from BaseAgent and implements analyze().
 Agents are organized in tiers (1-5) that determine execution order:
   Tiers 1-4 run in parallel, Tier 5 runs after (needs all outputs).
 
-3-Phase Pattern:
+3-Phase Data Pattern:
   Phase 1 — Data Discovery: get_data_availability() checks what's populated
   Phase 2 — Formula Selection: FULL / PARTIAL / MINIMAL path
   Phase 3 — Dynamic Calculation: real values, derived estimates, or LLM fallback
+
+5-Phase Karpathy Reasoning (wraps every analyze() call):
+  THINK → HYPOTHESIZE → EXPERIMENT → SYNTHESIZE → REFLECT
+  Provides auditable reasoning chains, null hypothesis testing, and
+  confidence-calibrated outputs. Chain stored under result["_reasoning"].
 """
 import logging
 from abc import ABC, abstractmethod
@@ -51,14 +56,49 @@ class BaseAgent(ABC):
     name: str = "base"
     description: str = ""
     tier: int = 1
+    domain: str = ""
 
     def __init__(self, ctx):
         self.ctx = ctx
         self._data_avail: DataAvailability | None = None
+        self._chain = None
 
     @abstractmethod
     async def analyze(self) -> dict:
         ...
+
+    async def analyze_with_reasoning(self) -> dict:
+        """Run analyze() wrapped in a Karpathy 5-phase reasoning chain.
+
+        The chain runs BEFORE analyze() to establish context, then the
+        analysis result is enriched with reasoning metadata. Fully
+        backward-compatible — agents that call analyze() directly are unaffected.
+        """
+        from ..reasoning import KarpathyReasoning
+        reasoning = KarpathyReasoning()
+        ctx_dict = self._build_reasoning_context()
+        domain = self.domain or self.name
+        self._chain = await reasoning.reason(self.name, domain, ctx_dict)
+        result = await self.analyze()
+        result["_reasoning"] = self._chain.to_dict()
+        if self._chain.confidence_level != "UNKNOWN":
+            result["reasoning_confidence"] = self._chain.confidence
+            result["reasoning_verdict"] = self._chain.verdict
+        return result
+
+    def _build_reasoning_context(self) -> dict:
+        """Extract data from agent context for the reasoning engine."""
+        ctx = self.ctx
+        return {
+            "transactions": getattr(ctx, "transactions", []) or [],
+            "daily_revenue": getattr(ctx, "daily_revenue", []) or [],
+            "product_performance": getattr(ctx, "product_performance", []) or [],
+            "products": getattr(ctx, "products", []) or [],
+            "inventory": getattr(ctx, "inventory", []) or [],
+            "employees": getattr(ctx, "employees", []) or [],
+            "hourly_revenue": getattr(ctx, "hourly_revenue", []) or [],
+            "business_vertical": getattr(ctx, "business_vertical", "other"),
+        }
 
     # ─── ML Engine Methods (lazy-loaded, graceful fallback) ──
 
@@ -288,7 +328,7 @@ class BaseAgent(ABC):
                 insight["data_quality"] = dq
             if "estimated" not in insight:
                 insight["estimated"] = calculation_path != "full"
-        return {
+        result = {
             "agent_name": self.name,
             "status": "complete",
             "summary": summary,
@@ -300,3 +340,8 @@ class BaseAgent(ABC):
             "calculation_path": calculation_path,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
+        if self._chain is not None:
+            result["_reasoning"] = self._chain.to_dict()
+            result["reasoning_confidence"] = self._chain.confidence
+            result["reasoning_verdict"] = self._chain.verdict
+        return result

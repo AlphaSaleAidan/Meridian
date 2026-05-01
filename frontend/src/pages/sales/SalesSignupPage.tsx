@@ -5,7 +5,7 @@ import { MeridianEmblem } from '@/components/MeridianLogo'
 
 export default function SalesSignupPage() {
   const navigate = useNavigate()
-  const { authenticated, login } = useSalesAuth()
+  const { authenticated, signup } = useSalesAuth()
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -25,7 +25,7 @@ export default function SalesSignupPage() {
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
 
-    const err = await login(email, password)
+    const err = await signup(name, email, password, phone || undefined)
     setLoading(false)
     if (err) {
       setError(err)

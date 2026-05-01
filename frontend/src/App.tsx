@@ -38,12 +38,12 @@ import MarginsPage from '@/pages/MarginsPage'
 import MenuEngineeringPage from '@/pages/MenuEngineeringPage'
 import AnomaliesPage from '@/pages/AnomaliesPage'
 
-const CustomerIntelligencePage = lazy(() => import('@/pages/CustomerIntelligencePage'))
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
 const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazy(() => import('@/pages/CareersPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
+const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
 
 function LazyFallback() {
   return (
@@ -72,11 +72,6 @@ function CustomerDashboardRoutes() {
       <Route path="margins" element={<MarginsPage />} />
       <Route path="menu-matrix" element={<MenuEngineeringPage />} />
       <Route path="anomalies" element={<AnomaliesPage />} />
-      <Route path="intelligence" element={
-        <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/15 border border-[#1A8FD6]/30 flex items-center justify-center animate-pulse"><span className="text-[#1A8FD6] font-bold text-sm">M</span></div></div>}>
-          <CustomerIntelligencePage />
-        </Suspense>
-      } />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>
@@ -117,6 +112,21 @@ export default function App() {
                   <AdminPage />
                 </ProtectedRoute>
               } />
+
+              {/* IT Health Dashboard — admin/owner only */}
+              <Route path="/admin/it-health" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <Layout />
+                  </Suspense>
+                </ProtectedRoute>
+              }>
+                <Route index element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <ITDashboardPage />
+                  </Suspense>
+                } />
+              </Route>
 
               {/* Customer dashboard — protected, requires business owner auth */}
               <Route path="/app" element={

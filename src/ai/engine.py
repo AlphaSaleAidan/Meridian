@@ -478,10 +478,17 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
         StaffingAgent(ctx),
     ]
 
-    results = await asyncio.gather(
-        *[agent.analyze() for agent in tier_1_4_agents],
-        return_exceptions=True,
-    )
+    use_reasoning = os.environ.get("MERIDIAN_REASONING", "1") == "1"
+    if use_reasoning:
+        results = await asyncio.gather(
+            *[agent.analyze_with_reasoning() for agent in tier_1_4_agents],
+            return_exceptions=True,
+        )
+    else:
+        results = await asyncio.gather(
+            *[agent.analyze() for agent in tier_1_4_agents],
+            return_exceptions=True,
+        )
 
     agent_outputs: dict[str, Any] = {}
     for agent, result in zip(tier_1_4_agents, results):
@@ -503,10 +510,16 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
         GrowthScoreAgent(ctx),
     ]
 
-    strategic_results = await asyncio.gather(
-        *[agent.analyze() for agent in strategic_agents],
-        return_exceptions=True,
-    )
+    if use_reasoning:
+        strategic_results = await asyncio.gather(
+            *[agent.analyze_with_reasoning() for agent in strategic_agents],
+            return_exceptions=True,
+        )
+    else:
+        strategic_results = await asyncio.gather(
+            *[agent.analyze() for agent in strategic_agents],
+            return_exceptions=True,
+        )
 
     for agent, result in zip(strategic_agents, strategic_results):
         if isinstance(result, Exception):

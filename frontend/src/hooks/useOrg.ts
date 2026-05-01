@@ -1,14 +1,25 @@
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 
 export type Tier = 'trial' | 'starter' | 'growth' | 'enterprise'
 
 export function useOrgId(): string {
+  const location = useLocation()
   const { org } = useAuth()
+
+  // Always use 'demo' on the /demo route regardless of auth state
+  if (location.pathname.startsWith('/demo')) return 'demo'
+
   return org?.org_id || import.meta.env.VITE_ORG_ID || 'demo'
 }
 
 export function useTier(): Tier {
+  const location = useLocation()
   const { org } = useAuth()
+
+  // Demo route always uses trial tier
+  if (location.pathname.startsWith('/demo')) return 'trial'
+
   return (org?.plan as Tier) || 'trial'
 }
 
