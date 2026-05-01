@@ -76,6 +76,7 @@ export default function CreateCustomerPage() {
   const price = form.customPrice ? parseInt(form.customPrice) : selectedPlan.price
   const setupFee = form.setupFee ? parseInt(form.setupFee) : 0
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
+  const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
   function validateDetails(): boolean {
     if (!form.businessName.trim()) { setError('Business name is required'); return false }
@@ -195,7 +196,7 @@ export default function CreateCustomerPage() {
           stage: 'proposal_sent',
           monthly_value: price,
           commission_rate: rep?.commission_rate || 35,
-          notes: form.notes || `Plan: ${selectedPlan.label} at $${price}/mo. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
+          notes: form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
           rep_id: rep?.rep_id || null,
         })
         if (dealErr) console.warn('Deal creation warning:', dealErr.message)
@@ -398,7 +399,7 @@ export default function CreateCustomerPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-[#F5F5F7]">${plan.price}</p>
-                      <p className="text-[10px] text-[#A1A1A8]">/month</p>
+                      <p className="text-[10px] text-[#A1A1A8]">{selectedPlan.interval === 'week' ? '/week' : '/month'}</p>
                     </div>
                   </div>
                 </button>
@@ -434,7 +435,7 @@ export default function CreateCustomerPage() {
                   <p className="text-[13px] font-semibold text-[#F5F5F7]">{selectedPlan.label} Plan</p>
                   <p className="text-[11px] text-[#A1A1A8]">{selectedPlan.features.length} features included</p>
                 </div>
-                <p className="text-lg font-bold text-[#7C5CFF]">${selectedPlan.price}/mo</p>
+                <p className="text-lg font-bold text-[#7C5CFF]">${selectedPlan.price}{interval}</p>
               </div>
             </div>
 
@@ -500,7 +501,7 @@ export default function CreateCustomerPage() {
               </div>
               <div className="flex justify-between py-2 border-b border-[#1F1F23]">
                 <span className="text-[#A1A1A8]">Plan</span>
-                <span className="text-[#F5F5F7] font-medium">{selectedPlan.label} — ${price}/mo</span>
+                <span className="text-[#F5F5F7] font-medium">{selectedPlan.label} — ${price}{interval}</span>
               </div>
               {setupFee > 0 && (
                 <div className="flex justify-between py-2 border-b border-[#1F1F23]">
@@ -524,7 +525,7 @@ export default function CreateCustomerPage() {
                 <p className="text-[11px] text-[#A1A1A8]">
                   Rep: <span className="text-[#F5F5F7] font-medium">{rep.name}</span> ·
                   Commission: <span className="text-[#4FE3C1] font-medium">{rep.commission_rate}%</span> =
-                  <span className="text-[#4FE3C1] font-medium"> ${Math.round(price * (rep.commission_rate / 100))}/mo</span>
+                  <span className="text-[#4FE3C1] font-medium"> ${Math.round(price * (rep.commission_rate / 100))}{interval}</span>
                   {setupFee > 0 && <span className="text-[#7C5CFF]"> + ${setupFee} setup</span>}
                 </p>
               </div>
@@ -564,7 +565,7 @@ export default function CreateCustomerPage() {
               </div>
               <div className="p-3 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
                 <div className="text-[10px] text-[#A1A1A8]/50 uppercase tracking-wider mb-1">Plan</div>
-                <div className="text-[#7C5CFF] font-medium">{selectedPlan.label} — ${price}/mo</div>
+                <div className="text-[#7C5CFF] font-medium">{selectedPlan.label} — ${price}{interval}</div>
               </div>
               <div className="p-3 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
                 <div className="text-[10px] text-[#A1A1A8]/50 uppercase tracking-wider mb-1">Due Today</div>
@@ -617,7 +618,7 @@ export default function CreateCustomerPage() {
                   </div>
                 </div>
                 <p className="text-center text-[11px] text-[#A1A1A8]">
-                  Customer scans to pay — {selectedPlan.label} ${price}/mo
+                  Customer scans to pay — {selectedPlan.label} ${price}{interval}
                   {setupFee > 0 ? ` + $${setupFee} setup` : ''}
                   {form.firstMonthFree ? ' · 30-day free trial' : ''}
                 </p>
