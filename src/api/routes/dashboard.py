@@ -20,6 +20,8 @@ from typing import Optional
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 
+from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
+
 logger = logging.getLogger("meridian.api.dashboard")
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -52,7 +54,11 @@ async def get_overview(
     - Revenue change vs prior period
     - Connection status
     """
-    # Fetch data in parallel-ish (sequential for now, can asyncio.gather later)
+    cache_key = dashboard_cache.make_key("overview", org_id)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     daily = await db.get_daily_revenue(org_id, days=60)
     money_left = await db.select(
         "money_left_scores",
@@ -78,7 +84,7 @@ async def get_overview(
     if prior_revenue > 0:
         change_pct = round((current_revenue - prior_revenue) / prior_revenue * 100, 1)
 
-    return {
+    result = {
         "revenue_cents_30d": current_revenue,
         "revenue_change_pct": change_pct,
         "transaction_count_30d": current_txns,
@@ -91,6 +97,8 @@ async def get_overview(
         },
         "days_with_data": len(current),
     }
+    dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
 
 
 # ─── Revenue ──────────────────────────────────────────────
@@ -102,6 +110,11 @@ async def get_revenue(
     db=Depends(_get_db),
 ):
     """Daily revenue data for charts."""
+    cache_key = dashboard_cache.make_key("revenue", org_id, days=days)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     daily = await db.get_daily_revenue(org_id, days=days)
     weekly = await db.select(
         "weekly_revenue",
@@ -112,7 +125,7 @@ async def get_revenue(
         order="week_bucket.asc",
     )
 
-    return {
+    result = {
         "daily": [
             {
                 "date": r.get("day_bucket"),
@@ -137,6 +150,8 @@ async def get_revenue(
             for r in weekly
         ],
     }
+    dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
 
 
 @router.get("/revenue/hourly")
@@ -146,9 +161,14 @@ async def get_hourly_revenue(
     db=Depends(_get_db),
 ):
     """Hourly revenue breakdown for heat map / peak hours."""
+    cache_key = dashboard_cache.make_key("hourly", org_id, days=days)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     hourly = await db.get_hourly_revenue(org_id, days=days)
 
-    return {
+    result = {
         "hourly": [
             {
                 "hour": r.get("hour_bucket"),
@@ -163,6 +183,8 @@ async def get_hourly_revenue(
             for r in hourly
         ],
     }
+    dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
 
 
 # ─── Products ─────────────────────────────────────────────
@@ -174,6 +196,11 @@ async def get_products(
     db=Depends(_get_db),
 ):
     """Product performance data."""
+    cache_key = dashboard_cache.make_key("products", org_id, days=days)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     products = await db.get_products(org_id)
     performance = await db.get_product_performance(org_id, days=days)
 
@@ -216,11 +243,13 @@ async def get_products(
     # Sort by revenue descending
     result.sort(key=lambda x: x["total_revenue_cents"], reverse=True)
 
-    return {
+    response = {
         "products": result,
         "total_products": len(products),
         "period_days": days,
     }
+    dashboard_cache.set(cache_key, response, TTL_FAST)
+    return response
 
 
 # ─── Insights ─────────────────────────────────────────────
@@ -233,6 +262,11 @@ async def get_insights(
     db=Depends(_get_db),
 ):
     """Active AI-generated insights."""
+    cache_key = dashboard_cache.make_key("insights", org_id, limit=limit, status=status)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     filters = {
         "org_id": f"eq.{org_id}",
         "is_active": "eq.true",
@@ -247,7 +281,7 @@ async def get_insights(
         limit=limit,
     )
 
-    return {
+    result = {
         "insights": [
             {
                 "id": r.get("id"),
@@ -265,6 +299,8 @@ async def get_insights(
         ],
         "total": len(insights),
     }
+    dashboard_cache.set(cache_key, result, TTL_SLOW)
+    return result
 
 
 @router.patch("/insights/{insight_id}/action")
@@ -302,6 +338,11 @@ async def get_forecasts(
     db=Depends(_get_db),
 ):
     """Revenue forecasts."""
+    cache_key = dashboard_cache.make_key("forecasts", org_id, forecast_type=forecast_type)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     filters = {
         "org_id": f"eq.{org_id}",
         "period_start": f"gte.{datetime.now(timezone.utc).date().isoformat()}",
@@ -316,7 +357,7 @@ async def get_forecasts(
         limit=90,
     )
 
-    return {
+    result = {
         "forecasts": [
             {
                 "id": r.get("id"),
@@ -332,6 +373,8 @@ async def get_forecasts(
         ],
         "total": len(forecasts),
     }
+    dashboard_cache.set(cache_key, result, TTL_SLOW)
+    return result
 
 
 # ─── Notifications ────────────────────────────────────────
@@ -590,3 +633,14 @@ async def get_inventory(
             "trending_up": trending_up,
         },
     }
+
+
+# ─── Cache Management ───────────────────────────────────
+
+@router.post("/cache/flush")
+async def flush_cache(
+    org_id: str = Query(..., description="Organization ID"),
+):
+    """Flush dashboard cache for an organization."""
+    dashboard_cache.invalidate_org(org_id)
+    return {"flushed": True, "org_id": org_id}

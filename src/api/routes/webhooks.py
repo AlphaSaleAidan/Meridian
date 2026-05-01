@@ -222,6 +222,9 @@ async def _process_webhook(
     try:
         result = await processor.handle(event_type, event, connection)
         logger.info(f"Webhook {event_type} result: {result}")
+        if connection:
+            from ...db.cache import dashboard_cache
+            dashboard_cache.invalidate_org(connection.get("org_id", ""))
     except Exception as e:
         logger.error(f"Webhook processing failed: {e}", exc_info=True)
         # Create error notification if we have a connection
