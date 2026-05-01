@@ -367,3 +367,66 @@ The sales CRM is a separate Convex app at `meridian-sales-f7df5b93.viktor.space`
 - Auth: Convex Auth (email/password)
 - Tracks: leads, deals, commissions, proposals
 - Flat pricing: $250/mo, 70% commission rate
+
+---
+
+## AI Power-Up Libraries — Customer Data Breakdown
+
+These repos supercharge Meridian's ability to analyze POS customer data:
+
+### Customer Intelligence
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `pymc-labs/pymc-marketing` | 1,139 | Bayesian CLV + BG/NBD models. Predicts customer lifetime value and who's about to churn. | `src/ai/agents/customer_ltv.py`, retention-strategist agent |
+| `py-why/EconML` | 4,614 | Microsoft's causal inference. Measures true promo ROI — "did this promotion *cause* more sales?" | `src/ai/agents/promo_roi.py`, `src/ai/predictive/root_cause.py` |
+| `yzhao062/pyod` | 9,834 | 60+ anomaly detection algorithms for fraud, refund abuse, suspicious patterns. | `src/ai/agents/money_left.py`, transaction-analyst agent |
+
+### Time-Series & Forecasting
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `unit8co/darts` | 9,354 | Unified API for 30+ forecasting + anomaly detection models. Auto-selects best model. | `src/ai/agents/forecaster.py`, revenue-forecaster agent |
+| `nixtla/neuralforecast` | 3,000+ | Deep learning forecasting (N-BEATS, NHITS, PatchTST). Best for 12mo+ data. | `src/ai/predictive/demand_forecast.py` |
+| `facebook/prophet` | (existing) | Keep for seasonality decomposition + holiday effects. | `src/ai/agents/seasonality.py` |
+| `nixtla/statsforecast` | (existing) | Keep for fast daily AutoARIMA/Theta predictions. | `src/ai/agents/forecaster.py` |
+
+### Tabular ML (Predictions on Structured POS Data)
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `microsoft/LightGBM` | 17,000+ | Gradient boosting for churn prediction, staff scoring, product ranking. | All tabular prediction tasks across agents |
+| `catboost/catboost` | 8,000+ | Handles categorical features natively (product types, payment methods, day-of-week). Zero preprocessing. | `src/ai/agents/product_velocity.py`, `src/ai/agents/employee_perf.py` |
+
+### Data Quality & Missing Data
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `great-expectations/great_expectations` | 10,000+ | Validate POS data before AI runs (no negatives, no future dates, sane amounts). | Data ingestion pipeline, `src/pipeline.py` |
+| `WenjieDu/PyPOTS` | 2,004 | Fill gaps in incomplete POS data (offline sales, downtime). AI doesn't hallucinate on missing data. | All analyzers that consume transaction data |
+| `arundo/adtk` | 1,206 | Rule-based time-series anomaly detection. Auto-detect revenue drops, traffic spikes, seasonal shifts. | `src/ai/agents/peak_hours.py`, `src/ai/agents/revenue_trend.py` |
+
+### NLP & Embeddings (Review/Feedback Data)
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `huggingface/transformers` | 140,000+ | Sentiment analysis on Google/Yelp reviews. What do customers love/hate? | `src/ai/generators/insights.py`, insight-narrator agent |
+| `UKPLab/sentence-transformers` | 16,000+ | Embed products + customer patterns into vectors. "Find similar customers" and cross-store benchmarking. | `src/ai/agents/benchmark.py`, competitor-benchmarker agent |
+
+### Basket & Association Analysis
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `rasbt/mlxtend` | (existing) | Use `fpgrowth` instead of `apriori` (10x faster). Bundle recommendations. | `src/ai/agents/basket_analysis.py` |
+
+### Causal Inference
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `py-why/dowhy` | (existing) | Already installed. Use for pricing experiments and treatment effects. | `src/ai/predictive/dynamic_pricing.py` |
+| `py-why/EconML` | 4,614 | Heterogeneous treatment effects. Per-customer promo impact. | `src/ai/agents/promo_roi.py` |
+
+### Priority Install Order
+1. `pymc-marketing` — CLV prediction is the #1 most requested merchant insight
+2. `darts` — replaces fragmented forecasting with unified auto-selecting engine
+3. `lightgbm` — one model for all tabular predictions
+4. `EconML` — causal promo ROI (huge competitive moat)
+5. `great-expectations` — data quality gate prevents bad AI outputs
+6. `catboost` — handles POS categorical data natively
+7. `adtk` — lightweight anomaly detection
+8. `PyPOTS` — missing data handling
+9. `sentence-transformers` — cross-store intelligence
+10. `neuralforecast` — deep learning for merchants with long history
