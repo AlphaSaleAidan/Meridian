@@ -430,3 +430,55 @@ These repos supercharge Meridian's ability to analyze POS customer data:
 8. `PyPOTS` — missing data handling
 9. `sentence-transformers` — cross-store intelligence
 10. `neuralforecast` — deep learning for merchants with long history
+
+---
+
+## AI Power-Up Libraries — Wave 2: Vision, Processing, Explainability
+
+### Face Tracking & Customer Indexing (NEW capability)
+
+Architecture: Cameras → YOLO (detect) → ByteTrack (track) → DeepFace/InsightFace (identify) → Meridian DB → AI Agents
+
+| Library | Stars | Purpose | Creates |
+|---------|-------|---------|---------|
+| `serengil/deepface` | 22,655 | Face recognition + age/gender/emotion analysis. One API = identity + demographics. | NEW: customer indexing agent |
+| `deepinsight/insightface` | 25,000+ | State-of-the-art ArcFace embeddings. Higher accuracy for re-identification across visits. | NEW: face embedding engine |
+| `exadel-inc/CompreFace` | 7,904 | Self-hosted face recognition REST API in Docker. Zero cloud dependency. | NEW: on-prem face API service |
+| `ultralytics/ultralytics` | 40,000+ | YOLOv8/YOLO11 real-time person detection + pose estimation. | NEW: person detection pipeline |
+| `FoundationVision/ByteTrack` | 6,339 | Multi-object tracking across frames. Consistent person IDs through store. | NEW: person tracking agent |
+| `mikel-brostrom/boxmot` | 8,135 | Pluggable MOT (DeepSORT, ByteTrack, BoT-SORT). Pair with YOLO. | NEW: tracking pipeline |
+| `roboflow/supervision` | 25,000+ | CV toolbox for annotation, heatmaps, zone tracking, path visualization. | NEW: visual analytics overlay |
+
+New agents this enables:
+- **Foot Traffic Analyzer** — hourly/daily/weekly visit counts + trends
+- **Dwell Time Optimizer** — time spent per zone
+- **Customer Recognition** — "John visited 12x this month, avg spend $47"
+- **Demographic Insights** — age/gender distribution by time of day
+- **Queue Length Monitor** — real-time wait time at checkout
+
+### Data Processing & Profiling
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `pola-rs/polars` | 38,348 | 10-100x faster than pandas. Use for all POS data aggregations, RFM, cohorts. | All data crunching across agents |
+| `ydataai/ydata-profiling` | 13,000+ | Auto data profiling: missing values, distributions, correlations, duplicates. | Data quality gate in `src/pipeline.py` |
+| `MAIF/shapash` | 3,211 | ML explainability dashboard. Shows *why* AI makes each recommendation. | `src/ai/generators/insights.py`, insight-narrator |
+
+### A/B Testing & Experimentation
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `cbellei/abyes` | 61 | Bayesian A/B testing. Measure if pricing/menu changes actually worked. | `src/ai/predictive/scenario_engine.py` |
+| `BakermMoran/BayesABTest` | 21 | Simple Bayesian AB test framework for business users. | `src/ai/agents/promo_roi.py` |
+| `evidentlyai/evidently` | 6,000+ | ML monitoring + data drift detection. Auto-detect when merchant patterns shift. | Pipeline monitoring, model retraining |
+
+### Explainability & Insight Generation
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `xplainable/xplainable` | 64 | Real-time explainable ML for business optimization. Plain-English explanations. | `src/ai/generators/insights.py` |
+| `BlueBrain/BlueGraph` | 34 | Graph analytics for co-occurrence. Customer-product interaction graphs. | `src/ai/agents/basket_analysis.py` |
+| `shapiq` | 722 | Shapley interaction values. Feature *combinations* driving predictions. | All predictive modules |
+
+### Advanced Predictions
+| Library | Stars | Purpose | Enhances |
+|---------|-------|---------|----------|
+| `Nixtla/mlforecast` | 1,000+ | ML-based forecasting (LightGBM/XGBoost on time series). | `src/ai/agents/forecaster.py` |
+| `whylabs/whylogs` | 3,000+ | Data logging for ML pipelines. Audit every prediction. | Pipeline monitoring |
