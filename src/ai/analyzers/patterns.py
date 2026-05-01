@@ -11,8 +11,7 @@ Analyzes hourly/daily transaction patterns to produce:
 import logging
 import math
 from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime
 
 logger = logging.getLogger("meridian.ai.analyzers.patterns")
 

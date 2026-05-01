@@ -6,46 +6,18 @@ class PricingPowerAgent(BaseAgent):
     tier = 1
 
     async def analyze(self) -> dict:
-        avail = self.get_data_availability()
+        path, confidence = self._select_path()
         products = self.ctx.product_performance
 
-        # Choose calculation path
-        if avail.is_full:
-            # FULL: use real product cost data for margin-based elasticity
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            # PARTIAL: estimate elasticity from price/velocity
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            # MINIMAL: use benchmark margins + industry elasticity
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
-        # MINIMAL: no product data, use benchmarks
         if path == "minimal" or len(products) < 3:
             if len(products) < 3 and path != "minimal":
                 return self._insufficient_data("At least 3 products with sales data")
-            margin_range = self.get_benchmark_range("gross_margin_pct")
-            bench_margin = margin_range.mid if margin_range else 65.0
-            insights = [{"type": "benchmark_estimate", "detail": f"Using industry benchmark gross margin of {bench_margin}%"}]
-            if margin_range:
-                insights[0]["benchmark"] = {"low": margin_range.low, "mid": margin_range.mid, "high": margin_range.high, "source": margin_range.source}
-                insights[0]["estimated"] = True
-            recommendations = [{
-                "action": "Connect POS line-item data for precise analysis",
-                "impact": "Improves accuracy from estimated to actual values",
-                "effort": "low",
-            }]
-            return self._result(
-                summary=f"Estimated gross margin ~{bench_margin}% (industry benchmark, no product data)",
-                score=50,
-                insights=insights,
-                recommendations=recommendations,
-                data={"benchmark_margin_pct": bench_margin, "source": "benchmark", "product_count": len(products)},
-                confidence=confidence,
-                calculation_path=path,
+            bench = self.get_benchmark_range("gross_margin_pct")
+            bench_margin = bench.mid if bench else 65.0
+            return self._benchmark_fallback(
+                "gross_margin_pct",
+                f"Estimated gross margin ~{bench_margin}% (industry benchmark, no product data)",
+                {"benchmark_margin_pct": bench_margin, "product_count": len(products)},
             )
 
         safe_to_raise = []

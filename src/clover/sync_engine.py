@@ -8,76 +8,15 @@ Three modes:
 
 Mirrors the Square SyncEngine pattern exactly.
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from .client import CloverClient
 from .mappers import CloverDataMapper
+from ..integrations.base.models import SyncProgress, SyncResult
 
 logger = logging.getLogger("meridian.clover.sync_engine")
-
-
-class SyncProgress:
-    """Tracks sync progress for UI display."""
-
-    def __init__(self, connection_id: str):
-        self.connection_id = connection_id
-        self.phase: str = "starting"
-        self.detail: str = ""
-        self.progress_pct: float = 0.0
-        self.items_synced: int = 0
-        self.errors: list[str] = []
-
-    def update(self, phase: str, detail: str = "", progress_pct: float = 0.0):
-        self.phase = phase
-        self.detail = detail
-        self.progress_pct = progress_pct
-        logger.info(f"[{self.connection_id}] Sync: {phase} — {detail} ({progress_pct:.0f}%)")
-
-    def to_dict(self) -> dict:
-        return {
-            "phase": self.phase,
-            "detail": self.detail,
-            "progress_pct": self.progress_pct,
-            "items_synced": self.items_synced,
-            "errors": self.errors[-10:],
-        }
-
-
-class SyncResult:
-    """Result of a sync operation."""
-
-    def __init__(self):
-        self.location: dict | None = None
-        self.categories: list[dict] = []
-        self.products: list[dict] = []
-        self.transactions: list[dict] = []
-        self.transaction_items: list[dict] = []
-        self.inventory_snapshots: list[dict] = []
-        self.employee_cache: dict[str, str] = {}
-        self.errors: list[str] = []
-        self.started_at: datetime = datetime.now(timezone.utc)
-        self.completed_at: datetime | None = None
-
-    @property
-    def summary(self) -> dict:
-        return {
-            "location": 1 if self.location else 0,
-            "categories": len(self.categories),
-            "products": len(self.products),
-            "transactions": len(self.transactions),
-            "transaction_items": len(self.transaction_items),
-            "inventory_snapshots": len(self.inventory_snapshots),
-            "employees_cached": len(self.employee_cache),
-            "errors": len(self.errors),
-            "duration_sec": (
-                (self.completed_at - self.started_at).total_seconds()
-                if self.completed_at
-                else None
-            ),
-        }
 
 
 class CloverSyncEngine:
@@ -148,7 +87,7 @@ class CloverSyncEngine:
                 org_id=self.org_id,
                 pos_connection_id=self.pos_connection_id,
             )
-            result.location = mapper.map_merchant_to_location(merchant)
+            result.locations = [mapper.map_merchant_to_location(merchant)]
             logger.info(f"Merchant: {merchant.get('name', 'Unknown')}")
 
             # Phase 2: Employees

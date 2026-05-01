@@ -11,9 +11,7 @@ The engine auto-selects the right template based on org.business_type.
 """
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
-
-from ..economics.benchmarks import IndustryBenchmarks, BENCHMARKS
+from ..economics.benchmarks import IndustryBenchmarks
 
 logger = logging.getLogger("meridian.ai.industry_templates")
 

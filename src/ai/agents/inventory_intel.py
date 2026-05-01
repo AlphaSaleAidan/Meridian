@@ -7,23 +7,9 @@ class InventoryIntelAgent(BaseAgent):
     tier = 2
 
     async def analyze(self) -> dict:
-        avail = self.get_data_availability()
+        path, confidence = self._select_path()
         inventory = self.ctx.inventory
         products = self.ctx.product_performance
-
-        # Choose calculation path
-        if avail.is_full:
-            # FULL: real inventory + velocity data
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            # PARTIAL: estimate from sales data without inventory snapshot
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            # MINIMAL: skip with note — no inventory data
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
 
         # MINIMAL: no inventory data at all
         if path == "minimal" or not inventory:

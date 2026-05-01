@@ -2,7 +2,6 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.alerts")
 

@@ -17,7 +17,7 @@ Agents are organized in tiers (1-5) that determine execution order:
 """
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -296,6 +296,39 @@ class BaseAgent(ABC):
         from ..economics.benchmarks import IndustryBenchmarks
         bench = IndustryBenchmarks(getattr(self.ctx, "business_vertical", "other"))
         return bench.get_range(metric)
+
+    def _select_path(self) -> tuple[str, float]:
+        """Standard 3-path selection based on data availability.
+
+        Override in subclasses that need custom path logic (e.g. tier-5
+        agents that inspect upstream outputs).
+        """
+        avail = self.get_data_availability()
+        if avail.is_full:
+            return "full", avail.quality_score
+        elif avail.is_partial:
+            return "partial", avail.quality_score
+        else:
+            return "minimal", min(0.4, avail.quality_score)
+
+    def _benchmark_fallback(self, metric_key: str, summary: str, extra_data: dict | None = None) -> dict:
+        """Build a minimal-path result using industry benchmarks."""
+        bench_range = self.get_benchmark_range(metric_key)
+        insight: dict = {"type": "benchmark_estimate", "detail": summary, "estimated": True}
+        if bench_range:
+            insight["benchmark"] = {"low": bench_range.low, "mid": bench_range.mid, "high": bench_range.high, "source": bench_range.source}
+        data = {"source": "benchmark"}
+        if extra_data:
+            data.update(extra_data)
+        return self._result(
+            summary=summary,
+            score=50,
+            insights=[insight],
+            recommendations=[{"action": "Connect POS line-item data for precise analysis", "impact": "Improves accuracy from estimated to actual values", "effort": "low"}],
+            data=data,
+            confidence=min(0.4, self.get_data_availability().quality_score),
+            calculation_path="minimal",
+        )
 
     def _insufficient_data(self, reason: str) -> dict:
         return {

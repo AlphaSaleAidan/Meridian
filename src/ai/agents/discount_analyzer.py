@@ -6,46 +6,18 @@ class DiscountAnalyzerAgent(BaseAgent):
     tier = 1
 
     async def analyze(self) -> dict:
-        avail = self.get_data_availability()
+        path, confidence = self._select_path()
         txns = self.ctx.transactions
 
-        # Choose calculation path
-        if avail.is_full:
-            # FULL: analyze line-item discounts
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            # PARTIAL: use transaction-level discount_cents
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            # MINIMAL: benchmark discount rate
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
-        # MINIMAL: no transaction data, use benchmarks
         if path == "minimal" or len(txns) < 10:
             if len(txns) < 10 and path != "minimal":
                 return self._insufficient_data("At least 10 transactions")
-            discount_range = self.get_benchmark_range("healthy_discount_rate_pct")
-            bench_discount = discount_range.mid if discount_range else 4.0
-            insights = [{"type": "benchmark_estimate", "detail": f"Using industry benchmark discount rate of {bench_discount}%"}]
-            if discount_range:
-                insights[0]["benchmark"] = {"low": discount_range.low, "mid": discount_range.mid, "high": discount_range.high, "source": discount_range.source}
-                insights[0]["estimated"] = True
-            recommendations = [{
-                "action": "Connect POS line-item data for precise analysis",
-                "impact": "Improves accuracy from estimated to actual values",
-                "effort": "low",
-            }]
-            return self._result(
-                summary=f"Estimated healthy discount rate ~{bench_discount}% (industry benchmark)",
-                score=50,
-                insights=insights,
-                recommendations=recommendations,
-                data={"benchmark_discount_pct": bench_discount, "source": "benchmark", "transaction_count": len(txns)},
-                confidence=confidence,
-                calculation_path=path,
+            bench = self.get_benchmark_range("healthy_discount_rate_pct")
+            bench_discount = bench.mid if bench else 4.0
+            return self._benchmark_fallback(
+                "healthy_discount_rate_pct",
+                f"Estimated healthy discount rate ~{bench_discount}% (industry benchmark)",
+                {"benchmark_discount_pct": bench_discount, "transaction_count": len(txns)},
             )
 
         discounted = [t for t in txns if t.get("discount_cents", 0) > 0]

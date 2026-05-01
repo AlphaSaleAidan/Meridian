@@ -23,8 +23,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Optional
-from uuid import uuid4
+from typing import Any
 
 from .analyzers.revenue import RevenueAnalyzer
 from .analyzers.products import ProductAnalyzer

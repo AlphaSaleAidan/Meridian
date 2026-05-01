@@ -1,5 +1,4 @@
 from .base import BaseAgent
-from collections import defaultdict
 
 class ProductVelocityAgent(BaseAgent):
     name = "product_velocity"
@@ -7,22 +6,8 @@ class ProductVelocityAgent(BaseAgent):
     tier = 2
 
     async def analyze(self) -> dict:
-        avail = self.get_data_availability()
+        path, confidence = self._select_path()
         products = self.ctx.product_performance
-
-        # Choose calculation path
-        if avail.is_full:
-            # FULL: real velocity from items + inventory
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            # PARTIAL: estimate from product_performance
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            # MINIMAL: insufficient data for velocity analysis
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
 
         # MINIMAL: skip — not enough product data for meaningful velocity
         if path == "minimal" or len(products) < 3:

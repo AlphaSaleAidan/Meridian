@@ -6,8 +6,7 @@ All other modules (sync engine, OAuth, webhooks) go through this client.
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 

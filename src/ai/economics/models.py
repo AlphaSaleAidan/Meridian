@@ -12,7 +12,6 @@ Implements:
 """
 import math
 import logging
-from typing import Optional
 
 logger = logging.getLogger("meridian.ai.economics.models")
 

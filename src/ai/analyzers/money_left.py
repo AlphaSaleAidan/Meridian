@@ -13,10 +13,8 @@ Computes a dollar score across 5 components:
 Each component provides actionable recommendations.
 """
 import logging
-import math
 from datetime import datetime, timezone
 from uuid import uuid4
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.analyzers.money_left")
 

@@ -7,7 +7,6 @@ Supports these scenario types:
   - drop_products: "What if I drop my worst 3 products?"
 """
 import logging
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.predictive.scenario")
 

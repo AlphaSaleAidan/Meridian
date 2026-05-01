@@ -6,8 +6,6 @@ WHEN it changed, and WHY by checking correlations across all agents.
 Uses Granger-style causality testing (simplified).
 """
 import logging
-from datetime import datetime, timezone
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.predictive.root_cause")
 

@@ -2,7 +2,7 @@
 Meridian Configuration — Environment variables and settings.
 """
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 try:

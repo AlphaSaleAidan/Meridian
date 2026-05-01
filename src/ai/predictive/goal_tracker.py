@@ -7,7 +7,6 @@ pace metrics, and stretch analysis.
 import logging
 from calendar import monthrange
 from datetime import datetime, timezone
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.predictive.goals")
 

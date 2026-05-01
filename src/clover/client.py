@@ -13,8 +13,8 @@ Clover API differences from Square:
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import datetime
+from typing import Any
 
 import httpx
 

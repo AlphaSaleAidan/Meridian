@@ -10,9 +10,6 @@ Analyzes product sales data to produce:
   • Recommended actions per product
 """
 import logging
-import math
-from collections import defaultdict
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.analyzers.products")
 

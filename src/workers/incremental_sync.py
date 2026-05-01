@@ -4,7 +4,6 @@ Incremental Sync Worker — Runs every 15 minutes.
 Fetches new/updated orders since last sync timestamp.
 Only runs for connections where historical_import_complete = TRUE.
 """
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 

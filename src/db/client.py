@@ -4,10 +4,8 @@ Database Client — Supabase/PostgreSQL operations for Meridian.
 In production, this connects to Supabase via asyncpg.
 For sandbox testing, operations are collected in-memory.
 """
-import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import datetime
 
 logger = logging.getLogger("meridian.db")
 

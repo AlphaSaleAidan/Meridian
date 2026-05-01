@@ -14,11 +14,10 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Request, HTTPException
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
 
 from ...square.oauth import OAuthManager, OAuthError
 from ...security.encryption import encrypt_token
-from ...config import app as app_config
 
 logger = logging.getLogger("meridian.api.oauth")
 

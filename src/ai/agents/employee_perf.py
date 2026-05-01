@@ -8,22 +8,11 @@ class EmployeePerformanceAgent(BaseAgent):
     tier = 4
 
     async def analyze(self) -> dict:
+        path, confidence = self._select_path()
         avail = self.get_data_availability()
-
-        if avail.is_full:
-            confidence = avail.quality_score
-            path = "full"
-        elif avail.is_partial:
-            confidence = avail.quality_score
-            path = "partial"
-        else:
-            confidence = min(0.4, avail.quality_score)
-            path = "minimal"
-
         txns = self.ctx.transactions
         with_employee = [t for t in txns if t.get("employee_name")]
 
-        # --- MINIMAL path: no employee data at all ---
         if not avail.has_employees or len(with_employee) < 10:
             confidence = 0.0
             return self._insufficient_data(

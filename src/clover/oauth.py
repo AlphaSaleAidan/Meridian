@@ -18,12 +18,12 @@ import hmac
 import logging
 import secrets
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlencode
 
 import httpx
 
-from ..config import clover as cl_config, app as app_config
+from ..config import clover as cl_config
 
 logger = logging.getLogger("meridian.clover.oauth")
 

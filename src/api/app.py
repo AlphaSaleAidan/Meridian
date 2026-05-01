@@ -15,8 +15,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-
 from .routes.oauth import router as oauth_router
 from .routes.webhooks import router as webhook_router
 from .routes.dashboard import router as dashboard_router
@@ -26,7 +24,6 @@ from .routes.predictive import router as predictive_router
 from .routes.admin import router as admin_router
 from .routes.vision import router as vision_router
 from .routes.cline import router as cline_router
-from ..config import app as app_config
 
 # Configure logging
 logging.basicConfig(
