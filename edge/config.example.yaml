@@ -1,0 +1,53 @@
+# Meridian Vision Edge — Configuration
+# Copy to config.yaml and edit before running.
+
+store:
+  store_id: "your-store-uuid-here"
+  api_endpoint: "https://api.meridianpos.ai"
+  api_key: ""
+
+cameras:
+  - id: "cam-front-door"
+    name: "Front Door"
+    rtsp_url: "rtsp://192.168.1.100:554/stream1"
+    type: "entrance"
+    zone_config:
+      sidewalk:
+        polygon: [[0, 0], [640, 0], [640, 200], [0, 200]]
+      entrance:
+        polygon: [[200, 200], [440, 200], [440, 480], [200, 480]]
+      menu_board:
+        polygon: [[440, 200], [640, 200], [640, 400], [440, 400]]
+
+  - id: "cam-checkout"
+    name: "Checkout Area"
+    rtsp_url: "rtsp://192.168.1.101:554/stream1"
+    type: "checkout"
+    zone_config:
+      checkout:
+        polygon: [[0, 0], [640, 0], [640, 480], [0, 480]]
+
+processing:
+  detection_confidence: 0.4
+  recognition_interval_sec: 5
+  batch_interval_sec: 60
+  heartbeat_interval_sec: 30
+  max_fps: 15
+  frame_resize: [640, 480]
+
+privacy:
+  compliance_mode: "anonymous"   # anonymous | opt_in_identity | disabled
+  retention_days: 90
+  consent_signage_required: true
+  log_detections: false
+  store_raw_frames: false        # NEVER set to true in production
+
+models:
+  yolo: "yolov8n.pt"
+  insightface: "buffalo_l"
+  device: "auto"                 # auto | cuda:0 | cpu
+
+logging:
+  level: "INFO"
+  file: "/var/log/meridian-edge.log"
+  max_size_mb: 50
