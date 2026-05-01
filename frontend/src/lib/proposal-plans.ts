@@ -3,18 +3,34 @@
  */
 
 export interface PlanTier {
-  id: 'standard' | 'premium' | 'command'
+  id: 'standard' | 'premium' | 'command' | 'weekly'
   label: string
   price: number
+  interval?: 'month' | 'week'
   tag?: string
   features: string[]
 }
 
 export const PLAN_TIERS: PlanTier[] = [
   {
+    id: 'weekly',
+    label: 'Weekly',
+    price: 65,
+    interval: 'week',
+    features: [
+      'POS analytics dashboard',
+      'Revenue + product insights',
+      'Anomaly detection',
+      'Email alerts',
+      '1 POS integration',
+      'Pay weekly — no long-term commitment',
+    ],
+  },
+  {
     id: 'standard',
     label: 'Standard',
     price: 250,
+    interval: 'month',
     features: [
       'POS analytics dashboard',
       'Revenue + product insights',
@@ -27,6 +43,7 @@ export const PLAN_TIERS: PlanTier[] = [
     id: 'premium',
     label: 'Premium',
     price: 500,
+    interval: 'month',
     tag: 'MOST POPULAR',
     features: [
       'Everything in Standard',
@@ -41,6 +58,7 @@ export const PLAN_TIERS: PlanTier[] = [
     id: 'command',
     label: 'Command',
     price: 1000,
+    interval: 'month',
     features: [
       'Everything in Premium',
       'Unlimited camera feeds',
@@ -53,5 +71,5 @@ export const PLAN_TIERS: PlanTier[] = [
 ]
 
 export function getPlan(id: string): PlanTier {
-  return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[0]
+  return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1] // default to Standard
 }
