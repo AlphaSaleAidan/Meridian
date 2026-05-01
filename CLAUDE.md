@@ -1112,6 +1112,53 @@ POS Data Stream
 
 ---
 
+## Phase 3 Beast Mode Modules
+
+### Infrastructure (Wave 1)
+| Module | Path | Purpose |
+|--------|------|---------|
+| Prefect Workflows | `src/workflows/` | Nightly analysis, realtime anomaly, weekly reports |
+| Celery Task Queue | `src/workers/celery_app.py`, `tasks.py` | Background POS sync, analysis, reports with Redis broker |
+| Auth (fastapi-users) | `src/auth/` | Register, login, RBAC (owner/manager/staff), Supabase adapter |
+
+### Intelligence (Wave 2)
+| Module | Path | Purpose |
+|--------|------|---------|
+| PostHog Analytics | `src/analytics/posthog_service.py` | Event tracking, feature flags (vision_beta, voice_ai, advanced_forecast) |
+| Great Expectations | `src/data_quality/` | Data validation gate before AI agents run |
+| OpenBB Market Data | `src/ai/economics/market_data.py` | CPI, unemployment, sector performance for benchmarks |
+| BentoML Serving | `src/serving/service.py` | 5 agent endpoints: forecast, anomaly, churn, pricing, staffing |
+
+### Customer-Facing (Wave 3)
+| Module | Path | Purpose |
+|--------|------|---------|
+| GeoMap (Mapbox) | `frontend/src/components/GeoMap.tsx` | Customer heatmap colored by spend tier |
+| Marketing Automation | `src/marketing/` | Agent-driven campaigns: win-back, promo report, retention |
+| Dagster Pipeline | `src/pipeline/` | Software-defined assets: raw → cleaned → aggregated → insights → reports |
+
+### Polish (Wave 4)
+| Module | Path | Purpose |
+|--------|------|---------|
+| Highlight.io | `src/monitoring/highlight_service.py` | Error capture, traces, agent timing spans, session replays |
+| BTYD Customer LTV | `src/ai/agents/customer_ltv.py` | BG/NBD + Gamma-Gamma probabilistic CLV (30/90/365 day) |
+| Schedule Optimizer | `src/ai/scheduling/optimizer.py` | Peak hours + staffing → optimal shift assignments |
+| Webhook Delivery | `src/webhooks/` | Outbound webhooks with HMAC-SHA256, exponential backoff, dead letter |
+| Document OCR | `src/documents/ocr_service.py` | Receipt/invoice/menu scanning → structured JSON |
+
+### New API Endpoints (Phase 3)
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/auth/register` | POST | User registration |
+| `/api/auth/login` | POST | JWT login |
+| `/api/auth/me` | GET | Current user profile |
+| `/api/scheduling/optimize` | POST | Generate optimal staff schedule |
+| `/api/webhooks/register` | POST | Register outbound webhook |
+| `/api/webhooks/list` | GET | List registered webhooks |
+| `/api/webhooks/deliveries` | GET | List delivery attempts |
+| `/api/documents/scan` | POST | OCR scan receipt/invoice/menu |
+
+---
+
 ## Environment Variables
 
 ```
