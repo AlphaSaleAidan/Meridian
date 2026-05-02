@@ -43,13 +43,18 @@ export default function CustomerSignupPage() {
     setError(null)
     if (!t.trim()) { setError('Please enter your access token'); return }
     setLoading(true)
-    const err = await validateToken(t.trim())
-    setLoading(false)
-    if (err) {
-      setError(err)
-    } else {
-      setSuccess('Token verified! Complete your registration below.')
-      setShowTokenInput(false)
+    try {
+      const err = await validateToken(t.trim())
+      if (err) {
+        setError(err)
+      } else {
+        setSuccess('Token verified! Complete your registration below.')
+        setShowTokenInput(false)
+      }
+    } catch (err: any) {
+      setError(err.message || 'Token validation failed. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -58,15 +63,21 @@ export default function CustomerSignupPage() {
     setError(null)
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
-    const result = await signup(email, password, fullName, businessName)
-    setLoading(false)
+    try {
+      const result = await signup(email, password, fullName, businessName)
 
-    if (result === '__confirm_email__') {
-      setSuccess('Account created! Check your email and click the confirmation link, then come back and sign in.')
-      return
+      if (result === '__confirm_email__') {
+        setSuccess('Account created! Check your email and click the confirmation link, then come back and sign in.')
+        return
+      }
+      if (result) { setError(result); return }
+      setSuccess('Account created! Redirecting to your dashboard...')
+    } catch (err: any) {
+      console.error('[Signup] Unhandled error:', err)
+      setError(err.message || 'Something went wrong during signup. Please try again.')
+    } finally {
+      setLoading(false)
     }
-    if (result) { setError(result); return }
-    setSuccess('Account created! Redirecting to your dashboard...')
   }
 
   const inputClass = 'w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50 focus:ring-1 focus:ring-[#1A8FD6]/20 transition-colors'
