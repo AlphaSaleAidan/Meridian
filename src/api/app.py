@@ -8,6 +8,9 @@ Routes:
   POST /api/webhooks/square           → Square webhook receiver
   GET  /api/dashboard/*               → Dashboard data endpoints
   */api/vision/*                      → Vision intelligence endpoints
+  POST /api/billing/create-checkout   → Create Square payment link
+  POST /api/billing/create-invoice    → Create Square invoice
+  GET  /api/billing/status/:org_id    → Subscription status
 """
 import logging
 import os
@@ -24,6 +27,11 @@ from .routes.predictive import router as predictive_router
 from .routes.admin import router as admin_router
 from .routes.vision import router as vision_router
 from .routes.cline import router as cline_router
+try:
+    from .routes.billing import router as billing_router
+    _has_billing = True
+except ImportError:
+    _has_billing = False
 
 # Configure logging
 logging.basicConfig(
@@ -94,6 +102,8 @@ app.include_router(predictive_router)
 app.include_router(admin_router)
 app.include_router(vision_router)
 app.include_router(cline_router)
+if _has_billing:
+    app.include_router(billing_router)
 
 
 @app.get("/health")
