@@ -265,21 +265,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userId = data.user.id
     const userEmail = data.user.email || email
 
-    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY)
-    if (storedToken) {
-      await supabase.rpc('redeem_access_token', {
-        input_token: storedToken,
-        redeeming_user_id: userId,
-      })
-      localStorage.removeItem(TOKEN_STORAGE_KEY)
-      setPendingBusiness(null)
-    } else {
-      await supabase.rpc('create_business_for_user', {
-        user_id: userId,
-        biz_name: businessName,
-        biz_owner_name: fullName,
-        biz_email: userEmail,
-      })
+    // Create or link the business record — errors here should not block signup
+    try {
+      const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY)
+      if (storedToken) {
+        const { error: redeemErr } = await supabase.rpc('redeem_access_token', {
+          input_token: storedToken,
+          redeeming_user_id: userId,
+        })
+        if (redeemErr) console.warn('[Auth] Token redeem error (non-fatal):', redeemErr.message)
+        localStorage.removeItem(TOKEN_STORAGE_KEY)
+        setPendingBusiness(null)
+      } else {
+        const { error: createErr } = await supabase.rpc('create_business_for_user', {
+          user_id: userId,
+          biz_name: businessName,
+          biz_owner_name: fullName,
+          biz_email: userEmail,
+        })
+        if (createErr) console.warn('[Auth] Business creation error (non-fatal):', createErr.message)
+      }
+    } catch (rpcErr) {
+      console.warn('[Auth] RPC call failed (non-fatal):', rpcErr)
     }
 
     if (data.session) {
