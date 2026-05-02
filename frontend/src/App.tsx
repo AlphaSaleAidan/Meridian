@@ -66,12 +66,16 @@ function CustomerDashboardRoutes() {
   )
 }
 
-/** Redirect all /sales/* routes to the Viktor Space sales portal */
+/** Embed the Viktor Space sales portal directly in the main site */
 function SalesRedirect() {
-  window.location.href = 'https://meridian-sales-f7df5b93.viktor.space';
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0A0A0B', color: '#A1A1A8', fontFamily: 'system-ui' }}>
-      <p>Redirecting to Meridian Sales Portal…</p>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#0A0A0B' }}>
+      <iframe
+        src="https://meridian-sales-f7df5b93.viktor.space"
+        title="Meridian Sales Portal"
+        style={{ width: '100%', height: '100%', border: 'none' }}
+        allow="clipboard-write; clipboard-read"
+      />
     </div>
   );
 }
