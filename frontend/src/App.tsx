@@ -4,19 +4,7 @@ import { AuthProvider } from '@/lib/auth'
 import { SalesAuthProvider } from '@/lib/sales-auth'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
-import SalesProtectedRoute from '@/components/SalesProtectedRoute'
 import Layout from '@/components/Layout'
-import SalesLayout from '@/components/SalesLayout'
-
-import SalesLoginPage from '@/pages/sales/SalesLoginPage'
-import SalesSignupPage from '@/pages/sales/SalesSignupPage'
-import SalesDashboardPage from '@/pages/sales/SalesDashboardPage'
-import LeadsPage from '@/pages/sales/LeadsPage'
-import AccountsPage from '@/pages/sales/AccountsPage'
-import TrainingPage from '@/pages/sales/TrainingPage'
-import TeamManagementPage from '@/pages/sales/TeamManagementPage'
-import SalesSettingsPage from '@/pages/sales/SalesSettingsPage'
-import CreateCustomerPage from '@/pages/sales/CreateCustomerPage'
 
 import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
 import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
@@ -39,7 +27,7 @@ import MenuEngineeringPage from '@/pages/MenuEngineeringPage'
 import AnomaliesPage from '@/pages/AnomaliesPage'
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
-const OnboardingPage = lazy(() => import('@/pages/OnboardingPage'))
+// Sales portal moved to Viktor Space — OnboardingPage no longer needed here
 const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazy(() => import('@/pages/CareersPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
@@ -76,6 +64,16 @@ function CustomerDashboardRoutes() {
       <Route path="settings" element={<SettingsPage />} />
     </>
   )
+}
+
+/** Redirect all /sales/* routes to the Viktor Space sales portal */
+function SalesRedirect() {
+  window.location.href = 'https://meridian-sales-f7df5b93.viktor.space';
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0A0A0B', color: '#A1A1A8', fontFamily: 'system-ui' }}>
+      <p>Redirecting to Meridian Sales Portal…</p>
+    </div>
+  );
 }
 
 export default function App() {
@@ -143,32 +141,9 @@ export default function App() {
               </Route>
 
               {/* ══════════════════════════════════════════════
-                  SALES CRM — internal, sales reps only
+                  SALES CRM — redirect to Viktor Space portal
                   ══════════════════════════════════════════════ */}
-              <Route path="/sales/login" element={<SalesLoginPage />} />
-              <Route path="/sales/signup" element={<SalesSignupPage />} />
-
-              <Route element={
-                <SalesProtectedRoute>
-                  <SalesLayout />
-                </SalesProtectedRoute>
-              }>
-                <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
-                <Route path="/sales/leads" element={<LeadsPage />} />
-                <Route path="/sales/accounts" element={<AccountsPage />} />
-                <Route path="/sales/new-customer" element={<CreateCustomerPage />} />
-                <Route path="/sales/training" element={<TrainingPage />} />
-                <Route path="/sales/settings" element={<SalesSettingsPage />} />
-                <Route path="/sales/admin" element={<TeamManagementPage />} />
-              </Route>
-
-              <Route path="/sales/onboarding" element={
-                <SalesProtectedRoute>
-                  <Suspense fallback={<LazyFallback />}>
-                    <OnboardingPage />
-                  </Suspense>
-                </SalesProtectedRoute>
-              } />
+              <Route path="/sales/*" element={<SalesRedirect />} />
 
               {/* ══════════════════════════════════════════════
                   LEGACY REDIRECTS
