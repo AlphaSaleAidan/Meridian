@@ -1,7 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "framework": "vite",
   "redirects": [
     {
       "source": "/canada/portal",
@@ -26,7 +25,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!api|assets|meridian-icon\.svg).*)",
+      "source": "/((?!api|assets|meridian-icon\\.svg).*)",
       "destination": "/index.html"
     }
   ],
