@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Users, TrendingUp, DollarSign, Target, Search, MoreVertical } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Users, TrendingUp, DollarSign, Target, Search, UserPlus, MoreVertical } from 'lucide-react'
 import { clsx } from 'clsx'
+import { supabase } from '@/lib/supabase'
 
 interface TeamMember {
   id: string
@@ -17,11 +18,8 @@ interface TeamMember {
 }
 
 const DEMO_TEAM: TeamMember[] = [
-  { id: '1', name: 'Sarah Mitchell', email: 'sarah@meridian.com', phone: '(555) 100-2000', commission_rate: 35, deals_open: 5, deals_won: 12, total_earned: 4280000, total_paid: 3500000, is_active: true, joined: '2025-09-15' },
-  { id: '2', name: 'Demo Sales Rep', email: 'demo@meridian.com', phone: '(555) 123-4567', commission_rate: 35, deals_open: 8, deals_won: 7, total_earned: 1822000, total_paid: 960000, is_active: true, joined: '2026-01-20' },
-  { id: '3', name: 'Marcus Johnson', email: 'marcus@meridian.com', phone: '(555) 300-4000', commission_rate: 40, deals_open: 3, deals_won: 18, total_earned: 6120000, total_paid: 5800000, is_active: true, joined: '2025-06-01' },
-  { id: '4', name: 'Priya Patel', email: 'priya@meridian.com', phone: '(555) 400-5000', commission_rate: 30, deals_open: 6, deals_won: 4, total_earned: 980000, total_paid: 700000, is_active: true, joined: '2026-02-10' },
-  { id: '5', name: 'Jake Torres', email: 'jake@meridian.com', phone: '(555) 500-6000', commission_rate: 30, deals_open: 0, deals_won: 2, total_earned: 320000, total_paid: 320000, is_active: false, joined: '2025-11-01' },
+  { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 35, deals_open: 5, deals_won: 12, total_earned: 4280000, total_paid: 3500000, is_active: true, joined: '2025-09-15' },
+  { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 35, deals_open: 0, deals_won: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03' },
 ]
 
 function formatCurrency(cents: number): string {
@@ -30,16 +28,63 @@ function formatCurrency(cents: number): string {
 
 export default function TeamManagementPage() {
   const [search, setSearch] = useState('')
+  const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
+  const [loading, setLoading] = useState(true)
 
-  const team = DEMO_TEAM.filter(m => {
+  useEffect(() => {
+    async function fetchTeam() {
+      if (!supabase) {
+        setLoading(false)
+        return
+      }
+      try {
+        const { data, error } = await supabase
+          .from('sales_reps')
+          .select('*')
+          .order('created_at', { ascending: true })
+
+        if (data && !error && data.length > 0) {
+          setTeam(data.map((r: Record<string, unknown>) => ({
+            id: r.id as string,
+            name: r.name as string,
+            email: r.email as string,
+            phone: (r.phone as string) || '',
+            commission_rate: Number(r.commission_rate) || 35,
+            deals_open: 0,
+            deals_won: 0,
+            total_earned: Math.round(Number(r.total_earned || 0) * 100),
+            total_paid: Math.round(Number(r.total_paid || 0) * 100),
+            is_active: r.is_active as boolean,
+            joined: (r.created_at as string || '').slice(0, 10),
+          })))
+        }
+      } catch {
+        // fall back to demo data
+      }
+      setLoading(false)
+    }
+    fetchTeam()
+  }, [])
+
+  const filtered = team.filter(m => {
     if (!search) return true
     const s = search.toLowerCase()
     return m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s)
   })
 
-  const totalActive = DEMO_TEAM.filter(m => m.is_active).length
-  const totalDealsWon = DEMO_TEAM.reduce((s, m) => s + m.deals_won, 0)
-  const totalRevenue = DEMO_TEAM.reduce((s, m) => s + m.total_earned, 0)
+  const totalActive = team.filter(m => m.is_active).length
+  const totalDealsWon = team.reduce((s, m) => s + m.deals_won, 0)
+  const totalRevenue = team.reduce((s, m) => s + m.total_earned, 0)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
+          <span className="text-[#17C5B0] font-bold text-sm">S</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -76,7 +121,9 @@ export default function TeamManagementPage() {
             <span className="text-[10px] text-[#A1A1A8]">Avg Close Rate</span>
           </div>
           <p className="text-lg font-bold text-[#F5F5F7]">
-            {Math.round(DEMO_TEAM.reduce((s, m) => s + (m.deals_won / Math.max(m.deals_open + m.deals_won, 1)) * 100, 0) / DEMO_TEAM.length)}%
+            {team.length > 0
+              ? Math.round(team.reduce((s, m) => s + (m.deals_won / Math.max(m.deals_open + m.deals_won, 1)) * 100, 0) / team.length)
+              : 0}%
           </p>
         </div>
       </div>
@@ -105,7 +152,7 @@ export default function TeamManagementPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1F1F23]">
-              {team.map(member => (
+              {filtered.map(member => (
                 <tr key={member.id} className="hover:bg-[#111113] transition-colors">
                   <td className="px-4 py-3">
                     <p className="text-[11px] font-medium text-[#F5F5F7]">{member.name}</p>
