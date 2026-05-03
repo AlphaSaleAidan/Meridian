@@ -26,3 +26,7 @@ from .dwell_time import DwellTimeAgent
 from .customer_recognizer import CustomerRecognizerAgent
 from .demographic_profiler import DemographicProfilerAgent
 from .queue_monitor import QueueMonitorAgent
+from .loyalty_architect import LoyaltyArchitectAgent
+from .location_analyst import LocationAnalystAgent
+from .action_prioritizer import ActionPrioritizerAgent
+from .feature_engineer import FeatureEngineerAgent
