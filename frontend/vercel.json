@@ -4,6 +4,16 @@
   "framework": "vite",
   "redirects": [
     {
+      "source": "/canada/portal",
+      "destination": "https://meridian-canada-0443c396.viktor.space",
+      "permanent": false
+    },
+    {
+      "source": "/canada",
+      "destination": "https://meridian-canada-0443c396.viktor.space",
+      "permanent": false
+    },
+    {
       "source": "/sales/:path*",
       "destination": "https://meridian-sales-f7df5b93.viktor.space/",
       "permanent": false
@@ -16,7 +26,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!api|assets|meridian-icon\\.svg).*)",
+      "source": "/((?!api|assets|meridian-icon\.svg).*)",
       "destination": "/index.html"
     }
   ],
