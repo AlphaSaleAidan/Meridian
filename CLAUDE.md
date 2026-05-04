@@ -2,6 +2,22 @@
 
 > This file is read automatically every session. It is the single source of truth for how this codebase works.
 
+## Cline Rules
+
+- Never hardcode merchant IDs, API keys, or tokens
+- All new API routes go in `src/api/routes/` and must be registered in `src/api/app.py`
+- Always use Row Level Security on new Supabase tables
+- TypeScript strict mode — no `any` types
+- Python: type hints required on all functions
+- Component files max 300 lines — split if larger
+- All API routes must have error handling and return typed responses
+- 42+ API routes already exist — check `src/api/routes/` before creating new ones
+- Auth is handled via Supabase JWT — never roll your own
+- The demo portal mirrors production — every change goes in both
+- Read existing similar components before writing new ones
+- Check `frontend/src/data/pos-systems.ts` before touching any POS logic
+- Ask before deleting anything
+
 ---
 
 ## Project Overview
@@ -14,6 +30,93 @@
 - **Frontend:** Vite + React + Tailwind on Vercel
 - **Database:** Supabase (PostgreSQL 15 + TimescaleDB)
 - **AI:** 24 analyzers + 6 predictive modules + 15-agent Ruflo swarm
+- **Mobile (planned):** Swift/SwiftUI native app for LiDAR scanning
+
+---
+
+## LiDAR Store Scanning — Architecture
+
+### Why Native, Not Web
+LiDAR depth sensing is NOT available via the web browser. `getUserMedia` gives a 2D
+camera feed only. Apple's LiDAR sensor is only accessible through native iOS frameworks:
+- **RoomPlan API** (iOS 16+, iPhone 12 Pro+) — purpose-built for indoor scanning,
+  returns structured 3D room data with walls, doors, furniture, and dimensions
+- **ARKit + SceneReconstruction** — raw mesh/point cloud from LiDAR
+
+RoomPlan is the correct choice for Meridian because it outputs categorized geometry
+(counters, shelves, tables) that maps directly to our zone analytics.
+
+### Implementation Plan
+
+#### Phase 1: Native iOS Scanner App (Swift/SwiftUI)
+```
+meridian-scanner/
+├── MeridianScanner/
+│   ├── App.swift
+│   ├── ScanView.swift          # RoomPlan RoomCaptureView wrapper
+│   ├── ScanSessionManager.swift # RoomCaptureSession delegate
+│   ├── ScanResultView.swift     # Preview + confirm scan
+│   ├── UploadService.swift      # Upload USDZ to Supabase Storage
+│   └── AuthService.swift        # Supabase auth (same project)
+├── Models/
+│   ├── StoreScan.swift          # Scan metadata
+│   └── ZoneAnnotation.swift     # SR-added zone labels
+└── Info.plist                   # NSCameraUsageDescription, ARKit capability
+```
+
+**Key APIs:**
+- `RoomCaptureView` — drop-in SwiftUI view that runs the full scanning UX
+- `RoomCaptureSession` — manages LiDAR capture, provides real-time feedback
+- `CapturedRoom` — output: walls, doors, windows, objects with dimensions
+- Export as `.usdz` (3D model) + `.json` (structured room data)
+
+**Device Requirements:**
+- iPhone 12 Pro, 13 Pro, 14 Pro, 15 Pro (any Pro model with LiDAR)
+- iPad Pro (2020+)
+- iOS 16.0+
+
+#### Phase 2: Upload Pipeline
+```
+SR scans restaurant with iPhone
+    ↓ RoomPlan captures 3D room
+    ↓ Export .usdz + zone metadata JSON
+    ↓
+Upload to Supabase Storage (bucket: store-scans/{org_id}/)
+    ↓
+POST /api/space/upload — save scan metadata to scans table
+    ↓
+Frontend loads .usdz via <model-viewer> or Three.js USDZLoader
+    ↓
+Overlay POS zone analytics (hot zones, traffic, revenue/sqft)
+```
+
+**Supabase Storage bucket:** `store-scans`
+**Table:** `store_scans` (id, org_id, scan_url, zones_json, scanned_by, scanned_at)
+
+#### Phase 3: Web Viewer Integration
+The dashboard already has the 3D Space tab (`SpaceTab.tsx`, `SpaceViewer.tsx`).
+Replace the Polycam embed with the merchant's own scan:
+1. Fetch latest scan URL from `store_scans` table
+2. Load .usdz in Three.js using `USDZLoader` or display via `<model-viewer>`
+3. Overlay zone analytics from the existing `demoZones` data structure
+
+#### Phase 4: Zone Analytics Mapping
+Map RoomPlan's `CapturedRoom` objects to Meridian zones:
+- `CapturedRoom.Object.category == .table` → dining zone
+- `CapturedRoom.Object.category == .storage` → shelf/display zone
+- `CapturedRoom.Object.category == .stove` → kitchen zone
+- Custom annotations by SR → counter zone, entrance zone, etc.
+
+### Interim Solution (Before Native App)
+SRs use **Polycam** (free iOS app) to scan, then share the Polycam URL.
+The dashboard embeds it via iframe (already implemented in SpaceTab.tsx).
+Backend route `POST /api/space/polycam-link` stores the URL per org.
+
+### Web "Open Scanner" Button Behavior
+- **Demo portal:** Placeholder animation (current behavior, keep as-is)
+- **Business portal (no scan exists):** Show instructions to download Polycam
+  or the Meridian Scanner app (when available), with App Store link
+- **Business portal (scan exists):** Show "Re-scan" option, same flow
 
 ---
 
