@@ -9,8 +9,7 @@ import { api } from '@/lib/api'
 import { formatCents, formatCentsCompact, formatNumber } from '@/lib/format'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
-
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
+import { useOrgId } from '@/hooks/useOrg'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -27,7 +26,8 @@ export default function ProductsPage() {
   const [days, setDays] = useState(30)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('revenue')
-  const products = useApi(() => api.products(ORG_ID, days), [days])
+  const orgId = useOrgId()
+  const products = useApi(() => api.products(orgId, days), [orgId, days])
 
   if (products.loading) return <LoadingPage />
   if (products.error) return <ErrorState message={products.error} onRetry={products.refetch} />

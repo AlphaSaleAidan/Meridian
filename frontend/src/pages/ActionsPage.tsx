@@ -8,6 +8,8 @@ import { generateTopActions, type TopAction, type ReasoningChain } from '@/lib/a
 import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import AnalyzingDataState from '@/components/AnalyzingDataState'
+import { useIsDemo } from '@/hooks/useOrg'
 
 const priorityColors: Record<string, { bg: string; text: string; border: string }> = {
   Critical: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20' },
@@ -123,7 +125,28 @@ function ActionCard({ action }: { action: TopAction }) {
 }
 
 export default function ActionsPage() {
+  const isDemo = useIsDemo()
   const actions = generateTopActions()
+
+  if (!isDemo) {
+    return (
+      <div className="space-y-6">
+        <ScrollReveal variant="fadeUp">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Top 3 Actions Today</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              AI-prioritized by ROI potential and effort required
+            </p>
+          </div>
+        </ScrollReveal>
+        <AnalyzingDataState
+          title="Identifying your top actions"
+          description="The Action Prioritizer agent reads all other agent outputs and ranks recommendations by ROI potential, effort, and confidence. Actions appear once enough data is analyzed."
+        />
+      </div>
+    )
+  }
+
   const totalImpact = actions.reduce((s, a) => s + a.impactCents, 0)
 
   return (

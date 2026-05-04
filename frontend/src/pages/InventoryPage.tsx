@@ -10,8 +10,7 @@ import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import { formatNumber, formatRelative } from '@/lib/format'
-
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
+import { useOrgId } from '@/hooks/useOrg'
 
 type SortField = 'product_name' | 'current_stock' | 'days_until_reorder' | 'predicted_daily_usage' | 'trend_pct'
 type SortDir = 'asc' | 'desc'
@@ -59,7 +58,8 @@ function StockBar({ current, reorder, max }: { current: number; reorder: number;
 }
 
 export default function InventoryPage() {
-  const inventory = useApi(() => api.inventory(ORG_ID), [])
+  const orgId = useOrgId()
+  const inventory = useApi(() => api.inventory(orgId), [orgId])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [sortField, setSortField] = useState<SortField>('days_until_reorder')

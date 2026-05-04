@@ -3,12 +3,15 @@ import { useAuth } from '@/lib/auth'
 
 export type Tier = 'trial' | 'starter' | 'growth' | 'enterprise'
 
+function isDemoPath(pathname: string): boolean {
+  return pathname.startsWith('/demo') || pathname.startsWith('/canada')
+}
+
 export function useOrgId(): string {
   const location = useLocation()
   const { org } = useAuth()
 
-  // Always use 'demo' on the /demo route regardless of auth state
-  if (location.pathname.startsWith('/demo')) return 'demo'
+  if (isDemoPath(location.pathname)) return 'demo'
 
   return org?.org_id || import.meta.env.VITE_ORG_ID || 'demo'
 }
@@ -17,10 +20,14 @@ export function useTier(): Tier {
   const location = useLocation()
   const { org } = useAuth()
 
-  // Demo route always uses trial tier
-  if (location.pathname.startsWith('/demo')) return 'trial'
+  if (isDemoPath(location.pathname)) return 'trial'
 
   return (org?.plan as Tier) || 'trial'
+}
+
+export function useIsDemo(): boolean {
+  const location = useLocation()
+  return isDemoPath(location.pathname)
 }
 
 export const tierLimits = {
