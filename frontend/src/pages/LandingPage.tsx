@@ -428,7 +428,7 @@ export default function LandingPage() {
 
       {/* ─── FOOTER ───────────────────────────────── */}
       <footer className="border-t border-[#1F1F23]/40 py-8">
-        <div className="max-w-content mx-auto px-6">
+        <div className="max-w-content mx-auto px-6 space-y-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <MeridianLogo size={20} showWordmark showTagline={false} />
@@ -444,12 +444,20 @@ export default function LandingPage() {
                 <a onClick={() => navigate('/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
                 <a onClick={() => navigate('/sales/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
                 <a onClick={() => navigate('/customer/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>
-                <a href="/canada" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md border border-[#1F1F23] hover:border-[#17C5B0]/40 hover:text-[#17C5B0] transition-colors">
-                  <span className="text-[11px]">🍁</span> Canadian Portal
-                </a>
               </div>
               <p className="text-[11px] text-[#A1A1A8]/30">© 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>
             </div>
+          </div>
+
+          {/* Canadian Portal — standalone visible button */}
+          <div className="flex justify-center pt-2 border-t border-[#1F1F23]/30">
+            <a
+              href="/canada"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#1F1F23] bg-[#0F0F12] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#17C5B0]/40 hover:bg-[#17C5B0]/5 transition-all"
+            >
+              <span className="text-base">🍁</span>
+              Canadian Portal Login
+            </a>
           </div>
         </div>
       </footer>
