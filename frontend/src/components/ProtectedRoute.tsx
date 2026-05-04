@@ -4,7 +4,7 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { ShieldX } from 'lucide-react'
 
-export default function ProtectedRoute({ children, loginPath = '/customer/login' }: { children: React.ReactNode; loginPath?: string }) {
+export default function ProtectedRoute({ children, loginPath = '/customer/login', allowSalesReps = false }: { children: React.ReactNode; loginPath?: string; allowSalesReps?: boolean }) {
   const { ready, authenticated, org, isSalesRep } = useAuth()
   const salesAuth = useSalesAuth()
   const location = useLocation()
@@ -19,12 +19,14 @@ export default function ProtectedRoute({ children, loginPath = '/customer/login'
     )
   }
 
-  if (salesAuth.authenticated && !org) {
-    return <AccessDenied type="sales-rep" />
-  }
+  if (!allowSalesReps) {
+    if (salesAuth.authenticated && !org) {
+      return <AccessDenied type="sales-rep" />
+    }
 
-  if (isSalesRep && !org) {
-    return <AccessDenied type="sales-rep" />
+    if (isSalesRep && !org) {
+      return <AccessDenied type="sales-rep" />
+    }
   }
 
   if (!authenticated) {

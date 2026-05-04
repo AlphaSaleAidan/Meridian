@@ -39,7 +39,7 @@ const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
 const POSCoveragePage = lazy(() => import('@/pages/admin/POSCoveragePage'))
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
-  return <ProtectedRoute loginPath="/canada/login">{children}</ProtectedRoute>
+  return <ProtectedRoute loginPath="/canada/login" allowSalesReps>{children}</ProtectedRoute>
 }
 
 function LazyFallback() {

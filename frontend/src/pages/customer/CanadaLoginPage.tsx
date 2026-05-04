@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { MapPin } from 'lucide-react'
 
 export default function CanadaLoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { authenticated, login, resetPassword } = useAuth()
+  const { authenticated } = useAuth()
 
   const from = (location.state as { from?: string })?.from || '/canada'
 
@@ -26,19 +27,30 @@ export default function CanadaLoginPage() {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const err = await login(email, password)
+
+    if (!supabase) {
+      setLoading(false)
+      navigate(from, { replace: true })
+      return
+    }
+
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
-    if (err) setError(err)
-    else navigate(from, { replace: true })
+    if (authError) {
+      setError(authError.message)
+    } else {
+      navigate(from, { replace: true })
+    }
   }
 
   async function handleForgot(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const err = await resetPassword(email)
+    if (!supabase) { setLoading(false); return }
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email)
     setLoading(false)
-    if (err) { setError(err); return }
+    if (resetError) { setError(resetError.message); return }
     setSuccess('If that email exists, a reset link has been sent.')
   }
 
