@@ -26,20 +26,21 @@ router = APIRouter(prefix="/api/square", tags=["square-oauth"])
 # HMAC signing secret — REQUIRED in all environments.
 _STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET", "")
 if not _STATE_SECRET:
-    import warnings
     if os.environ.get("TESTING", "").lower() in ("1", "true"):
         _STATE_SECRET = "test-only-secret-not-for-production"
-        warnings.warn("Using test-only OAUTH_STATE_SECRET — do NOT use in production")
+    elif os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("RENDER"):
+        raise RuntimeError("OAUTH_STATE_SECRET must be set in production — refusing to start")
     else:
-        _STATE_SECRET = "dev-fallback-not-for-production"
-        warnings.warn("OAUTH_STATE_SECRET not set — using insecure fallback")
+        import warnings
+        _STATE_SECRET = os.urandom(32).hex()
+        warnings.warn("OAUTH_STATE_SECRET not set — using ephemeral random secret (dev only)")
 
 _STATE_TTL_SECONDS = 600  # 10 minutes
 
 # Frontend URL for redirects after OAuth
 _FRONTEND_URL = os.environ.get(
     "FRONTEND_URL",
-    os.environ.get("FRONTEND_ORIGIN", "https://meridian-dun-nu.vercel.app")
+    os.environ.get("FRONTEND_ORIGIN", "https://meridian.tips")
 )
 
 oauth_manager = OAuthManager()

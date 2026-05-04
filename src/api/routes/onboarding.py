@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/onboarding", tags=["onboarding"])
 
 _FRONTEND_URL = os.environ.get(
     "FRONTEND_URL",
-    os.environ.get("FRONTEND_ORIGIN", "https://meridian-dun-nu.vercel.app"),
+    os.environ.get("FRONTEND_ORIGIN", "https://meridian.tips"),
 )
 
 
@@ -188,6 +188,207 @@ async def handle_subscription_payment(payment_data: dict):
         logger.info(f"Auto-onboarding complete for {customer_email}, org={result.org_id}")
     except Exception as e:
         logger.error(f"Auto-onboarding failed for {customer_email}: {e}", exc_info=True)
+
+
+# ── SR-Driven Customer Provisioning ─────────────────────────
+
+class ProvisionCustomerRequest(BaseModel):
+    org_id: str
+    email: EmailStr
+    owner_name: str
+    business_name: str
+    plan: str = "starter"
+    monthly_price: int = 500
+    rep_id: str | None = None
+    rep_name: str | None = None
+
+
+class ProvisionCustomerResponse(BaseModel):
+    org_id: str
+    email: str
+    temporary_password: str
+    login_url: str
+    invoices_sent: bool
+    welcome_email_sent: bool
+
+
+@router.post("/provision-customer", response_model=ProvisionCustomerResponse)
+async def provision_customer(req: ProvisionCustomerRequest):
+    """
+    Full customer provisioning — called by the sales rep after confirming a deal.
+
+    1. Creates Supabase Auth user with generated password
+    2. Links user to existing organization (created by SR frontend)
+    3. Sends Square invoices (setup fee + monthly recurring)
+    4. Sends welcome email with login credentials
+
+    Returns the generated password so the SR can see/share it.
+    """
+    import httpx
+
+    db = get_db()
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+
+    if not supabase_url or not service_key:
+        raise HTTPException(503, "Supabase not configured")
+
+    temp_password = _generate_password()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1. Create Supabase Auth user (admin API — skips email confirmation)
+    auth_user_id = None
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{supabase_url}/auth/v1/admin/users",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "email": req.email,
+                "password": temp_password,
+                "email_confirm": True,
+                "user_metadata": {
+                    "full_name": req.owner_name,
+                    "business_name": req.business_name,
+                    "org_id": req.org_id,
+                    "role": "owner",
+                },
+            },
+        )
+        if resp.status_code in (200, 201):
+            auth_user_id = resp.json().get("id")
+            logger.info(f"Created auth user {auth_user_id} for {req.email}")
+        elif resp.status_code == 422 and "already been registered" in resp.text.lower():
+            logger.info(f"Auth user already exists for {req.email} — proceeding")
+        else:
+            logger.error(f"Auth user creation failed: {resp.status_code} {resp.text}")
+            raise HTTPException(400, f"Could not create user account: {resp.json().get('msg', 'Unknown error')}")
+
+    # 2. Create business record linking auth user to org
+    if auth_user_id:
+        try:
+            await db.upsert("businesses", {
+                "id": req.org_id,
+                "owner_user_id": auth_user_id,
+                "name": req.business_name,
+                "owner_name": req.owner_name,
+                "email": req.email,
+                "plan_tier": req.plan,
+                "pos_connected": False,
+                "onboarded": True,
+                "created_at": now,
+            }, on_conflict="id")
+        except Exception as e:
+            logger.warning(f"Business upsert warning: {e}")
+
+    # 3. Send Square invoices (setup fee + monthly recurring)
+    invoices_sent = False
+    try:
+        from src.billing.billing_service import BillingService
+        billing = BillingService(db)
+
+        plan_label = req.plan.replace("_", " ").title()
+
+        setup_result = await billing.create_invoice(
+            org_id=req.org_id,
+            amount_cents=req.monthly_price * 100,
+            customer_email=req.email,
+            description=f"Meridian Analytics - {plan_label} Plan (Setup Fee)",
+            due_days=3,
+        )
+        recurring_result = await billing.create_invoice(
+            org_id=req.org_id,
+            amount_cents=req.monthly_price * 100,
+            customer_email=req.email,
+            description=f"Meridian Analytics - {plan_label} Plan (Monthly Recurring)",
+            due_days=30,
+        )
+
+        invoices_sent = setup_result.success and recurring_result.success
+        if invoices_sent:
+            logger.info(f"Sent invoices for {req.email}: setup={setup_result.invoice_id}, recurring={recurring_result.invoice_id}")
+
+            await db.upsert("subscriptions", {
+                "org_id": req.org_id,
+                "tier": req.plan,
+                "status": "pending_payment",
+                "monthly_price_cents": req.monthly_price * 100,
+                "current_period_start": now,
+                "metadata": {
+                    "payment_method": "square_invoice",
+                    "setup_invoice_id": setup_result.invoice_id,
+                    "recurring_invoice_id": recurring_result.invoice_id,
+                    "created_via": "sr_provision",
+                    "rep_id": req.rep_id,
+                },
+            }, on_conflict="org_id")
+    except ImportError:
+        logger.warning("Billing service not available — skipping invoices")
+    except Exception as e:
+        logger.warning(f"Invoice creation failed: {e}")
+
+    # 4. Send welcome email with credentials
+    welcome_sent = False
+    login_url = f"{_FRONTEND_URL}/customer/login"
+    try:
+        email_body = (
+            f"Hi {req.owner_name.split()[0]},\n\n"
+            f"Your Meridian analytics dashboard for {req.business_name} is live!\n\n"
+            f"Here are your login credentials:\n\n"
+            f"  Portal: {login_url}\n"
+            f"  Email: {req.email}\n"
+            f"  Password: {temp_password}\n\n"
+            f"Please change your password after your first login.\n\n"
+            f"What happens next:\n"
+            f"  1. Log in at the link above\n"
+            f"  2. Connect your POS system (Square, Clover, or Toast)\n"
+            f"  3. Your data syncs in 10-30 minutes\n"
+            f"  4. AI-powered insights start appearing on your dashboard\n\n"
+        )
+        if req.rep_name:
+            email_body += f"Your rep {req.rep_name} is here to help if you need anything.\n\n"
+        email_body += "Welcome to Meridian!\n"
+
+        # Log the email (production: replace with SendGrid/Resend)
+        logger.info(f"Welcome email for {req.email}:\n{email_body}")
+
+        await db.insert("notifications", {
+            "id": str(uuid4()),
+            "org_id": req.org_id,
+            "title": f"Welcome to Meridian — {req.business_name}",
+            "body": email_body,
+            "priority": "high",
+            "source_type": "event",
+            "status": "active",
+            "created_at": now,
+            "metadata": {
+                "type": "welcome_email",
+                "recipient": req.email,
+                "temporary_password": temp_password,
+            },
+        })
+        welcome_sent = True
+    except Exception as e:
+        logger.warning(f"Welcome notification failed: {e}")
+
+    return ProvisionCustomerResponse(
+        org_id=req.org_id,
+        email=req.email,
+        temporary_password=temp_password,
+        login_url=login_url,
+        invoices_sent=invoices_sent,
+        welcome_email_sent=welcome_sent,
+    )
+
+
+def _generate_password() -> str:
+    """Generate a readable temporary password like 'Mer-7kX9pQ2m'."""
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+    suffix = "".join(secrets.choice(chars) for _ in range(8))
+    return f"Mer-{suffix}"
 
 
 def _hash_password(password: str) -> str:

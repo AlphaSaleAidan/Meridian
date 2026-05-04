@@ -65,6 +65,9 @@ class TrafficIngestRequest(BaseModel):
     queue_wait_avg_sec: float = 0
     conversion_rate: float = 0
     demographic_breakdown: dict = {}
+    # Depth metrics (optional — populated when edge runs with ENABLE_DEPTH=1)
+    depth_zone_occupancy: Optional[dict] = None
+    avg_person_distance: Optional[float] = None
 
 
 class VisitIngestRequest(BaseModel):
@@ -227,6 +230,10 @@ async def ingest_traffic(req: TrafficIngestRequest):
         "conversion_rate": req.conversion_rate,
         "demographic_breakdown": req.demographic_breakdown,
     }
+    if req.depth_zone_occupancy is not None:
+        row["depth_zone_occupancy"] = req.depth_zone_occupancy
+    if req.avg_person_distance is not None:
+        row["avg_person_distance"] = req.avg_person_distance
     result = (
         db.client.table("vision_traffic")
         .upsert(row, on_conflict="org_id,camera_id,bucket")

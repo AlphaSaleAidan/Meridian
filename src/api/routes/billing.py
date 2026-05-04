@@ -10,10 +10,12 @@ Endpoints:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+
+from ...db import get_db
 
 logger = logging.getLogger("meridian.billing.routes")
 
@@ -48,7 +50,7 @@ class CancelRequest(BaseModel):
 # ── Route handlers ──
 
 @router.post("/create-checkout")
-async def create_checkout(req: CheckoutRequest, request: Request):
+async def create_checkout(req: CheckoutRequest):
     """
     Create a Square Checkout (Payment Link) for a new customer subscription.
     Called by the onboarding wizard's payment step.
@@ -57,7 +59,7 @@ async def create_checkout(req: CheckoutRequest, request: Request):
     try:
         from src.billing.billing_service import BillingService
 
-        db = request.app.state.db
+        db = get_db()
         service = BillingService(db)
 
         result = await service.create_checkout(
@@ -80,18 +82,19 @@ async def create_checkout(req: CheckoutRequest, request: Request):
             raise HTTPException(status_code=400, detail=result.error)
 
     except ImportError:
-        # Billing service not yet deployed — return a helpful error
         raise HTTPException(
             status_code=501,
             detail="Billing service not yet configured. Set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID."
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Checkout creation failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Checkout creation failed")
 
 
 @router.post("/create-invoice")
-async def create_invoice(req: InvoiceRequest, request: Request):
+async def create_invoice(req: InvoiceRequest):
     """
     Create a Square Invoice for custom amounts or manual billing.
     Used for non-standard pricing or when the SR sets a custom amount.
@@ -99,7 +102,7 @@ async def create_invoice(req: InvoiceRequest, request: Request):
     try:
         from src.billing.billing_service import BillingService
 
-        db = request.app.state.db
+        db = get_db()
         service = BillingService(db)
 
         result = await service.create_invoice(
@@ -120,18 +123,20 @@ async def create_invoice(req: InvoiceRequest, request: Request):
 
     except ImportError:
         raise HTTPException(status_code=501, detail="Billing service not yet configured.")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Invoice creation failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Invoice creation failed")
 
 
 @router.post("/cancel")
-async def cancel_subscription(req: CancelRequest, request: Request):
+async def cancel_subscription(req: CancelRequest):
     """Cancel a subscription. Stops future auto-renewals."""
     try:
         from src.billing.billing_service import BillingService
 
-        db = request.app.state.db
+        db = get_db()
         service = BillingService(db)
 
         success = await service.cancel_subscription(req.org_id, req.reason)
@@ -143,16 +148,18 @@ async def cancel_subscription(req: CancelRequest, request: Request):
 
     except ImportError:
         raise HTTPException(status_code=501, detail="Billing service not yet configured.")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Cancellation failed")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Cancellation failed")
 
 
 @router.get("/status/{org_id}")
-async def get_billing_status(org_id: str, request: Request):
+async def get_billing_status(org_id: str):
     """Get current subscription/billing status for an organization."""
     try:
-        db = request.app.state.db
+        db = get_db()
 
         result = db.table("subscriptions").select("*").eq("org_id", org_id).single().execute()
 
@@ -170,9 +177,11 @@ async def get_billing_status(org_id: str, request: Request):
         else:
             return {"status": "none", "tier": None}
 
+    except RuntimeError:
+        return {"status": "unavailable", "tier": None}
     except Exception as e:
         logger.exception(f"Status check failed for org {org_id}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Could not retrieve billing status")
 
 
 @router.post("/webhook")
@@ -192,24 +201,22 @@ async def handle_billing_webhook(request: Request):
 
         logger.info(f"Billing webhook: {event_type}")
 
+        db = get_db()
+
         if event_type == "payment.completed":
             payment = data.get("payment", {})
             order_id = payment.get("order_id", "")
 
             if order_id:
-                db = request.app.state.db
-
-                # Find subscription by order ID in metadata
                 subs = db.table("subscriptions").select("*").execute()
                 for sub in (subs.data or []):
                     meta = sub.get("metadata") or {}
                     if meta.get("square_order_id") == order_id:
-                        # Activate the subscription
                         db.table("subscriptions").update({
                             "status": "active",
                             "metadata": {
                                 **meta,
-                                "payment_completed_at": datetime.utcnow().isoformat(),
+                                "payment_completed_at": datetime.now(timezone.utc).isoformat(),
                                 "square_payment_id": payment.get("id"),
                             },
                         }).eq("id", sub["id"]).execute()
@@ -222,14 +229,10 @@ async def handle_billing_webhook(request: Request):
             invoice_id = invoice.get("id", "")
 
             if invoice_id:
-                db = request.app.state.db
-
-                # Find subscription by invoice ID in metadata
                 subs = db.table("subscriptions").select("*").execute()
                 for sub in (subs.data or []):
                     meta = sub.get("metadata") or {}
                     if meta.get("renewal_invoice_id") == invoice_id:
-                        # Update status back to active if it was past_due
                         if sub.get("status") == "past_due":
                             db.table("subscriptions").update({
                                 "status": "active",
@@ -239,6 +242,9 @@ async def handle_billing_webhook(request: Request):
 
         return {"status": "ok"}
 
+    except RuntimeError:
+        logger.error("Database not available for billing webhook")
+        return {"status": "error", "detail": "Database unavailable"}
     except Exception as e:
         logger.exception("Billing webhook processing failed")
-        return {"status": "error", "detail": str(e)}
+        return {"status": "error", "detail": "Webhook processing failed"}

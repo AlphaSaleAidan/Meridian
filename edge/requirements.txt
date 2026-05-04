@@ -1,6 +1,11 @@
 httpx>=0.27.0
+ultralytics>=8.1.0
 supervision>=0.21.0
 boxmot>=10.0.0
 deepface>=0.0.89
 opencv-python-headless>=4.9.0
 numpy>=1.26
+# Depth Anything V2 (only needed when ENABLE_DEPTH=1)
+torch>=2.1.0
+torchvision>=0.16.0
+transformers>=4.40.0

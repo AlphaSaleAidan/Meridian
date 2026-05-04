@@ -17,7 +17,7 @@ Uses Square catalog items:
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
 
@@ -231,7 +231,7 @@ class BillingService:
                 return InvoiceResult(error="Failed to create order for invoice")
 
             # Create the invoice
-            due_date = (datetime.utcnow() + timedelta(days=due_days)).strftime("%Y-%m-%d")
+            due_date = (datetime.now(timezone.utc) + timedelta(days=due_days)).strftime("%Y-%m-%d")
 
             invoice_resp = await self.http.post("/v2/invoices", json={
                 "idempotency_key": idempotency_key,
@@ -300,7 +300,7 @@ class BillingService:
         - Every 3 months: subscription is reconfirmed (notification sent)
         """
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Find active subscriptions where current_period_end is today or past
             result = self.db.table("subscriptions").select(
@@ -384,7 +384,7 @@ class BillingService:
         try:
             self.db.table("subscriptions").update({
                 "status": "canceled",
-                "canceled_at": datetime.utcnow().isoformat(),
+                "canceled_at": datetime.now(timezone.utc).isoformat(),
                 "cancel_reason": reason,
             }).eq("org_id", org_id).eq("status", "active").execute()
 
@@ -444,7 +444,7 @@ class BillingService:
         status: str = "pending_payment",
     ):
         """Record or update a subscription in the database."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         self.db.table("subscriptions").upsert({
             "org_id": org_id,
