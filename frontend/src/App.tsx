@@ -25,8 +25,10 @@ import PeakHoursPage from '@/pages/PeakHoursPage'
 import MarginsPage from '@/pages/MarginsPage'
 import MenuEngineeringPage from '@/pages/MenuEngineeringPage'
 import AnomaliesPage from '@/pages/AnomaliesPage'
+import SpaceTab from '@/pages/SpaceTab'
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
+const CanadaLayout = lazy(() => import('@/components/CanadaLayout'))
 // Sales portal moved to Viktor Space — OnboardingPage no longer needed here
 const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazy(() => import('@/pages/CareersPage'))
@@ -60,6 +62,7 @@ function CustomerDashboardRoutes() {
       <Route path="margins" element={<MarginsPage />} />
       <Route path="menu-matrix" element={<MenuEngineeringPage />} />
       <Route path="anomalies" element={<AnomaliesPage />} />
+      <Route path="space" element={<SpaceTab />} />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>
@@ -141,6 +144,17 @@ export default function App() {
 
               {/* Demo — open access, no auth required */}
               <Route path="/demo" element={<Layout />}>
+                {CustomerDashboardRoutes()}
+              </Route>
+
+              {/* ══════════════════════════════════════════════
+                  CANADIAN PORTAL — demo mode, no auth
+                  ══════════════════════════════════════════════ */}
+              <Route path="/canada" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <CanadaLayout />
+                </Suspense>
+              }>
                 {CustomerDashboardRoutes()}
               </Route>
 

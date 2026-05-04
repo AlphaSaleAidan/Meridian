@@ -11,8 +11,7 @@ import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import TransactionDrillDown from '@/components/TransactionDrillDown'
-
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
+import { useOrgId } from '@/hooks/useOrg'
 
 const periods = [
   { label: '7D', days: 7 },
@@ -32,7 +31,8 @@ const tooltipStyle = {
 export default function RevenuePage() {
   const [days, setDays] = useState(30)
   const [drillDate, setDrillDate] = useState<string | null>(null)
-  const revenue = useApi(() => api.revenue(ORG_ID, days), [days])
+  const orgId = useOrgId()
+  const revenue = useApi(() => api.revenue(orgId, days), [orgId, days])
 
   if (revenue.loading) return <LoadingPage />
   if (revenue.error) return <ErrorState message={revenue.error} onRetry={revenue.refetch} />

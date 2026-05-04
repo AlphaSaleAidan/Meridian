@@ -5,6 +5,8 @@ import { generateAnomalies, type Anomaly } from '@/lib/agent-data'
 import { formatRelative } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import AnalyzingDataState from '@/components/AnalyzingDataState'
+import { useIsDemo } from '@/hooks/useOrg'
 
 const severityConfig = {
   critical: { color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/15', icon: AlertTriangle, label: 'Critical' },
@@ -73,7 +75,28 @@ function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
 }
 
 export default function AnomaliesPage() {
+  const isDemo = useIsDemo()
   const anomalies = generateAnomalies()
+
+  if (!isDemo) {
+    return (
+      <div className="space-y-6">
+        <ScrollReveal variant="fadeUp">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Anomaly Detection</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              Real-time alerts powered by AI agents
+            </p>
+          </div>
+        </ScrollReveal>
+        <AnalyzingDataState
+          title="Establishing your baselines"
+          description="Our AI needs a few days of transaction data to establish normal patterns before it can detect anomalies. Alerts will appear here automatically."
+        />
+      </div>
+    )
+  }
+
   const unacked = anomalies.filter(a => !a.acknowledged).length
   const critical = anomalies.filter(a => a.severity === 'critical').length
   const warnings = anomalies.filter(a => a.severity === 'warning').length

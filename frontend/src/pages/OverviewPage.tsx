@@ -16,7 +16,8 @@ import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { generateTopActions, generateAgents, generateRFMSegments } from '@/lib/agent-data'
-import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
+import { useOrgId, useTier, useIsDemo, tierLimits } from '@/hooks/useOrg'
+import { AnalyzingSection } from '@/components/AnalyzingDataState'
 
 export default function OverviewPage() {
   const location = useLocation()
@@ -24,20 +25,23 @@ export default function OverviewPage() {
   const orgId = useOrgId()
   const tier = useTier()
   const limits = tierLimits[tier]
+  const isDemo = useIsDemo()
 
   const overview = useApi(() => api.overview(orgId), [orgId])
   const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
   const insights = useApi(() => api.insights(orgId, 5), [orgId])
   const forecastData = useApi(() => api.forecasts(orgId), [orgId])
 
-  const topActions = generateTopActions()
-  const agents = generateAgents()
-  const segments = generateRFMSegments()
+  const topActions = isDemo ? generateTopActions() : []
+  const agents = isDemo ? generateAgents() : []
+  const segments = isDemo ? generateRFMSegments() : []
   const activeAgents = agents.filter(a => a.status === 'active' || a.status === 'running').length
-  const avgRetention = Math.round(
-    segments.reduce((s, seg) => s + seg.retentionScore * seg.count, 0) /
-    segments.reduce((s, seg) => s + seg.count, 0)
-  )
+  const avgRetention = segments.length > 0
+    ? Math.round(
+        segments.reduce((s, seg) => s + seg.retentionScore * seg.count, 0) /
+        segments.reduce((s, seg) => s + seg.count, 0)
+      )
+    : 0
 
   if (overview.loading) return <LoadingPage />
   if (overview.error) return <ErrorState message={overview.error} onRetry={overview.refetch} />
@@ -92,10 +96,10 @@ export default function OverviewPage() {
         <StaggerItem>
           <StatCard
             label="Retention Score"
-            value={`${avgRetention}%`}
+            value={avgRetention > 0 ? `${avgRetention}%` : '—'}
             icon={Users}
             iconColor="text-[#7C5CFF]"
-            subtitle="weighted by segment"
+            subtitle={avgRetention > 0 ? 'weighted by segment' : 'analyzing...'}
           />
         </StaggerItem>
       </StaggerContainer>
@@ -111,35 +115,39 @@ export default function OverviewPage() {
             Details →
           </Link>
         </div>
-        <div className="space-y-2">
-          {topActions.map(action => (
-            <DashboardTiltCard
-              key={action.rank}
-              className={clsx(
-                'card p-4 flex items-center gap-3',
-                action.priority === 'Critical' && 'border-red-500/10'
-              )}
-            >
-              <div className={clsx(
-                'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-sm font-mono',
-                action.rank === 1 ? 'bg-red-500/10 text-red-400' : action.rank === 2 ? 'bg-amber-400/10 text-amber-400' : 'bg-[#1A8FD6]/10 text-[#1A8FD6]'
-              )}>
-                {action.rank}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[#F5F5F7] truncate">{action.title}</p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={clsx(
-                    'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
-                    action.priority === 'Critical' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  )}>{action.priority}</span>
-                  <span className="text-[10px] text-[#A1A1A8]/50 font-mono">{action.confidence}% conf</span>
+        {topActions.length > 0 ? (
+          <div className="space-y-2">
+            {topActions.map(action => (
+              <DashboardTiltCard
+                key={action.rank}
+                className={clsx(
+                  'card p-4 flex items-center gap-3',
+                  action.priority === 'Critical' && 'border-red-500/10'
+                )}
+              >
+                <div className={clsx(
+                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-sm font-mono',
+                  action.rank === 1 ? 'bg-red-500/10 text-red-400' : action.rank === 2 ? 'bg-amber-400/10 text-amber-400' : 'bg-[#1A8FD6]/10 text-[#1A8FD6]'
+                )}>
+                  {action.rank}
                 </div>
-              </div>
-              <span className="text-sm font-bold font-mono text-[#17C5B0] flex-shrink-0">+{formatCents(action.impactCents)}/mo</span>
-            </DashboardTiltCard>
-          ))}
-        </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#F5F5F7] truncate">{action.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={clsx(
+                      'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                      action.priority === 'Critical' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    )}>{action.priority}</span>
+                    <span className="text-[10px] text-[#A1A1A8]/50 font-mono">{action.confidence}% conf</span>
+                  </div>
+                </div>
+                <span className="text-sm font-bold font-mono text-[#17C5B0] flex-shrink-0">+{formatCents(action.impactCents)}/mo</span>
+              </DashboardTiltCard>
+            ))}
+          </div>
+        ) : (
+          <AnalyzingSection title="Identifying your top actions..." description="Actions will appear once enough data is analyzed by our AI agents." />
+        )}
       </ScrollReveal>
 
       {/* Revenue Forecast Widget + Money Left */}
@@ -217,21 +225,25 @@ export default function OverviewPage() {
             View all →
           </Link>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          {agents.slice(0, 5).map(agent => (
-            <div key={agent.id} className="card p-3">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', agent.status === 'active' ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/30')} />
-                <p className="text-[11px] font-medium text-[#F5F5F7] truncate">{agent.name}</p>
+        {agents.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            {agents.slice(0, 5).map(agent => (
+              <div key={agent.id} className="card p-3">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className={clsx('w-2 h-2 rounded-full flex-shrink-0', agent.status === 'active' ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/30')} />
+                  <p className="text-[11px] font-medium text-[#F5F5F7] truncate">{agent.name}</p>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8]/50 line-clamp-2 leading-relaxed">{agent.latestFinding}</p>
+                <div className="flex items-center justify-between mt-1.5">
+                  <span className="text-[9px] font-mono text-[#A1A1A8]/40">{agent.findings} findings</span>
+                  <span className="text-[9px] font-mono text-[#A1A1A8]/40">{agent.confidence}%</span>
+                </div>
               </div>
-              <p className="text-[10px] text-[#A1A1A8]/50 line-clamp-2 leading-relaxed">{agent.latestFinding}</p>
-              <div className="flex items-center justify-between mt-1.5">
-                <span className="text-[9px] font-mono text-[#A1A1A8]/40">{agent.findings} findings</span>
-                <span className="text-[9px] font-mono text-[#A1A1A8]/40">{agent.confidence}%</span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <AnalyzingSection title="Deploying agents..." description="AI agents are being initialized to analyze your business data." />
+        )}
       </ScrollReveal>
 
       {/* Recent Insights */}

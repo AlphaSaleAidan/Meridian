@@ -4,6 +4,8 @@ import { generateMenuEngineering, type MenuEngItem, type MenuQuadrant } from '@/
 import { formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import AnalyzingDataState from '@/components/AnalyzingDataState'
+import { useIsDemo } from '@/hooks/useOrg'
 
 const quadrantConfig: Record<MenuQuadrant, { label: string; color: string; bg: string; border: string; icon: typeof Star; desc: string }> = {
   star:      { label: 'Stars',       color: 'text-[#17C5B0]', bg: 'bg-[#17C5B0]/10', border: 'border-[#17C5B0]/15', icon: Star,       desc: 'High profit + high popularity' },
@@ -49,7 +51,28 @@ function QuadrantCard({ quadrant, items }: { quadrant: MenuQuadrant; items: Menu
 }
 
 export default function MenuEngineeringPage() {
+  const isDemo = useIsDemo()
   const items = generateMenuEngineering()
+
+  if (!isDemo) {
+    return (
+      <div className="space-y-6">
+        <ScrollReveal variant="fadeUp">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Menu Engineering</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              BCG matrix analysis — profitability vs popularity
+            </p>
+          </div>
+        </ScrollReveal>
+        <AnalyzingDataState
+          title="Engineering your menu matrix"
+          description="Our AI needs sales volume and cost data to classify every item as a Star, Puzzle, Plowhorse, or Dog. Results appear after enough transactions are analyzed."
+        />
+      </div>
+    )
+  }
+
   const stars = items.filter(i => i.quadrant === 'star')
   const puzzles = items.filter(i => i.quadrant === 'puzzle')
   const plowhorses = items.filter(i => i.quadrant === 'plowhorse')

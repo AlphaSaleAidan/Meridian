@@ -4,6 +4,8 @@ import { generatePeakHourHeatmap, type PeakHourCell } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import AnalyzingDataState from '@/components/AnalyzingDataState'
+import { useIsDemo } from '@/hooks/useOrg'
 
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const hourLabels = Array.from({ length: 24 }, (_, i) => {
@@ -75,7 +77,28 @@ function HeatmapGrid({ cells }: { cells: PeakHourCell[] }) {
 }
 
 export default function PeakHoursPage() {
+  const isDemo = useIsDemo()
   const cells = generatePeakHourHeatmap()
+
+  if (!isDemo) {
+    return (
+      <div className="space-y-6">
+        <ScrollReveal variant="fadeUp">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Peak Hours</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              Powered by Peak Hour Optimizer agent
+            </p>
+          </div>
+        </ScrollReveal>
+        <AnalyzingDataState
+          title="Mapping your peak hours"
+          description="Our AI needs at least 7 days of transaction data to generate accurate hourly heatmaps and staffing recommendations."
+        />
+      </div>
+    )
+  }
+
 
   const peakCell = cells.reduce((max, c) => c.intensity > max.intensity ? c : max, cells[0])
   const totalTxns = cells.reduce((s, c) => s + c.transactions, 0)
