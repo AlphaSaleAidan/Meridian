@@ -103,6 +103,7 @@ export default function CustomerOnboardingWizard() {
   // Checkout
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [paymentComplete, setPaymentComplete] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const monthlyPrice = prefill.price ? parseInt(prefill.price) : 250
 
   // Processing
@@ -122,6 +123,10 @@ export default function CustomerOnboardingWizard() {
   useEffect(() => {
     const checkoutStatus = searchParams.get('checkout')
     if (checkoutStatus === 'success') {
+      const savedToken = sessionStorage.getItem('meridian_onboard_token')
+      if (savedToken) {
+        sessionStorage.removeItem('meridian_onboard_token')
+      }
       setPaymentComplete(true)
       setStep('checkout')
     }
@@ -329,78 +334,56 @@ export default function CustomerOnboardingWizard() {
   // ── Checkout Step ──
   async function handleSquareCheckout() {
     setCheckoutLoading(true)
-    setError(null)
+    setCheckoutError(null)
+
+    const planLabel = (prefill.plan || 'Standard').replace(/^\w/, (c: string) => c.toUpperCase())
 
     try {
-      // Call backend to create Square checkout link
-      const response = await fetch(`${API_BASE}/api/billing/create-checkout`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          org_id: org?.org_id,
-          plan: prefill.plan || 'standard',
-          monthly_price_cents: monthlyPrice * 100,
-          customer_email: account.email,
-          customer_name: account.ownerName,
-          business_name: account.businessName,
-          return_url: `${window.location.origin}/onboard?checkout=success&token=${prefill.token}`,
+      // Send both invoices in parallel: upfront fee + monthly recurring
+      const [upfrontRes, recurringRes] = await Promise.all([
+        fetch(`${API_BASE}/api/billing/create-invoice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            org_id: org?.org_id,
+            amount_cents: monthlyPrice * 100,
+            customer_email: account.email,
+            description: `Meridian Analytics - ${planLabel} Plan (Setup Fee)`,
+            due_days: 3,
+          }),
         }),
-      })
+        fetch(`${API_BASE}/api/billing/create-invoice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            org_id: org?.org_id,
+            amount_cents: monthlyPrice * 100,
+            customer_email: account.email,
+            description: `Meridian Analytics - ${planLabel} Plan (Monthly Recurring)`,
+            due_days: 30,
+          }),
+        }),
+      ])
 
-      if (response.ok) {
-        const data = await response.json()
-        if (data.checkout_url) {
-          // Redirect to Square Checkout
-          window.location.href = data.checkout_url
-          return
-        }
+      const upfrontOk = upfrontRes.ok
+      const recurringOk = recurringRes.ok
+
+      if (upfrontOk && recurringOk) {
+        setPaymentComplete(true)
+        return
       }
 
-      // Fallback: if backend isn't ready yet, mark as pending
-      // Store subscription info and proceed (manual billing)
-      if (supabase && org) {
-        await supabase.from('subscriptions').upsert({
-          org_id: org.org_id,
-          tier: prefill.plan || 'standard',
-          status: 'pending_payment',
-          monthly_price_cents: monthlyPrice * 100,
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          metadata: {
-            payment_method: 'square',
-            created_via: 'onboarding_wizard',
-            billing_cycle: 'monthly',
-            auto_renew: true,
-            renewal_period_months: 3,
-          },
-        }, { onConflict: 'org_id' })
-      }
-
-      setPaymentComplete(true)
+      const failedRes = !upfrontOk ? upfrontRes : recurringRes
+      const errorData = await failedRes.json().catch(() => null)
+      setCheckoutError(
+        errorData?.detail ||
+        'Unable to create invoices. Please try again or contact support at help@meridian.tips'
+      )
     } catch (err: any) {
-      // If the backend endpoint doesn't exist yet, gracefully degrade
-      console.warn('Checkout API not available yet, creating pending subscription:', err)
-
-      if (supabase && org) {
-        await supabase.from('subscriptions').upsert({
-          org_id: org.org_id,
-          tier: prefill.plan || 'standard',
-          status: 'pending_payment',
-          monthly_price_cents: monthlyPrice * 100,
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          metadata: {
-            payment_method: 'square_pending',
-            created_via: 'onboarding_wizard',
-            billing_cycle: 'monthly',
-            auto_renew: true,
-            renewal_period_months: 3,
-            note: 'Checkout API unavailable — send invoice manually',
-          },
-        }, { onConflict: 'org_id' })
-      }
-
-      setPaymentComplete(true)
+      console.error('Invoice creation failed:', err)
+      setCheckoutError(
+        'Billing system is temporarily unavailable. Please try again in a moment or contact support at help@meridian.tips'
+      )
     } finally {
       setCheckoutLoading(false)
     }
@@ -753,8 +736,8 @@ export default function CustomerOnboardingWizard() {
               </h1>
               <p className="text-[13px] text-[#A1A1A8] mt-1">
                 {paymentComplete
-                  ? 'Your subscription is active — let\'s get your dashboard running'
-                  : 'Secure payment through Square — cancel anytime'}
+                  ? 'Your dashboard is ready — pay the invoice from your email at your convenience'
+                  : 'We\'ll send a Square invoice to your email — pay when ready'}
               </p>
             </div>
 
@@ -763,9 +746,16 @@ export default function CustomerOnboardingWizard() {
                 <div className="w-14 h-14 rounded-full bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center mx-auto mb-4">
                   <CheckCircle2 size={28} className="text-[#17C5B0]" />
                 </div>
-                <p className="text-[14px] font-medium text-[#F5F5F7]">Payment Successful</p>
+                <p className="text-[14px] font-medium text-[#F5F5F7]">Invoices Sent!</p>
                 <p className="text-[12px] text-[#A1A1A8] mt-1">
-                  ${monthlyPrice}/month • Auto-renews monthly • Cancel anytime
+                  Two invoices sent to <span className="text-[#F5F5F7]">{account.email}</span>:
+                </p>
+                <div className="mt-2 space-y-1 text-[11px] text-[#A1A1A8]">
+                  <p>1. <span className="text-[#F5F5F7]">${monthlyPrice}</span> — Setup fee (due in 3 days)</p>
+                  <p>2. <span className="text-[#F5F5F7]">${monthlyPrice}/mo</span> — Monthly recurring (due in 30 days)</p>
+                </div>
+                <p className="text-[11px] text-[#A1A1A8]/60 mt-2">
+                  Pay via the links in your email — your dashboard is ready to use now
                 </p>
               </div>
             ) : (
@@ -780,31 +770,42 @@ export default function CustomerOnboardingWizard() {
                   </div>
                   <div className="space-y-2 text-[12px]">
                     <div className="flex justify-between text-[#A1A1A8]">
-                      <span>Monthly subscription</span>
+                      <span>Setup fee (due in 3 days)</span>
                       <span className="text-[#F5F5F7]">${monthlyPrice}.00</span>
                     </div>
                     <div className="flex justify-between text-[#A1A1A8]">
-                      <span>Billing cycle</span>
-                      <span className="text-[#F5F5F7]">Monthly, auto-renew</span>
+                      <span>Monthly recurring (starts day 30)</span>
+                      <span className="text-[#F5F5F7]">${monthlyPrice}.00/mo</span>
                     </div>
                     <div className="flex justify-between text-[#A1A1A8]">
                       <span>Commitment</span>
                       <span className="text-[#F5F5F7]">Cancel anytime</span>
                     </div>
                     <div className="border-t border-[#1F1F23] pt-2 flex justify-between">
-                      <span className="font-medium text-[#F5F5F7]">Due today</span>
-                      <span className="text-lg font-bold text-[#17C5B0]">${monthlyPrice}.00</span>
+                      <span className="font-medium text-[#A1A1A8]">Invoices sent to your email</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Square pay button */}
+                {checkoutError && (
+                  <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] flex items-start gap-2">
+                    <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                    <div>
+                      <p>{checkoutError}</p>
+                      <button onClick={() => setCheckoutError(null)} className="text-[11px] text-red-400/60 hover:text-red-400 mt-1 underline">
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Square invoice button */}
                 <button onClick={handleSquareCheckout} disabled={checkoutLoading}
                   className="w-full flex items-center justify-center gap-2 px-6 py-3.5 text-[14px] font-semibold text-white bg-[#006AFF] rounded-lg hover:bg-[#0055CC] disabled:opacity-50 transition-colors">
                   {checkoutLoading ? (
-                    <><Loader2 size={16} className="animate-spin" /> Opening Square Checkout...</>
+                    <><Loader2 size={16} className="animate-spin" /> Creating Invoice...</>
                   ) : (
-                    <><CreditCard size={16} /> Pay with Square</>
+                    <><CreditCard size={16} /> Send Invoice to My Email</>
                   )}
                 </button>
 
@@ -815,9 +816,9 @@ export default function CustomerOnboardingWizard() {
                 {/* Billing details */}
                 <div className="rounded-lg p-3 bg-[#17C5B0]/5 border border-[#17C5B0]/15">
                   <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
-                    <span className="text-[#17C5B0] font-medium">How billing works:</span> You'll be charged ${monthlyPrice}/month starting today.
-                    Your subscription auto-renews every month. We'll review and reconfirm your plan every 3 months.
-                    You can cancel anytime from your dashboard settings.
+                    <span className="text-[#17C5B0] font-medium">How billing works:</span> You'll receive two Square invoices via email — a one-time
+                    setup fee and your monthly recurring subscription. Pay at your convenience through the secure links.
+                    We'll review and reconfirm your plan every 3 months. Cancel anytime from your dashboard settings.
                   </p>
                 </div>
               </div>

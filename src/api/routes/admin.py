@@ -2,7 +2,6 @@
 Admin Routes — One-time setup helpers.
 """
 import logging
-import traceback
 from uuid import uuid4
 from datetime import datetime, timezone
 from fastapi import APIRouter
@@ -53,6 +52,5 @@ async def create_rep(req: CreateRepRequest):
         logger.info(f"Created sales rep: {req.name} ({req.email})")
         return {"status": "created", "rep_id": rep_id}
     except Exception as e:
-        tb = traceback.format_exc()
-        logger.error(f"create-rep failed: {e}\n{tb}")
-        return {"status": "error", "error": str(e), "traceback": tb}
+        logger.error(f"create-rep failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}

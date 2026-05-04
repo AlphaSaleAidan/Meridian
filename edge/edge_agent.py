@@ -36,6 +36,7 @@ ORG_ID = os.environ.get("MERIDIAN_ORG_ID", "")
 COMPREFACE_URL = os.environ.get("COMPREFACE_URL", "http://localhost:8000")
 COMPREFACE_API_KEY = os.environ.get("COMPREFACE_API_KEY", "")
 
+ENABLE_DEPTH = os.environ.get("ENABLE_DEPTH", "0") == "1"
 HEARTBEAT_INTERVAL = 60
 TRAFFIC_PUSH_INTERVAL = 900  # 15 minutes
 PERSON_CLASS_ID = 0
@@ -56,10 +57,16 @@ class CameraProcessor:
         self.tracker = None
         self._init_tracker()
 
+        self.depth_processor = None
+        if ENABLE_DEPTH:
+            self._init_depth()
+
         self.current_bucket = defaultdict(int)
         self.current_bucket["occupancy_samples"] = []
         self.current_bucket["queue_samples"] = []
         self.current_bucket["wait_samples"] = []
+        self.current_bucket["depth_distances"] = []
+        self.current_bucket["depth_zone_counts"] = defaultdict(list)
 
     def _init_tracker(self):
         try:
@@ -67,6 +74,16 @@ class CameraProcessor:
             self.tracker = BYTETracker()
         except ImportError:
             logger.warning("boxmot not available — tracking disabled")
+
+    def _init_depth(self):
+        try:
+            from depth_processor import DepthProcessor
+            device = os.environ.get("DEPTH_DEVICE", "cuda")
+            model_size = os.environ.get("DEPTH_MODEL_SIZE", "small")
+            self.depth_processor = DepthProcessor(model_size=model_size, device=device)
+            logger.info("Depth Anything V2 enabled")
+        except Exception as e:
+            logger.warning(f"Depth processor init failed (continuing without depth): {e}")
 
     def is_active(self) -> bool:
         now = datetime.now()
@@ -114,6 +131,28 @@ class CameraProcessor:
             )
             self.current_bucket["queue_samples"].append(in_queue)
 
+        # Depth estimation (additive — never blocks existing pipeline)
+        if self.depth_processor and detections:
+            try:
+                depth_map = self.depth_processor.estimate_depth(frame)
+
+                bboxes = [[d[0], d[1], d[2], d[3]] for d in detections]
+                distances = self.depth_processor.estimate_distances(depth_map, bboxes)
+                self.current_bucket["depth_distances"].extend(distances)
+
+                if self.zone_config:
+                    zone_depths = self.depth_processor.get_zone_depths(
+                        depth_map, self.zone_config
+                    )
+                    zone_counts = defaultdict(int)
+                    for dist in distances:
+                        zone_name = self.depth_processor.classify_zone_by_depth(dist)
+                        zone_counts[zone_name] += 1
+                    for zone_name, count in zone_counts.items():
+                        self.current_bucket["depth_zone_counts"][zone_name].append(count)
+            except Exception as e:
+                logger.debug(f"Depth estimation failed: {e}")
+
         return {
             "person_count": person_count,
             "tracked_ids": tracked_ids,
@@ -142,10 +181,24 @@ class CameraProcessor:
             "demographic_breakdown": {},
         }
 
+        # Depth metrics (only present when ENABLE_DEPTH=1)
+        depth_dists = self.current_bucket.get("depth_distances", [])
+        depth_zones = self.current_bucket.get("depth_zone_counts", {})
+        if depth_dists:
+            metrics["avg_person_distance"] = round(
+                sum(depth_dists) / len(depth_dists), 4
+            )
+            zone_occ = {}
+            for zone_name, counts in depth_zones.items():
+                zone_occ[zone_name] = round(sum(counts) / max(len(counts), 1), 1)
+            metrics["depth_zone_occupancy"] = zone_occ
+
         self.current_bucket = defaultdict(int)
         self.current_bucket["occupancy_samples"] = []
         self.current_bucket["queue_samples"] = []
         self.current_bucket["wait_samples"] = []
+        self.current_bucket["depth_distances"] = []
+        self.current_bucket["depth_zone_counts"] = defaultdict(list)
 
         return metrics
 
