@@ -6,7 +6,9 @@ import {
 } from 'lucide-react'
 import POSLogo, { POSStatusBadge } from './POSLogo'
 import { posSystems, posSystemsGrouped, type POSSystem, type POSSystemKey } from '@/data/pos-systems'
-import { useIsDemo } from '@/hooks/useOrg'
+import { useIsDemo, useOrgId } from '@/hooks/useOrg'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 interface POSSelectorPanelProps {
   onSelect?: (system: POSSystem) => void
@@ -26,6 +28,7 @@ export default function POSSelectorPanel({
   className,
 }: POSSelectorPanelProps) {
   const isDemo = useIsDemo()
+  const orgId = useOrgId()
   const [selected, setSelected] = useState<POSSystem | null>(
     defaultSelected ? posSystems.find(s => s.key === defaultSelected) || null : null
   )
@@ -69,12 +72,33 @@ export default function POSSelectorPanel({
     setWaitlistSubmitted(false)
     setWaitlistEmail('')
     onSelect?.(system)
+
+    if (orgId && orgId !== 'demo') {
+      const status = system.status === 'integrated' ? 'connected'
+        : system.status === 'contingency' ? 'manual'
+        : 'pending'
+      fetch(`${API_BASE}/api/pos/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_id: orgId, pos_system: system.key, connection_status: status }),
+      }).catch(() => {})
+    }
   }
 
   function handleWaitlistSubmit() {
     if (!waitlistEmail.trim() || !selected) return
     setWaitlistSubmitted(true)
     onWaitlist?.(selected, waitlistEmail)
+
+    fetch(`${API_BASE}/api/pos/waitlist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: waitlistEmail,
+        pos_system: selected.key,
+        org_id: orgId !== 'demo' ? orgId : undefined,
+      }),
+    }).catch(() => {})
   }
 
   return (

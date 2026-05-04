@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Search, Settings2, Users, Clock } from 'lucide-react'
+import { Search, Settings2, Users, Clock, ChevronDown } from 'lucide-react'
 import { posSystems, type POSSystem } from '@/data/pos-systems'
 import POSLogo, { POSStatusBadge } from '@/components/POSLogo'
 import type { POSSystemKey } from '@/data/pos-systems'
 import ScrollReveal from '@/components/ScrollReveal'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+const STATUS_OPTIONS = ['integrated', 'coming_soon', 'contingency', 'unsupported'] as const
 
 const demoMerchantCounts: Record<string, number> = {
   square: 847,
@@ -37,6 +41,16 @@ const demoWaitlistCounts: Record<string, number> = {
 export default function POSCoveragePage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, string>>({})
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+
+  function handleStatusChange(systemKey: string, newStatus: string) {
+    setStatusOverrides(prev => ({ ...prev, [systemKey]: newStatus }))
+    setEditingKey(null)
+    fetch(`${API_BASE}/api/pos/status?pos_system=${encodeURIComponent(systemKey)}&new_status=${encodeURIComponent(newStatus)}`, {
+      method: 'PATCH',
+    }).catch(() => {})
+  }
 
   const filtered = posSystems.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(search.toLowerCase())
@@ -123,6 +137,7 @@ export default function POSCoveragePage() {
                   <th className="text-right">Waitlist</th>
                   <th className="text-center">Effort</th>
                   <th className="text-center">Tier</th>
+                  <th className="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -140,7 +155,7 @@ export default function POSCoveragePage() {
                       </div>
                     </td>
                     <td className="text-center">
-                      <POSStatusBadge status={system.status} />
+                      <POSStatusBadge status={(statusOverrides[system.key] || system.status) as POSSystem['status']} />
                     </td>
                     <td className="text-right font-mono text-[#F5F5F7]">
                       {demoMerchantCounts[system.key] || 0}
@@ -160,6 +175,32 @@ export default function POSCoveragePage() {
                     </td>
                     <td className="text-center font-mono text-[#A1A1A8] text-xs">
                       T{system.tier}
+                    </td>
+                    <td className="text-center">
+                      <div className="relative inline-block">
+                        <button
+                          onClick={() => setEditingKey(editingKey === system.key ? null : system.key)}
+                          className="flex items-center gap-1 px-2 py-1 text-[10px] text-[#A1A1A8] border border-[#1F1F23] rounded hover:border-[#2A2A2E] transition-colors"
+                        >
+                          <Settings2 size={10} /> <ChevronDown size={10} />
+                        </button>
+                        {editingKey === system.key && (
+                          <div className="absolute z-50 right-0 mt-1 w-36 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] shadow-xl overflow-hidden">
+                            {STATUS_OPTIONS.map(opt => (
+                              <button
+                                key={opt}
+                                onClick={() => handleStatusChange(system.key, opt)}
+                                className={clsx(
+                                  'w-full text-left px-3 py-2 text-[11px] hover:bg-[#1F1F23]/50 transition-colors',
+                                  (statusOverrides[system.key] || system.status) === opt ? 'text-[#17C5B0]' : 'text-[#A1A1A8]',
+                                )}
+                              >
+                                {opt.replace('_', ' ')}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

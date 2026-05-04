@@ -234,17 +234,33 @@ export default function SpaceTab() {
 
       {/* 3D Viewer */}
       <ScrollReveal variant="fadeUp" delay={0.1}>
-        <Suspense fallback={
-          <div className="h-[400px] sm:h-[500px] rounded-xl bg-[#0A0A0B] border border-[#1F1F23] flex items-center justify-center">
-            <p className="text-sm text-[#A1A1A8]/50">Loading 3D viewer...</p>
+        {viewMode === '3d' ? (
+          <div className="relative rounded-xl overflow-hidden bg-[#0A0A0B] border border-[#1F1F23] isolate h-[400px] sm:h-[500px]">
+            <iframe
+              src="https://poly.cam/capture/D3C8EE9B-7EF3-44F2-A656-7E869018204F"
+              className="w-full h-full border-0"
+              allow="xr-spatial-tracking"
+              allowFullScreen
+              title="LiDAR store scan"
+            />
+            <div className="absolute top-3 left-3 px-3 py-1.5 rounded-lg bg-[#0A0A0B]/80 border border-[#1F1F23]">
+              <p className="text-[10px] font-mono text-[#17C5B0]">LiDAR Scan — Live</p>
+              <p className="text-[9px] text-[#A1A1A8]/40">Polycam capture • iPhone 15 Pro</p>
+            </div>
           </div>
-        }>
-          <SpaceViewer
-            showHotZones={showHotZones && (viewMode === '3d' || viewMode === 'heatmap')}
-            showSweep={viewMode === '3d'}
-            className="h-[400px] sm:h-[500px]"
-          />
-        </Suspense>
+        ) : (
+          <Suspense fallback={
+            <div className="h-[400px] sm:h-[500px] rounded-xl bg-[#0A0A0B] border border-[#1F1F23] flex items-center justify-center">
+              <p className="text-sm text-[#A1A1A8]/50">Loading 3D viewer...</p>
+            </div>
+          }>
+            <SpaceViewer
+              showHotZones={showHotZones}
+              showSweep={false}
+              className="h-[400px] sm:h-[500px]"
+            />
+          </Suspense>
+        )}
       </ScrollReveal>
 
       {/* Zone Details Table */}

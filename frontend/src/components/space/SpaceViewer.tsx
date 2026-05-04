@@ -127,8 +127,8 @@ function HotZoneRing({ zone }: { zone: HotZone }) {
         <circleGeometry args={[zone.radius * 0.8, 48]} />
         <meshBasicMaterial color={zone.color} transparent opacity={zone.intensity * 0.06} side={THREE.DoubleSide} />
       </mesh>
-      <Html position={[0, 0.3, 0]} center distanceFactor={8}>
-        <div className="px-2 py-1 rounded-md bg-[#0A0A0B]/90 border border-[#1F1F23] whitespace-nowrap pointer-events-none">
+      <Html position={[0, 0.3, 0]} center distanceFactor={8} zIndexRange={[1, 0]}>
+        <div className="px-2 py-1 rounded-md bg-[#0A0A0B]/90 border border-[#1F1F23] whitespace-nowrap pointer-events-none select-none">
           <p className="text-[10px] font-medium text-[#F5F5F7]">{zone.label}</p>
           <p className="text-[8px] font-mono" style={{ color: zone.color }}>{Math.round(zone.intensity * 100)}% traffic</p>
         </div>
@@ -174,7 +174,7 @@ export default function SpaceViewer({
   const { points, hotZones } = useMemo(() => generateDemoScan(), [])
 
   return (
-    <div className={`relative rounded-xl overflow-hidden bg-[#0A0A0B] border border-[#1F1F23] ${className}`}>
+    <div className={`relative rounded-xl overflow-hidden bg-[#0A0A0B] border border-[#1F1F23] isolate ${className}`}>
       <Canvas
         style={{ height: '100%', width: '100%' }}
         gl={{ antialias: true, alpha: false }}

@@ -51,15 +51,13 @@ class ErrorReportResponse(BaseModel):
 
 async def _get_cline():
     from ...cline.agent import ClineAgent
-    from ...db import get_db
-    db = await get_db()
-    return ClineAgent(db=db)
+    from ...db import _db_instance
+    return ClineAgent(db=_db_instance)
 
 async def _get_detector():
     from ...cline.error_detector import ErrorDetector
-    from ...db import get_db
-    db = await get_db()
-    return ErrorDetector(db=db)
+    from ...db import _db_instance
+    return ErrorDetector(db=_db_instance)
 
 
 # ── POST /api/cline/chat ─────────────────────────────────
@@ -129,8 +127,7 @@ async def report_error(req: ErrorReport):
 @router.get("/api/cline/conversations/{org_id}")
 async def get_conversations(org_id: str, limit: int = 20):
     """Get recent Cline conversations for an organization."""
-    from ...db import get_db
-    db = await get_db()
+    from ...db import _db_instance as db
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
 
@@ -191,8 +188,7 @@ async def get_health(org_id: str):
 @router.get("/api/cline/errors/{org_id}")
 async def get_errors(org_id: str, limit: int = 25):
     """Get recent Cline errors for an organization."""
-    from ...db import get_db
-    db = await get_db()
+    from ...db import _db_instance as db
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
 
@@ -216,8 +212,7 @@ async def it_dashboard():
     This endpoint bypasses org-level RLS (uses service role) to provide
     a global view for the engineering/IT team.
     """
-    from ...db import get_db
-    db = await get_db()
+    from ...db import _db_instance as db
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
 
