@@ -9,8 +9,11 @@ import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import { generateBusinessProfiles, type BusinessTypeProfile } from '@/lib/agent-data'
 import ScrollReveal from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import POSSelectorPanel from '@/components/POSSelectorPanel'
+import POSLogo from '@/components/POSLogo'
+import { posSystemsByKey, type POSSystemKey } from '@/data/pos-systems'
+import { useOrgId } from '@/hooks/useOrg'
 
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
 const API_URL = import.meta.env.VITE_API_URL || ''
 
 const statusIcons: Record<string, typeof Wifi> = {
@@ -110,7 +113,8 @@ function BusinessTuningPanel() {
 export default function SettingsPage() {
   const location = useLocation()
   const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
-  const conn = useApi(() => api.connection(ORG_ID), [])
+  const orgId = useOrgId()
+  const conn = useApi(() => api.connection(orgId), [orgId])
 
   if (conn.loading) return <LoadingPage />
   if (conn.error) return <ErrorState message={conn.error} onRetry={conn.refetch} />
@@ -133,7 +137,7 @@ export default function SettingsPage() {
             <h3 className="text-sm font-semibold text-[#F5F5F7]">POS Connections</h3>
 {connections.length === 0 && (
             <a
-              href={basePath === '/demo' ? '#' : `${API_URL}/api/square/authorize?org_id=${ORG_ID}`}
+              href={basePath === '/demo' ? '#' : `${API_URL}/api/square/authorize?org_id=${orgId}`}
               onClick={basePath === '/demo' ? (e: React.MouseEvent) => { e.preventDefault(); alert('Connect Square is disabled in demo mode. Sign up to connect your real POS!') } : undefined}
               className="px-4 py-2.5 sm:py-2 text-xs font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#6B4FE0] transition-all shadow-[0_0_16px_rgba(124,92,255,0.25)] hover:shadow-[0_0_24px_rgba(124,92,255,0.35)] inline-flex items-center gap-2"
             >
@@ -153,11 +157,15 @@ export default function SettingsPage() {
                   <div key={c.id} className="px-4 sm:px-5 py-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className={clsx('p-2 rounded-lg bg-[#1F1F23]/60', color)}>
-                          <Icon size={18} />
-                        </div>
+                        {posSystemsByKey[c.provider] ? (
+                          <POSLogo system={c.provider as POSSystemKey} size="md" />
+                        ) : (
+                          <div className={clsx('p-2 rounded-lg bg-[#1F1F23]/60', color)}>
+                            <Icon size={18} />
+                          </div>
+                        )}
                         <div>
-                          <p className="text-sm font-medium text-[#F5F5F7] capitalize">{c.provider}</p>
+                          <p className="text-sm font-medium text-[#F5F5F7] capitalize">{posSystemsByKey[c.provider]?.name || c.provider}</p>
                           <p className="text-xs text-[#A1A1A8]/50 font-mono">
                             Merchant: {c.merchant_id || 'Unknown'}
                           </p>
@@ -201,12 +209,8 @@ export default function SettingsPage() {
               })}
             </div>
           ) : (
-            <div className="px-5 py-12 text-center">
-              <WifiOff size={32} className="text-[#A1A1A8]/20 mx-auto mb-3" />
-              <p className="text-sm font-medium text-[#F5F5F7]/70">No POS Connected</p>
-              <p className="text-xs text-[#A1A1A8]/50 mt-1">
-                Connect your Square account to start getting insights.
-              </p>
+            <div className="p-4">
+              <POSSelectorPanel defaultSelected="square" />
             </div>
           )}
         </div>
@@ -228,7 +232,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
               <span className="text-[#A1A1A8]/60">Organization</span>
-              <code className="text-[#A1A1A8] font-mono text-[11px]">{ORG_ID}</code>
+              <code className="text-[#A1A1A8] font-mono text-[11px]">{orgId}</code>
             </div>
             <div className="flex items-center justify-between py-1.5">
               <span className="text-[#A1A1A8]/60">Version</span>

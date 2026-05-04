@@ -8,6 +8,8 @@ import {
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import POSSelectorPanel from '@/components/POSSelectorPanel'
+import type { POSSystem } from '@/data/pos-systems'
 
 type Step = 'account' | 'pos' | 'inventory' | 'staff' | 'schedule' | 'checkout' | 'processing' | 'done'
 
@@ -512,39 +514,22 @@ export default function CustomerOnboardingWizard() {
               <p className="text-[13px] text-[#A1A1A8] mt-1">We'll pull in your transaction history to start generating insights</p>
             </div>
 
-            <div className="rounded-xl p-6 border border-[#1F1F23] bg-[#0F0F12] space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {POS_PROVIDERS.map(p => (
-                  <button key={p.id} onClick={() => { setPosProvider(p.id); setPosFields({}) }}
-                    className={`p-3 rounded-lg border text-center transition-all ${
-                      posProvider === p.id ? 'border-[#1A8FD6]/50 bg-[#1A8FD6]/10' : 'border-[#1F1F23] hover:border-[#2A2A2E]'
-                    }`}>
-                    <div className="w-8 h-8 rounded-lg mx-auto mb-1.5 flex items-center justify-center" style={{ backgroundColor: p.color + '15', border: `1px solid ${p.color}30` }}>
-                      <Wifi size={14} style={{ color: p.color }} />
-                    </div>
-                    <span className="text-[12px] font-medium text-[#F5F5F7]">{p.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              {posProvider && (
-                <div className="space-y-3 pt-3 border-t border-[#1F1F23]">
-                  {POS_PROVIDERS.find(p => p.id === posProvider)?.fields.map(field => (
-                    <div key={field.key}>
-                      <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">{field.label}</label>
-                      <input type="text" value={posFields[field.key] || ''} onChange={e => setPosFields(f => ({ ...f, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder} className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#2A2A2E] text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:border-[#1A8FD6]/50 focus:outline-none font-mono" />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <POSSelectorPanel
+              onSelect={(system: POSSystem) => {
+                setPosProvider(system.key)
+                setPosFields({})
+              }}
+              onConnect={(system: POSSystem) => {
+                setPosProvider(system.key)
+                handlePosNext()
+              }}
+            />
 
             <div className="flex justify-between">
               <button onClick={() => setStep('account')} className="flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">
                 <ArrowLeft size={14} /> Back
               </button>
-              <button onClick={handlePosNext} disabled={saving}
+              <button onClick={handlePosNext} disabled={saving || !posProvider}
                 className="flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#1574B8] disabled:opacity-50 transition-colors">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
                 {saving ? 'Connecting...' : 'Next: Inventory'} <ArrowRight size={14} />

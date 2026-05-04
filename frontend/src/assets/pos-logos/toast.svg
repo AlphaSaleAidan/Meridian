@@ -1,0 +1,6 @@
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="12" fill="#FF4C00"/>
+  <path d="M32 14C32 14 22 24 22 34C22 39.5 26.5 44 32 44C37.5 44 42 39.5 42 34C42 24 32 14 32 14Z" fill="white"/>
+  <path d="M32 20C32 20 26 27 26 33C26 36.3 28.7 39 32 39C35.3 39 38 36.3 38 33C38 27 32 20 32 20Z" fill="#FF4C00"/>
+  <text x="14" y="56" fill="white" font-family="system-ui" font-weight="700" font-size="11">TOAST</text>
+</svg>

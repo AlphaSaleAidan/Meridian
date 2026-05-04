@@ -35,6 +35,7 @@ const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnb
 const CareersPage = lazy(() => import('@/pages/CareersPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
 const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
+const POSCoveragePage = lazy(() => import('@/pages/admin/POSCoveragePage'))
 
 function LazyFallback() {
   return (
@@ -134,6 +135,21 @@ export default function App() {
                 } />
               </Route>
 
+              {/* POS Coverage — admin only */}
+              <Route path="/admin/pos-coverage" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <Layout />
+                  </Suspense>
+                </ProtectedRoute>
+              }>
+                <Route index element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <POSCoveragePage />
+                  </Suspense>
+                } />
+              </Route>
+
               {/* Customer dashboard — protected, requires business owner auth */}
               <Route path="/app" element={
                 <ProtectedRoute>
@@ -146,6 +162,11 @@ export default function App() {
               {/* Demo — open access, no auth required */}
               <Route path="/demo" element={<Layout />}>
                 {CustomerDashboardRoutes()}
+                <Route path="pos-coverage" element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <POSCoveragePage />
+                  </Suspense>
+                } />
               </Route>
 
               {/* ══════════════════════════════════════════════
