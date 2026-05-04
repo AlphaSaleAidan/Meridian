@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/lib/auth'
 import { SalesAuthProvider } from '@/lib/sales-auth'
 import ErrorBoundary from '@/components/ErrorBoundary'
@@ -179,6 +180,7 @@ export default function App() {
           </Suspense>
         </SalesAuthProvider>
       </AuthProvider>
+      <Analytics />
     </ErrorBoundary>
   )
 }
