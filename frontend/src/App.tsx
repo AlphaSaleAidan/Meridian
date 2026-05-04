@@ -9,6 +9,7 @@ import Layout from '@/components/Layout'
 
 import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
 import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
+import CanadaLoginPage from '@/pages/customer/CanadaLoginPage'
 
 import OverviewPage from '@/pages/OverviewPage'
 import RevenuePage from '@/pages/RevenuePage'
@@ -36,6 +37,10 @@ const CareersPage = lazy(() => import('@/pages/CareersPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
 const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
 const POSCoveragePage = lazy(() => import('@/pages/admin/POSCoveragePage'))
+
+function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
+  return <ProtectedRoute loginPath="/canada/login">{children}</ProtectedRoute>
+}
 
 function LazyFallback() {
   return (
@@ -170,12 +175,15 @@ export default function App() {
               </Route>
 
               {/* ══════════════════════════════════════════════
-                  CANADIAN PORTAL — demo mode, no auth
+                  CANADIAN PORTAL — auth-gated
                   ══════════════════════════════════════════════ */}
+              <Route path="/canada/login" element={<CanadaLoginPage />} />
               <Route path="/canada" element={
-                <Suspense fallback={<LazyFallback />}>
-                  <CanadaLayout />
-                </Suspense>
+                <CanadaProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <CanadaLayout />
+                  </Suspense>
+                </CanadaProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}
               </Route>

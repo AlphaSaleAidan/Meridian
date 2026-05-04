@@ -4,7 +4,7 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { ShieldX } from 'lucide-react'
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export default function ProtectedRoute({ children, loginPath = '/customer/login' }: { children: React.ReactNode; loginPath?: string }) {
   const { ready, authenticated, org, isSalesRep } = useAuth()
   const salesAuth = useSalesAuth()
   const location = useLocation()
@@ -28,7 +28,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   if (!authenticated) {
-    return <Navigate to="/customer/login" state={{ from: location.pathname }} replace />
+    return <Navigate to={loginPath} state={{ from: location.pathname }} replace />
   }
 
   return <>{children}</>
