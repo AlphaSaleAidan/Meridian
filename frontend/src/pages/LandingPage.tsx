@@ -444,6 +444,9 @@ export default function LandingPage() {
                 <a onClick={() => navigate('/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
                 <a onClick={() => navigate('/sales/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
                 <a onClick={() => navigate('/customer/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>
+                <a href="/canada" className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md border border-[#1F1F23] hover:border-[#17C5B0]/40 hover:text-[#17C5B0] transition-colors">
+                  <span className="text-[11px]">🍁</span> Canadian Portal
+                </a>
               </div>
               <p className="text-[11px] text-[#A1A1A8]/30">© 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>
             </div>
