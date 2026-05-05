@@ -1,24 +1,36 @@
 /**
  * Formatting utilities for currency, numbers, dates, and percentages.
+ * Currency/locale adapts based on portal path (Canada vs US).
  */
+
+function getLocaleConfig(): { locale: string; currency: string } {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')) {
+    return { locale: 'en-CA', currency: 'CAD' }
+  }
+  return { locale: 'en-US', currency: 'USD' }
+}
 
 export function formatCents(cents: number | null | undefined): string {
   if (cents == null) return '$0.00'
+  const { locale, currency } = getLocaleConfig()
   const dollars = cents / 100
-  return '$' + dollars.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return dollars.toLocaleString(locale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export function formatCentsCompact(cents: number | null | undefined): string {
   if (cents == null) return '$0'
+  const { locale, currency } = getLocaleConfig()
   const dollars = cents / 100
-  if (dollars >= 1_000_000) return `$${(dollars / 1_000_000).toFixed(1)}M`
-  if (dollars >= 1_000) return `$${(dollars / 1_000).toFixed(1)}K`
-  return `$${dollars.toFixed(0)}`
+  const prefix = currency === 'CAD' ? 'CA$' : '$'
+  if (dollars >= 1_000_000) return `${prefix}${(dollars / 1_000_000).toFixed(1)}M`
+  if (dollars >= 1_000) return `${prefix}${(dollars / 1_000).toFixed(1)}K`
+  return dollars.toLocaleString(locale, { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 export function formatNumber(n: number | null | undefined): string {
   if (n == null) return '0'
-  return n.toLocaleString('en-US')
+  const { locale } = getLocaleConfig()
+  return n.toLocaleString(locale)
 }
 
 export function formatPercent(pct: number | null | undefined, decimals = 1): string {
@@ -33,14 +45,16 @@ export function formatConfidence(score: number | null | undefined): string {
 
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—'
+  const { locale } = getLocaleConfig()
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
+  const { locale } = getLocaleConfig()
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', {
+  return d.toLocaleDateString(locale, {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   })
 }
@@ -61,6 +75,7 @@ export function formatRelative(iso: string | null | undefined): string {
 }
 
 export function formatChartDate(iso: string): string {
+  const { locale } = getLocaleConfig()
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
 }

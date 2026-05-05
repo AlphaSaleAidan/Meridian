@@ -5,8 +5,7 @@ import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/format'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
-
-const ORG_ID = import.meta.env.VITE_ORG_ID || 'demo'
+import { useOrgId } from '@/hooks/useOrg'
 
 const priorityConfig: Record<string, { color: string; dot: string }> = {
   urgent: { color: 'text-red-400', dot: 'bg-red-400' },
@@ -23,7 +22,8 @@ const sourceIcons: Record<string, typeof Bell> = {
 }
 
 export default function NotificationsPage() {
-  const notifs = useApi(() => api.notifications(ORG_ID, 50), [])
+  const orgId = useOrgId()
+  const notifs = useApi(() => api.notifications(orgId, 50), [orgId])
 
   if (notifs.loading) return <LoadingPage />
   if (notifs.error) return <ErrorState message={notifs.error} onRetry={notifs.refetch} />

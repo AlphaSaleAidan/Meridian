@@ -428,7 +428,7 @@ export default function LandingPage() {
 
       {/* ─── FOOTER ───────────────────────────────── */}
       <footer className="border-t border-[#1F1F23]/40 py-8">
-        <div className="max-w-content mx-auto px-6 space-y-6">
+        <div className="max-w-content mx-auto px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <MeridianLogo size={20} showWordmark showTagline={false} />
@@ -449,16 +449,6 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Canadian Portal — standalone visible button */}
-          <div className="flex justify-center pt-2 border-t border-[#1F1F23]/30">
-            <a
-              href="/canada"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-[#1F1F23] bg-[#0F0F12] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#17C5B0]/40 hover:bg-[#17C5B0]/5 transition-all"
-            >
-              <span className="text-base">🍁</span>
-              Canadian Portal Login
-            </a>
-          </div>
         </div>
       </footer>
     </div>
