@@ -69,8 +69,8 @@ export default function CanadaSalesLayout() {
         <MeridianEmblem size={28} />
         <div className="flex flex-col">
           <span className="text-sm font-bold text-[#F5F5F7] leading-tight">Meridian</span>
-          <span className="text-[8px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
-            Canada Sales Portal <span className="text-[10px]">{'\u{1F1E8}\u{1F1E6}'}</span>
+          <span className="text-[8px] font-semibold text-[#17C5B0] uppercase tracking-widest">
+            Canada Sales Portal
           </span>
         </div>
         <button
@@ -179,8 +179,8 @@ export default function CanadaSalesLayout() {
           <MeridianEmblem size={24} />
           <div className="flex flex-col">
             <span className="text-sm font-bold text-[#F5F5F7] leading-tight">Meridian</span>
-            <span className="text-[7px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
-              Canada Sales Portal <span className="text-[9px]">{'\u{1F1E8}\u{1F1E6}'}</span>
+            <span className="text-[7px] font-semibold text-[#17C5B0] uppercase tracking-widest">
+              Canada Sales Portal
             </span>
           </div>
         </header>
