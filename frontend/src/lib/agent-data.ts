@@ -8,7 +8,7 @@ export interface AgentInfo {
   nextRun: string
   findings: number
   confidence: number
-  category: 'analysis' | 'forecasting' | 'optimization' | 'strategy' | 'coordination'
+  category: 'analysis' | 'forecasting' | 'optimization' | 'strategy' | 'coordination' | 'vision'
   description: string
   latestFinding: string
 }
@@ -162,6 +162,18 @@ export function generateAgents(): AgentInfo[] {
     { id: 'insight-narrator', name: 'Insight Narrator', status: 'active', lastRun: minutesAgo(30), nextRun: hoursFromNow(2), findings: 10, confidence: 87, category: 'coordination', description: 'Synthesizes all agent findings into plain English narratives', latestFinding: 'Generated executive brief: 3 critical actions, $3,200/mo combined impact potential' },
     { id: 'action-prioritizer', name: 'Action Prioritizer', status: 'active', lastRun: minutesAgo(25), nextRun: hoursFromNow(2), findings: 3, confidence: 85, category: 'coordination', description: 'Ranks all recommendations by ROI and effort', latestFinding: 'Top action: Matcha Latte price increase — $840/mo impact, 15 minutes effort' },
     { id: 'feature-engineer', name: 'Feature Engineer', status: 'idle', lastRun: hoursAgo(72), nextRun: hoursFromNow(96), findings: 2, confidence: 74, category: 'strategy', description: 'Identifies highest-value features from agent findings', latestFinding: 'Priority feature: Automated reorder alerts via SMS when stock hits reorder point' },
+    // ─── Camera Intelligence Agents ────────────────────────────
+    { id: 'foot-traffic-analyst', name: 'Foot Traffic Analyst', status: 'active', lastRun: minutesAgo(5), nextRun: hoursFromNow(1), findings: 7, confidence: 92, category: 'vision', description: 'Counts entries/exits via YOLO edge detection, correlates with POS transactions for walk-in conversion rates', latestFinding: '312 walk-ins today vs. 118 transactions — 37.8% conversion rate, down 4% from last Tuesday' },
+    { id: 'queue-monitor', name: 'Queue Monitor', status: 'active', lastRun: minutesAgo(2), nextRun: minutesAgo(-15), findings: 4, confidence: 89, category: 'vision', description: 'Real-time queue length and wait time estimation using ByteTrack person tracking', latestFinding: 'Avg queue wait hit 6.1 min at 8:15AM — 3 customers abandoned line before ordering' },
+    { id: 'heatmap-generator', name: 'Heatmap Generator', status: 'active', lastRun: minutesAgo(10), nextRun: hoursFromNow(1), findings: 3, confidence: 87, category: 'vision', description: 'Builds spatial density heatmaps from camera zones showing customer dwell concentration', latestFinding: 'Front-left zone near pastry case draws 2.4x more dwell than back seating — merchandising opportunity' },
+    { id: 'dwell-time-analyzer', name: 'Dwell Time Analyzer', status: 'active', lastRun: minutesAgo(8), nextRun: hoursFromNow(1), findings: 5, confidence: 84, category: 'vision', description: 'Measures how long customers spend in each defined zone, flags lingering and rapid exits', latestFinding: 'Avg dwell in ordering zone: 2.8 min (normal). Menu board zone: 4.1 min — menu complexity causing hesitation' },
+    { id: 'demographic-profiler', name: 'Demographic Profiler', status: 'active', lastRun: minutesAgo(15), nextRun: hoursFromNow(2), findings: 3, confidence: 76, category: 'vision', description: 'Anonymous age/gender estimation for audience insights — no PII stored, embeddings auto-purge at 90 days', latestFinding: '68% of morning peak is 25-40 age bracket, weekend shifts younger (18-25). Tailor promos accordingly.' },
+    { id: 'conversion-tracker', name: 'Conversion Tracker', status: 'active', lastRun: minutesAgo(5), nextRun: hoursFromNow(1), findings: 6, confidence: 90, category: 'vision', description: 'Correlates foot traffic counts with POS transactions to measure walk-in-to-purchase funnel', latestFinding: 'Conversion rate 41% weekdays vs. 28% weekends — weekend browsers need stronger in-store CTAs' },
+    { id: 'zone-performance', name: 'Zone Performance', status: 'active', lastRun: hoursAgo(1), nextRun: hoursFromNow(4), findings: 4, confidence: 83, category: 'vision', description: 'Maps revenue per square foot by zone using LiDAR spatial data and POS attribution', latestFinding: 'Counter zone: $48/sqft/day. Seating zone: $12/sqft/day. Patio: $6/sqft — consider seasonal pop-up at patio' },
+    { id: 'occupancy-optimizer', name: 'Occupancy Optimizer', status: 'active', lastRun: minutesAgo(3), nextRun: minutesAgo(-30), findings: 2, confidence: 91, category: 'vision', description: 'Tracks real-time occupancy against max capacity, alerts for fire code compliance and crowding', latestFinding: 'Peak occupancy 87% of capacity at 8:30AM Saturday. Within limits but approaching threshold.' },
+    { id: 'customer-flow-mapper', name: 'Customer Flow Mapper', status: 'active', lastRun: minutesAgo(20), nextRun: hoursFromNow(2), findings: 3, confidence: 81, category: 'vision', description: 'Traces anonymized movement paths through store to identify common routes and bottlenecks', latestFinding: 'Door → counter is 73% of paths. Only 18% browse pastry case first — relocate case near entrance?' },
+    { id: 'security-sentinel', name: 'Security Sentinel', status: 'active', lastRun: minutesAgo(1), nextRun: minutesAgo(-5), findings: 1, confidence: 88, category: 'vision', description: 'Detects unusual behavior patterns — loitering, after-hours motion, register area anomalies', latestFinding: 'All clear — no anomalous behavior detected in last 24 hours. 2 after-hours motion events were cleaning crew.' },
+    { id: 'camera-health-monitor', name: 'Camera Health Monitor', status: 'active', lastRun: minutesAgo(1), nextRun: minutesAgo(-5), findings: 1, confidence: 95, category: 'vision', description: 'Monitors camera uptime, feed quality, edge agent CPU/memory, and network latency', latestFinding: '3/3 cameras online. Edge agent CPU 42%, 1.2GB RAM. Avg inference: 28ms. All feeds nominal.' },
   ]
 }
 
@@ -231,6 +243,50 @@ export function generateTopActions(): TopAction[] {
         rawData: { cappuccino_weekly_sales: 180, co_purchase_rate: '34%', projected_rate: '52%', bundle_price: '$8.50', individual_total: '$9.50' },
         agentId: 'product-intelligence',
         agentName: 'Product Intelligence',
+      },
+    },
+    {
+      rank: 4,
+      title: 'Relocate pastry case near entrance to capture 2.4x more foot traffic',
+      description: 'Camera flow analysis shows only 18% of customers browse the pastry case in its current location. The front-left zone near the case draws 2.4x more dwell time than other zones. Moving the case into the high-traffic path could increase impulse food attachment by 15-20%.',
+      expectedImpact: '+$460/month from increased food attach rate',
+      impactCents: 46000,
+      effort: 'Medium',
+      confidence: 81,
+      priority: 'High',
+      agentSource: 'customer-flow-mapper',
+      reasoning: {
+        observation: '18% of customers browse pastry case, front-left zone has 2.4x dwell density, food attach rate 22%',
+        reasoning: 'If relocating the case into the primary traffic path increases browse rate from 18% to 40%, and 30% of browsers purchase (current rate), that adds ~26 food sales/day at $4.25 avg = $110/day = $3,300/mo. Conservative estimate: $460/mo accounting for cannibalization and adjustment period.',
+        conclusion: 'Move pastry display case to front-left zone near entrance. This puts impulse items in the natural customer flow path before they reach the counter.',
+        impact: '+$460/month from higher food attachment, improved customer experience with visible fresh items',
+        confidence: 81,
+        priority: 'High',
+        rawData: { current_browse_rate: '18%', target_browse_rate: '40%', dwell_multiplier: '2.4x', avg_food_ticket: '$4.25', daily_foot_traffic: 312 },
+        agentId: 'customer-flow-mapper',
+        agentName: 'Customer Flow Mapper',
+      },
+    },
+    {
+      rank: 5,
+      title: 'Add dedicated queue staff during 8-9AM to reduce 6.1 min wait times',
+      description: 'Queue Monitor detected avg wait time of 6.1 minutes at 8:15AM peak with 3 line abandonments. Industry benchmark for coffee is under 3 minutes. Each abandonment costs $10.20 avg ticket.',
+      expectedImpact: '+$310/month from reduced queue abandonment',
+      impactCents: 31000,
+      effort: 'Low',
+      confidence: 89,
+      priority: 'High',
+      agentSource: 'queue-monitor',
+      reasoning: {
+        observation: 'Queue wait 6.1 min at peak, 3 daily abandonments, industry benchmark 3 min',
+        reasoning: 'If 3 customers abandon the queue daily at $10.20 avg ticket = $30.60/day lost. Adding an expediter for 1 hour at $18/hr reduces abandonment to ~1. Net gain: $20.40/day x 22 workdays = $449/mo. Conservative: $310/mo.',
+        conclusion: 'Station a dedicated queue expediter (order-taker with tablet) during 8-9AM to pre-take orders and reduce perceived wait time.',
+        impact: '+$310/month net revenue after labor cost, plus improved customer satisfaction scores',
+        confidence: 89,
+        priority: 'High',
+        rawData: { avg_wait_min: 6.1, daily_abandonments: 3, avg_ticket: '$10.20', labor_cost: '$18/hr', benchmark_wait: '3 min' },
+        agentId: 'queue-monitor',
+        agentName: 'Queue Monitor',
       },
     },
   ]
@@ -539,6 +595,8 @@ export function generateAnomalies(): Anomaly[] {
     { id: 'a3', type: 'cost_spike', severity: 'warning', title: 'Oat milk usage up 40%', description: 'Oat milk consumption jumped 40% without corresponding sales increase. Possible over-portioning or waste issue.', detectedAt: hoursAgo(8), metric: 'ingredient_usage_oz', expected: 320, actual: 448, deviationPct: 40, agentSource: 'inventory-intelligence', acknowledged: true },
     { id: 'a4', type: 'traffic_anomaly', severity: 'info', title: 'Unusual Saturday surge', description: 'Transactions 35% above Saturday average. Nearby event (farmers market) likely driving foot traffic. Consider staffing up for recurring events.', detectedAt: hoursAgo(26), metric: 'transaction_count', expected: 180, actual: 243, deviationPct: 35, agentSource: 'peak-hour-optimizer', acknowledged: true },
     { id: 'a5', type: 'refund_surge', severity: 'warning', title: 'Refund rate doubled this week', description: 'Refund rate hit 4.2% vs. 2.1% trailing average. 6 of 8 refunds were on Breakfast Sandwich — possible quality issue with current batch.', detectedAt: hoursAgo(5), metric: 'refund_rate_pct', expected: 2.1, actual: 4.2, deviationPct: 100, agentSource: 'transaction-analyst', acknowledged: false },
+    { id: 'a6', type: 'traffic_anomaly', severity: 'warning', title: 'Walk-in conversion dropped 12% vs. last week', description: 'Foot Traffic Analyst counted 340 entries but only 112 transactions (33% conversion). Same period last week: 38% conversion. Potential cause: nearby construction deterring browse-to-buy.', detectedAt: hoursAgo(2), metric: 'conversion_rate_pct', expected: 38, actual: 33, deviationPct: -13, agentSource: 'conversion-tracker', acknowledged: false },
+    { id: 'a7', type: 'traffic_anomaly', severity: 'info', title: 'Queue abandonment spike at 8:15AM', description: 'Queue Monitor detected 5 line abandonments between 8:10-8:25AM — 2x the daily average. Wait time peaked at 7.2 minutes. Consider adding expediter during this window.', detectedAt: hoursAgo(4), metric: 'queue_abandonments', expected: 2, actual: 5, deviationPct: 150, agentSource: 'queue-monitor', acknowledged: false },
   ]
 }
 
@@ -570,6 +628,7 @@ export interface AgentChainLink {
 
 export function generateAgentChains(): AgentChainLink[] {
   return [
+    // ── POS Core Web ──────────────────────────────────────────
     { from: 'transaction-analyst', to: 'product-intelligence', trigger: 'new_transactions_batch', dataPassed: 'Transaction line items + timestamps' },
     { from: 'transaction-analyst', to: 'customer-segmentor', trigger: 'new_transactions_batch', dataPassed: 'Customer IDs + spend amounts' },
     { from: 'product-intelligence', to: 'margin-optimizer', trigger: 'sku_velocity_updated', dataPassed: 'SKU rankings + co-purchase rates' },
@@ -577,9 +636,53 @@ export function generateAgentChains(): AgentChainLink[] {
     { from: 'customer-segmentor', to: 'retention-strategist', trigger: 'segments_updated', dataPassed: 'RFM segments + churn risk scores' },
     { from: 'peak-hour-optimizer', to: 'staff-performance-analyst', trigger: 'staffing_gap_detected', dataPassed: 'Peak hours + current schedules' },
     { from: 'inventory-intelligence', to: 'margin-optimizer', trigger: 'cost_anomaly_detected', dataPassed: 'Ingredient cost changes + usage rates' },
-    { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'All findings from all agents' },
-    { from: 'action-prioritizer', to: 'revenue-forecaster', trigger: 'action_ranked', dataPassed: 'Top actions for impact projection' },
-    { from: 'revenue-forecaster', to: 'insight-narrator', trigger: 'forecast_updated', dataPassed: 'Updated projections for narrative' },
+
+    // ── Camera Core Web ─────────────────────────────────────
+    { from: 'foot-traffic-analyst', to: 'conversion-tracker', trigger: 'traffic_count_updated', dataPassed: 'Hourly entry/exit counts + timestamps' },
+    { from: 'foot-traffic-analyst', to: 'occupancy-optimizer', trigger: 'traffic_count_updated', dataPassed: 'Real-time occupancy deltas' },
+    { from: 'heatmap-generator', to: 'zone-performance', trigger: 'heatmap_updated', dataPassed: 'Zone density matrices + dwell concentrations' },
+    { from: 'heatmap-generator', to: 'dwell-time-analyzer', trigger: 'heatmap_updated', dataPassed: 'Zone intensity data for dwell correlation' },
+    { from: 'dwell-time-analyzer', to: 'customer-flow-mapper', trigger: 'dwell_anomaly_detected', dataPassed: 'Zone dwell times + rapid-exit flags' },
+    { from: 'camera-health-monitor', to: 'security-sentinel', trigger: 'feed_status_change', dataPassed: 'Camera uptime + blind-spot alerts' },
+
+    // ── POS × Camera Cross-References ───────────────────────
+    // Traffic → POS: every walk-in gets matched against transactions
+    { from: 'conversion-tracker', to: 'peak-hour-optimizer', trigger: 'conversion_rate_calculated', dataPassed: 'Walk-in vs. purchase rates by hour' },
+    { from: 'conversion-tracker', to: 'transaction-analyst', trigger: 'conversion_gap_detected', dataPassed: 'Hours with high traffic but low sales — POS needs to verify no system issues' },
+    { from: 'conversion-tracker', to: 'revenue-forecaster', trigger: 'conversion_trend_shift', dataPassed: 'Rolling conversion rate for revenue model adjustment' },
+
+    // Queue → POS: wait times cross-referenced with ticket values and staff
+    { from: 'queue-monitor', to: 'peak-hour-optimizer', trigger: 'queue_threshold_exceeded', dataPassed: 'Queue length + wait time + abandonment count' },
+    { from: 'queue-monitor', to: 'staff-performance-analyst', trigger: 'queue_by_register', dataPassed: 'Per-register queue depth — correlate with staff speed' },
+    { from: 'queue-monitor', to: 'transaction-analyst', trigger: 'abandonment_event', dataPassed: 'Timestamp + count of line abandonments for lost-revenue calc' },
+
+    // Zones → POS: spatial revenue attribution
+    { from: 'zone-performance', to: 'margin-optimizer', trigger: 'zone_revenue_mapped', dataPassed: 'Revenue per sqft per zone + product attribution' },
+    { from: 'zone-performance', to: 'product-intelligence', trigger: 'zone_product_correlation', dataPassed: 'Which products sell in which zones — placement optimization' },
+    { from: 'zone-performance', to: 'inventory-intelligence', trigger: 'zone_demand_signal', dataPassed: 'Zone-level demand intensity for stock positioning' },
+
+    // Demographics → POS: audience insights enriching customer data
+    { from: 'demographic-profiler', to: 'customer-segmentor', trigger: 'demographics_updated', dataPassed: 'Anonymous age/gender distribution by time slot' },
+    { from: 'demographic-profiler', to: 'product-intelligence', trigger: 'demographic_preference_shift', dataPassed: 'Product preference by demographic cohort' },
+    { from: 'demographic-profiler', to: 'retention-strategist', trigger: 'demographic_churn_signal', dataPassed: 'Demographic segments with declining visit frequency' },
+
+    // Flow → POS: path data enriching product and layout decisions
+    { from: 'customer-flow-mapper', to: 'product-intelligence', trigger: 'path_analysis_complete', dataPassed: 'Movement paths + zone visit sequences before purchase' },
+    { from: 'customer-flow-mapper', to: 'margin-optimizer', trigger: 'impulse_zone_identified', dataPassed: 'High-traffic zones with low product placement — margin capture opportunity' },
+
+    // POS → Camera: POS data enriching vision analysis
+    { from: 'transaction-analyst', to: 'foot-traffic-analyst', trigger: 'hourly_revenue_spike', dataPassed: 'Revenue spikes that need traffic correlation' },
+    { from: 'peak-hour-optimizer', to: 'heatmap-generator', trigger: 'peak_window_identified', dataPassed: 'Peak hours for targeted heatmap capture' },
+    { from: 'product-intelligence', to: 'zone-performance', trigger: 'high_margin_product_identified', dataPassed: 'Top-margin SKUs for zone placement analysis' },
+    { from: 'staff-performance-analyst', to: 'queue-monitor', trigger: 'staff_schedule_updated', dataPassed: 'Shift changes for queue prediction model' },
+
+    // ── Coordination Hub (all paths converge) ───────────────
+    { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'All POS + camera findings merged into unified insight set' },
+    { from: 'action-prioritizer', to: 'revenue-forecaster', trigger: 'action_ranked', dataPassed: 'Top actions with camera + POS impact projections' },
+    { from: 'revenue-forecaster', to: 'insight-narrator', trigger: 'forecast_updated', dataPassed: 'Updated projections incorporating vision data' },
+    { from: 'camera-health-monitor', to: 'insight-narrator', trigger: 'camera_alert', dataPassed: 'Camera status changes + edge agent health' },
+    { from: 'security-sentinel', to: 'insight-narrator', trigger: 'security_event', dataPassed: 'Anomalous behavior alerts + severity level' },
+    { from: 'occupancy-optimizer', to: 'insight-narrator', trigger: 'capacity_warning', dataPassed: 'Occupancy threshold alerts for operational narrative' },
   ]
 }
 
@@ -606,6 +709,13 @@ export function generateCalibrationHistory(): CalibrationPoint[] {
     { agentId: 'product-intelligence', agentName: 'Product Intelligence', predictionDate: '2026-03-20', predictedValue: 380, actualValue: 410, confidenceScore: 78, accuracyPct: 92, category: 'bundle uplift' },
     { agentId: 'inventory-intelligence', agentName: 'Inventory Intelligence', predictionDate: '2026-04-01', predictedValue: 2, actualValue: 2, confidenceScore: 85, accuracyPct: 100, category: 'stockout prediction' },
     { agentId: 'retention-strategist', agentName: 'Retention Strategist', predictionDate: '2026-04-10', predictedValue: 840, actualValue: null, confidenceScore: 79, accuracyPct: null, category: 'winback revenue' },
+    // Camera Intelligence calibration
+    { agentId: 'foot-traffic-analyst', agentName: 'Foot Traffic Analyst', predictionDate: '2026-04-15', predictedValue: 310, actualValue: 318, confidenceScore: 92, accuracyPct: 97, category: 'daily walk-ins' },
+    { agentId: 'conversion-tracker', agentName: 'Conversion Tracker', predictionDate: '2026-04-15', predictedValue: 38, actualValue: 36, confidenceScore: 88, accuracyPct: 95, category: 'conversion rate %' },
+    { agentId: 'queue-monitor', agentName: 'Queue Monitor', predictionDate: '2026-04-20', predictedValue: 5, actualValue: 6, confidenceScore: 85, accuracyPct: 83, category: 'peak wait time min' },
+    { agentId: 'heatmap-generator', agentName: 'Heatmap Generator', predictionDate: '2026-04-22', predictedValue: 240, actualValue: 255, confidenceScore: 84, accuracyPct: 94, category: 'zone dwell index' },
+    { agentId: 'occupancy-optimizer', agentName: 'Occupancy Optimizer', predictionDate: '2026-05-01', predictedValue: 85, actualValue: 87, confidenceScore: 91, accuracyPct: 98, category: 'peak occupancy %' },
+    { agentId: 'demographic-profiler', agentName: 'Demographic Profiler', predictionDate: '2026-05-01', predictedValue: 65, actualValue: null, confidenceScore: 76, accuracyPct: null, category: 'age bracket %' },
   ]
 }
 
