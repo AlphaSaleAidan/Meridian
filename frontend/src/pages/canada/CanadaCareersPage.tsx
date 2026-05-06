@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2, AlertCircle, Linkedin, UserCircle } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import MagneticButton from '@/components/landing/MagneticButton'
+import { supabase } from '@/lib/supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 const EASE = [0.16, 1, 0.3, 1] as const
@@ -36,6 +37,36 @@ const positions = [
   },
 ]
 
+interface Recruiter {
+  id: string
+  name: string
+  title: string
+  company: string
+  bio: string
+  linkedin_url: string
+  email: string
+  photo_url: string | null
+  region: string
+  active: boolean
+  display_order: number
+}
+
+const FALLBACK_RECRUITERS: Recruiter[] = [
+  {
+    id: '1',
+    name: 'Enoch Cheung',
+    title: 'Canadian Regional Director, Meridian',
+    company: 'Nexus Consulting',
+    bio: "Leading Meridian's expansion across Canadian markets.",
+    linkedin_url: '', // TODO: replace with real contact URL
+    email: '',
+    photo_url: null,
+    region: 'canada',
+    active: true,
+    display_order: 1,
+  },
+]
+
 const empty = { name: '', email: '', phone: '', position: '', city: '', province: '', experience: '', employer: '', linkedin: '', heardFrom: '', availability: '', message: '' }
 
 export default function CanadaCareersPage() {
@@ -44,6 +75,23 @@ export default function CanadaCareersPage() {
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [recruiters, setRecruiters] = useState<Recruiter[]>(FALLBACK_RECRUITERS)
+
+  useEffect(() => {
+    async function loadRecruiters() {
+      if (!supabase) return
+      try {
+        const { data } = await supabase
+          .from('recruiters')
+          .select('*')
+          .eq('region', 'canada')
+          .eq('active', true)
+          .order('display_order', { ascending: true })
+        if (data && data.length > 0) setRecruiters(data as Recruiter[])
+      } catch { /* use fallback */ }
+    }
+    loadRecruiters()
+  }, [])
 
   const set = (key: keyof typeof empty) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setFormData((d) => ({ ...d, [key]: e.target.value }))
@@ -76,7 +124,7 @@ export default function CanadaCareersPage() {
           <div className="flex items-center gap-3">
             <MeridianLogo size={28} showWordmark showTagline={false} />
             <span className="text-[11px] px-2 py-0.5 rounded-full border border-red-500/30 text-red-400 bg-red-500/10 font-medium flex items-center gap-1">
-              <span aria-label="maple leaf">&#127809;</span> Canada
+              <span aria-label="CN Tower">&#128508;</span> Canada
             </span>
           </div>
           <MagneticButton onClick={() => navigate('/canada')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200 flex items-center gap-1.5">
@@ -134,6 +182,57 @@ export default function CanadaCareersPage() {
           </div>
         </div>
       </section>
+
+      {/* YOUR RECRUITER */}
+      {recruiters.length > 0 && (
+        <section className="pb-16">
+          <div className="max-w-5xl mx-auto px-6">
+            <h2 className="text-xl font-semibold text-[#F5F5F7] mb-2 flex items-center gap-2">
+              <UserCircle size={20} className="text-[#1A8FD6]" /> Your Recruiter
+            </h2>
+            <p className="text-[13px] text-[#A1A1A8] mb-6">Questions about the role? Reach out directly.</p>
+            <div className={`grid gap-4 ${recruiters.length > 1 ? 'md:grid-cols-2' : 'max-w-md'}`}>
+              {recruiters.map(rec => (
+                <motion.div
+                  key={rec.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: EASE }}
+                  className="rounded-xl border border-[#1F1F23] bg-[#111113]/80 p-6 hover:border-[#1A8FD6]/30 transition-colors"
+                >
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#1A8FD6]/20 to-[#17C5B0]/20 border border-[#1F1F23] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {rec.photo_url ? (
+                        <img src={rec.photo_url} alt={rec.name} className="w-full h-full object-cover rounded-full" />
+                      ) : (
+                        <span className="text-xl font-bold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">
+                          {rec.name.split(' ').map(n => n[0]).join('')}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-[#F5F5F7] font-semibold text-[15px]">{rec.name}</h3>
+                      <p className="text-[12px] text-[#A1A1A8]">{rec.title}</p>
+                      <p className="text-[11px] text-[#1A8FD6] mt-0.5">{rec.company}</p>
+                    </div>
+                  </div>
+                  {rec.bio && (
+                    <p className="text-[13px] text-[#A1A1A8]/80 leading-relaxed mb-4">{rec.bio}</p>
+                  )}
+                  <a
+                    href={rec.linkedin_url || rec.email ? `mailto:${rec.email}` : '#'}
+                    target={rec.linkedin_url ? '_blank' : undefined}
+                    rel={rec.linkedin_url ? 'noopener noreferrer' : undefined}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium text-[#1A8FD6] border border-[#1A8FD6]/30 rounded-lg bg-[#1A8FD6]/5 hover:bg-[#1A8FD6]/10 hover:border-[#1A8FD6]/50 transition-all"
+                  >
+                    <Linkedin size={14} /> Connect with {rec.name.split(' ')[0]}
+                  </a>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* APPLICATION FORM */}
       <section className="pb-24">

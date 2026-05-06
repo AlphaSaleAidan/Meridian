@@ -38,7 +38,7 @@ export default function CanadaPortalLoginPage() {
         <div className="flex flex-col items-center gap-1 mb-8">
           <MeridianEmblem size={40} />
           <span className="text-xl font-bold text-[#F5F5F7] mt-2">
-            Meridian Canada Sales <span className="text-base">{'\u{1F341}'}</span>
+            Meridian Canada Sales <span className="text-base">{'\u{1F5FC}'}</span>
           </span>
           <span className="text-[10px] font-semibold text-[#17C5B0] uppercase tracking-widest">Canada CRM</span>
         </div>

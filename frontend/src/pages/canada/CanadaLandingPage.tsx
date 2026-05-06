@@ -64,10 +64,10 @@ export default function CanadaLandingPage() {
         <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <MeridianLogo size={28} showWordmark showTagline={false} />
-            <span className="text-lg leading-none" title="Canada">🍁</span>
+            <span className="text-lg leading-none" title="Canada">🗼</span>
           </div>
           <div className="flex items-center gap-2">
-            <MagneticButton onClick={() => navigate('/canada')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200">
+            <MagneticButton onClick={() => navigate('/demo')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200">
               Live Demo
             </MagneticButton>
             <MagneticButton onClick={() => navigate('/canada/careers')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200">
@@ -119,7 +119,7 @@ export default function CanadaLandingPage() {
             <MagneticButton onClick={() => navigate('/canada/login')} className="group px-6 py-3 text-[14px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(26,143,214,0.3)] flex items-center gap-2">
               Get Started Free <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
-            <MagneticButton onClick={() => navigate('/canada')} className="group px-6 py-3 text-[14px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 flex items-center gap-2">
+            <MagneticButton onClick={() => navigate('/demo')} className="group px-6 py-3 text-[14px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 flex items-center gap-2">
               See Live Demo <ChevronRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
           </motion.div>
@@ -275,7 +275,7 @@ export default function CanadaLandingPage() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <MeridianLogo size={20} showWordmark showTagline={false} />
-              <span className="text-sm leading-none">🍁</span>
+              <span className="text-sm leading-none">🗼</span>
               <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0]" />
                 All systems operational

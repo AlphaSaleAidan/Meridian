@@ -214,7 +214,7 @@ export default function CanadaPortalCreateCustomerPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Business Name *</label>
-                <input type="text" value={form.businessName} onChange={e => update('businessName', e.target.value)} placeholder="e.g. Maple Leaf Bistro" className={INPUT} />
+                <input type="text" value={form.businessName} onChange={e => update('businessName', e.target.value)} placeholder="e.g. Queen Street Bistro" className={INPUT} />
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Business Type</label>
@@ -235,7 +235,7 @@ export default function CanadaPortalCreateCustomerPage() {
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Email *</label>
-                <input type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="sarah@mapleleaf.ca" className={INPUT} />
+                <input type="email" value={form.email} onChange={e => update('email', e.target.value)} placeholder="sarah@queenstreet.ca" className={INPUT} />
               </div>
               <div>
                 <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Phone *</label>

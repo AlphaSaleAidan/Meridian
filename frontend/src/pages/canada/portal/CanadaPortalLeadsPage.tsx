@@ -1,10 +1,26 @@
 import { useState, useEffect } from 'react'
 import {
-  Plus, Search, Filter, MoreVertical, Phone, Mail, Calendar,
-  ChevronDown, ArrowUpDown, X,
+  Plus, Search, Mail, X, ArrowUpDown,
 } from 'lucide-react'
-import { clsx } from 'clsx'
-import { salesDemoData, STAGE_CONFIG, STAGE_ORDER, type Deal, type DealStage } from '@/lib/sales-demo-data'
+import { useSalesAuth } from '@/lib/sales-auth'
+import { supabase } from '@/lib/supabase'
+import { STAGE_CONFIG, STAGE_ORDER, type DealStage } from '@/lib/sales-demo-data'
+
+interface CanadaDeal {
+  id: string
+  business_name: string
+  contact_name: string
+  contact_email: string
+  contact_phone: string
+  vertical: string
+  stage: DealStage
+  monthly_value: number
+  commission_rate: number
+  expected_close_date: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
 
 function formatCompact(value: number): string {
   return 'CA$' + value.toLocaleString('en-CA')
@@ -24,7 +40,8 @@ function StageBadge({ stage }: { stage: DealStage }) {
 }
 
 export default function CanadaPortalLeadsPage() {
-  const [deals, setDeals] = useState<Deal[]>([])
+  const { rep } = useSalesAuth()
+  const [deals, setDeals] = useState<CanadaDeal[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<DealStage | 'all'>('all')
@@ -37,8 +54,21 @@ export default function CanadaPortalLeadsPage() {
   })
 
   useEffect(() => {
-    salesDemoData.deals().then(d => { setDeals(d); setLoading(false) })
-  }, [])
+    async function load() {
+      if (!supabase || !rep) { setLoading(false); return }
+      try {
+        const { data } = await supabase
+          .from('deals')
+          .select('*')
+          .eq('country', 'CA')
+          .eq('rep_id', rep.rep_id)
+          .order('created_at', { ascending: false })
+        if (data) setDeals(data as CanadaDeal[])
+      } catch { /* empty state */ }
+      setLoading(false)
+    }
+    load()
+  }, [rep])
 
   const filtered = deals
     .filter(d => stageFilter === 'all' || d.stage === stageFilter)
@@ -51,7 +81,7 @@ export default function CanadaPortalLeadsPage() {
 
   function handleAddDeal(e: React.FormEvent) {
     e.preventDefault()
-    const deal: Deal = {
+    const deal: CanadaDeal = {
       id: crypto.randomUUID(),
       ...newDeal,
       monthly_value: Number(newDeal.monthly_value) || 0,
@@ -87,7 +117,9 @@ export default function CanadaPortalLeadsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-[#F5F5F7]">Leads</h1>
-          <p className="text-sm text-[#A1A1A8] mt-0.5">{filtered.length} leads in pipeline</p>
+          <p className="text-sm text-[#A1A1A8] mt-0.5">
+            {deals.length === 0 ? 'No leads yet — add your first Canadian lead below.' : `${filtered.length} leads in pipeline`}
+          </p>
         </div>
         <button
           onClick={() => setShowNew(true)}
@@ -181,7 +213,7 @@ export default function CanadaPortalLeadsPage() {
                     <StageBadge stage={deal.stage} />
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-[11px] font-semibold text-[#F5F5F7]">{formatCompact(deal.monthly_value)}/mo</p>
+                    <p className="text-[11px] font-semibold text-[#F5F5F7]">{formatCompact(deal.monthly_value)} CAD/mo</p>
                     <p className="text-[10px] text-[#A1A1A8]/40">{deal.commission_rate}% rate</p>
                   </td>
                   <td className="px-4 py-3">
@@ -201,7 +233,7 @@ export default function CanadaPortalLeadsPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#A1A1A8]/40">
-                    No leads found. {search || stageFilter !== 'all' ? 'Try adjusting your filters.' : 'Click "New Lead" to add one.'}
+                    {search || stageFilter !== 'all' ? 'No leads match your filters.' : 'No leads yet. Click "New Lead" to add your first Canadian prospect.'}
                   </td>
                 </tr>
               )}
