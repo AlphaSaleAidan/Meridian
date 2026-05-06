@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2, AlertCircle } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import MagneticButton from '@/components/landing/MagneticButton'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const EASE = [0.16, 1, 0.3, 1] as const
 
@@ -42,6 +44,8 @@ const positions = [
 export default function CareersPage() {
   const navigate = useNavigate()
   const [submitted, setSubmitted] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -51,10 +55,29 @@ export default function CareersPage() {
     message: '',
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In the future this would hit an API — for now just show confirmation
-    setSubmitted(true)
+    setError('')
+    setLoading(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/careers/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          position: formData.position,
+          experience: formData.experience,
+          motivation: formData.message,
+        }),
+      })
+      if (res.ok) { setSubmitted(true); return }
+      const errData = await res.json().catch(() => null)
+      throw new Error(errData?.detail || `Server responded with ${res.status}`)
+    } catch (err: any) {
+      setError(err?.message || 'Something went wrong. Please try again.')
+    } finally { setLoading(false) }
   }
 
   return (
@@ -179,6 +202,11 @@ export default function CareersPage() {
             </motion.div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="flex items-center gap-2 text-red-400 text-[13px] bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2.5">
+                  <AlertCircle size={16} /> {error}
+                </div>
+              )}
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[12px] text-[#A1A1A8] font-medium mb-1.5">Full Name *</label>
@@ -250,10 +278,11 @@ export default function CareersPage() {
               </div>
               <button
                 type="submit"
-                className="w-full py-3 bg-[#1A8FD6] text-white font-medium rounded-lg hover:bg-[#1574B8] transition-colors duration-200 flex items-center justify-center gap-2"
+                disabled={loading}
+                className="w-full py-3 bg-[#1A8FD6] text-white font-medium rounded-lg hover:bg-[#1574B8] transition-colors duration-200 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Send size={16} />
-                Submit Application
+                {loading ? 'Submitting...' : 'Submit Application'}
               </button>
             </form>
           )}

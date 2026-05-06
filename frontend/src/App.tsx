@@ -38,6 +38,20 @@ const AdminPage = lazy(() => import('@/pages/AdminPage'))
 const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
 const POSCoveragePage = lazy(() => import('@/pages/admin/POSCoveragePage'))
 
+const CanadaLandingPage = lazy(() => import('@/pages/canada/CanadaLandingPage'))
+const CanadaCareersPage = lazy(() => import('@/pages/canada/CanadaCareersPage'))
+const CanadaSalesLayout = lazy(() => import('@/pages/canada/portal/CanadaSalesLayout'))
+const CanadaPortalLoginPage = lazy(() => import('@/pages/canada/portal/CanadaPortalLoginPage'))
+const CanadaPortalSignupPage = lazy(() => import('@/pages/canada/portal/CanadaPortalSignupPage'))
+const CanadaSalesProtectedRoute = lazy(() => import('@/pages/canada/portal/CanadaSalesProtectedRoute'))
+const CanadaPortalDashboardPage = lazy(() => import('@/pages/canada/portal/CanadaPortalDashboardPage'))
+const CanadaPortalLeadsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalLeadsPage'))
+const CanadaPortalAccountsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalAccountsPage'))
+const CanadaPortalTeamPage = lazy(() => import('@/pages/canada/portal/CanadaPortalTeamPage'))
+const CanadaPortalTrainingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalTrainingPage'))
+const CanadaPortalSettingsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalSettingsPage'))
+const CanadaPortalCreateCustomerPage = lazy(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
+
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute loginPath="/canada/login" allowSalesReps>{children}</ProtectedRoute>
 }
@@ -175,10 +189,17 @@ export default function App() {
               </Route>
 
               {/* ══════════════════════════════════════════════
-                  CANADIAN PORTAL — auth-gated
+                  CANADA — public pages
+                  ══════════════════════════════════════════════ */}
+              <Route path="/canada" element={<CanadaLandingPage />} />
+              <Route path="/canada/landing" element={<CanadaLandingPage />} />
+              <Route path="/canada/careers" element={<CanadaCareersPage />} />
+
+              {/* ══════════════════════════════════════════════
+                  CANADA — customer auth + dashboard
                   ══════════════════════════════════════════════ */}
               <Route path="/canada/login" element={<CanadaLoginPage />} />
-              <Route path="/canada" element={
+              <Route path="/canada/dashboard" element={
                 <CanadaProtectedRoute>
                   <Suspense fallback={<LazyFallback />}>
                     <CanadaLayout />
@@ -186,6 +207,28 @@ export default function App() {
                 </CanadaProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}
+              </Route>
+
+              {/* ══════════════════════════════════════════════
+                  CANADA — sales portal (native React CRM)
+                  ══════════════════════════════════════════════ */}
+              <Route path="/canada/portal/login" element={<CanadaPortalLoginPage />} />
+              <Route path="/canada/portal/signup" element={<CanadaPortalSignupPage />} />
+              <Route path="/canada/portal" element={
+                <CanadaSalesProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <CanadaSalesLayout />
+                  </Suspense>
+                </CanadaSalesProtectedRoute>
+              }>
+                <Route index element={<Navigate to="/canada/portal/dashboard" replace />} />
+                <Route path="dashboard" element={<CanadaPortalDashboardPage />} />
+                <Route path="leads" element={<CanadaPortalLeadsPage />} />
+                <Route path="new-customer" element={<CanadaPortalCreateCustomerPage />} />
+                <Route path="accounts" element={<CanadaPortalAccountsPage />} />
+                <Route path="training" element={<CanadaPortalTrainingPage />} />
+                <Route path="team" element={<CanadaPortalTeamPage />} />
+                <Route path="settings" element={<CanadaPortalSettingsPage />} />
               </Route>
 
               {/* ══════════════════════════════════════════════

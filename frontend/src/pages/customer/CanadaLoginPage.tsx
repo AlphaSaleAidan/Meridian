@@ -48,7 +48,9 @@ export default function CanadaLoginPage() {
     setError(null)
     setLoading(true)
     if (!supabase) { setLoading(false); return }
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email)
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/canada/login',
+    })
     setLoading(false)
     if (resetError) { setError(resetError.message); return }
     setSuccess('If that email exists, a reset link has been sent.')

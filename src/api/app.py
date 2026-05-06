@@ -29,6 +29,8 @@ from .routes.vision import router as vision_router
 from .routes.cline import router as cline_router
 from .routes.pos import router as pos_router
 from .routes.spaces import router as spaces_router
+from .routes.canada import router as canada_router
+from .routes.careers import router as careers_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -106,6 +108,8 @@ app.include_router(vision_router)
 app.include_router(cline_router)
 app.include_router(pos_router)
 app.include_router(spaces_router)
+app.include_router(canada_router)
+app.include_router(careers_router)
 if _has_billing:
     app.include_router(billing_router)
 
