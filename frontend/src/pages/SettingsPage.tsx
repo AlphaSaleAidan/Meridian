@@ -34,8 +34,9 @@ const statusColors: Record<string, string> = {
 }
 
 function BusinessTuningPanel() {
+  const { businessType } = useDemoContext()
   const profiles = generateBusinessProfiles()
-  const [selected, setSelected] = useState<string>('coffee_shop')
+  const [selected, setSelected] = useState<string>(businessType ?? 'coffee_shop')
   const profile = profiles.find(p => p.type === selected)!
 
   return (
