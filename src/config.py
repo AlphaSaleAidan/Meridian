@@ -32,7 +32,7 @@ def _resolve_base_url() -> str:
     railway = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
     if railway:
         return f"https://{railway}"
-    return "https://app.meridian.tips"
+    return "https://meridian.tips"
 
 _BASE_URL = _resolve_base_url()
 
