@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, TrendingUp, DollarSign, Target, Search } from 'lucide-react'
+import { Users, TrendingUp, DollarSign, Target, Search, UserPlus, MoreVertical } from 'lucide-react'
 import { clsx } from 'clsx'
 import { supabase } from '@/lib/supabase'
 
@@ -17,20 +17,26 @@ interface TeamMember {
   joined: string
 }
 
-const EMPTY_TEAM: TeamMember[] = []
+const DEMO_TEAM: TeamMember[] = [
+  { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 35, deals_open: 5, deals_won: 12, total_earned: 4280000, total_paid: 3500000, is_active: true, joined: '2025-09-15' },
+  { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 35, deals_open: 0, deals_won: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03' },
+]
 
 function formatCurrency(cents: number): string {
-  return 'CA$' + (cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return '$' + (cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' CAD'
 }
 
 export default function CanadaPortalTeamPage() {
   const [search, setSearch] = useState('')
-  const [team, setTeam] = useState<TeamMember[]>(EMPTY_TEAM)
+  const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchTeam() {
-      if (!supabase) { setLoading(false); return }
+      if (!supabase) {
+        setLoading(false)
+        return
+      }
       try {
         const { data, error } = await supabase
           .from('sales_reps')
@@ -53,7 +59,7 @@ export default function CanadaPortalTeamPage() {
           })))
         }
       } catch {
-        // empty state — no fallback data for Canada
+        // fall back to demo data
       }
       setLoading(false)
     }

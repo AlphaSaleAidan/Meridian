@@ -12,6 +12,7 @@ import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import TransactionDrillDown from '@/components/TransactionDrillDown'
 import { useOrgId } from '@/hooks/useOrg'
+import { useDemoContext } from '@/lib/demo-context'
 
 const periods = [
   { label: '7D', days: 7 },
@@ -32,7 +33,8 @@ export default function RevenuePage() {
   const [days, setDays] = useState(30)
   const [drillDate, setDrillDate] = useState<string | null>(null)
   const orgId = useOrgId()
-  const revenue = useApi(() => api.revenue(orgId, days), [orgId, days])
+  const { businessType } = useDemoContext()
+  const revenue = useApi(() => api.revenue(orgId, days), [orgId, days, businessType])
 
   if (revenue.loading) return <LoadingPage />
   if (revenue.error) return <ErrorState message={revenue.error} onRetry={revenue.refetch} />

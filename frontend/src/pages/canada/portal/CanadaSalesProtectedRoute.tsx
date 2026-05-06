@@ -41,22 +41,39 @@ export default function CanadaSalesProtectedRoute({ children }: { children: Reac
   }
 
   if (customerAuth.authenticated && customerAuth.org && !rep) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-sm text-center">
-          <div className="flex flex-col items-center gap-1 mb-6">
-            <MeridianEmblem size={36} />
-            <span className="text-lg font-bold text-[#F5F5F7] mt-2">Meridian Canada Sales</span>
-            <span className="text-[10px] font-semibold text-[#17C5B0] uppercase tracking-widest">Canada CRM</span>
+    return <AccessDenied />
+  }
+
+  if (!authenticated) {
+    return <Navigate to="/canada/portal/login" state={{ from: location.pathname }} replace />
+  }
+
+  return <>{children}</>
+}
+
+function AccessDenied() {
+  return (
+    <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
+      <div className="w-full max-w-sm text-center">
+        <div className="flex flex-col items-center gap-1 mb-6">
+          <MeridianEmblem size={36} />
+          <span className="text-lg font-bold text-[#F5F5F7] mt-2">Meridian Sales</span>
+          <span className="text-[10px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
+            Canada CRM {'\u{1F1E8}\u{1F1E6}'}
+          </span>
+        </div>
+
+        <div className="card p-6 sm:p-8 border border-red-500/20">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+            <ShieldX size={24} className="text-red-400" />
           </div>
-          <div className="card p-6 sm:p-8 border border-red-500/20">
-            <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
-              <ShieldX size={24} className="text-red-400" />
-            </div>
-            <h2 className="text-lg font-bold text-[#F5F5F7] mb-2">Access Denied</h2>
-            <p className="text-sm text-[#A1A1A8] mb-6">
-              This portal is for Meridian Canada sales reps only.
-            </p>
+
+          <h2 className="text-lg font-bold text-[#F5F5F7] mb-2">Access Denied</h2>
+          <p className="text-sm text-[#A1A1A8] mb-6">
+            This portal is for Meridian sales reps only. If you're a business owner, please use the customer dashboard.
+          </p>
+
+          <div className="space-y-2">
             <Link
               to="/canada/login"
               className="block w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-semibold rounded-lg hover:bg-[#1A8FD6]/90 transition-all text-center"
@@ -66,12 +83,6 @@ export default function CanadaSalesProtectedRoute({ children }: { children: Reac
           </div>
         </div>
       </div>
-    )
-  }
-
-  if (!authenticated) {
-    return <Navigate to="/canada/portal/login" state={{ from: location.pathname }} replace />
-  }
-
-  return <>{children}</>
+    </div>
+  )
 }

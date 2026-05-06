@@ -2,8 +2,16 @@ import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
-  LayoutDashboard, UserPlus, Building2, GraduationCap,
-  Users, Settings, Menu, X, LogOut, PlusCircle,
+  LayoutDashboard,
+  UserPlus,
+  Building2,
+  GraduationCap,
+  Users,
+  Settings,
+  Menu,
+  X,
+  LogOut,
+  PlusCircle,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -41,7 +49,9 @@ export default function CanadaSalesLayout() {
     navigate('/canada/portal/login', { replace: true })
   }
 
-  useEffect(() => { setSidebarOpen(false) }, [location.pathname])
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -60,7 +70,7 @@ export default function CanadaSalesLayout() {
         <div className="flex flex-col">
           <span className="text-sm font-bold text-[#F5F5F7] leading-tight">Meridian</span>
           <span className="text-[8px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
-            Canada Sales Portal <span className="text-[10px]">{'\u{1F5FC}'}</span>
+            Canada Sales Portal <span className="text-[10px]">{'\u{1F1E8}\u{1F1E6}'}</span>
           </span>
         </div>
         <button
@@ -170,7 +180,7 @@ export default function CanadaSalesLayout() {
           <div className="flex flex-col">
             <span className="text-sm font-bold text-[#F5F5F7] leading-tight">Meridian</span>
             <span className="text-[7px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
-              Canada Sales Portal <span className="text-[9px]">{'\u{1F5FC}'}</span>
+              Canada Sales Portal <span className="text-[9px]">{'\u{1F1E8}\u{1F1E6}'}</span>
             </span>
           </div>
         </header>

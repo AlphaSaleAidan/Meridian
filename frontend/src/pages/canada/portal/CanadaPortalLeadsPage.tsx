@@ -1,29 +1,13 @@
 import { useState, useEffect } from 'react'
 import {
-  Plus, Search, Mail, X, ArrowUpDown,
+  Plus, Search, Filter, MoreVertical, Phone, Mail, Calendar,
+  ChevronDown, ArrowUpDown, X,
 } from 'lucide-react'
-import { useSalesAuth } from '@/lib/sales-auth'
-import { supabase } from '@/lib/supabase'
-import { STAGE_CONFIG, STAGE_ORDER, type DealStage } from '@/lib/sales-demo-data'
-
-interface CanadaDeal {
-  id: string
-  business_name: string
-  contact_name: string
-  contact_email: string
-  contact_phone: string
-  vertical: string
-  stage: DealStage
-  monthly_value: number
-  commission_rate: number
-  expected_close_date: string
-  notes: string
-  created_at: string
-  updated_at: string
-}
+import { clsx } from 'clsx'
+import { canadaSalesDemoData, STAGE_CONFIG, STAGE_ORDER, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 
 function formatCompact(value: number): string {
-  return 'CA$' + value.toLocaleString('en-CA')
+  return '$' + value.toLocaleString('en-CA') + ' CAD'
 }
 
 function StageBadge({ stage }: { stage: DealStage }) {
@@ -40,8 +24,7 @@ function StageBadge({ stage }: { stage: DealStage }) {
 }
 
 export default function CanadaPortalLeadsPage() {
-  const { rep } = useSalesAuth()
-  const [deals, setDeals] = useState<CanadaDeal[]>([])
+  const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<DealStage | 'all'>('all')
@@ -54,21 +37,8 @@ export default function CanadaPortalLeadsPage() {
   })
 
   useEffect(() => {
-    async function load() {
-      if (!supabase || !rep) { setLoading(false); return }
-      try {
-        const { data } = await supabase
-          .from('deals')
-          .select('*')
-          .eq('country', 'CA')
-          .eq('rep_id', rep.rep_id)
-          .order('created_at', { ascending: false })
-        if (data) setDeals(data as CanadaDeal[])
-      } catch { /* empty state */ }
-      setLoading(false)
-    }
-    load()
-  }, [rep])
+    canadaSalesDemoData.deals().then(d => { setDeals(d); setLoading(false) })
+  }, [])
 
   const filtered = deals
     .filter(d => stageFilter === 'all' || d.stage === stageFilter)
@@ -79,9 +49,9 @@ export default function CanadaPortalLeadsPage() {
     })
     .sort((a, b) => sortBy === 'value' ? b.monthly_value - a.monthly_value : b.created_at.localeCompare(a.created_at))
 
-  async function handleAddDeal(e: React.FormEvent) {
+  function handleAddDeal(e: React.FormEvent) {
     e.preventDefault()
-    const deal: CanadaDeal = {
+    const deal: Deal = {
       id: crypto.randomUUID(),
       ...newDeal,
       monthly_value: Number(newDeal.monthly_value) || 0,
@@ -94,27 +64,10 @@ export default function CanadaPortalLeadsPage() {
     setDeals(prev => [deal, ...prev])
     setShowNew(false)
     setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '' })
-    if (supabase && rep) {
-      try {
-        await supabase.from('deals').insert({
-          id: deal.id, business_name: deal.business_name, contact_name: deal.contact_name,
-          contact_email: deal.contact_email, contact_phone: deal.contact_phone,
-          vertical: deal.vertical, stage: deal.stage, monthly_value: deal.monthly_value,
-          commission_rate: deal.commission_rate, expected_close_date: deal.expected_close_date,
-          notes: deal.notes, rep_id: rep.rep_id, country: 'CA',
-        })
-      } catch { /* table may not exist yet */ }
-    }
   }
 
-  async function moveDeal(id: string, newStage: DealStage) {
-    const now = new Date().toISOString().slice(0, 10)
-    setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: newStage, updated_at: now } : d))
-    if (supabase) {
-      try {
-        await supabase.from('deals').update({ stage: newStage, updated_at: now }).eq('id', id)
-      } catch { /* table may not exist yet */ }
-    }
+  function moveDeal(id: string, newStage: DealStage) {
+    setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: newStage, updated_at: new Date().toISOString().slice(0, 10) } : d))
   }
 
   const inputClass = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'
@@ -134,9 +87,7 @@ export default function CanadaPortalLeadsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-[#F5F5F7]">Leads</h1>
-          <p className="text-sm text-[#A1A1A8] mt-0.5">
-            {deals.length === 0 ? 'No leads yet — add your first Canadian lead below.' : `${filtered.length} leads in pipeline`}
-          </p>
+          <p className="text-sm text-[#A1A1A8] mt-0.5">{filtered.length} leads in pipeline</p>
         </div>
         <button
           onClick={() => setShowNew(true)}
@@ -189,7 +140,7 @@ export default function CanadaPortalLeadsPage() {
                 <option key={v} value={v}>{v}</option>
               ))}
             </select>
-            <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Est. Monthly Revenue (CA$) *" />
+            <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Est. Monthly Revenue (CAD) *" />
             <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
             <div className="sm:col-span-2 flex justify-end gap-2">
               <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Cancel</button>
@@ -230,7 +181,7 @@ export default function CanadaPortalLeadsPage() {
                     <StageBadge stage={deal.stage} />
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-[11px] font-semibold text-[#F5F5F7]">{formatCompact(deal.monthly_value)} CAD/mo</p>
+                    <p className="text-[11px] font-semibold text-[#F5F5F7]">{formatCompact(deal.monthly_value)}/mo</p>
                     <p className="text-[10px] text-[#A1A1A8]/40">{deal.commission_rate}% rate</p>
                   </td>
                   <td className="px-4 py-3">
@@ -250,7 +201,7 @@ export default function CanadaPortalLeadsPage() {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#A1A1A8]/40">
-                    {search || stageFilter !== 'all' ? 'No leads match your filters.' : 'No leads yet. Click "New Lead" to add your first Canadian prospect.'}
+                    No leads found. {search || stageFilter !== 'all' ? 'Try adjusting your filters.' : 'Click "New Lead" to add one.'}
                   </td>
                 </tr>
               )}

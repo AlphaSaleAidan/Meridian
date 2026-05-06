@@ -8,6 +8,7 @@ import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
+import { useDemoContext } from '@/lib/demo-context'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -22,8 +23,9 @@ export default function ForecastsPage() {
   const orgId = useOrgId()
   const tier = useTier()
   const limits = tierLimits[tier]
-  const forecasts = useApi(() => api.forecasts(orgId), [orgId])
-  const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
+  const { businessType } = useDemoContext()
+  const forecasts = useApi(() => api.forecasts(orgId), [orgId, businessType])
+  const revenue = useApi(() => api.revenue(orgId, 30), [orgId, businessType])
 
   if (forecasts.loading) return <LoadingPage />
   if (forecasts.error) return <ErrorState message={forecasts.error} onRetry={forecasts.refetch} />

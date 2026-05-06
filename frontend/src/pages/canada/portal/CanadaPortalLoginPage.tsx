@@ -37,15 +37,15 @@ export default function CanadaPortalLoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-1 mb-8">
           <MeridianEmblem size={40} />
-          <span className="text-xl font-bold text-[#F5F5F7] mt-2">
-            Meridian Canada Sales <span className="text-base">{'\u{1F5FC}'}</span>
+          <span className="text-xl font-bold text-[#F5F5F7] mt-2">Meridian Sales</span>
+          <span className="text-[10px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
+            Canada CRM {'\u{1F1E8}\u{1F1E6}'}
           </span>
-          <span className="text-[10px] font-semibold text-[#17C5B0] uppercase tracking-widest">Canada CRM</span>
         </div>
 
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
           <p className="text-sm text-[#A1A1A8] text-center mb-6">
-            Sign in to access your Canadian pipeline and leads.
+            Sign in to access your pipeline and leads.
           </p>
 
           {error && (

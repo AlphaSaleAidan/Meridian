@@ -8,6 +8,8 @@ import {
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { supabase } from '@/lib/supabase'
+import POSSelectorPanel from '@/components/POSSelectorPanel'
+import { type POSSystem } from '@/data/pos-systems'
 
 type Step = 'details' | 'plan' | 'confirm' | 'provisioned'
 
@@ -42,6 +44,7 @@ export default function CreateCustomerPage() {
     invoicesSent: boolean
   } | null>(null)
 
+  const [selectedPOS, setSelectedPOS] = useState<POSSystem | null>(null)
   const [form, setForm] = useState({
     businessName: '',
     ownerName: '',
@@ -90,6 +93,8 @@ export default function CreateCustomerPage() {
             monthly_price: price,
             owner_name: form.ownerName,
             created_by_rep: rep?.rep_id || null,
+            pos_system: selectedPOS?.key || null,
+            pos_status: selectedPOS?.status || null,
           },
         })
         if (bizErr) throw new Error(bizErr.message)
@@ -297,6 +302,17 @@ export default function CreateCustomerPage() {
               </div>
             </div>
 
+            <div className="mt-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Store size={16} className="text-[#7C5CFF]" />
+                <h2 className="text-[14px] font-semibold text-[#F5F5F7]">POS System</h2>
+              </div>
+              <POSSelectorPanel
+                onSelect={setSelectedPOS}
+                defaultSelected={selectedPOS?.key}
+              />
+            </div>
+
             <div className="mt-2">
               <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Notes (optional)</label>
               <textarea value={form.notes} onChange={e => update('notes', e.target.value)}
@@ -401,6 +417,12 @@ export default function CreateCustomerPage() {
                 <div className="flex justify-between py-2 border-b border-[#1F1F23]">
                   <span className="text-[#A1A1A8]">Type</span>
                   <span className="text-[#F5F5F7] font-medium">{form.vertical}</span>
+                </div>
+              )}
+              {selectedPOS && (
+                <div className="flex justify-between py-2 border-b border-[#1F1F23]">
+                  <span className="text-[#A1A1A8]">POS System</span>
+                  <span className="text-[#F5F5F7] font-medium">{selectedPOS.name}</span>
                 </div>
               )}
               <div className="flex justify-between py-2 border-b border-[#1F1F23]">
@@ -534,6 +556,7 @@ export default function CreateCustomerPage() {
             </button>
             <button onClick={() => {
                 setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', plan: 'starter', customPrice: '', notes: '' })
+                setSelectedPOS(null)
                 setStep('details')
                 setCredentials(null)
               }}

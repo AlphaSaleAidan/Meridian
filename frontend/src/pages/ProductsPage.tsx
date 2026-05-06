@@ -10,6 +10,7 @@ import { formatCents, formatCentsCompact, formatNumber } from '@/lib/format'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
 import { useOrgId } from '@/hooks/useOrg'
+import { useDemoContext } from '@/lib/demo-context'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -27,7 +28,8 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('revenue')
   const orgId = useOrgId()
-  const products = useApi(() => api.products(orgId, days), [orgId, days])
+  const { businessType } = useDemoContext()
+  const products = useApi(() => api.products(orgId, days), [orgId, days, businessType])
 
   if (products.loading) return <LoadingPage />
   if (products.error) return <ErrorState message={products.error} onRetry={products.refetch} />

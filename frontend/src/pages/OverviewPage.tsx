@@ -17,6 +17,7 @@ import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/Scroll
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { generateTopActions, generateAgents, generateRFMSegments } from '@/lib/agent-data'
 import { useOrgId, useTier, useIsDemo, tierLimits } from '@/hooks/useOrg'
+import { useDemoContext } from '@/lib/demo-context'
 import { AnalyzingSection } from '@/components/AnalyzingDataState'
 
 export default function OverviewPage() {
@@ -26,11 +27,12 @@ export default function OverviewPage() {
   const tier = useTier()
   const limits = tierLimits[tier]
   const isDemo = useIsDemo()
+  const { businessType } = useDemoContext()
 
-  const overview = useApi(() => api.overview(orgId), [orgId])
-  const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
-  const insights = useApi(() => api.insights(orgId, 5), [orgId])
-  const forecastData = useApi(() => api.forecasts(orgId), [orgId])
+  const overview = useApi(() => api.overview(orgId), [orgId, businessType])
+  const revenue = useApi(() => api.revenue(orgId, 30), [orgId, businessType])
+  const insights = useApi(() => api.insights(orgId, 5), [orgId, businessType])
+  const forecastData = useApi(() => api.forecasts(orgId), [orgId, businessType])
 
   const topActions = isDemo ? generateTopActions() : []
   const agents = isDemo ? generateAgents() : []
