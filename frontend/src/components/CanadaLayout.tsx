@@ -32,7 +32,7 @@ const navItems = [
 export default function CanadaLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
-  const basePath = '/canada'
+  const basePath = '/canada/dashboard'
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">
@@ -86,7 +86,7 @@ export default function CanadaLayout() {
         {/* Bottom — discreet SR login */}
         <div className="px-3 py-3 border-t border-[#1F1F23] flex-shrink-0">
           <a
-            href="/sales"
+            href="/canada/portal/login"
             className="text-[9px] text-[#A1A1A8]/20 hover:text-[#A1A1A8]/50 transition-colors block text-center py-1"
           >
             Sales Rep Access

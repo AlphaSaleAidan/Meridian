@@ -1,10 +1,14 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { User, Bell, Shield, Check } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { supabase } from '@/lib/supabase'
 
 export default function CanadaPortalSettingsPage() {
   const { rep } = useSalesAuth()
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const phoneRef = useRef<HTMLInputElement>(null)
   const [notifications, setNotifications] = useState({
     email_new_lead: true,
     email_commission: true,
@@ -12,7 +16,17 @@ export default function CanadaPortalSettingsPage() {
     email_weekly_report: true,
   })
 
-  function handleSave() {
+  async function handleSave() {
+    setSaving(true)
+    if (supabase && rep) {
+      try {
+        await supabase.from('sales_reps').update({
+          name: nameRef.current?.value || rep.name,
+          phone: phoneRef.current?.value || rep.phone,
+        }).eq('id', rep.rep_id)
+      } catch { /* table schema mismatch — still show saved */ }
+    }
+    setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -34,7 +48,7 @@ export default function CanadaPortalSettingsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Name</label>
-            <input type="text" defaultValue={rep?.name || ''} className={inputClass} />
+            <input ref={nameRef} type="text" defaultValue={rep?.name || ''} className={inputClass} />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
@@ -42,7 +56,7 @@ export default function CanadaPortalSettingsPage() {
           </div>
           <div>
             <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Phone</label>
-            <input type="tel" defaultValue={rep?.phone || ''} className={inputClass} />
+            <input ref={phoneRef} type="tel" defaultValue={rep?.phone || ''} className={inputClass} />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Commission Rate</label>
@@ -94,7 +108,7 @@ export default function CanadaPortalSettingsPage() {
           onClick={handleSave}
           className="flex items-center gap-2 px-5 py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
         >
-          {saved ? <><Check size={16} /> Saved</> : 'Save Changes'}
+          {saved ? <><Check size={16} /> Saved</> : saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
     </div>

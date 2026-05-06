@@ -79,7 +79,7 @@ export default function CanadaPortalLeadsPage() {
     })
     .sort((a, b) => sortBy === 'value' ? b.monthly_value - a.monthly_value : b.created_at.localeCompare(a.created_at))
 
-  function handleAddDeal(e: React.FormEvent) {
+  async function handleAddDeal(e: React.FormEvent) {
     e.preventDefault()
     const deal: CanadaDeal = {
       id: crypto.randomUUID(),
@@ -94,10 +94,27 @@ export default function CanadaPortalLeadsPage() {
     setDeals(prev => [deal, ...prev])
     setShowNew(false)
     setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '' })
+    if (supabase && rep) {
+      try {
+        await supabase.from('deals').insert({
+          id: deal.id, business_name: deal.business_name, contact_name: deal.contact_name,
+          contact_email: deal.contact_email, contact_phone: deal.contact_phone,
+          vertical: deal.vertical, stage: deal.stage, monthly_value: deal.monthly_value,
+          commission_rate: deal.commission_rate, expected_close_date: deal.expected_close_date,
+          notes: deal.notes, rep_id: rep.rep_id, country: 'CA',
+        })
+      } catch { /* table may not exist yet */ }
+    }
   }
 
-  function moveDeal(id: string, newStage: DealStage) {
-    setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: newStage, updated_at: new Date().toISOString().slice(0, 10) } : d))
+  async function moveDeal(id: string, newStage: DealStage) {
+    const now = new Date().toISOString().slice(0, 10)
+    setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: newStage, updated_at: now } : d))
+    if (supabase) {
+      try {
+        await supabase.from('deals').update({ stage: newStage, updated_at: now }).eq('id', id)
+      } catch { /* table may not exist yet */ }
+    }
   }
 
   const inputClass = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'

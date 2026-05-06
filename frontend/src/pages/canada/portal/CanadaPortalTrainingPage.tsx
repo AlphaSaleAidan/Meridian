@@ -106,6 +106,10 @@ const MODULES: Module[] = [
 export default function CanadaPortalTrainingPage() {
   const [expandedId, setExpandedId] = useState<string | null>('onboarding')
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('meridian_ca_training_progress')
+      if (stored) return new Set(JSON.parse(stored) as string[])
+    } catch { /* fall through to defaults */ }
     const initial = new Set<string>()
     MODULES.forEach(m => m.lessons.forEach(l => { if (l.completed) initial.add(l.id) }))
     return initial
@@ -120,6 +124,7 @@ export default function CanadaPortalTrainingPage() {
       const next = new Set(prev)
       if (next.has(lessonId)) next.delete(lessonId)
       else next.add(lessonId)
+      try { localStorage.setItem('meridian_ca_training_progress', JSON.stringify([...next])) } catch { /* quota */ }
       return next
     })
   }
