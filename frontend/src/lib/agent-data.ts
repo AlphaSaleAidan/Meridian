@@ -1,4 +1,6 @@
 import type { Insight } from './api'
+import { getActiveBusinessType } from './demo-context'
+import { getIndustryOverrides } from './demo-industries'
 
 export interface AgentInfo {
   id: string
@@ -178,6 +180,10 @@ export function generateAgents(): AgentInfo[] {
 }
 
 export function generateTopActions(): TopAction[] {
+  const overrides = getIndustryOverrides(getActiveBusinessType())
+  if (overrides.topActions.length > 0) {
+    return overrides.topActions
+  }
   return [
     {
       rank: 1,
@@ -349,6 +355,10 @@ export function generateStaffPerformance(): StaffMember[] {
 }
 
 export function generatePeakHourHeatmap(): PeakHourCell[] {
+  const overrides = getIndustryOverrides(getActiveBusinessType())
+  if (overrides.peakHourHeatmap.length > 0) {
+    return overrides.peakHourHeatmap
+  }
   const basePattern = [
     [0,0,0,0,0,3,12,42,78,65,48,58,72,62,45,35,28,22,15,8,4,0,0,0],
     [0,0,0,0,0,5,15,45,85,70,55,65,80,70,50,40,35,30,20,10,5,0,0,0],

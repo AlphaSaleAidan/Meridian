@@ -6,6 +6,7 @@ import { SalesAuthProvider } from '@/lib/sales-auth'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
+import DemoLayout from '@/components/DemoLayout'
 
 import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
 import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
@@ -179,7 +180,7 @@ export default function App() {
               </Route>
 
               {/* Demo — open access, no auth required */}
-              <Route path="/demo" element={<Layout />}>
+              <Route path="/demo" element={<DemoLayout />}>
                 {CustomerDashboardRoutes()}
                 <Route path="pos-coverage" element={
                   <Suspense fallback={<LazyFallback />}>
