@@ -67,7 +67,7 @@ const MODULES: Module[] = [
     duration: '40 min',
     category: 'Industry Knowledge',
     lessons: [
-      { id: '14', title: 'Restaurants & Cafés', completed: false },
+      { id: '14', title: 'Restaurants & Cafes', completed: false },
       { id: '15', title: 'Smoke Shops & Vape', completed: false },
       { id: '16', title: 'Salons & Spas', completed: false },
       { id: '17', title: 'Retail & Boutiques', completed: false },
@@ -103,6 +103,25 @@ const MODULES: Module[] = [
   },
 ]
 
+// Section groupings
+const SECTIONS = [
+  {
+    title: 'How to Sell a Deal (5-Step SOP)',
+    description: 'Follow these steps from first contact to closed deal.',
+    moduleIds: ['onboarding', 'pitch', 'demo'],
+  },
+  {
+    title: 'Sales Knowledge',
+    description: 'Deepen your expertise across verticals and techniques.',
+    moduleIds: ['verticals', 'advanced'],
+  },
+  {
+    title: 'Compliance & Ethics',
+    description: 'Required training for all sales representatives.',
+    moduleIds: ['compliance'],
+  },
+]
+
 export default function CanadaPortalTrainingPage() {
   const [expandedId, setExpandedId] = useState<string | null>('onboarding')
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(() => {
@@ -124,89 +143,142 @@ export default function CanadaPortalTrainingPage() {
     })
   }
 
+  function getDurationMinutes(duration: string): number {
+    const match = duration.match(/(\d+)/)
+    return match ? parseInt(match[1]) : 0
+  }
+
+  function getLessonTime(mod: Module): string {
+    const totalMin = getDurationMinutes(mod.duration)
+    const perLesson = Math.round(totalMin / mod.lessons.length)
+    return `${perLesson} min`
+  }
+
+  // Track step numbers across sections
+  let globalStep = 0
+
   return (
-    <div className="space-y-5">
+    <div className="min-h-screen bg-[#0a0f0d] space-y-6 p-1">
       <div>
-        <h1 className="text-xl font-bold text-[#F5F5F7]">Training</h1>
-        <p className="text-sm text-[#A1A1A8] mt-0.5">Level up your sales skills with guided modules.</p>
+        <h1 className="text-xl font-bold text-white">Training</h1>
+        <p className="text-sm text-[#6b7a74] mt-0.5">Level up your sales skills with guided modules.</p>
       </div>
 
-      <div className="card border border-[#1F1F23] p-5">
+      {/* Progress Section */}
+      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <BarChart3 size={16} className="text-[#17C5B0]" />
-            <span className="text-sm font-semibold text-[#F5F5F7]">Your Progress</span>
+            <BarChart3 size={16} className="text-[#00d4aa]" />
+            <span className="text-sm font-semibold text-white">Your Progress</span>
           </div>
-          <span className="text-sm font-bold text-[#17C5B0]">{progressPct}%</span>
+          <span className="text-sm font-bold text-[#00d4aa]">{progressPct}%</span>
         </div>
-        <div className="w-full h-2 bg-[#1F1F23] rounded-full overflow-hidden">
-          <div className="h-full bg-[#17C5B0] rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
+        <div className="w-full h-2 bg-[#1a2420] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[#00d4aa] rounded-full transition-all duration-500"
+            style={{ width: `${progressPct}%` }}
+          />
         </div>
-        <p className="text-[10px] text-[#A1A1A8]/40 mt-2">{completedCount} of {totalLessons} lessons completed</p>
+        <p className="text-[10px] text-[#4a5550] mt-2">
+          {completedCount} of {totalLessons} lessons completed
+        </p>
       </div>
 
-      <div className="space-y-3">
-        {MODULES.map(mod => {
-          const modCompleted = mod.lessons.filter(l => completedLessons.has(l.id)).length
-          const isExpanded = expandedId === mod.id
-          const Icon = mod.icon
+      {/* Sections */}
+      {SECTIONS.map((section) => {
+        const sectionModules = section.moduleIds.map(id => MODULES.find(m => m.id === id)!).filter(Boolean)
 
-          return (
-            <div key={mod.id} className="card border border-[#1F1F23] overflow-hidden">
-              <button
-                onClick={() => setExpandedId(isExpanded ? null : mod.id)}
-                className="w-full px-4 sm:px-5 py-4 flex items-center gap-3 text-left hover:bg-[#111113] transition-colors"
-              >
-                <div className="w-9 h-9 rounded-lg bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center justify-center flex-shrink-0">
-                  <Icon size={16} className="text-[#7C5CFF]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[11px] font-semibold text-[#F5F5F7]">{mod.title}</p>
-                    <span className="text-[9px] text-[#A1A1A8]/30 bg-[#1F1F23] px-1.5 py-0.5 rounded">{mod.category}</span>
-                  </div>
-                  <p className="text-[10px] text-[#A1A1A8]/50 truncate mt-0.5">{mod.description}</p>
-                </div>
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <div className="text-right">
-                    <p className="text-[10px] font-medium text-[#A1A1A8]">{modCompleted}/{mod.lessons.length}</p>
-                    <p className="text-[9px] text-[#A1A1A8]/30">{mod.duration}</p>
-                  </div>
-                  <ChevronRight size={14} className={clsx('text-[#A1A1A8]/30 transition-transform', isExpanded && 'rotate-90')} />
-                </div>
-              </button>
-
-              {isExpanded && (
-                <div className="border-t border-[#1F1F23]">
-                  {mod.lessons.map((lesson, i) => (
-                    <button
-                      key={lesson.id}
-                      onClick={() => toggleLesson(lesson.id)}
-                      className={clsx(
-                        'w-full px-5 py-3 flex items-center gap-3 text-left transition-colors',
-                        i < mod.lessons.length - 1 && 'border-b border-[#1F1F23]/50',
-                        'hover:bg-[#111113]',
-                      )}
-                    >
-                      {completedLessons.has(lesson.id) ? (
-                        <CheckCircle2 size={16} className="text-[#17C5B0] flex-shrink-0" />
-                      ) : (
-                        <div className="w-4 h-4 rounded-full border border-[#1F1F23] flex-shrink-0" />
-                      )}
-                      <span className={clsx(
-                        'text-[11px] font-medium',
-                        completedLessons.has(lesson.id) ? 'text-[#A1A1A8]/50 line-through' : 'text-[#F5F5F7]'
-                      )}>
-                        {lesson.title}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+        return (
+          <div key={section.title} className="space-y-3">
+            <div className="mb-2">
+              <h2 className="text-[14px] font-semibold text-white">{section.title}</h2>
+              <p className="text-[11px] text-[#6b7a74] mt-0.5">{section.description}</p>
             </div>
-          )
-        })}
-      </div>
+
+            {sectionModules.map(mod => {
+              globalStep++
+              const stepNum = globalStep
+              const modCompleted = mod.lessons.filter(l => completedLessons.has(l.id)).length
+              const isExpanded = expandedId === mod.id
+              const Icon = mod.icon
+
+              return (
+                <div key={mod.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setExpandedId(isExpanded ? null : mod.id)}
+                    className="w-full px-4 sm:px-5 py-4 flex items-center gap-3 text-left hover:bg-[#0f1512]/80 transition-colors"
+                  >
+                    {/* Step number badge */}
+                    <div className="w-7 h-7 rounded-full bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[11px] font-bold text-[#00d4aa]">{stepNum}</span>
+                    </div>
+
+                    {/* Module icon */}
+                    <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center flex-shrink-0">
+                      <Icon size={16} className="text-[#00d4aa]" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] font-semibold text-white">{mod.title}</p>
+                      <p className="text-[10px] text-[#6b7a74] truncate mt-0.5">{mod.description}</p>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="text-right">
+                        <p className="text-[10px] font-medium text-[#6b7a74]">
+                          {modCompleted}/{mod.lessons.length} lessons
+                        </p>
+                        <p className="text-[9px] text-[#4a5550]">{mod.duration}</p>
+                      </div>
+                      <ChevronRight
+                        size={14}
+                        className={clsx(
+                          'text-[#4a5550] transition-transform',
+                          isExpanded && 'rotate-90'
+                        )}
+                      />
+                    </div>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-[#1a2420]">
+                      {mod.lessons.map((lesson, i) => {
+                        const lessonTime = getLessonTime(mod)
+                        return (
+                          <button
+                            key={lesson.id}
+                            onClick={() => toggleLesson(lesson.id)}
+                            className={clsx(
+                              'w-full px-5 py-3 flex items-center gap-3 text-left transition-colors',
+                              i < mod.lessons.length - 1 && 'border-b border-[#1a2420]/50',
+                              'hover:bg-[#1a2420]/30',
+                            )}
+                          >
+                            {completedLessons.has(lesson.id) ? (
+                              <CheckCircle2 size={16} className="text-[#00d4aa] flex-shrink-0" />
+                            ) : (
+                              <div className="w-4 h-4 rounded-full border border-[#1a2420] flex-shrink-0" />
+                            )}
+                            <span
+                              className={clsx(
+                                'text-[11px] font-medium flex-1',
+                                completedLessons.has(lesson.id) ? 'text-[#6b7a74]' : 'text-white'
+                              )}
+                            >
+                              {lesson.title}
+                            </span>
+                            <span className="text-[9px] text-[#4a5550]">{lessonTime}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
     </div>
   )
 }

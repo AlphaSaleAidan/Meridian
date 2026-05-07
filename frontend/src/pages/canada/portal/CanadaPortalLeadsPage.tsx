@@ -1,35 +1,90 @@
 import { useState, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Plus, Search, Filter, MoreVertical, Phone, Mail, Calendar,
-  ChevronDown, ArrowUpDown, X,
+  Plus, Search, X, ChevronRight, Store, Wifi,
 } from 'lucide-react'
-import { clsx } from 'clsx'
-import { canadaSalesDemoData, STAGE_CONFIG, STAGE_ORDER, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { canadaSalesDemoData, STAGE_CONFIG, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 
-function formatCompact(value: number): string {
-  return '$' + value.toLocaleString('en-CA') + ' CAD'
+const STAGE_TO_STEP: Record<DealStage, number> = {
+  prospecting: 1,
+  contacted: 2,
+  demo_scheduled: 3,
+  proposal_sent: 4,
+  negotiation: 5,
+  closed_won: 6,
+  closed_lost: 0,
 }
 
-function StageBadge({ stage }: { stage: DealStage }) {
-  const cfg = STAGE_CONFIG[stage]
+const STEP_LABELS: Record<number, string> = {
+  1: 'Step 1: Lead Created',
+  2: 'Step 2: Contacted',
+  3: 'Step 3: Demo/Proposal',
+  4: 'Step 4: Connect POS',
+  5: 'Step 5: Monitoring',
+  6: 'Step 6: Sale Complete',
+}
+
+function StepPill({ step }: { step: number }) {
+  if (step <= 0) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border border-red-500/30 text-red-400">
+        Lost
+      </span>
+    )
+  }
+  if (step <= 2) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border border-[#4a5550] text-[#6b7a74]">
+        {STEP_LABELS[step]}
+      </span>
+    )
+  }
+  if (step <= 4) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#00d4aa]/15 text-[#00d4aa]">
+        {STEP_LABELS[step]}
+      </span>
+    )
+  }
+  if (step === 5) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#00d4aa]/20 text-[#00d4aa] font-semibold">
+        {STEP_LABELS[step]}
+      </span>
+    )
+  }
   return (
-    <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
-      style={{ backgroundColor: cfg.color + '15', color: cfg.color, border: `1px solid ${cfg.color}30` }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cfg.color }} />
-      {cfg.label}
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/15 text-emerald-400">
+      {STEP_LABELS[step]}
     </span>
   )
 }
 
+function ProgressBar({ currentStep }: { currentStep: number }) {
+  return (
+    <div className="flex gap-1 mt-3">
+      {[1, 2, 3, 4, 5, 6].map(seg => {
+        let cls = 'h-1 flex-1 rounded-full '
+        if (seg < currentStep) {
+          cls += 'bg-[#00d4aa]'
+        } else if (seg === currentStep) {
+          cls += 'bg-[#00d4aa] animate-pulse'
+        } else {
+          cls += 'bg-[#1a2420]'
+        }
+        return <div key={seg} className={cls} />
+      })}
+    </div>
+  )
+}
+
 export default function CanadaPortalLeadsPage() {
+  const [searchParams] = useSearchParams()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [stageFilter, setStageFilter] = useState<DealStage | 'all'>('all')
-  const [showNew, setShowNew] = useState(false)
-  const [sortBy, setSortBy] = useState<'date' | 'value'>('date')
+  const [tab, setTab] = useState<'active' | 'new'>('active')
+  const [showNew, setShowNew] = useState(searchParams.get('new') === 'true')
 
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
@@ -40,14 +95,15 @@ export default function CanadaPortalLeadsPage() {
     canadaSalesDemoData.deals().then(d => { setDeals(d); setLoading(false) })
   }, [])
 
-  const filtered = deals
-    .filter(d => stageFilter === 'all' || d.stage === stageFilter)
+  const activeDeals = deals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
+  const newLeads = deals.filter(d => d.stage === 'prospecting')
+
+  const displayed = (tab === 'active' ? activeDeals : newLeads)
     .filter(d => {
       if (!search) return true
       const s = search.toLowerCase()
       return d.business_name.toLowerCase().includes(s) || d.contact_name.toLowerCase().includes(s) || d.contact_email.toLowerCase().includes(s)
     })
-    .sort((a, b) => sortBy === 'value' ? b.monthly_value - a.monthly_value : b.created_at.localeCompare(a.created_at))
 
   function handleAddDeal(e: React.FormEvent) {
     e.preventDefault()
@@ -66,17 +122,13 @@ export default function CanadaPortalLeadsPage() {
     setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '' })
   }
 
-  function moveDeal(id: string, newStage: DealStage) {
-    setDeals(prev => prev.map(d => d.id === id ? { ...d, stage: newStage, updated_at: new Date().toISOString().slice(0, 10) } : d))
-  }
-
-  const inputClass = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'
+  const inputClass = 'w-full px-3 py-2 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#17C5B0] font-bold text-sm">S</span>
+        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
+          <span className="text-[#00d4aa] font-bold text-sm">S</span>
         </div>
       </div>
     )
@@ -84,130 +136,140 @@ export default function CanadaPortalLeadsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-[#F5F5F7]">Leads</h1>
-          <p className="text-sm text-[#A1A1A8] mt-0.5">{filtered.length} leads in pipeline</p>
+          <h1 className="text-xl font-bold text-white">Leads</h1>
+          <p className="text-sm text-[#6b7a74] mt-0.5">
+            {activeDeals.length} active deals &middot; {deals.length} leads
+          </p>
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 px-3.5 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
+          className="flex items-center gap-2 px-3.5 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
         >
           <Plus size={16} /> New Lead
         </button>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A1A1A8]/40" />
-          <input
-            type="text" value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#17C5B0]/50"
-            placeholder="Search leads..."
-          />
-        </div>
-        <select
-          value={stageFilter} onChange={e => setStageFilter(e.target.value as DealStage | 'all')}
-          className="px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#A1A1A8] focus:outline-none focus:border-[#17C5B0]/50"
-        >
-          <option value="all">All Stages</option>
-          {STAGE_ORDER.map(s => <option key={s} value={s}>{STAGE_CONFIG[s].label}</option>)}
-        </select>
+      {/* Tab Toggle */}
+      <div className="flex gap-1 p-1 bg-[#0f1512] border border-[#1a2420] rounded-xl w-fit">
         <button
-          onClick={() => setSortBy(sortBy === 'date' ? 'value' : 'date')}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors"
+          onClick={() => setTab('active')}
+          className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+            tab === 'active' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
+          }`}
         >
-          <ArrowUpDown size={14} />
-          {sortBy === 'date' ? 'Newest' : 'Highest Value'}
+          Active Deals
+        </button>
+        <button
+          onClick={() => setTab('new')}
+          className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+            tab === 'new' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
+          }`}
+        >
+          New Leads
         </button>
       </div>
 
+      {/* Search */}
+      <div className="relative">
+        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7a74]" />
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="w-full pl-11 pr-4 py-3 bg-[#0f1512] border border-[#1a2420] rounded-xl text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 transition-colors"
+          placeholder="Search leads..."
+        />
+      </div>
+
+      {/* New Lead Modal */}
       {showNew && (
-        <div className="card border border-[#17C5B0]/30 p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-[#F5F5F7]">Add New Lead</h3>
-            <button onClick={() => setShowNew(false)} className="p-1 rounded hover:bg-[#1F1F23] transition-colors">
-              <X size={16} className="text-[#A1A1A8]" />
-            </button>
-          </div>
-          <form onSubmit={handleAddDeal} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input required value={newDeal.business_name} onChange={e => setNewDeal(p => ({ ...p, business_name: e.target.value }))} className={inputClass} placeholder="Business Name *" />
-            <input required value={newDeal.contact_name} onChange={e => setNewDeal(p => ({ ...p, contact_name: e.target.value }))} className={inputClass} placeholder="Contact Name *" />
-            <input type="email" required value={newDeal.contact_email} onChange={e => setNewDeal(p => ({ ...p, contact_email: e.target.value }))} className={inputClass} placeholder="Contact Email *" />
-            <input type="tel" value={newDeal.contact_phone} onChange={e => setNewDeal(p => ({ ...p, contact_phone: e.target.value }))} className={inputClass} placeholder="Phone" />
-            <select value={newDeal.vertical} onChange={e => setNewDeal(p => ({ ...p, vertical: e.target.value }))} className={inputClass}>
-              {['Restaurant', 'Smoke Shop', 'Cafe', 'Bar', 'Food Truck', 'Salon', 'Boutique', 'Convenience Store', 'Other'].map(v => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
-            <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Est. Monthly Revenue (CAD) *" />
-            <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
-            <div className="sm:col-span-2 flex justify-end gap-2">
-              <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Cancel</button>
-              <button type="submit" className="px-4 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all">Add Lead</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-lg bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-white">Add New Lead</h3>
+              <button onClick={() => setShowNew(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
+                <X size={18} className="text-[#6b7a74]" />
+              </button>
             </div>
-          </form>
+            <form onSubmit={handleAddDeal} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input required value={newDeal.business_name} onChange={e => setNewDeal(p => ({ ...p, business_name: e.target.value }))} className={inputClass} placeholder="Business Name *" />
+              <input required value={newDeal.contact_name} onChange={e => setNewDeal(p => ({ ...p, contact_name: e.target.value }))} className={inputClass} placeholder="Contact Name *" />
+              <input type="email" required value={newDeal.contact_email} onChange={e => setNewDeal(p => ({ ...p, contact_email: e.target.value }))} className={inputClass} placeholder="Contact Email *" />
+              <input type="tel" value={newDeal.contact_phone} onChange={e => setNewDeal(p => ({ ...p, contact_phone: e.target.value }))} className={inputClass} placeholder="Phone" />
+              <select value={newDeal.vertical} onChange={e => setNewDeal(p => ({ ...p, vertical: e.target.value }))} className={inputClass}>
+                {['Restaurant', 'Smoke Shop', 'Cafe', 'Bar', 'Food Truck', 'Salon', 'Boutique', 'Convenience Store', 'Other'].map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Est. Monthly Revenue (CAD) *" />
+              <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
+              <div className="sm:col-span-2 flex justify-end gap-2 mt-2">
+                <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">Add Lead</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
-      <div className="card border border-[#1F1F23] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-[#1F1F23]">
-                <th className="px-4 py-3 text-[10px] font-semibold text-[#A1A1A8]/50 uppercase tracking-wider">Business</th>
-                <th className="px-4 py-3 text-[10px] font-semibold text-[#A1A1A8]/50 uppercase tracking-wider">Contact</th>
-                <th className="px-4 py-3 text-[10px] font-semibold text-[#A1A1A8]/50 uppercase tracking-wider">Stage</th>
-                <th className="px-4 py-3 text-[10px] font-semibold text-[#A1A1A8]/50 uppercase tracking-wider">Value</th>
-                <th className="px-4 py-3 text-[10px] font-semibold text-[#A1A1A8]/50 uppercase tracking-wider">Vertical</th>
-                <th className="px-4 py-3 text-[10px] font-semibold text-[#A1A1A8]/50 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#1F1F23]">
-              {filtered.map(deal => (
-                <tr key={deal.id} className="hover:bg-[#111113] transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="text-[11px] font-medium text-[#F5F5F7]">{deal.business_name}</p>
-                    <p className="text-[10px] text-[#A1A1A8]/40">{deal.notes.slice(0, 60)}{deal.notes.length > 60 ? '...' : ''}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-[11px] text-[#F5F5F7]">{deal.contact_name}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Mail size={10} className="text-[#A1A1A8]/30" />
-                      <span className="text-[10px] text-[#A1A1A8]/50">{deal.contact_email}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <StageBadge stage={deal.stage} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-[11px] font-semibold text-[#F5F5F7]">{formatCompact(deal.monthly_value)}/mo</p>
-                    <p className="text-[10px] text-[#A1A1A8]/40">{deal.commission_rate}% rate</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-[11px] text-[#A1A1A8]">{deal.vertical}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={deal.stage}
-                      onChange={e => moveDeal(deal.id, e.target.value as DealStage)}
-                      className="px-2 py-1 bg-[#111113] border border-[#1F1F23] rounded text-[10px] text-[#A1A1A8] focus:outline-none focus:border-[#17C5B0]/50"
-                    >
-                      {STAGE_ORDER.map(s => <option key={s} value={s}>{STAGE_CONFIG[s].label}</option>)}
-                    </select>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm text-[#A1A1A8]/40">
-                    No leads found. {search || stageFilter !== 'all' ? 'Try adjusting your filters.' : 'Click "New Lead" to add one.'}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Lead Cards */}
+      <div className="space-y-3">
+        {displayed.map(deal => {
+          const step = STAGE_TO_STEP[deal.stage]
+          const isConnected = step >= 4
+          return (
+            <Link
+              key={deal.id}
+              to={`/canada/portal/leads/${deal.id}`}
+              className="block bg-[#0f1512] border border-[#1a2420] rounded-xl p-4 hover:border-[#00d4aa]/30 transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                {/* Icon */}
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#1a2420] flex items-center justify-center">
+                  {isConnected ? (
+                    <Wifi size={18} className="text-[#00d4aa]" />
+                  ) : (
+                    <Store size={18} className="text-[#6b7a74]" />
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-semibold text-white truncate">{deal.business_name}</span>
+                    {deal.vertical && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a2420] text-[#6b7a74] font-medium">
+                        {deal.vertical}
+                      </span>
+                    )}
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#00d4aa]/10 text-[#00d4aa] font-medium">
+                      ${deal.monthly_value.toLocaleString('en-CA')} CAD/mo
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#6b7a74] mt-0.5 truncate">{deal.contact_name}</p>
+                </div>
+
+                {/* Step pill + arrow */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <StepPill step={step} />
+                  <ChevronRight size={16} className="text-[#4a5550] group-hover:text-[#6b7a74] transition-colors" />
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              {step > 0 && <ProgressBar currentStep={step} />}
+            </Link>
+          )
+        })}
+
+        {displayed.length === 0 && (
+          <div className="text-center py-16 text-sm text-[#6b7a74]">
+            No leads found. {search ? 'Try adjusting your search.' : 'Click "New Lead" to add one.'}
+          </div>
+        )}
       </div>
     </div>
   )
