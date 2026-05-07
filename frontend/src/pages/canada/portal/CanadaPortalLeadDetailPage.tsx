@@ -4,6 +4,7 @@ import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2,
   FileText, Eye, Mail,
 } from 'lucide-react'
+import PortalPOSPicker from '@/components/PortalPOSPicker'
 import { canadaSalesDemoData, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
@@ -83,7 +84,6 @@ export default function CanadaPortalLeadDetailPage() {
 
   // Step 4 state
   const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
-  const [accessToken, setAccessToken] = useState('')
 
   // Files state
   const [files, setFiles] = useState(DEMO_FILES)
@@ -208,50 +208,7 @@ export default function CanadaPortalLeadDetailPage() {
       {/* Step 4 - Connect POS */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Step 4 — Connect POS</h2>
-
-        {/* POS Cards */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { id: 'square', name: 'Square', emoji: '🟦' },
-            { id: 'clover', name: 'Clover', emoji: '🍀' },
-            { id: 'toast', name: 'Toast', emoji: '🍞' },
-          ].map(pos => (
-            <button
-              key={pos.id}
-              onClick={() => setSelectedPOS(pos.id)}
-              className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
-                selectedPOS === pos.id
-                  ? 'border-[#00d4aa] bg-[#00d4aa]/5'
-                  : 'border-[#1a2420] hover:border-[#4a5550]'
-              }`}
-            >
-              {selectedPOS === pos.id && (
-                <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-[#00d4aa] flex items-center justify-center">
-                  <Check size={10} className="text-white" />
-                </div>
-              )}
-              <span className="text-2xl">{pos.emoji}</span>
-              <span className="text-xs font-medium text-white">{pos.name}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Access Token */}
-        <div>
-          <label className="text-xs text-[#6b7a74] block mb-1.5">Access Token</label>
-          <input
-            type="text"
-            value={accessToken}
-            onChange={e => setAccessToken(e.target.value)}
-            className={inputClass}
-            placeholder="Paste access token..."
-          />
-          <p className="text-[11px] text-[#4a5550] mt-1.5">
-            Find this in your POS dashboard under Settings &gt; API
-          </p>
-        </div>
-
-        {/* Save button */}
+        <PortalPOSPicker value={selectedPOS} onChange={setSelectedPOS} mode="lead-detail" />
         <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">
           <Wifi size={16} /> Save & Test Connection
         </button>

@@ -6,6 +6,7 @@ import {
   Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
+import PortalPOSPicker from '@/components/PortalPOSPicker'
 import { supabase } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
@@ -32,13 +33,6 @@ function generateQrSvg(text: string, size: number = 256): string {
 }
 
 const API_URL = import.meta.env.VITE_API_URL || ''
-
-/* ─── POS selector icons ─── */
-const POS_OPTIONS = [
-  { id: 'square', label: 'Square', emoji: '⬛' },
-  { id: 'clover', label: 'Clover', emoji: '🍀' },
-  { id: 'toast', label: 'Toast', emoji: '🍞' },
-]
 
 /* ─── Proposal Slide Overlay ─── */
 function ProposalOverlay({
@@ -775,27 +769,11 @@ export default function CanadaPortalCreateCustomerPage() {
             {/* POS Selector */}
             <div>
               <label className="block text-[11px] font-medium text-[#6b7a74] mb-2">Current POS System</label>
-              <div className="grid grid-cols-3 gap-3">
-                {POS_OPTIONS.map(pos => (
-                  <button
-                    key={pos.id}
-                    onClick={() => update('pos', pos.id)}
-                    className={`relative p-3 rounded-xl border text-center transition-all duration-200 ${
-                      form.pos === pos.id
-                        ? 'border-[#00d4aa] bg-[#00d4aa]/5'
-                        : 'border-[#1a2420] bg-[#0a0f0d] hover:border-[#4a5550]'
-                    }`}
-                  >
-                    {form.pos === pos.id && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-[#00d4aa] flex items-center justify-center">
-                        <Check size={10} className="text-[#0a0f0d]" />
-                      </div>
-                    )}
-                    <span className="text-xl">{pos.emoji}</span>
-                    <p className="text-[11px] font-medium text-white mt-1">{pos.label}</p>
-                  </button>
-                ))}
-              </div>
+              <PortalPOSPicker
+                value={form.pos || null}
+                onChange={(key) => update('pos', key)}
+                mode="new-customer"
+              />
             </div>
 
             <div className="flex items-center gap-2 mt-6 mb-2">
