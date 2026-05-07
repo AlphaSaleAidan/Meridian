@@ -1,8 +1,8 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/lib/auth'
-import { SalesAuthProvider } from '@/lib/sales-auth'
+import { SalesAuthProvider, useSalesAuth } from '@/lib/sales-auth'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
@@ -105,7 +105,15 @@ function CustomerDashboardRoutes() {
 }
 
 function SalesProtectedRoute({ children }: { children: React.ReactNode }) {
-  return <ProtectedRoute loginPath="/sales/login" allowSalesReps>{children}</ProtectedRoute>
+  const salesAuth = useSalesAuth()
+  const location = useLocation()
+  if (!salesAuth.ready) {
+    return <LazyFallback />
+  }
+  if (!salesAuth.authenticated) {
+    return <Navigate to="/sales/login" state={{ from: location.pathname }} replace />
+  }
+  return <>{children}</>
 }
 
 export default function App() {
