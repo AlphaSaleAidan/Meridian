@@ -1,0 +1,190 @@
+"""
+Celery Tasks — Background jobs for POS sync, AI analysis, and reports.
+
+All tasks are async-safe via asyncio.run() bridge.
+Rate-limited tasks for Square/Clover API calls.
+"""
+import asyncio
+import logging
+from functools import wraps
+
+from celery import shared_task
+from celery.utils.log import get_task_logger
+
+logger = get_task_logger(__name__)
+
+
+def run_async(coro):
+    """Run an async coroutine from a sync Celery task."""
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+@shared_task(
+    bind=True,
+    name="src.workers.tasks.sync_pos_data",
+    max_retries=3,
+    default_retry_delay=30,
+    rate_limit="8/s",
+)
+def sync_pos_data(self, org_id: str, pos_type: str = "square"):
+    """Sync POS data for a single merchant. Rate-limited to respect API limits."""
+    logger.info(f"Syncing {pos_type} data for {org_id}")
+
+    async def _sync():
+        if pos_type == "square":
+            from ..square.sync_engine import SquareSyncEngine
+            engine = SquareSyncEngine()
+        elif pos_type == "clover":
+            from ..clover.sync_engine import CloverSyncEngine
+            engine = CloverSyncEngine()
+        else:
+            return {"status": "skipped", "reason": f"Unknown POS: {pos_type}"}
+
+        return await engine.incremental_sync(org_id)
+
+    try:
+        result = run_async(_sync())
+        logger.info(f"Sync complete for {org_id}: {result}")
+        return {"org_id": org_id, "status": "synced", **result}
+    except Exception as exc:
+        logger.error(f"Sync failed for {org_id}: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    bind=True,
+    name="src.workers.tasks.run_analysis",
+    max_retries=3,
+    default_retry_delay=30,
+)
+def run_analysis(self, org_id: str, include_report: bool = False):
+    """Run full AI analysis pipeline for a merchant."""
+    logger.info(f"Running analysis for {org_id}")
+
+    async def _analyze():
+        from ..db import init_db, close_db
+        from ..ai.engine import MeridianAI
+
+        db = await init_db()
+        if not db:
+            return {"org_id": org_id, "status": "error", "error": "DB unavailable"}
+
+        try:
+            ai = MeridianAI(db=db)
+            result = await ai.analyze_merchant(
+                org_id=org_id,
+                days=30,
+                include_forecasts=True,
+                include_report=include_report,
+            )
+            return {"org_id": org_id, "status": "complete", **result.summary}
+        finally:
+            await close_db()
+
+    try:
+        result = run_async(_analyze())
+        logger.info(f"Analysis complete for {org_id}: {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"Analysis failed for {org_id}: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    name="src.workers.tasks.generate_report",
+    max_retries=2,
+    default_retry_delay=30,
+)
+def generate_report(org_id: str):
+    """Generate a weekly report for a single merchant."""
+    logger.info(f"Generating report for {org_id}")
+
+    async def _report():
+        from ..db import init_db, close_db
+        from ..ai.engine import MeridianAI
+
+        db = await init_db()
+        if not db:
+            return {"org_id": org_id, "status": "error", "error": "DB unavailable"}
+
+        try:
+            ai = MeridianAI(db=db)
+            result = await ai.analyze_merchant(
+                org_id=org_id, days=7, include_forecasts=True, include_report=True,
+            )
+            return {"org_id": org_id, "status": "generated", "has_report": result.weekly_report is not None}
+        finally:
+            await close_db()
+
+    return run_async(_report())
+
+
+@shared_task(name="src.workers.tasks.run_nightly_analysis")
+def run_nightly_analysis():
+    """Nightly batch: sync + analyze all active merchants."""
+    logger.info("Starting nightly analysis batch")
+
+    async def _batch():
+        from ..db import init_db, close_db
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            orgs = await db.query(
+                "organizations",
+                select="id, pos_type",
+                filters={"status": "eq.active"},
+            )
+
+            results = []
+            for org in orgs:
+                sync_pos_data.apply_async(
+                    args=[org["id"], org.get("pos_type", "square")],
+                    countdown=0,
+                )
+                run_analysis.apply_async(
+                    args=[org["id"]],
+                    countdown=10,
+                )
+                results.append(org["id"])
+
+            return {"status": "dispatched", "merchant_count": len(results)}
+        finally:
+            await close_db()
+
+    return run_async(_batch())
+
+
+@shared_task(name="src.workers.tasks.generate_weekly_reports")
+def generate_weekly_reports():
+    """Weekly batch: generate reports for all active merchants."""
+    logger.info("Starting weekly report generation")
+
+    async def _batch():
+        from ..db import init_db, close_db
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            orgs = await db.query(
+                "organizations",
+                select="id",
+                filters={"status": "eq.active"},
+            )
+
+            for org in orgs:
+                generate_report.apply_async(args=[org["id"]])
+
+            return {"status": "dispatched", "merchant_count": len(orgs)}
+        finally:
+            await close_db()
+
+    return run_async(_batch())
