@@ -109,9 +109,14 @@ export default function PeakHoursPage() {
     auto_shop: [8, 11], smoke_shop: [16, 19],
   }
   const [peakStart, peakEnd] = peakWindows[bt] || peakWindows.coffee_shop
-  const morningRevenue = cells.filter(c => c.hour >= peakStart && c.hour < peakEnd).reduce((s, c) => s + c.revenue, 0)
+  const peakRevenue = cells.filter(c => c.hour >= peakStart && c.hour < peakEnd).reduce((s, c) => s + c.revenue, 0)
   const totalRevenue = cells.reduce((s, c) => s + c.revenue, 0)
-  const morningPct = totalRevenue > 0 ? Math.round(morningRevenue / totalRevenue * 100) : 0
+  const morningPct = totalRevenue > 0 ? Math.round(peakRevenue / totalRevenue * 100) : 0
+  const peakLabels: Record<string, string> = {
+    coffee_shop: 'AM Revenue', restaurant: 'Dinner Rev', fast_food: 'Lunch Rev',
+    auto_shop: 'AM Drop-off', smoke_shop: 'PM Rush Rev',
+  }
+  const peakLabel = peakLabels[bt] || 'Peak Rev'
 
   return (
     <div className="space-y-6">
@@ -158,7 +163,7 @@ export default function PeakHoursPage() {
                 <TrendingUp size={16} className="text-[#7C5CFF]" />
               </div>
               <div>
-                <p className="stat-label">AM Revenue</p>
+                <p className="stat-label">{peakLabel}</p>
                 <p className="text-lg font-bold text-[#7C5CFF] font-mono">{morningPct}%</p>
               </div>
             </div>

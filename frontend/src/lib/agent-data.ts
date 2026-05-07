@@ -304,18 +304,70 @@ export function generateTopActions(): TopAction[] {
   ]
 }
 
+const RFM_SEGMENTS_BY_TYPE: Record<string, RFMSegment[]> = {
+  coffee_shop: [
+    { name: 'Champions', count: 23, percentage: 8, avgSpendCents: 284000, avgFrequency: 18, retentionScore: 96, color: '#17C5B0', description: 'Best customers. High spend, frequent visits, recent activity.' },
+    { name: 'Loyal', count: 45, percentage: 15, avgSpendCents: 178000, avgFrequency: 12, retentionScore: 88, color: '#1A8FD6', description: 'Regular customers with consistent spending patterns.' },
+    { name: 'Potential Loyalists', count: 38, percentage: 13, avgSpendCents: 95000, avgFrequency: 6, retentionScore: 74, color: '#7C5CFF', description: 'Recent customers with moderate frequency. High conversion potential.' },
+    { name: 'Recent Customers', count: 52, percentage: 18, avgSpendCents: 42000, avgFrequency: 2, retentionScore: 62, color: '#4FE3C1', description: 'New customers. Need nurturing to build habit.' },
+    { name: 'Promising', count: 34, percentage: 12, avgSpendCents: 68000, avgFrequency: 4, retentionScore: 58, color: '#60A5FA', description: 'Moderate recency and frequency. Respond well to promotions.' },
+    { name: 'Needs Attention', count: 28, percentage: 10, avgSpendCents: 124000, avgFrequency: 3, retentionScore: 42, color: '#FBBF24', description: 'Previously good customers showing declining engagement.' },
+    { name: 'At Risk', count: 22, percentage: 8, avgSpendCents: 156000, avgFrequency: 1, retentionScore: 28, color: '#F97316', description: 'High-value customers who stopped visiting. Urgent winback needed.' },
+    { name: 'Hibernating', count: 32, percentage: 11, avgSpendCents: 52000, avgFrequency: 1, retentionScore: 15, color: '#EF4444', description: 'Long inactive. Low probability of return without intervention.' },
+    { name: 'Lost', count: 16, percentage: 5, avgSpendCents: 38000, avgFrequency: 0, retentionScore: 5, color: '#6B7280', description: 'No activity in 90+ days. Consider removing from active targeting.' },
+  ],
+  restaurant: [
+    { name: 'Champions', count: 18, percentage: 7, avgSpendCents: 1024000, avgFrequency: 6, retentionScore: 94, color: '#17C5B0', description: 'Top diners. High spend per cover, frequent reservations.' },
+    { name: 'Loyal', count: 35, percentage: 14, avgSpendCents: 480000, avgFrequency: 4, retentionScore: 86, color: '#1A8FD6', description: 'Regular guests with consistent reservation patterns.' },
+    { name: 'Potential Loyalists', count: 30, percentage: 12, avgSpendCents: 220000, avgFrequency: 2, retentionScore: 72, color: '#7C5CFF', description: 'Recent diners who could become regulars with engagement.' },
+    { name: 'Recent Customers', count: 48, percentage: 19, avgSpendCents: 85000, avgFrequency: 1, retentionScore: 60, color: '#4FE3C1', description: 'First-time or second-time guests. Follow-up opportunity.' },
+    { name: 'Promising', count: 28, percentage: 11, avgSpendCents: 145000, avgFrequency: 2, retentionScore: 55, color: '#60A5FA', description: 'Moderate engagement. Respond well to event invitations.' },
+    { name: 'Needs Attention', count: 25, percentage: 10, avgSpendCents: 380000, avgFrequency: 1, retentionScore: 40, color: '#FBBF24', description: 'Previously regular diners showing declining visit frequency.' },
+    { name: 'At Risk', count: 20, percentage: 8, avgSpendCents: 520000, avgFrequency: 0, retentionScore: 25, color: '#F97316', description: 'High-value guests who have not returned. Personal outreach needed.' },
+    { name: 'Hibernating', count: 28, percentage: 11, avgSpendCents: 195000, avgFrequency: 0, retentionScore: 12, color: '#EF4444', description: 'Long inactive. Low probability of return without a compelling offer.' },
+    { name: 'Lost', count: 18, percentage: 7, avgSpendCents: 310000, avgFrequency: 0, retentionScore: 4, color: '#6B7280', description: 'No reservation or visit in 120+ days.' },
+  ],
+  fast_food: [
+    { name: 'Champions', count: 28, percentage: 9, avgSpendCents: 88000, avgFrequency: 18, retentionScore: 95, color: '#17C5B0', description: 'Daily regulars. Highest visit frequency and consistent orders.' },
+    { name: 'Loyal', count: 52, percentage: 17, avgSpendCents: 55000, avgFrequency: 10, retentionScore: 87, color: '#1A8FD6', description: 'Frequent visitors with predictable order patterns.' },
+    { name: 'Potential Loyalists', count: 42, percentage: 14, avgSpendCents: 30000, avgFrequency: 5, retentionScore: 72, color: '#7C5CFF', description: 'Growing visit frequency. App engagement opportunity.' },
+    { name: 'Recent Customers', count: 58, percentage: 19, avgSpendCents: 12000, avgFrequency: 2, retentionScore: 60, color: '#4FE3C1', description: 'New visitors. Coupon-driven first visits.' },
+    { name: 'Promising', count: 36, percentage: 12, avgSpendCents: 24000, avgFrequency: 4, retentionScore: 56, color: '#60A5FA', description: 'Moderate frequency. Combo deal responsive.' },
+    { name: 'Needs Attention', count: 24, percentage: 8, avgSpendCents: 42000, avgFrequency: 2, retentionScore: 38, color: '#FBBF24', description: 'Visit frequency declining. Previously came weekly.' },
+    { name: 'At Risk', count: 20, percentage: 7, avgSpendCents: 65000, avgFrequency: 1, retentionScore: 24, color: '#F97316', description: 'Was a regular, now visiting rarely. Competitor risk.' },
+    { name: 'Hibernating', count: 26, percentage: 9, avgSpendCents: 28000, avgFrequency: 0, retentionScore: 12, color: '#EF4444', description: 'No visit in 30+ days. App push notification candidate.' },
+    { name: 'Lost', count: 14, percentage: 5, avgSpendCents: 22000, avgFrequency: 0, retentionScore: 4, color: '#6B7280', description: 'No activity in 60+ days. Low reactivation probability.' },
+  ],
+  auto_shop: [
+    { name: 'Champions', count: 15, percentage: 8, avgSpendCents: 684000, avgFrequency: 2, retentionScore: 94, color: '#17C5B0', description: 'Top accounts. Multiple vehicles, full-service loyalty.' },
+    { name: 'Loyal', count: 28, percentage: 15, avgSpendCents: 280000, avgFrequency: 1, retentionScore: 86, color: '#1A8FD6', description: 'Regular maintenance customers on predictable schedules.' },
+    { name: 'Potential Loyalists', count: 22, percentage: 12, avgSpendCents: 120000, avgFrequency: 0.5, retentionScore: 70, color: '#7C5CFF', description: 'Came for one service, could become regulars with follow-up.' },
+    { name: 'Recent Customers', count: 35, percentage: 19, avgSpendCents: 45000, avgFrequency: 0.3, retentionScore: 58, color: '#4FE3C1', description: 'First-time visitors. Service reminder follow-up needed.' },
+    { name: 'Promising', count: 20, percentage: 11, avgSpendCents: 85000, avgFrequency: 0.5, retentionScore: 52, color: '#60A5FA', description: 'Have returned once. Maintenance reminder opportunity.' },
+    { name: 'Needs Attention', count: 18, percentage: 10, avgSpendCents: 210000, avgFrequency: 0.3, retentionScore: 38, color: '#FBBF24', description: 'Overdue for service. Were previously on schedule.' },
+    { name: 'At Risk', count: 14, percentage: 8, avgSpendCents: 340000, avgFrequency: 0, retentionScore: 22, color: '#F97316', description: 'High-value accounts that missed their service interval.' },
+    { name: 'Hibernating', count: 18, percentage: 10, avgSpendCents: 140000, avgFrequency: 0, retentionScore: 10, color: '#EF4444', description: 'No visit in 6+ months. May have switched shops.' },
+    { name: 'Lost', count: 12, percentage: 7, avgSpendCents: 210000, avgFrequency: 0, retentionScore: 3, color: '#6B7280', description: 'No activity in 12+ months. Likely moved or found another shop.' },
+  ],
+  smoke_shop: [
+    { name: 'Champions', count: 20, percentage: 8, avgSpendCents: 374000, avgFrequency: 12, retentionScore: 95, color: '#17C5B0', description: 'Top spenders. Weekly carton buyers and premium product collectors.' },
+    { name: 'Loyal', count: 42, percentage: 16, avgSpendCents: 172000, avgFrequency: 8, retentionScore: 88, color: '#1A8FD6', description: 'Regular replenishment customers with predictable cycles.' },
+    { name: 'Potential Loyalists', count: 32, percentage: 12, avgSpendCents: 54000, avgFrequency: 4, retentionScore: 72, color: '#7C5CFF', description: 'Recent customers building a purchase pattern.' },
+    { name: 'Recent Customers', count: 48, percentage: 18, avgSpendCents: 18000, avgFrequency: 2, retentionScore: 60, color: '#4FE3C1', description: 'New walk-ins. Loyalty program enrollment opportunity.' },
+    { name: 'Promising', count: 30, percentage: 12, avgSpendCents: 42000, avgFrequency: 3, retentionScore: 55, color: '#60A5FA', description: 'Moderate buyers. Respond to new product introductions.' },
+    { name: 'Needs Attention', count: 24, percentage: 9, avgSpendCents: 95000, avgFrequency: 2, retentionScore: 40, color: '#FBBF24', description: 'Previously regular buyers whose visit frequency dropped.' },
+    { name: 'At Risk', count: 18, percentage: 7, avgSpendCents: 128000, avgFrequency: 0, retentionScore: 25, color: '#F97316', description: 'Was a weekly buyer, now lapsed 2+ weeks. Competitor or online risk.' },
+    { name: 'Hibernating', count: 26, percentage: 10, avgSpendCents: 68000, avgFrequency: 0, retentionScore: 12, color: '#EF4444', description: 'No visit in 30+ days. May have switched brands or stores.' },
+    { name: 'Lost', count: 20, percentage: 8, avgSpendCents: 32000, avgFrequency: 0, retentionScore: 4, color: '#6B7280', description: 'No activity in 60+ days. Low reactivation probability.' },
+  ],
+}
+
 export function generateRFMSegments(): RFMSegment[] {
-  return [
-    { name: 'Champions', count: 23, percentage: 8, avgSpendCents: scaleCents(284000), avgFrequency: 18, retentionScore: 96, color: '#17C5B0', description: 'Best customers. High spend, frequent visits, recent activity.' },
-    { name: 'Loyal', count: 45, percentage: 15, avgSpendCents: scaleCents(178000), avgFrequency: 12, retentionScore: 88, color: '#1A8FD6', description: 'Regular customers with consistent spending patterns.' },
-    { name: 'Potential Loyalists', count: 38, percentage: 13, avgSpendCents: scaleCents(95000), avgFrequency: 6, retentionScore: 74, color: '#7C5CFF', description: 'Recent customers with moderate frequency. High conversion potential.' },
-    { name: 'Recent Customers', count: 52, percentage: 18, avgSpendCents: scaleCents(42000), avgFrequency: 2, retentionScore: 62, color: '#4FE3C1', description: 'New customers. Need nurturing to build habit.' },
-    { name: 'Promising', count: 34, percentage: 12, avgSpendCents: scaleCents(68000), avgFrequency: 4, retentionScore: 58, color: '#60A5FA', description: 'Moderate recency and frequency. Respond well to promotions.' },
-    { name: 'Needs Attention', count: 28, percentage: 10, avgSpendCents: scaleCents(124000), avgFrequency: 3, retentionScore: 42, color: '#FBBF24', description: 'Previously good customers showing declining engagement.' },
-    { name: 'At Risk', count: 22, percentage: 8, avgSpendCents: scaleCents(156000), avgFrequency: 1, retentionScore: 28, color: '#F97316', description: 'High-value customers who stopped visiting. Urgent winback needed.' },
-    { name: 'Hibernating', count: 32, percentage: 11, avgSpendCents: scaleCents(52000), avgFrequency: 1, retentionScore: 15, color: '#EF4444', description: 'Long inactive. Low probability of return without intervention.' },
-    { name: 'Lost', count: 16, percentage: 5, avgSpendCents: scaleCents(38000), avgFrequency: 0, retentionScore: 5, color: '#6B7280', description: 'No activity in 90+ days. Consider removing from active targeting.' },
-  ]
+  const bt = getActiveBusinessType()
+  const segments = RFM_SEGMENTS_BY_TYPE[bt] || RFM_SEGMENTS_BY_TYPE.coffee_shop
+  const m = currencyMultiplier()
+  if (m === 1) return segments
+  return segments.map(s => ({ ...s, avgSpendCents: scaleCents(s.avgSpendCents) }))
 }
 
 export function generateRFMMatrix(): RFMCell[] {
@@ -590,10 +642,17 @@ export function generateCustomerRankings(): CustomerProfile[] {
 }
 
 export function generateForecastPeriods(): ForecastPeriod[] {
+  const overrides = getIndustryOverrides(getActiveBusinessType())
+  const dailyRev = overrides.overview.revenue_cents_30d / 30
+
+  const week = Math.round(dailyRev * 7 * 1.04)
+  const month = Math.round(dailyRev * 30 * 1.08)
+  const quarter = Math.round(dailyRev * 90 * 1.12)
+
   return [
-    { label: '7-Day', days: 7, predictedCents: scaleCents(1350000), lowerCents: scaleCents(1150000), upperCents: scaleCents(1550000), confidence: 89, growthPct: 4.2 },
-    { label: '30-Day', days: 30, predictedCents: scaleCents(5480000), lowerCents: scaleCents(4850000), upperCents: scaleCents(6110000), confidence: 82, growthPct: 8.3 },
-    { label: '90-Day', days: 90, predictedCents: scaleCents(18400000), lowerCents: scaleCents(15800000), upperCents: scaleCents(21000000), confidence: 71, growthPct: 12.1 },
+    { label: '7-Day', days: 7, predictedCents: scaleCents(week), lowerCents: scaleCents(Math.round(week * 0.85)), upperCents: scaleCents(Math.round(week * 1.15)), confidence: 89, growthPct: 4.2 },
+    { label: '30-Day', days: 30, predictedCents: scaleCents(month), lowerCents: scaleCents(Math.round(month * 0.88)), upperCents: scaleCents(Math.round(month * 1.12)), confidence: 82, growthPct: 8.3 },
+    { label: '90-Day', days: 90, predictedCents: scaleCents(quarter), lowerCents: scaleCents(Math.round(quarter * 0.86)), upperCents: scaleCents(Math.round(quarter * 1.14)), confidence: 71, growthPct: 12.1 },
   ]
 }
 
@@ -802,13 +861,42 @@ export interface CohortRow {
   retentionByMonth: number[]
 }
 
-export function generateCohorts(): CohortRow[] {
-  return [
+const COHORTS_BY_TYPE: Record<string, CohortRow[]> = {
+  coffee_shop: [
     { cohort: 'Jan 2026', totalCustomers: 42, retentionByMonth: [100, 74, 62, 55] },
     { cohort: 'Feb 2026', totalCustomers: 38, retentionByMonth: [100, 71, 58] },
     { cohort: 'Mar 2026', totalCustomers: 51, retentionByMonth: [100, 78] },
     { cohort: 'Apr 2026', totalCustomers: 47, retentionByMonth: [100] },
-  ]
+  ],
+  restaurant: [
+    { cohort: 'Jan 2026', totalCustomers: 28, retentionByMonth: [100, 68, 54, 46] },
+    { cohort: 'Feb 2026', totalCustomers: 32, retentionByMonth: [100, 65, 50] },
+    { cohort: 'Mar 2026', totalCustomers: 36, retentionByMonth: [100, 72] },
+    { cohort: 'Apr 2026', totalCustomers: 30, retentionByMonth: [100] },
+  ],
+  fast_food: [
+    { cohort: 'Jan 2026', totalCustomers: 68, retentionByMonth: [100, 58, 42, 35] },
+    { cohort: 'Feb 2026', totalCustomers: 72, retentionByMonth: [100, 55, 38] },
+    { cohort: 'Mar 2026', totalCustomers: 80, retentionByMonth: [100, 62] },
+    { cohort: 'Apr 2026', totalCustomers: 75, retentionByMonth: [100] },
+  ],
+  auto_shop: [
+    { cohort: 'Jan 2026', totalCustomers: 18, retentionByMonth: [100, 82, 72, 65] },
+    { cohort: 'Feb 2026', totalCustomers: 22, retentionByMonth: [100, 78, 68] },
+    { cohort: 'Mar 2026', totalCustomers: 25, retentionByMonth: [100, 84] },
+    { cohort: 'Apr 2026', totalCustomers: 20, retentionByMonth: [100] },
+  ],
+  smoke_shop: [
+    { cohort: 'Jan 2026', totalCustomers: 35, retentionByMonth: [100, 70, 58, 48] },
+    { cohort: 'Feb 2026', totalCustomers: 40, retentionByMonth: [100, 66, 52] },
+    { cohort: 'Mar 2026', totalCustomers: 45, retentionByMonth: [100, 72] },
+    { cohort: 'Apr 2026', totalCustomers: 38, retentionByMonth: [100] },
+  ],
+}
+
+export function generateCohorts(): CohortRow[] {
+  const bt = getActiveBusinessType()
+  return COHORTS_BY_TYPE[bt] || COHORTS_BY_TYPE.coffee_shop
 }
 
 // ─── #4 Agent Chaining ──────���───────────────────────────────
