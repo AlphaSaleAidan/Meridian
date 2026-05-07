@@ -27,8 +27,11 @@ const DEMO_TEAM: TeamMember[] = [
 
 const AVATAR_COLORS = ['#00d4aa', '#7c3aed', '#f59e0b', '#1a8fd6']
 
+const CAD_RATE = 1.37
+
 function formatCurrency(cents: number): string {
-  return '$' + (cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' CAD'
+  const cad = (cents / 100) * CAD_RATE
+  return 'CA$' + cad.toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 }
 
 function getInitials(name: string): string {

@@ -183,14 +183,14 @@ export default function ClineChatWidget() {
           onClick={() => setOpen(true)}
           className={clsx(
             'fixed z-40 bottom-20 sm:bottom-6 right-4 sm:right-6',
-            'w-12 h-12 rounded-full shadow-lg flex items-center justify-center',
+            'w-10 h-10 rounded-full shadow-lg flex items-center justify-center',
             'bg-[#17C5B0] text-white hover:bg-[#17C5B0]/90 transition-all duration-200',
             'hover:scale-105 active:scale-95',
             hasAlert && 'animate-pulse ring-2 ring-[#17C5B0]/50 ring-offset-2 ring-offset-[#0A0A0B]',
           )}
           aria-label="Open Cline assistant"
         >
-          <MessageCircle size={20} />
+          <MessageCircle size={16} />
         </button>
       )}
 

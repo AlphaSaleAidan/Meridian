@@ -4,6 +4,7 @@ import {
   Plus, Search, X, ChevronRight, Store, Wifi,
 } from 'lucide-react'
 import { canadaSalesDemoData, STAGE_CONFIG, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
   prospecting: 1,
@@ -204,7 +205,7 @@ export default function CanadaPortalLeadsPage() {
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
-              <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Est. Monthly Revenue (CAD) *" />
+              <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Monthly Price (USD) *" />
               <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
               <div className="sm:col-span-2 flex justify-end gap-2 mt-2">
                 <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
@@ -246,7 +247,7 @@ export default function CanadaPortalLeadsPage() {
                       </span>
                     )}
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#00d4aa]/10 text-[#00d4aa] font-medium">
-                      ${deal.monthly_value.toLocaleString('en-CA')} CAD/mo
+                      CA${Math.round(deal.monthly_value * CAD_RATE).toLocaleString()}/mo
                     </span>
                   </div>
                   <p className="text-xs text-[#6b7a74] mt-0.5 truncate">{deal.contact_name}</p>

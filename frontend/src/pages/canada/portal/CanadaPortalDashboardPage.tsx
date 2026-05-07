@@ -12,12 +12,16 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import { canadaSalesDemoData, type SalesOverview, type Deal, type SalesClient } from '@/lib/canada-sales-demo-data'
 
+const CAD_RATE = 1.37
+
 function formatCentsToCad(cents: number): string {
-  return '$' + (cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' CAD'
+  const cad = (cents / 100) * CAD_RATE
+  return 'CA$' + cad.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 function formatDollarsCad(value: number): string {
-  return '$' + value.toLocaleString('en-CA') + ' CAD/mo'
+  const cad = Math.round(value * CAD_RATE)
+  return 'CA$' + cad.toLocaleString('en-CA') + '/mo'
 }
 
 function titleCase(name: string): string {
@@ -125,7 +129,7 @@ export default function CanadaPortalDashboardPage() {
               <p className="text-xs font-medium text-[#6b7a74] mb-1">In Pipeline</p>
               <p className="text-2xl font-bold text-white">{pipelineDeals.length}</p>
               <p className="text-[11px] text-[#4a5550] mt-1">
-                ${pipelineValue.toLocaleString('en-CA')} CAD/mo potential
+                ${pipelineValue.toLocaleString()}/mo potential
               </p>
             </div>
             <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#f59e0b]/15">
@@ -181,7 +185,7 @@ export default function CanadaPortalDashboardPage() {
                   <p className="text-[11px] text-[#6b7a74]">{client.pos_provider ?? 'POS'}</p>
                 </div>
                 <span className="text-xs font-semibold text-white bg-[#1a2420] px-2.5 py-1 rounded-lg flex-shrink-0">
-                  {formatCentsToCad(client.monthly_revenue).replace(' CAD', '')}/mo CAD
+                  {formatCentsToCad(client.monthly_revenue)}/mo
                 </span>
               </div>
             ))

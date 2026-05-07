@@ -137,7 +137,7 @@ function ProposalOverlay({
           </div>
           <div className="relative z-10">
             <p className="text-[11px] font-mono tracking-[0.2em] text-[#00d4aa] uppercase mb-8">
-              MERIDIAN CANADA · PROPOSAL
+              MERIDIAN CANADA · PROPOSAL (CAD)
             </p>
             <p className="text-[15px] text-[#6b7a74] italic font-serif mb-2">Prepared for</p>
             <h1 className="text-4xl sm:text-6xl font-bold text-white leading-tight">{businessName}</h1>
@@ -621,7 +621,7 @@ export default function CanadaPortalCreateCustomerPage() {
           monthly_value: price,
           commission_rate: rep?.commission_rate || 35,
           country: 'CA',
-          notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
+          notes: form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
           rep_id: rep?.rep_id || null,
         })
         if (dealErr) console.warn('Deal creation warning:', dealErr.message)

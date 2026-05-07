@@ -395,7 +395,7 @@ function IntegratedContent({
       <DataPills data={dataAvailable} theme={t} />
 
       {/* Credential inputs (lead-detail mode only) */}
-      {mode === 'lead-detail' && reqs.filter(r => r.fieldType !== 'oauth_button').map(req => (
+      {mode === 'lead-detail' && reqs.length > 0 && reqs.filter(r => r.fieldType !== 'oauth_button').map(req => (
         <div key={req.fieldId}>
           <label className={clsx('text-xs block mb-1.5', t.textMuted)}>{req.label}</label>
           {req.fieldType === 'file_upload' ? (
@@ -418,6 +418,11 @@ function IntegratedContent({
           <p className={clsx('text-[11px] mt-1.5', t.textDim)}>{req.howToFind}</p>
         </div>
       ))}
+
+      {/* Auto-generated credential inputs when merchantRequirements not defined */}
+      {mode === 'lead-detail' && reqs.length === 0 && (
+        <AutoCredentialFields system={system} theme={t} credentialValues={credentialValues} onCredentialChange={onCredentialChange} />
+      )}
 
       {/* Connect button */}
       <button
@@ -560,6 +565,97 @@ function ManualImportContent({ system, theme: t }: { system: POSSystem; theme: T
           </ul>
         </div>
       )}
+    </>
+  )
+}
+
+function AutoCredentialFields({
+  system, theme: t, credentialValues, onCredentialChange,
+}: {
+  system: POSSystem
+  theme: Theme
+  credentialValues: Record<string, string>
+  onCredentialChange: (fieldId: string, val: string) => void
+}) {
+  const auth = system.authMethod ?? (system.integrationStatus.oauthSupported ? 'oauth2' : system.integrationStatus.apiAvailable ? 'api_key' : 'manual_export')
+  const creds = system.connectionRequirements.requiredCredentials
+
+  if (auth === 'oauth2') {
+    return (
+      <>
+        <button
+          type="button"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all text-white"
+          style={{ backgroundColor: t.accent }}
+        >
+          <ExternalLink size={14} /> Authorize with {system.name}
+        </button>
+        {creds.filter(c => !c.toLowerCase().includes('oauth')).map(cred => {
+          const fieldId = cred.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+          return (
+            <div key={fieldId}>
+              <label className={clsx('text-xs block mb-1.5', t.textMuted)}>{cred}</label>
+              <input
+                type="text"
+                value={credentialValues[fieldId] || ''}
+                onChange={e => onCredentialChange(fieldId, e.target.value)}
+                className={clsx(
+                  'w-full px-3 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-1 transition-colors',
+                  t.bg, t.border, t.text, t.placeholder, t.borderFocus, t.ringFocus,
+                )}
+                placeholder={`Enter ${cred}`}
+              />
+            </div>
+          )
+        })}
+      </>
+    )
+  }
+
+  if (auth === 'manual_export') {
+    return (
+      <div className={clsx('flex items-center justify-center gap-2 px-4 py-8 rounded-lg border border-dashed cursor-pointer', t.border, t.bg)}>
+        <Upload size={16} className={t.textMuted} />
+        <span className={clsx('text-xs', t.textMuted)}>Upload {system.contingencyPlan.dataExportFormat || 'CSV'} export from {system.name}</span>
+      </div>
+    )
+  }
+
+  const fields: { id: string; label: string; type: 'text' | 'password' }[] = []
+  for (const cred of creds) {
+    const lower = cred.toLowerCase()
+    const id = lower.replace(/[^a-z0-9]+/g, '_')
+    const isSecret = lower.includes('secret') || lower.includes('password') || lower.includes('key')
+    fields.push({ id, label: cred, type: isSecret ? 'password' : 'text' })
+  }
+
+  if (fields.length === 0 && auth === 'api_key') {
+    fields.push({ id: 'api_key', label: 'API Key', type: 'password' })
+  }
+  if (fields.length === 0 && auth === 'api_key_plus_secret') {
+    fields.push({ id: 'api_key', label: 'API Key', type: 'password' }, { id: 'api_secret', label: 'API Secret', type: 'password' })
+  }
+  if (fields.length === 0 && auth === 'username_password') {
+    fields.push({ id: 'username', label: 'Username', type: 'text' }, { id: 'password', label: 'Password', type: 'password' })
+  }
+
+  return (
+    <>
+      {fields.map(f => (
+        <div key={f.id}>
+          <label className={clsx('text-xs block mb-1.5', t.textMuted)}>{f.label}</label>
+          <input
+            type={f.type}
+            value={credentialValues[f.id] || ''}
+            onChange={e => onCredentialChange(f.id, e.target.value)}
+            className={clsx(
+              'w-full px-3 py-2.5 rounded-lg border text-sm focus:outline-none focus:ring-1 transition-colors',
+              t.bg, t.border, t.text, t.placeholder, t.borderFocus, t.ringFocus,
+            )}
+            placeholder={`Enter ${f.label}`}
+          />
+        </div>
+      ))}
     </>
   )
 }

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { canadaSalesDemoData, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
   prospecting: 1,
@@ -139,7 +140,7 @@ export default function CanadaPortalLeadDetailPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">{deal.business_name}</h1>
         <p className="text-sm text-[#6b7a74] mt-1">
-          {deal.contact_name} &middot; ${deal.monthly_value.toLocaleString('en-CA')} CAD/mo &middot; {deal.contact_email}
+          {deal.contact_name} &middot; CA${Math.round(deal.monthly_value * CAD_RATE).toLocaleString()}/mo &middot; {deal.contact_email}
         </p>
       </div>
 
@@ -165,13 +166,13 @@ export default function CanadaPortalLeadDetailPage() {
               onChange={e => setMonthlyPrice(Number(e.target.value))}
               className="flex-1 h-2 bg-[#1a2420] rounded-full appearance-none cursor-pointer accent-[#00d4aa]"
             />
-            <span className="text-sm font-semibold text-white w-24 text-right">${monthlyPrice} CAD</span>
+            <span className="text-sm font-semibold text-white w-28 text-right">CA${Math.round(monthlyPrice * CAD_RATE)}/mo</span>
           </div>
         </div>
 
         {/* Setup Fee */}
         <div>
-          <label className="text-xs text-[#6b7a74] block mb-1.5">Setup Fee (CAD)</label>
+          <label className="text-xs text-[#6b7a74] block mb-1.5">Setup Fee</label>
           <input
             type="text"
             value={setupFee}

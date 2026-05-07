@@ -1,75 +1,22 @@
 /**
- * Meridian Canada plan tiers — CAD pricing.
+ * Canada plans — base USD pricing × 1.37 for CAD display.
+ * Source of truth for USD pricing lives in proposal-plans.ts.
  */
+import { PLAN_TIERS as US_PLAN_TIERS, getPlan as getUsPlan, type PlanTier } from './proposal-plans'
 
-export interface PlanTier {
-  id: 'standard' | 'premium' | 'command' | 'weekly'
-  label: string
-  price: number
-  interval?: 'month' | 'week'
-  tag?: string
-  features: string[]
-}
+export const CAD_RATE = 1.37
 
-export const PLAN_TIERS: PlanTier[] = [
-  {
-    id: 'weekly',
-    label: 'Weekly',
-    price: 89,
-    interval: 'week',
-    features: [
-      'POS analytics dashboard',
-      'Revenue + product insights',
-      'Anomaly detection',
-      'Email alerts',
-      '1 POS integration',
-      'Pay weekly — no long-term commitment',
-    ],
-  },
-  {
-    id: 'standard',
-    label: 'Standard',
-    price: 339,
-    interval: 'month',
-    features: [
-      'POS analytics dashboard',
-      'Revenue + product insights',
-      'Anomaly detection',
-      'Email alerts',
-      '1 POS integration',
-    ],
-  },
-  {
-    id: 'premium',
-    label: 'Premium',
-    price: 675,
-    interval: 'month',
-    tag: 'MOST POPULAR',
-    features: [
-      'Everything in Standard',
-      'Predictive engine (churn, demand)',
-      'Menu engineering AI',
-      'Staff optimization',
-      'Camera intelligence (1 feed)',
-      'Priority support',
-    ],
-  },
-  {
-    id: 'command',
-    label: 'Command',
-    price: 1350,
-    interval: 'month',
-    features: [
-      'Everything in Premium',
-      'Unlimited camera feeds',
-      'Multi-location support',
-      'Custom AI models',
-      'White-glove onboarding',
-      'Dedicated account manager',
-    ],
-  },
-]
+export type { PlanTier }
+
+export const PLAN_TIERS: PlanTier[] = US_PLAN_TIERS.map(p => ({
+  ...p,
+  price: Math.round(p.price * CAD_RATE),
+}))
 
 export function getPlan(id: string): PlanTier {
   return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1]
+}
+
+export function toCad(usd: number): number {
+  return Math.round(usd * CAD_RATE)
 }
