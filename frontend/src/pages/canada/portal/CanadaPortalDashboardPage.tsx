@@ -19,6 +19,7 @@ import {
   type DealStage,
   type SalesClient,
 } from '@/lib/canada-sales-demo-data'
+import { canadaLeadsService } from '@/lib/canada-leads-service'
 
 const CAD_RATE = 1.37
 
@@ -63,7 +64,7 @@ export default function CanadaPortalDashboardPage() {
   useEffect(() => {
     Promise.all([
       canadaSalesDemoData.overview(),
-      canadaSalesDemoData.deals(),
+      canadaLeadsService.list(),
       canadaSalesDemoData.clients(),
     ]).then(([o, d, c]) => {
       setOverview(o)
@@ -137,7 +138,7 @@ export default function CanadaPortalDashboardPage() {
               <p className="text-xs font-medium text-[#6b7a74] mb-1">In Pipeline</p>
               <p className="text-2xl font-bold text-white">{pipelineDeals.length}</p>
               <p className="text-[11px] text-[#4a5550] mt-1">
-                ${pipelineValue.toLocaleString()}/mo potential
+                CA${Math.round(pipelineValue * CAD_RATE).toLocaleString()}/mo potential
               </p>
             </div>
             <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#f59e0b]/15">

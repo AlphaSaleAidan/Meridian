@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/lib/auth'
-import { SalesAuthProvider, useSalesAuth } from '@/lib/sales-auth'
+import { SalesAuthProvider } from '@/lib/sales-auth'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
@@ -38,17 +38,6 @@ const AdminPage = lazy(() => import('@/pages/AdminPage'))
 const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
 const POSCoveragePage = lazy(() => import('@/pages/admin/POSCoveragePage'))
 
-const SalesLayout = lazy(() => import('@/pages/sales/SalesLayout'))
-const SalesLoginPage = lazy(() => import('@/pages/sales/SalesLoginPage'))
-const SalesSignupPage = lazy(() => import('@/pages/sales/SalesSignupPage'))
-const SalesDashboardPage = lazy(() => import('@/pages/sales/SalesDashboardPage'))
-const SalesLeadsPage = lazy(() => import('@/pages/sales/LeadsPage'))
-const SalesLeadDetailPage = lazy(() => import('@/pages/sales/LeadDetailPage'))
-const SalesAccountsPage = lazy(() => import('@/pages/sales/AccountsPage'))
-const SalesCreateCustomerPage = lazy(() => import('@/pages/sales/CreateCustomerPage'))
-const SalesTeamPage = lazy(() => import('@/pages/sales/TeamManagementPage'))
-const SalesTrainingPage = lazy(() => import('@/pages/sales/TrainingPage'))
-const SalesSettingsPage = lazy(() => import('@/pages/sales/SalesSettingsPage'))
 
 const CanadaLandingPage = lazy(() => import('@/pages/canada/CanadaLandingPage'))
 const CanadaCareersPage = lazy(() => import('@/pages/canada/CanadaCareersPage'))
@@ -64,6 +53,7 @@ const CanadaPortalTeamPage = lazy(() => import('@/pages/canada/portal/CanadaPort
 const CanadaPortalTrainingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalTrainingPage'))
 const CanadaPortalSettingsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalSettingsPage'))
 const CanadaPortalCreateCustomerPage = lazy(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
+const CanadaPortalOnboardingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
 
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -104,16 +94,15 @@ function CustomerDashboardRoutes() {
   )
 }
 
-function SalesProtectedRoute({ children }: { children: React.ReactNode }) {
-  const salesAuth = useSalesAuth()
-  const location = useLocation()
-  if (!salesAuth.ready) {
-    return <LazyFallback />
-  }
-  if (!salesAuth.authenticated) {
-    return <Navigate to="/sales/login" state={{ from: location.pathname }} replace />
-  }
-  return <>{children}</>
+function SalesRedirect() {
+  const loc = useLocation()
+  const path = loc.pathname.replace(/^\/sales\/?/, '') + loc.search + loc.hash
+  const url = `https://meridian-sales-f7df5b93.viktor.space/${path}`
+  return (
+    <div className="w-full h-screen bg-[#0A0A0B]">
+      <iframe src={url} className="w-full h-full border-0" title="Meridian Sales" allow="clipboard-write" />
+    </div>
+  )
 }
 
 export default function App() {
@@ -226,6 +215,13 @@ export default function App() {
                   ══════════════════════════════════════════════ */}
               <Route path="/canada/portal/login" element={<CanadaPortalLoginPage />} />
               <Route path="/canada/portal/signup" element={<CanadaPortalSignupPage />} />
+              <Route path="/canada/portal/onboarding" element={
+                <CanadaSalesProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <CanadaPortalOnboardingPage />
+                  </Suspense>
+                </CanadaSalesProtectedRoute>
+              } />
               <Route path="/canada/portal" element={
                 <CanadaSalesProtectedRoute>
                   <Suspense fallback={<LazyFallback />}>
@@ -245,27 +241,9 @@ export default function App() {
               </Route>
 
               {/* ══════════════════════════════════════════════
-                  SALES CRM — native React portal
+                  SALES CRM — redirect to Viktor Space
                   ══════════════════════════════════════════════ */}
-              <Route path="/sales/login" element={<SalesLoginPage />} />
-              <Route path="/sales/signup" element={<SalesSignupPage />} />
-              <Route path="/sales" element={
-                <SalesProtectedRoute>
-                  <Suspense fallback={<LazyFallback />}>
-                    <SalesLayout />
-                  </Suspense>
-                </SalesProtectedRoute>
-              }>
-                <Route index element={<Navigate to="/sales/dashboard" replace />} />
-                <Route path="dashboard" element={<SalesDashboardPage />} />
-                <Route path="leads" element={<SalesLeadsPage />} />
-                <Route path="leads/:id" element={<SalesLeadDetailPage />} />
-                <Route path="new-customer" element={<SalesCreateCustomerPage />} />
-                <Route path="accounts" element={<SalesAccountsPage />} />
-                <Route path="training" element={<SalesTrainingPage />} />
-                <Route path="team" element={<SalesTeamPage />} />
-                <Route path="settings" element={<SalesSettingsPage />} />
-              </Route>
+              <Route path="/sales/*" element={<SalesRedirect />} />
 
               {/* ══════════════════════════════════════════════
                   LEGACY REDIRECTS

@@ -1,7 +1,10 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "redirects": [],
+  "redirects": [
+    { "source": "/sales/:path*", "destination": "https://meridian-sales-f7df5b93.viktor.space/", "permanent": false },
+    { "source": "/login", "destination": "https://meridian-sales-f7df5b93.viktor.space/", "permanent": false }
+  ],
   "rewrites": [
     {
       "source": "/((?!api|assets|meridian-icon\\.svg).*)",

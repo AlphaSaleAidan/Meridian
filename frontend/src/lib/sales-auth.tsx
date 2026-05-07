@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { supabase } from './supabase'
 
+export type PortalContext = 'us' | 'canada' | 'all'
+
 export interface SalesRepProfile {
   rep_id: string
   name: string
@@ -12,6 +14,7 @@ export interface SalesRepProfile {
   total_earned: number
   total_paid: number
   created_at: string
+  portal_context: PortalContext
 }
 
 export interface SalesAuthState {
@@ -84,6 +87,7 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     total_earned: 0,
     total_paid: 0,
     created_at: new Date().toISOString(),
+    portal_context: resolvePortalContext(email),
   }
   return localProfile
 }
@@ -174,6 +178,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         total_earned: 14820,
         total_paid: 9600,
         created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
+        portal_context: resolvePortalContext(email),
       }
       saveRep(demoRep)
       setRep(demoRep)
@@ -209,6 +214,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         total_earned: 0,
         total_paid: 0,
         created_at: new Date().toISOString(),
+        portal_context: resolvePortalContext(email),
       }
       saveRep(demoRep)
       setRep(demoRep)
@@ -264,6 +270,19 @@ export function useSalesAuth(): SalesAuthState {
   return ctx
 }
 
+export function canAccessPortal(rep: SalesRepProfile | null, portal: 'us' | 'canada'): boolean {
+  if (!rep) return false
+  if (rep.portal_context === 'all') return true
+  return rep.portal_context === portal
+}
+
+function resolvePortalContext(email: string): PortalContext {
+  const e = email.toLowerCase()
+  if (e.includes('enoch')) return 'canada'
+  if (e.includes('aidan')) return 'all'
+  return 'all'
+}
+
 function repFromRow(data: Record<string, unknown>): SalesRepProfile {
   return {
     rep_id: data.id as string,
@@ -276,5 +295,6 @@ function repFromRow(data: Record<string, unknown>): SalesRepProfile {
     total_earned: Number(data.total_earned) || 0,
     total_paid: Number(data.total_paid) || 0,
     created_at: data.created_at as string,
+    portal_context: (data.portal_context as PortalContext) || resolvePortalContext(data.email as string),
   }
 }

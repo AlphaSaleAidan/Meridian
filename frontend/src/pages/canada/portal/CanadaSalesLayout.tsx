@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
+import ClineAIChatWidget from '@/components/ClineAIChatWidget'
 
 const salesNavItems = [
   { heading: 'Sales' },
@@ -235,6 +236,8 @@ export default function CanadaSalesLayout() {
           </div>
         </main>
       </div>
+
+      <ClineAIChatWidget />
     </div>
   )
 }

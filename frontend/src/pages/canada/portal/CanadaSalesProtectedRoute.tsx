@@ -48,6 +48,10 @@ export default function CanadaSalesProtectedRoute({ children }: { children: Reac
     return <Navigate to="/canada/portal/login" state={{ from: location.pathname }} replace />
   }
 
+  if (rep && rep.portal_context === 'us') {
+    return <AccessDenied />
+  }
+
   return <>{children}</>
 }
 

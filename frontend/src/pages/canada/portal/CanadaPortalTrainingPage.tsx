@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   GraduationCap, Play, CheckCircle2, Clock, ChevronRight,
   BookOpen, Target, Users, Zap, Shield, BarChart3,
+  Camera, Lightbulb, Plug,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
@@ -101,6 +102,49 @@ const MODULES: Module[] = [
       { id: '25', title: 'Accurate Representations', completed: false },
     ],
   },
+  {
+    id: 'camera',
+    title: 'Camera Intelligence Setup',
+    description: 'How to sell and configure Meridian Vision for foot traffic and queue analytics.',
+    icon: Camera,
+    duration: '30 min',
+    category: 'Product Knowledge',
+    lessons: [
+      { id: '26', title: 'What is Camera Intelligence?', completed: false },
+      { id: '27', title: 'Hardware Requirements & Placement', completed: false },
+      { id: '28', title: 'PIPEDA Compliance & Privacy Signage', completed: false },
+      { id: '29', title: 'Configuring Zones & Alerts', completed: false },
+      { id: '30', title: 'Selling the ROI to Prospects', completed: false },
+    ],
+  },
+  {
+    id: 'quicktips',
+    title: 'Quick Tips',
+    description: 'Bite-sized tips for everyday selling in the Canadian market.',
+    icon: Lightbulb,
+    duration: '15 min',
+    category: 'Quick Reference',
+    lessons: [
+      { id: '31', title: 'Pricing in CAD — Handling Currency Questions', completed: false },
+      { id: '32', title: 'Canadian Payment Processing Landscape', completed: false },
+      { id: '33', title: 'Provincial Tax Differences (GST/HST/PST)', completed: false },
+      { id: '34', title: 'Seasonal Sales Patterns in Canada', completed: false },
+    ],
+  },
+  {
+    id: 'pos-guides',
+    title: 'POS Connection Guides',
+    description: 'Step-by-step guides for connecting major Canadian POS systems.',
+    icon: Plug,
+    duration: '25 min',
+    category: 'Technical',
+    lessons: [
+      { id: '35', title: 'Moneris Integration Walkthrough', completed: false },
+      { id: '36', title: 'Square Canada Setup', completed: false },
+      { id: '37', title: 'Clover Canada Configuration', completed: false },
+      { id: '38', title: 'Troubleshooting POS Connections', completed: false },
+    ],
+  },
 ]
 
 // Section groupings
@@ -119,6 +163,16 @@ const SECTIONS = [
     title: 'Compliance & Ethics',
     description: 'Required training for all sales representatives.',
     moduleIds: ['compliance'],
+  },
+  {
+    title: 'Product Deep Dives',
+    description: 'Technical knowledge for Camera Intelligence and POS integrations.',
+    moduleIds: ['camera', 'pos-guides'],
+  },
+  {
+    title: 'Quick Reference',
+    description: 'Handy tips for the Canadian market.',
+    moduleIds: ['quicktips'],
   },
 ]
 

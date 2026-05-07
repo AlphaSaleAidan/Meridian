@@ -12,6 +12,9 @@ export interface Deal {
   commission_rate: number
   expected_close_date: string
   notes: string
+  source?: string
+  city?: string
+  province?: string
   created_at: string
   updated_at: string
 }
@@ -54,29 +57,8 @@ export interface SalesOverview {
   conversion_rate: number
 }
 
-function uuid(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = (Math.random() * 16) | 0
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
-  })
-}
-
-function daysAgo(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
-}
-
-function daysFromNow(n: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() + n)
-  return d.toISOString().slice(0, 10)
-}
-
 const DEMO_DEALS: Deal[] = []
-
 const DEMO_COMMISSIONS: Commission[] = []
-
 const DEMO_CLIENTS: SalesClient[] = []
 
 function delay<T>(data: T, ms = 300): Promise<T> {
@@ -100,7 +82,7 @@ export const canadaSalesDemoData = {
       total_paid: totalPaid,
       pending_payout: totalEarned - totalPaid,
       active_clients: DEMO_CLIENTS.filter(c => c.is_active).length,
-      conversion_rate: Math.round((closedWon.length / allDeals.length) * 100),
+      conversion_rate: allDeals.length > 0 ? Math.round((closedWon.length / allDeals.length) * 100) : 0,
     })
   },
 

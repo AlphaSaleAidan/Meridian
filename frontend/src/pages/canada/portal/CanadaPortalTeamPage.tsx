@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Users, DollarSign, Target, CreditCard, Search, MoreVertical } from 'lucide-react'
+import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save } from 'lucide-react'
 import { clsx } from 'clsx'
 import { supabase } from '@/lib/supabase'
+import { useSalesAuth } from '@/lib/sales-auth'
 import { canadaSalesDemoData, type Commission } from '@/lib/canada-sales-demo-data'
 
 interface TeamMember {
@@ -60,12 +61,22 @@ function getRoleBadge(role: string) {
   }
 }
 
+function isAdmin(email: string | undefined): boolean {
+  if (!email) return false
+  const e = email.toLowerCase()
+  return e.includes('aidan') || e.includes('apierce') || e === 'aidanpierce@meridian.tips'
+}
+
 export default function CanadaPortalTeamPage() {
+  const { rep } = useSalesAuth()
+  const admin = isAdmin(rep?.email)
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'reps' | 'payouts'>('reps')
+  const [activeTab, setActiveTab] = useState<'reps' | 'payouts' | 'onboarding'>('reps')
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [editRate, setEditRate] = useState('')
 
   useEffect(() => {
     async function fetchData() {
@@ -212,6 +223,17 @@ export default function CanadaPortalTeamPage() {
         >
           Payouts
         </button>
+        {admin && (
+          <button
+            onClick={() => setActiveTab('onboarding')}
+            className={clsx(
+              'px-4 py-1.5 rounded-lg text-xs font-medium transition-colors',
+              activeTab === 'onboarding' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
+            )}
+          >
+            Onboarding
+          </button>
+        )}
       </div>
 
       {/* Sales Reps Tab */}
@@ -258,15 +280,22 @@ export default function CanadaPortalTeamPage() {
                       <p className="text-[10px] text-[#4a5550]">{member.location}</p>
                     </div>
 
-                    {/* Commission Rate */}
-                    <div className="hidden sm:block">
-                      <span className="text-sm font-bold text-[#7c3aed]">{member.commission_rate}%</span>
-                    </div>
+                    {/* Commission Rate — admin only */}
+                    {admin && (
+                      <div className="hidden sm:block">
+                        <span className="text-sm font-bold text-[#7c3aed]">{member.commission_rate}%</span>
+                      </div>
+                    )}
 
-                    {/* More Menu */}
-                    <button className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors">
-                      <MoreVertical size={14} />
-                    </button>
+                    {/* Edit button — admin only */}
+                    {admin && (
+                      <button
+                        onClick={() => { setEditingMember(member); setEditRate(String(member.commission_rate)) }}
+                        className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -303,7 +332,7 @@ export default function CanadaPortalTeamPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{member.name}</p>
                         <p className="text-[10px] text-[#6b7a74]">
-                          {member.deals_won} deals &middot; {member.commission_rate}% rate &middot; {formatCurrency(member.total_earned)} earned
+                          {member.deals_won} deals{admin ? ` · ${member.commission_rate}% rate` : ''} &middot; {formatCurrency(member.total_earned)} earned
                         </p>
                       </div>
 
@@ -351,7 +380,7 @@ export default function CanadaPortalTeamPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-white">{formatCurrency(comm.commission_amount)}</p>
                         <p className="text-[10px] text-[#6b7a74]">
-                          Aidan Pierce &middot; {comm.client_name} &middot; {comm.commission_rate}%
+                          {comm.client_name}{admin ? ` · ${comm.commission_rate}%` : ''}
                         </p>
                       </div>
                       <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border', statusBadge.bg, statusBadge.textColor, statusBadge.border)}>
@@ -361,6 +390,99 @@ export default function CanadaPortalTeamPage() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding Tab — admin only */}
+      {activeTab === 'onboarding' && admin && (
+        <div className="space-y-4">
+          <p className="text-sm text-[#6b7a74]">Track new rep onboarding progress.</p>
+          {team.filter(m => m.role === 'onboarding' || m.role === 'active').map(member => {
+            const avatarColor = getAvatarColor(member.name)
+            const badge = getRoleBadge(member.role)
+            const onboardingDone = member.role !== 'onboarding'
+            return (
+              <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{ backgroundColor: avatarColor + '20' }}
+                  >
+                    <span className="text-xs font-bold" style={{ color: avatarColor }}>
+                      {getInitials(member.name)}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-white">{member.name}</p>
+                      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border', badge.bg, badge.textColor, badge.border)}>
+                        {badge.text}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#6b7a74] mt-0.5">{member.email}</p>
+                  </div>
+                  <span className={clsx(
+                    'text-[10px] font-medium px-2.5 py-1 rounded-full',
+                    onboardingDone ? 'bg-[#00d4aa]/10 text-[#00d4aa]' : 'bg-[#f59e0b]/10 text-[#f59e0b]'
+                  )}>
+                    {onboardingDone ? 'Complete' : 'In Progress'}
+                  </span>
+                </div>
+                {!onboardingDone && (
+                  <div className="mt-3">
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4, 5].map(seg => (
+                        <div key={seg} className={`h-1 flex-1 rounded-full ${seg <= 2 ? 'bg-[#f59e0b]' : 'bg-[#1a2420]'}`} />
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-[#4a5550] mt-1">Step 2 of 5 — Profile setup</p>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {team.filter(m => m.role === 'onboarding').length === 0 && (
+            <div className="text-center py-10 text-sm text-[#4a5550]">
+              No reps currently onboarding.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Admin Payout Editor Modal */}
+      {editingMember && admin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-white">Edit Payout Rate</h3>
+              <button onClick={() => setEditingMember(null)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
+                <X size={18} className="text-[#6b7a74]" />
+              </button>
+            </div>
+            <p className="text-sm text-[#6b7a74] mb-4">{editingMember.name}</p>
+            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate (%)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={editRate}
+              onChange={e => setEditRate(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white focus:outline-none focus:border-[#00d4aa]/50"
+            />
+            <div className="flex justify-end gap-2 mt-5">
+              <button onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
+              <button
+                onClick={() => {
+                  const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
+                  setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, commission_rate: rate } : m))
+                  setEditingMember(null)
+                }}
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+              >
+                <Save size={14} /> Save
+              </button>
             </div>
           </div>
         </div>

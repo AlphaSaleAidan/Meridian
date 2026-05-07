@@ -5,7 +5,8 @@ import {
   FileText, Eye, Mail,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
-import { canadaSalesDemoData, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
@@ -90,9 +91,8 @@ export default function CanadaPortalLeadDetailPage() {
   const [files, setFiles] = useState(DEMO_FILES)
 
   useEffect(() => {
-    canadaSalesDemoData.deals().then(deals => {
-      const found = deals.find(d => d.id === id)
-      setDeal(found || null)
+    canadaLeadsService.getById(id!).then(found => {
+      setDeal(found)
       if (found) {
         setMonthlyPrice(Math.round(found.monthly_value / 100) || 500)
       }
@@ -250,7 +250,13 @@ export default function CanadaPortalLeadDetailPage() {
       </div>
 
       {/* Mark as Lost */}
-      <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/15 transition-all">
+      <button
+        onClick={async () => {
+          await canadaLeadsService.updateStage(deal.id, 'closed_lost')
+          navigate('/canada/portal/leads')
+        }}
+        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/15 transition-all"
+      >
         <X size={16} /> Mark as Lost
       </button>
     </div>

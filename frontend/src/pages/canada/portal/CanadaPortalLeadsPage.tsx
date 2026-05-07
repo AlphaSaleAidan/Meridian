@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   Plus, Search, X, ChevronRight, Store, Wifi,
 } from 'lucide-react'
-import { canadaSalesDemoData, STAGE_CONFIG, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { STAGE_CONFIG, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
@@ -90,10 +91,11 @@ export default function CanadaPortalLeadsPage() {
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
     vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '',
+    source: 'Referral', city: '', province: '',
   })
 
   useEffect(() => {
-    canadaSalesDemoData.deals().then(d => { setDeals(d); setLoading(false) })
+    canadaLeadsService.list().then(d => { setDeals(d); setLoading(false) })
   }, [])
 
   const activeDeals = deals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
@@ -106,7 +108,7 @@ export default function CanadaPortalLeadsPage() {
       return d.business_name.toLowerCase().includes(s) || d.contact_name.toLowerCase().includes(s) || d.contact_email.toLowerCase().includes(s)
     })
 
-  function handleAddDeal(e: React.FormEvent) {
+  async function handleAddDeal(e: React.FormEvent) {
     e.preventDefault()
     const deal: Deal = {
       id: crypto.randomUUID(),
@@ -118,9 +120,10 @@ export default function CanadaPortalLeadsPage() {
       created_at: new Date().toISOString().slice(0, 10),
       updated_at: new Date().toISOString().slice(0, 10),
     }
-    setDeals(prev => [deal, ...prev])
+    const saved = await canadaLeadsService.create(deal)
+    setDeals(prev => [saved, ...prev])
     setShowNew(false)
-    setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '' })
+    setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '', source: 'Referral', city: '', province: '' })
   }
 
   const inputClass = 'w-full px-3 py-2 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
@@ -205,7 +208,19 @@ export default function CanadaPortalLeadsPage() {
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
-              <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Monthly Price (USD) *" />
+              <select value={newDeal.source} onChange={e => setNewDeal(p => ({ ...p, source: e.target.value }))} className={inputClass}>
+                {['Referral', 'Cold Call', 'Walk-in', 'Social Media', 'Website', 'Trade Show', 'Partner', 'Other'].map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <input value={newDeal.city} onChange={e => setNewDeal(p => ({ ...p, city: e.target.value }))} className={inputClass} placeholder="City" />
+              <select value={newDeal.province} onChange={e => setNewDeal(p => ({ ...p, province: e.target.value }))} className={inputClass}>
+                <option value="">Province / Territory</option>
+                {['Alberta','British Columbia','Manitoba','New Brunswick','Newfoundland and Labrador','Northwest Territories','Nova Scotia','Nunavut','Ontario','Prince Edward Island','Quebec','Saskatchewan','Yukon'].map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Monthly Price (CA$) *" />
               <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
               <div className="sm:col-span-2 flex justify-end gap-2 mt-2">
                 <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
