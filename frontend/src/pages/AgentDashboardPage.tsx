@@ -116,7 +116,7 @@ export default function AgentDashboardPage() {
         </ScrollReveal>
         <AnalyzingDataState
           title="Agents are processing your data"
-          description="Our 26 AI agents — including 11 camera intelligence agents — are analyzing your POS transactions, customer patterns, spatial data, and foot traffic. Findings and confidence scores will appear here shortly."
+          description="Our 27 AI agents — including 11 camera intelligence agents — are analyzing your POS transactions, customer patterns, spatial data, and foot traffic. Findings and confidence scores will appear here shortly."
         />
       </div>
     )

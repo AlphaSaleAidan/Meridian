@@ -15,6 +15,7 @@ import type {
 
 import { getActiveBusinessType } from './demo-context'
 import { getIndustryOverrides } from './demo-industries'
+import { currencyMultiplier } from './format'
 
 // ─── Helpers ────────────────────────────────────────────
 
@@ -327,7 +328,14 @@ function generateConnection(): { connections: ConnectionInfo[] } {
 // ─── Overview ───────────────────────────────────────────
 
 function generateOverview(_daily: DailyRevenue[]): Overview {
-  return getIndustryOverrides(getActiveBusinessType()).overview
+  const o = getIndustryOverrides(getActiveBusinessType()).overview
+  const m = currencyMultiplier()
+  if (m === 1) return o
+  return {
+    ...o,
+    revenue_cents_30d: Math.round(o.revenue_cents_30d * m),
+    avg_ticket_cents: Math.round(o.avg_ticket_cents * m),
+  }
 }
 
 // ─── Transaction Drill-Down ─────────────────────────────

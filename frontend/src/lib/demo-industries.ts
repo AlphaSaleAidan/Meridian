@@ -45,6 +45,53 @@ export const BUSINESS_TYPES: BusinessTypeMeta[] = [
   { id: 'smoke_shop', label: 'Smoke Shop', icon: '💨', description: 'Tobacco and accessories retail' },
 ]
 
+export interface MarginIngredient {
+  name: string
+  batchCostCents: number
+  batchServings: number
+  amountUsedOz: number
+  wastePct: number
+}
+
+export interface MarginItemDef {
+  name: string
+  category: string
+  sellingPriceCents: number
+  monthlySales: number
+  ingredients: MarginIngredient[]
+  externalLeakageCents: number
+}
+
+export interface MenuEngItem {
+  name: string
+  category: string
+  monthlySales: number
+  marginPct: number
+  revenueCents: number
+  marginCents: number
+}
+
+export interface MenuEngConfig {
+  pageTitle: string
+  xAxisLabel: string
+  yAxisLabel: string
+  quadrantLabels: { star: string; plowhorse: string; puzzle: string; dog: string }
+  items: MenuEngItem[]
+}
+
+export interface AnomalyDef {
+  id: string
+  type: 'void_spike' | 'refund_surge' | 'revenue_drop' | 'cost_spike' | 'traffic_anomaly' | 'register_shortage'
+  severity: 'critical' | 'warning' | 'info'
+  title: string
+  description: string
+  metric: string
+  expected: number
+  actual: number
+  deviationPct: number
+  agentSource: string
+}
+
 export interface IndustryOverrides {
   businessName: string
   overview: Overview
@@ -54,6 +101,9 @@ export interface IndustryOverrides {
   topActions: TopAction[]
   peakHourHeatmap: PeakHourCell[]
   recoverableRevenue30d: number
+  marginItems: MarginItemDef[]
+  menuEngConfig: MenuEngConfig
+  anomalies: AnomalyDef[]
 }
 
 // ─── Helpers ────────────────────────────────────────────
@@ -342,6 +392,165 @@ function coffeeShopTopActions(): TopAction[] {
   ]
 }
 
+function coffeeShopMarginItems(): MarginItemDef[] {
+  return [
+    {
+      name: 'Espresso', category: 'drinks', sellingPriceCents: 450, monthlySales: 330,
+      ingredients: [
+        { name: 'Espresso Beans', batchCostCents: 1800, batchServings: 50, amountUsedOz: 0.7, wastePct: 3 },
+        { name: 'Filtered Water', batchCostCents: 200, batchServings: 100, amountUsedOz: 2, wastePct: 1 },
+        { name: 'Paper Cup + Lid', batchCostCents: 1500, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Cappuccino', category: 'drinks', sellingPriceCents: 525, monthlySales: 450,
+      ingredients: [
+        { name: 'Espresso Beans', batchCostCents: 1800, batchServings: 50, amountUsedOz: 0.7, wastePct: 3 },
+        { name: 'Whole Milk', batchCostCents: 450, batchServings: 20, amountUsedOz: 6, wastePct: 5 },
+        { name: 'Paper Cup + Lid', batchCostCents: 1500, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Iced Latte', category: 'drinks', sellingPriceCents: 575, monthlySales: 340,
+      ingredients: [
+        { name: 'Espresso Beans', batchCostCents: 1800, batchServings: 50, amountUsedOz: 0.7, wastePct: 3 },
+        { name: 'Whole Milk', batchCostCents: 450, batchServings: 20, amountUsedOz: 8, wastePct: 5 },
+        { name: 'Ice', batchCostCents: 300, batchServings: 80, amountUsedOz: 6, wastePct: 10 },
+        { name: 'Plastic Cup + Lid', batchCostCents: 1800, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Cold Brew', category: 'drinks', sellingPriceCents: 550, monthlySales: 300,
+      ingredients: [
+        { name: 'Cold Brew Beans', batchCostCents: 2200, batchServings: 40, amountUsedOz: 1, wastePct: 4 },
+        { name: 'Filtered Water', batchCostCents: 200, batchServings: 100, amountUsedOz: 12, wastePct: 1 },
+        { name: 'Plastic Cup + Lid', batchCostCents: 1800, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Matcha Latte', category: 'drinks', sellingPriceCents: 625, monthlySales: 190,
+      ingredients: [
+        { name: 'Matcha Powder', batchCostCents: 3200, batchServings: 30, amountUsedOz: 0.5, wastePct: 3 },
+        { name: 'Oat Milk', batchCostCents: 550, batchServings: 12, amountUsedOz: 10, wastePct: 6 },
+        { name: 'Paper Cup + Lid', batchCostCents: 1500, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 8400,
+    },
+    {
+      name: 'Croissant', category: 'food', sellingPriceCents: 425, monthlySales: 360,
+      ingredients: [
+        { name: 'Frozen Croissants', batchCostCents: 2400, batchServings: 24, amountUsedOz: 3, wastePct: 8 },
+        { name: 'Butter Finish', batchCostCents: 600, batchServings: 48, amountUsedOz: 0.5, wastePct: 3 },
+        { name: 'Bakery Bag', batchCostCents: 800, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 6800,
+    },
+    {
+      name: 'Avocado Toast', category: 'food', sellingPriceCents: 895, monthlySales: 140,
+      ingredients: [
+        { name: 'Sourdough Bread', batchCostCents: 500, batchServings: 12, amountUsedOz: 3, wastePct: 8 },
+        { name: 'Avocado', batchCostCents: 250, batchServings: 2, amountUsedOz: 4, wastePct: 12 },
+        { name: 'Toppings (egg, radish, seeds)', batchCostCents: 1200, batchServings: 20, amountUsedOz: 2, wastePct: 5 },
+        { name: 'Plate + Napkin', batchCostCents: 600, batchServings: 50, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 9200,
+    },
+    {
+      name: 'Breakfast Sandwich', category: 'food', sellingPriceCents: 750, monthlySales: 180,
+      ingredients: [
+        { name: 'English Muffin', batchCostCents: 400, batchServings: 12, amountUsedOz: 3, wastePct: 4 },
+        { name: 'Egg', batchCostCents: 450, batchServings: 12, amountUsedOz: 2, wastePct: 3 },
+        { name: 'Cheese & Bacon', batchCostCents: 1400, batchServings: 20, amountUsedOz: 2, wastePct: 5 },
+        { name: 'Wrapper', batchCostCents: 600, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 4200,
+    },
+    {
+      name: 'Blueberry Muffin', category: 'food', sellingPriceCents: 395, monthlySales: 270,
+      ingredients: [
+        { name: 'Muffin Batter Mix', batchCostCents: 1200, batchServings: 24, amountUsedOz: 4, wastePct: 5 },
+        { name: 'Blueberries', batchCostCents: 600, batchServings: 12, amountUsedOz: 1.5, wastePct: 8 },
+        { name: 'Bakery Bag', batchCostCents: 800, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 3100,
+    },
+    {
+      name: 'Drip Coffee', category: 'drinks', sellingPriceCents: 275, monthlySales: 300,
+      ingredients: [
+        { name: 'Drip Beans', batchCostCents: 1400, batchServings: 60, amountUsedOz: 0.5, wastePct: 3 },
+        { name: 'Filter', batchCostCents: 400, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+        { name: 'Paper Cup + Lid', batchCostCents: 1500, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+  ]
+}
+
+function coffeeShopMenuEngConfig(): MenuEngConfig {
+  return {
+    pageTitle: 'Menu Matrix',
+    xAxisLabel: 'Popularity',
+    yAxisLabel: 'Contribution Margin',
+    quadrantLabels: { star: 'Stars', plowhorse: 'Plowhorses', puzzle: 'Puzzles', dog: 'Dogs' },
+    items: [
+      { name: 'Espresso', category: 'drinks', monthlySales: 330, marginPct: 78, revenueCents: 148500, marginCents: 115830 },
+      { name: 'Cappuccino', category: 'drinks', monthlySales: 450, marginPct: 72, revenueCents: 236250, marginCents: 170100 },
+      { name: 'Iced Latte', category: 'drinks', monthlySales: 340, marginPct: 70, revenueCents: 195500, marginCents: 136850 },
+      { name: 'Cold Brew', category: 'drinks', monthlySales: 300, marginPct: 76, revenueCents: 165000, marginCents: 125400 },
+      { name: 'Matcha Latte', category: 'drinks', monthlySales: 190, marginPct: 62, revenueCents: 118750, marginCents: 73625 },
+      { name: 'Drip Coffee', category: 'drinks', monthlySales: 300, marginPct: 85, revenueCents: 82500, marginCents: 70125 },
+      { name: 'Croissant', category: 'food', monthlySales: 360, marginPct: 65, revenueCents: 153000, marginCents: 99450 },
+      { name: 'Avocado Toast', category: 'food', monthlySales: 140, marginPct: 52, revenueCents: 125300, marginCents: 65156 },
+      { name: 'Breakfast Sandwich', category: 'food', monthlySales: 180, marginPct: 58, revenueCents: 135000, marginCents: 78300 },
+      { name: 'Blueberry Muffin', category: 'food', monthlySales: 270, marginPct: 68, revenueCents: 106650, marginCents: 72522 },
+    ],
+  }
+}
+
+function coffeeShopAnomalies(): AnomalyDef[] {
+  return [
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'critical',
+      title: 'Morning rush lasted 40 min longer Thursday',
+      description: 'Queue past door 8:10am-9:50am, 14 walkouts detected by camera. Normal rush ends by 9:10am. Estimated lost revenue from walkouts: $105.',
+      metric: 'queue_duration_min', expected: 60, actual: 100, deviationPct: 67,
+      agentSource: 'queue-monitor',
+    },
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'warning',
+      title: 'Cold brew sold out by 11am Wed and Thu',
+      description: 'Batch exhausted 2 hours before typical demand tails off. Estimated $340 in lost sales across both days. Consider increasing cold brew batch by 40%.',
+      metric: 'stockout_lost_revenue_cents', expected: 0, actual: 34000, deviationPct: 100,
+      agentSource: 'inventory-tracker',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'warning',
+      title: '41 morning regulars not visited in 18+ days',
+      description: 'Loyalty data shows 41 customers who previously visited 4+/week have not returned in 18+ days. Potential monthly revenue at risk: $2,300.',
+      metric: 'churning_regulars', expected: 5, actual: 41, deviationPct: 720,
+      agentSource: 'customer-intelligence',
+    },
+    {
+      id: uuid(), type: 'cost_spike', severity: 'warning',
+      title: 'Oat milk usage up 40% without sales increase',
+      description: 'Oat milk consumption spiked 40% week-over-week but oat milk drink sales remained flat. Possible over-pouring or waste. Weekly cost impact: ~$85.',
+      metric: 'oat_milk_usage_oz', expected: 320, actual: 448, deviationPct: 40,
+      agentSource: 'margin-optimizer',
+    },
+    {
+      id: uuid(), type: 'void_spike', severity: 'warning',
+      title: 'Void transactions 3x normal Tuesday evenings',
+      description: 'Tuesday 4-8pm saw 18 void transactions vs. normal average of 6. Concentrate on Register 2. Review staff procedures and POS error patterns.',
+      metric: 'void_count', expected: 6, actual: 18, deviationPct: 200,
+      agentSource: 'anomaly-detector',
+    },
+  ]
+}
+
 // ─── Restaurant ─────────────────────────────────────────
 
 const RESTAURANT_PRODUCTS: ProductDef[] = [
@@ -458,6 +667,158 @@ function restaurantTopActions(): TopAction[] {
         rawData: { lunch_drink_pct: '12%', dinner_drink_pct: '58%', target_pct: '25%', avg_drink_price: '$12' },
         agentId: 'product-intelligence', agentName: 'Product Intelligence',
       }),
+    },
+  ]
+}
+
+function restaurantMarginItems(): MarginItemDef[] {
+  return [
+    {
+      name: 'Ribeye Steak', category: 'entrees', sellingPriceCents: 4200, monthlySales: 180,
+      ingredients: [
+        { name: 'Prime Beef Ribeye', batchCostCents: 9600, batchServings: 8, amountUsedOz: 14, wastePct: 6 },
+        { name: 'Seasoning & Butter', batchCostCents: 800, batchServings: 40, amountUsedOz: 1, wastePct: 2 },
+        { name: 'Side Vegetables', batchCostCents: 1200, batchServings: 10, amountUsedOz: 6, wastePct: 8 },
+        { name: 'Plate & Service', batchCostCents: 0, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 18000,
+    },
+    {
+      name: 'Grilled Salmon', category: 'entrees', sellingPriceCents: 2800, monthlySales: 210,
+      ingredients: [
+        { name: 'Salmon Fillet', batchCostCents: 5400, batchServings: 6, amountUsedOz: 8, wastePct: 5 },
+        { name: 'Lemon Butter Sauce', batchCostCents: 600, batchServings: 20, amountUsedOz: 2, wastePct: 3 },
+        { name: 'Side Vegetables', batchCostCents: 1200, batchServings: 10, amountUsedOz: 6, wastePct: 8 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Caesar Salad', category: 'starters', sellingPriceCents: 1400, monthlySales: 250,
+      ingredients: [
+        { name: 'Romaine Lettuce', batchCostCents: 350, batchServings: 8, amountUsedOz: 6, wastePct: 12 },
+        { name: 'Caesar Dressing', batchCostCents: 900, batchServings: 20, amountUsedOz: 2, wastePct: 3 },
+        { name: 'Croutons', batchCostCents: 400, batchServings: 25, amountUsedOz: 1, wastePct: 2 },
+        { name: 'Parmesan', batchCostCents: 1200, batchServings: 30, amountUsedOz: 0.5, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Chicken Parmesan', category: 'entrees', sellingPriceCents: 2200, monthlySales: 200,
+      ingredients: [
+        { name: 'Chicken Breast', batchCostCents: 2400, batchServings: 8, amountUsedOz: 8, wastePct: 4 },
+        { name: 'Marinara Sauce', batchCostCents: 800, batchServings: 16, amountUsedOz: 4, wastePct: 3 },
+        { name: 'Mozzarella', batchCostCents: 1000, batchServings: 12, amountUsedOz: 3, wastePct: 3 },
+        { name: 'Pasta', batchCostCents: 600, batchServings: 10, amountUsedOz: 6, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Craft Cocktail', category: 'drinks', sellingPriceCents: 1500, monthlySales: 280,
+      ingredients: [
+        { name: 'Premium Spirits', batchCostCents: 4500, batchServings: 25, amountUsedOz: 2, wastePct: 2 },
+        { name: 'Mixers & Syrups', batchCostCents: 800, batchServings: 20, amountUsedOz: 3, wastePct: 5 },
+        { name: 'Garnish', batchCostCents: 600, batchServings: 30, amountUsedOz: 0.5, wastePct: 15 },
+        { name: 'Glassware (depreciation)', batchCostCents: 200, batchServings: 50, amountUsedOz: 0, wastePct: 3 },
+      ],
+      externalLeakageCents: 12000,
+    },
+    {
+      name: 'House Wine', category: 'drinks', sellingPriceCents: 1100, monthlySales: 230,
+      ingredients: [
+        { name: 'Wine (by glass)', batchCostCents: 2400, batchServings: 5, amountUsedOz: 5, wastePct: 4 },
+        { name: 'Glassware (depreciation)', batchCostCents: 200, batchServings: 50, amountUsedOz: 0, wastePct: 3 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Lobster Bisque', category: 'starters', sellingPriceCents: 1600, monthlySales: 140,
+      ingredients: [
+        { name: 'Lobster Base', batchCostCents: 3600, batchServings: 8, amountUsedOz: 6, wastePct: 10 },
+        { name: 'Heavy Cream', batchCostCents: 700, batchServings: 12, amountUsedOz: 3, wastePct: 5 },
+        { name: 'Mirepoix', batchCostCents: 400, batchServings: 16, amountUsedOz: 2, wastePct: 8 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Tiramisu', category: 'desserts', sellingPriceCents: 1200, monthlySales: 120,
+      ingredients: [
+        { name: 'Mascarpone', batchCostCents: 900, batchServings: 8, amountUsedOz: 3, wastePct: 4 },
+        { name: 'Ladyfingers', batchCostCents: 500, batchServings: 12, amountUsedOz: 2, wastePct: 3 },
+        { name: 'Espresso', batchCostCents: 300, batchServings: 15, amountUsedOz: 2, wastePct: 2 },
+        { name: 'Cocoa Powder', batchCostCents: 400, batchServings: 40, amountUsedOz: 0.25, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Margherita Pizza', category: 'entrees', sellingPriceCents: 1800, monthlySales: 160,
+      ingredients: [
+        { name: 'Pizza Dough', batchCostCents: 800, batchServings: 10, amountUsedOz: 10, wastePct: 5 },
+        { name: 'Fresh Mozzarella', batchCostCents: 1200, batchServings: 8, amountUsedOz: 5, wastePct: 3 },
+        { name: 'San Marzano Tomato', batchCostCents: 600, batchServings: 10, amountUsedOz: 4, wastePct: 4 },
+        { name: 'Fresh Basil', batchCostCents: 300, batchServings: 20, amountUsedOz: 0.25, wastePct: 15 },
+      ],
+      externalLeakageCents: 0,
+    },
+  ]
+}
+
+function restaurantMenuEngConfig(): MenuEngConfig {
+  return {
+    pageTitle: 'Menu Matrix',
+    xAxisLabel: 'Popularity',
+    yAxisLabel: 'Contribution Margin',
+    quadrantLabels: { star: 'Stars', plowhorse: 'Plowhorses', puzzle: 'Puzzles', dog: 'Dogs' },
+    items: [
+      { name: 'Ribeye Steak', category: 'entrees', monthlySales: 180, marginPct: 62, revenueCents: 756000, marginCents: 468720 },
+      { name: 'Grilled Salmon', category: 'entrees', monthlySales: 210, marginPct: 68, revenueCents: 588000, marginCents: 399840 },
+      { name: 'Caesar Salad', category: 'starters', monthlySales: 250, marginPct: 78, revenueCents: 350000, marginCents: 273000 },
+      { name: 'Chicken Parmesan', category: 'entrees', monthlySales: 200, marginPct: 66, revenueCents: 440000, marginCents: 290400 },
+      { name: 'Craft Cocktail', category: 'drinks', monthlySales: 280, marginPct: 82, revenueCents: 420000, marginCents: 344400 },
+      { name: 'House Wine', category: 'drinks', monthlySales: 230, marginPct: 72, revenueCents: 253000, marginCents: 182160 },
+      { name: 'Lobster Bisque', category: 'starters', monthlySales: 140, marginPct: 58, revenueCents: 224000, marginCents: 129920 },
+      { name: 'Tiramisu', category: 'desserts', monthlySales: 120, marginPct: 74, revenueCents: 144000, marginCents: 106560 },
+      { name: 'Margherita Pizza', category: 'entrees', monthlySales: 160, marginPct: 70, revenueCents: 288000, marginCents: 201600 },
+      { name: 'Sparkling Water', category: 'drinks', monthlySales: 180, marginPct: 88, revenueCents: 72000, marginCents: 63360 },
+    ],
+  }
+}
+
+function restaurantAnomalies(): AnomalyDef[] {
+  return [
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'critical',
+      title: 'Revenue dropped 22% on Tuesday vs prior Tuesday',
+      description: 'Conversion fell from 94% to 71% for seated guests. Walk-in traffic was normal but reservation no-shows were 3x average. Estimated revenue gap: $1,680.',
+      metric: 'daily_revenue_cents', expected: 756000, actual: 589680, deviationPct: 22,
+      agentSource: 'revenue-tracker',
+    },
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'warning',
+      title: 'Table 12-16 avg ticket $18 below floor average',
+      description: 'Server section covering tables 12-16 averaged $24 per cover vs. floor average of $42. Beverage attachment in this section was 18% vs. 52% floor-wide.',
+      metric: 'section_avg_ticket_cents', expected: 4200, actual: 2400, deviationPct: 43,
+      agentSource: 'staff-performance',
+    },
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'warning',
+      title: 'Dessert attachment rate fell from 31% to 9% this week',
+      description: 'Dessert orders dropped dramatically. Correlates with removal of tableside dessert tray on Monday. Estimated weekly revenue impact: $840.',
+      metric: 'dessert_attachment_pct', expected: 31, actual: 9, deviationPct: 71,
+      agentSource: 'product-intelligence',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'info',
+      title: 'Bar revenue up 40% Saturday — nearby event detected',
+      description: 'Saturday bar revenue was $2,800 vs. $2,000 typical. Correlates with a music festival 2 blocks away. Consider event-aware staffing for future dates.',
+      metric: 'bar_revenue_cents', expected: 200000, actual: 280000, deviationPct: 40,
+      agentSource: 'event-correlator',
+    },
+    {
+      id: uuid(), type: 'void_spike', severity: 'warning',
+      title: 'Void transactions 2x on Thursday evening',
+      description: 'Thursday 6-10pm had 14 void transactions vs. normal average of 7. Most voids were on POS terminal 3. Training or system issue suspected.',
+      metric: 'void_count', expected: 7, actual: 14, deviationPct: 100,
+      agentSource: 'anomaly-detector',
     },
   ]
 }
@@ -582,6 +943,168 @@ function fastFoodTopActions(): TopAction[] {
   ]
 }
 
+function fastFoodMarginItems(): MarginItemDef[] {
+  return [
+    {
+      name: 'Classic Burger', category: 'burgers', sellingPriceCents: 899, monthlySales: 850,
+      ingredients: [
+        { name: 'Beef Patty', batchCostCents: 3600, batchServings: 24, amountUsedOz: 4, wastePct: 3 },
+        { name: 'Bun', batchCostCents: 600, batchServings: 24, amountUsedOz: 3, wastePct: 4 },
+        { name: 'Lettuce & Tomato', batchCostCents: 400, batchServings: 30, amountUsedOz: 2, wastePct: 10 },
+        { name: 'Wrapper', batchCostCents: 500, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Double Stack', category: 'burgers', sellingPriceCents: 1149, monthlySales: 520,
+      ingredients: [
+        { name: 'Beef Patty (x2)', batchCostCents: 3600, batchServings: 12, amountUsedOz: 8, wastePct: 3 },
+        { name: 'Bun', batchCostCents: 600, batchServings: 24, amountUsedOz: 3, wastePct: 4 },
+        { name: 'Cheese Slices', batchCostCents: 800, batchServings: 48, amountUsedOz: 1, wastePct: 2 },
+        { name: 'Wrapper', batchCostCents: 500, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Chicken Tenders', category: 'sides', sellingPriceCents: 799, monthlySales: 480,
+      ingredients: [
+        { name: 'Chicken Strips', batchCostCents: 2800, batchServings: 20, amountUsedOz: 5, wastePct: 4 },
+        { name: 'Breading Mix', batchCostCents: 500, batchServings: 40, amountUsedOz: 1, wastePct: 2 },
+        { name: 'Frying Oil', batchCostCents: 1800, batchServings: 100, amountUsedOz: 2, wastePct: 8 },
+        { name: 'Box', batchCostCents: 600, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Fries Large', category: 'sides', sellingPriceCents: 449, monthlySales: 780,
+      ingredients: [
+        { name: 'Frozen Potatoes', batchCostCents: 1200, batchServings: 40, amountUsedOz: 6, wastePct: 3 },
+        { name: 'Frying Oil', batchCostCents: 1800, batchServings: 100, amountUsedOz: 2, wastePct: 8 },
+        { name: 'Salt', batchCostCents: 100, batchServings: 200, amountUsedOz: 0.1, wastePct: 1 },
+        { name: 'Container', batchCostCents: 400, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Soda Fountain', category: 'drinks', sellingPriceCents: 249, monthlySales: 900,
+      ingredients: [
+        { name: 'Syrup BIB', batchCostCents: 5500, batchServings: 400, amountUsedOz: 3, wastePct: 1 },
+        { name: 'CO2 Tank', batchCostCents: 3000, batchServings: 600, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Cup + Lid + Straw', batchCostCents: 1200, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Combo Meal', category: 'combos', sellingPriceCents: 1399, monthlySales: 650,
+      ingredients: [
+        { name: 'Burger Components', batchCostCents: 3600, batchServings: 24, amountUsedOz: 4, wastePct: 3 },
+        { name: 'Fries Components', batchCostCents: 1200, batchServings: 40, amountUsedOz: 6, wastePct: 3 },
+        { name: 'Drink Components', batchCostCents: 5500, batchServings: 400, amountUsedOz: 3, wastePct: 1 },
+        { name: 'Combo Bag', batchCostCents: 800, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Milkshake', category: 'drinks', sellingPriceCents: 599, monthlySales: 220,
+      ingredients: [
+        { name: 'Ice Cream', batchCostCents: 2400, batchServings: 16, amountUsedOz: 8, wastePct: 4 },
+        { name: 'Whole Milk', batchCostCents: 450, batchServings: 20, amountUsedOz: 4, wastePct: 3 },
+        { name: 'Cup + Lid', batchCostCents: 1400, batchServings: 100, amountUsedOz: 1, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Kids Meal', category: 'combos', sellingPriceCents: 699, monthlySales: 280,
+      ingredients: [
+        { name: 'Mini Burger', batchCostCents: 2400, batchServings: 24, amountUsedOz: 2.5, wastePct: 3 },
+        { name: 'Small Fries', batchCostCents: 1200, batchServings: 60, amountUsedOz: 3, wastePct: 3 },
+        { name: 'Toy', batchCostCents: 4800, batchServings: 100, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Bag', batchCostCents: 600, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Onion Rings', category: 'sides', sellingPriceCents: 549, monthlySales: 180,
+      ingredients: [
+        { name: 'Onion Rings (frozen)', batchCostCents: 1400, batchServings: 20, amountUsedOz: 5, wastePct: 4 },
+        { name: 'Breading Mix', batchCostCents: 500, batchServings: 40, amountUsedOz: 1, wastePct: 2 },
+        { name: 'Frying Oil', batchCostCents: 1800, batchServings: 100, amountUsedOz: 2, wastePct: 8 },
+        { name: 'Container', batchCostCents: 400, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Apple Pie', category: 'desserts', sellingPriceCents: 349, monthlySales: 150,
+      ingredients: [
+        { name: 'Frozen Apple Pie', batchCostCents: 2400, batchServings: 48, amountUsedOz: 3, wastePct: 3 },
+        { name: 'Box', batchCostCents: 400, batchServings: 100, amountUsedOz: 1, wastePct: 1 },
+      ],
+      externalLeakageCents: 0,
+    },
+  ]
+}
+
+function fastFoodMenuEngConfig(): MenuEngConfig {
+  return {
+    pageTitle: 'Menu Matrix',
+    xAxisLabel: 'Popularity',
+    yAxisLabel: 'Contribution Margin',
+    quadrantLabels: { star: 'Stars', plowhorse: 'Plowhorses', puzzle: 'Puzzles', dog: 'Dogs' },
+    items: [
+      { name: 'Classic Burger', category: 'burgers', monthlySales: 850, marginPct: 68, revenueCents: 764150, marginCents: 519622 },
+      { name: 'Double Stack', category: 'burgers', monthlySales: 520, marginPct: 64, revenueCents: 597480, marginCents: 382387 },
+      { name: 'Chicken Tenders', category: 'sides', monthlySales: 480, marginPct: 66, revenueCents: 383520, marginCents: 253123 },
+      { name: 'Fries Large', category: 'sides', monthlySales: 780, marginPct: 82, revenueCents: 350220, marginCents: 287180 },
+      { name: 'Soda Fountain', category: 'drinks', monthlySales: 900, marginPct: 85, revenueCents: 224100, marginCents: 190485 },
+      { name: 'Combo Meal', category: 'combos', monthlySales: 650, marginPct: 62, revenueCents: 909350, marginCents: 563797 },
+      { name: 'Milkshake', category: 'drinks', monthlySales: 220, marginPct: 58, revenueCents: 131780, marginCents: 76432 },
+      { name: 'Kids Meal', category: 'combos', monthlySales: 280, marginPct: 55, revenueCents: 195720, marginCents: 107646 },
+      { name: 'Onion Rings', category: 'sides', monthlySales: 180, marginPct: 72, revenueCents: 98820, marginCents: 71150 },
+      { name: 'Apple Pie', category: 'desserts', monthlySales: 150, marginPct: 78, revenueCents: 52350, marginCents: 40833 },
+    ],
+  }
+}
+
+function fastFoodAnomalies(): AnomalyDef[] {
+  return [
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'critical',
+      title: 'Drive-through speed spiked to 7.2 min Tuesday 12-1pm',
+      description: 'Average drive-through service time hit 7.2 minutes during Tuesday lunch peak, well above 4.5-minute target. 11 vehicles abandoned the lane. Correlates with one fryer being down for maintenance.',
+      metric: 'drive_through_time_min', expected: 4.5, actual: 7.2, deviationPct: 60,
+      agentSource: 'queue-monitor',
+    },
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'warning',
+      title: 'Combo attachment rate dropped to 44% — down from 61%',
+      description: 'Combo meal upgrade rate fell 17 percentage points over the past week. POS upsell prompt was disabled after a software update on Monday. Re-enable to recover estimated $420/week.',
+      metric: 'combo_attachment_pct', expected: 61, actual: 44, deviationPct: 28,
+      agentSource: 'product-intelligence',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'info',
+      title: 'Seating area occupancy at 0% from 2-4pm three days',
+      description: 'In-store seating area completely empty during 2-4pm on Monday, Wednesday, and Thursday. All orders were drive-through or takeout. Consider converting seating to pickup staging.',
+      metric: 'seating_occupancy_pct', expected: 15, actual: 0, deviationPct: 100,
+      agentSource: 'heatmap-generator',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'info',
+      title: 'Breakfast daypart up 28% since menu change',
+      description: 'Breakfast revenue (6-10:30am) increased 28% week-over-week following the new breakfast burrito launch. 340 breakfast transactions this week vs. 265 prior week.',
+      metric: 'breakfast_revenue_cents', expected: 291500, actual: 373120, deviationPct: 28,
+      agentSource: 'revenue-tracker',
+    },
+    {
+      id: uuid(), type: 'refund_surge', severity: 'warning',
+      title: 'Register 3 refund rate 3x other registers',
+      description: 'Register 3 processed 24 refunds this week vs. average of 8 on other registers. Review operator training or investigate potential process issues.',
+      metric: 'refund_count', expected: 8, actual: 24, deviationPct: 200,
+      agentSource: 'anomaly-detector',
+    },
+  ]
+}
+
 // ─── Auto Shop ──────────────────────────────────────────
 
 const AUTO_SHOP_PRODUCTS: ProductDef[] = [
@@ -698,6 +1221,158 @@ function autoShopTopActions(): TopAction[] {
         rawData: { drop_off_share: '65%', avg_checkin_min: 12, drive_aways: 2, avg_ticket: '$185' },
         agentId: 'peak-hour-optimizer', agentName: 'Peak Hour Optimizer',
       }),
+    },
+  ]
+}
+
+function autoShopMarginItems(): MarginItemDef[] {
+  return [
+    {
+      name: 'Oil Change', category: 'maintenance', sellingPriceCents: 4999, monthlySales: 420,
+      ingredients: [
+        { name: 'Motor Oil (5qt)', batchCostCents: 2800, batchServings: 1, amountUsedOz: 160, wastePct: 2 },
+        { name: 'Oil Filter', batchCostCents: 450, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Labor (20 min)', batchCostCents: 1200, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Oil Disposal Fee', batchCostCents: 150, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Brake Pad Replace', category: 'repair', sellingPriceCents: 24900, monthlySales: 110,
+      ingredients: [
+        { name: 'Brake Pads (set)', batchCostCents: 4500, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Rotors (pair)', batchCostCents: 6200, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Labor (2 hr)', batchCostCents: 7200, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Hardware & Clips', batchCostCents: 350, batchServings: 1, amountUsedOz: 0, wastePct: 2 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Tire Rotation', category: 'maintenance', sellingPriceCents: 3999, monthlySales: 280,
+      ingredients: [
+        { name: 'Labor (30 min)', batchCostCents: 1800, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Equipment Wear', batchCostCents: 200, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Full Inspection', category: 'diagnostic', sellingPriceCents: 8999, monthlySales: 190,
+      ingredients: [
+        { name: 'Labor (45 min)', batchCostCents: 2700, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Inspection Report/Printout', batchCostCents: 50, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Engine Diagnostic', category: 'diagnostic', sellingPriceCents: 12900, monthlySales: 160,
+      ingredients: [
+        { name: 'Labor (1 hr)', batchCostCents: 3600, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Scanner Usage', batchCostCents: 400, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'AC Recharge', category: 'repair', sellingPriceCents: 14900, monthlySales: 90,
+      ingredients: [
+        { name: 'Refrigerant (R-134a)', batchCostCents: 3200, batchServings: 1, amountUsedOz: 24, wastePct: 5 },
+        { name: 'Labor (1 hr)', batchCostCents: 3600, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'UV Dye', batchCostCents: 250, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Alignment', category: 'maintenance', sellingPriceCents: 9999, monthlySales: 120,
+      ingredients: [
+        { name: 'Labor (45 min)', batchCostCents: 2700, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Alignment Equipment Wear', batchCostCents: 500, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Battery Replace', category: 'repair', sellingPriceCents: 18900, monthlySales: 85,
+      ingredients: [
+        { name: 'Battery', batchCostCents: 9500, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Labor (30 min)', batchCostCents: 1800, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Core Disposal', batchCostCents: 300, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Transmission Flush', category: 'maintenance', sellingPriceCents: 17900, monthlySales: 60,
+      ingredients: [
+        { name: 'Transmission Fluid', batchCostCents: 4800, batchServings: 1, amountUsedOz: 128, wastePct: 3 },
+        { name: 'Labor (1.5 hr)', batchCostCents: 5400, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Gasket', batchCostCents: 350, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Wiper Blades', category: 'parts', sellingPriceCents: 3499, monthlySales: 200,
+      ingredients: [
+        { name: 'Wiper Blade Set', batchCostCents: 1200, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Labor (10 min)', batchCostCents: 600, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+  ]
+}
+
+function autoShopMenuEngConfig(): MenuEngConfig {
+  return {
+    pageTitle: 'Service Matrix',
+    xAxisLabel: 'Job Frequency',
+    yAxisLabel: 'Profit per Job',
+    quadrantLabels: { star: 'Core Services', plowhorse: 'High Volume Low Margin', puzzle: 'High Value Low Volume', dog: 'Review' },
+    items: [
+      { name: 'Oil Change', category: 'maintenance', monthlySales: 420, marginPct: 54, revenueCents: 2099580, marginCents: 1133773 },
+      { name: 'Brake Pad Replace', category: 'repair', monthlySales: 110, marginPct: 27, revenueCents: 2739000, marginCents: 739530 },
+      { name: 'Tire Rotation', category: 'maintenance', monthlySales: 280, marginPct: 50, revenueCents: 1119720, marginCents: 559860 },
+      { name: 'Full Inspection', category: 'diagnostic', monthlySales: 190, marginPct: 69, revenueCents: 1709810, marginCents: 1179769 },
+      { name: 'Engine Diagnostic', category: 'diagnostic', monthlySales: 160, marginPct: 69, revenueCents: 2064000, marginCents: 1424160 },
+      { name: 'AC Recharge', category: 'repair', monthlySales: 90, marginPct: 53, revenueCents: 1341000, marginCents: 710730 },
+      { name: 'Alignment', category: 'maintenance', monthlySales: 120, marginPct: 68, revenueCents: 1199880, marginCents: 815918 },
+      { name: 'Battery Replace', category: 'repair', monthlySales: 85, marginPct: 39, revenueCents: 1606500, marginCents: 626535 },
+      { name: 'Transmission Flush', category: 'maintenance', monthlySales: 60, marginPct: 41, revenueCents: 1074000, marginCents: 440340 },
+    ],
+  }
+}
+
+function autoShopAnomalies(): AnomalyDef[] {
+  return [
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'critical',
+      title: 'Bay utilization dropped to 54% Tue-Wed vs 85% target',
+      description: 'Only 3 of 6 bays were active Tuesday and Wednesday. Two technicians called out sick with no backup coverage. Estimated lost capacity: 18 jobs worth $3,330.',
+      metric: 'bay_utilization_pct', expected: 85, actual: 54, deviationPct: 36,
+      agentSource: 'capacity-monitor',
+    },
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'warning',
+      title: 'Avg repair order value fell $67 — advisor upsell dropped',
+      description: 'Average repair order value dropped from $185 to $118. Service advisor upsell rate fell from 34% to 12%. Correlates with new advisor starting Monday without completing upsell training.',
+      metric: 'avg_order_value_cents', expected: 18500, actual: 11800, deviationPct: 36,
+      agentSource: 'staff-performance',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'warning',
+      title: 'Customer wait time in lounge exceeded 90 min on 6 visits',
+      description: 'Six customers waited over 90 minutes for oil changes and inspections, versus 45-minute target. Two left negative reviews. Root cause: inspection backlog creating bottleneck.',
+      metric: 'customer_wait_min', expected: 45, actual: 90, deviationPct: 100,
+      agentSource: 'queue-monitor',
+    },
+    {
+      id: uuid(), type: 'cost_spike', severity: 'warning',
+      title: 'Parts inventory discrepancy: 12 filters unaccounted for',
+      description: 'Monthly inventory count shows 12 oil filters missing from stock. At $4.50 each, $54 in unaccounted inventory. Could indicate recording errors or shrinkage.',
+      metric: 'missing_parts_count', expected: 0, actual: 12, deviationPct: 100,
+      agentSource: 'inventory-tracker',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'info',
+      title: 'Saturday morning bookings up 35% — overflow risk',
+      description: 'Saturday 7-11am appointment slots are 35% above last month. Current capacity may overflow by 3 jobs. Consider extending Saturday hours or adding a flex technician.',
+      metric: 'saturday_bookings', expected: 20, actual: 27, deviationPct: 35,
+      agentSource: 'capacity-monitor',
     },
   ]
 }
@@ -822,6 +1497,151 @@ function smokeShopTopActions(): TopAction[] {
   ]
 }
 
+function smokeShopMarginItems(): MarginItemDef[] {
+  return [
+    {
+      name: 'Cigarette Carton', category: 'tobacco', sellingPriceCents: 6500, monthlySales: 340,
+      ingredients: [
+        { name: 'Wholesale Carton', batchCostCents: 4800, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Tax & Compliance', batchCostCents: 850, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Vape Pod Pack', category: 'vape', sellingPriceCents: 2400, monthlySales: 380,
+      ingredients: [
+        { name: 'Wholesale Pods', batchCostCents: 1200, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Packaging', batchCostCents: 50, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Premium Cigar', category: 'tobacco', sellingPriceCents: 1800, monthlySales: 200,
+      ingredients: [
+        { name: 'Wholesale Cigar', batchCostCents: 900, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Humidor Maintenance', batchCostCents: 80, batchServings: 1, amountUsedOz: 0, wastePct: 3 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'E-Liquid 60ml', category: 'vape', sellingPriceCents: 2200, monthlySales: 250,
+      ingredients: [
+        { name: 'Wholesale E-Liquid', batchCostCents: 850, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Shelf Space Allocation', batchCostCents: 30, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Glass Pipe', category: 'glass', sellingPriceCents: 4500, monthlySales: 80,
+      ingredients: [
+        { name: 'Wholesale Glass', batchCostCents: 1500, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Display & Insurance', batchCostCents: 200, batchServings: 1, amountUsedOz: 0, wastePct: 4 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Rolling Papers', category: 'accessories', sellingPriceCents: 450, monthlySales: 420,
+      ingredients: [
+        { name: 'Wholesale Papers', batchCostCents: 120, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Display Rack', batchCostCents: 10, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Lighter Collection', category: 'accessories', sellingPriceCents: 800, monthlySales: 350,
+      ingredients: [
+        { name: 'Wholesale Lighters', batchCostCents: 250, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Display', batchCostCents: 15, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'CBD Gummies', category: 'cbd', sellingPriceCents: 3500, monthlySales: 110,
+      ingredients: [
+        { name: 'Wholesale CBD Gummies', batchCostCents: 1100, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Compliance & Labeling', batchCostCents: 150, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Hookah Tobacco', category: 'tobacco', sellingPriceCents: 2800, monthlySales: 70,
+      ingredients: [
+        { name: 'Wholesale Tobacco', batchCostCents: 1400, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Compliance & Tax', batchCostCents: 200, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+    {
+      name: 'Grinder', category: 'accessories', sellingPriceCents: 2500, monthlySales: 95,
+      ingredients: [
+        { name: 'Wholesale Grinder', batchCostCents: 800, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+        { name: 'Display', batchCostCents: 20, batchServings: 1, amountUsedOz: 0, wastePct: 0 },
+      ],
+      externalLeakageCents: 0,
+    },
+  ]
+}
+
+function smokeShopMenuEngConfig(): MenuEngConfig {
+  return {
+    pageTitle: 'Product Matrix',
+    xAxisLabel: 'Sales Velocity',
+    yAxisLabel: 'Gross Margin %',
+    quadrantLabels: { star: 'Top Performers', plowhorse: 'High Volume', puzzle: 'Premium', dog: 'Underperformers' },
+    items: [
+      { name: 'Cigarette Carton', category: 'tobacco', monthlySales: 340, marginPct: 13, revenueCents: 2210000, marginCents: 287300 },
+      { name: 'Premium Cigar', category: 'tobacco', monthlySales: 200, marginPct: 46, revenueCents: 360000, marginCents: 165600 },
+      { name: 'Rolling Papers', category: 'accessories', monthlySales: 420, marginPct: 71, revenueCents: 189000, marginCents: 134190 },
+      { name: 'Glass Pipe', category: 'glass', monthlySales: 80, marginPct: 62, revenueCents: 360000, marginCents: 223200 },
+      { name: 'Vape Pod Pack', category: 'vape', monthlySales: 380, marginPct: 48, revenueCents: 912000, marginCents: 437760 },
+      { name: 'Lighter Collection', category: 'accessories', monthlySales: 350, marginPct: 67, revenueCents: 280000, marginCents: 187600 },
+      { name: 'CBD Gummies', category: 'cbd', monthlySales: 110, marginPct: 64, revenueCents: 385000, marginCents: 246400 },
+      { name: 'E-Liquid 60ml', category: 'vape', monthlySales: 250, marginPct: 60, revenueCents: 550000, marginCents: 330000 },
+      { name: 'Hookah Tobacco', category: 'tobacco', monthlySales: 70, marginPct: 43, revenueCents: 196000, marginCents: 84280 },
+    ],
+  }
+}
+
+function smokeShopAnomalies(): AnomalyDef[] {
+  return [
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'critical',
+      title: '7 regular customers (4+ visits/week) not returned in 10+ days',
+      description: 'Loyalty data shows 7 high-frequency customers have gone silent. Combined weekly spend was $840. Potential churn to competitor or online ordering. Consider targeted outreach.',
+      metric: 'churning_regulars', expected: 1, actual: 7, deviationPct: 600,
+      agentSource: 'customer-intelligence',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'warning',
+      title: 'Accessory wall dwell time up 34% but conversion stayed at 3%',
+      description: 'Camera heatmap shows 34% more browsing time at the accessory display, but purchase conversion remains stuck at 3%. Customers may be interested but facing friction — pricing, product placement, or lack of staff assistance.',
+      metric: 'accessory_conversion_pct', expected: 8, actual: 3, deviationPct: 63,
+      agentSource: 'heatmap-generator',
+    },
+    {
+      id: uuid(), type: 'revenue_drop', severity: 'warning',
+      title: 'Tuesday 4-7pm revenue 41% below prior Tuesday',
+      description: 'Prime after-work revenue window saw $680 vs. $1,150 the prior week. Foot traffic was normal but conversion dropped from 72% to 44%. Possibly related to out-of-stock on popular vape pods.',
+      metric: 'afternoon_revenue_cents', expected: 115000, actual: 68000, deviationPct: 41,
+      agentSource: 'revenue-tracker',
+    },
+    {
+      id: uuid(), type: 'cost_spike', severity: 'warning',
+      title: 'CBD inventory approaching expiry date on 14 units',
+      description: '14 CBD gummy packs expire within 30 days. At $35 each, $490 at risk. Consider running a BOGO promotion or bundling with other CBD products to clear inventory.',
+      metric: 'expiring_units', expected: 2, actual: 14, deviationPct: 600,
+      agentSource: 'inventory-tracker',
+    },
+    {
+      id: uuid(), type: 'traffic_anomaly', severity: 'info',
+      title: 'Weekend foot traffic up 22% — likely nearby event',
+      description: 'Saturday and Sunday foot traffic was 22% above 4-week average. No promotions were running. Nearby street fair likely drove additional walk-in traffic. Plan staffing for similar future events.',
+      metric: 'weekend_traffic', expected: 95, actual: 116, deviationPct: 22,
+      agentSource: 'event-correlator',
+    },
+  ]
+}
+
 // ─── Industry Override Builder ──────────────────────────
 
 function buildOverrides(params: {
@@ -834,6 +1654,9 @@ function buildOverrides(params: {
   hourlyDistribution: number[]
   insightsFn: () => Insight[]
   topActionsFn: () => TopAction[]
+  marginItemsFn: () => MarginItemDef[]
+  menuEngConfigFn: () => MenuEngConfig
+  anomaliesFn: () => AnomalyDef[]
 }): IndustryOverrides {
   const days = 30
   return {
@@ -850,6 +1673,9 @@ function buildOverrides(params: {
     topActions: params.topActionsFn(),
     peakHourHeatmap: generatePeakHourHeatmapFromDistribution(params.hourlyDistribution),
     recoverableRevenue30d: params.recoverableRevenue30d,
+    marginItems: params.marginItemsFn(),
+    menuEngConfig: params.menuEngConfigFn(),
+    anomalies: params.anomaliesFn(),
   }
 }
 
@@ -875,6 +1701,9 @@ export function getIndustryOverrides(type: BusinessType): IndustryOverrides {
         hourlyDistribution: COFFEE_SHOP_HOURLY,
         insightsFn: coffeeShopInsights,
         topActionsFn: coffeeShopTopActions,
+        marginItemsFn: coffeeShopMarginItems,
+        menuEngConfigFn: coffeeShopMenuEngConfig,
+        anomaliesFn: coffeeShopAnomalies,
       })
       break
 
@@ -889,6 +1718,9 @@ export function getIndustryOverrides(type: BusinessType): IndustryOverrides {
         hourlyDistribution: RESTAURANT_HOURLY,
         insightsFn: restaurantInsights,
         topActionsFn: restaurantTopActions,
+        marginItemsFn: restaurantMarginItems,
+        menuEngConfigFn: restaurantMenuEngConfig,
+        anomaliesFn: restaurantAnomalies,
       })
       break
 
@@ -903,6 +1735,9 @@ export function getIndustryOverrides(type: BusinessType): IndustryOverrides {
         hourlyDistribution: FAST_FOOD_HOURLY,
         insightsFn: fastFoodInsights,
         topActionsFn: fastFoodTopActions,
+        marginItemsFn: fastFoodMarginItems,
+        menuEngConfigFn: fastFoodMenuEngConfig,
+        anomaliesFn: fastFoodAnomalies,
       })
       break
 
@@ -917,6 +1752,9 @@ export function getIndustryOverrides(type: BusinessType): IndustryOverrides {
         hourlyDistribution: AUTO_SHOP_HOURLY,
         insightsFn: autoShopInsights,
         topActionsFn: autoShopTopActions,
+        marginItemsFn: autoShopMarginItems,
+        menuEngConfigFn: autoShopMenuEngConfig,
+        anomaliesFn: autoShopAnomalies,
       })
       break
 
@@ -931,6 +1769,9 @@ export function getIndustryOverrides(type: BusinessType): IndustryOverrides {
         hourlyDistribution: SMOKE_SHOP_HOURLY,
         insightsFn: smokeShopInsights,
         topActionsFn: smokeShopTopActions,
+        marginItemsFn: smokeShopMarginItems,
+        menuEngConfigFn: smokeShopMenuEngConfig,
+        anomaliesFn: smokeShopAnomalies,
       })
       break
 
