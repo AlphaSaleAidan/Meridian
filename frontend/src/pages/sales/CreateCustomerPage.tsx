@@ -8,8 +8,7 @@ import {
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { supabase } from '@/lib/supabase'
-import POSSelectorPanel from '@/components/POSSelectorPanel'
-import { type POSSystem } from '@/data/pos-systems'
+import POSSystemPicker from '@/components/POSSystemPicker'
 
 type Step = 'details' | 'plan' | 'confirm' | 'provisioned'
 
@@ -44,7 +43,7 @@ export default function CreateCustomerPage() {
     invoicesSent: boolean
   } | null>(null)
 
-  const [selectedPOS, setSelectedPOS] = useState<POSSystem | null>(null)
+  const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
   const [form, setForm] = useState({
     businessName: '',
     ownerName: '',
@@ -93,8 +92,8 @@ export default function CreateCustomerPage() {
             monthly_price: price,
             owner_name: form.ownerName,
             created_by_rep: rep?.rep_id || null,
-            pos_system: selectedPOS?.key || null,
-            pos_status: selectedPOS?.status || null,
+            pos_system: selectedPOS || null,
+            pos_status: selectedPOS ? 'selected' : null,
           },
         })
         if (bizErr) throw new Error(bizErr.message)
@@ -307,9 +306,11 @@ export default function CreateCustomerPage() {
                 <Store size={16} className="text-[#7C5CFF]" />
                 <h2 className="text-[14px] font-semibold text-[#F5F5F7]">POS System</h2>
               </div>
-              <POSSelectorPanel
-                onSelect={setSelectedPOS}
-                defaultSelected={selectedPOS?.key}
+              <POSSystemPicker
+                value={selectedPOS}
+                onChange={setSelectedPOS}
+                mode="new-customer"
+                portalContext="us"
               />
             </div>
 
@@ -422,7 +423,7 @@ export default function CreateCustomerPage() {
               {selectedPOS && (
                 <div className="flex justify-between py-2 border-b border-[#1F1F23]">
                   <span className="text-[#A1A1A8]">POS System</span>
-                  <span className="text-[#F5F5F7] font-medium">{selectedPOS.name}</span>
+                  <span className="text-[#F5F5F7] font-medium">{selectedPOS}</span>
                 </div>
               )}
               <div className="flex justify-between py-2 border-b border-[#1F1F23]">

@@ -6,7 +6,7 @@ import {
   Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
-import PortalPOSPicker from '@/components/PortalPOSPicker'
+import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
@@ -769,10 +769,11 @@ export default function CanadaPortalCreateCustomerPage() {
             {/* POS Selector */}
             <div>
               <label className="block text-[11px] font-medium text-[#6b7a74] mb-2">Current POS System</label>
-              <PortalPOSPicker
+              <POSSystemPicker
                 value={form.pos || null}
                 onChange={(key) => update('pos', key)}
                 mode="new-customer"
+                portalContext="canada"
               />
             </div>
 

@@ -1,14 +1,12 @@
 import { clsx } from 'clsx'
 import { posSystemsByKey, type POSSystemKey } from '@/data/pos-systems'
 
-import squareSvg from '@/assets/pos-logos/square.svg'
-import toastSvg from '@/assets/pos-logos/toast.svg'
-import cloverSvg from '@/assets/pos-logos/clover.svg'
+const svgModules = import.meta.glob<{ default: string }>('@/assets/pos-logos/*.svg', { eager: true })
 
-const logoMap: Record<string, string> = {
-  square: squareSvg,
-  toast: toastSvg,
-  clover: cloverSvg,
+const logoMap: Record<string, string> = {}
+for (const [path, mod] of Object.entries(svgModules)) {
+  const key = path.split('/').pop()!.replace('.svg', '')
+  logoMap[key] = mod.default
 }
 
 const sizes = { sm: 20, md: 32, lg: 48 } as const
@@ -56,7 +54,7 @@ export default function POSLogo({ system, size = 'md', variant = 'color', classN
         fontSize: px * 0.35,
       }}
     >
-      {(info?.name || system).charAt(0).toUpperCase()}
+      {info?.logoInitials || (info?.name || system).slice(0, 2).toUpperCase()}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2,
   FileText, Eye, Mail,
 } from 'lucide-react'
-import PortalPOSPicker from '@/components/PortalPOSPicker'
+import POSSystemPicker from '@/components/POSSystemPicker'
 import { canadaSalesDemoData, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
@@ -208,7 +208,7 @@ export default function CanadaPortalLeadDetailPage() {
       {/* Step 4 - Connect POS */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Step 4 — Connect POS</h2>
-        <PortalPOSPicker value={selectedPOS} onChange={setSelectedPOS} mode="lead-detail" />
+        <POSSystemPicker value={selectedPOS} onChange={setSelectedPOS} mode="lead-detail" portalContext="canada" />
         <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">
           <Wifi size={16} /> Save & Test Connection
         </button>
