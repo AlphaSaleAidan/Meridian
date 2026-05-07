@@ -1,0 +1,272 @@
+{
+  "revenue_trend": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "cash_flow": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "pricing_power": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "discount_analyzer": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "product_velocity": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "basket_analysis": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "category_mix": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "inventory_intel": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "peak_hours": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "seasonality": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "day_of_week": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "employee_performance": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "payment_optimizer": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "waste_shrinkage": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "staffing": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "foot_traffic": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "queue_monitor": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "customer_recognizer": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "dwell_time": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "demographic_profiler": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "benchmark": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "money_left": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "forecaster": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "customer_ltv": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "promo_roi": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "cashflow_forecast": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  },
+  "growth_score": {
+    "total_runs": 1,
+    "avg_confidence": 0.05,
+    "accuracy_score": 0.5,
+    "engagement_rate": 0.0,
+    "agreement_score": 0.0,
+    "trend": "stable",
+    "last_trained": "",
+    "pattern_count": 0
+  }
+}

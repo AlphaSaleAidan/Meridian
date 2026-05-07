@@ -31,6 +31,7 @@ from .routes.pos import router as pos_router
 from .routes.spaces import router as spaces_router
 from .routes.canada import router as canada_router
 from .routes.careers import router as careers_router
+from .routes.training import router as training_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -58,7 +59,24 @@ async def lifespan(app: FastAPI):
     if _db_instance:
         init_commission_hook(_db_instance)
         logger.info("Commission webhook hook initialized")
+
+    # Start autonomous swarm trainer in background
+    import asyncio
+    _trainer_task = None
+    if os.environ.get("ENABLE_SWARM_TRAINING", "1") == "1":
+        from ..ai.swarm_trainer import get_swarm_trainer
+        trainer = get_swarm_trainer(db=_db_instance)
+        interval = int(os.environ.get("SWARM_TRAINING_INTERVAL", "300"))
+        _trainer_task = asyncio.create_task(trainer.start_autonomous(interval))
+        logger.info(f"Autonomous swarm trainer started (every {interval}s)")
+
     yield
+
+    if _trainer_task:
+        from ..ai.swarm_trainer import get_swarm_trainer
+        get_swarm_trainer().stop()
+        _trainer_task.cancel()
+        logger.info("Autonomous swarm trainer stopped")
     await close_db()
     logger.info("Meridian server shut down.")
 
@@ -110,6 +128,7 @@ app.include_router(pos_router)
 app.include_router(spaces_router)
 app.include_router(canada_router)
 app.include_router(careers_router)
+app.include_router(training_router)
 if _has_billing:
     app.include_router(billing_router)
 

@@ -54,6 +54,11 @@ class AnalysisContext:
     transactions: list[dict] = field(default_factory=list)
     inventory: list[dict] = field(default_factory=list)
     
+    # Vision data from camera pipeline (ADR-011)
+    vision_traffic: list[dict] = field(default_factory=list)
+    vision_visits: list[dict] = field(default_factory=list)
+    vision_visitors: list[dict] = field(default_factory=list)
+
     # Merchant metadata
     business_vertical: str = "other"
     timezone: str = "America/Los_Angeles"
@@ -81,7 +86,7 @@ class AnalysisResult:
     pattern_analysis: dict = field(default_factory=dict)
     money_left_score: dict = field(default_factory=dict)
 
-    # Agent swarm outputs (22 agents)
+    # Agent swarm outputs (27 agents: 22 POS + 5 vision)
     agent_outputs: dict = field(default_factory=dict)
 
     # Alerts fired
@@ -302,12 +307,11 @@ class MeridianAI:
                 logger.error(f"Report generation failed: {e}", exc_info=True)
                 result.errors.append(f"report: {str(e)}")
 
-        # ── Phase 5b: Agent Swarm (22 agents) ────────────────
+        # ── Phase 5b: Agent Swarm (27 agents: 22 POS + 5 vision) ──
         try:
             result.agent_outputs = await run_agent_swarm(ctx)
             ctx.agent_outputs = result.agent_outputs
 
-            # Merge swarm insights into the main insights list
             for agent_name, output in result.agent_outputs.items():
                 if isinstance(output, dict) and output.get("status") == "complete":
                     for insight in output.get("insights", []):
@@ -316,6 +320,19 @@ class MeridianAI:
         except Exception as e:
             logger.error(f"Agent swarm failed: {e}", exc_info=True)
             result.errors.append(f"agent_swarm: {str(e)}")
+
+        # ── Phase 5c: Autonomous Swarm Training ──────────────
+        if result.agent_outputs:
+            try:
+                from .swarm_trainer import get_swarm_trainer
+                trainer = get_swarm_trainer(db=self.db)
+                training_result = await trainer.run_training_cycle(
+                    result.agent_outputs, ctx.org_id
+                )
+                logger.info(f"Swarm training: {training_result}")
+            except Exception as e:
+                logger.error(f"Swarm training failed: {e}", exc_info=True)
+                result.errors.append(f"swarm_training: {str(e)}")
 
         # ── Phase 6: Alert Evaluation ────────────────────────
         try:
@@ -458,6 +475,11 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
     from .agents.promo_roi import PromoROIAgent
     from .agents.cashflow_forecast import CashFlowForecastAgent
     from .agents.growth_score import GrowthScoreAgent
+    from .agents.foot_traffic import FootTrafficAgent
+    from .agents.dwell_time import DwellTimeAgent
+    from .agents.customer_recognizer import CustomerRecognizerAgent
+    from .agents.demographic_profiler import DemographicProfilerAgent
+    from .agents.queue_monitor import QueueMonitorAgent
 
     tier_1_4_agents = [
         RevenueTrendAgent(ctx),
@@ -475,6 +497,11 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
         PaymentOptimizerAgent(ctx),
         WasteShrinkageAgent(ctx),
         StaffingAgent(ctx),
+        FootTrafficAgent(ctx),
+        QueueMonitorAgent(ctx),
+        CustomerRecognizerAgent(ctx),
+        DwellTimeAgent(ctx),
+        DemographicProfilerAgent(ctx),
     ]
 
     use_reasoning = os.environ.get("MERIDIAN_REASONING", "1") == "1"

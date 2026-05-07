@@ -1,12 +1,12 @@
 name: meridian-pos-intelligence
-version: 1.0.0
-description: 15-agent POS Intelligence swarm for Meridian analytics platform
+version: 2.0.0
+description: 20-agent POS + Vision Intelligence swarm for Meridian analytics platform
 
 model: claude-haiku-3-5-20251001
 max_tokens: 4096
 
 topology: hierarchical
-max_agents: 15
+max_agents: 20
 strategy: specialized
 consensus: raft
 
@@ -176,6 +176,11 @@ agents:
       - margin-optimizer
       - loyalty-architect
       - location-analyst
+      - foot-traffic-analyst
+      - queue-monitor
+      - customer-recognizer
+      - dwell-time-optimizer
+      - demographic-profiler
 
   - id: action-prioritizer
     name: Action Prioritizer
@@ -199,6 +204,68 @@ agents:
     schedule: weekly
     dependencies: [insight-narrator, action-prioritizer]
 
+  # ── Vision Intelligence Agents (ADR-011) ──────────────────
+
+  - id: foot-traffic-analyst
+    name: Foot Traffic Analyst
+    role: >
+      Counts entries/exits from camera feeds, builds hourly and daily traffic
+      patterns, calculates visitor-to-transaction conversion rate. Cross-references
+      POS transaction volume to find missed-sale opportunities.
+    inputs: [vision_traffic, transactions]
+    outputs: [traffic_patterns, conversion_rate, peak_traffic_hours, missed_sales_estimate]
+    priority: high
+    schedule: on_data
+    dependencies: [transaction-analyst]
+
+  - id: queue-monitor
+    name: Queue Monitor
+    role: >
+      Tracks real-time queue length and wait time at checkout zones. Fires alerts
+      when queues exceed thresholds. Estimates walkaway revenue loss from long waits
+      and recommends staffing adjustments.
+    inputs: [vision_traffic, transactions]
+    outputs: [queue_metrics, wait_times, walkaway_estimates, staffing_alerts]
+    priority: high
+    schedule: on_data
+    dependencies: [transaction-analyst]
+
+  - id: customer-recognizer
+    name: Customer Recognizer
+    role: >
+      Identifies repeat visitors via anonymized embeddings (opt-in only).
+      Calculates new-vs-returning ratio, visit frequency distribution, and
+      loyalty-without-a-card metrics. Links visit patterns to POS purchase history.
+    inputs: [vision_visitors, vision_visits]
+    outputs: [repeat_rate, frequency_distribution, loyalty_metrics, visitor_segments]
+    priority: medium
+    schedule: daily
+    dependencies: [foot-traffic-analyst]
+
+  - id: dwell-time-optimizer
+    name: Dwell Time Optimizer
+    role: >
+      Measures how long visitors spend in each zone (entry, browse, checkout).
+      Builds a browse-to-buy funnel and zone flow heatmaps. Correlates dwell time
+      with conversion to find optimal engagement thresholds.
+    inputs: [vision_visits, vision_traffic]
+    outputs: [zone_dwell_stats, flow_heatmap, browse_to_buy_funnel, dwell_conversion_correlation]
+    priority: medium
+    schedule: daily
+    dependencies: [foot-traffic-analyst, customer-recognizer]
+
+  - id: demographic-profiler
+    name: Demographic Profiler
+    role: >
+      Detects age range and gender distribution from camera feeds (opt-in mode with
+      demographic detection). Breaks down demographics by daypart and maps segment-
+      specific conversion rates to inform marketing and product decisions.
+    inputs: [vision_visitors, vision_visits, vision_traffic]
+    outputs: [age_distribution, gender_distribution, segment_conversion, daypart_demographics]
+    priority: low
+    schedule: daily
+    dependencies: [customer-recognizer, foot-traffic-analyst]
+
 coordination:
   shared_context:
     - All agents share a common data context to avoid duplicate analysis
@@ -207,12 +274,31 @@ coordination:
   storage: supabase
   execution_order:
     level_0: [transaction-analyst]
-    level_1: [revenue-forecaster, product-intelligence, customer-segmentor, staff-performance-analyst]
-    level_2: [retention-strategist, peak-hour-optimizer, inventory-intelligence, margin-optimizer]
-    level_3: [competitor-benchmarker, loyalty-architect, location-analyst]
+    level_1: [revenue-forecaster, product-intelligence, customer-segmentor, staff-performance-analyst, foot-traffic-analyst, queue-monitor]
+    level_2: [retention-strategist, peak-hour-optimizer, inventory-intelligence, margin-optimizer, customer-recognizer]
+    level_3: [competitor-benchmarker, loyalty-architect, location-analyst, dwell-time-optimizer, demographic-profiler]
     level_4: [insight-narrator]
     level_5: [action-prioritizer]
     level_6: [feature-engineer]
+
+training:
+  enabled: true
+  mode: autonomous
+  interval_seconds: 300
+  signals:
+    - engagement     # merchant viewed/acted/dismissed insight
+    - accuracy       # predicted trend vs actual outcome
+    - agreement      # inter-agent consensus on findings
+    - quality        # reasoning chain completeness & confidence
+  dspy:
+    enabled: true
+    compile_threshold: 10  # min examples before recompilation
+    model: openai/gpt-4o
+  memory:
+    backend: mem0     # persistent cross-cycle agent memory
+    fallback: dict    # in-memory when mem0 unavailable
+  pattern_storage: .claude-flow/data/learned-patterns.jsonl
+  score_tracking: .claude-flow/data/agent-scores.json
 
 reasoning:
   required_fields:
