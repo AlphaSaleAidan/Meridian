@@ -3,16 +3,8 @@
  * Currency/locale adapts based on portal path (Canada vs US).
  */
 
-export function isCanadianPath(): boolean {
-  return typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
-}
-
-export function currencyMultiplier(): number {
-  return isCanadianPath() ? 1.37 : 1
-}
-
 function getLocaleConfig(): { locale: string; currency: string } {
-  if (isCanadianPath()) {
+  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')) {
     return { locale: 'en-CA', currency: 'CAD' }
   }
   return { locale: 'en-US', currency: 'USD' }

@@ -54,18 +54,6 @@ const CanadaPortalTrainingPage = lazy(() => import('@/pages/canada/portal/Canada
 const CanadaPortalSettingsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalSettingsPage'))
 const CanadaPortalCreateCustomerPage = lazy(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
 
-const SalesLayout = lazy(() => import('@/components/SalesLayout'))
-const SalesProtectedRoute = lazy(() => import('@/components/SalesProtectedRoute'))
-const SalesLoginPage = lazy(() => import('@/pages/sales/SalesLoginPage'))
-const SalesSignupPage = lazy(() => import('@/pages/sales/SalesSignupPage'))
-const SalesDashboardPage = lazy(() => import('@/pages/sales/SalesDashboardPage'))
-const LeadsPage = lazy(() => import('@/pages/sales/LeadsPage'))
-const LeadDetailPage = lazy(() => import('@/pages/sales/LeadDetailPage'))
-const CreateCustomerPage = lazy(() => import('@/pages/sales/CreateCustomerPage'))
-const AccountsPage = lazy(() => import('@/pages/sales/AccountsPage'))
-const TrainingPage = lazy(() => import('@/pages/sales/TrainingPage'))
-const TeamManagementPage = lazy(() => import('@/pages/sales/TeamManagementPage'))
-const SalesSettingsPage = lazy(() => import('@/pages/sales/SalesSettingsPage'))
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute loginPath="/canada/login" allowSalesReps>{children}</ProtectedRoute>
@@ -248,27 +236,9 @@ export default function App() {
               </Route>
 
               {/* ══════════════════════════════════════════════
-                  SALES CRM — US sales portal (native React)
+                  SALES CRM — redirect to Viktor Space portal
                   ══════════════════════════════════════════════ */}
-              <Route path="/sales/login" element={<SalesLoginPage />} />
-              <Route path="/sales/signup" element={<SalesSignupPage />} />
-              <Route path="/sales" element={
-                <SalesProtectedRoute>
-                  <Suspense fallback={<LazyFallback />}>
-                    <SalesLayout />
-                  </Suspense>
-                </SalesProtectedRoute>
-              }>
-                <Route index element={<Navigate to="/sales/dashboard" replace />} />
-                <Route path="dashboard" element={<SalesDashboardPage />} />
-                <Route path="leads" element={<LeadsPage />} />
-                <Route path="leads/:id" element={<LeadDetailPage />} />
-                <Route path="new-customer" element={<CreateCustomerPage />} />
-                <Route path="accounts" element={<AccountsPage />} />
-                <Route path="training" element={<TrainingPage />} />
-                <Route path="admin" element={<TeamManagementPage />} />
-                <Route path="settings" element={<SalesSettingsPage />} />
-              </Route>
+              <Route path="/sales/*" element={<SalesRedirect />} />
 
               {/* ══════════════════════════════════════════════
                   LEGACY REDIRECTS

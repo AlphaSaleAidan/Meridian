@@ -28,23 +28,6 @@ function msgId(): string {
   return `cline-${Date.now()}-${++_msgCounter}`
 }
 
-function getLocalResponse(text: string): string {
-  const t = text.toLowerCase()
-  if (t.includes('system') || t.includes('health') || t.includes('status'))
-    return 'All systems are operational. POS data sync is running normally, no errors detected in the last 24 hours.'
-  if (t.includes('error') || t.includes('issue') || t.includes('problem'))
-    return 'No active errors detected. Your POS connection is healthy and data pipelines are running on schedule.'
-  if (t.includes('sync') || t.includes('data'))
-    return 'Data sync is up to date. Last successful sync completed a few minutes ago. All transactions are flowing correctly.'
-  if (t.includes('help') || t.includes('can you'))
-    return 'I can help with system health checks, error diagnosis, data sync status, and POS connection issues. What would you like to know?'
-  if (t.includes('fix') || t.includes('repair') || t.includes('resolve'))
-    return 'I\'ve run a diagnostic check — everything looks good. If you\'re experiencing a specific issue, describe it and I\'ll investigate further.'
-  if (t.includes('hello') || t.includes('hi') || t.includes('hey'))
-    return 'Hey! I\'m Cline, your IT health assistant. I can check system status, diagnose errors, or help with data sync issues. What do you need?'
-  return 'I checked your system — everything looks healthy. POS connections are active, data is syncing normally, and no anomalies detected. Let me know if you need anything specific!'
-}
-
 export function useCline(): UseClineReturn {
   const orgId = useOrgId()
   const [messages, setMessages] = useState<ClineMessage[]>([])
@@ -67,7 +50,6 @@ export function useCline(): UseClineReturn {
           org_id: orgId,
           message: text,
         }),
-        signal: AbortSignal.timeout(5000),
       })
 
       if (!res.ok) throw new Error(`Chat failed: ${res.status}`)
@@ -81,15 +63,14 @@ export function useCline(): UseClineReturn {
       }
       setMessages(prev => [...prev, agentMsg])
       if (data.conversation_id) convIdRef.current = data.conversation_id
-    } catch {
-      const reply = getLocalResponse(text)
-      const agentMsg: ClineMessage = {
+    } catch (e) {
+      const errMsg: ClineMessage = {
         id: msgId(),
         role: 'agent',
-        content: reply,
+        content: 'Sorry, I couldn\'t connect right now. Please try again.',
         timestamp: Date.now(),
       }
-      setMessages(prev => [...prev, agentMsg])
+      setMessages(prev => [...prev, errMsg])
     } finally {
       setIsThinking(false)
     }

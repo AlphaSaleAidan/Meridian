@@ -246,7 +246,7 @@ export default function PortalPage() {
               { step: '1', label: 'Activate Account', desc: 'Use your access token or create an account directly', color: '#1A8FD6' },
               { step: '2', label: 'Connect POS System', desc: 'Link Square, Clover, or Toast via secure OAuth', color: '#1A8FD6' },
               { step: '3', label: 'Historical Import', desc: 'We pull up to 18 months of transaction history automatically', color: '#7C5CFF' },
-              { step: '4', label: 'Agent Calibration', desc: '27 AI agents analyze your data and tune to your business type', color: '#7C5CFF' },
+              { step: '4', label: 'Agent Calibration', desc: '15 AI agents analyze your data and tune to your business type', color: '#7C5CFF' },
               { step: '5', label: 'Insights Go Live', desc: 'Revenue forecasts, margin analysis, customer segments, and top actions', color: '#17C5B0' },
               { step: '6', label: 'Ongoing Intelligence', desc: 'Agents run continuously — new findings every hour, alerts in real time', color: '#17C5B0' },
             ].map((s, i, arr) => (

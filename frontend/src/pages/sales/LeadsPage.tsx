@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
 import {
   Plus, Search, Filter, MoreVertical, Phone, Mail, Calendar,
   ChevronDown, ArrowUpDown, X,
@@ -25,7 +24,6 @@ function StageBadge({ stage }: { stage: DealStage }) {
 }
 
 export default function LeadsPage() {
-  const navigate = useNavigate()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -167,9 +165,9 @@ export default function LeadsPage() {
             </thead>
             <tbody className="divide-y divide-[#1F1F23]">
               {filtered.map(deal => (
-                <tr key={deal.id} className="hover:bg-[#111113] transition-colors cursor-pointer" onClick={() => navigate(`/sales/leads/${deal.id}`)}>
+                <tr key={deal.id} className="hover:bg-[#111113] transition-colors">
                   <td className="px-4 py-3">
-                    <Link to={`/sales/leads/${deal.id}`} className="text-[11px] font-medium text-[#F5F5F7] hover:text-[#1A8FD6] transition-colors">{deal.business_name}</Link>
+                    <p className="text-[11px] font-medium text-[#F5F5F7]">{deal.business_name}</p>
                     <p className="text-[10px] text-[#A1A1A8]/40">{deal.notes.slice(0, 60)}{deal.notes.length > 60 ? '...' : ''}</p>
                   </td>
                   <td className="px-4 py-3">

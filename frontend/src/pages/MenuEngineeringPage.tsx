@@ -1,21 +1,21 @@
 import { clsx } from 'clsx'
 import { Star, HelpCircle, Truck, XCircle, ArrowUpRight } from 'lucide-react'
-import { generateMenuEngineering, getMenuEngConfig, type MenuEngItem, type MenuQuadrant } from '@/lib/agent-data'
+import { generateMenuEngineering, type MenuEngItem, type MenuQuadrant } from '@/lib/agent-data'
 import { formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import AnalyzingDataState from '@/components/AnalyzingDataState'
 import { useIsDemo } from '@/hooks/useOrg'
 
-const quadrantColors: Record<MenuQuadrant, { color: string; bg: string; border: string; icon: typeof Star }> = {
-  star:      { color: 'text-[#17C5B0]', bg: 'bg-[#17C5B0]/10', border: 'border-[#17C5B0]/15', icon: Star },
-  puzzle:    { color: 'text-[#7C5CFF]', bg: 'bg-[#7C5CFF]/10',  border: 'border-[#7C5CFF]/15',  icon: HelpCircle },
-  plowhorse: { color: 'text-[#1A8FD6]', bg: 'bg-[#1A8FD6]/10', border: 'border-[#1A8FD6]/15', icon: Truck },
-  dog:       { color: 'text-[#A1A1A8]', bg: 'bg-[#A1A1A8]/10',  border: 'border-[#A1A1A8]/15',  icon: XCircle },
+const quadrantConfig: Record<MenuQuadrant, { label: string; color: string; bg: string; border: string; icon: typeof Star; desc: string }> = {
+  star:      { label: 'Stars',       color: 'text-[#17C5B0]', bg: 'bg-[#17C5B0]/10', border: 'border-[#17C5B0]/15', icon: Star,       desc: 'High profit + high popularity' },
+  puzzle:    { label: 'Puzzles',     color: 'text-[#7C5CFF]', bg: 'bg-[#7C5CFF]/10',  border: 'border-[#7C5CFF]/15',  icon: HelpCircle, desc: 'High profit but low popularity' },
+  plowhorse: { label: 'Plowhorses', color: 'text-[#1A8FD6]', bg: 'bg-[#1A8FD6]/10', border: 'border-[#1A8FD6]/15', icon: Truck,      desc: 'Popular but low profit' },
+  dog:       { label: 'Dogs',        color: 'text-[#A1A1A8]', bg: 'bg-[#A1A1A8]/10',  border: 'border-[#A1A1A8]/15',  icon: XCircle,    desc: 'Low profit + low popularity' },
 }
 
-function QuadrantCard({ quadrant, label, items }: { quadrant: MenuQuadrant; label: string; items: MenuEngItem[] }) {
-  const cfg = quadrantColors[quadrant]
+function QuadrantCard({ quadrant, items }: { quadrant: MenuQuadrant; items: MenuEngItem[] }) {
+  const cfg = quadrantConfig[quadrant]
   const Icon = cfg.icon
   return (
     <DashboardTiltCard className={clsx('card p-4', cfg.border)}>
@@ -24,7 +24,8 @@ function QuadrantCard({ quadrant, label, items }: { quadrant: MenuQuadrant; labe
           <Icon size={14} className={cfg.color} />
         </div>
         <div>
-          <h4 className={clsx('text-xs font-semibold', cfg.color)}>{label}</h4>
+          <h4 className={clsx('text-xs font-semibold', cfg.color)}>{cfg.label}</h4>
+          <p className="text-[9px] text-[#A1A1A8]/40">{cfg.desc}</p>
         </div>
         <span className="ml-auto text-[10px] font-mono text-[#A1A1A8]/40">{items.length} items</span>
       </div>
@@ -52,7 +53,6 @@ function QuadrantCard({ quadrant, label, items }: { quadrant: MenuQuadrant; labe
 export default function MenuEngineeringPage() {
   const isDemo = useIsDemo()
   const items = generateMenuEngineering()
-  const menuConfig = getMenuEngConfig()
 
   if (!isDemo) {
     return (
@@ -85,9 +85,9 @@ export default function MenuEngineeringPage() {
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
-          <h1 className="text-2xl font-bold text-[#F5F5F7]">{menuConfig.pageTitle}</h1>
+          <h1 className="text-2xl font-bold text-[#F5F5F7]">Menu Engineering</h1>
           <p className="text-sm text-[#A1A1A8] mt-1">
-            BCG matrix analysis — every item classified by {menuConfig.yAxisLabel.toLowerCase()} and {menuConfig.xAxisLabel.toLowerCase()}
+            BCG matrix analysis — every item classified by profitability and popularity
           </p>
         </div>
       </ScrollReveal>
@@ -100,8 +100,7 @@ export default function MenuEngineeringPage() {
           { q: 'plowhorse' as const, items: plowhorses },
           { q: 'dog' as const, items: dogs },
         ]).map(({ q, items: qItems }) => {
-          const cfg = quadrantColors[q]
-          const label = menuConfig.quadrantLabels[q]
+          const cfg = quadrantConfig[q]
           const rev = qItems.reduce((s, i) => s + i.revenueCents, 0)
           return (
             <StaggerItem key={q}>
@@ -111,7 +110,7 @@ export default function MenuEngineeringPage() {
                     <cfg.icon size={16} className={cfg.color} />
                   </div>
                   <div>
-                    <p className="stat-label">{label}</p>
+                    <p className="stat-label">{cfg.label}</p>
                     <p className={clsx('text-lg font-bold font-mono', cfg.color)}>{qItems.length}</p>
                   </div>
                   <span className="ml-auto text-[10px] font-mono text-[#A1A1A8]/40">{formatCentsCompact(rev)}</span>
@@ -125,31 +124,31 @@ export default function MenuEngineeringPage() {
       {/* Scatter plot (CSS-based) */}
       <ScrollReveal variant="fadeUp" delay={0.1}>
         <div className="card p-4 sm:p-5">
-          <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">{menuConfig.yAxisLabel} vs {menuConfig.xAxisLabel} Matrix</h3>
+          <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Profitability vs Popularity Matrix</h3>
           <div className="relative w-full aspect-square max-w-[500px] mx-auto">
             {/* Quadrant backgrounds */}
             <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
               <div className="bg-[#7C5CFF]/5 border-r border-b border-[#1F1F23] flex items-center justify-center">
-                <span className="text-[10px] text-[#7C5CFF]/30 font-medium">{menuConfig.quadrantLabels.puzzle}</span>
+                <span className="text-[10px] text-[#7C5CFF]/30 font-medium">Puzzles</span>
               </div>
               <div className="bg-[#17C5B0]/5 border-b border-[#1F1F23] flex items-center justify-center">
-                <span className="text-[10px] text-[#17C5B0]/30 font-medium">{menuConfig.quadrantLabels.star}</span>
+                <span className="text-[10px] text-[#17C5B0]/30 font-medium">Stars</span>
               </div>
               <div className="bg-[#A1A1A8]/5 border-r border-[#1F1F23] flex items-center justify-center">
-                <span className="text-[10px] text-[#A1A1A8]/20 font-medium">{menuConfig.quadrantLabels.dog}</span>
+                <span className="text-[10px] text-[#A1A1A8]/20 font-medium">Dogs</span>
               </div>
               <div className="bg-[#1A8FD6]/5 flex items-center justify-center">
-                <span className="text-[10px] text-[#1A8FD6]/30 font-medium">{menuConfig.quadrantLabels.plowhorse}</span>
+                <span className="text-[10px] text-[#1A8FD6]/30 font-medium">Plowhorses</span>
               </div>
             </div>
             {/* Axis labels */}
-            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-[#A1A1A8]/40 font-mono">{menuConfig.xAxisLabel} →</div>
-            <div className="absolute -left-5 top-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-[#A1A1A8]/40 font-mono">{menuConfig.yAxisLabel} →</div>
+            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-[#A1A1A8]/40 font-mono">Popularity →</div>
+            <div className="absolute -left-5 top-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-[#A1A1A8]/40 font-mono">Profitability →</div>
             {/* Data points */}
             {items.map(item => {
               const x = Math.min(95, Math.max(5, (item.popularityIndex / 200) * 100))
               const y = Math.min(95, Math.max(5, 100 - (item.profitabilityIndex / 200) * 100))
-              const cfg = quadrantColors[item.quadrant]
+              const cfg = quadrantConfig[item.quadrant]
               return (
                 <div
                   key={item.name}
@@ -168,10 +167,10 @@ export default function MenuEngineeringPage() {
 
       {/* Quadrant detail cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ScrollReveal variant="fadeUp" delay={0.15}><QuadrantCard quadrant="star" label={menuConfig.quadrantLabels.star} items={stars} /></ScrollReveal>
-        <ScrollReveal variant="fadeUp" delay={0.2}><QuadrantCard quadrant="puzzle" label={menuConfig.quadrantLabels.puzzle} items={puzzles} /></ScrollReveal>
-        <ScrollReveal variant="fadeUp" delay={0.25}><QuadrantCard quadrant="plowhorse" label={menuConfig.quadrantLabels.plowhorse} items={plowhorses} /></ScrollReveal>
-        <ScrollReveal variant="fadeUp" delay={0.3}><QuadrantCard quadrant="dog" label={menuConfig.quadrantLabels.dog} items={dogs} /></ScrollReveal>
+        <ScrollReveal variant="fadeUp" delay={0.15}><QuadrantCard quadrant="star" items={stars} /></ScrollReveal>
+        <ScrollReveal variant="fadeUp" delay={0.2}><QuadrantCard quadrant="puzzle" items={puzzles} /></ScrollReveal>
+        <ScrollReveal variant="fadeUp" delay={0.25}><QuadrantCard quadrant="plowhorse" items={plowhorses} /></ScrollReveal>
+        <ScrollReveal variant="fadeUp" delay={0.3}><QuadrantCard quadrant="dog" items={dogs} /></ScrollReveal>
       </div>
     </div>
   )

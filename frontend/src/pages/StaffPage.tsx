@@ -4,7 +4,6 @@ import {
   DollarSign, ShoppingCart,
 } from 'lucide-react'
 import { generateStaffPerformance, type StaffMember } from '@/lib/agent-data'
-import { getActiveBusinessType } from '@/lib/demo-context'
 import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
@@ -178,18 +177,8 @@ export default function StaffPage() {
               <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
                 <span className="text-[#F5F5F7] font-medium">{topPerformer.name}</span> achieves a {topPerformer.upsellRate}% upsell rate —
                 <span className="text-[#17C5B0] font-medium"> {Math.round(topPerformer.upsellRate / avgUpsell * 100 - 100)}% above team average</span>.
-                {(() => {
-                  const bt = getActiveBusinessType()
-                  const tips: Record<string, string> = {
-                    coffee_shop: 'Key differentiator: suggestive selling during morning rush when customers are time-constrained but open to add-ons.',
-                    restaurant: 'Key differentiator: wine pairing suggestions at entrée order — high-margin upsell with minimal friction.',
-                    fast_food: 'Key differentiator: consistently offering combo upgrades at point of order, converting 38% of single-item purchases.',
-                    auto_shop: 'Key differentiator: recommending preventive maintenance add-ons during routine services — customers trust the technician at the bay.',
-                    smoke_shop: 'Key differentiator: accessory pairing at checkout (papers + tips + lighter) — small ticket lift that adds up across volume.',
-                  }
-                  return tips[bt] || tips.coffee_shop
-                })()}
-                {' '}Recommended: Pair with {staff[staff.length - 1].name} for mentoring shifts to transfer technique.
+                Key differentiator: suggestive selling during morning rush when customers are time-constrained but open to add-ons.
+                Recommended: Pair with {staff[staff.length - 1].name} for mentoring shifts to transfer technique.
                 <span className="text-[#A1A1A8]/50"> (Confidence: 82%)</span>
               </p>
             </div>

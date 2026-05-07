@@ -18,7 +18,6 @@ const categoryColors: Record<string, string> = {
   optimization: 'text-[#17C5B0] bg-[#17C5B0]/10',
   strategy: 'text-amber-400 bg-amber-400/10',
   coordination: 'text-[#4FE3C1] bg-[#4FE3C1]/10',
-  vision: 'text-rose-400 bg-rose-400/10',
 }
 
 const statusColors: Record<string, { dot: string; text: string }> = {
@@ -116,7 +115,7 @@ export default function AgentDashboardPage() {
         </ScrollReveal>
         <AnalyzingDataState
           title="Agents are processing your data"
-          description="Our 27 AI agents — including 11 camera intelligence agents — are analyzing your POS transactions, customer patterns, spatial data, and foot traffic. Findings and confidence scores will appear here shortly."
+          description="Our 22 AI agents are analyzing your POS transactions, customer patterns, and operational data. Agent findings and confidence scores will appear here shortly."
         />
       </div>
     )

@@ -8,7 +8,6 @@ import { formatDateTime, formatRelative, formatCents } from '@/lib/format'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import { generateBusinessProfiles, type BusinessTypeProfile } from '@/lib/agent-data'
 import ScrollReveal from '@/components/ScrollReveal'
-import { useDemoContext } from '@/lib/demo-context'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import POSSelectorPanel from '@/components/POSSelectorPanel'
 import POSLogo from '@/components/POSLogo'
@@ -34,9 +33,8 @@ const statusColors: Record<string, string> = {
 }
 
 function BusinessTuningPanel() {
-  const { businessType } = useDemoContext()
   const profiles = generateBusinessProfiles()
-  const [selected, setSelected] = useState<string>(businessType ?? 'coffee_shop')
+  const [selected, setSelected] = useState<string>('coffee_shop')
   const profile = profiles.find(p => p.type === selected)!
 
   return (
@@ -116,8 +114,7 @@ export default function SettingsPage() {
   const location = useLocation()
   const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
   const orgId = useOrgId()
-  const { businessType } = useDemoContext()
-  const conn = useApi(() => api.connection(orgId), [orgId, businessType])
+  const conn = useApi(() => api.connection(orgId), [orgId])
 
   if (conn.loading) return <LoadingPage />
   if (conn.error) return <ErrorState message={conn.error} onRetry={conn.refetch} />

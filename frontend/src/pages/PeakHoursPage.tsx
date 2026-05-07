@@ -1,8 +1,7 @@
 import { clsx } from 'clsx'
 import { Clock, TrendingUp, Users, Zap } from 'lucide-react'
 import { generatePeakHourHeatmap, type PeakHourCell } from '@/lib/agent-data'
-import { getActiveBusinessType } from '@/lib/demo-context'
-import { formatCents, formatCentsCompact } from '@/lib/format'
+import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import AnalyzingDataState from '@/components/AnalyzingDataState'
@@ -101,22 +100,11 @@ export default function PeakHoursPage() {
   }
 
 
-  const bt = getActiveBusinessType()
   const peakCell = cells.reduce((max, c) => c.intensity > max.intensity ? c : max, cells[0])
   const totalTxns = cells.reduce((s, c) => s + c.transactions, 0)
-  const peakWindows: Record<string, [number, number]> = {
-    coffee_shop: [7, 10], restaurant: [18, 21], fast_food: [11, 14],
-    auto_shop: [8, 11], smoke_shop: [16, 19],
-  }
-  const [peakStart, peakEnd] = peakWindows[bt] || peakWindows.coffee_shop
-  const peakRevenue = cells.filter(c => c.hour >= peakStart && c.hour < peakEnd).reduce((s, c) => s + c.revenue, 0)
+  const morningRevenue = cells.filter(c => c.hour >= 7 && c.hour < 10).reduce((s, c) => s + c.revenue, 0)
   const totalRevenue = cells.reduce((s, c) => s + c.revenue, 0)
-  const morningPct = totalRevenue > 0 ? Math.round(peakRevenue / totalRevenue * 100) : 0
-  const peakLabels: Record<string, string> = {
-    coffee_shop: 'AM Revenue', restaurant: 'Dinner Rev', fast_food: 'Lunch Rev',
-    auto_shop: 'AM Drop-off', smoke_shop: 'PM Rush Rev',
-  }
-  const peakLabel = peakLabels[bt] || 'Peak Rev'
+  const morningPct = totalRevenue > 0 ? Math.round(morningRevenue / totalRevenue * 100) : 0
 
   return (
     <div className="space-y-6">
@@ -163,7 +151,7 @@ export default function PeakHoursPage() {
                 <TrendingUp size={16} className="text-[#7C5CFF]" />
               </div>
               <div>
-                <p className="stat-label">{peakLabel}</p>
+                <p className="stat-label">AM Revenue</p>
                 <p className="text-lg font-bold text-[#7C5CFF] font-mono">{morningPct}%</p>
               </div>
             </div>
@@ -197,23 +185,11 @@ export default function PeakHoursPage() {
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Peak Hour Optimizer Recommendation</h3>
               <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-                {(() => {
-                  const bt = getActiveBusinessType()
-                  const recs: Record<string, { window: string; recovery: number; detail: string }> = {
-                    coffee_shop: { window: '7-9AM', recovery: 52000, detail: 'reduce average queue time from 4.2 to 2.1 minutes' },
-                    restaurant: { window: '6-8PM', recovery: 128000, detail: 'turn 2 extra tables per night and reduce walkouts' },
-                    fast_food: { window: '11:30AM-1PM', recovery: 84000, detail: 'cut drive-through wait from 5.4 to 3.1 minutes' },
-                    auto_shop: { window: '8-10AM', recovery: 215000, detail: 'open one more bay to capture morning drop-off overflow' },
-                    smoke_shop: { window: '4-7PM', recovery: 38000, detail: 'add a second register to eliminate the after-work rush line' },
-                  }
-                  const r = recs[bt] || recs.coffee_shop
-                  return <>
-                    Your <span className="text-[#F5F5F7] font-medium">{r.window} window</span> generates {morningPct}% of daily revenue
-                    but current staffing is 1 person below optimal. Adding 1 staff member during this window would {r.detail} and recover an estimated
-                    <span className="text-[#17C5B0] font-medium"> {formatCentsCompact(r.recovery)}/month</span> in lost walkout revenue.
-                    <span className="text-[#A1A1A8]/50"> (Confidence: 88%)</span>
-                  </>
-                })()}
+                Your <span className="text-[#F5F5F7] font-medium">7-9AM window</span> generates {morningPct}% of daily revenue
+                but current staffing is 1 person below optimal. Adding 1 staff member during this window would
+                reduce average queue time from 4.2 to 2.1 minutes and recover an estimated
+                <span className="text-[#17C5B0] font-medium"> $520/month</span> in lost walkout revenue.
+                <span className="text-[#A1A1A8]/50"> (Confidence: 88%)</span>
               </p>
             </div>
           </div>

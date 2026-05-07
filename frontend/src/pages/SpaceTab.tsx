@@ -1,13 +1,13 @@
 import { useState, Suspense, lazy } from 'react'
 import { clsx } from 'clsx'
 import {
-  Box, Camera, ScanLine, Layers, MapPin, Zap,
-  Smartphone, Share2, Download, RefreshCw,
+  Layers, MapPin, Zap,
+  Share2, Download, RefreshCw,
 } from 'lucide-react'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import AnalyzingDataState from '@/components/AnalyzingDataState'
 import { useIsDemo } from '@/hooks/useOrg'
+import { ScanButton, ProductionSpaceSetup } from '@/components/space/ScanControls'
 
 const SpaceViewer = lazy(() => import('@/components/space/SpaceViewer'))
 
@@ -30,93 +30,13 @@ const demoZones: ZoneStat[] = [
   { id: 'shelf-a', name: 'High-Value Shelf', traffic: 156, dwellMinutes: 4.2, conversionPct: 38, revenuePerSqFt: 203, trend: 'down' },
 ]
 
-function ScanButton({ onScan }: { onScan: () => void }) {
-  const [scanning, setScanning] = useState(false)
-
-  function handleScan() {
-    setScanning(true)
-    onScan()
-    setTimeout(() => setScanning(false), 3000)
-  }
-
-  return (
-    <button
-      onClick={handleScan}
-      disabled={scanning}
-      className={clsx(
-        'flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all',
-        scanning
-          ? 'bg-[#17C5B0]/20 text-[#17C5B0] border border-[#17C5B0]/30 animate-pulse'
-          : 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/20 hover:bg-[#1A8FD6]/15',
-      )}
-    >
-      {scanning ? (
-        <>
-          <ScanLine size={14} className="animate-spin" />
-          Scanning...
-        </>
-      ) : (
-        <>
-          <Camera size={14} />
-          New Scan
-        </>
-      )}
-    </button>
-  )
-}
-
 export default function SpaceTab() {
   const isDemo = useIsDemo()
   const [viewMode, setViewMode] = useState<ViewMode>('3d')
   const [showHotZones, setShowHotZones] = useState(true)
   const [lastScan] = useState('2 hours ago')
 
-  if (!isDemo) {
-    return (
-      <div className="space-y-6">
-        <ScrollReveal variant="fadeUp">
-          <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">3D Space</h1>
-            <p className="text-sm text-[#A1A1A8] mt-1">
-              LiDAR store mapping & spatial analytics
-            </p>
-          </div>
-        </ScrollReveal>
-
-        <div className="card p-6 border-[#1A8FD6]/10">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0">
-              <Box size={24} className="text-[#1A8FD6]" />
-            </div>
-            <div className="space-y-3">
-              <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7]">Set Up 3D Space Mapping</h3>
-                <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-                  Use your iPhone or iPad's LiDAR scanner to create a 3D model of your store.
-                  Meridian will overlay foot traffic heatmaps, identify dead zones, and optimize your layout for revenue.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-4 text-[10px] text-[#A1A1A8]/60">
-                <span className="flex items-center gap-1"><Smartphone size={10} /> Requires LiDAR-equipped device</span>
-                <span className="flex items-center gap-1"><ScanLine size={10} /> 2-5 minute scan</span>
-                <span className="flex items-center gap-1"><Layers size={10} /> USDZ/GLB format</span>
-              </div>
-              <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A8FD6] text-white text-xs font-medium hover:bg-[#1A8FD6]/90 transition-colors shadow-[0_0_16px_rgba(26,143,214,0.25)]">
-                <Camera size={14} />
-                Open Scanner
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <AnalyzingDataState
-          title="No scans yet"
-          description="Once you scan your store, Meridian will generate a 3D model with traffic heatmaps, zone analytics, and layout optimization recommendations."
-          compact
-        />
-      </div>
-    )
-  }
+  if (!isDemo) return <ProductionSpaceSetup />
 
   const zones = demoZones
   const totalTraffic = zones.reduce((s, z) => s + z.traffic, 0)
@@ -125,7 +45,6 @@ export default function SpaceTab() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <ScrollReveal variant="fadeUp">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
@@ -135,7 +54,7 @@ export default function SpaceTab() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ScanButton onScan={() => {}} />
+            <ScanButton onScan={() => {}} isDemo={isDemo} />
             <button className="p-2 rounded-lg border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#2A2A30] transition-colors">
               <Share2 size={14} />
             </button>
@@ -146,7 +65,6 @@ export default function SpaceTab() {
         </div>
       </ScrollReveal>
 
-      {/* Stats */}
       <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
@@ -202,7 +120,6 @@ export default function SpaceTab() {
         </StaggerItem>
       </StaggerContainer>
 
-      {/* View mode toggle */}
       <ScrollReveal variant="fadeUp" delay={0.05}>
         <div className="flex items-center gap-3">
           <div className="period-toggle">
@@ -232,22 +149,32 @@ export default function SpaceTab() {
         </div>
       </ScrollReveal>
 
-      {/* 3D Viewer */}
       <ScrollReveal variant="fadeUp" delay={0.1}>
-        <Suspense fallback={
-          <div className="h-[400px] sm:h-[500px] rounded-xl bg-[#0A0A0B] border border-[#1F1F23] flex items-center justify-center">
-            <p className="text-sm text-[#A1A1A8]/50">Loading 3D viewer...</p>
+        {viewMode === '3d' ? (
+          <div className="relative rounded-xl overflow-hidden bg-[#0A0A0B] border border-[#1F1F23] isolate h-[400px] sm:h-[500px]">
+            <iframe
+              src="https://poly.cam/capture/D3C8EE9B-7EF3-44F2-A656-7E869018204F"
+              className="w-full h-full border-0"
+              allow="xr-spatial-tracking"
+              allowFullScreen
+              title="LiDAR store scan"
+            />
+            <div className="absolute top-3 left-3 px-3 py-1.5 rounded-lg bg-[#0A0A0B]/80 border border-[#1F1F23]">
+              <p className="text-[10px] font-mono text-[#17C5B0]">LiDAR Scan — Live</p>
+              <p className="text-[9px] text-[#A1A1A8]/40">Polycam capture • iPhone 15 Pro</p>
+            </div>
           </div>
-        }>
-          <SpaceViewer
-            showHotZones={showHotZones && (viewMode === '3d' || viewMode === 'heatmap')}
-            showSweep={viewMode === '3d'}
-            className="h-[400px] sm:h-[500px]"
-          />
-        </Suspense>
+        ) : (
+          <Suspense fallback={
+            <div className="h-[400px] sm:h-[500px] rounded-xl bg-[#0A0A0B] border border-[#1F1F23] flex items-center justify-center">
+              <p className="text-sm text-[#A1A1A8]/50">Loading 3D viewer...</p>
+            </div>
+          }>
+            <SpaceViewer showHotZones={showHotZones} showSweep={false} className="h-[400px] sm:h-[500px]" />
+          </Suspense>
+        )}
       </ScrollReveal>
 
-      {/* Zone Details Table */}
       <ScrollReveal variant="fadeUp" delay={0.15}>
         <div className="card overflow-hidden">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
@@ -304,7 +231,6 @@ export default function SpaceTab() {
         </div>
       </ScrollReveal>
 
-      {/* AI Recommendation */}
       <ScrollReveal variant="fadeUp" delay={0.2}>
         <div className="card p-4 border-[#17C5B0]/10">
           <div className="flex items-start gap-3">

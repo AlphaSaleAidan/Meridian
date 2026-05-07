@@ -11,7 +11,6 @@ import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import { formatNumber, formatRelative } from '@/lib/format'
 import { useOrgId } from '@/hooks/useOrg'
-import { useDemoContext } from '@/lib/demo-context'
 
 type SortField = 'product_name' | 'current_stock' | 'days_until_reorder' | 'predicted_daily_usage' | 'trend_pct'
 type SortDir = 'asc' | 'desc'
@@ -60,8 +59,7 @@ function StockBar({ current, reorder, max }: { current: number; reorder: number;
 
 export default function InventoryPage() {
   const orgId = useOrgId()
-  const { businessType } = useDemoContext()
-  const inventory = useApi(() => api.inventory(orgId), [orgId, businessType])
+  const inventory = useApi(() => api.inventory(orgId), [orgId])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [sortField, setSortField] = useState<SortField>('days_until_reorder')

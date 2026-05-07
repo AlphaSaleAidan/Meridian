@@ -8,7 +8,6 @@ import InsightCard from '@/components/InsightCard'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
 import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
-import { useDemoContext } from '@/lib/demo-context'
 
 const insightTypes = [
   { key: '', label: 'All' },
@@ -28,8 +27,7 @@ export default function InsightsPage() {
   const orgId = useOrgId()
   const tier = useTier()
   const limits = tierLimits[tier]
-  const { businessType } = useDemoContext()
-  const insights = useApi(() => api.insights(orgId, 50), [orgId, businessType])
+  const insights = useApi(() => api.insights(orgId, 50), [orgId])
 
   if (insights.loading) return <LoadingPage />
   if (insights.error) return <ErrorState message={insights.error} onRetry={insights.refetch} />
