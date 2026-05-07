@@ -43,3 +43,8 @@ opentelemetry-instrumentation-asyncpg>=0.46b0
 # Analytics
 posthog>=3.5.0
 duckdb>=1.0.0
+
+# Vision — Camera Detection Pipeline
+ultralytics>=8.0.0
+supervision>=0.25.0
+opencv-python-headless>=4.8.0
