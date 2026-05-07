@@ -10,7 +10,15 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { canadaSalesDemoData, type SalesOverview, type Deal, type SalesClient } from '@/lib/canada-sales-demo-data'
+import {
+  canadaSalesDemoData,
+  STAGE_CONFIG,
+  STAGE_ORDER,
+  type SalesOverview,
+  type Deal,
+  type DealStage,
+  type SalesClient,
+} from '@/lib/canada-sales-demo-data'
 
 const CAD_RATE = 1.37
 
@@ -154,6 +162,81 @@ export default function CanadaPortalDashboardPage() {
             <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-[#7c3aed]/15">
               <CreditCard size={20} className="text-[#7c3aed]" />
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Kanban Deal Pipeline */}
+      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
+        <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Deal Pipeline</h2>
+          <Link
+            to="/canada/portal/leads"
+            className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
+          >
+            View all <ArrowRight size={12} />
+          </Link>
+        </div>
+        <div className="px-4 py-4 overflow-x-auto">
+          <div className="grid grid-cols-5 gap-3 min-w-[800px]">
+            {(STAGE_ORDER.filter(
+              (s): s is Exclude<DealStage, 'closed_won' | 'closed_lost'> =>
+                !['closed_won', 'closed_lost'].includes(s)
+            ) as DealStage[]).map(stage => {
+              const cfg = STAGE_CONFIG[stage]
+              const stageDeals = deals.filter(d => d.stage === stage)
+              return (
+                <div key={stage} className="flex flex-col">
+                  {/* Column header */}
+                  <div className="flex items-center gap-2 mb-3 px-1">
+                    <div
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: cfg.color }}
+                    />
+                    <span className="text-xs font-medium text-[#6b7a74] truncate">
+                      {cfg.label}
+                    </span>
+                    <span
+                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
+                      style={{
+                        color: cfg.color,
+                        backgroundColor: `${cfg.color}15`,
+                      }}
+                    >
+                      {stageDeals.length}
+                    </span>
+                  </div>
+                  {/* Deal cards */}
+                  <div className="space-y-2 flex-1">
+                    {stageDeals.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-[#1a2420] bg-[#0a0f0d] px-3 py-4 text-center">
+                        <p className="text-[11px] text-[#4a5550]">No deals</p>
+                      </div>
+                    ) : (
+                      stageDeals.map(deal => (
+                        <div
+                          key={deal.id}
+                          className="rounded-lg border border-[#1a2420] bg-[#0a0f0d] px-3 py-2.5 hover:border-[#2a3430] transition-colors"
+                        >
+                          <p className="text-xs font-medium text-white truncate">
+                            {deal.business_name}
+                          </p>
+                          <p className="text-[11px] text-[#6b7a74] truncate mt-0.5">
+                            {deal.contact_name}
+                          </p>
+                          <p
+                            className="text-[11px] font-semibold mt-1.5"
+                            style={{ color: cfg.color }}
+                          >
+                            {formatDollarsCad(deal.monthly_value)}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

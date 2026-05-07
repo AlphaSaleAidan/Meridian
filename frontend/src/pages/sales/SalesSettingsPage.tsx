@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Settings, User, Bell, Shield, Check } from 'lucide-react'
+import { Settings, User, Bell, Shield, Check, Wifi } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
+import POSSystemPicker from '@/components/POSSystemPicker'
 
 export default function SalesSettingsPage() {
   const { rep } = useSalesAuth()
   const [saved, setSaved] = useState(false)
+  const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
   const [notifications, setNotifications] = useState({
     email_new_lead: true,
     email_commission: true,
@@ -49,6 +51,22 @@ export default function SalesSettingsPage() {
             <input type="text" value={rep ? `${rep.commission_rate}%` : ''} className={inputClass} readOnly />
           </div>
         </div>
+      </div>
+
+      <div className="card border border-[#1F1F23] p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Wifi size={16} className="text-[#1A8FD6]" />
+          <h2 className="text-sm font-semibold text-[#F5F5F7]">POS System</h2>
+        </div>
+        <POSSystemPicker
+          value={selectedPOS}
+          onChange={setSelectedPOS}
+          mode="new-customer"
+          portalContext="us"
+        />
+        <p className="text-[10px] text-[#A1A1A8]/40 mt-3">
+          Connect your POS system to sync transactions and customer data.
+        </p>
       </div>
 
       <div className="card border border-[#1F1F23] p-5">

@@ -11,6 +11,7 @@ import {
   X,
   LogOut,
   Plus,
+  Settings,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -21,6 +22,7 @@ const salesNavItems = [
   { path: '/canada/portal/leads', icon: Target, label: 'Leads' },
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
+  { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
 ] as const
 
 const adminNavItems = [
