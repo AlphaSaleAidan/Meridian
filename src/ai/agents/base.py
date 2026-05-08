@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from ..agent_logger import get_agent_logger
+
 logger = logging.getLogger("meridian.ai.agents")
 
 
@@ -62,6 +64,7 @@ class BaseAgent(ABC):
         self.ctx = ctx
         self._data_avail: DataAvailability | None = None
         self._chain = None
+        self._json_logger = get_agent_logger(self.__class__.__name__)
 
     @abstractmethod
     async def analyze(self) -> dict:

@@ -74,7 +74,7 @@ async def detect_inventory_anomaly(org_id: str, inventory_update: dict) -> dict 
 
 @task(retries=2, retry_delay_seconds=10, log_prints=True)
 async def persist_anomaly_alert(org_id: str, anomaly: dict):
-    """Save anomaly alert to DB and trigger notification."""
+    """Save anomaly alert to DB, trigger notification, and email the owner."""
     from ..db import init_db, close_db
 
     db = await init_db()
@@ -82,15 +82,36 @@ async def persist_anomaly_alert(org_id: str, anomaly: dict):
         return
 
     try:
+        anomaly_type = anomaly.get("type", "unknown")
+        severity = "high"
+        title = f"Anomaly detected: {anomaly_type}"
+
         await db.insert("notifications", {
             "org_id": org_id,
-            "type": anomaly["type"],
-            "severity": "high",
-            "title": f"Anomaly detected: {anomaly['type']}",
+            "type": anomaly_type,
+            "severity": severity,
+            "title": title,
             "payload": anomaly,
             "read": False,
         })
         logger.info(f"Anomaly alert persisted for {org_id}")
+
+        orgs = await db.select("organizations", filters={"id": f"eq.{org_id}"}, limit=1)
+        if orgs:
+            org = orgs[0]
+            email = org.get("email") or org.get("contact_email")
+            if email:
+                from ..email.send import send_anomaly_alert
+                details = anomaly.get("anomalies") or anomaly.get("alerts") or []
+                detail_text = "; ".join(str(d) for d in details[:3]) if details else str(anomaly)
+                await send_anomaly_alert(
+                    to=email,
+                    business_name=org.get("name", "Your Business"),
+                    alert_title=title,
+                    alert_detail=detail_text,
+                    severity=severity,
+                    org_id=org_id,
+                )
     finally:
         await close_db()
 

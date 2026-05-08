@@ -111,6 +111,25 @@ async def run_backfill(
     )
     logger.info(f"Marked connection {connection_id} historical_import_complete=True")
 
+    # ── Send POS connected email ────────────────────────
+    try:
+        orgs = await db.select("organizations", filters={"id": f"eq.{org_id}"}, limit=1)
+        if orgs:
+            org = orgs[0]
+            email = org.get("email") or org.get("contact_email")
+            if email:
+                from ..email.send import send_pos_connected
+                location_name = result.locations[0].get("name", "Main Location") if result.locations else "Your Location"
+                await send_pos_connected(
+                    to=email,
+                    first_name=org.get("owner_name", org.get("name", "")).split()[0] or "there",
+                    pos_name="Square",
+                    location_name=location_name,
+                    org_id=org_id,
+                )
+    except Exception as e:
+        logger.warning(f"POS connected email failed for org={org_id}: {e}")
+
     # ── Trigger AI pipeline ──────────────────────────────
     try:
         from ..pipeline import MeridianPipeline

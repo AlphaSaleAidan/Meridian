@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "capsules": [
+    {
+      "type": "Capsule",
+      "id": "meridian-camera-hardening",
+      "name": "Camera Pipeline Stability Campaign",
+      "description": "Full hardening pass for the camera swarm pipeline.",
+      "gene_sequence": [
+        "meridian-agent-null-check",
+        "meridian-agent-timeout",
+        "meridian-heatmap-bounds"
+      ],
+      "trigger_condition": "camera_pipeline_failure_rate > 0.05",
+      "success_metric": "camera_pipeline_failure_rate < 0.01"
+    },
+    {
+      "type": "Capsule",
+      "id": "meridian-phone-order-hardening",
+      "name": "Phone Order Agent Stability Campaign",
+      "description": "Full hardening pass for the phone order pipeline.",
+      "gene_sequence": [
+        "meridian-whisper-silence",
+        "meridian-pos-retry"
+      ],
+      "trigger_condition": "phone_order_failure_rate > 0.1",
+      "success_metric": "phone_order_failure_rate < 0.02"
+    },
+    {
+      "type": "Capsule",
+      "id": "meridian-portal-integrity",
+      "name": "Portal Data Integrity Campaign",
+      "description": "Ensures all portal data queries are correctly scoped.",
+      "gene_sequence": [
+        "meridian-portal-scope",
+        "meridian-db-connection"
+      ],
+      "trigger_condition": "portal_scope_error_count > 0",
+      "success_metric": "portal_scope_error_count = 0"
+    }
+  ]
+}

@@ -1,0 +1,486 @@
+{
+  "version": 2,
+  "genes": [
+    {
+      "type": "Gene",
+      "id": "gene_gep_repair_from_errors",
+      "category": "repair",
+      "signals_match": [
+        "error",
+        "exception",
+        "failed",
+        "unstable"
+      ],
+      "preconditions": [
+        "signals contains error-related indicators"
+      ],
+      "strategy": [
+        "Extract structured signals from logs and user instructions",
+        "Select an existing Gene by signals match (no improvisation)",
+        "Estimate blast radius (files, lines) before editing",
+        "Apply smallest reversible patch",
+        "Validate using declared validation steps; rollback on failure",
+        "Solidify knowledge: append EvolutionEvent, update Gene/Capsule store"
+      ],
+      "constraints": {
+        "max_files": 20,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/evolve ./src/gep/solidify ./src/gep/policyCheck ./src/gep/selector ./src/gep/memoryGraph ./src/gep/assetStore",
+        "node scripts/validate-suite.js"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "gene_gep_optimize_prompt_and_assets",
+      "category": "optimize",
+      "signals_match": [
+        "protocol",
+        "gep",
+        "prompt",
+        "audit",
+        "reusable"
+      ],
+      "preconditions": [
+        "need stricter, auditable evolution protocol outputs"
+      ],
+      "strategy": [
+        "Extract signals and determine selection rationale via Selector JSON",
+        "Prefer reusing existing Gene/Capsule; only create if no match exists",
+        "Refactor prompt assembly to embed assets (genes, capsules, parent event)",
+        "Reduce noise and ambiguity; enforce strict output schema",
+        "Validate by running node index.js run and ensuring no runtime errors",
+        "Solidify: record EvolutionEvent, update Gene definitions, create Capsule on success"
+      ],
+      "constraints": {
+        "max_files": 20,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/evolve ./src/gep/prompt ./src/gep/contentHash ./src/gep/skillDistiller",
+        "node scripts/validate-suite.js"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "gene_gep_innovate_from_opportunity",
+      "category": "innovate",
+      "signals_match": [
+        "user_feature_request",
+        "user_improvement_suggestion",
+        "perf_bottleneck",
+        "capability_gap",
+        "stable_success_plateau",
+        "external_opportunity",
+        "bounty_task"
+      ],
+      "preconditions": [
+        "at least one opportunity signal is present",
+        "no active log_error signals (stability first)"
+      ],
+      "strategy": [
+        "Extract opportunity signals and identify the specific user need or system gap",
+        "Search existing Genes and Capsules for partial matches (avoid reinventing)",
+        "Design a minimal, testable implementation plan (prefer small increments)",
+        "Estimate blast radius; innovate changes may touch more files but must stay within constraints",
+        "Implement the change with clear validation criteria",
+        "Validate using declared validation steps; rollback on failure",
+        "Solidify: record EvolutionEvent with intent=innovate, create new Gene if pattern is novel, create Capsule on success"
+      ],
+      "constraints": {
+        "max_files": 25,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/evolve ./src/gep/solidify ./src/gep/policyCheck ./src/gep/mutation ./src/gep/personality",
+        "node scripts/validate-suite.js"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "gene_gep_optimize_tool_usage",
+      "summary": "Optimize tool execution patterns by reducing redundant exec calls, improving tool selection strategy, and enforcing tool-use constraints to prevent bypass.",
+      "category": "optimize",
+      "signals_match": [
+        "high_tool_usage:exec",
+        "repeated_tool_usage:exec",
+        "tool_bypass",
+        "tool_loop",
+        "high_tool_usage"
+      ],
+      "preconditions": [
+        "agent repeatedly invokes the same tool (especially exec) without progress",
+        "tool execution bypass patterns detected",
+        "no active error signals (errors would take repair priority)"
+      ],
+      "strategy": [
+        "Analyze tool usage patterns to identify the root cause of repetition (wrong tool, missing context, or lack of guardrails)",
+        "Introduce strategy-level guardrails: prefer single-shot commands, batch related operations, add explicit retry limits",
+        "If tool_bypass detected, strengthen constraint enforcement in prompt assembly or tool routing",
+        "Estimate blast radius; changes should target tool routing, prompt constraints, or signal deduplication logic",
+        "Validate by confirming no regressions in existing tool tests and signal extraction accuracy",
+        "Solidify: record EvolutionEvent with intent=optimize, update Capsule on success"
+      ],
+      "constraints": {
+        "max_files": 15,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node scripts/validate-modules.js ./src/gep/signals ./src/evolve",
+        "node scripts/validate-suite.js"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "gene_distilled_s2g-env-vars",
+      "summary": "Vercel environment variable expert guidance. Use when working with .env files, vercel env commands, OIDC tokens, or managing environment-specific configuration.",
+      "category": "optimize",
+      "signals_match": [
+        "use_when_working_with",
+        "env_files",
+        "vercel_env_commands",
+        "oidc_tokens",
+        "vercel_env_pull",
+        "env_local_overwrite",
+        "oidc_token_expiry",
+        "dotenv_cli"
+      ],
+      "preconditions": [
+        "Skill env-vars has just been executed locally"
+      ],
+      "strategy": [
+        "Identify the dominant trigger signals from the Skill description.",
+        "Apply the smallest targeted change that satisfies the Skill workflow.",
+        "Run the Skill validation commands and abort if any fails."
+      ],
+      "constraints": {
+        "max_files": 12,
+        "forbidden_paths": [
+          ".git",
+          "node_modules"
+        ]
+      },
+      "validation": [
+        "node --version"
+      ],
+      "schema_version": "1.6.0",
+      "_source": {
+        "kind": "skill2gep",
+        "skill_name": "env-vars",
+        "skill_platform": "vercel",
+        "skill_hash": "ba0bdb4db2",
+        "rationale_paper": "Wang, Ren, Zhang. From Procedural Skills to Strategy Genes. arXiv:2604.15097",
+        "paper_scope": "code-science (arXiv:2604.15097, 45 tasks, Gemini 3.1 Pro/Flash Lite)",
+        "claims_outside_scope": "assumption",
+        "quality_heuristics": {
+          "strategy_steps": 0,
+          "avoid_count": 0,
+          "validation_declared_count": 0,
+          "validation_runnable_count": 0,
+          "validation_fallback_used": true,
+          "signals_extracted": 4,
+          "preconditions_extracted": 0
+        }
+      },
+      "asset_id": "sha256:4fa74fe34d19564416dfd8e63f3012a1672e86f39c4bff85d1c70524e06b5a2e"
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-agent-null-check",
+      "summary": "Add null/undefined guards to camera agent frame processing to prevent TypeError crashes.",
+      "category": "repair",
+      "signals_match": [
+        "TypeError",
+        "Cannot read property",
+        "null_frame",
+        "undefined"
+      ],
+      "preconditions": [
+        "camera agent frame processing encounters null or undefined values",
+        "applies to FootTrafficAgent, DwellTimeAgent, QueueMonitorAgent"
+      ],
+      "strategy": [
+        "Identify the failing frame access pattern in the agent's process method",
+        "Add null/undefined guards before accessing frame.data and frame.metadata",
+        "Log the null frame event with structured context (agent_id, timestamp, frame_source)",
+        "Return gracefully with a no-op result instead of raising",
+        "Validate that the agent can handle a stream of null frames without cascading failures",
+        "Solidify: record EvolutionEvent, update Gene store with null-check pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"import ast; ast.parse(open('src/ai/agents/base.py').read())\"",
+        "python3 -m py_compile src/ai/agents/base.py"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-pos-retry",
+      "summary": "Wrap POS API calls with retry and exponential backoff to handle transient connection failures.",
+      "category": "repair",
+      "signals_match": [
+        "POS API error",
+        "Connection refused",
+        "ECONNRESET",
+        "timeout"
+      ],
+      "preconditions": [
+        "POS API calls are failing with transient network errors",
+        "applies to pos_connector, order_processor"
+      ],
+      "strategy": [
+        "Locate the POS API call sites in pos_connector and order_processor",
+        "Wrap each call with a retry decorator using exponential backoff (3 attempts: 0s, 2s, 4s)",
+        "After 3 consecutive failures, activate the fallback order flow",
+        "Log each retry attempt with structured context (attempt_number, delay, error_type)",
+        "Validate that the retry logic does not mask permanent failures",
+        "Solidify: record EvolutionEvent, update Gene store with retry pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"from src.api.app import app\"",
+        "python3 -m py_compile src/integrations/pos_connector.py"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-insight-empty",
+      "summary": "Validate dataset size before insight generation to prevent errors on empty or sparse data.",
+      "category": "repair",
+      "signals_match": [
+        "insight.revenue_impact is null",
+        "Cannot format undefined",
+        "empty_dataset"
+      ],
+      "preconditions": [
+        "insight generation encounters empty or insufficient data",
+        "applies to InsightGenerationAgent, MarginAnalysisAgent"
+      ],
+      "strategy": [
+        "Add a dataset size check before the insight generation pipeline runs",
+        "If the dataset contains fewer than 10 transactions, emit a standard low-data insight instead of computing",
+        "Ensure the low-data insight follows the same output schema as normal insights",
+        "Log the low-data event with dataset size and time window for monitoring",
+        "Validate that downstream consumers handle low-data insights correctly",
+        "Solidify: record EvolutionEvent, update Gene store with empty-data guard pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"import ast; ast.parse(open('src/ai/agents/base.py').read())\"",
+        "python3 -m py_compile src/ai/agents/base.py"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-agent-timeout",
+      "summary": "Add 30-second execution timeout to all agents to prevent pipeline stalls and hung processes.",
+      "category": "repair",
+      "signals_match": [
+        "Agent execution exceeded",
+        "Pipeline stall detected",
+        "timeout",
+        "hung"
+      ],
+      "preconditions": [
+        "agent execution is taking longer than expected or stalling the pipeline",
+        "applies to all_agents"
+      ],
+      "strategy": [
+        "Wrap the agent's main execution method with asyncio.wait_for using a 30-second timeout",
+        "On timeout, log the event with agent_id, elapsed_time, and last known state",
+        "Return the last valid partial result if available, otherwise return a timeout sentinel",
+        "Mark the agent for restart in the orchestrator's health check loop",
+        "Validate that timeout handling does not corrupt shared state or leave locks held",
+        "Solidify: record EvolutionEvent, update Gene store with timeout pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"import ast; ast.parse(open('src/ai/agents/base.py').read())\"",
+        "python3 -m py_compile src/ai/agents/base.py"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-heatmap-bounds",
+      "summary": "Validate heatmap coordinates against store dimensions to prevent index-out-of-bounds errors.",
+      "category": "repair",
+      "signals_match": [
+        "heatmap cell out of bounds",
+        "Invalid coordinates",
+        "index_error"
+      ],
+      "preconditions": [
+        "heatmap synthesis encounters coordinates outside the store space grid",
+        "applies to HeatmapSynthesisAgent"
+      ],
+      "strategy": [
+        "Before writing a heatmap cell, validate x/y coordinates against store_space.width and store_space.height",
+        "Clamp coordinates that are slightly out of bounds to the nearest valid cell",
+        "Discard data points with coordinates that are wildly out of range (>2x bounds)",
+        "Log discarded or clamped points with source camera_id for calibration review",
+        "Validate that the heatmap output grid has no gaps or artifacts from clamping",
+        "Solidify: record EvolutionEvent, update Gene store with bounds-check pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"import ast; ast.parse(open('src/ai/agents/base.py').read())\"",
+        "python3 -m py_compile src/ai/agents/base.py"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-whisper-silence",
+      "summary": "Check Silero VAD confidence before Whisper transcription to avoid hallucinations on silent segments.",
+      "category": "repair",
+      "signals_match": [
+        "hallucination",
+        "empty transcription",
+        "silent segment",
+        "vad_low"
+      ],
+      "preconditions": [
+        "Whisper is producing hallucinated text from silent or near-silent audio segments",
+        "applies to WhisperLiveKitSTT"
+      ],
+      "strategy": [
+        "Before sending an audio segment to Whisper, check Silero VAD confidence score",
+        "If VAD confidence is below 0.7, skip transcription and wait for the next voiced segment",
+        "Log skipped segments with VAD score, segment duration, and audio source for tuning",
+        "Ensure segment boundaries are correctly maintained when skipping silent segments",
+        "Validate that skipping does not introduce timing drift in the transcription stream",
+        "Solidify: record EvolutionEvent, update Gene store with VAD-gate pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"import ast; ast.parse(open('src/ai/agents/base.py').read())\"",
+        "python3 -m py_compile src/ai/agents/base.py"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-db-connection",
+      "summary": "Handle database connection pool exhaustion with jitter retry and circuit breaker fallback.",
+      "category": "repair",
+      "signals_match": [
+        "connection pool exhausted",
+        "too many connections",
+        "PGSSLMODE",
+        "supabase_error"
+      ],
+      "preconditions": [
+        "database connections are being exhausted or failing repeatedly",
+        "applies to all_database_writers"
+      ],
+      "strategy": [
+        "Add connection timeout handling with jitter-based retry to avoid thundering herd",
+        "Log pool exhaustion events with current pool size, active connections, and waiting queries",
+        "Implement a circuit breaker that switches to read-only mode after 5 consecutive connection failures",
+        "When circuit breaker is open, queue write operations for replay when connection recovers",
+        "Validate that read-only fallback does not silently drop critical writes",
+        "Solidify: record EvolutionEvent, update Gene store with connection-resilience pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"from src.api.app import app\"",
+        "python3 -m py_compile src/api/app.py"
+      ]
+    },
+    {
+      "type": "Gene",
+      "id": "meridian-portal-scope",
+      "summary": "Enforce portal_context filter on all user-owned data queries to prevent cross-portal data leakage.",
+      "category": "repair",
+      "signals_match": [
+        "cross-portal data",
+        "missing portal_context filter",
+        "data_leakage"
+      ],
+      "preconditions": [
+        "user-facing data queries are returning data from other portals",
+        "applies to all_portal_queries"
+      ],
+      "strategy": [
+        "Audit the failing query to identify the missing portal_context filter",
+        "Add portal_context filter to every user-owned data query at the repository/query layer",
+        "Never allow a query to execute without a portal_context filter on user-owned tables",
+        "Add a query interceptor or middleware that rejects unscoped queries before execution",
+        "Validate that no query path can bypass the portal_context enforcement",
+        "Solidify: record EvolutionEvent, update Gene store with scope-enforcement pattern"
+      ],
+      "constraints": {
+        "max_files": 10,
+        "forbidden_paths": [
+          ".git",
+          "node_modules",
+          "__pycache__"
+        ]
+      },
+      "validation": [
+        "python3 -c \"from src.api.app import app\"",
+        "python3 -m py_compile src/api/app.py"
+      ]
+    }
+  ]
+}

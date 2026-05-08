@@ -10,7 +10,7 @@ Endpoints:
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -184,6 +184,52 @@ async def get_billing_status(org_id: str):
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
 
 
+@router.post("/check-trials")
+async def check_expiring_trials():
+    """
+    Check for trials expiring within the next 3 days and send reminder emails.
+    Called by a daily cron job or admin trigger.
+    """
+    try:
+        db = get_db()
+        now = datetime.now(timezone.utc)
+
+        for days_out in (3, 1):
+            target = now + timedelta(days=days_out)
+            target_date = target.strftime("%Y-%m-%d")
+
+            result = db.table("subscriptions").select(
+                "*, organizations(name, email, contact_email, owner_name)"
+            ).eq("status", "trialing").gte(
+                "current_period_end", f"{target_date}T00:00:00Z"
+            ).lte(
+                "current_period_end", f"{target_date}T23:59:59Z"
+            ).execute()
+
+            for sub in (result.data or []):
+                org = sub.get("organizations") or {}
+                email = org.get("email") or org.get("contact_email")
+                if not email:
+                    continue
+                try:
+                    from ...email.send import send_trial_expiring
+                    name = (org.get("owner_name") or org.get("name") or "").split()[0] or "there"
+                    await send_trial_expiring(
+                        to=email,
+                        first_name=name,
+                        days_remaining=days_out,
+                        org_id=sub.get("org_id"),
+                    )
+                    logger.info(f"Sent trial expiring email ({days_out}d) to {email}")
+                except Exception as e:
+                    logger.warning(f"Trial expiring email failed for {email}: {e}")
+
+        return {"status": "ok"}
+    except Exception as e:
+        logger.exception("Trial check failed")
+        raise HTTPException(status_code=500, detail="Trial check failed")
+
+
 @router.post("/webhook")
 async def handle_billing_webhook(request: Request):
     """
@@ -208,7 +254,7 @@ async def handle_billing_webhook(request: Request):
             order_id = payment.get("order_id", "")
 
             if order_id:
-                subs = db.table("subscriptions").select("*").execute()
+                subs = db.table("subscriptions").select("*, organizations(name, email, contact_email)").execute()
                 for sub in (subs.data or []):
                     meta = sub.get("metadata") or {}
                     if meta.get("square_order_id") == order_id:
@@ -222,6 +268,24 @@ async def handle_billing_webhook(request: Request):
                         }).eq("id", sub["id"]).execute()
 
                         logger.info(f"Activated subscription for order {order_id}")
+
+                        org = sub.get("organizations") or {}
+                        recipient = org.get("email") or org.get("contact_email")
+                        if recipient:
+                            try:
+                                from ...email.send import send_payment_receipt
+                                amount_cents = payment.get("amount_money", {}).get("amount", sub.get("monthly_price_cents", 0))
+                                await send_payment_receipt(
+                                    to=recipient,
+                                    business_name=org.get("name", "Your Business"),
+                                    plan_name=sub.get("tier", "Standard").title(),
+                                    amount=f"${amount_cents / 100:.2f}",
+                                    period="Monthly",
+                                    invoice_url=payment.get("receipt_url", ""),
+                                    org_id=sub.get("org_id"),
+                                )
+                            except Exception as e:
+                                logger.warning(f"Payment receipt email failed: {e}")
                         break
 
         elif event_type == "invoice.payment_made":
