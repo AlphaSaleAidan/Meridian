@@ -1,124 +1,310 @@
-import { useState, Suspense, lazy } from 'react'
+import { useState, useEffect, Suspense, lazy } from 'react'
 import { clsx } from 'clsx'
 import {
-  Layers, MapPin, Zap,
-  Share2, Download, RefreshCw,
+  Layers, MapPin, Zap, Plus, Video, Trash2,
+  Eye, Clock, Box, MoreVertical,
 } from 'lucide-react'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import { useIsDemo } from '@/hooks/useOrg'
-import { ScanButton, ProductionSpaceSetup } from '@/components/space/ScanControls'
+import { useOrgId } from '@/hooks/useOrg'
+import { spacesService, type Space } from '@/lib/spaces-service'
+import ScanWizard from '@/components/space/ScanWizard'
 
 const SpaceViewer = lazy(() => import('@/components/space/SpaceViewer'))
 
-type ViewMode = '3d' | 'heatmap' | 'zones'
-
-interface ZoneStat {
-  id: string
-  name: string
-  traffic: number
-  dwellMinutes: number
-  conversionPct: number
-  revenuePerSqFt: number
-  trend: 'up' | 'down' | 'flat'
-}
-
-const demoZones: ZoneStat[] = [
-  { id: 'counter', name: 'POS Counter', traffic: 342, dwellMinutes: 2.1, conversionPct: 94, revenuePerSqFt: 187, trend: 'up' },
-  { id: 'display', name: 'Feature Display', traffic: 278, dwellMinutes: 3.8, conversionPct: 42, revenuePerSqFt: 124, trend: 'up' },
-  { id: 'entrance', name: 'Entrance Zone', traffic: 512, dwellMinutes: 0.4, conversionPct: 68, revenuePerSqFt: 45, trend: 'flat' },
-  { id: 'shelf-a', name: 'High-Value Shelf', traffic: 156, dwellMinutes: 4.2, conversionPct: 38, revenuePerSqFt: 203, trend: 'down' },
-]
-
 export default function SpaceTab() {
-  const isDemo = useIsDemo()
-  const [viewMode, setViewMode] = useState<ViewMode>('3d')
-  const [showHotZones, setShowHotZones] = useState(true)
-  const [lastScan] = useState('2 hours ago')
+  const orgId = useOrgId()
+  const [spaces, setSpaces] = useState<Space[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showWizard, setShowWizard] = useState(false)
+  const [selectedSpace, setSelectedSpace] = useState<Space | null>(null)
+  const [menuOpen, setMenuOpen] = useState<string | null>(null)
 
-  if (!isDemo) return <ProductionSpaceSetup />
+  useEffect(() => {
+    loadSpaces()
+  }, [orgId])
 
-  const zones = demoZones
-  const totalTraffic = zones.reduce((s, z) => s + z.traffic, 0)
-  const avgDwell = (zones.reduce((s, z) => s + z.dwellMinutes, 0) / zones.length).toFixed(1)
-  const avgConversion = Math.round(zones.reduce((s, z) => s + z.conversionPct, 0) / zones.length)
+  async function loadSpaces() {
+    setLoading(false)
+    const data = await spacesService.list(orgId)
+    setSpaces(data)
+  }
+
+  function handleScanComplete(spaceId: string) {
+    setShowWizard(false)
+    loadSpaces()
+    spacesService.getById(spaceId).then(s => {
+      if (s) setSelectedSpace(s)
+    })
+  }
+
+  async function handleDelete(spaceId: string) {
+    setMenuOpen(null)
+    await spacesService.deleteSpace(spaceId)
+    if (selectedSpace?.id === spaceId) setSelectedSpace(null)
+    loadSpaces()
+  }
+
+  const readySpaces = spaces.filter(s => s.status === 'ready')
+  const processingSpaces = spaces.filter(s => s.status === 'processing')
+  const totalFrames = readySpaces.reduce((n, s) => n + (s.frame_count ?? 0), 0)
+
+  if (selectedSpace) {
+    return (
+      <SpaceDetailView
+        space={selectedSpace}
+        onBack={() => setSelectedSpace(null)}
+      />
+    )
+  }
 
   return (
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">3D Space</h1>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">3D Spaces</h1>
             <p className="text-sm text-[#A1A1A8] mt-1">
-              LiDAR store mapping • Last scan: <span className="font-mono text-[#17C5B0]">{lastScan}</span>
+              Video-based store mapping powered by LingBot-Map
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <ScanButton onScan={() => {}} isDemo={isDemo} />
-            <button className="p-2 rounded-lg border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#2A2A30] transition-colors">
-              <Share2 size={14} />
-            </button>
-            <button className="p-2 rounded-lg border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#2A2A30] transition-colors">
-              <Download size={14} />
-            </button>
-          </div>
+          <button
+            onClick={() => setShowWizard(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1A8FD6] text-white text-xs font-medium hover:bg-[#1A8FD6]/90 transition-colors shadow-[0_0_16px_rgba(26,143,214,0.25)]"
+          >
+            <Plus size={14} />
+            New Scan
+          </button>
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StaggerItem>
-          <DashboardTiltCard className="card p-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center">
-                <MapPin size={16} className="text-[#1A8FD6]" />
+      {/* Stats bar */}
+      {spaces.length > 0 && (
+        <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <StaggerItem>
+            <DashboardTiltCard className="card p-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center">
+                  <Box size={16} className="text-[#1A8FD6]" />
+                </div>
+                <div>
+                  <p className="stat-label">Total Spaces</p>
+                  <p className="text-lg font-bold text-[#F5F5F7] font-mono">{spaces.length}</p>
+                </div>
               </div>
-              <div>
-                <p className="stat-label">Zones</p>
-                <p className="text-lg font-bold text-[#F5F5F7] font-mono">{zones.length}</p>
+            </DashboardTiltCard>
+          </StaggerItem>
+          <StaggerItem>
+            <DashboardTiltCard className="card p-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center">
+                  <Zap size={16} className="text-[#17C5B0]" />
+                </div>
+                <div>
+                  <p className="stat-label">Ready</p>
+                  <p className="text-lg font-bold text-[#17C5B0] font-mono">{readySpaces.length}</p>
+                </div>
               </div>
+            </DashboardTiltCard>
+          </StaggerItem>
+          <StaggerItem>
+            <DashboardTiltCard className="card p-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-[#7C5CFF]/10 flex items-center justify-center">
+                  <Clock size={16} className="text-[#7C5CFF]" />
+                </div>
+                <div>
+                  <p className="stat-label">Processing</p>
+                  <p className="text-lg font-bold text-[#F5F5F7] font-mono">{processingSpaces.length}</p>
+                </div>
+              </div>
+            </DashboardTiltCard>
+          </StaggerItem>
+          <StaggerItem>
+            <DashboardTiltCard className="card p-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-400/10 flex items-center justify-center">
+                  <Layers size={16} className="text-amber-400" />
+                </div>
+                <div>
+                  <p className="stat-label">Total Frames</p>
+                  <p className="text-lg font-bold text-amber-400 font-mono">{totalFrames.toLocaleString()}</p>
+                </div>
+              </div>
+            </DashboardTiltCard>
+          </StaggerItem>
+        </StaggerContainer>
+      )}
+
+      {/* Empty state */}
+      {!loading && spaces.length === 0 && (
+        <ScrollReveal variant="fadeUp">
+          <div className="card p-8 border-[#1A8FD6]/10">
+            <div className="flex flex-col items-center text-center max-w-md mx-auto">
+              <div className="w-16 h-16 rounded-2xl bg-[#1A8FD6]/10 flex items-center justify-center mb-4">
+                <Video size={32} className="text-[#1A8FD6]" />
+              </div>
+              <h3 className="text-base font-semibold text-[#F5F5F7]">Map Your Store in 3D</h3>
+              <p className="text-xs text-[#A1A1A8] mt-2 leading-relaxed">
+                Record a walkthrough video with any phone camera. LingBot-Map uses AI to reconstruct
+                a full 3D model of your store — no LiDAR or special hardware required.
+              </p>
+              <div className="flex flex-wrap justify-center gap-4 mt-4 text-[10px] text-[#A1A1A8]/60">
+                <span className="flex items-center gap-1"><Video size={10} /> Any phone camera</span>
+                <span className="flex items-center gap-1"><MapPin size={10} /> Zone analytics</span>
+                <span className="flex items-center gap-1"><Zap size={10} /> Heatmap overlays</span>
+              </div>
+              <button
+                onClick={() => setShowWizard(true)}
+                className="mt-6 flex items-center gap-2 px-6 py-2.5 rounded-lg bg-[#1A8FD6] text-white text-sm font-medium hover:bg-[#1A8FD6]/90 transition-colors shadow-[0_0_16px_rgba(26,143,214,0.25)]"
+              >
+                <Plus size={16} />
+                Create First Scan
+              </button>
             </div>
-          </DashboardTiltCard>
-        </StaggerItem>
-        <StaggerItem>
-          <DashboardTiltCard className="card p-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center">
-                <Zap size={16} className="text-[#17C5B0]" />
+          </div>
+        </ScrollReveal>
+      )}
+
+      {/* Space cards grid */}
+      {spaces.length > 0 && (
+        <StaggerContainer className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {spaces.map(space => (
+            <StaggerItem key={space.id}>
+              <div className="card overflow-hidden group hover:border-[#2A2A30] transition-all">
+                {/* Thumbnail / preview */}
+                <div
+                  className="h-36 bg-[#111113] flex items-center justify-center cursor-pointer relative"
+                  onClick={() => space.status === 'ready' && setSelectedSpace(space)}
+                >
+                  {space.status === 'ready' ? (
+                    <>
+                      <Box size={36} className="text-[#1A8FD6]/20" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A8FD6] text-white text-xs font-medium">
+                          <Eye size={12} />
+                          View 3D
+                        </div>
+                      </div>
+                    </>
+                  ) : space.status === 'processing' ? (
+                    <div className="text-center">
+                      <div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center mx-auto mb-2">
+                        <div className="w-4 h-4 border-2 border-[#1A8FD6] border-t-transparent rounded-full animate-spin" />
+                      </div>
+                      <p className="text-[10px] text-[#A1A1A8]">Processing...</p>
+                    </div>
+                  ) : space.status === 'failed' ? (
+                    <div className="text-center">
+                      <p className="text-xs text-red-400">Failed</p>
+                      <p className="text-[10px] text-[#A1A1A8] mt-0.5">{space.error_message}</p>
+                    </div>
+                  ) : (
+                    <Box size={36} className="text-[#A1A1A8]/10" />
+                  )}
+                </div>
+
+                {/* Info */}
+                <div className="px-4 py-3 border-t border-[#1F1F23]">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#F5F5F7] truncate">{space.name || 'Untitled Scan'}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className={clsx(
+                          'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+                          space.status === 'ready' ? 'bg-[#17C5B0]/10 text-[#17C5B0]' :
+                          space.status === 'processing' ? 'bg-[#1A8FD6]/10 text-[#1A8FD6]' :
+                          space.status === 'failed' ? 'bg-red-400/10 text-red-400' :
+                          'bg-[#A1A1A8]/10 text-[#A1A1A8]'
+                        )}>
+                          {space.status}
+                        </span>
+                        {space.frame_count && (
+                          <span className="text-[10px] text-[#A1A1A8] font-mono">{space.frame_count.toLocaleString()} frames</span>
+                        )}
+                        {space.scan_duration_seconds && (
+                          <span className="text-[10px] text-[#A1A1A8] font-mono">{Math.round(space.scan_duration_seconds / 60)}m scan</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <button
+                        onClick={() => setMenuOpen(menuOpen === space.id ? null : space.id)}
+                        className="p-1 rounded text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
+                      >
+                        <MoreVertical size={14} />
+                      </button>
+                      {menuOpen === space.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(null)} />
+                          <div className="absolute right-0 top-full mt-1 z-20 w-32 bg-[#111113] border border-[#1F1F23] rounded-lg shadow-xl overflow-hidden">
+                            {space.status === 'ready' && (
+                              <button
+                                onClick={() => { setMenuOpen(null); setSelectedSpace(space) }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
+                              >
+                                <Eye size={12} /> View
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDelete(space.id)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-400/5 transition-colors"
+                            >
+                              <Trash2 size={12} /> Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-[#A1A1A8]/40 mt-2 font-mono">
+                    {new Date(space.created_at).toLocaleDateString()}
+                    {space.model_used && ` • ${space.model_used}`}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="stat-label">Total Traffic</p>
-                <p className="text-lg font-bold text-[#17C5B0] font-mono">{totalTraffic}</p>
-              </div>
+            </StaggerItem>
+          ))}
+        </StaggerContainer>
+      )}
+
+      {showWizard && (
+        <ScanWizard
+          orgId={orgId}
+          onComplete={handleScanComplete}
+          onCancel={() => setShowWizard(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function SpaceDetailView({ space, onBack }: { space: Space; onBack: () => void }) {
+  const [viewMode, setViewMode] = useState<'3d' | 'heatmap' | 'zones'>('3d')
+  const [showHotZones, setShowHotZones] = useState(true)
+
+  return (
+    <div className="space-y-6">
+      <ScrollReveal variant="fadeUp">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="p-2 rounded-lg border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#2A2A30] transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-[#F5F5F7]">{space.name || 'Untitled Scan'}</h1>
+              <p className="text-sm text-[#A1A1A8] mt-0.5">
+                {space.frame_count?.toLocaleString()} frames
+                {space.scan_duration_seconds && ` • ${Math.round(space.scan_duration_seconds / 60)}m scan`}
+                {space.model_used && ` • ${space.model_used}`}
+              </p>
             </div>
-          </DashboardTiltCard>
-        </StaggerItem>
-        <StaggerItem>
-          <DashboardTiltCard className="card p-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#7C5CFF]/10 flex items-center justify-center">
-                <RefreshCw size={16} className="text-[#7C5CFF]" />
-              </div>
-              <div>
-                <p className="stat-label">Avg Dwell</p>
-                <p className="text-lg font-bold text-[#F5F5F7] font-mono">{avgDwell}m</p>
-              </div>
-            </div>
-          </DashboardTiltCard>
-        </StaggerItem>
-        <StaggerItem>
-          <DashboardTiltCard className="card p-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-400/10 flex items-center justify-center">
-                <Layers size={16} className="text-amber-400" />
-              </div>
-              <div>
-                <p className="stat-label">Conversion</p>
-                <p className="text-lg font-bold text-amber-400 font-mono">{avgConversion}%</p>
-              </div>
-            </div>
-          </DashboardTiltCard>
-        </StaggerItem>
-      </StaggerContainer>
+          </div>
+        </div>
+      </ScrollReveal>
 
       <ScrollReveal variant="fadeUp" delay={0.05}>
         <div className="flex items-center gap-3">
@@ -150,29 +336,17 @@ export default function SpaceTab() {
       </ScrollReveal>
 
       <ScrollReveal variant="fadeUp" delay={0.1}>
-        {viewMode === '3d' ? (
-          <div className="relative rounded-xl overflow-hidden bg-[#0A0A0B] border border-[#1F1F23] isolate h-[400px] sm:h-[500px]">
-            <iframe
-              src="https://poly.cam/capture/D3C8EE9B-7EF3-44F2-A656-7E869018204F"
-              className="w-full h-full border-0"
-              allow="xr-spatial-tracking"
-              allowFullScreen
-              title="LiDAR store scan"
-            />
-            <div className="absolute top-3 left-3 px-3 py-1.5 rounded-lg bg-[#0A0A0B]/80 border border-[#1F1F23]">
-              <p className="text-[10px] font-mono text-[#17C5B0]">LiDAR Scan — Live</p>
-              <p className="text-[9px] text-[#A1A1A8]/40">Polycam capture • iPhone 15 Pro</p>
-            </div>
+        <Suspense fallback={
+          <div className="h-[400px] sm:h-[500px] rounded-xl bg-[#0A0A0B] border border-[#1F1F23] flex items-center justify-center">
+            <p className="text-sm text-[#A1A1A8]/50">Loading 3D viewer...</p>
           </div>
-        ) : (
-          <Suspense fallback={
-            <div className="h-[400px] sm:h-[500px] rounded-xl bg-[#0A0A0B] border border-[#1F1F23] flex items-center justify-center">
-              <p className="text-sm text-[#A1A1A8]/50">Loading 3D viewer...</p>
-            </div>
-          }>
-            <SpaceViewer showHotZones={showHotZones} showSweep={false} className="h-[400px] sm:h-[500px]" />
-          </Suspense>
-        )}
+        }>
+          <SpaceViewer
+            showHotZones={showHotZones}
+            showSweep={viewMode === 'heatmap'}
+            className="h-[400px] sm:h-[500px]"
+          />
+        </Suspense>
       </ScrollReveal>
 
       <ScrollReveal variant="fadeUp" delay={0.15}>
@@ -195,36 +369,16 @@ export default function SpaceTab() {
                   <th className="text-right">Dwell Time</th>
                   <th className="text-right">Conversion</th>
                   <th className="text-right">Rev/sq ft</th>
-                  <th className="text-center">Trend</th>
                 </tr>
               </thead>
               <tbody>
-                {zones.map(z => (
-                  <tr key={z.id}>
-                    <td className="font-medium text-[#F5F5F7]">{z.name}</td>
-                    <td className="text-right font-mono text-[#F5F5F7]">{z.traffic}</td>
-                    <td className="text-right font-mono text-[#A1A1A8]">{z.dwellMinutes}m</td>
-                    <td className="text-right">
-                      <span className={clsx(
-                        'font-mono font-medium',
-                        z.conversionPct >= 70 ? 'text-[#17C5B0]' : z.conversionPct >= 40 ? 'text-[#F5F5F7]' : 'text-amber-400',
-                      )}>
-                        {z.conversionPct}%
-                      </span>
-                    </td>
-                    <td className="text-right font-mono text-[#F5F5F7]">${z.revenuePerSqFt}</td>
-                    <td className="text-center">
-                      <span className={clsx(
-                        'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
-                        z.trend === 'up' ? 'bg-[#17C5B0]/10 text-[#17C5B0]' :
-                        z.trend === 'down' ? 'bg-red-400/10 text-red-400' :
-                        'bg-[#A1A1A8]/10 text-[#A1A1A8]',
-                      )}>
-                        {z.trend === 'up' ? '↑' : z.trend === 'down' ? '↓' : '→'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {space.zones_configured ? (
+                  <tr><td colSpan={5} className="text-center text-[#A1A1A8] text-xs py-6">Zone data loading...</td></tr>
+                ) : (
+                  <tr><td colSpan={5} className="text-center text-[#A1A1A8] text-xs py-6">
+                    No zones configured yet. Use the zone editor in the 3D viewer to define store zones.
+                  </td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -240,11 +394,8 @@ export default function SpaceTab() {
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Spatial Optimization</h3>
               <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-                Your <span className="text-[#F5F5F7] font-medium">Feature Display</span> has high dwell time (3.8m) but only 42% conversion.
-                Consider adding price tags or promotional signage. Moving high-margin items from <span className="text-[#F5F5F7] font-medium">High-Value Shelf</span> (decreasing traffic)
-                to the Feature Display could increase revenue by an estimated
-                <span className="text-[#17C5B0] font-medium"> $340/month</span>.
-                <span className="text-[#A1A1A8]/50"> (Confidence: 76%)</span>
+                Once zones are configured, Meridian will analyze traffic patterns and recommend layout
+                optimizations to maximize revenue per square foot.
               </p>
             </div>
           </div>

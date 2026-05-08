@@ -1,0 +1,14 @@
+{
+  "name": "meridian-phone-agent-fonoster",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fonoster voice application for Meridian AI Phone Agent",
+  "main": "fonoster_app.js",
+  "scripts": {
+    "start": "node fonoster_app.js"
+  },
+  "dependencies": {
+    "@fonoster/voice": "^0.9.0",
+    "node-fetch": "^2.7.0"
+  }
+}

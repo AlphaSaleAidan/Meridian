@@ -5,7 +5,7 @@ import {
   LayoutDashboard, TrendingUp, Package, Layers, Lightbulb,
   LineChart, Bell, Settings, Menu, X, Bot, Target, Users,
   UserCheck, Clock, DollarSign, ChefHat, AlertTriangle, Box,
-  LogOut, MapPin,
+  LogOut, MapPin, Phone,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 
@@ -24,6 +24,7 @@ const navItems = [
   { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },
   { path: 'inventory', icon: Layers, label: 'Inventory' },
   { path: 'space', icon: Box, label: '3D Space' },
+  { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
   { path: 'insights', icon: Lightbulb, label: 'Insights' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },

@@ -29,6 +29,7 @@ import MarginsPage from '@/pages/MarginsPage'
 import MenuEngineeringPage from '@/pages/MenuEngineeringPage'
 import AnomaliesPage from '@/pages/AnomaliesPage'
 import SpaceTab from '@/pages/SpaceTab'
+import PhoneOrdersPage from '@/pages/PhoneOrdersPage'
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazy(() => import('@/components/CanadaLayout'))
@@ -88,6 +89,7 @@ function CustomerDashboardRoutes() {
       <Route path="menu-matrix" element={<MenuEngineeringPage />} />
       <Route path="anomalies" element={<AnomaliesPage />} />
       <Route path="space" element={<SpaceTab />} />
+      <Route path="phone-orders" element={<PhoneOrdersPage />} />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>

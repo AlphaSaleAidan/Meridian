@@ -1,0 +1,85 @@
+version: "3.8"
+
+services:
+  # Fonoster — open source Twilio replacement (SIP + FreeSWITCH)
+  fonoster:
+    image: fonoster/fonoster:latest
+    ports:
+      - "5060:5060/udp"        # SIP
+      - "5060:5060/tcp"        # SIP
+      - "10000-20000:10000-20000/udp"  # RTP media
+      - "50051:50051"          # gRPC API
+      - "3000:3000"            # HTTP API / Console
+    environment:
+      - LOGS_LEVEL=info
+      - SIP_DOMAIN=${SIP_DOMAIN:-sip.localhost}
+      - EXTERN_ADDR=${SERVER_PUBLIC_IP:-127.0.0.1}
+    volumes:
+      - fonoster_data:/var/lib/fonoster
+    restart: unless-stopped
+
+  # Fonoster voice app (Node.js — receives calls, streams to Pipecat)
+  voice-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.voice
+    environment:
+      - PIPECAT_WS_URL=ws://phone-agent:8090/ws
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    depends_on:
+      - fonoster
+      - phone-agent
+    restart: unless-stopped
+
+  # Ollama — self-hosted LLM (Llama 3.3)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # Meridian Phone Agent (Python — Pipecat + WhisperLiveKit + Kokoro)
+  phone-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.3:70b}
+      - WHISPER_MODEL=${WHISPER_MODEL:-medium}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-auto}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+      - KOKORO_VOICE=${KOKORO_VOICE:-af_bella}
+      - KOKORO_SPEED=${KOKORO_SPEED:-1.1}
+      - PHONE_AGENT_PORT=8090
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      - ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  fonoster_data:
+  ollama_data:
