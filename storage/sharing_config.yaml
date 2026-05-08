@@ -1,0 +1,12 @@
+version: 1
+shares:
+  - name: meridian_benchmarks
+    schemas:
+      - name: analytics
+        tables:
+          - name: industry_benchmarks
+            location: s3://meridian-data-raw/benchmarks
+            id: meridian-benchmarks-v1
+          - name: foot_traffic_patterns
+            location: s3://meridian-data-raw/foot_traffic
+            id: meridian-foot-traffic-v1

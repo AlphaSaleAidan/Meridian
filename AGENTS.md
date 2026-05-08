@@ -110,7 +110,11 @@ appropriate Gene-based repairs.
 
 | Time | Service | Purpose |
 |------|---------|---------|
+| 1:30 AM | Storage Pipeline | Supabase → Parquet → validate → B2 archive |
 | 2:00 AM | Nightly Pipeline | Data sync, aggregation, insights |
 | 3:00 AM | Ruflo | Agent swarm full analysis run |
 | 3:30 AM | Evolver (repair-only) | Read Ruflo error logs, generate repairs |
 | 4:00 AM | Weekly report | Sunday only: generate + email reports |
+| 4:00 AM | Evolver (harden) | Sunday only: stability improvements |
+| 5:00 AM | Trial check | Email expiring trial reminders |
+| 1st of month | Benchmark publish | Anonymized benchmarks → R2 marketplace |

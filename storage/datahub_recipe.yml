@@ -1,0 +1,20 @@
+# DataHub ingestion recipe for Meridian datasets
+# Usage: datahub ingest -c storage/datahub_recipe.yml
+source:
+  type: s3
+  config:
+    aws_access_key_id: "${B2_KEY_ID}"
+    aws_secret_access_key: "${B2_APP_KEY}"
+    aws_endpoint_url: "${B2_ENDPOINT}"
+    s3_bucket: meridian-data-raw
+    path_spec:
+      include:
+        - "s3://meridian-data-raw/benchmarks/**/*.parquet"
+        - "s3://meridian-data-raw/foot_traffic/**/*.parquet"
+      file_types:
+        - parquet
+
+sink:
+  type: datahub-rest
+  config:
+    server: "http://localhost:8080"

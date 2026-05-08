@@ -39,6 +39,11 @@ try:
     _has_billing = True
 except ImportError:
     _has_billing = False
+try:
+    from marketplace.webhook import router as marketplace_router
+    _has_marketplace = True
+except ImportError:
+    _has_marketplace = False
 
 # Configure logging
 logging.basicConfig(
@@ -135,6 +140,8 @@ app.include_router(email_api_router)
 app.include_router(email_webhook_router)
 if _has_billing:
     app.include_router(billing_router)
+if _has_marketplace:
+    app.include_router(marketplace_router)
 
 
 @app.get("/health")

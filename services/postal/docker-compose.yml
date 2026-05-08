@@ -18,6 +18,7 @@ services:
       - "5000:8080"
     volumes:
       - ./postal.yml:/config/postal.yml:ro
+      - ./signing.key:/config/signing.key:ro
     depends_on:
       postal-db:
         condition: service_healthy
@@ -42,6 +43,7 @@ services:
       - "25:25"
     volumes:
       - ./postal.yml:/config/postal.yml:ro
+      - ./signing.key:/config/signing.key:ro
     depends_on:
       postal-db:
         condition: service_healthy
@@ -55,6 +57,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./postal.yml:/config/postal.yml:ro
+      - ./signing.key:/config/signing.key:ro
     depends_on:
       postal-db:
         condition: service_healthy
