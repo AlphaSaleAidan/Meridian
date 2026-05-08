@@ -38,6 +38,7 @@ const CareersPage = lazy(() => import('@/pages/CareersPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
 const ITDashboardPage = lazy(() => import('@/pages/ITDashboardPage'))
 const POSCoveragePage = lazy(() => import('@/pages/admin/POSCoveragePage'))
+const EmailDashboardPage = lazy(() => import('@/pages/admin/EmailDashboardPage'))
 
 
 const CanadaLandingPage = lazy(() => import('@/pages/canada/CanadaLandingPage'))
@@ -168,6 +169,21 @@ export default function App() {
                 <Route index element={
                   <Suspense fallback={<LazyFallback />}>
                     <POSCoveragePage />
+                  </Suspense>
+                } />
+              </Route>
+
+              {/* Email Dashboard — admin only */}
+              <Route path="/admin/email" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <Layout />
+                  </Suspense>
+                </ProtectedRoute>
+              }>
+                <Route index element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <EmailDashboardPage />
                   </Suspense>
                 } />
               </Route>

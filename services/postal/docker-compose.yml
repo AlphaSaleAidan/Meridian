@@ -1,0 +1,70 @@
+# Postal — Self-hosted email delivery platform
+# Docs: https://docs.postalserver.io/install/docker
+#
+# Usage:
+#   cd services/postal
+#   docker compose up -d
+#
+# After first start:
+#   docker compose exec postal postal initialize
+#   docker compose exec postal postal make-user
+#
+# Then create an organization + mail server in the Postal web UI
+# and copy the API key into POSTAL_API_KEY in your .env
+
+services:
+  postal:
+    image: ghcr.io/postalserver/postal:3
+    container_name: meridian-postal
+    restart: unless-stopped
+    ports:
+      - "5000:5000"   # Web UI
+      - "25:25"        # SMTP
+    volumes:
+      - postal-config:/config
+      - postal-storage:/opt/postal/storage
+    depends_on:
+      postal-db:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
+    environment:
+      POSTAL_CONFIG_ROOT: /config
+
+  postal-db:
+    image: mariadb:11
+    container_name: meridian-postal-db
+    restart: unless-stopped
+    volumes:
+      - postal-db-data:/var/lib/mysql
+    environment:
+      MARIADB_ROOT_PASSWORD: ${POSTAL_DB_ROOT_PASSWORD:-postal_root_pw}
+      MARIADB_DATABASE: postal
+      MARIADB_USER: postal
+      MARIADB_PASSWORD: ${POSTAL_DB_PASSWORD:-postal_db_pw}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postal-rabbitmq:
+    image: rabbitmq:3-management
+    container_name: meridian-postal-rabbitmq
+    restart: unless-stopped
+    volumes:
+      - postal-rabbitmq-data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: postal
+      RABBITMQ_DEFAULT_PASS: ${POSTAL_RABBITMQ_PASSWORD:-postal_rmq_pw}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postal-config:
+  postal-storage:
+  postal-db-data:
+  postal-rabbitmq-data:

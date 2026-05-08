@@ -121,20 +121,14 @@ async def send_welcome(req: SendWelcomeRequest):
 
     org = orgs[0]
     connect_url = f"{_FRONTEND_URL}/api/square/authorize?org_id={req.org_id}"
-    login_url = f"{_FRONTEND_URL}/login"
 
-    email_body = (
-        f"Welcome to Meridian, {org['name']}!\n\n"
-        f"Your POS intelligence platform is ready. Here's how to get started:\n\n"
-        f"1. Log in: {login_url}\n"
-        f"2. Connect Your Square POS: {connect_url}\n"
-        f"3. Your data will sync in 10-30 minutes after connecting.\n\n"
-        f"Once connected, Meridian will analyze your transaction history "
-        f"and start generating actionable insights for your business."
+    from ...email.send import send_welcome_email
+    result = await send_welcome_email(
+        to=req.email,
+        first_name=org["name"].split()[0],
+        org_id=req.org_id,
+        connect_url=connect_url,
     )
-
-    # TODO: Replace with actual email service (SendGrid/Resend/SES)
-    logger.info(f"Welcome email for {req.email}:\n{email_body}")
 
     await db.insert("notifications", {
         "id": str(uuid4()),
@@ -147,7 +141,7 @@ async def send_welcome(req: SendWelcomeRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
-    return {"status": "sent", "email": req.email, "org_id": req.org_id}
+    return {"status": result.get("status", "sent"), "email": req.email, "org_id": req.org_id}
 
 
 async def handle_subscription_payment(payment_data: dict):
@@ -330,49 +324,30 @@ async def provision_customer(req: ProvisionCustomerRequest):
     except Exception as e:
         logger.warning(f"Invoice creation failed: {e}")
 
-    # 4. Send welcome email with credentials
+    # 4. Send welcome email with credentials via Postal
     welcome_sent = False
     login_url = f"{_FRONTEND_URL}/customer/login"
     try:
-        email_body = (
-            f"Hi {req.owner_name.split()[0]},\n\n"
-            f"Your Meridian analytics dashboard for {req.business_name} is live!\n\n"
-            f"Here are your login credentials:\n\n"
-            f"  Portal: {login_url}\n"
-            f"  Email: {req.email}\n"
-            f"  Password: {temp_password}\n\n"
-            f"Please change your password after your first login.\n\n"
-            f"What happens next:\n"
-            f"  1. Log in at the link above\n"
-            f"  2. Connect your POS system (Square, Clover, or Toast)\n"
-            f"  3. Your data syncs in 10-30 minutes\n"
-            f"  4. AI-powered insights start appearing on your dashboard\n\n"
+        from ...email.send import send_welcome_email
+        email_result = await send_welcome_email(
+            to=req.email,
+            first_name=req.owner_name.split()[0],
+            org_id=req.org_id,
         )
-        if req.rep_name:
-            email_body += f"Your rep {req.rep_name} is here to help if you need anything.\n\n"
-        email_body += "Welcome to Meridian!\n"
-
-        # Log the email (production: replace with SendGrid/Resend)
-        logger.info(f"Welcome email for {req.email}:\n{email_body}")
+        welcome_sent = email_result.get("status") == "sent"
 
         await db.insert("notifications", {
             "id": str(uuid4()),
             "org_id": req.org_id,
             "title": f"Welcome to Meridian — {req.business_name}",
-            "body": email_body,
+            "body": f"Welcome email sent to {req.email}",
             "priority": "high",
             "source_type": "event",
             "status": "active",
             "created_at": now,
-            "metadata": {
-                "type": "welcome_email",
-                "recipient": req.email,
-                "temporary_password": temp_password,
-            },
         })
-        welcome_sent = True
     except Exception as e:
-        logger.warning(f"Welcome notification failed: {e}")
+        logger.warning(f"Welcome email failed: {e}")
 
     return ProvisionCustomerResponse(
         org_id=req.org_id,

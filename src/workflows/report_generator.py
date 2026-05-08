@@ -46,9 +46,36 @@ async def generate_merchant_report(org_id: str) -> dict:
 
 @task(retries=2, retry_delay_seconds=30, log_prints=True)
 async def send_report_email(org_id: str, report: dict) -> dict:
-    """Send weekly report email to merchant. Placeholder for email integration."""
-    logger.info(f"Email report for {org_id} — {len(report.get('sections', []))} sections")
-    return {"org_id": org_id, "status": "sent"}
+    """Send weekly report email to merchant via Postal."""
+    from ..db import init_db
+    db = await init_db()
+    if not db:
+        return {"org_id": org_id, "status": "error", "error": "DB unavailable"}
+
+    orgs = await db.select("organizations", filters={"id": f"eq.{org_id}"}, limit=1)
+    if not orgs:
+        return {"org_id": org_id, "status": "error", "error": "Org not found"}
+
+    org = orgs[0]
+    email = org.get("email") or org.get("contact_email")
+    if not email:
+        logger.warning(f"No email for org {org_id} — skipping report email")
+        return {"org_id": org_id, "status": "skipped", "reason": "no_email"}
+
+    from ..email.send import send_weekly_report
+    result = await send_weekly_report(
+        to=email,
+        business_name=org.get("name", "Your Business"),
+        week_label=report.get("week_label", "This Week"),
+        revenue=report.get("revenue", "$0"),
+        revenue_change=report.get("revenue_change", "+0%"),
+        orders=str(report.get("orders", 0)),
+        avg_ticket=report.get("avg_ticket", "$0"),
+        top_insights=[i.get("title", i) if isinstance(i, dict) else str(i) for i in report.get("insights", [])[:5]],
+        org_id=org_id,
+    )
+    logger.info(f"Report email for {org_id}: {result.get('status')}")
+    return {"org_id": org_id, "status": result.get("status", "sent")}
 
 
 @flow(
