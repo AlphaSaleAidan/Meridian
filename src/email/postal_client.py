@@ -20,6 +20,7 @@ class PostalConfig:
     api_key: str = os.getenv("POSTAL_API_KEY", "")
     default_from: str = os.getenv("POSTAL_FROM", "Meridian <hello@meridian.tips>")
     webhook_secret: str = os.getenv("POSTAL_WEBHOOK_SECRET", "")
+    server_hostname: str = os.getenv("POSTAL_SERVER_HOSTNAME", "postal.meridian.tips")
 
 
 _config = PostalConfig()
@@ -69,6 +70,7 @@ class PostalClient:
                     headers={
                         "X-Server-API-Key": self._cfg.api_key,
                         "Content-Type": "application/json",
+                        "Host": self._cfg.server_hostname,
                     },
                 )
                 data = resp.json()
@@ -116,6 +118,7 @@ class PostalClient:
                     headers={
                         "X-Server-API-Key": self._cfg.api_key,
                         "Content-Type": "application/json",
+                        "Host": self._cfg.server_hostname,
                     },
                 )
                 return resp.json()

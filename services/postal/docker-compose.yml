@@ -1,35 +1,65 @@
 # Postal — Self-hosted email delivery platform
 # Docs: https://docs.postalserver.io/install/docker
 #
-# Usage:
+# First-time setup:
 #   cd services/postal
+#   docker compose up -d postal-db postal-rabbitmq
+#   docker compose run --rm postal postal initialize
+#   docker compose run --rm postal postal make-user
 #   docker compose up -d
-#
-# After first start:
-#   docker compose exec postal postal initialize
-#   docker compose exec postal postal make-user
-#
-# Then create an organization + mail server in the Postal web UI
-# and copy the API key into POSTAL_API_KEY in your .env
 
 services:
   postal:
-    image: ghcr.io/postalserver/postal:3
-    container_name: meridian-postal
+    image: ghcr.io/postalserver/postal:latest
+    container_name: meridian-postal-web
+    command: postal web-server
     restart: unless-stopped
     ports:
-      - "5000:5000"   # Web UI
-      - "25:25"        # SMTP
+      - "5000:8080"
     volumes:
-      - postal-config:/config
-      - postal-storage:/opt/postal/storage
+      - ./postal.yml:/config/postal.yml:ro
     depends_on:
       postal-db:
         condition: service_healthy
       postal-rabbitmq:
         condition: service_healthy
-    environment:
-      POSTAL_CONFIG_ROOT: /config
+
+  postal-proxy:
+    image: alpine/socat:latest
+    container_name: meridian-postal-proxy
+    command: TCP-LISTEN:8080,fork,reuseaddr TCP:127.0.0.1:5000
+    restart: unless-stopped
+    network_mode: "service:postal"
+    depends_on:
+      - postal
+
+  postal-smtp:
+    image: ghcr.io/postalserver/postal:latest
+    container_name: meridian-postal-smtp
+    command: postal smtp-server
+    restart: unless-stopped
+    ports:
+      - "25:25"
+    volumes:
+      - ./postal.yml:/config/postal.yml:ro
+    depends_on:
+      postal-db:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
+
+  postal-worker:
+    image: ghcr.io/postalserver/postal:latest
+    container_name: meridian-postal-worker
+    command: postal worker
+    restart: unless-stopped
+    volumes:
+      - ./postal.yml:/config/postal.yml:ro
+    depends_on:
+      postal-db:
+        condition: service_healthy
+      postal-rabbitmq:
+        condition: service_healthy
 
   postal-db:
     image: mariadb:11
@@ -64,7 +94,5 @@ services:
       retries: 5
 
 volumes:
-  postal-config:
-  postal-storage:
   postal-db-data:
   postal-rabbitmq-data:

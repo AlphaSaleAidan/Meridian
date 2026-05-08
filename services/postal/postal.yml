@@ -1,0 +1,44 @@
+web:
+  host: postal.meridian.tips
+  port: 5000
+
+main_db:
+  host: postal-db
+  port: 3306
+  username: postal
+  password: postal_db_pw
+  database: postal
+
+message_db:
+  host: postal-db
+  port: 3306
+  username: postal
+  password: postal_db_pw
+  prefix: postal
+
+rabbitmq:
+  host: postal-rabbitmq
+  port: 5672
+  username: postal
+  password: postal_rmq_pw
+  vhost: /
+
+smtp_server:
+  port: 25
+  tls_enabled: false
+
+dns:
+  mx_records:
+    - mx.meridian.tips
+  smtp_server_hostname: postal.meridian.tips
+  spf_include: spf.meridian.tips
+  return_path_domain: rp.meridian.tips
+  route_domain: routes.meridian.tips
+  track_domain: track.meridian.tips
+  dkim_identifier: postal
+  domain_verify_prefix: postal-verification
+
+signing_key: 32c8b4508d735596b094eb766a9c9c20c364f789a15ac04ada686a2df2276ff3
+
+rails:
+  secret_key: 32c8b4508d735596b094eb766a9c9c20c364f789a15ac04ada686a2df2276ff3
