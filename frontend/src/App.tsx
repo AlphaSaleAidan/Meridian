@@ -56,6 +56,7 @@ const CanadaPortalTrainingPage = lazy(() => import('@/pages/canada/portal/Canada
 const CanadaPortalSettingsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalSettingsPage'))
 const CanadaPortalCreateCustomerPage = lazy(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
 const CanadaPortalOnboardingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
+const CanadaCustomerOnboardingWizard = lazy(() => import('@/pages/canada/portal/CanadaCustomerOnboardingWizard'))
 
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -231,6 +232,11 @@ export default function App() {
               {/* ══════════════════════════════════════════════
                   CANADA — sales portal (native React CRM)
                   ══════════════════════════════════════════════ */}
+              <Route path="/canada/onboard" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <CanadaCustomerOnboardingWizard />
+                </Suspense>
+              } />
               <Route path="/canada/portal/login" element={<CanadaPortalLoginPage />} />
               <Route path="/canada/portal/signup" element={<CanadaPortalSignupPage />} />
               <Route path="/canada/portal/onboarding" element={

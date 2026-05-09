@@ -442,7 +442,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -496,7 +496,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -604,7 +604,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 45,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -658,7 +658,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 60,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -712,7 +712,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
 
@@ -986,7 +986,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1040,7 +1040,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1094,7 +1094,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 35,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -1148,7 +1148,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1202,7 +1202,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1256,7 +1256,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 45,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1310,7 +1310,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 35,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1364,7 +1364,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 45,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
 
@@ -1422,7 +1422,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1476,7 +1476,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 60,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1530,7 +1530,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 45,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1584,7 +1584,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1638,7 +1638,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 35,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1692,7 +1692,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 60,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
 
@@ -1750,7 +1750,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -1804,7 +1804,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 15,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -1858,7 +1858,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -1912,7 +1912,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 15,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -1966,7 +1966,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
 
@@ -2024,7 +2024,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2078,7 +2078,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2132,7 +2132,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2186,7 +2186,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2240,7 +2240,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 35,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2294,7 +2294,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2348,7 +2348,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2402,7 +2402,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 45,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2456,7 +2456,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2510,7 +2510,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 35,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2564,7 +2564,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 35,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2618,7 +2618,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2672,7 +2672,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
   {
@@ -2726,7 +2726,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'automotive',
   },
 
@@ -2784,7 +2784,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -2838,7 +2838,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -2892,7 +2892,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -2946,7 +2946,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -3000,7 +3000,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -3054,7 +3054,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 15,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -3108,7 +3108,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -3162,7 +3162,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -3216,7 +3216,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
   {
@@ -3270,7 +3270,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'restaurant',
   },
 
@@ -3328,7 +3328,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3382,7 +3382,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3436,7 +3436,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3490,7 +3490,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 45,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -3544,7 +3544,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3598,7 +3598,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3652,7 +3652,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -3706,7 +3706,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3760,7 +3760,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 45,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'multi_vertical',
   },
   {
@@ -3814,7 +3814,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3868,7 +3868,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
   {
@@ -3922,7 +3922,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'retail',
   },
 
@@ -3980,7 +3980,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4034,7 +4034,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4088,7 +4088,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4142,7 +4142,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4196,7 +4196,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'oauth2',
     estimatedSetupMinutes: 20,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4250,7 +4250,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4304,7 +4304,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 40,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4358,7 +4358,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 35,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4412,7 +4412,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'api_key',
     estimatedSetupMinutes: 25,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
   {
@@ -4466,7 +4466,7 @@ export const posSystems: POSSystem[] = [
     },
     authMethod: 'manual_export',
     estimatedSetupMinutes: 30,
-    canadaAvailable: false,
+    canadaAvailable: true,
     category: 'cannabis',
   },
 ]
