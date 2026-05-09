@@ -501,8 +501,6 @@ export default function CanadaPortalCreateCustomerPage() {
   function validateDetails(): boolean {
     if (!form.businessName.trim()) { setError('Business name is required'); return false }
     if (!form.ownerName.trim()) { setError('Owner name is required'); return false }
-    if (!form.email.trim()) { setError('Email is required'); return false }
-    if (!form.phone.trim()) { setError('Phone number is required'); return false }
     return true
   }
 
@@ -636,27 +634,30 @@ export default function CanadaPortalCreateCustomerPage() {
       }
 
       // Provision customer: create Supabase Auth user, send invoices + welcome email
+      // Only call if email is provided — rep can add it later
       const API_URL = import.meta.env.VITE_API_URL || ''
-      try {
-        const provRes = await fetch(`${API_URL}/api/onboarding/provision-customer`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            org_id: businessId,
-            email: form.email,
-            owner_name: form.ownerName,
-            business_name: form.businessName,
-            plan: form.plan,
-            monthly_price: price,
-            rep_id: rep?.rep_id || null,
-            rep_name: rep?.name || null,
-          }),
-        })
-        if (provRes.ok) {
-          const provData = await provRes.json()
-          console.info('Customer provisioned:', provData.email, '— temp password generated, welcome email sent')
+      if (form.email.trim()) {
+        try {
+          const provRes = await fetch(`${API_URL}/api/onboarding/provision-customer`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              org_id: businessId,
+              email: form.email,
+              owner_name: form.ownerName,
+              business_name: form.businessName,
+              plan: form.plan,
+              monthly_price: price,
+              rep_id: rep?.rep_id || null,
+              rep_name: rep?.name || null,
+            }),
+          })
+          if (provRes.ok) {
+            const provData = await provRes.json()
+            console.info('Customer provisioned:', provData.email, '— temp password generated, welcome email sent')
+          }
+        } catch (provisionErr) {
+          console.warn('Provision call failed (non-blocking):', provisionErr)
         }
-      } catch (provisionErr) {
-        console.warn('Provision call failed (non-blocking):', provisionErr)
       }
 
       const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
@@ -813,13 +814,13 @@ export default function CanadaPortalCreateCustomerPage() {
                   className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white placeholder-[#4a5550] focus:border-[#00d4aa]/50 focus:outline-none transition-colors" />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">Email *</label>
+                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">Email</label>
                 <input type="email" value={form.email} onChange={e => update('email', e.target.value)}
                   placeholder="james@luckydragon.com"
                   className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white placeholder-[#4a5550] focus:border-[#00d4aa]/50 focus:outline-none transition-colors" />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">Phone *</label>
+                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">Phone</label>
                 <input type="tel" value={form.phone} onChange={e => update('phone', e.target.value)}
                   placeholder="(555) 234-5678"
                   className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white placeholder-[#4a5550] focus:border-[#00d4aa]/50 focus:outline-none transition-colors" />

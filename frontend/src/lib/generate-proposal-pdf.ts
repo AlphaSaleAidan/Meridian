@@ -11,8 +11,8 @@ import type { SalesRepProfile } from './sales-auth'
 export interface ProposalInput {
   businessName: string
   ownerName: string
-  email: string
-  phone: string
+  email?: string
+  phone?: string
   plan: PlanTier
   customPrice?: number
   setupFee: number
