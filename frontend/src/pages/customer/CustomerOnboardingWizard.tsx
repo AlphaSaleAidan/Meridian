@@ -371,6 +371,24 @@ export default function CustomerOnboardingWizard() {
       const recurringOk = recurringRes.ok
 
       if (upfrontOk && recurringOk) {
+        // Provision customer: create business record, subscription, and send welcome email
+        try {
+          await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              org_id: org?.org_id || prefill.token,
+              email: account.email,
+              owner_name: account.ownerName,
+              business_name: account.businessName,
+              plan: prefill.plan || 'starter',
+              monthly_price: monthlyPrice,
+              rep_id: searchParams.get('rep') || null,
+              rep_name: searchParams.get('rep_name') || null,
+            }),
+          })
+        } catch (provisionErr) {
+          console.warn('Provision call failed (non-blocking):', provisionErr)
+        }
         setPaymentComplete(true)
         return
       }

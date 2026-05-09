@@ -299,7 +299,28 @@ export default function CanadaCustomerOnboardingWizard() {
           }),
         }),
       ])
-      if (upfrontRes.ok && recurringRes.ok) { setPaymentComplete(true); return }
+      if (upfrontRes.ok && recurringRes.ok) {
+        // Provision customer: create business record, subscription, and send welcome email
+        try {
+          await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              org_id: org?.org_id || prefill.token,
+              email: account.email,
+              owner_name: account.ownerName,
+              business_name: account.businessName,
+              plan: prefill.plan || 'starter',
+              monthly_price: monthlyPriceCAD,
+              rep_id: searchParams.get('rep') || null,
+              rep_name: searchParams.get('rep_name') || null,
+            }),
+          })
+        } catch (provisionErr) {
+          console.warn('Provision call failed (non-blocking):', provisionErr)
+        }
+        setPaymentComplete(true)
+        return
+      }
       const failedRes = !upfrontRes.ok ? upfrontRes : recurringRes
       const errorData = await failedRes.json().catch(() => null)
       setCheckoutError(errorData?.detail || 'Unable to create invoices. Please try again or contact support at help@meridian.tips')

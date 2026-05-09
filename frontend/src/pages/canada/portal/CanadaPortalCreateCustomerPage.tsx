@@ -635,7 +635,31 @@ export default function CanadaPortalCreateCustomerPage() {
         localStorage.setItem('meridian_pending_customers_ca', JSON.stringify(existing))
       }
 
-      const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}`
+      // Provision customer: create Supabase Auth user, send invoices + welcome email
+      const API_URL = import.meta.env.VITE_API_URL || ''
+      try {
+        const provRes = await fetch(`${API_URL}/api/onboarding/provision-customer`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            org_id: businessId,
+            email: form.email,
+            owner_name: form.ownerName,
+            business_name: form.businessName,
+            plan: form.plan,
+            monthly_price: price,
+            rep_id: rep?.rep_id || null,
+            rep_name: rep?.name || null,
+          }),
+        })
+        if (provRes.ok) {
+          const provData = await provRes.json()
+          console.info('Customer provisioned:', provData.email, '— temp password generated, welcome email sent')
+        }
+      } catch (provisionErr) {
+        console.warn('Provision call failed (non-blocking):', provisionErr)
+      }
+
+      const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
       setOnboardingLink(link)
     } catch (err: any) {
       setError(err.message || 'Failed to create customer')
