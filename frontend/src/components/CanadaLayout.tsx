@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard, TrendingUp, Package, Layers, Lightbulb,
-  LineChart, Bell, Settings, Menu, X, Bot, Target, Users,
+  LineChart, Bell, Settings, Menu, Bot, Target, Users,
   UserCheck, Clock, DollarSign, ChefHat, AlertTriangle, Box,
-  LogOut, MapPin, Phone,
+  MapPin, Phone,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 

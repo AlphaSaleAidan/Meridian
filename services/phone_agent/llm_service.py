@@ -12,7 +12,6 @@ from typing import Any
 import aiohttp
 from pipecat.services.ai_services import LLMService
 from pipecat.frames.frames import (
-    LLMMessagesFrame,
     TextFrame,
     FunctionCallFrame,
     StartFrame,

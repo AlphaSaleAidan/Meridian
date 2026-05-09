@@ -2,10 +2,10 @@ import { useState, useRef, useEffect } from 'react'
 import { clsx } from 'clsx'
 import {
   Search, ChevronDown, CheckCircle2, Upload, ExternalLink, Bell,
-  AlertTriangle, Loader2, X, Wifi,
+  AlertTriangle, Wifi,
 } from 'lucide-react'
 import POSLogo, { POSStatusBadge } from './POSLogo'
-import { posSystems, posSystemsGrouped, type POSSystem, type POSSystemKey } from '@/data/pos-systems'
+import { posSystems, type POSSystem, type POSSystemKey } from '@/data/pos-systems'
 import { useIsDemo, useOrgId } from '@/hooks/useOrg'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''

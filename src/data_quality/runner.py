@@ -9,7 +9,6 @@ from typing import Any
 
 import pandas as pd
 import great_expectations as gx
-from great_expectations.core import ExpectationSuite
 
 from .expectations import ALL_SUITES
 

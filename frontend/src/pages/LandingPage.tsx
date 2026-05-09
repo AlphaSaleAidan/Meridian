@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, ChevronRight, Shield, Clock } from 'lucide-react'
 
-import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import { TextRevealStagger } from '@/components/landing/TextReveal'
 import ScrollReveal from '@/components/landing/ScrollReveal'

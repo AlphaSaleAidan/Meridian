@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Loader2, Upload, Plus, Trash2,
   Store, User, Wifi, Package, Users, Calendar, Camera, Shield,
-  X, CreditCard, AlertCircle, ExternalLink,
+  X, CreditCard, AlertCircle,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'

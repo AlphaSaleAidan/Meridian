@@ -5,11 +5,11 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
-import { api, InventoryItem } from '@/lib/api'
+import { api } from '@/lib/api'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
-import { formatNumber, formatRelative } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { useOrgId } from '@/hooks/useOrg'
 
 type SortField = 'product_name' | 'current_stock' | 'days_until_reorder' | 'predicted_daily_usage' | 'trend_pct'

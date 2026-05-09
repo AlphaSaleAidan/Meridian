@@ -7,7 +7,7 @@ POST /api/training/trigger      → Force a training cycle
 POST /api/training/signal       → Submit engagement signal from dashboard
 """
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel
 
 logger = logging.getLogger("meridian.api.training")

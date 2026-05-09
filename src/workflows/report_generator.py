@@ -94,7 +94,6 @@ async def weekly_report_flow(send_emails: bool = False):
     3. Optionally email reports
     """
     from .nightly_analysis import fetch_active_merchants
-    import asyncio
 
     merchants = await fetch_active_merchants()
     if not merchants:

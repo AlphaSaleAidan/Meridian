@@ -14,7 +14,6 @@ from pydantic import BaseModel, EmailStr
 
 from .manager import get_user_from_supabase
 from .models import UserDB, UserRole
-from .rbac import require_role
 
 logger = logging.getLogger("meridian.auth.router")
 

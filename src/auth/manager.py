@@ -7,10 +7,9 @@ using Supabase as the backend instead of SQLAlchemy.
 import logging
 import os
 from typing import Optional
-from uuid import UUID
 
 import httpx
-from fastapi import Depends, Request
+from fastapi import Request
 from fastapi_users import BaseUserManager, UUIDIDMixin
 
 from .models import UserDB, UserRole

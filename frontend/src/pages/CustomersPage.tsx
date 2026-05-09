@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
 import {
-  Users, Shield, AlertTriangle, Heart, ArrowUpDown,
+  Users, Shield, AlertTriangle, Heart,
   TrendingUp, TrendingDown, Minus, Search, CalendarDays,
   Camera, Wifi, WifiOff,
 } from 'lucide-react'

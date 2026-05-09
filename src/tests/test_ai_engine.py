@@ -5,8 +5,6 @@ Generates 30 days of realistic POS data (simulating a coffee shop),
 runs the full AI pipeline, and validates all outputs.
 """
 import asyncio
-import json
-import math
 import random
 import sys
 from datetime import datetime, date, timedelta, timezone
@@ -15,7 +13,7 @@ from uuid import uuid4
 # Fix path
 sys.path.insert(0, "/work/meridian/src")
 
-from ai.engine import MeridianAI, AnalysisContext, AnalysisResult
+from ai.engine import MeridianAI, AnalysisContext
 
 
 # ─── Realistic Test Data Generator ───────────────────────────

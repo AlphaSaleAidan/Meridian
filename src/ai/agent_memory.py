@@ -7,7 +7,6 @@ Falls back to a simple dict cache when mem0 is not installed.
 """
 import logging
 import os
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.agent_memory")
 

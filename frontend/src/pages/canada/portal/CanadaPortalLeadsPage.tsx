@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import {
   Plus, Search, X, ChevronRight, Store, Wifi,
 } from 'lucide-react'
-import { STAGE_CONFIG, type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { CAD_RATE } from '@/lib/canada-proposal-plans'
 

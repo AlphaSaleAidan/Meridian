@@ -22,7 +22,7 @@ sys.path.insert(0, "/work/meridian")
 
 from src.square.client import SquareClient, SquareAPIError
 from src.square.mappers import DataMapper
-from src.square.sync_engine import SyncEngine, SyncResult
+from src.square.sync_engine import SyncEngine
 from src.db.client import InMemoryDB
 from src.config import square as sq_config
 

@@ -5,8 +5,6 @@ All tasks are async-safe via asyncio.run() bridge.
 Rate-limited tasks for Square/Clover API calls.
 """
 import asyncio
-import logging
-from functools import wraps
 
 from celery import shared_task
 from celery.utils.log import get_task_logger
@@ -35,16 +33,13 @@ def sync_pos_data(self, org_id: str, pos_type: str = "square"):
     logger.info(f"Syncing {pos_type} data for {org_id}")
 
     async def _sync():
-        if pos_type == "square":
-            from ..square.sync_engine import SquareSyncEngine
-            engine = SquareSyncEngine()
-        elif pos_type == "clover":
-            from ..clover.sync_engine import CloverSyncEngine
-            engine = CloverSyncEngine()
-        else:
+        from ..integrations.registry import get_sync_engine
+        try:
+            engine = get_sync_engine(pos_type)
+        except ValueError:
             return {"status": "skipped", "reason": f"Unknown POS: {pos_type}"}
 
-        return await engine.incremental_sync(org_id)
+        return await engine.run_incremental_sync(org_id)
 
     try:
         result = run_async(_sync())
@@ -182,6 +177,72 @@ def generate_weekly_reports():
 
             for org in orgs:
                 generate_report.apply_async(args=[org["id"]])
+
+            return {"status": "dispatched", "merchant_count": len(orgs)}
+        finally:
+            await close_db()
+
+    return run_async(_batch())
+
+
+@shared_task(
+    bind=True,
+    name="src.workers.tasks.train_swarm",
+    max_retries=2,
+    default_retry_delay=60,
+)
+def train_swarm(self, org_id: str = ""):
+    """Run a swarm training cycle on the latest agent outputs."""
+    logger.info(f"Training swarm{f' for {org_id}' if org_id else ''}")
+
+    async def _train():
+        from ..db import init_db, close_db
+        from ..ai.swarm_trainer import get_swarm_trainer
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            trainer = get_swarm_trainer(db=db)
+            outputs = await trainer._fetch_latest_outputs()
+            if not outputs:
+                return {"status": "skipped", "reason": "No new outputs to train on"}
+            result = await trainer.run_training_cycle(outputs, ctx_org_id=org_id)
+            return {"status": "trained", **result}
+        finally:
+            await close_db()
+
+    try:
+        result = run_async(_train())
+        logger.info(f"Swarm training complete: {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"Swarm training failed: {exc}")
+        raise self.retry(exc=exc)
+
+
+@shared_task(name="src.workers.tasks.train_swarm_batch")
+def train_swarm_batch():
+    """Train swarm on all active merchants' latest outputs."""
+    logger.info("Starting batch swarm training")
+
+    async def _batch():
+        from ..db import init_db, close_db
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            orgs = await db.query(
+                "organizations",
+                select="id",
+                filters={"status": "eq.active"},
+            )
+
+            for org in orgs:
+                train_swarm.apply_async(args=[org["id"]])
 
             return {"status": "dispatched", "merchant_count": len(orgs)}
         finally:

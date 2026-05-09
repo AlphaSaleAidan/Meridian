@@ -15,7 +15,6 @@ Usage in routes:
     async def location_data(user = Depends(require_role(UserRole.MANAGER))):
         ...
 """
-from functools import wraps
 from typing import Callable
 
 from fastapi import Depends, HTTPException

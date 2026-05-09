@@ -15,42 +15,19 @@ asyncpg>=0.30.0
 cryptography>=42.0.0
 bcrypt>=4.0.0
 
-# AI
-openai>=1.40.0
-
 # Data
 numpy>=1.26
 pandas>=2.2
-polars>=0.20
 scipy>=1.14
 pyyaml>=6.0
 
-# AI / LLM
-anthropic>=0.39.0
-
-# Billing
-stripe>=7.0.0
-
-# Monitoring
-sentry-sdk[fastapi]>=2.0.0
-opentelemetry-api>=1.25.0
-opentelemetry-sdk>=1.25.0
-opentelemetry-exporter-otlp-proto-grpc>=1.25.0
-opentelemetry-instrumentation-fastapi>=0.46b0
-opentelemetry-instrumentation-httpx>=0.46b0
-opentelemetry-instrumentation-asyncpg>=0.46b0
-
 # Analytics
-posthog>=3.5.0
 duckdb>=1.0.0
 
 # Vision — Camera Detection Pipeline
 ultralytics>=8.0.0
 supervision>=0.25.0
 opencv-python-headless>=4.8.0
-
-# Vector Store
-qdrant-client>=1.9.0
 
 # Prompt Optimization
 dspy>=2.5.0
@@ -60,6 +37,3 @@ langfuse>=2.40.0
 
 # Agent Memory
 mem0ai>=0.1.0
-
-# Event Streaming (Redpanda / Kafka)
-confluent-kafka>=2.3.0

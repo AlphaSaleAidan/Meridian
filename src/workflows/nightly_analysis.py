@@ -9,10 +9,8 @@ Runs nightly via Prefect scheduler:
 """
 import asyncio
 import logging
-from datetime import timedelta
 
 from prefect import flow, task
-from prefect.tasks import task_input_hash
 
 logger = logging.getLogger("meridian.workflows.nightly")
 
@@ -20,16 +18,13 @@ logger = logging.getLogger("meridian.workflows.nightly")
 @task(retries=3, retry_delay_seconds=30, log_prints=True)
 async def sync_pos_data(org_id: str, pos_type: str) -> dict:
     """Sync latest POS data for a merchant."""
-    if pos_type == "square":
-        from ..square.sync_engine import SquareSyncEngine
-        engine = SquareSyncEngine()
-    elif pos_type == "clover":
-        from ..clover.sync_engine import CloverSyncEngine
-        engine = CloverSyncEngine()
-    else:
+    from ..integrations.registry import get_sync_engine
+    try:
+        engine = get_sync_engine(pos_type)
+    except ValueError:
         return {"org_id": org_id, "status": "skipped", "reason": f"Unknown POS: {pos_type}"}
 
-    result = await engine.incremental_sync(org_id)
+    result = await engine.run_incremental_sync(org_id)
     logger.info(f"Synced {pos_type} data for {org_id}: {result}")
     return {"org_id": org_id, "pos_type": pos_type, "status": "synced", **result}
 

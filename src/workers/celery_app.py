@@ -39,6 +39,8 @@ celery_app.conf.update(
         "src.workers.tasks.sync_pos_data": {"queue": "sync"},
         "src.workers.tasks.run_analysis": {"queue": "analysis"},
         "src.workers.tasks.generate_report": {"queue": "reports"},
+        "src.workers.tasks.train_swarm": {"queue": "analysis"},
+        "src.workers.tasks.train_swarm_batch": {"queue": "analysis"},
     },
     beat_schedule={
         "nightly-analysis": {
@@ -50,6 +52,11 @@ celery_app.conf.update(
             "task": "src.workers.tasks.generate_weekly_reports",
             "schedule": 604800.0,  # 7 days
             "options": {"queue": "reports"},
+        },
+        "swarm-training": {
+            "task": "src.workers.tasks.train_swarm_batch",
+            "schedule": 21600.0,  # 6 hours
+            "options": {"queue": "analysis"},
         },
     },
 )

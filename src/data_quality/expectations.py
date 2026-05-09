@@ -5,9 +5,7 @@ Defines expectation suites for transactions, products, and customers.
 Uses Great Expectations to validate before AI agents run.
 """
 import logging
-from typing import Any
 
-import great_expectations as gx
 from great_expectations.core import ExpectationSuite
 from great_expectations.core.expectation_configuration import ExpectationConfiguration
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import queue
 import threading
-from typing import Any
 
 import cv2
 import numpy as np

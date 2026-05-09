@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 import {
   Phone, PhoneCall, PhoneOff, Settings, Mic, Volume2,
-  CheckCircle2, Clock, XCircle, TrendingUp, MessageSquare,
-  Plus, Play, Pause, ChevronDown, ChevronRight,
+  CheckCircle2, TrendingUp, MessageSquare,
 } from 'lucide-react'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'

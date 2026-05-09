@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Search, Settings2, Users, Clock, ChevronDown } from 'lucide-react'
+import { Search, Settings2, ChevronDown } from 'lucide-react'
 import { posSystems, type POSSystem } from '@/data/pos-systems'
 import POSLogo, { POSStatusBadge } from '@/components/POSLogo'
 import type { POSSystemKey } from '@/data/pos-systems'

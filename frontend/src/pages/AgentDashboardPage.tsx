@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
 import {
-  Bot, Activity, Zap, Clock, ChevronDown, ChevronRight,
-  TrendingUp, AlertTriangle, Target, Brain, ArrowRight,
+  Bot, Activity, Zap, ChevronDown, ChevronRight,
+  AlertTriangle, Target, Brain, ArrowRight,
   CheckCircle2, XCircle, Minus,
 } from 'lucide-react'
 import { generateAgents, generateAgentChains, generateCalibrationHistory, type AgentInfo } from '@/lib/agent-data'

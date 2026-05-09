@@ -4,9 +4,7 @@ or webhook based on merchant configuration.
 """
 import logging
 import os
-import smtplib
-from email.mime.text import MIMEText
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 

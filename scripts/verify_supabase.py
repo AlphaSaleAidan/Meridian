@@ -6,8 +6,12 @@ import httpx
 import json
 import sys
 
-SUPABASE_URL = "https://kbuzufjxwflrutowwnfl.supabase.co"
-SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtidXp1Zmp4d2ZscnV0b3d3bmZsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjU2MTcxMSwiZXhwIjoyMDkyMTM3NzExfQ.gM7VDdKcR5maYcZz7iu-9jzEZvkvn2qgI37OWHISgEc"
+import os
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+if not SUPABASE_URL or not SERVICE_KEY:
+    print("ERROR: Set SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables")
+    sys.exit(1)
 
 headers = {
     "apikey": SERVICE_KEY,

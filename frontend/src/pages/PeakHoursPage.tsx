@@ -1,4 +1,3 @@
-import { clsx } from 'clsx'
 import { Clock, TrendingUp, Users, Zap } from 'lucide-react'
 import { generatePeakHourHeatmap, type PeakHourCell } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'

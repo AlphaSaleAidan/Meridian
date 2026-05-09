@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
 import {
-  Target, ChevronDown, ChevronRight, Zap, Clock,
-  TrendingUp, AlertTriangle, CheckCircle2, Bot,
+  ChevronDown, ChevronRight, Zap, Clock,
+  Bot,
 } from 'lucide-react'
 import { generateTopActions, type TopAction, type ReasoningChain } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'

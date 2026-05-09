@@ -1,6 +1,6 @@
 import { useLocation, Link } from 'react-router-dom'
 import {
-  DollarSign, ShoppingCart, Receipt, TrendingUp, ArrowUpRight, ArrowDownRight,
+  DollarSign, ShoppingCart, Receipt,
   Target, Bot, LineChart, Users,
 } from 'lucide-react'
 import { clsx } from 'clsx'

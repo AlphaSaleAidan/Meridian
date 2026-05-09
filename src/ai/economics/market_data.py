@@ -6,7 +6,6 @@ Cached daily to avoid redundant API calls.
 Feeds into benchmark and forecaster agents.
 """
 import logging
-import os
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 

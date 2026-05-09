@@ -1,7 +1,7 @@
 """
 Meridian Intelligence Data Marketplace — Streamlit preview app.
 
-Displays sample anonymized benchmark data and links to Stripe checkout.
+Displays sample anonymized benchmark data and links to Square checkout.
 Deploy free on Streamlit Cloud, custom domain: data.meridian.tips
 """
 import os
@@ -58,36 +58,36 @@ st.divider()
 st.header("Purchase Options")
 col1, col2, col3, col4 = st.columns(4)
 
-STRIPE_LINKS = {
-    "benchmarks": os.getenv("STRIPE_LINK_BENCHMARKS", "#"),
-    "foot_traffic": os.getenv("STRIPE_LINK_FOOT_TRAFFIC", "#"),
-    "full_suite": os.getenv("STRIPE_LINK_FULL_SUITE", "#"),
-    "archive": os.getenv("STRIPE_LINK_ARCHIVE", "#"),
+SQUARE_LINKS = {
+    "benchmarks": os.getenv("SQUARE_LINK_BENCHMARKS", "#"),
+    "foot_traffic": os.getenv("SQUARE_LINK_FOOT_TRAFFIC", "#"),
+    "full_suite": os.getenv("SQUARE_LINK_FULL_SUITE", "#"),
+    "archive": os.getenv("SQUARE_LINK_ARCHIVE", "#"),
 }
 
 with col1:
     st.markdown("### Industry Benchmarks")
     st.markdown("Monthly anonymized KPIs by business type and region")
     st.metric("Price", "$299/mo")
-    st.link_button("Buy Benchmarks", STRIPE_LINKS["benchmarks"])
+    st.link_button("Buy Benchmarks", SQUARE_LINKS["benchmarks"])
 
 with col2:
     st.markdown("### Foot Traffic Intelligence")
     st.markdown("Hourly patterns, dwell time, conversion by zone")
     st.metric("Price", "$499/mo")
-    st.link_button("Buy Foot Traffic", STRIPE_LINKS["foot_traffic"])
+    st.link_button("Buy Foot Traffic", SQUARE_LINKS["foot_traffic"])
 
 with col3:
     st.markdown("### Full Analytics Suite")
     st.markdown("All datasets, API access, monthly updates")
     st.metric("Price", "$799/mo")
-    st.link_button("Buy Full Suite", STRIPE_LINKS["full_suite"])
+    st.link_button("Buy Full Suite", SQUARE_LINKS["full_suite"])
 
 with col4:
     st.markdown("### Historical Archive")
     st.markdown("Full historical dataset, all types, all regions")
     st.metric("Price", "$2,999/yr")
-    st.link_button("Buy Archive", STRIPE_LINKS["archive"])
+    st.link_button("Buy Archive", SQUARE_LINKS["archive"])
 
 st.divider()
 st.caption(

@@ -16,12 +16,10 @@ Training signals:
 import asyncio
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger("meridian.ai.swarm_trainer")
 

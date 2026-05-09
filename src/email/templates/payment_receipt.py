@@ -1,4 +1,4 @@
-from .base import base_template, heading, paragraph, info_box, stat_row, divider
+from .base import base_template, heading, paragraph, stat_row, divider
 
 
 def render(

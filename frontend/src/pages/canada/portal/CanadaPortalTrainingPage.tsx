@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  GraduationCap, Play, CheckCircle2, Clock, ChevronRight,
+  GraduationCap, Play, CheckCircle2, ChevronRight,
   BookOpen, Target, Users, Zap, Shield, BarChart3,
   Camera, Lightbulb, Plug,
 } from 'lucide-react'

@@ -1,7 +1,7 @@
 import { clsx } from 'clsx'
 import {
   Users, TrendingUp, TrendingDown, Minus, Award, Target,
-  DollarSign, ShoppingCart,
+  DollarSign,
 } from 'lucide-react'
 import { generateStaffPerformance, type StaffMember } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'
