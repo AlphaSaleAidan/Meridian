@@ -154,7 +154,7 @@ export default function CanadaPortalLeadDetailPage() {
 
   const buildProposalInput = useCallback(() => {
     if (!deal || !rep) return null
-    const closestPlan = monthlyPrice >= 750 ? 'command' : monthlyPrice >= 375 ? 'premium' : 'standard'
+    const closestPlan = monthlyPrice >= 1000 ? 'command' : monthlyPrice >= 500 ? 'premium' : 'standard'
     const plan = getPlan(closestPlan)
     return {
       businessName: deal.business_name,

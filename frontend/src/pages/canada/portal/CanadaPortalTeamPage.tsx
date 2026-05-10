@@ -83,15 +83,13 @@ function isAdmin(email: string | undefined): boolean {
 }
 
 function computeTeamStats(team: TeamMember[], deals: Deal[]) {
+  const assignedDealIds = new Set<string>()
   const enriched = team.map(member => {
-    const repDeals = deals.filter(d =>
-      (d.contact_email && member.email && d.contact_email.toLowerCase() === member.email.toLowerCase()) ||
-      (d as any).rep_id === member.id
-    )
-    const allRepDeals = repDeals.length > 0 ? repDeals : deals.filter(() => member.role === 'admin')
+    const repDeals = deals.filter(d => (d as any).rep_id === member.id)
+    repDeals.forEach(d => assignedDealIds.add(d.id))
 
-    const openDeals = allRepDeals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
-    const wonDeals = allRepDeals.filter(d => d.stage === 'closed_won')
+    const openDeals = repDeals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
+    const wonDeals = repDeals.filter(d => d.stage === 'closed_won')
 
     const monthlyMrr = wonDeals.reduce((s, d) => s + d.monthly_value, 0)
     const mrrCad = Math.round(monthlyMrr)
@@ -149,8 +147,8 @@ export default function CanadaPortalTeamPage() {
                 deals_open: 0,
                 deals_won: 0,
                 total_mrr: 0,
-                total_earned: Math.round(Number(r.total_earned || 0) * 100),
-                total_paid: Math.round(Number(r.total_paid || 0) * 100),
+                total_earned: Math.round(Number(r.total_earned || 0)),
+                total_paid: Math.round(Number(r.total_paid || 0)),
                 is_active: r.is_active as boolean,
                 joined: (r.created_at as string || '').slice(0, 10),
                 role: adminRole ? 'admin' : (r.is_active ? 'active' : 'inactive') as 'admin' | 'active' | 'inactive',

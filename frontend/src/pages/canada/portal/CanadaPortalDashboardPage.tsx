@@ -23,6 +23,7 @@ import {
   type Deal,
   type DealStage,
   type SalesClient,
+  type Commission,
 } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 
@@ -78,6 +79,7 @@ export default function CanadaPortalDashboardPage() {
   const [overview, setOverview] = useState<SalesOverview | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
   const [clients, setClients] = useState<SalesClient[]>([])
+  const [commissions, setCommissions] = useState<Commission[]>([])
   const [loading, setLoading] = useState(true)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
@@ -86,10 +88,12 @@ export default function CanadaPortalDashboardPage() {
       canadaSalesDemoData.overview(),
       canadaLeadsService.list(),
       canadaSalesDemoData.clients(),
-    ]).then(([o, d, c]) => {
+      canadaSalesDemoData.commissions(),
+    ]).then(([o, d, c, cm]) => {
       setOverview(o)
       setDeals(d)
       setClients(c)
+      setCommissions(cm)
       setLoading(false)
     })
   }, [])
@@ -105,10 +109,14 @@ export default function CanadaPortalDashboardPage() {
   }
 
   const activeClients = clients.filter(c => c.is_active && c.pos_connected)
-  const mrr = activeClients.reduce((sum, c) => sum + c.monthly_revenue, 0)
+  const clientMrr = activeClients.reduce((sum, c) => sum + c.monthly_revenue, 0)
+  const wonDealsMrr = deals.filter(d => d.stage === 'closed_won').reduce((sum, d) => sum + d.monthly_value, 0)
+  const mrr = Math.max(clientMrr, wonDealsMrr)
   const pipelineDeals = deals.filter(d => !['closed_won', 'closed_lost'].includes(d.stage))
   const pipelineValue = pipelineDeals.reduce((sum, d) => sum + d.monthly_value, 0)
   const commissionRate = rep?.commission_rate ?? 35
+  const totalCommEarned = commissions.reduce((s, c) => s + c.commission_amount, 0)
+  const pendingComm = commissions.filter(c => c.status === 'earned' || c.status === 'pending').reduce((s, c) => s + c.commission_amount, 0)
 
   const showFirst30Banner = rep?.created_at && isWithin30Days(rep.created_at) && !bannerDismissed
   const mrrProgress = Math.min((mrr / MONTH1_MRR_GOAL) * 100, 100)
@@ -197,8 +205,8 @@ export default function CanadaPortalDashboardPage() {
         />
         <StatCard
           label="Commissions"
-          value={formatCad(overview.total_earned)}
-          subtitle={`${commissionRate}% rate | ${formatCad(overview.pending_payout)} pending`}
+          value={formatCad(totalCommEarned)}
+          subtitle={`${commissionRate}% rate | ${formatCad(pendingComm)} pending`}
           icon={<CreditCard size={18} className="text-[#f0b429]" />}
           iconBg="bg-[#f0b429]/15"
           valueColor="#f0b429"

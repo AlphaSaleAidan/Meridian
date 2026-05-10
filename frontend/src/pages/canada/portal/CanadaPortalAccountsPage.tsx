@@ -45,7 +45,8 @@ export default function CanadaPortalAccountsPage() {
 
   const activeCount = clients.filter(c => c.is_active).length
   const totalMRR = clients.reduce((s, c) => s + c.monthly_revenue, 0)
-  const weeklyRevenue = Math.round(totalMRR / 4)
+  const annualRevenue = totalMRR * 12
+  const avgRevPerAccount = activeCount > 0 ? Math.round(totalMRR / activeCount) : 0
 
   if (loading) {
     return (
@@ -96,8 +97,8 @@ export default function CanadaPortalAccountsPage() {
               <TrendingUp size={16} className="text-[#00d4aa]" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Weekly Revenue</p>
-              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(weeklyRevenue)}</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Annual Revenue</p>
+              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(annualRevenue)}</p>
             </div>
           </div>
         </div>
@@ -107,8 +108,8 @@ export default function CanadaPortalAccountsPage() {
               <BarChart3 size={16} className="text-[#00d4aa]" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Monthly Revenue</p>
-              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(totalMRR)}</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Avg per Account</p>
+              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(avgRevPerAccount)}/mo</p>
             </div>
           </div>
         </div>
