@@ -289,6 +289,19 @@ export default function CanadaPortalLeadDetailPage() {
     setFiles(prev => prev.filter(f => f.id !== fileId))
   }
 
+  function handleUpload() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (!file) return
+      const ext = file.name.split('.').pop()?.toUpperCase() || 'File'
+      setFiles(prev => [...prev, { id: String(Date.now()), name: file.name, description: `Uploaded ${ext} file`, tag: ext }])
+    }
+    input.click()
+  }
+
   const inputClass = 'w-full px-3 py-2.5 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
 
   return (
@@ -446,7 +459,7 @@ export default function CanadaPortalLeadDetailPage() {
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">Project Files</h2>
-          <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#00d4aa] border border-[#00d4aa]/30 rounded-lg hover:bg-[#00d4aa]/10 transition-all">
+          <button onClick={handleUpload} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#00d4aa] border border-[#00d4aa]/30 rounded-lg hover:bg-[#00d4aa]/10 transition-all">
             <Upload size={14} /> Upload
           </button>
         </div>

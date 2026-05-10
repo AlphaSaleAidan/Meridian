@@ -31,6 +31,7 @@ export default function CanadaPortalAccountsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [syncingId, setSyncingId] = useState<string | null>(null)
 
   useEffect(() => {
     canadaSalesDemoData.clients().then(c => { setClients(c); setLoading(false) })
@@ -243,9 +244,13 @@ export default function CanadaPortalAccountsPage() {
                   {/* POS Sync */}
                   <div className="space-y-3">
                     <p className="text-[10px] text-[#4a5550]">Last POS sync: {new Date(Date.now() - 1000 * 60 * 47).toLocaleString('en-CA')}</p>
-                    <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] rounded-xl text-xs text-[#6b7a74] hover:border-[#00d4aa]/30 hover:text-[#00d4aa] transition-colors">
-                      <RefreshCw size={12} />
-                      Sync POS Data
+                    <button
+                      onClick={() => { setSyncingId(client.id); setTimeout(() => setSyncingId(null), 2000) }}
+                      disabled={syncingId === client.id}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] rounded-xl text-xs text-[#6b7a74] hover:border-[#00d4aa]/30 hover:text-[#00d4aa] disabled:opacity-50 transition-colors"
+                    >
+                      <RefreshCw size={12} className={syncingId === client.id ? 'animate-spin' : ''} />
+                      {syncingId === client.id ? 'Syncing...' : 'Sync POS Data'}
                     </button>
                   </div>
                 </div>
