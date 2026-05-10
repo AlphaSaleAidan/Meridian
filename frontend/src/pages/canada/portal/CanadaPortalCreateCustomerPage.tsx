@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send, Check,
   Store, User, Mail, Phone, DollarSign, FileDown,
@@ -458,6 +458,7 @@ function ProposalOverlay({
 /* ─── Main Page Component ─── */
 export default function CanadaPortalCreateCustomerPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { rep } = useSalesAuth()
   const [step, setStep] = useState<Step>('details')
   const [saving, setSaving] = useState(false)
@@ -474,11 +475,11 @@ export default function CanadaPortalCreateCustomerPage() {
   const [copiedCheckout, setCopiedCheckout] = useState(false)
 
   const [form, setForm] = useState({
-    businessName: '',
-    ownerName: '',
-    email: '',
-    phone: '',
-    vertical: '',
+    businessName: searchParams.get('name') || '',
+    ownerName: searchParams.get('contact') || '',
+    email: searchParams.get('email') || '',
+    phone: searchParams.get('phone') || '',
+    vertical: searchParams.get('vertical') || '',
     pos: '',
     plan: 'premium',
     customPrice: '',

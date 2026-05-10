@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2,
-  FileText, Eye, Mail, CheckCircle2, Loader2, Download,
+  FileText, Eye, Mail, CheckCircle2, Loader2, Download, ChevronRight,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
@@ -476,16 +476,70 @@ export default function CanadaPortalLeadDetailPage() {
         </div>
       </div>
 
+      {/* Stage Advancement */}
+      {deal.stage !== 'closed_won' && deal.stage !== 'closed_lost' && (
+        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
+          {deal.stage === 'negotiation' ? (
+            <button
+              onClick={async () => {
+                await canadaLeadsService.updateStage(deal.id, 'closed_won')
+                setDeal(prev => prev ? { ...prev, stage: 'closed_won' } : prev)
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+            >
+              <CheckCircle2 size={16} /> Close Deal — Sale Complete
+            </button>
+          ) : (
+            <button
+              onClick={async () => {
+                const order: DealStage[] = ['prospecting', 'contacted', 'demo_scheduled', 'proposal_sent', 'negotiation']
+                const idx = order.indexOf(deal.stage)
+                if (idx >= 0 && idx < order.length - 1) {
+                  const nextStage = order[idx + 1]
+                  await canadaLeadsService.updateStage(deal.id, nextStage)
+                  setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 transition-all"
+            >
+              <ChevronRight size={16} /> Advance to Next Stage
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Convert to Customer (when closed_won) */}
+      {deal.stage === 'closed_won' && (
+        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+            <h2 className="text-sm font-semibold text-[#00d4aa]">Deal Closed — Ready to Onboard</h2>
+          </div>
+          <p className="text-xs text-[#6b7a74]">
+            This deal is closed. Create a customer account to provision their Meridian dashboard, connect their POS, and start billing.
+          </p>
+          <button
+            onClick={() => navigate(`/canada/portal/new-customer?lead=${deal.id}&name=${encodeURIComponent(deal.business_name)}&contact=${encodeURIComponent(deal.contact_name)}&email=${encodeURIComponent(deal.contact_email)}&phone=${encodeURIComponent(deal.contact_phone)}&vertical=${encodeURIComponent(deal.vertical)}`)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+          >
+            <Sparkles size={16} /> Create Customer Account
+          </button>
+        </div>
+      )}
+
       {/* Mark as Lost */}
-      <button
-        onClick={async () => {
-          await canadaLeadsService.updateStage(deal.id, 'closed_lost')
-          navigate('/canada/portal/leads')
-        }}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/15 transition-all"
-      >
-        <X size={16} /> Mark as Lost
-      </button>
+      {deal.stage !== 'closed_won' && deal.stage !== 'closed_lost' && (
+        <button
+          onClick={async () => {
+            await canadaLeadsService.updateStage(deal.id, 'closed_lost')
+            navigate('/canada/portal/leads')
+          }}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/15 transition-all"
+        >
+          <X size={16} /> Mark as Lost
+        </button>
+      )}
     </div>
   )
 }
