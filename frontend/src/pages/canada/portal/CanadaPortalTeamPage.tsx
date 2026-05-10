@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save } from 'lucide-react'
+import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { supabase } from '@/lib/supabase'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { canadaSalesDemoData, type Commission } from '@/lib/canada-sales-demo-data'
+import { canadaSalesDemoData, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
+import { canadaLeadsService } from '@/lib/canada-leads-service'
+import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
 interface TeamMember {
   id: string
@@ -13,6 +15,7 @@ interface TeamMember {
   commission_rate: number
   deals_open: number
   deals_won: number
+  total_mrr: number
   total_earned: number
   total_paid: number
   is_active: boolean
@@ -21,18 +24,34 @@ interface TeamMember {
   location: string
 }
 
+interface Applicant {
+  id: string
+  name: string
+  email: string
+  phone: string
+  applied_at: string
+  status: 'pending' | 'approved' | 'rejected'
+}
+
+const ADMIN_EMAILS = [
+  'apierce@alphasale.co',
+  'aidanpierce72@gmail.com',
+  'aidanpierce@meridian.tips',
+  'cheungenochmgmt@gmail.com',
+  'aidan.nguyen@meridian.tips',
+]
+
 const DEMO_TEAM: TeamMember[] = [
-  { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 35, deals_open: 5, deals_won: 12, total_earned: 4280000, total_paid: 3500000, is_active: true, joined: '2025-09-15', role: 'admin', location: 'Toronto, ON' },
-  { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 35, deals_open: 0, deals_won: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03', role: 'active', location: 'Vancouver, BC' },
+  { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 35, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2025-09-15', role: 'admin', location: 'Toronto, ON' },
+  { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 35, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03', role: 'admin', location: 'Vancouver, BC' },
+  { id: '3', name: 'Aidan Nguyen', email: 'aidan.nguyen@meridian.tips', phone: '', commission_rate: 35, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-09', role: 'admin', location: 'Toronto, ON' },
 ]
 
 const AVATAR_COLORS = ['#00d4aa', '#7c3aed', '#f59e0b', '#1a8fd6']
+const AVG_LIFETIME_MONTHS = 18
 
-const CAD_RATE = 1.37
-
-function formatCurrency(cents: number): string {
-  const cad = (cents / 100) * CAD_RATE
-  return 'CA$' + cad.toLocaleString('en-CA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+function formatCad(amount: number): string {
+  return 'CA$' + Math.round(amount).toLocaleString('en-CA')
 }
 
 function getInitials(name: string): string {
@@ -42,9 +61,7 @@ function getInitials(name: string): string {
 
 function getAvatarColor(name: string): string {
   let hash = 0
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  }
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 
@@ -63,8 +80,38 @@ function getRoleBadge(role: string) {
 
 function isAdmin(email: string | undefined): boolean {
   if (!email) return false
-  const e = email.toLowerCase()
-  return e.includes('aidan') || e.includes('apierce') || e === 'aidanpierce@meridian.tips'
+  return ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
+}
+
+function computeTeamStats(team: TeamMember[], deals: Deal[]) {
+  const enriched = team.map(member => {
+    const repDeals = deals.filter(d =>
+      (d.contact_email && member.email && d.contact_email.toLowerCase() === member.email.toLowerCase()) ||
+      (d as any).rep_id === member.id
+    )
+    const allRepDeals = repDeals.length > 0 ? repDeals : deals.filter(() => member.role === 'admin')
+
+    const openDeals = allRepDeals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
+    const wonDeals = allRepDeals.filter(d => d.stage === 'closed_won')
+
+    const monthlyMrr = wonDeals.reduce((s, d) => s + d.monthly_value, 0)
+    const mrrCad = Math.round(monthlyMrr * CAD_RATE)
+
+    // Total Commission = SR% / 100 * MRR * lifetime months
+    const lifetimeCommission = Math.round((member.commission_rate / 100) * mrrCad * AVG_LIFETIME_MONTHS)
+
+    return {
+      ...member,
+      deals_open: openDeals.length,
+      deals_won: wonDeals.length,
+      total_mrr: mrrCad,
+      total_earned: lifetimeCommission,
+      // Balance Owed = SR% of MRR per month (current month unpaid)
+      // Accumulate: months since first won deal * monthly commission - total_paid
+    }
+  })
+
+  return enriched
 }
 
 export default function CanadaPortalTeamPage() {
@@ -72,15 +119,17 @@ export default function CanadaPortalTeamPage() {
   const admin = isAdmin(rep?.email)
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
+  const [deals, setDeals] = useState<Deal[]>([])
   const [commissions, setCommissions] = useState<Commission[]>([])
+  const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'reps' | 'payouts' | 'onboarding'>('reps')
+  const [activeTab, setActiveTab] = useState<'reps' | 'payouts' | 'applications'>('reps')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
 
   useEffect(() => {
     async function fetchData() {
-      // Try supabase first
+      // Fetch team from Supabase
       if (supabase) {
         try {
           const { data, error } = await supabase
@@ -89,28 +138,65 @@ export default function CanadaPortalTeamPage() {
             .order('created_at', { ascending: true })
 
           if (data && !error && data.length > 0) {
-            setTeam(data.map((r: Record<string, unknown>) => ({
-              id: r.id as string,
-              name: r.name as string,
-              email: r.email as string,
-              phone: (r.phone as string) || '',
-              commission_rate: Number(r.commission_rate) || 35,
-              deals_open: 0,
-              deals_won: 0,
-              total_earned: Math.round(Number(r.total_earned || 0) * 100),
-              total_paid: Math.round(Number(r.total_paid || 0) * 100),
-              is_active: r.is_active as boolean,
-              joined: (r.created_at as string || '').slice(0, 10),
-              role: (r.is_active ? 'active' : 'inactive') as 'active' | 'inactive',
-              location: 'Toronto, ON',
-            })))
+            setTeam(data.map((r: Record<string, unknown>) => {
+              const email = (r.email as string) || ''
+              const adminRole = ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
+              return {
+                id: r.id as string || r.rep_id as string || '',
+                name: r.name as string,
+                email,
+                phone: (r.phone as string) || '',
+                commission_rate: Number(r.commission_rate) || 35,
+                deals_open: 0,
+                deals_won: 0,
+                total_mrr: 0,
+                total_earned: Math.round(Number(r.total_earned || 0) * 100),
+                total_paid: Math.round(Number(r.total_paid || 0) * 100),
+                is_active: r.is_active as boolean,
+                joined: (r.created_at as string || '').slice(0, 10),
+                role: adminRole ? 'admin' : (r.is_active ? 'active' : 'inactive') as 'admin' | 'active' | 'inactive',
+                location: (r as any).location || 'Canada',
+              }
+            }))
           }
         } catch {
           // fall back to demo data
         }
       }
 
-      // Load commissions from demo data
+      // Fetch deals for real pipeline calculation
+      try {
+        const dealData = await canadaLeadsService.list()
+        setDeals(dealData)
+      } catch {
+        // ignore
+      }
+
+      // Fetch applicants (new signups not yet activated)
+      if (supabase) {
+        try {
+          const { data } = await supabase
+            .from('sales_reps')
+            .select('*')
+            .eq('is_active', false)
+            .order('created_at', { ascending: false })
+
+          if (data && data.length > 0) {
+            setApplicants(data.map((r: Record<string, unknown>) => ({
+              id: r.id as string || r.rep_id as string || '',
+              name: r.name as string || 'Unknown',
+              email: (r.email as string) || '',
+              phone: (r.phone as string) || '',
+              applied_at: (r.created_at as string || '').slice(0, 10),
+              status: 'pending' as const,
+            })))
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // Load commissions
       const comms = await canadaSalesDemoData.commissions()
       setCommissions(comms)
       setLoading(false)
@@ -118,19 +204,52 @@ export default function CanadaPortalTeamPage() {
     fetchData()
   }, [])
 
-  const filtered = team.filter(m => {
+  // Enrich team with computed deal stats
+  const enrichedTeam = computeTeamStats(team, deals)
+
+  const filtered = enrichedTeam.filter(m => {
     if (!search) return true
     const s = search.toLowerCase()
     return m.name.toLowerCase().includes(s) || m.email.toLowerCase().includes(s)
   })
 
-  const totalActive = team.filter(m => m.is_active).length
-  const totalOnboarding = team.filter(m => m.role === 'onboarding').length
-  const totalDeals = team.reduce((s, m) => s + m.deals_open + m.deals_won, 0)
-  const pipelineValue = team.reduce((s, m) => s + m.deals_open * 15000, 0) // estimate per deal
-  const totalEarned = team.reduce((s, m) => s + m.total_earned, 0)
-  const totalPaid = team.reduce((s, m) => s + m.total_paid, 0)
-  const balanceOwed = totalEarned - totalPaid
+  // ── Stat card formulas ──
+  const totalActive = enrichedTeam.filter(m => m.is_active).length
+  const totalOnboarding = enrichedTeam.filter(m => m.role === 'onboarding').length
+
+  // Pipeline = all open deals from signed reps
+  const openDeals = deals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
+  const wonDeals = deals.filter(d => d.stage === 'closed_won')
+  const pipelineMrr = Math.round(openDeals.reduce((s, d) => s + d.monthly_value, 0) * CAD_RATE)
+
+  // Total Commission = sum of each rep's (commission_rate% * their won MRR * avg lifetime)
+  const totalCommission = enrichedTeam.reduce((s, m) => s + m.total_earned, 0)
+
+  // Total paid (from team data)
+  const totalPaid = enrichedTeam.reduce((s, m) => s + m.total_paid, 0)
+
+  // Balance Owed = sum of each rep's (commission_rate% * their MRR per month) - total_paid
+  const monthlyCommissionOwed = enrichedTeam.reduce((s, m) => s + Math.round((m.commission_rate / 100) * m.total_mrr), 0)
+  const balanceOwed = totalCommission - totalPaid
+
+  async function handleApproveApplicant(applicant: Applicant) {
+    if (supabase) {
+      await supabase.from('sales_reps').update({ is_active: true }).eq('id', applicant.id)
+    }
+    setApplicants(prev => prev.filter(a => a.id !== applicant.id))
+    setTeam(prev => [...prev, {
+      id: applicant.id, name: applicant.name, email: applicant.email, phone: applicant.phone,
+      commission_rate: 35, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0,
+      total_paid: 0, is_active: true, joined: applicant.applied_at, role: 'active', location: 'Canada',
+    }])
+  }
+
+  async function handleRejectApplicant(applicant: Applicant) {
+    if (supabase) {
+      await supabase.from('sales_reps').delete().eq('id', applicant.id)
+    }
+    setApplicants(prev => prev.filter(a => a.id !== applicant.id))
+  }
 
   if (loading) {
     return (
@@ -159,8 +278,8 @@ export default function CanadaPortalTeamPage() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Reps</p>
-              <p className="text-lg font-bold text-white">{team.length}</p>
-              <p className="text-[10px] text-[#4a5550]">{totalActive} active / {totalOnboarding} onboarding</p>
+              <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
+              <p className="text-[10px] text-[#4a5550]">{totalActive} active{totalOnboarding > 0 ? ` / ${totalOnboarding} onboarding` : ''}</p>
             </div>
           </div>
         </div>
@@ -171,8 +290,8 @@ export default function CanadaPortalTeamPage() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Pipeline</p>
-              <p className="text-lg font-bold text-white">{totalDeals} deals</p>
-              <p className="text-[10px] text-[#4a5550]">{formatCurrency(pipelineValue)}/mo value</p>
+              <p className="text-lg font-bold text-white">{openDeals.length} deals</p>
+              <p className="text-[10px] text-[#4a5550]">{formatCad(pipelineMrr)}/mo MRR</p>
             </div>
           </div>
         </div>
@@ -183,8 +302,8 @@ export default function CanadaPortalTeamPage() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Commissions</p>
-              <p className="text-lg font-bold text-white">{formatCurrency(totalEarned)}</p>
-              <p className="text-[10px] text-[#4a5550]">{formatCurrency(totalPaid)} paid out</p>
+              <p className="text-lg font-bold text-white">{formatCad(totalCommission)}</p>
+              <p className="text-[10px] text-[#4a5550]">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
             </div>
           </div>
         </div>
@@ -196,8 +315,9 @@ export default function CanadaPortalTeamPage() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Balance Owed</p>
               <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-[#f59e0b]' : 'text-white')}>
-                {formatCurrency(balanceOwed)}
+                {formatCad(balanceOwed)}
               </p>
+              <p className="text-[10px] text-[#4a5550]">{wonDeals.length} signed deals</p>
             </div>
           </div>
         </div>
@@ -207,31 +327,27 @@ export default function CanadaPortalTeamPage() {
       <div className="flex items-center gap-1 bg-[#0f1512] border border-[#1a2420] rounded-xl p-1 w-fit">
         <button
           onClick={() => setActiveTab('reps')}
-          className={clsx(
-            'px-4 py-1.5 rounded-lg text-xs font-medium transition-colors',
-            activeTab === 'reps' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
-          )}
+          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
         >
           Sales Reps
         </button>
         <button
           onClick={() => setActiveTab('payouts')}
-          className={clsx(
-            'px-4 py-1.5 rounded-lg text-xs font-medium transition-colors',
-            activeTab === 'payouts' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
-          )}
+          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'payouts' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
         >
           Payouts
         </button>
         {admin && (
           <button
-            onClick={() => setActiveTab('onboarding')}
-            className={clsx(
-              'px-4 py-1.5 rounded-lg text-xs font-medium transition-colors',
-              activeTab === 'onboarding' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
-            )}
+            onClick={() => setActiveTab('applications')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors relative', activeTab === 'applications' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
           >
-            Onboarding
+            Applications
+            {applicants.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#f59e0b] text-[#0a0f0d] text-[9px] font-bold flex items-center justify-center">
+                {applicants.length}
+              </span>
+            )}
           </button>
         )}
       </div>
@@ -239,7 +355,6 @@ export default function CanadaPortalTeamPage() {
       {/* Sales Reps Tab */}
       {activeTab === 'reps' && (
         <>
-          {/* Search */}
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a74]/60" />
             <input
@@ -249,26 +364,19 @@ export default function CanadaPortalTeamPage() {
             />
           </div>
 
-          {/* Rep Cards */}
           <div className="space-y-3">
             {filtered.map(member => {
               const badge = getRoleBadge(member.role)
               const avatarColor = getAvatarColor(member.name)
+              const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
 
               return (
                 <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
                   <div className="flex items-center gap-4">
-                    {/* Avatar */}
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: avatarColor + '20' }}
-                    >
-                      <span className="text-xs font-bold" style={{ color: avatarColor }}>
-                        {getInitials(member.name)}
-                      </span>
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
+                      <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
                     </div>
 
-                    {/* Name + Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white truncate">{member.name}</p>
@@ -280,14 +388,28 @@ export default function CanadaPortalTeamPage() {
                       <p className="text-[10px] text-[#4a5550]">{member.location}</p>
                     </div>
 
-                    {/* Commission Rate — admin only */}
+                    {/* Stats */}
+                    <div className="hidden sm:flex items-center gap-4 text-center">
+                      <div>
+                        <p className="text-[10px] text-[#4a5550]">Deals</p>
+                        <p className="text-xs font-bold text-white">{member.deals_open + member.deals_won}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#4a5550]">MRR</p>
+                        <p className="text-xs font-bold text-[#00d4aa]">{formatCad(member.total_mrr)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#4a5550]">Comm/mo</p>
+                        <p className="text-xs font-bold text-[#7c3aed]">{formatCad(monthlyComm)}</p>
+                      </div>
+                    </div>
+
                     {admin && (
                       <div className="hidden sm:block">
                         <span className="text-sm font-bold text-[#7c3aed]">{member.commission_rate}%</span>
                       </div>
                     )}
 
-                    {/* Edit button — admin only */}
                     {admin && (
                       <button
                         onClick={() => { setEditingMember(member); setEditRate(String(member.commission_rate)) }}
@@ -307,43 +429,36 @@ export default function CanadaPortalTeamPage() {
       {/* Payouts Tab */}
       {activeTab === 'payouts' && (
         <div className="space-y-6">
-          {/* Rep Balances */}
           <div>
             <h3 className="text-sm font-semibold text-white mb-3">Rep Balances</h3>
             <div className="space-y-3">
-              {team.map(member => {
+              {enrichedTeam.map(member => {
+                const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
                 const owed = member.total_earned - member.total_paid
                 const avatarColor = getAvatarColor(member.name)
 
                 return (
                   <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
                     <div className="flex items-center gap-4">
-                      {/* Avatar */}
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: avatarColor + '20' }}
-                      >
-                        <span className="text-xs font-bold" style={{ color: avatarColor }}>
-                          {getInitials(member.name)}
-                        </span>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
+                        <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
                       </div>
-
-                      {/* Info */}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{member.name}</p>
                         <p className="text-[10px] text-[#6b7a74]">
-                          {member.deals_won} deals{admin ? ` · ${member.commission_rate}% rate` : ''} &middot; {formatCurrency(member.total_earned)} earned
+                          {member.deals_won} signed · {member.commission_rate}% rate · {formatCad(member.total_mrr)} MRR · {formatCad(monthlyComm)}/mo comm
+                        </p>
+                        <p className="text-[10px] text-[#4a5550]">
+                          Lifetime est: {formatCad(member.total_earned)} ({AVG_LIFETIME_MONTHS}mo avg)
                         </p>
                       </div>
-
-                      {/* Status */}
                       {owed <= 0 ? (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#00d4aa]/10 text-[#00d4aa] border border-[#00d4aa]/20">
                           Paid up &#10003;
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20">
-                          {formatCurrency(owed)} owed
+                          {formatCad(owed)} owed
                         </span>
                       )}
                     </div>
@@ -353,7 +468,19 @@ export default function CanadaPortalTeamPage() {
             </div>
           </div>
 
-          {/* Commission Log */}
+          {/* Formulas Reference — admin only */}
+          {admin && (
+            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
+              <h3 className="text-xs font-semibold text-[#6b7a74] uppercase tracking-wider mb-3">Commission Formulas</h3>
+              <div className="space-y-2 text-[11px] font-mono text-[#4a5550]">
+                <p><span className="text-[#7c3aed]">Monthly Comm</span> = Commission Rate % × MRR (CAD)</p>
+                <p><span className="text-[#7c3aed]">Lifetime Est</span> = Commission Rate % × MRR × {AVG_LIFETIME_MONTHS} months</p>
+                <p><span className="text-[#f59e0b]">Balance Owed</span> = Lifetime Est − Total Paid</p>
+                <p><span className="text-[#00d4aa]">Pipeline MRR</span> = Sum of open deal monthly values × {CAD_RATE} CAD rate</p>
+              </div>
+            </div>
+          )}
+
           <div>
             <h3 className="text-sm font-semibold text-white mb-3">Commission Log</h3>
             <div className="space-y-2">
@@ -378,7 +505,7 @@ export default function CanadaPortalTeamPage() {
                         <DollarSign size={12} className="text-[#7c3aed]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-white">{formatCurrency(comm.commission_amount)}</p>
+                        <p className="text-xs font-semibold text-white">{formatCad(comm.commission_amount * CAD_RATE)}</p>
                         <p className="text-[10px] text-[#6b7a74]">
                           {comm.client_name}{admin ? ` · ${comm.commission_rate}%` : ''}
                         </p>
@@ -395,57 +522,63 @@ export default function CanadaPortalTeamPage() {
         </div>
       )}
 
-      {/* Onboarding Tab — admin only */}
-      {activeTab === 'onboarding' && admin && (
+      {/* Applications Tab — admin only */}
+      {activeTab === 'applications' && admin && (
         <div className="space-y-4">
-          <p className="text-sm text-[#6b7a74]">Track new rep onboarding progress.</p>
-          {team.filter(m => m.role === 'onboarding' || m.role === 'active').map(member => {
-            const avatarColor = getAvatarColor(member.name)
-            const badge = getRoleBadge(member.role)
-            const onboardingDone = member.role !== 'onboarding'
-            return (
-              <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
-                <div className="flex items-center gap-4">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: avatarColor + '20' }}
-                  >
-                    <span className="text-xs font-bold" style={{ color: avatarColor }}>
-                      {getInitials(member.name)}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-white">{member.name}</p>
-                      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border', badge.bg, badge.textColor, badge.border)}>
-                        {badge.text}
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#6b7a74] mt-0.5">{member.email}</p>
-                  </div>
-                  <span className={clsx(
-                    'text-[10px] font-medium px-2.5 py-1 rounded-full',
-                    onboardingDone ? 'bg-[#00d4aa]/10 text-[#00d4aa]' : 'bg-[#f59e0b]/10 text-[#f59e0b]'
-                  )}>
-                    {onboardingDone ? 'Complete' : 'In Progress'}
-                  </span>
-                </div>
-                {!onboardingDone && (
-                  <div className="mt-3">
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map(seg => (
-                        <div key={seg} className={`h-1 flex-1 rounded-full ${seg <= 2 ? 'bg-[#f59e0b]' : 'bg-[#1a2420]'}`} />
-                      ))}
-                    </div>
-                    <p className="text-[10px] text-[#4a5550] mt-1">Step 2 of 5 — Profile setup</p>
-                  </div>
-                )}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-white">Sales Rep Applications</h3>
+              <p className="text-xs text-[#6b7a74] mt-0.5">New reps who signed up at /canada/portal/signup appear here for approval.</p>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0f1512] border border-[#1a2420] text-[10px] font-medium text-[#6b7a74]">
+              <UserPlus size={12} /> {applicants.length} pending
+            </div>
+          </div>
+
+          {applicants.length === 0 ? (
+            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-10 text-center">
+              <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
+                <UserPlus size={20} className="text-[#00d4aa]" />
               </div>
-            )
-          })}
-          {team.filter(m => m.role === 'onboarding').length === 0 && (
-            <div className="text-center py-10 text-sm text-[#4a5550]">
-              No reps currently onboarding.
+              <p className="text-sm text-[#6b7a74]">No pending applications.</p>
+              <p className="text-[11px] text-[#4a5550] mt-1">New reps who sign up will appear here for your review.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {applicants.map(applicant => {
+                const avatarColor = getAvatarColor(applicant.name)
+                return (
+                  <div key={applicant.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
+                        <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(applicant.name)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white">{applicant.name}</p>
+                        <p className="text-xs text-[#6b7a74]">{applicant.email}</p>
+                        {applicant.phone && <p className="text-[10px] text-[#4a5550]">{applicant.phone}</p>}
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-[#4a5550]">
+                          <Clock size={10} /> Applied {applicant.applied_at}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleApproveApplicant(applicant)}
+                          className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-[#00d4aa] text-[#0a0f0d] rounded-lg hover:bg-[#00d4aa]/90 transition-colors"
+                        >
+                          <CheckCircle2 size={12} /> Approve
+                        </button>
+                        <button
+                          onClick={() => handleRejectApplicant(applicant)}
+                          className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors"
+                        >
+                          <XCircle size={12} /> Reject
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
@@ -464,11 +597,7 @@ export default function CanadaPortalTeamPage() {
             <p className="text-sm text-[#6b7a74] mb-4">{editingMember.name}</p>
             <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate (%)</label>
             <input
-              type="number"
-              min={0}
-              max={100}
-              value={editRate}
-              onChange={e => setEditRate(e.target.value)}
+              type="number" min={0} max={100} value={editRate} onChange={e => setEditRate(e.target.value)}
               className="w-full px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white focus:outline-none focus:border-[#00d4aa]/50"
             />
             <div className="flex justify-end gap-2 mt-5">
@@ -477,6 +606,9 @@ export default function CanadaPortalTeamPage() {
                 onClick={() => {
                   const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
                   setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, commission_rate: rate } : m))
+                  if (supabase) {
+                    supabase.from('sales_reps').update({ commission_rate: rate }).eq('id', editingMember.id).then(() => {})
+                  }
                   setEditingMember(null)
                 }}
                 className="flex items-center gap-1.5 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
