@@ -1,0 +1,108 @@
+# Meridian Context — Agent TARS Reference
+# All URLs, credentials sources, and service topology for TARS playbooks.
+
+project:
+  name: Meridian
+  owner: Aidan Pierce <aidanpierce72@gmail.com>
+  domain: meridian.tips
+  repo: github.com/aidanpierce72/Meridian  # private
+
+services:
+  backend:
+    platform: Railway
+    runtime: "uvicorn src.api.app:app"
+    port_env: PORT
+    url: https://api.meridian.tips
+    health: /health
+    env_source: "Railway dashboard → Meridian service → Variables tab"
+
+  frontend:
+    platform: Vercel
+    framework: Vite + React + Tailwind
+    url: https://app.meridian.tips
+    package: meridian-dashboard
+    env_source: "Vercel dashboard → meridian-dashboard → Settings → Environment Variables"
+
+  database:
+    platform: Supabase
+    engine: PostgreSQL 15 + TimescaleDB
+    dashboard: https://supabase.com/dashboard
+    migrations_dir: supabase/migrations/
+    env_vars:
+      - SUPABASE_URL
+      - SUPABASE_ANON_KEY
+      - SUPABASE_SERVICE_KEY
+      - DATABASE_URL
+
+  email:
+    platform: Postal (self-hosted)
+    host: postal.meridian.tips
+    web_ui: http://localhost:5000
+    login: aidanpierce72@gmail.com
+    env_vars:
+      - POSTAL_HOST
+      - POSTAL_API_KEY
+      - POSTAL_FROM
+    dns_doc: docs/postal-dns-setup.md
+
+  task_queue:
+    platform: "Celery + Redis"
+    broker_env: REDIS_URL
+    queues: [default, sync, analysis, reports]
+    beat_schedules:
+      - nightly-analysis (24h)
+      - weekly-reports (7d)
+      - swarm-training (6h)
+
+  pos_integrations:
+    square:
+      env_vars: [SQUARE_ACCESS_TOKEN, SQUARE_LOCATION_ID, SQUARE_ENVIRONMENT]
+    clover:
+      env_vars: [CLOVER_API_KEY, CLOVER_MERCHANT_ID, CLOVER_ENVIRONMENT]
+
+dns:
+  registrar: Namecheap
+  domain: meridian.tips
+  records:
+    - type: A
+      host: "@"
+      value: "<server-ip>"
+      note: "Main server"
+    - type: A
+      host: postal
+      value: "<server-ip>"
+      note: "Postal mail server"
+    - type: CNAME
+      host: rp
+      value: postal.meridian.tips
+      note: "Return path for Postal"
+    - type: MX
+      host: rp
+      value: postal.meridian.tips
+      priority: 10
+    - type: TXT
+      host: "@"
+      value: "v=spf1 a mx include:spf.meridian.tips ~all"
+      note: "SPF"
+    - type: TXT
+      host: _dmarc
+      value: "v=DMARC1; p=quarantine; rua=mailto:dmarc@meridian.tips"
+      note: "DMARC"
+
+dashboards:
+  railway: https://railway.app/dashboard
+  vercel: https://vercel.com/dashboard
+  supabase: https://supabase.com/dashboard
+  namecheap: https://ap.www.namecheap.com/domains/domaincontrolpanel/meridian.tips/advancedns
+
+ai_agents:
+  count: 27
+  config: ruflo.config.yaml
+  engine: src/ai/engine.py
+  swarm_trainer: src/ai/swarm_trainer.py
+
+vps:
+  path: /root/Meridian
+  frontend_path: /root/Meridian/frontend
+  migrations_path: /root/Meridian/supabase/migrations
+  env_file: /root/Meridian/.env

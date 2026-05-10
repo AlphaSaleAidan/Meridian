@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Meridian Sales Rep Training</title>
+<style>
+@page { size: 1920px 1080px; margin: 0; }
+*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+body{background:#06060a;font-family:'Inter',system-ui,-apple-system,sans-serif;color:#F5F5F7;-webkit-font-smoothing:antialiased;}
+
+.slide{
+  position:relative;width:1920px;height:1080px;overflow:hidden;
+  background:#06060a;padding:80px 100px;
+  page-break-after:always;page-break-inside:avoid;
+}
+.slide:last-child{page-break-after:auto;}
+
+/* Subtle gradient overlays */
+.slide::before{
+  content:'';position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;
+  background:radial-gradient(ellipse at 20% 50%, rgba(124,92,255,0.05) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 20%, rgba(79,227,193,0.03) 0%, transparent 50%);
+}
+.slide>*{position:relative;z-index:1;}
+
+/* ── Typography ─── */
+.eyebrow{font-family:monospace;font-size:18px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:#7C5CFF;}
+.title{font-family:Georgia,serif;font-style:italic;font-size:72px;font-weight:400;color:#fff;line-height:1.1;margin-top:12px;}
+.title .v{color:#7C5CFF;} .title .c{color:#4FE3C1;}
+.subtitle{font-size:28px;color:#A1A1A8;margin-top:16px;line-height:1.5;max-width:1200px;}
+h2{font-family:Georgia,serif;font-style:italic;font-size:56px;font-weight:400;color:#fff;margin-bottom:24px;}
+h3{font-size:28px;font-weight:600;color:#fff;margin-bottom:12px;}
+p,.li{font-size:24px;color:#A1A1A8;line-height:1.6;}
+.white{color:#fff;} .bold{font-weight:600;color:#fff;}
+
+/* ── Section header bar ─── */
+.sec-header{display:flex;align-items:center;gap:24px;margin-bottom:40px;}
+.sec-num{
+  width:64px;height:64px;border-radius:14px;flex-shrink:0;
+  background:linear-gradient(135deg,rgba(124,92,255,0.15),rgba(79,227,193,0.1));
+  border:1px solid rgba(124,92,255,0.3);
+  display:flex;align-items:center;justify-content:center;
+  font-family:monospace;font-size:24px;font-weight:700;color:#7C5CFF;
+}
+.sec-line{flex:1;height:1px;background:rgba(255,255,255,0.08);}
+
+/* ── Cards ─── */
+.card{
+  background:rgba(14,14,16,0.88);border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;padding:36px;
+}
+.card-glow{
+  background:linear-gradient(180deg,rgba(124,92,255,0.08) 0%,rgba(14,14,16,0.88) 60%);
+  border:1px solid rgba(124,92,255,0.25);border-radius:12px;padding:36px;
+}
+.card-cyan{
+  background:linear-gradient(180deg,rgba(79,227,193,0.06) 0%,rgba(14,14,16,0.88) 60%);
+  border:1px solid rgba(79,227,193,0.2);border-radius:12px;padding:36px;
+}
+.card-amber{
+  background:linear-gradient(180deg,rgba(255,183,77,0.06) 0%,rgba(14,14,16,0.88) 60%);
+  border:1px solid rgba(255,183,77,0.2);border-radius:12px;padding:36px;
+}
+
+/* ── Grids ─── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px;}
+
+/* ── Steps ─── */
+.step{display:flex;gap:20px;margin-bottom:24px;}
+.step-n{
+  width:44px;height:44px;border-radius:10px;flex-shrink:0;
+  background:linear-gradient(135deg,#7C5CFF,#9B7FFF);
+  display:flex;align-items:center;justify-content:center;
+  font-family:monospace;font-size:18px;font-weight:700;color:#fff;
+}
+.step-c h4{font-size:26px;font-weight:600;color:#fff;margin-bottom:6px;}
+.step-c p{font-size:22px;color:#A1A1A8;line-height:1.5;}
+.step-c code{font-family:monospace;font-size:20px;background:rgba(124,92,255,0.1);padding:2px 10px;border-radius:4px;color:#C8B0FF;}
+
+/* ── Tip boxes ─── */
+.tip{padding:20px 24px;border-radius:10px;font-size:22px;line-height:1.5;margin-top:16px;}
+.tip.purple{background:rgba(124,92,255,0.08);border:1px solid rgba(124,92,255,0.2);color:#C8B0FF;}
+.tip.cyan{background:rgba(79,227,193,0.08);border:1px solid rgba(79,227,193,0.2);color:#4FE3C1;}
+.tip.amber{background:rgba(255,183,77,0.08);border:1px solid rgba(255,183,77,0.2);color:#FFB74D;}
+.tip.red{background:rgba(255,82,82,0.08);border:1px solid rgba(255,82,82,0.2);color:#FF5252;}
+.tip-label{font-family:monospace;font-size:14px;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px;font-weight:600;}
+
+/* ── Tags ─── */
+.tag{display:inline-block;padding:6px 16px;border-radius:20px;font-size:18px;font-weight:600;margin:4px 6px 4px 0;}
+.tag-v{background:rgba(124,92,255,0.15);color:#9B7FFF;border:1px solid rgba(124,92,255,0.3);}
+.tag-c{background:rgba(79,227,193,0.15);color:#4FE3C1;border:1px solid rgba(79,227,193,0.3);}
+
+/* ── Flow ─── */
+.flow{display:flex;align-items:center;justify-content:center;gap:0;}
+.flow-s{
+  background:rgba(14,14,16,0.88);border:1px solid rgba(124,92,255,0.3);border-radius:12px;
+  padding:20px 32px;text-align:center;min-width:180px;
+}
+.flow-s .num{font-family:monospace;font-size:14px;color:#7C5CFF;margin-bottom:4px;}
+.flow-s .label{font-size:20px;font-weight:600;color:#fff;}
+.flow-s .time{font-size:16px;color:#6B6B73;margin-top:2px;}
+.flow-a{color:#7C5CFF;font-size:32px;padding:0 12px;}
+
+/* ── Script lines ─── */
+.script{padding:16px 24px;margin-bottom:12px;border-radius:10px;}
+.script.rep{background:rgba(124,92,255,0.08);border-left:3px solid #7C5CFF;}
+.script.note{background:rgba(79,227,193,0.06);border-left:3px solid #4FE3C1;margin-left:60px;}
+.script-l{font-family:monospace;font-size:13px;letter-spacing:0.1em;color:#6B6B73;margin-bottom:4px;}
+.script-t{font-size:22px;color:#E0E0E0;line-height:1.5;}
+
+/* ── Buzz ─── */
+.buzz{background:rgba(14,14,16,0.88);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:24px;}
+.buzz-t{font-size:22px;font-weight:700;color:#7C5CFF;margin-bottom:4px;}
+.buzz-t.c{color:#4FE3C1;} .buzz-t.a{color:#FFB74D;}
+.buzz-d{font-size:18px;color:#A1A1A8;line-height:1.4;}
+.buzz-u{font-size:16px;color:#4FE3C1;margin-top:8px;font-style:italic;}
+
+/* ── Table ─── */
+table{width:100%;border-collapse:collapse;}
+th{font-family:monospace;font-size:16px;letter-spacing:0.1em;text-transform:uppercase;color:#7C5CFF;padding:14px 20px;text-align:left;border-bottom:1px solid rgba(124,92,255,0.3);}
+td{padding:14px 20px;font-size:20px;color:#A1A1A8;border-bottom:1px solid rgba(255,255,255,0.05);}
+td.h{color:#fff;font-weight:600;}
+
+/* ── Pricing ─── */
+.price{text-align:center;padding:40px 28px;}
+.price-name{font-size:24px;font-weight:600;color:#7C5CFF;margin-bottom:12px;}
+.price-amt{font-family:monospace;font-size:52px;font-weight:700;color:#fff;}
+.price-int{font-size:22px;color:#6B6B73;}
+.price-feat{text-align:left;margin-top:20px;list-style:none;}
+.price-feat li{font-size:18px;color:#A1A1A8;padding:5px 0 5px 24px;position:relative;}
+.price-feat li::before{content:'✓';position:absolute;left:0;color:#4FE3C1;font-weight:700;}
+
+/* ── Objection ─── */
+.obj{border-radius:12px;padding:32px 36px;margin-bottom:20px;}
+.obj-q{font-size:28px;font-weight:600;margin-bottom:12px;}
+.obj-a{font-size:22px;color:#E0E0E0;line-height:1.5;padding:16px 20px;background:rgba(124,92,255,0.06);border-left:3px solid #7C5CFF;border-radius:8px;}
+
+.badge{font-family:monospace;font-size:14px;letter-spacing:0.1em;padding:4px 14px;border-radius:4px;background:rgba(124,92,255,0.15);color:#9B7FFF;display:inline-block;vertical-align:middle;margin-left:12px;}
+.badge-c{background:rgba(79,227,193,0.15);color:#4FE3C1;}
+.badge-a{background:rgba(255,183,77,0.15);color:#FFB74D;}
+
+.center{text-align:center;} .mt{margin-top:32px;} .mb{margin-bottom:24px;}
+.dim{color:#6B6B73;} .vio{color:#7C5CFF;} .cya{color:#4FE3C1;} .amb{color:#FFB74D;}
+</style>
+</head>
+<body>
+
+<!-- ═══ SLIDE 1: COVER ═══ -->
+<div class="slide" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
+  <div class="eyebrow">MERIDIAN INTELLIGENCE · SALES REP TRAINING</div>
+  <div class="title" style="font-size:96px;margin-top:20px;">The <span class="v">Complete</span> Guide</div>
+  <div class="subtitle" style="text-align:center;margin-top:24px;">POS setups · Camera connections · Buzzwords · Closing scripts</div>
+  <div style="font-size:20px;color:#6B6B73;margin-top:40px;">Presentation Day · May 3, 2026</div>
+</div>
+
+<!-- ═══ SLIDE 2: WHAT IS MERIDIAN ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">01</div><h2>What Is Meridian?</h2><div class="sec-line"></div></div>
+
+  <div class="card-glow" style="margin-bottom:32px;">
+    <div style="font-size:20px;font-weight:600;color:#7C5CFF;margin-bottom:12px;">🎯 THE ONE-LINER</div>
+    <div style="font-size:32px;color:#fff;font-style:italic;line-height:1.5;">
+      "Meridian connects to your cash register and your cameras, then uses AI to show you exactly where your business is losing money — and how to fix it."
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <h3 style="color:#7C5CFF;">💰 POS Intelligence</h3>
+      <p>Plugs into the register (Square, Clover, Toast). AI finds patterns — busiest hours, best-sellers, items losing money, staffing issues. Like having a CFO who watches 24/7.</p>
+    </div>
+    <div class="card">
+      <h3 style="color:#4FE3C1;">📷 Camera Intelligence</h3>
+      <p>Connects to existing security cameras. Counts foot traffic, measures wait times, tracks conversion rates, creates heatmaps. All privacy-first, no video stored.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 3: WHO IS THIS FOR + KEY SELLING POINT ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">01</div><h2>Who Is This For?</h2><div class="sec-line"></div></div>
+
+  <div style="margin-bottom:40px;">
+    <span class="tag tag-v">Restaurants</span><span class="tag tag-v">Smoke Shops</span><span class="tag tag-v">Boutiques</span><span class="tag tag-v">Pawn Shops</span><span class="tag tag-v">Bodegas</span><span class="tag tag-v">Convenience Stores</span><span class="tag tag-v">Coffee Shops</span><span class="tag tag-v">Bars & Lounges</span><span class="tag tag-v">Salons</span><span class="tag tag-v">Any Business with a POS</span>
+  </div>
+
+  <div class="card-glow">
+    <div style="font-size:20px;font-weight:600;color:#7C5CFF;margin-bottom:12px;">💡 KEY SELLING POINT</div>
+    <p style="font-size:28px;color:#fff;line-height:1.5;">Meridian gives independent business owners the <span class="bold">same data analytics</span> that Starbucks, McDonald's, and Walmart use — but at a fraction of the cost. <span class="vio">Enterprise intelligence for independent businesses.</span></p>
+  </div>
+
+  <div class="tip purple" style="margin-top:32px;">
+    <div class="tip-label">🔥 FUSION INTELLIGENCE</div>
+    When POS data + camera data combine = insights no competitor can match. Traffic went up 23% but revenue stayed flat? Your conversion rate dropped. Only Meridian shows this.
+  </div>
+</div>
+
+<!-- ═══ SLIDE 4: 5-STEP SALES PROCESS ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">02</div><h2>The 5-Step Sales Process</h2><div class="sec-line"></div></div>
+
+  <div class="flow" style="margin-bottom:48px;">
+    <div class="flow-s"><div class="num">STEP 1</div><div class="label">Create Lead</div><div class="time">~1 min</div></div>
+    <div class="flow-a">→</div>
+    <div class="flow-s"><div class="num">STEP 2</div><div class="label">Show Proposal</div><div class="time">~2 min</div></div>
+    <div class="flow-a">→</div>
+    <div class="flow-s"><div class="num">STEP 3</div><div class="label">Checkout</div><div class="time">~1 min</div></div>
+    <div class="flow-a">→</div>
+    <div class="flow-s"><div class="num">STEP 4</div><div class="label">Connect POS</div><div class="time">~5 min</div></div>
+    <div class="flow-a">→</div>
+    <div class="flow-s"><div class="num">STEP 5</div><div class="label">Walkthrough</div><div class="time">~10 min</div></div>
+  </div>
+
+  <div class="g2">
+    <div>
+      <div class="step"><div class="step-n">1</div><div class="step-c"><h4>Create a Lead</h4><p>Leads → New Lead. Enter business name, contact, phone, email, type.</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>Generate & Show Proposal</h4><p>Select billing ($250/mo or $65/wk). Click "Generate Proposal" — branded with QR code.</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Customer Checkout</h4><p>Customer scans QR code to pay via Square. Click "Customer Agreed."</p></div></div>
+    </div>
+    <div>
+      <div class="step"><div class="step-n">4</div><div class="step-c"><h4>Connect Customer POS</h4><p>Most critical step. Square, Clover, or Toast — see detailed guides.</p></div></div>
+      <div class="step"><div class="step-n">5</div><div class="step-c"><h4>Customer Walkthrough</h4><p>Walk them through the dashboard. Show real insights. Click "Complete Onboarding."</p></div></div>
+      <div class="tip amber">
+        <div class="tip-label">⚠️ DO NOT SKIP THE WALKTHROUGH</div>
+        Pull their actual data after connecting. That "wow moment" prevents churn.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 5: SQUARE SETUP ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">03</div><h2>Square Setup</h2><span class="badge">MOST COMMON</span><div class="sec-line"></div></div>
+
+  <div class="g2">
+    <div>
+      <div class="step"><div class="step-n">1</div><div class="step-c"><h4>Access Square Dashboard</h4><p>Customer logs into <code>squareup.com/dashboard</code></p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>Developer Dashboard</h4><p>Go to <code>developer.squareup.com</code> → Applications</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Select or Create App</h4><p>Create new app (name it "Meridian") → OAuth → Access Token</p></div></div>
+      <div class="step"><div class="step-n">4</div><div class="step-c"><h4>Copy Production Token</h4><p>Starts with <code>sq0atp-...</code> — make sure it says PRODUCTION</p></div></div>
+      <div class="step"><div class="step-n">5</div><div class="step-c"><h4>Paste & Test</h4><p>Paste in Sales Portal → "Save & Test Connection" → Pull data</p></div></div>
+    </div>
+    <div>
+      <div class="tip red" style="margin-top:0;">
+        <div class="tip-label">⚠️ IMPORTANT</div>
+        Make sure it says PRODUCTION, not Sandbox. Sandbox tokens only return test data.
+      </div>
+      <div class="tip cyan" style="margin-top:20px;">
+        <div class="tip-label">✅ SUCCESS INDICATORS</div>
+        You'll see: location name(s), location ID, merchant ID, and a green "Connected" badge. Pull data to see transaction count, total revenue, average transaction value.
+      </div>
+      <div class="tip purple" style="margin-top:20px;">
+        <div class="tip-label">🔒 REASSURANCE SCRIPT</div>
+        "The connection is read-only — we can only view your transaction data. We can never move money, change prices, or modify anything in your system."
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 6: CLOVER + TOAST ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">03</div><h2>Clover & Toast Setup</h2><div class="sec-line"></div></div>
+
+  <div class="g2">
+    <div class="card-cyan">
+      <h3><span style="font-size:32px;">🟢</span> Clover — Needs: API Key + Merchant ID</h3>
+      <div class="step" style="margin-top:20px;"><div class="step-n">1</div><div class="step-c"><h4>Clover Dashboard</h4><p>Log into <code>clover.com</code></p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>API Tokens</h4><p>Account & Setup → API Tokens → Generate/copy token</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Merchant ID</h4><p>Found in URL after <code>/merchants/</code> or in Account Settings</p></div></div>
+      <div class="step"><div class="step-n">4</div><div class="step-c"><h4>Enter Both</h4><p>API Key + Merchant ID → "Save & Test Connection"</p></div></div>
+    </div>
+    <div class="card-amber">
+      <h3><span style="font-size:32px;">🍊</span> Toast — Needs: Client ID + Secret + GUID</h3>
+      <div class="step" style="margin-top:20px;"><div class="step-n">1</div><div class="step-c"><h4>Toast Admin</h4><p>Log into <code>pos.toasttab.com</code></p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>API Credentials</h4><p>Admin → Integrations → API Credentials → Create app</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Copy All Three</h4><p>Client ID, Client Secret, and Restaurant GUID (from URL)</p></div></div>
+      <div class="step"><div class="step-n">4</div><div class="step-c"><h4>Enter All</h4><p>All three credentials → "Save & Test Connection"</p></div></div>
+      <div class="tip amber" style="font-size:18px;">
+        <div class="tip-label">⚠️ NOTE</div>
+        Requires owner/manager with admin access. Cashier logins won't have API options.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 7: NEW/UNKNOWN POS ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">04</div><h2>New or Unknown POS</h2><div class="sec-line"></div></div>
+  <p class="subtitle" style="margin-bottom:32px;">What to do when a customer uses a POS system you haven't seen before.</p>
+
+  <div class="g2">
+    <div class="card-glow">
+      <h3>🆕 The Universal Process</h3>
+      <div class="step" style="margin-top:16px;"><div class="step-n">1</div><div class="step-c"><h4>Ask the Customer</h4><p>"What POS do you use? Does it have an admin dashboard?"</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>Google It</h4><p>Search: <code>[POS name] developer API</code> or <code>[POS name] API key</code></p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Find the Credentials</h4><p>Look for: API Key, Access Token, Merchant ID, or Client ID + Secret</p></div></div>
+      <div class="step"><div class="step-n">4</div><div class="step-c"><h4>Enter as "Other"</h4><p>Select "Other" POS in portal. Enter credentials. Flag for tech team.</p></div></div>
+      <div class="tip purple" style="font-size:20px;">
+        <div class="tip-label">🔑 UNIVERSAL TRUTH</div>
+        Every modern POS has API access. The pattern is always: admin → developer settings → generate key.
+      </div>
+    </div>
+    <div>
+      <div class="card">
+        <h3 style="margin-bottom:16px;">Other POS Systems You May See</h3>
+        <table>
+          <tr><th>POS</th><th>Look For</th></tr>
+          <tr><td class="h">Shopify POS</td><td>Admin API access token</td></tr>
+          <tr><td class="h">Lightspeed</td><td>Account → API Key</td></tr>
+          <tr><td class="h">Revel</td><td>API Key + API Secret</td></tr>
+          <tr><td class="h">NCR / Aloha</td><td>OAuth credentials</td></tr>
+          <tr><td class="h">Vend</td><td>Setup → Personal Token</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 8: CAMERA TYPES ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">05</div><h2>Camera Intelligence — What We Connect</h2><div class="sec-line"></div></div>
+
+  <div class="tip cyan" style="margin-bottom:28px;font-size:24px;">
+    <div class="tip-label">✨ FIRST 50 STANDARD CUSTOMERS GET CAMERA INTELLIGENCE FREE</div>
+    Normally comes with Premium ($500/mo) — first 50 Standard plan customers get it at no extra cost.
+  </div>
+
+  <div class="g3" style="margin-bottom:24px;">
+    <div class="card">
+      <h3 style="color:#4FE3C1;">📡 WiFi Cameras</h3>
+      <p style="font-size:20px;">Wireless IP cameras on business WiFi. Auto-discover or manual stream URL.</p>
+      <div style="margin-top:12px;"><span class="tag tag-c" style="font-size:14px;">Hikvision</span><span class="tag tag-c" style="font-size:14px;">Dahua</span><span class="tag tag-c" style="font-size:14px;">Reolink</span><span class="tag tag-c" style="font-size:14px;">Amcrest</span></div>
+    </div>
+    <div class="card">
+      <h3 style="color:#4FE3C1;">🖥️ NVR Systems</h3>
+      <p style="font-size:20px;">Connect to the recorder box — one connection covers ALL cameras.</p>
+      <div style="margin-top:12px;"><span class="tag tag-c" style="font-size:14px;">Hikvision NVR</span><span class="tag tag-c" style="font-size:14px;">Dahua</span><span class="tag tag-c" style="font-size:14px;">Lorex</span></div>
+    </div>
+    <div class="card">
+      <h3 style="color:#4FE3C1;">☁️ Cloud Cameras</h3>
+      <p style="font-size:20px;">Smart cameras via API. Customer signs in & authorizes.</p>
+      <div style="margin-top:12px;"><span class="tag tag-c" style="font-size:14px;">Ring</span><span class="tag tag-c" style="font-size:14px;">Nest</span><span class="tag tag-c" style="font-size:14px;">Arlo</span><span class="tag tag-c" style="font-size:14px;">Wyze</span><span class="tag tag-c" style="font-size:14px;">Blink</span><span class="tag tag-c" style="font-size:14px;">Eufy</span></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <h3 style="color:#4FE3C1;">🔌 Wired / PoE Cameras</h3>
+      <p style="font-size:20px;">Ethernet cameras. Most reliable — zero wireless interference.</p>
+    </div>
+    <div class="card">
+      <h3 style="color:#4FE3C1;">📼 DVR + Analog (Legacy)</h3>
+      <p style="font-size:20px;">Older coax/BNC cameras. Connect via Meridian Bridge or network port.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 9: WHAT CAMERAS TRACK ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">05</div><h2>What Camera Intelligence Tracks</h2><div class="sec-line"></div></div>
+
+  <div class="g3" style="margin-bottom:40px;">
+    <div class="card"><h3 style="color:#7C5CFF;">Foot Traffic</h3><p>Exact count of people entering per hour/day/week. "312 entered today, 187 purchased."</p></div>
+    <div class="card"><h3 style="color:#7C5CFF;">Conversion Rate</h3><p>Traffic vs. POS transactions. "60% conversion — up from 52% last month."</p></div>
+    <div class="card"><h3 style="color:#7C5CFF;">Queue & Wait Time</h3><p>Real-time line monitoring. Alerts when wait time gets too long.</p></div>
+    <div class="card"><h3 style="color:#4FE3C1;">Peak Hours Heatmap</h3><p>Visual map of busiest times by hour and day of week.</p></div>
+    <div class="card"><h3 style="color:#4FE3C1;">Dwell Time</h3><p>How long customers linger at displays, cases, or areas.</p></div>
+    <div class="card"><h3 style="color:#4FE3C1;">Walkout Detection</h3><p>People who entered but left without buying. Estimated lost revenue.</p></div>
+  </div>
+
+  <div class="tip purple" style="font-size:24px;">
+    <div class="tip-label">🔒 PRIVACY TALKING POINT</div>
+    "No raw images or video are ever stored or sent to the cloud. All processing happens locally on hardware inside your building. You maintain full control. We're GDPR and CCPA compliant."
+  </div>
+</div>
+
+<!-- ═══ SLIDE 10: CAMERA SETUP - AUTO-DISCOVER ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">06</div><h2>Camera Setup: Auto-Discover</h2><span class="badge badge-c">EASIEST</span><div class="sec-line"></div></div>
+  <p class="subtitle" style="margin-bottom:32px;">Works with WiFi/wired cameras supporting ONVIF/UPnP. System scans the network and finds cameras automatically.</p>
+
+  <div class="g2">
+    <div>
+      <div class="step"><div class="step-n">1</div><div class="step-c"><h4>Verify Network Access</h4><p>Meridian device must be on the <span class="bold">same WiFi network</span> as cameras. Go to Cameras → Connect Camera → Auto-Discover.</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>Run Network Scan</h4><p>Click "Scan Network." Wait 15–30 seconds. Cameras appear with IP, manufacturer, model.</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Authenticate & Configure</h4><p>Select cameras, enter admin credentials (default: <code>admin/admin</code> or <code>admin/12345</code>). Name each camera, set zones, enable privacy masking.</p></div></div>
+    </div>
+    <div>
+      <div class="tip amber" style="margin-top:0;">
+        <div class="tip-label">⚠️ NO CAMERAS FOUND?</div>
+        Check cameras are powered on and on the same network. Some need ONVIF enabled in their settings. If discovery fails → fall back to RTSP Manual.
+      </div>
+      <div class="tip purple" style="margin-top:20px;">
+        <div class="tip-label">💡 RTSP MANUAL FALLBACK</div>
+        Enter camera's stream URL directly. Find IP in router settings. Format by brand:<br>
+        • Hikvision: <code>rtsp://user:pass@ip:554/Streaming/Channels/101</code><br>
+        • Dahua: <code>rtsp://user:pass@ip:554/cam/realmonitor?channel=1</code><br>
+        • Reolink: <code>rtsp://user:pass@ip:554/h264Preview_01_main</code><br>
+        • Generic: <code>rtsp://user:pass@ip:554/stream1</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 11: MERIDIAN BRIDGE + NVR + CLOUD ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">06</div><h2>Bridge, NVR & Cloud Setup</h2><div class="sec-line"></div></div>
+
+  <div class="g3">
+    <div class="card-cyan">
+      <h3>📦 Meridian Bridge<span class="badge badge-c">ZERO CONFIG</span></h3>
+      <p style="font-size:20px;margin-top:12px;">Pre-configured device we ship. Customer plugs in 2 cables — done.</p>
+      <div class="step" style="margin-top:16px;"><div class="step-n">1</div><div class="step-c"><p style="font-size:18px;">We ship Bridge (pre-linked to their account)</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><p style="font-size:18px;"><span class="bold">Ethernet</span> into router + <span class="bold">USB-C power</span> into wall</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><p style="font-size:18px;">LED turns green (~60s). Cameras auto-appear in 2–3 min.</p></div></div>
+      <div class="tip cyan" style="font-size:16px;margin-top:12px;">
+        <div class="tip-label">PERFECT FOR</div>
+        Non-tech-savvy customers, DVR/analog systems, or anyone who wants "just works."
+      </div>
+    </div>
+    <div class="card">
+      <h3>🖥️ NVR Connection</h3>
+      <p style="font-size:20px;margin-top:12px;">One connection covers all cameras on the system.</p>
+      <div class="step" style="margin-top:16px;"><div class="step-n">1</div><div class="step-c"><p style="font-size:18px;">Get NVR's IP address (check its display or router)</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><p style="font-size:18px;">Enter IP + admin credentials in Meridian</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><p style="font-size:18px;">All camera channels appear — select which to import</p></div></div>
+    </div>
+    <div class="card">
+      <h3>☁️ Cloud Cameras</h3>
+      <p style="font-size:20px;margin-top:12px;">Ring, Nest, Arlo, Wyze, Blink, Eufy</p>
+      <div class="step" style="margin-top:16px;"><div class="step-n">1</div><div class="step-c"><p style="font-size:18px;">Select camera brand in Meridian</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><p style="font-size:18px;">Click "Connect Account" → customer signs in via OAuth</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><p style="font-size:18px;">All cameras appear automatically. No passwords stored.</p></div></div>
+      <div class="tip amber" style="font-size:16px;margin-top:12px;">
+        <div class="tip-label">⚠️ NOTE</div>
+        Cloud cameras sample every 5–15s. For real-time → use local cameras or Bridge.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 12: BUZZWORDS - ANALYTICS ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">07</div><h2>Buzzwords: Analytics & AI</h2><div class="sec-line"></div></div>
+
+  <div class="g3">
+    <div class="buzz"><div class="buzz-t">POS Intelligence</div><div class="buzz-d">AI-powered analysis of transaction data. Finds patterns, anomalies, and opportunities.</div><div class="buzz-u">"Your POS intelligence shows exactly where revenue is leaking."</div></div>
+    <div class="buzz"><div class="buzz-t">Fusion Intelligence</div><div class="buzz-d">POS + camera data combined — insights neither can generate alone. Meridian's unique edge.</div><div class="buzz-u">"Traffic up 23% but revenue flat — your conversion dropped."</div></div>
+    <div class="buzz"><div class="buzz-t">Anomaly Detection</div><div class="buzz-d">AI flags unusual activity — revenue dips, void spikes, unexpected traffic drops.</div><div class="buzz-u">"You'll get an alert the moment something looks off."</div></div>
+    <div class="buzz"><div class="buzz-t">Conversion Rate</div><div class="buzz-d">% of walk-ins who buy. Camera traffic ÷ POS transactions.</div><div class="buzz-u">"Your conversion is 52%. Industry average is 60%. That gap costs $2K/mo."</div></div>
+    <div class="buzz"><div class="buzz-t">Menu Engineering</div><div class="buzz-d">Stars (high margin + high sales), Plow Horses, Puzzles, Dogs. Cut the Dogs, promote the Stars.</div><div class="buzz-u">"Your brisket plate is a Star. The Caesar wrap is a Dog — remove it."</div></div>
+    <div class="buzz"><div class="buzz-t">Predictive Forecasting</div><div class="buzz-d">AI predicts tomorrow's sales, demand, and seasonal trends with 90%+ accuracy.</div><div class="buzz-u">"Meridian predicts $4,200 on Friday. Prep accordingly."</div></div>
+    <div class="buzz"><div class="buzz-t">"Money Left on the Table"</div><div class="buzz-d">Single dollar amount showing how much revenue the business is missing.</div><div class="buzz-u">"Your score this month is $3,400. Let me show you where."</div></div>
+    <div class="buzz"><div class="buzz-t">Average Ticket Size</div><div class="buzz-d">Average $ per transaction. Even $2 more = thousands per month.</div><div class="buzz-u">"Your avg ticket is $18.40. Getting to $20 = $1,600 more/month."</div></div>
+    <div class="buzz"><div class="buzz-t">Dwell Time</div><div class="buzz-d">How long customers stay in a specific area. Long dwell + low buy = problem.</div><div class="buzz-u">"3 min at pastry case but only 8% buy. Try a sample tray."</div></div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 13: BUZZWORDS - TECHNICAL + BUSINESS ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">07</div><h2>Buzzwords: Technical & Business</h2><div class="sec-line"></div></div>
+
+  <div class="g2">
+    <div>
+      <div style="font-family:monospace;font-size:18px;letter-spacing:0.1em;color:#4FE3C1;margin-bottom:16px;">🔧 TECHNICAL TERMS</div>
+      <div class="g2" style="gap:16px;">
+        <div class="buzz"><div class="buzz-t c">POS System</div><div class="buzz-d">The register/checkout. Square, Clover, Toast.</div><div class="buzz-u">"We plug into whatever POS you already use."</div></div>
+        <div class="buzz"><div class="buzz-t c">API Key / Token</div><div class="buzz-d">A read-only password for data access.</div><div class="buzz-u">"Like a view-only password. We see data, can't touch it."</div></div>
+        <div class="buzz"><div class="buzz-t c">RTSP Stream</div><div class="buzz-d">Camera's video feed URL on the network.</div><div class="buzz-u">"We just need the camera's stream address."</div></div>
+        <div class="buzz"><div class="buzz-t c">Edge Processing</div><div class="buzz-d">AI runs inside customer's building. Maximum privacy.</div><div class="buzz-u">"Everything runs locally — total privacy."</div></div>
+        <div class="buzz"><div class="buzz-t c">NVR / DVR</div><div class="buzz-d">The security recorder box. We connect to it.</div><div class="buzz-u">"We connect to that and get all cameras at once."</div></div>
+        <div class="buzz"><div class="buzz-t c">OAuth</div><div class="buzz-d">Secure account connection without sharing passwords.</div><div class="buzz-u">"Just sign in and hit Allow."</div></div>
+      </div>
+    </div>
+    <div>
+      <div style="font-family:monospace;font-size:18px;letter-spacing:0.1em;color:#FFB74D;margin-bottom:16px;">💼 BUSINESS TERMS</div>
+      <div class="g2" style="gap:16px;">
+        <div class="buzz"><div class="buzz-t a">ROI</div><div class="buzz-d">Return on investment. Typically 10–20x in 60 days.</div><div class="buzz-u">"$250/mo → $2,500+ back in recovered revenue."</div></div>
+        <div class="buzz"><div class="buzz-t a">Churn</div><div class="buzz-d">Customer cancels. Walkthrough + quick ROI prevents this.</div><div class="buzz-u">"Once they see the data, they don't leave."</div></div>
+        <div class="buzz"><div class="buzz-t a">MRR</div><div class="buzz-d">Monthly recurring revenue. Your commission is % of this.</div><div class="buzz-u">Internal term — tracks your earnings.</div></div>
+        <div class="buzz"><div class="buzz-t a">COGS</div><div class="buzz-d">Cost of Goods Sold. Meridian tracks this vs. revenue.</div><div class="buzz-u">"COGS at 38%. Industry target 30%. That's $2,100/mo lost."</div></div>
+        <div class="buzz"><div class="buzz-t a">P&L</div><div class="buzz-d">Profit & Loss. Meridian automates daily P&L from POS.</div><div class="buzz-u">"Daily P&L automatically. No waiting for your accountant."</div></div>
+        <div class="buzz"><div class="buzz-t a">Upsell Rate</div><div class="buzz-d">How often extras are added. Tracked by register/employee.</div><div class="buzz-u">"Register 1: 28% upsell. Register 2: 9%. Training opp."</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 14: CLOSING PLAYBOOK ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">08</div><h2>The Closing Playbook</h2><div class="sec-line"></div></div>
+
+  <div class="g2">
+    <div>
+      <div class="script rep"><div class="script-l">YOU SAY (OPENING)</div><div class="script-t">"Hey [Name], I'm with Meridian. We help businesses like yours see exactly what's happening with their sales in real time — no guesswork, no spreadsheets."</div></div>
+      <div class="script rep"><div class="script-l">YOU SAY (PAIN POINT)</div><div class="script-t">"Quick question — do you currently know which hours bring in the most revenue? Or which items have the best margins?"</div></div>
+      <div class="script note"><div class="script-l">🎯 WAIT FOR RESPONSE</div><div class="script-t">Let them talk. Listen for: "I don't really know my numbers," "my accountant does that" = they need Meridian.</div></div>
+      <div class="script rep"><div class="script-l">YOU SAY (SOLUTION)</div><div class="script-t">"We connect to your [POS] and give you a live AI dashboard. 5 minutes to set up. No contract, cancel anytime."</div></div>
+    </div>
+    <div>
+      <div class="script rep"><div class="script-l">YOU SAY (VALUE)</div><div class="script-t">"Most clients find $2,000+ in missing revenue in month one. It's $250/month — pays for itself 10x over."</div></div>
+      <div class="script rep"><div class="script-l">YOU SAY (CLOSE)</div><div class="script-t">"Want me to show you a proposal for [Business Name]? I can pull it up right now."</div></div>
+      <div style="margin-top:24px;">
+        <h3 style="margin-bottom:16px;">⚡ Power Closes</h3>
+        <div class="card" style="margin-bottom:12px;padding:20px;">
+          <span class="bold vio">Assumptive:</span> <span style="color:#A1A1A8;">"Let's get you set up — monthly or weekly billing?"</span>
+        </div>
+        <div class="card" style="margin-bottom:12px;padding:20px;">
+          <span class="bold vio">Social Proof:</span> <span style="color:#A1A1A8;">"We just onboarded a similar business down the street — $3K in recovered revenue week one."</span>
+        </div>
+        <div class="card" style="margin-bottom:12px;padding:20px;">
+          <span class="bold cya">Urgency:</span> <span style="color:#A1A1A8;">"First 50 customers get Camera Intelligence free."</span>
+        </div>
+        <div class="card" style="padding:20px;">
+          <span class="bold cya">Risk Reversal:</span> <span style="color:#A1A1A8;">"Zero risk — no contract, cancel anytime."</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 15: OBJECTIONS ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">09</div><h2>Handling Objections</h2><div class="sec-line"></div></div>
+
+  <div class="g2">
+    <div>
+      <div class="obj" style="border-left:3px solid #FF5252;background:rgba(255,82,82,0.04);">
+        <div class="obj-q" style="color:#FF5252;">"It's too expensive."</div>
+        <div class="obj-a">"Most clients find $2,000+ in missing revenue month one. That's 10x ROI. No contract — cancel anytime."</div>
+      </div>
+      <div class="obj" style="border-left:3px solid #FFB74D;background:rgba(255,183,77,0.04);">
+        <div class="obj-q" style="color:#FFB74D;">"We already track our sales."</div>
+        <div class="obj-a">"Meridian uses AI to spot patterns you'd never catch manually — underperforming hours, items to push, conversion drops. It's the difference between a speedometer and a pit crew."</div>
+      </div>
+      <div class="obj" style="border-left:3px solid #7C5CFF;background:rgba(124,92,255,0.04);">
+        <div class="obj-q" style="color:#7C5CFF;">"Let me think about it."</div>
+        <div class="obj-a">"What specific concerns do you have? Let me set it up today — try it for a week. If it doesn't wow you, cancel free."</div>
+      </div>
+    </div>
+    <div>
+      <div class="obj" style="border-left:3px solid #4FE3C1;background:rgba(79,227,193,0.04);">
+        <div class="obj-q" style="color:#4FE3C1;">"I'm not tech-savvy."</div>
+        <div class="obj-a">"You don't need to be! I handle the entire setup — 5 minutes. After that, just check your dashboard like email."</div>
+      </div>
+      <div class="obj" style="border-left:3px solid #9B7FFF;background:rgba(155,127,255,0.04);">
+        <div class="obj-q" style="color:#9B7FFF;">"I don't want you accessing my data."</div>
+        <div class="obj-a">"Read-only — we can never move money or change anything. For cameras, no video is stored or sent to the cloud. All local. Disconnect anytime."</div>
+      </div>
+      <div class="obj" style="border-left:3px solid #4FE3C1;background:rgba(79,227,193,0.04);">
+        <div class="obj-q" style="color:#4FE3C1;">"Need to talk to my partner."</div>
+        <div class="obj-a">"Let me email you the proposal to share. Can I follow up tomorrow to answer their questions?"</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 16: PRICING ═══ -->
+<div class="slide">
+  <div class="sec-header"><div class="sec-num">10</div><h2>Pricing Quick Reference</h2><div class="sec-line"></div></div>
+
+  <div class="g3" style="margin-bottom:40px;">
+    <div class="card price">
+      <div class="price-name">Weekly</div>
+      <div class="price-amt">$65<span class="price-int">/week</span></div>
+      <p style="font-size:18px;color:#6B6B73;margin-top:4px;">No commitment</p>
+      <ul class="price-feat">
+        <li>POS analytics dashboard</li>
+        <li>Revenue + product insights</li>
+        <li>Anomaly detection</li>
+        <li>Email alerts</li>
+        <li>1 POS integration</li>
+      </ul>
+    </div>
+    <div class="card-glow price" style="position:relative;">
+      <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#7C5CFF,#4FE3C1);padding:6px 24px;border-radius:20px;font-size:14px;font-weight:700;letter-spacing:0.1em;">MOST POPULAR</div>
+      <div class="price-name">Standard</div>
+      <div class="price-amt">$250<span class="price-int">/mo</span></div>
+      <p style="font-size:18px;color:#6B6B73;margin-top:4px;">Best value</p>
+      <ul class="price-feat">
+        <li>Everything in Weekly</li>
+        <li>Monthly savings vs. weekly</li>
+        <li>Camera Intelligence (first 50 FREE)</li>
+        <li>Priority onboarding</li>
+      </ul>
+    </div>
+    <div class="card price">
+      <div class="price-name" style="color:#4FE3C1;">Premium</div>
+      <div class="price-amt">$500<span class="price-int">/mo</span></div>
+      <p style="font-size:18px;color:#6B6B73;margin-top:4px;">Full power</p>
+      <ul class="price-feat">
+        <li>Everything in Standard</li>
+        <li>Predictive engine</li>
+        <li>Menu engineering AI</li>
+        <li>Staff optimization</li>
+        <li>Camera intelligence</li>
+        <li>Priority support</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="padding:28px 36px;">
+    <div class="g2" style="align-items:center;">
+      <div>
+        <h3>💰 Commission Structure</h3>
+        <p>30–60% per rep. Recurring every month the customer stays active.</p>
+      </div>
+      <div class="tip purple" style="margin:0;font-size:20px;">
+        <div class="tip-label">🏆 EXAMPLE</div>
+        30% of $250/mo = $75/mo per deal. Close 10 deals = $750/mo. Close 20 = $1,500/mo. Recurring.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SLIDE 17: CLOSING SLIDE ═══ -->
+<div class="slide" style="display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
+  <div class="eyebrow" style="margin-bottom:24px;">MERIDIAN INTELLIGENCE</div>
+  <div class="title" style="font-size:120px;">Go <span class="v">Close</span> Deals.</div>
+  <div style="font-size:24px;color:#6B6B73;margin-top:48px;">meridian.tips · Sales Portal: meridian-sales-f7df5b93.viktor.space</div>
+</div>
+
+</body>
+</html>
