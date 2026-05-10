@@ -106,8 +106,48 @@ class BaseAgent(ABC):
     # ─── ML Engine Methods (lazy-loaded, graceful fallback) ──
 
     def forecast(self, series: list[dict], periods: int = 30) -> list[dict]:
-        """Forecast using Prophet (≥30 data points) or manual fallback."""
+        """Forecast using statsforecast (preferred), Prophet, or manual fallback."""
+        if len(series) >= 7:
+            # --- Tier 1: statsforecast AutoARIMA (fast, no cmdstan dependency) ---
+            try:
+                import pandas as pd
+                from statsforecast import StatsForecast
+                from statsforecast.models import AutoARIMA
+
+                df = pd.DataFrame(series)
+                if "date" in df.columns:
+                    df = df.rename(columns={"date": "ds", "revenue_cents": "y"})
+                elif "ds" not in df.columns:
+                    df.columns = ["ds", "y"] + list(df.columns[2:])
+
+                df["ds"] = pd.to_datetime(df["ds"])
+                df["unique_id"] = "series_1"
+                df = df[["unique_id", "ds", "y"]].sort_values("ds").reset_index(drop=True)
+
+                season_length = 7  # weekly seasonality
+                sf = StatsForecast(
+                    models=[AutoARIMA(season_length=season_length)],
+                    freq="D",
+                    n_jobs=1,
+                )
+                sf.fit(df)
+                fc = sf.predict(h=periods, level=[90])
+                return [
+                    {
+                        "date": row["ds"].strftime("%Y-%m-%d") if hasattr(row["ds"], "strftime") else str(row["ds"]),
+                        "predicted": round(row["AutoARIMA"]),
+                        "lower": round(row.get("AutoARIMA-lo-90", row["AutoARIMA"] * 0.85)),
+                        "upper": round(row.get("AutoARIMA-hi-90", row["AutoARIMA"] * 1.15)),
+                    }
+                    for _, row in fc.reset_index().iterrows()
+                ]
+            except ImportError:
+                logger.debug("statsforecast not installed — trying Prophet")
+            except Exception as e:
+                logger.warning(f"statsforecast forecast failed: {e} — trying Prophet")
+
         if len(series) >= 30:
+            # --- Tier 2: Prophet (requires cmdstan, heavier) ---
             try:
                 import pandas as pd
                 from prophet import Prophet

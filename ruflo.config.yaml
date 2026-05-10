@@ -1,12 +1,12 @@
 name: meridian-pos-intelligence
 version: 2.0.0
-description: 20-agent POS + Vision Intelligence swarm for Meridian analytics platform
+description: 27-agent POS + Vision Intelligence swarm for Meridian analytics platform
 
 model: claude-haiku-3-5-20251001
 max_tokens: 4096
 
 topology: hierarchical
-max_agents: 20
+max_agents: 27
 strategy: specialized
 consensus: raft
 

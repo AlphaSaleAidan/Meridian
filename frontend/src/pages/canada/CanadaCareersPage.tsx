@@ -58,8 +58,8 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
     title: 'Canadian Regional Director, Meridian',
     company: 'Nexus Consulting',
     bio: "Leading Meridian's expansion across Canadian markets.",
-    linkedin_url: '', // TODO: replace with real contact URL
-    email: '',
+    linkedin_url: 'https://www.linkedin.com/company/nexusconsulting',
+    email: 'cheungenochmgmt@gmail.com',
     photo_url: null,
     region: 'canada',
     active: true,

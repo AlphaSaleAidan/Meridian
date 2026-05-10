@@ -11,6 +11,13 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger("meridian.ai.predictive.churn")
 
+# Optional: SHAP for explainable churn predictions
+try:
+    import shap
+    HAS_SHAP = True
+except ImportError:
+    HAS_SHAP = False
+
 
 class ChurnWarningAgent:
     """Detect customer churn signals and prioritize win-back targets."""
@@ -90,6 +97,26 @@ class ChurnWarningAgent:
             reverse=True,
         )[:10]
 
+        # SHAP: explain why each at-risk customer is flagged
+        shap_explanations = self._explain_churn(customers, at_risk) if at_risk else []
+
+        win_back_entries = []
+        for c in win_back[:5]:
+            entry = {
+                "customer_id": c["customer_id"],
+                "monthly_value_cents": c["monthly_value_cents"],
+                "churn_probability": c["churn_probability"],
+                "days_since_last": c["days_since_last"],
+                "visit_count": c["visit_count"],
+            }
+            # Attach SHAP "why" if available
+            cid = c["customer_id"]
+            for expl in shap_explanations:
+                if expl["customer_id"] == cid:
+                    entry["why"] = expl["top_factors"]
+                    break
+            win_back_entries.append(entry)
+
         return {
             "agent_name": self.name,
             "status": "complete",
@@ -104,16 +131,7 @@ class ChurnWarningAgent:
                 "churned": len(segments["churned"]),
             },
             "churn_revenue_at_risk_cents": churn_revenue,
-            "win_back_priority": [
-                {
-                    "customer_id": c["customer_id"],
-                    "monthly_value_cents": c["monthly_value_cents"],
-                    "churn_probability": c["churn_probability"],
-                    "days_since_last": c["days_since_last"],
-                    "visit_count": c["visit_count"],
-                }
-                for c in win_back[:5]
-            ],
+            "win_back_priority": win_back_entries,
             "total_customers_tracked": len(customers),
             "data_quality": 0.6 if len(customers) >= 20 else 0.4,
             "insights": [
@@ -219,3 +237,86 @@ class ChurnWarningAgent:
             }
 
         return result
+
+    def _explain_churn(self, all_customers: dict, at_risk: list[dict]) -> list[dict]:
+        """Use SHAP to explain top churn factors per at-risk customer.
+
+        Falls back to a heuristic explanation if SHAP is unavailable.
+        """
+        feature_names = [
+            "days_since_last", "avg_interval_days", "visit_count",
+            "avg_ticket_cents", "span_days",
+        ]
+
+        if not HAS_SHAP or len(all_customers) < 10:
+            # Heuristic fallback: rank factors by deviation from mean
+            explanations = []
+            for c in at_risk[:5]:
+                factors = []
+                if c.get("days_since_last", 0) > c.get("avg_interval_days", 30) * 2:
+                    factors.append(f"Overdue by {c['days_since_last'] - int(c.get('avg_interval_days', 30)*2)} days")
+                if c.get("ticket_trend") == "declining":
+                    factors.append("Declining ticket size")
+                if c.get("visit_count", 0) < 5:
+                    factors.append("Low visit frequency")
+                if not factors:
+                    factors.append("Extended absence pattern")
+                explanations.append({
+                    "customer_id": c["customer_id"],
+                    "top_factors": factors[:3],
+                    "method": "heuristic",
+                })
+            return explanations
+
+        try:
+            import numpy as np
+
+            # Build feature matrix from ALL customers for background
+            rows = []
+            cids = []
+            for cid, p in all_customers.items():
+                rows.append([
+                    p.get("days_since_last", 0) if "days_since_last" in p else 0,
+                    p.get("avg_interval_days", 30),
+                    p.get("visit_count", 0),
+                    p.get("avg_ticket_cents", 0),
+                    p.get("span_days", 0),
+                ])
+                cids.append(cid)
+            X = np.array(rows, dtype=float)
+
+            # Labels: 1 = at-risk/churned, 0 = retained
+            at_risk_ids = {c["customer_id"] for c in at_risk}
+            y = np.array([1 if cid in at_risk_ids else 0 for cid in cids])
+
+            # Train a lightweight model for SHAP to explain
+            from sklearn.ensemble import GradientBoostingClassifier
+            model = GradientBoostingClassifier(n_estimators=50, max_depth=3, random_state=42)
+            model.fit(X, y)
+
+            explainer = shap.TreeExplainer(model)
+            shap_values = explainer.shap_values(X)
+
+            explanations = []
+            for c in at_risk[:5]:
+                cid = c["customer_id"]
+                if cid not in cids:
+                    continue
+                idx = cids.index(cid)
+                sv = shap_values[idx]
+                # Top 3 absolute SHAP contributors
+                top_indices = np.argsort(np.abs(sv))[::-1][:3]
+                factors = []
+                for fi in top_indices:
+                    fname = feature_names[fi]
+                    direction = "increases" if sv[fi] > 0 else "decreases"
+                    factors.append(f"{fname} ({direction} churn risk)")
+                explanations.append({
+                    "customer_id": cid,
+                    "top_factors": factors,
+                    "method": "shap",
+                })
+            return explanations
+        except Exception as e:
+            logger.warning(f"SHAP churn explanation failed: {e}")
+            return []

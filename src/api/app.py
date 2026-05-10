@@ -16,6 +16,29 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+# ── Sentry error tracking (must init before FastAPI) ──
+try:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN", ""),
+        traces_sample_rate=0.2,
+        environment=os.getenv("ENVIRONMENT", "production"),
+        send_default_pii=False,
+    )
+except ImportError:
+    pass
+
+# ── PostHog analytics (optional) ──
+try:
+    from posthog import Posthog
+    posthog_client = Posthog(
+        project_api_key=os.getenv("POSTHOG_API_KEY", ""),
+        host=os.getenv("POSTHOG_HOST", "https://us.i.posthog.com"),
+        disabled=not os.getenv("POSTHOG_API_KEY"),
+    )
+except ImportError:
+    posthog_client = None
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routes.oauth import router as oauth_router

@@ -11,6 +11,13 @@ import logging
 
 logger = logging.getLogger("meridian.ai.predictive.pricing")
 
+# Optional: SHAP for explainable pricing recommendations
+try:
+    import shap
+    HAS_SHAP = True
+except ImportError:
+    HAS_SHAP = False
+
 
 class DynamicPricingOptimizer:
     """Calculate context-dependent optimal prices."""
@@ -109,7 +116,7 @@ class DynamicPricingOptimizer:
             monthly_lift = int(daily_lift * 30)
             total_revenue_lift += monthly_lift
 
-            price_matrix.append({
+            entry = {
                 "product": name,
                 "current_price_cents": current_price,
                 "optimal_price_cents": dynamic_price,
@@ -121,7 +128,17 @@ class DynamicPricingOptimizer:
                     "seasonal_adj_pct": round(season_adj * 100, 1),
                 },
                 "predicted_monthly_lift_cents": monthly_lift,
-            })
+            }
+
+            # SHAP: explain why this price was recommended
+            why = self._explain_pricing(
+                peak_adj, slow_day_adj, season_adj,
+                elasticity, price_change, current_price,
+            )
+            if why:
+                entry["why"] = why
+
+            price_matrix.append(entry)
 
         price_matrix.sort(key=lambda x: x["predicted_monthly_lift_cents"], reverse=True)
 
@@ -170,3 +187,86 @@ class DynamicPricingOptimizer:
                 },
             ],
         }
+
+    def _explain_pricing(
+        self,
+        peak_adj: float,
+        slow_day_adj: float,
+        season_adj: float,
+        elasticity: float,
+        price_change: int,
+        current_price: int,
+    ) -> list[str]:
+        """Explain top 3 factors driving a pricing recommendation.
+
+        Uses SHAP with a simple linear model when available, otherwise
+        returns a heuristic explanation based on adjustment magnitudes.
+        """
+        feature_names = [
+            "peak_hour_demand",
+            "slow_day_discount",
+            "seasonal_adjustment",
+            "price_elasticity",
+        ]
+        feature_values = [peak_adj, slow_day_adj, season_adj, elasticity]
+
+        if HAS_SHAP:
+            try:
+                import numpy as np
+
+                # Use KernelExplainer on a simple linear prediction function
+                X_bg = np.array([[0.0, 0.0, 0.0, -1.0]])
+                X_instance = np.array([feature_values])
+
+                def pricing_model(X):
+                    """Simplified pricing impact model for SHAP."""
+                    return np.array([
+                        row[0] * 100 + row[1] * 100 + row[2] * 100 + (1 + 1/min(row[3], -0.1)) * 100
+                        if row[3] < -0.1 else row[0] * 100 + row[1] * 100 + row[2] * 100
+                        for row in X
+                    ])
+
+                explainer = shap.KernelExplainer(pricing_model, X_bg)
+                sv = explainer.shap_values(X_instance, nsamples=50)[0]
+                top_indices = np.argsort(np.abs(sv))[::-1][:3]
+
+                factors = []
+                for idx in top_indices:
+                    val = feature_values[idx]
+                    if abs(sv[idx]) < 0.01:
+                        continue
+                    name = feature_names[idx]
+                    if name == "peak_hour_demand" and val > 0:
+                        factors.append(f"High peak-hour demand supports +{val*100:.0f}% premium")
+                    elif name == "slow_day_discount" and val < 0:
+                        factors.append(f"Weak slow-day traffic warrants {val*100:.0f}% discount")
+                    elif name == "seasonal_adjustment" and val != 0:
+                        direction = "peak" if val > 0 else "slow"
+                        factors.append(f"Seasonal {direction} factor: {val*100:+.0f}%")
+                    elif name == "price_elasticity":
+                        if abs(elasticity) > 1.2:
+                            factors.append(f"Elastic demand (e={elasticity:.1f}) favors competitive pricing")
+                        else:
+                            factors.append(f"Inelastic demand (e={elasticity:.1f}) supports premium pricing")
+                return factors[:3] if factors else None
+            except Exception as e:
+                logger.debug(f"SHAP pricing explanation failed: {e}")
+
+        # Heuristic fallback: rank by absolute magnitude
+        factors = []
+        adjustments = sorted(
+            zip(
+                ["Peak-hour premium", "Slow-day discount", "Seasonal adjustment"],
+                [peak_adj, slow_day_adj, season_adj],
+            ),
+            key=lambda x: abs(x[1]),
+            reverse=True,
+        )
+        for label, val in adjustments:
+            if abs(val) > 0.01:
+                factors.append(f"{label}: {val*100:+.1f}%")
+        if abs(elasticity) > 1.2:
+            factors.append(f"Elastic demand (e={elasticity:.1f}) favors lower prices")
+        elif abs(elasticity) < 0.7:
+            factors.append(f"Inelastic demand (e={elasticity:.1f}) supports premiums")
+        return factors[:3] if factors else None

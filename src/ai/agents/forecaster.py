@@ -1,6 +1,14 @@
 from .base import BaseAgent
 from datetime import datetime, timedelta
 
+# Optional: statsforecast for higher-quality forecasting
+try:
+    from statsforecast import StatsForecast
+    from statsforecast.models import AutoARIMA
+    HAS_STATSFORECAST = True
+except ImportError:
+    HAS_STATSFORECAST = False
+
 
 class ForecasterAgent(BaseAgent):
     name = "forecaster"
@@ -36,7 +44,66 @@ class ForecasterAgent(BaseAgent):
         std_dev = 0
         error_rate = 0.3  # default
 
-        if calc_path == "full":
+        # --- Try statsforecast AutoARIMA first (better accuracy) ---
+        sf_used = False
+        if HAS_STATSFORECAST and n >= 14 and calc_path in ("full", "partial"):
+            try:
+                import pandas as pd
+                df = pd.DataFrame(sorted_days)
+                df = df.rename(columns={"date": "ds", "revenue_cents": "y"})
+                df["ds"] = pd.to_datetime(df["ds"])
+                df["unique_id"] = "revenue"
+                df = df[["unique_id", "ds", "y"]].sort_values("ds").reset_index(drop=True)
+
+                sf = StatsForecast(
+                    models=[AutoARIMA(season_length=7)],
+                    freq="D",
+                    n_jobs=1,
+                )
+                sf.fit(df)
+
+                for horizon_key, horizon_days in [("7_day", 7), ("30_day", 30), ("90_day", 90)]:
+                    if n < horizon_days // 4:
+                        continue
+                    fc = sf.predict(h=horizon_days, level=[90])
+                    fc = fc.reset_index()
+                    for _, row in fc.iterrows():
+                        day_i = int((_ + 1) if isinstance(_, int) else 1)
+                        ds = row["ds"]
+                        date_str = ds.strftime("%Y-%m-%d") if hasattr(ds, "strftime") else str(ds)
+                        predicted = max(0, round(row["AutoARIMA"]))
+                        lower = max(0, round(row.get("AutoARIMA-lo-90", predicted * 0.85)))
+                        upper = max(0, round(row.get("AutoARIMA-hi-90", predicted * 1.15)))
+                        # Match the sampling pattern of the manual approach
+                        idx = int(_) + 1
+                        if (
+                            horizon_key == "7_day"
+                            or (horizon_key == "30_day" and idx % 7 == 0)
+                            or (horizon_key == "90_day" and idx % 30 == 0)
+                        ):
+                            forecasts[horizon_key].append({
+                                "date": date_str,
+                                "predicted_cents": predicted,
+                                "lower_bound_cents": lower,
+                                "upper_bound_cents": upper,
+                                "confidence_pct": max(40, round((0.95 ** (idx / 7)) * 100)),
+                            })
+
+                sf_used = True
+                # Derive slope from statsforecast predictions for summary
+                if forecasts.get("7_day"):
+                    first_pred = forecasts["7_day"][0]["predicted_cents"]
+                    last_pred = forecasts["7_day"][-1]["predicted_cents"]
+                    slope = (last_pred - first_pred) / max(len(forecasts["7_day"]) - 1, 1)
+                error_rate = 0.15  # statsforecast is more accurate
+            except Exception as e:
+                import logging
+                logging.getLogger("meridian.ai.agents").warning(
+                    f"statsforecast failed, falling back to manual: {e}"
+                )
+                sf_used = False
+
+        if not sf_used and calc_path == "full":
             # FULL: linear regression + DOW seasonality + trend momentum
             x_mean = (n - 1) / 2
             num = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(values))
@@ -97,7 +164,7 @@ class ForecasterAgent(BaseAgent):
                             "confidence_pct": round(confidence_decay * 100),
                         })
 
-        elif calc_path == "partial":
+        elif not sf_used and calc_path == "partial":
             # PARTIAL: simple moving average extrapolation
             window = min(n, 14)
             recent_avg = sum(values[-window:]) / window
@@ -128,7 +195,7 @@ class ForecasterAgent(BaseAgent):
                             "confidence_pct": max(40, round((0.95 ** (i / 7)) * 80)),
                         })
 
-        else:
+        elif not sf_used:
             # MINIMAL: benchmark-based growth projection
             bench_range = self.get_benchmark_range("avg_daily_revenue_cents")
             if bench_range is not None:
