@@ -18,12 +18,15 @@ const STEPS = [
 
 type StepId = typeof STEPS[number]['id']
 
-const CHECKLIST_ITEMS = [
-  { id: 'password', label: 'Set your password' },
-  { id: 'profile', label: 'Complete your profile' },
-  { id: 'training', label: 'Start training modules' },
-  { id: 'first-lead', label: 'Add your first lead' },
-  { id: 'pipeline', label: 'Review your pipeline' },
+const REQUIRED_ITEMS = [
+  { id: 'training', label: 'Complete all training modules', link: '/canada/portal/training' },
+  { id: 'product-overview', label: 'Read the Meridian product overview', link: '/canada/portal/training' },
+  { id: 'demo-practice', label: 'Practice the demo at least once', link: '/canada/portal/leads?new=true' },
+]
+const RECOMMENDED_ITEMS = [
+  { id: 'book-call', label: 'Book your onboarding call with your manager' },
+  { id: 'prospects', label: 'Identify your first 10 prospects' },
+  { id: 'first-lead', label: 'Submit your first lead' },
 ]
 
 const PROVINCES = ['Alberta','British Columbia','Manitoba','New Brunswick','Newfoundland and Labrador','Northwest Territories','Nova Scotia','Nunavut','Ontario','Prince Edward Island','Quebec','Saskatchewan','Yukon']
@@ -175,37 +178,39 @@ export default function CanadaPortalOnboardingPage() {
                 <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
                   <Sparkles size={22} className="text-[#00d4aa]" />
                 </div>
-                <h2 className="text-lg font-bold text-white">Welcome to Meridian</h2>
+                <h2 className="text-lg font-bold text-white">
+                  Welcome to Meridian, {rep?.name?.split(' ')[0] || 'there'}
+                </h2>
                 <p className="text-sm text-[#6b7a74] mt-1">
-                  Hi {rep?.name?.split(' ')[0] || 'there'}, you're now part of the Meridian Canada sales team.
+                  You're now part of the Meridian Canada sales team.
                 </p>
               </div>
-              <div className="space-y-3 text-sm text-[#6b7a74]">
-                <div className="flex items-start gap-3 p-3 bg-[#0a0f0d] rounded-lg">
-                  <div className="w-6 h-6 rounded-full bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-[#00d4aa] text-xs font-bold">1</span>
+
+              {/* Income Projection Cards */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Month 1', amount: 'CA$2,025', sub: '5 closes' },
+                  { label: 'Month 6', amount: 'CA$12,150', sub: '30 closes' },
+                  { label: 'Month 12', amount: 'CA$24,300', sub: '60 closes' },
+                ].map(card => (
+                  <div key={card.label} className="bg-[#0a0f0d] border border-[#1a2420] rounded-xl p-4 text-center">
+                    <p className="text-[10px] font-medium text-[#6b7a74] uppercase tracking-wide">{card.label}</p>
+                    <p className="text-xl font-bold text-[#f0b429] mt-1">{card.amount}</p>
+                    <p className="text-[10px] text-[#4a5550] mt-0.5">{card.sub}</p>
                   </div>
-                  <p><span className="text-white font-medium">Complete your profile</span> — Add your contact details and location.</p>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-[#0a0f0d] rounded-lg">
-                  <div className="w-6 h-6 rounded-full bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-[#00d4aa] text-xs font-bold">2</span>
-                  </div>
-                  <p><span className="text-white font-medium">Start training</span> — Go through the sales modules at your own pace.</p>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-[#0a0f0d] rounded-lg">
-                  <div className="w-6 h-6 rounded-full bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="text-[#00d4aa] text-xs font-bold">3</span>
-                  </div>
-                  <p><span className="text-white font-medium">Add your first lead</span> — Start building your pipeline.</p>
-                </div>
+                ))}
               </div>
+
+              <p className="text-center text-sm font-semibold text-white">
+                Every account you close pays you every month.
+              </p>
+
               <div className="flex justify-between">
                 <button onClick={prevStep} className={btnSecondary}>
                   <ChevronLeft size={16} /> Back
                 </button>
                 <button onClick={nextStep} className={btnPrimary}>
-                  Continue <ChevronRight size={16} />
+                  Let's Get Started <ChevronRight size={16} />
                 </button>
               </div>
             </div>
@@ -257,31 +262,49 @@ export default function CanadaPortalOnboardingPage() {
             </div>
           )}
 
-          {/* Step 4: Meet Your Manager */}
+          {/* Step 4: Meet Your Managers */}
           {step === 'manager' && (
             <div className="space-y-5">
               <div className="text-center">
                 <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
                   <Users size={22} className="text-[#00d4aa]" />
                 </div>
-                <h2 className="text-lg font-bold text-white">Meet Your Manager</h2>
-                <p className="text-sm text-[#6b7a74] mt-1">Here's who you'll be working with.</p>
+                <h2 className="text-lg font-bold text-white">Meet Your Managers</h2>
+                <p className="text-sm text-[#6b7a74] mt-1">Here's who you'll be working with in Canada.</p>
               </div>
-              <div className="bg-[#0a0f0d] border border-[#1a2420] rounded-xl p-5">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-[#7c3aed]/20 flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm font-bold text-[#7c3aed]">AP</span>
+              <div className="space-y-3">
+                <div className="bg-[#0a0f0d] border border-[#1a2420] rounded-xl p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-[#00d4aa]/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-[#00d4aa]">EC</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">Enoch Cheung</p>
+                      <p className="text-xs text-[#6b7a74]">Canadian Regional Director</p>
+                      <p className="text-[10px] text-[#00d4aa] mt-0.5">Nexus Consulting</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">Aidan Pierce</p>
-                    <p className="text-xs text-[#6b7a74]">Sales Manager</p>
-                    <p className="text-xs text-[#00d4aa] mt-1">apierce@alphasale.co</p>
-                  </div>
+                  <p className="text-xs text-[#6b7a74] mt-4 leading-relaxed">
+                    Enoch leads Meridian's Canadian expansion. He's your primary contact for pipeline strategy,
+                    deal support, and regional questions. Don't hesitate to reach out.
+                  </p>
                 </div>
-                <p className="text-xs text-[#6b7a74] mt-4 leading-relaxed">
-                  Aidan oversees the Canadian sales operation and is your go-to for pipeline strategy,
-                  deal support, and escalations. Don't hesitate to reach out.
-                </p>
+                <div className="bg-[#0a0f0d] border border-[#1a2420] rounded-xl p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-full bg-[#7c3aed]/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-[#7c3aed]">AN</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">Aidan Nguyen</p>
+                      <p className="text-xs text-[#6b7a74]">Canadian Admin</p>
+                      <p className="text-[10px] text-[#00d4aa] mt-0.5">Meridian</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[#6b7a74] mt-4 leading-relaxed">
+                    Aidan handles onboarding support, training materials, and account setup.
+                    Reach out for any technical or portal questions.
+                  </p>
+                </div>
               </div>
               <div className="flex justify-between">
                 <button onClick={prevStep} className={btnSecondary}>
@@ -295,53 +318,119 @@ export default function CanadaPortalOnboardingPage() {
           )}
 
           {/* Step 5: Checklist */}
-          {step === 'checklist' && (
-            <div className="space-y-5">
-              <div className="text-center">
-                <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                  <CheckSquare size={22} className="text-[#00d4aa]" />
+          {step === 'checklist' && (() => {
+            const requiredDone = REQUIRED_ITEMS.filter(i => checkedItems.has(i.id)).length
+            const allRequiredDone = requiredDone === REQUIRED_ITEMS.length
+            return (
+              <div className="space-y-5">
+                <div className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
+                    <CheckSquare size={22} className="text-[#00d4aa]" />
+                  </div>
+                  <h2 className="text-lg font-bold text-white">Getting Started Checklist</h2>
+                  <p className="text-sm text-[#6b7a74] mt-1">Complete the required items to unlock your dashboard.</p>
                 </div>
-                <h2 className="text-lg font-bold text-white">Getting Started Checklist</h2>
-                <p className="text-sm text-[#6b7a74] mt-1">Complete these tasks to hit the ground running.</p>
-              </div>
-              <div className="space-y-2">
-                {CHECKLIST_ITEMS.map(item => {
-                  const checked = checkedItems.has(item.id)
-                  return (
+
+                {/* Progress bar */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-[#6b7a74]">Required Progress</span>
+                    <span className="text-xs font-semibold text-[#00d4aa]">{requiredDone}/{REQUIRED_ITEMS.length}</span>
+                  </div>
+                  <div className="h-2 bg-[#1a2420] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-[#00d4aa] rounded-full transition-all duration-500"
+                      style={{ width: `${(requiredDone / REQUIRED_ITEMS.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Required items */}
+                <div>
+                  <p className="text-[10px] font-semibold text-[#6b7a74] uppercase tracking-wider mb-2">Required</p>
+                  <div className="space-y-2">
+                    {REQUIRED_ITEMS.map(item => {
+                      const checked = checkedItems.has(item.id)
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setCheckedItems(prev => {
+                              const next = new Set(prev)
+                              if (next.has(item.id)) next.delete(item.id)
+                              else next.add(item.id)
+                              return next
+                            })
+                          }}
+                          className="w-full flex items-center gap-3 p-3 bg-[#0a0f0d] rounded-lg hover:bg-[#0a0f0d]/80 transition-colors text-left"
+                        >
+                          <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                            checked ? 'bg-[#00d4aa] text-[#0a0f0d]' : 'border border-[#1a2420]'
+                          }`}>
+                            {checked && <Check size={12} />}
+                          </div>
+                          <span className={`text-sm flex-1 ${checked ? 'text-[#6b7a74] line-through' : 'text-white'}`}>
+                            {item.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Recommended items */}
+                <div>
+                  <p className="text-[10px] font-semibold text-[#6b7a74] uppercase tracking-wider mb-2">Recommended</p>
+                  <div className="space-y-2">
+                    {RECOMMENDED_ITEMS.map(item => {
+                      const checked = checkedItems.has(item.id)
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setCheckedItems(prev => {
+                              const next = new Set(prev)
+                              if (next.has(item.id)) next.delete(item.id)
+                              else next.add(item.id)
+                              return next
+                            })
+                          }}
+                          className="w-full flex items-center gap-3 p-3 bg-[#0a0f0d]/50 rounded-lg hover:bg-[#0a0f0d]/80 transition-colors text-left"
+                        >
+                          <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                            checked ? 'bg-[#00d4aa]/60 text-[#0a0f0d]' : 'border border-[#1a2420]/60'
+                          }`}>
+                            {checked && <Check size={12} />}
+                          </div>
+                          <span className={`text-sm ${checked ? 'text-[#4a5550] line-through' : 'text-[#6b7a74]'}`}>
+                            {item.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <button onClick={prevStep} className={btnSecondary}>
+                    <ChevronLeft size={16} /> Back
+                  </button>
+                  <div className="flex gap-2">
+                    <a href="/canada/portal/training" className={btnSecondary + ' border border-[#1a2420] rounded-lg px-4'}>
+                      Go to Training
+                    </a>
                     <button
-                      key={item.id}
-                      onClick={() => {
-                        setCheckedItems(prev => {
-                          const next = new Set(prev)
-                          if (next.has(item.id)) next.delete(item.id)
-                          else next.add(item.id)
-                          return next
-                        })
-                      }}
-                      className="w-full flex items-center gap-3 p-3 bg-[#0a0f0d] rounded-lg hover:bg-[#0a0f0d]/80 transition-colors text-left"
+                      onClick={handleFinish}
+                      disabled={!allRequiredDone}
+                      className={`${btnPrimary} ${!allRequiredDone ? 'opacity-40 cursor-not-allowed' : 'animate-pulse'}`}
                     >
-                      <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
-                        checked ? 'bg-[#00d4aa] text-[#0a0f0d]' : 'border border-[#1a2420]'
-                      }`}>
-                        {checked && <Check size={12} />}
-                      </div>
-                      <span className={`text-sm ${checked ? 'text-[#6b7a74] line-through' : 'text-white'}`}>
-                        {item.label}
-                      </span>
+                      Go to My Dashboard <ChevronRight size={16} />
                     </button>
-                  )
-                })}
+                  </div>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <button onClick={prevStep} className={btnSecondary}>
-                  <ChevronLeft size={16} /> Back
-                </button>
-                <button onClick={handleFinish} className={btnPrimary}>
-                  Go to Dashboard <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
 
         <p className="text-center text-[10px] text-[#4a5550] mt-4">

@@ -13,7 +13,7 @@ const PROVINCES = ['ON','BC','AB','QC','MB','SK','NS','NB','NL','PE','NT','YT','
 const HEAR_OPTIONS = ['LinkedIn','Referral','Job Board','Social Media','Other'] as const
 const AVAILABILITY = ['Immediately','2 weeks','1 month','Other'] as const
 
-const INPUT = 'w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-3 py-2.5 text-[#F5F5F7] text-[14px] focus:outline-none focus:border-[#1A8FD6]/50 transition-colors'
+const INPUT = 'w-full bg-[#0f1512] border border-[#1a2420] rounded-lg px-3 py-2.5 text-[#F5F5F7] text-[14px] focus:outline-none focus:border-[#00d4aa]/50 transition-colors'
 const LABEL = 'block text-[12px] text-[#A1A1A8] font-medium mb-1.5'
 
 const positions = [
@@ -67,7 +67,7 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
   },
 ]
 
-const empty = { name: '', email: '', phone: '', position: '', city: '', province: '', experience: '', employer: '', linkedin: '', heardFrom: '', availability: '', message: '' }
+const empty = { name: '', email: '', phone: '', position: '', city: '', province: '', experience: '', yearsExperience: '', commissionExperience: '', employer: '', linkedin: '', heardFrom: '', availability: '', referral: '', message: '' }
 
 export default function CanadaCareersPage() {
   const navigate = useNavigate()
@@ -136,17 +136,57 @@ export default function CanadaCareersPage() {
 
       {/* HERO */}
       <section className="pt-32 pb-16 relative">
-        <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] rounded-full bg-[#1A8FD6]/8 blur-[120px]" />
+        <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] rounded-full bg-[#00d4aa]/8 blur-[120px]" />
         <div className="max-w-5xl mx-auto px-6 text-center relative">
           <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, ease: EASE }} className="flex justify-center mb-6">
             <MeridianEmblem size={56} />
           </motion.div>
           <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay: 0.05 }} className="text-4xl md:text-6xl font-bold text-[#F5F5F7] tracking-tight">
-            Join{' '}<em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian Canada</em>
+            Join the{' '}<em className="font-serif italic font-normal bg-gradient-to-r from-[#00d4aa] to-[#17C5B0] bg-clip-text text-transparent">Meridian Canada</em>{' '}Sales Team
           </motion.h1>
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE, delay: 0.1 }} className="mt-4 text-[#A1A1A8] text-[16px] max-w-lg mx-auto leading-relaxed">
-            We're expanding across Canada. Help local businesses thrive from coast to coast and earn great money doing it.
+            Build recurring income. Help Canadian businesses grow. Work on your terms.
           </motion.p>
+        </div>
+
+        {/* Income Projection Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: EASE, delay: 0.2 }}
+          className="max-w-2xl mx-auto px-6 mt-10 grid grid-cols-3 gap-4"
+        >
+          {[
+            { label: 'Month 1', amount: 'CA$2,025', sub: '5 closes at CA$405 avg' },
+            { label: 'Month 6', amount: 'CA$12,150', sub: '30 accounts paying monthly' },
+            { label: 'Month 12', amount: 'CA$24,300', sub: '60 accounts, recurring' },
+          ].map(card => (
+            <div key={card.label} className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 text-center hover:border-[#00d4aa]/30 transition-colors">
+              <p className="text-[10px] font-semibold text-[#6b7a74] uppercase tracking-wider">{card.label}</p>
+              <p className="text-2xl font-bold text-[#f0b429] mt-2">{card.amount}</p>
+              <p className="text-[10px] text-[#4a5550] mt-1">{card.sub}</p>
+            </div>
+          ))}
+        </motion.div>
+      </section>
+
+      {/* Why Meridian */}
+      <section className="pb-16">
+        <div className="max-w-5xl mx-auto px-6">
+          <h2 className="text-xl font-semibold text-[#F5F5F7] mb-6">Why Meridian?</h2>
+          <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { title: 'Recurring Income', desc: 'Every account you close pays you every month. Build a book of business that compounds.' },
+              { title: 'No Territory Lock', desc: 'Sell anywhere in Canada. No geographic restrictions. Your hustle, your territory.' },
+              { title: 'Month-to-Month', desc: 'No long-term contracts for merchants. The product sells itself because it delivers real ROI.' },
+              { title: 'Full Support', desc: 'Complete training, AI-powered proposals, and a portal to manage your entire pipeline.' },
+            ].map(item => (
+              <div key={item.title} className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 hover:border-[#00d4aa]/20 transition-colors">
+                <h3 className="text-sm font-semibold text-[#00d4aa] mb-2">{item.title}</h3>
+                <p className="text-[12px] text-[#6b7a74] leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -154,20 +194,20 @@ export default function CanadaCareersPage() {
       <section className="pb-16">
         <div className="max-w-5xl mx-auto px-6">
           <h2 className="text-xl font-semibold text-[#F5F5F7] mb-6 flex items-center gap-2">
-            <Briefcase size={20} className="text-[#1A8FD6]" /> Open Positions
+            <Briefcase size={20} className="text-[#00d4aa]" /> Open Positions
           </h2>
           <div className="grid md:grid-cols-2 gap-4">
             {positions.map((pos) => (
-              <motion.div key={pos.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }} className="rounded-xl border border-[#1F1F23] bg-[#111113]/80 p-6 hover:border-[#1A8FD6]/30 transition-colors">
+              <motion.div key={pos.title} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }} className="rounded-xl border border-[#1F1F23] bg-[#111113]/80 p-6 hover:border-[#00d4aa]/30 transition-colors">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="text-[#F5F5F7] font-semibold text-lg">{pos.title}</h3>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] px-2 py-0.5 rounded-full border border-[#1A8FD6]/30 text-[#1A8FD6] bg-[#1A8FD6]/10 font-medium">{pos.type}</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full border border-[#00d4aa]/30 text-[#00d4aa] bg-[#00d4aa]/10 font-medium">{pos.type}</span>
                       <span className="text-[11px] px-2 py-0.5 rounded-full border border-[#17C5B0]/30 text-[#17C5B0] bg-[#17C5B0]/10 font-medium">{pos.location}</span>
                     </div>
                   </div>
-                  <pos.icon size={24} className="text-[#1A8FD6]/60" />
+                  <pos.icon size={24} className="text-[#00d4aa]/60" />
                 </div>
                 <p className="text-[#A1A1A8] text-[13px] leading-relaxed mb-4">{pos.description}</p>
                 <ul className="space-y-1.5">
@@ -188,7 +228,7 @@ export default function CanadaCareersPage() {
         <section className="pb-16">
           <div className="max-w-5xl mx-auto px-6">
             <h2 className="text-xl font-semibold text-[#F5F5F7] mb-2 flex items-center gap-2">
-              <UserCircle size={20} className="text-[#1A8FD6]" /> Your Recruiter
+              <UserCircle size={20} className="text-[#00d4aa]" /> Your Recruiter
             </h2>
             <p className="text-[13px] text-[#A1A1A8] mb-6">Questions about the role? Reach out directly.</p>
             <div className={`grid gap-4 ${recruiters.length > 1 ? 'md:grid-cols-2' : 'max-w-md'}`}>
@@ -198,14 +238,14 @@ export default function CanadaCareersPage() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, ease: EASE }}
-                  className="rounded-xl border border-[#1F1F23] bg-[#111113]/80 p-6 hover:border-[#1A8FD6]/30 transition-colors"
+                  className="rounded-xl border border-[#1F1F23] bg-[#111113]/80 p-6 hover:border-[#00d4aa]/30 transition-colors"
                 >
                   <div className="flex items-center gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#1A8FD6]/20 to-[#17C5B0]/20 border border-[#1F1F23] flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#00d4aa]/20 to-[#17C5B0]/20 border border-[#1F1F23] flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {rec.photo_url ? (
                         <img src={rec.photo_url} alt={rec.name} className="w-full h-full object-cover rounded-full" />
                       ) : (
-                        <span className="text-xl font-bold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">
+                        <span className="text-xl font-bold bg-gradient-to-r from-[#00d4aa] to-[#17C5B0] bg-clip-text text-transparent">
                           {rec.name.split(' ').map(n => n[0]).join('')}
                         </span>
                       )}
@@ -213,7 +253,7 @@ export default function CanadaCareersPage() {
                     <div>
                       <h3 className="text-[#F5F5F7] font-semibold text-[15px]">{rec.name}</h3>
                       <p className="text-[12px] text-[#A1A1A8]">{rec.title}</p>
-                      <p className="text-[11px] text-[#1A8FD6] mt-0.5">{rec.company}</p>
+                      <p className="text-[11px] text-[#00d4aa] mt-0.5">{rec.company}</p>
                     </div>
                   </div>
                   {rec.bio && (
@@ -223,7 +263,7 @@ export default function CanadaCareersPage() {
                     href={rec.linkedin_url || rec.email ? `mailto:${rec.email}` : '#'}
                     target={rec.linkedin_url ? '_blank' : undefined}
                     rel={rec.linkedin_url ? 'noopener noreferrer' : undefined}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium text-[#1A8FD6] border border-[#1A8FD6]/30 rounded-lg bg-[#1A8FD6]/5 hover:bg-[#1A8FD6]/10 hover:border-[#1A8FD6]/50 transition-all"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-[13px] font-medium text-[#00d4aa] border border-[#00d4aa]/30 rounded-lg bg-[#00d4aa]/5 hover:bg-[#00d4aa]/10 hover:border-[#00d4aa]/50 transition-all"
                   >
                     <Linkedin size={14} /> Connect with {rec.name.split(' ')[0]}
                   </a>
@@ -238,7 +278,7 @@ export default function CanadaCareersPage() {
       <section className="pb-24">
         <div className="max-w-2xl mx-auto px-6">
           <h2 className="text-xl font-semibold text-[#F5F5F7] mb-6 flex items-center gap-2">
-            <Send size={20} className="text-[#1A8FD6]" /> Apply Now
+            <Send size={20} className="text-[#00d4aa]" /> Apply Now
           </h2>
 
           {submitted ? (
@@ -282,14 +322,25 @@ export default function CanadaCareersPage() {
                   </select>
                 </div>
               </div>
-              {/* Row 4: Experience + Employer */}
+              {/* Row 4: Experience */}
               <div className="grid sm:grid-cols-2 gap-4">
-                <div><label className={LABEL}>Sales Experience</label><input type="text" value={formData.experience} onChange={set('experience')} className={INPUT} placeholder="e.g. 2 years B2B, door-to-door" /></div>
-                <div><label className={LABEL}>Current Employer</label><input type="text" value={formData.employer} onChange={set('employer')} className={INPUT} placeholder="Optional" /></div>
+                <div><label className={LABEL}>Current Occupation</label><input type="text" value={formData.employer} onChange={set('employer')} className={INPUT} placeholder="e.g. Sales Rep at XYZ" /></div>
+                <div><label className={LABEL}>Years of Sales Experience *</label><input type="text" required value={formData.yearsExperience} onChange={set('yearsExperience')} className={INPUT} placeholder="e.g. 3 years" /></div>
               </div>
-              {/* Row 5: LinkedIn + Heard From */}
+              {/* Row 5: Commission + LinkedIn */}
               <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={LABEL}>Commission sales experience? *</label>
+                  <select required value={formData.commissionExperience} onChange={set('commissionExperience')} className={INPUT}>
+                    <option value="">Select</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                  </select>
+                </div>
                 <div><label className={LABEL}>LinkedIn URL</label><input type="url" value={formData.linkedin} onChange={set('linkedin')} className={INPUT} placeholder="https://linkedin.com/in/..." /></div>
+              </div>
+              {/* Row 6: How heard + Referral */}
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className={LABEL}>How did you hear about us?</label>
                   <select value={formData.heardFrom} onChange={set('heardFrom')} className={INPUT}>
@@ -297,8 +348,9 @@ export default function CanadaCareersPage() {
                     {HEAR_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </div>
+                <div><label className={LABEL}>Referral Name</label><input type="text" value={formData.referral} onChange={set('referral')} className={INPUT} placeholder="Who referred you? (optional)" /></div>
               </div>
-              {/* Row 6: Availability */}
+              {/* Row 7: Availability */}
               <div>
                 <label className={LABEL}>Availability</label>
                 <select value={formData.availability} onChange={set('availability')} className={INPUT}>
@@ -311,8 +363,8 @@ export default function CanadaCareersPage() {
                 <label className={LABEL}>Why do you want to join Meridian Canada?</label>
                 <textarea rows={4} value={formData.message} onChange={set('message')} className={`${INPUT} resize-none`} placeholder="Tell us a bit about yourself..." />
               </div>
-              <button type="submit" disabled={loading} className="w-full py-3 bg-[#1A8FD6] text-white font-medium rounded-lg hover:bg-[#1574B8] transition-colors duration-200 flex items-center justify-center gap-2 disabled:opacity-50">
-                <Send size={16} /> {loading ? 'Submitting...' : 'Submit Application'}
+              <button type="submit" disabled={loading} className="w-full py-3 bg-[#00d4aa] text-[#0a0f0d] font-semibold rounded-lg hover:bg-[#00b892] transition-colors duration-200 flex items-center justify-center gap-2 disabled:opacity-50">
+                <Send size={16} /> {loading ? 'Submitting...' : 'Apply Now'}
               </button>
             </form>
           )}
@@ -322,7 +374,7 @@ export default function CanadaCareersPage() {
       {/* FOOTER */}
       <footer className="border-t border-[#1F1F23]/40 py-8">
         <div className="max-w-5xl mx-auto px-6 text-center">
-          <p className="text-[11px] text-[#A1A1A8]/30">&copy; 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian Canada</span></p>
+          <p className="text-[11px] text-[#A1A1A8]/30">&copy; 2026 <span className="font-semibold bg-gradient-to-r from-[#00d4aa] to-[#17C5B0] bg-clip-text text-transparent">Meridian Canada</span></p>
         </div>
       </footer>
     </div>
