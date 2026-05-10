@@ -114,7 +114,7 @@ export default function CanadaPortalDashboardPage() {
   const mrr = Math.max(clientMrr, wonDealsMrr)
   const pipelineDeals = deals.filter(d => !['closed_won', 'closed_lost'].includes(d.stage))
   const pipelineValue = pipelineDeals.reduce((sum, d) => sum + d.monthly_value, 0)
-  const commissionRate = rep?.commission_rate ?? 35
+  const commissionRate = rep?.commission_rate ?? 70
   const totalCommEarned = commissions.reduce((s, c) => s + c.commission_amount, 0)
   const pendingComm = commissions.filter(c => c.status === 'earned' || c.status === 'pending').reduce((s, c) => s + c.commission_amount, 0)
 

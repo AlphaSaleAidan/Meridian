@@ -24,7 +24,7 @@ function rowToDeal(row: Record<string, unknown>): Deal {
     vertical: (row.vertical as string) || '',
     stage: row.stage as DealStage,
     monthly_value: Number(row.monthly_value) || 0,
-    commission_rate: Number(row.commission_rate) || 35,
+    commission_rate: Number(row.commission_rate) || 70,
     expected_close_date: (row.expected_close_date as string) || '',
     notes: (row.notes as string) || '',
     source: (row.source as string) || '',

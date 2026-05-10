@@ -77,58 +77,58 @@ function daysFromNow(n: number): string {
 const DEMO_DEALS: Deal[] = [
   {
     id: uuid(), business_name: 'Golden Dragon Dim Sum', contact_name: 'Kevin Lau', contact_email: 'kevin@goldendragon.ca', contact_phone: '(604) 555-2345',
-    vertical: 'Restaurant', stage: 'prospecting', monthly_value: 685, commission_rate: 35, expected_close_date: daysFromNow(21), notes: 'High-volume dim sum spot in Richmond. 4 POS terminals, wants inventory tracking.', source: 'Referral', city: 'Richmond', province: 'BC', created_at: daysAgo(2), updated_at: daysAgo(1),
+    vertical: 'Restaurant', stage: 'prospecting', monthly_value: 685, commission_rate: 70, expected_close_date: daysFromNow(21), notes: 'High-volume dim sum spot in Richmond. 4 POS terminals, wants inventory tracking.', source: 'Referral', city: 'Richmond', province: 'BC', created_at: daysAgo(2), updated_at: daysAgo(1),
   },
   {
     id: uuid(), business_name: 'Cloud Nine Vape YVR', contact_name: 'Marcus Gill', contact_email: 'marcus@cloudninevape.ca', contact_phone: '(604) 555-3456',
-    vertical: 'Smoke Shop', stage: 'contacted', monthly_value: 500, commission_rate: 35, expected_close_date: daysFromNow(14), notes: 'Currently on Clover. Wants anomaly detection for theft. 2 Vancouver locations.', source: 'Cold Call', city: 'Vancouver', province: 'BC', created_at: daysAgo(5), updated_at: daysAgo(3),
+    vertical: 'Smoke Shop', stage: 'contacted', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(14), notes: 'Currently on Clover. Wants anomaly detection for theft. 2 Vancouver locations.', source: 'Cold Call', city: 'Vancouver', province: 'BC', created_at: daysAgo(5), updated_at: daysAgo(3),
   },
   {
     id: uuid(), business_name: 'Kensington Coffee House', contact_name: 'Sarah Olsen', contact_email: 'sarah@kensingtoncoffee.ca', contact_phone: '(403) 555-4567',
-    vertical: 'Café', stage: 'demo_scheduled', monthly_value: 343, commission_rate: 30, expected_close_date: daysFromNow(7), notes: 'Demo set for Thursday 2pm MST. Interested in predictive ordering for pastry inventory.', source: 'Website', city: 'Calgary', province: 'AB', created_at: daysAgo(8), updated_at: daysAgo(1),
+    vertical: 'Café', stage: 'demo_scheduled', monthly_value: 343, commission_rate: 70, expected_close_date: daysFromNow(7), notes: 'Demo set for Thursday 2pm MST. Interested in predictive ordering for pastry inventory.', source: 'Website', city: 'Calgary', province: 'AB', created_at: daysAgo(8), updated_at: daysAgo(1),
   },
   {
     id: uuid(), business_name: 'Queen West Threads', contact_name: 'Priya Patel', contact_email: 'priya@queenwestthreads.ca', contact_phone: '(416) 555-5678',
-    vertical: 'Boutique', stage: 'proposal_sent', monthly_value: 500, commission_rate: 35, expected_close_date: daysFromNow(5), notes: 'Sent Premium tier proposal. Owner reviewing with business partner.', source: 'Referral', city: 'Toronto', province: 'ON', created_at: daysAgo(12), updated_at: daysAgo(2),
+    vertical: 'Boutique', stage: 'proposal_sent', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(5), notes: 'Sent Premium tier proposal. Owner reviewing with business partner.', source: 'Referral', city: 'Toronto', province: 'ON', created_at: daysAgo(12), updated_at: daysAgo(2),
   },
   {
     id: uuid(), business_name: 'The Pilot Taphouse', contact_name: 'David Fong', contact_email: 'david@pilottaphouse.ca', contact_phone: '(416) 555-6789',
-    vertical: 'Bar', stage: 'negotiation', monthly_value: 1000, commission_rate: 40, expected_close_date: daysFromNow(3), notes: 'Wants 45% rate — countered at 40%. 3 patios, needs camera intelligence. Very close.', source: 'Event', city: 'Toronto', province: 'ON', created_at: daysAgo(15), updated_at: daysAgo(0),
+    vertical: 'Bar', stage: 'negotiation', monthly_value: 1000, commission_rate: 70, expected_close_date: daysFromNow(3), notes: 'Wants camera intelligence. 3 patios. Very close to signing.', source: 'Event', city: 'Toronto', province: 'ON', created_at: daysAgo(15), updated_at: daysAgo(0),
   },
   {
     id: uuid(), business_name: 'Chez Benny Poutine', contact_name: 'Benoît Tremblay', contact_email: 'benoit@chezbenny.ca', contact_phone: '(514) 555-7890',
-    vertical: 'Restaurant', stage: 'closed_won', monthly_value: 343, commission_rate: 30, expected_close_date: daysAgo(2), notes: 'Signed! Onboarding started. Moneris integration in progress.', source: 'Referral', city: 'Montreal', province: 'QC', created_at: daysAgo(20), updated_at: daysAgo(2),
+    vertical: 'Restaurant', stage: 'closed_won', monthly_value: 343, commission_rate: 70, expected_close_date: daysAgo(2), notes: 'Signed! Onboarding started. Moneris integration in progress.', source: 'Referral', city: 'Montreal', province: 'QC', created_at: daysAgo(20), updated_at: daysAgo(2),
   },
   {
     id: uuid(), business_name: 'Lux Hair Studio', contact_name: 'Tanya Chen', contact_email: 'tanya@luxhair.ca', contact_phone: '(604) 555-8901',
-    vertical: 'Salon', stage: 'closed_won', monthly_value: 500, commission_rate: 35, expected_close_date: daysAgo(10), notes: 'Active client. POS connected via Square Canada. First commission earned.', source: 'Website', city: 'Vancouver', province: 'BC', created_at: daysAgo(30), updated_at: daysAgo(10),
+    vertical: 'Salon', stage: 'closed_won', monthly_value: 500, commission_rate: 70, expected_close_date: daysAgo(10), notes: 'Active client. POS connected via Square Canada. First commission earned.', source: 'Website', city: 'Vancouver', province: 'BC', created_at: daysAgo(30), updated_at: daysAgo(10),
   },
   {
     id: uuid(), business_name: 'Maple Quick Mart', contact_name: 'Ali Farah', contact_email: 'ali@maplequickmart.ca', contact_phone: '(905) 555-9012',
-    vertical: 'Convenience Store', stage: 'closed_lost', monthly_value: 685, commission_rate: 35, expected_close_date: daysAgo(5), notes: 'Went with competitor. Price was the deciding factor — revisit in 6 months.', source: 'Cold Call', city: 'Mississauga', province: 'ON', created_at: daysAgo(25), updated_at: daysAgo(5),
+    vertical: 'Convenience Store', stage: 'closed_lost', monthly_value: 685, commission_rate: 70, expected_close_date: daysAgo(5), notes: 'Went with competitor. Price was the deciding factor — revisit in 6 months.', source: 'Cold Call', city: 'Mississauga', province: 'ON', created_at: daysAgo(25), updated_at: daysAgo(5),
   },
   {
     id: uuid(), business_name: 'Taco Madre', contact_name: 'Maria Santos', contact_email: 'maria@tacomadre.ca', contact_phone: '(403) 555-0123',
-    vertical: 'Restaurant', stage: 'prospecting', monthly_value: 500, commission_rate: 30, expected_close_date: daysFromNow(28), notes: 'Referral from Chez Benny. First call scheduled for next week.', source: 'Referral', city: 'Calgary', province: 'AB', created_at: daysAgo(1), updated_at: daysAgo(0),
+    vertical: 'Restaurant', stage: 'prospecting', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(28), notes: 'Referral from Chez Benny. First call scheduled for next week.', source: 'Referral', city: 'Calgary', province: 'AB', created_at: daysAgo(1), updated_at: daysAgo(0),
   },
   {
     id: uuid(), business_name: 'Byward Smoke Co.', contact_name: 'Kyle Bennett', contact_email: 'kyle@bywardsmoke.ca', contact_phone: '(613) 555-1122',
-    vertical: 'Smoke Shop', stage: 'demo_scheduled', monthly_value: 343, commission_rate: 35, expected_close_date: daysFromNow(10), notes: 'Demo next Tuesday. Interested in anomaly detection for high-value inventory.', source: 'Website', city: 'Ottawa', province: 'ON', created_at: daysAgo(6), updated_at: daysAgo(1),
+    vertical: 'Smoke Shop', stage: 'demo_scheduled', monthly_value: 343, commission_rate: 70, expected_close_date: daysFromNow(10), notes: 'Demo next Tuesday. Interested in anomaly detection for high-value inventory.', source: 'Website', city: 'Ottawa', province: 'ON', created_at: daysAgo(6), updated_at: daysAgo(1),
   },
 ]
 
 const DEMO_COMMISSIONS: Commission[] = [
-  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1536, commission_rate: 35, commission_amount: 538, status: 'paid', source_type: 'square_payment', created_at: daysAgo(30) + 'T10:00:00Z' },
-  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1343, commission_rate: 35, commission_amount: 470, status: 'paid', source_type: 'square_payment', created_at: daysAgo(23) + 'T10:00:00Z' },
-  { id: uuid(), client_name: 'Chez Benny Poutine', gross_amount: 877, commission_rate: 30, commission_amount: 263, status: 'earned', source_type: 'moneris_payment', created_at: daysAgo(5) + 'T10:00:00Z' },
-  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1440, commission_rate: 35, commission_amount: 504, status: 'earned', source_type: 'square_payment', created_at: daysAgo(16) + 'T10:00:00Z' },
-  { id: uuid(), client_name: 'Chez Benny Poutine', gross_amount: 987, commission_rate: 30, commission_amount: 296, status: 'earned', source_type: 'moneris_payment', created_at: daysAgo(2) + 'T10:00:00Z' },
-  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1220, commission_rate: 35, commission_amount: 427, status: 'pending', source_type: 'square_payment', created_at: daysAgo(1) + 'T10:00:00Z' },
+  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1536, commission_rate: 70, commission_amount: 1075, status: 'paid', source_type: 'square_payment', created_at: daysAgo(30) + 'T10:00:00Z' },
+  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1343, commission_rate: 70, commission_amount: 940, status: 'paid', source_type: 'square_payment', created_at: daysAgo(23) + 'T10:00:00Z' },
+  { id: uuid(), client_name: 'Chez Benny Poutine', gross_amount: 877, commission_rate: 70, commission_amount: 614, status: 'earned', source_type: 'moneris_payment', created_at: daysAgo(5) + 'T10:00:00Z' },
+  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1440, commission_rate: 70, commission_amount: 1008, status: 'earned', source_type: 'square_payment', created_at: daysAgo(16) + 'T10:00:00Z' },
+  { id: uuid(), client_name: 'Chez Benny Poutine', gross_amount: 987, commission_rate: 70, commission_amount: 691, status: 'earned', source_type: 'moneris_payment', created_at: daysAgo(2) + 'T10:00:00Z' },
+  { id: uuid(), client_name: 'Lux Hair Studio', gross_amount: 1220, commission_rate: 70, commission_amount: 854, status: 'pending', source_type: 'square_payment', created_at: daysAgo(1) + 'T10:00:00Z' },
 ]
 
 const DEMO_CLIENTS: SalesClient[] = [
-  { id: uuid(), business_name: 'Lux Hair Studio', contact_name: 'Tanya Chen', contact_email: 'tanya@luxhair.ca', vertical: 'Salon', plan: 'premium', monthly_revenue: 500, commission_rate: 35, assigned_at: daysAgo(30), is_active: true, pos_provider: 'square', pos_connected: true },
-  { id: uuid(), business_name: 'Chez Benny Poutine', contact_name: 'Benoît Tremblay', contact_email: 'benoit@chezbenny.ca', vertical: 'Restaurant', plan: 'standard', monthly_revenue: 343, commission_rate: 30, assigned_at: daysAgo(2), is_active: true, pos_provider: 'moneris', pos_connected: true },
+  { id: uuid(), business_name: 'Lux Hair Studio', contact_name: 'Tanya Chen', contact_email: 'tanya@luxhair.ca', vertical: 'Salon', plan: 'premium', monthly_revenue: 500, commission_rate: 70, assigned_at: daysAgo(30), is_active: true, pos_provider: 'square', pos_connected: true },
+  { id: uuid(), business_name: 'Chez Benny Poutine', contact_name: 'Benoît Tremblay', contact_email: 'benoit@chezbenny.ca', vertical: 'Restaurant', plan: 'standard', monthly_revenue: 343, commission_rate: 70, assigned_at: daysAgo(2), is_active: true, pos_provider: 'moneris', pos_connected: true },
 ]
 
 function delay<T>(data: T, ms = 300): Promise<T> {

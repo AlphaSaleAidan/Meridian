@@ -65,7 +65,7 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     .insert({
       name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       email,
-      commission_rate: 35,
+      commission_rate: 70,
       is_active: true,
       total_earned: 0,
       total_paid: 0,
@@ -81,7 +81,7 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
     email,
     phone: null,
-    commission_rate: 35,
+    commission_rate: 70,
     recruiter: null,
     is_active: true,
     total_earned: 0,
@@ -172,7 +172,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         name: 'Demo Sales Rep',
         email,
         phone: '(555) 123-4567',
-        commission_rate: 35,
+        commission_rate: 70,
         recruiter: null,
         is_active: true,
         total_earned: 14820,
@@ -208,7 +208,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         name,
         email,
         phone: phone || null,
-        commission_rate: 35,
+        commission_rate: 70,
         recruiter: null,
         is_active: true,
         total_earned: 0,
@@ -229,7 +229,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     // 2. Try to create sales_reps record
     const { error: insertErr } = await supabase
       .from('sales_reps')
-      .insert({ name, email, phone: phone || null, commission_rate: 35, is_active: true, total_earned: 0, total_paid: 0 })
+      .insert({ name, email, phone: phone || null, commission_rate: 70, is_active: true, total_earned: 0, total_paid: 0 })
 
     // 3. Resolve profile (handles INSERT failure gracefully)
     const profile = await resolveRepProfile(email)
@@ -289,7 +289,7 @@ function repFromRow(data: Record<string, unknown>): SalesRepProfile {
     name: data.name as string,
     email: data.email as string,
     phone: (data.phone as string) || null,
-    commission_rate: Number(data.commission_rate) || 30,
+    commission_rate: Number(data.commission_rate) || 70,
     recruiter: (data.recruiter as string) || null,
     is_active: data.is_active as boolean,
     total_earned: Number(data.total_earned) || 0,

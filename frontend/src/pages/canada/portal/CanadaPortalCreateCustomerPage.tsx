@@ -618,7 +618,7 @@ export default function CanadaPortalCreateCustomerPage() {
           vertical: form.vertical || 'Other',
           stage: 'proposal_sent',
           monthly_value: price,
-          commission_rate: rep?.commission_rate || 35,
+          commission_rate: rep?.commission_rate || 70,
           country: 'CA',
           notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
           rep_id: rep?.rep_id || null,

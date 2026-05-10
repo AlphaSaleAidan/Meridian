@@ -89,7 +89,7 @@ export default function CanadaPortalLeadsPage() {
 
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
-    vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '',
+    vertical: 'Restaurant', monthly_value: '', commission_rate: '70', notes: '',
     source: 'Referral', city: '', province: '',
   })
 
@@ -114,7 +114,7 @@ export default function CanadaPortalLeadsPage() {
       id: crypto.randomUUID(),
       ...newDeal,
       monthly_value: Number(newDeal.monthly_value) || 0,
-      commission_rate: Number(newDeal.commission_rate) || 35,
+      commission_rate: Number(newDeal.commission_rate) || 70,
       stage: 'prospecting',
       expected_close_date: new Date(Date.now() + 21 * 86400000).toISOString().slice(0, 10),
       created_at: new Date().toISOString().slice(0, 10),
@@ -123,7 +123,7 @@ export default function CanadaPortalLeadsPage() {
     const saved = await canadaLeadsService.create(deal)
     setDeals(prev => [saved, ...prev])
     setShowNew(false)
-    setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '35', notes: '', source: 'Referral', city: '', province: '' })
+    setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '' })
   }
 
   const inputClass = 'w-full px-3 py-2 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
