@@ -226,7 +226,7 @@ function ProposalOverlay({
               {
                 icon: '🔮', title: 'Predictive Forecasting', color: '#00d4aa',
                 desc: 'AI predicts tomorrow\'s sales with 90%+ accuracy. Auto-suggested prep lists.',
-                example: '"Friday predicted: $4,280 (+12%). Recommend 2 extra staff 11am-2pm."',
+                example: '"Friday predicted: CA$4,280 (+12%). Recommend 2 extra staff 11am-2pm."',
               },
             ].map(card => (
               <div key={card.title} className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
@@ -328,7 +328,7 @@ function ProposalOverlay({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               'Foot traffic up but revenue flat? Conversion dropped — train staff on upsells.',
-              'Long lines at noon? Open register 2 from 11:45am. Recover $2,380/week.',
+              'Long lines at noon? Open register 2 from 11:45am. Recover CA$2,380/week.',
               'Customers linger at display but don\'t buy? Try samples or price drop.',
               'Faster greeting = 47% higher ticket. Train all staff on top performer\'s flow.',
             ].map((insight, i) => (
@@ -347,7 +347,7 @@ function ProposalOverlay({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
               {
-                quote: '"We discovered our lunch conversion was only 44%. After adding a greeter, it jumped to 62%. That\'s $3K/month."',
+                quote: '"We discovered our lunch conversion was only 44%. After adding a greeter, it jumped to 62%. That\'s CA$3K/month."',
                 name: 'Marcus T.',
                 biz: 'Quick-service restaurant, Vancouver',
               },
@@ -357,7 +357,7 @@ function ProposalOverlay({
                 biz: 'Cafe & bakery, Toronto',
               },
               {
-                quote: '"The camera intelligence showed we lose 8 customers per lunch rush to long lines. One extra staff member = $1,200/week recovered."',
+                quote: '"The camera intelligence showed we lose 8 customers per lunch rush to long lines. One extra staff member = CA$1,200/week recovered."',
                 name: 'James K.',
                 biz: 'Smoke shop, Calgary',
               },
