@@ -88,7 +88,7 @@ export default function CanadaPortalLeadDetailPage() {
 
   // Step 2 state
   const [monthlyPrice, setMonthlyPrice] = useState(500)
-  const [setupFee, setSetupFee] = useState('250')
+  const [setupFee, setSetupFee] = useState('0')
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
   // Proposal state
@@ -466,7 +466,40 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Step 4 - Connect POS */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white">Connect POS</h2>
+        <h2 className="text-sm font-semibold text-white">Connect POS System</h2>
+
+        {/* Quick-select tiles for top POS systems */}
+        {!posConnected && (
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { key: 'square', name: 'Square', color: '#006AFF' },
+              { key: 'clover', name: 'Clover', color: '#43B02A' },
+              { key: 'toast', name: 'Toast', color: '#FF6600' },
+            ].map(pos => (
+              <button
+                key={pos.key}
+                type="button"
+                onClick={() => { setSelectedPOS(pos.key); setPosConnected(false); setPosError(null) }}
+                className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
+                  selectedPOS === pos.key
+                    ? 'border-[#00d4aa] bg-[#00d4aa]/5'
+                    : 'border-[#1a2420] hover:border-[#2a3430] bg-[#0a0f0d]'
+                }`}
+              >
+                <div
+                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                  style={{ backgroundColor: pos.color }}
+                >
+                  {pos.name[0]}
+                </div>
+                <span className={`text-xs font-medium ${selectedPOS === pos.key ? 'text-[#00d4aa]' : 'text-white'}`}>
+                  {pos.name}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <POSSystemPicker
           value={selectedPOS}
           onChange={k => { setSelectedPOS(k); setPosConnected(false); setPosError(null) }}

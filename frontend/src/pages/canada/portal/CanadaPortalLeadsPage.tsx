@@ -90,8 +90,12 @@ export default function CanadaPortalLeadsPage() {
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
     vertical: 'Restaurant', monthly_value: '', commission_rate: '70', notes: '',
-    source: 'Referral', city: '', province: '',
+    source: 'Referral', city: '', province: '', pos_system: '',
   })
+
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') setShowNew(true)
+  }, [searchParams])
 
   useEffect(() => {
     canadaLeadsService.list().then(d => { setDeals(d); setLoading(false) })
@@ -123,7 +127,7 @@ export default function CanadaPortalLeadsPage() {
     const saved = await canadaLeadsService.create(deal)
     setDeals(prev => [saved, ...prev])
     setShowNew(false)
-    setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '' })
+    setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', monthly_value: '', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '', pos_system: '' })
   }
 
   const inputClass = 'w-full px-3 py-2 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
@@ -226,6 +230,12 @@ export default function CanadaPortalLeadsPage() {
                 <option value="">Province / Territory</option>
                 {['Alberta','British Columbia','Manitoba','New Brunswick','Newfoundland and Labrador','Northwest Territories','Nova Scotia','Nunavut','Ontario','Prince Edward Island','Quebec','Saskatchewan','Yukon'].map(p => (
                   <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <select value={newDeal.pos_system} onChange={e => setNewDeal(p => ({ ...p, pos_system: e.target.value }))} className={inputClass}>
+                <option value="">POS System (optional)</option>
+                {['Square', 'Clover', 'Toast', 'Moneris', 'Lightspeed', 'Shopify POS', 'Other'].map(v => (
+                  <option key={v} value={v.toLowerCase()}>{v}</option>
                 ))}
               </select>
               <input type="number" required value={newDeal.monthly_value} onChange={e => setNewDeal(p => ({ ...p, monthly_value: e.target.value }))} className={inputClass} placeholder="Monthly Price (CA$) *" />

@@ -222,7 +222,7 @@ export default function CanadaSalesLayout() {
             </span>
           </div>
           <button
-            onClick={() => navigate('/canada/portal/leads?new=true')}
+            onClick={() => navigate('/canada/portal/leads?new=true&t=' + Date.now())}
             className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00d4aa] text-[#0a0f0d] text-xs font-semibold hover:bg-[#00d4aa]/90 transition-colors"
           >
             <Plus size={14} />
@@ -233,7 +233,7 @@ export default function CanadaSalesLayout() {
         {/* Desktop header with New Lead button */}
         <header className="hidden lg:flex h-14 items-center justify-end px-6 border-b border-[#1a2420] bg-[#0a0f0d] flex-shrink-0">
           <button
-            onClick={() => navigate('/canada/portal/leads?new=true')}
+            onClick={() => navigate('/canada/portal/leads?new=true&t=' + Date.now())}
             className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold hover:bg-[#00d4aa]/90 transition-colors"
           >
             <Plus size={16} />

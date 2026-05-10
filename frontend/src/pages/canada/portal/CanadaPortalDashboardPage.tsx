@@ -85,17 +85,38 @@ export default function CanadaPortalDashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      canadaSalesDemoData.overview(),
       canadaLeadsService.list(),
       canadaSalesDemoData.clients(),
       canadaSalesDemoData.commissions(),
-    ]).then(([o, d, c, cm]) => {
-      setOverview(o)
+    ]).then(([d, c, cm]) => {
       setDeals(d)
       setClients(c)
       setCommissions(cm)
-      setLoading(false)
-    })
+
+      const activePipeline = d.filter((deal: Deal) => !['closed_won', 'closed_lost'].includes(deal.stage))
+      const closedWon = d.filter((deal: Deal) => deal.stage === 'closed_won')
+      const allDeals = d.filter((deal: Deal) => deal.stage !== 'closed_lost')
+      const totalEarned = cm.reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
+      const totalPaid = cm.filter((cItem: Commission) => cItem.status === 'paid').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
+
+      setOverview({
+        total_deals: activePipeline.length,
+        pipeline_value: activePipeline.reduce((s: number, deal: Deal) => s + deal.monthly_value, 0),
+        closed_this_month: closedWon.length,
+        monthly_commission_earned: cm.filter((cItem: Commission) => cItem.status === 'earned').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0),
+        total_earned: totalEarned,
+        total_paid: totalPaid,
+        pending_payout: totalEarned - totalPaid,
+        active_clients: c.filter((cl: SalesClient) => cl.is_active).length,
+        conversion_rate: allDeals.length > 0 ? Math.round((closedWon.length / allDeals.length) * 100) : 0,
+      })
+    }).catch(() => {
+      setOverview({
+        total_deals: 0, pipeline_value: 0, closed_this_month: 0,
+        monthly_commission_earned: 0, total_earned: 0, total_paid: 0,
+        pending_payout: 0, active_clients: 0, conversion_rate: 0,
+      })
+    }).finally(() => setLoading(false))
   }, [])
 
   if (loading || !overview) {
@@ -314,6 +335,42 @@ export default function CanadaPortalDashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* ── Active Accounts ── */}
+          {activeClients.length > 0 && (
+            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
+              <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-white">Active Accounts</h2>
+                <Link
+                  to="/canada/portal/accounts"
+                  className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
+                >
+                  View all <ArrowRight size={12} />
+                </Link>
+              </div>
+              <div className="divide-y divide-[#1a2420]">
+                {activeClients.map(client => (
+                  <Link
+                    key={client.id}
+                    to="/canada/portal/accounts"
+                    className="px-5 py-3 flex items-center gap-3 hover:bg-[#0a0f0d]/50 transition-colors block"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0">
+                      <Users size={14} className="text-[#00d4aa]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{client.business_name}</p>
+                      <p className="text-[11px] text-[#6b7a74]">
+                        {client.pos_provider ? client.pos_provider.charAt(0).toUpperCase() + client.pos_provider.slice(1) : 'No POS'}
+                        <span className="mx-1.5 text-[#2a3430]">|</span>
+                        {formatCadMo(client.monthly_revenue)}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Recent Activity Feed ── */}
           <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
