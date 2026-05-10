@@ -26,14 +26,12 @@ import {
 } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 
-const CAD_RATE = 1.37
-
 function formatCad(value: number): string {
-  return 'CA$' + Math.round(value * CAD_RATE).toLocaleString('en-CA')
+  return 'CA$' + Math.round(value).toLocaleString('en-CA')
 }
 
 function formatCadMo(value: number): string {
-  return 'CA$' + value.toLocaleString('en-CA') + '/mo'
+  return 'CA$' + Math.round(value).toLocaleString('en-CA') + '/mo'
 }
 
 function titleCase(name: string): string {
@@ -108,14 +106,12 @@ export default function CanadaPortalDashboardPage() {
 
   const activeClients = clients.filter(c => c.is_active && c.pos_connected)
   const mrr = activeClients.reduce((sum, c) => sum + c.monthly_revenue, 0)
-  const mrrCad = (mrr / 100) * CAD_RATE
   const pipelineDeals = deals.filter(d => !['closed_won', 'closed_lost'].includes(d.stage))
   const pipelineValue = pipelineDeals.reduce((sum, d) => sum + d.monthly_value, 0)
   const commissionRate = rep?.commission_rate ?? 35
-  const commissionsCad = (overview.total_earned / 100) * CAD_RATE
 
   const showFirst30Banner = rep?.created_at && isWithin30Days(rep.created_at) && !bannerDismissed
-  const mrrProgress = Math.min((mrrCad / MONTH1_MRR_GOAL) * 100, 100)
+  const mrrProgress = Math.min((mrr / MONTH1_MRR_GOAL) * 100, 100)
 
   const recentActivity = [...deals]
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
@@ -150,7 +146,7 @@ export default function CanadaPortalDashboardPage() {
           <p className="text-sm text-white mb-3">
             Target: <span className="font-semibold text-[#f0b429]">CA$2,025</span> MRR
             <span className="mx-2 text-[#6b7a74]">|</span>
-            Your current MRR: <span className="font-semibold text-[#f0b429]">CA${mrrCad.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            Your current MRR: <span className="font-semibold text-[#f0b429]">CA${mrr.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </p>
           <div className="w-full h-2 rounded-full bg-[#1a2420] overflow-hidden">
             <div

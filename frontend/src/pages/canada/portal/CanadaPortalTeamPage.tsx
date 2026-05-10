@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { canadaSalesDemoData, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
-import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
 interface TeamMember {
   id: string
@@ -95,7 +94,7 @@ function computeTeamStats(team: TeamMember[], deals: Deal[]) {
     const wonDeals = allRepDeals.filter(d => d.stage === 'closed_won')
 
     const monthlyMrr = wonDeals.reduce((s, d) => s + d.monthly_value, 0)
-    const mrrCad = Math.round(monthlyMrr * CAD_RATE)
+    const mrrCad = Math.round(monthlyMrr)
 
     // Total Commission = SR% / 100 * MRR * lifetime months
     const lifetimeCommission = Math.round((member.commission_rate / 100) * mrrCad * AVG_LIFETIME_MONTHS)
@@ -220,7 +219,7 @@ export default function CanadaPortalTeamPage() {
   // Pipeline = all open deals from signed reps
   const openDeals = deals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
   const wonDeals = deals.filter(d => d.stage === 'closed_won')
-  const pipelineMrr = Math.round(openDeals.reduce((s, d) => s + d.monthly_value, 0) * CAD_RATE)
+  const pipelineMrr = Math.round(openDeals.reduce((s, d) => s + d.monthly_value, 0))
 
   // Total Commission = sum of each rep's (commission_rate% * their won MRR * avg lifetime)
   const totalCommission = enrichedTeam.reduce((s, m) => s + m.total_earned, 0)
@@ -476,7 +475,7 @@ export default function CanadaPortalTeamPage() {
                 <p><span className="text-[#7c3aed]">Monthly Comm</span> = Commission Rate % × MRR (CAD)</p>
                 <p><span className="text-[#7c3aed]">Lifetime Est</span> = Commission Rate % × MRR × {AVG_LIFETIME_MONTHS} months</p>
                 <p><span className="text-[#f59e0b]">Balance Owed</span> = Lifetime Est − Total Paid</p>
-                <p><span className="text-[#00d4aa]">Pipeline MRR</span> = Sum of open deal monthly values × {CAD_RATE} CAD rate</p>
+                <p><span className="text-[#00d4aa]">Pipeline MRR</span> = Sum of open deal monthly values (CAD)</p>
               </div>
             </div>
           )}
@@ -505,7 +504,7 @@ export default function CanadaPortalTeamPage() {
                         <DollarSign size={12} className="text-[#7c3aed]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-white">{formatCad(comm.commission_amount * CAD_RATE)}</p>
+                        <p className="text-xs font-semibold text-white">{formatCad(comm.commission_amount)}</p>
                         <p className="text-[10px] text-[#6b7a74]">
                           {comm.client_name}{admin ? ` · ${comm.commission_rate}%` : ''}
                         </p>

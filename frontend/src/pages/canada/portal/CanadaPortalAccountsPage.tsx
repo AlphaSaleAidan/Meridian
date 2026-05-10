@@ -2,11 +2,8 @@ import { useState, useEffect } from 'react'
 import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Wifi, Calendar, ChevronRight, RefreshCw } from 'lucide-react'
 import { canadaSalesDemoData, type SalesClient } from '@/lib/canada-sales-demo-data'
 
-const CAD_RATE = 1.37
-
-function formatCurrency(cents: number): string {
-  const cad = (cents / 100) * CAD_RATE
-  return 'CA$' + cad.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function formatCurrency(value: number): string {
+  return 'CA$' + value.toLocaleString('en-CA')
 }
 
 function daysUntilBilling(assignedAt: string): number {
@@ -159,7 +156,7 @@ export default function CanadaPortalAccountsPage() {
                   {/* Revenue Badge */}
                   <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#00d4aa]/10 border border-[#00d4aa]/20">
                     <DollarSign size={10} className="text-[#00d4aa]" />
-                    <span className="text-[10px] text-[#00d4aa] font-medium">CA${Math.round((client.monthly_revenue / 100) * CAD_RATE)}/mo</span>
+                    <span className="text-[10px] text-[#f0b429] font-medium">CA${client.monthly_revenue.toLocaleString()}/mo</span>
                   </div>
 
                   {/* Next Billing */}
