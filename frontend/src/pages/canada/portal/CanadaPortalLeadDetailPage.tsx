@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2,
-  FileText, Eye, Mail, CheckCircle2, Loader2,
+  FileText, Eye, Mail, CheckCircle2, Loader2, Download,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
-import { CAD_RATE } from '@/lib/canada-proposal-plans'
+import { CAD_RATE, getPlan, toCad } from '@/lib/canada-proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
+import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
+import { useSalesAuth } from '@/lib/sales-auth'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
   prospecting: 1,
@@ -77,6 +79,7 @@ function HorizontalStepper({ currentStep }: { currentStep: number }) {
 export default function CanadaPortalLeadDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { rep } = useSalesAuth()
   const [deal, setDeal] = useState<Deal | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -84,6 +87,12 @@ export default function CanadaPortalLeadDetailPage() {
   const [monthlyPrice, setMonthlyPrice] = useState(500)
   const [setupFee, setSetupFee] = useState('250')
   const [firstMonthFree, setFirstMonthFree] = useState(false)
+
+  // Proposal state
+  const [proposalBlob, setProposalBlob] = useState<Blob | null>(null)
+  const [proposalGenerating, setProposalGenerating] = useState(false)
+  const [proposalEmailing, setProposalEmailing] = useState(false)
+  const [proposalSent, setProposalSent] = useState(false)
 
   // Step 4 state
   const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
@@ -137,6 +146,106 @@ export default function CanadaPortalLeadDetailPage() {
     } catch {
       setPosError('Network error — please try again.')
       setPosConnecting(false)
+    }
+  }
+
+  const buildProposalInput = useCallback(() => {
+    if (!deal || !rep) return null
+    const closestPlan = monthlyPrice >= 750 ? 'command' : monthlyPrice >= 375 ? 'premium' : 'standard'
+    const plan = getPlan(closestPlan)
+    return {
+      businessName: deal.business_name,
+      ownerName: deal.contact_name,
+      email: deal.contact_email,
+      plan,
+      customPrice: toCad(monthlyPrice),
+      setupFee: Number(setupFee) || 0,
+      firstMonthFree,
+      rep,
+    }
+  }, [deal, rep, monthlyPrice, setupFee, firstMonthFree])
+
+  async function handleGenerateProposal() {
+    const input = buildProposalInput()
+    if (!input) return
+    setProposalGenerating(true)
+    try {
+      const blob = await generateProposalPdf(input)
+      setProposalBlob(blob)
+      if (deal && deal.stage === 'prospecting') {
+        await canadaLeadsService.updateStage(deal.id, 'contacted')
+        setDeal(prev => prev ? { ...prev, stage: 'contacted' } : prev)
+      }
+    } catch (err) {
+      console.error('[Proposal] Generation failed:', err)
+    } finally {
+      setProposalGenerating(false)
+    }
+  }
+
+  async function handleViewProposal() {
+    let blob = proposalBlob
+    if (!blob) {
+      const input = buildProposalInput()
+      if (!input) return
+      setProposalGenerating(true)
+      try {
+        blob = await generateProposalPdf(input)
+        setProposalBlob(blob)
+      } finally {
+        setProposalGenerating(false)
+      }
+    }
+    if (blob) {
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+    }
+  }
+
+  function handleDownloadProposal() {
+    if (!proposalBlob || !deal) return
+    const url = URL.createObjectURL(proposalBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Meridian_Proposal_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleEmailProposal() {
+    if (!deal) return
+    if (!proposalBlob) await handleGenerateProposal()
+    setProposalEmailing(true)
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      await fetch(`${API_BASE}/api/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: 'proposal_sent',
+          to: deal.contact_email,
+          first_name: deal.contact_name.split(' ')[0],
+          portal: 'canada',
+          extra: {
+            business_name: deal.business_name,
+            rep_name: rep?.name || '',
+            rep_email: rep?.email || '',
+            plan_name: monthlyPrice >= 750 ? 'Command' : monthlyPrice >= 375 ? 'Premium' : 'Standard',
+            monthly_price: `CA$${toCad(monthlyPrice).toLocaleString()}`,
+          },
+        }),
+      })
+      setProposalSent(true)
+      if (deal.stage === 'contacted' || deal.stage === 'demo_scheduled') {
+        await canadaLeadsService.updateStage(deal.id, 'proposal_sent')
+        setDeal(prev => prev ? { ...prev, stage: 'proposal_sent' } : prev)
+      }
+    } catch (err) {
+      console.error('[Proposal] Email failed:', err)
+    } finally {
+      setProposalEmailing(false)
     }
   }
 
@@ -246,15 +355,48 @@ export default function CanadaPortalLeadDetailPage() {
         </label>
 
         {/* Buttons */}
-        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">
-          <Sparkles size={16} /> Regenerate Proposal
+        <button
+          onClick={handleGenerateProposal}
+          disabled={proposalGenerating}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+        >
+          {proposalGenerating ? (
+            <><Loader2 size={16} className="animate-spin" /> Generating…</>
+          ) : (
+            <><Sparkles size={16} /> {proposalBlob ? 'Regenerate Proposal' : 'Generate Proposal'}</>
+          )}
         </button>
+
+        {proposalBlob && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+            <span className="text-xs text-[#00d4aa] font-medium">Proposal ready — 9 slides, PDF generated.</span>
+            <button onClick={handleDownloadProposal} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+              <Download size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="flex gap-3">
-          <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all">
+          <button
+            onClick={handleViewProposal}
+            disabled={proposalGenerating}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+          >
             <Eye size={16} /> View Proposal
           </button>
-          <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all">
-            <Mail size={16} /> Email Proposal
+          <button
+            onClick={handleEmailProposal}
+            disabled={proposalEmailing || proposalGenerating}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+          >
+            {proposalEmailing ? (
+              <><Loader2 size={16} className="animate-spin" /> Sending…</>
+            ) : proposalSent ? (
+              <><CheckCircle2 size={16} className="text-[#00d4aa]" /> Sent!</>
+            ) : (
+              <><Mail size={16} /> Email Proposal</>
+            )}
           </button>
         </div>
       </div>

@@ -30,7 +30,7 @@ export default function CanadaPortalSettingsPage() {
 
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <User size={16} className="text-[#1A8FD6]" />
+          <User size={16} className="text-[#00d4aa]" />
           <h2 className="text-sm font-semibold text-white">Profile</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -31,6 +31,14 @@ const adminNavItems = [
   { path: '/canada/portal/team', icon: Users, label: 'Team Management' },
 ] as const
 
+const ADMIN_EMAILS = [
+  'apierce@alphasale.co',
+  'aidanpierce72@gmail.com',
+  'aidanpierce@meridian.tips',
+  'cheungenochmgmt@gmail.com',
+  'aidan.nguyen@meridian.tips',
+]
+
 type NavHeading = { heading: string }
 type NavItem = { path: string; icon: typeof LayoutDashboard; label: string }
 type NavEntry = NavHeading | NavItem
@@ -81,7 +89,8 @@ export default function CanadaSalesLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const allNav: NavEntry[] = [...salesNavItems, ...adminNavItems]
+  const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
+  const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 
   const sidebarContent = (
     <>
