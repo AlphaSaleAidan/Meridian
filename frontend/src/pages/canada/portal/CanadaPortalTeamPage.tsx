@@ -3,7 +3,7 @@ import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, U
 import { clsx } from 'clsx'
 import { supabase } from '@/lib/supabase'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { canadaSalesDemoData, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
+import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 
 interface TeamMember {
@@ -162,9 +162,10 @@ export default function CanadaPortalTeamPage() {
       }
 
       // Fetch deals for real pipeline calculation
+      let fetchedDeals: Deal[] = []
       try {
-        const dealData = await canadaLeadsService.list()
-        setDeals(dealData)
+        fetchedDeals = await canadaLeadsService.list()
+        setDeals(fetchedDeals)
       } catch {
         // ignore
       }
@@ -193,8 +194,8 @@ export default function CanadaPortalTeamPage() {
         }
       }
 
-      // Load commissions
-      const comms = await canadaSalesDemoData.commissions()
+      // Derive commissions from leads data
+      const comms = deriveCommissionsFromLeads(fetchedDeals)
       setCommissions(comms)
       setLoading(false)
     }

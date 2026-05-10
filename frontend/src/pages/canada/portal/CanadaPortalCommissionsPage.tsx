@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { DollarSign, TrendingUp, Clock, CheckCircle2, Search, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
-import { canadaSalesDemoData, type Commission } from '@/lib/canada-sales-demo-data'
+import { deriveCommissionsFromLeads, type Commission } from '@/lib/canada-sales-demo-data'
+import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
 
 function formatCurrency(value: number): string {
@@ -26,7 +27,10 @@ export default function CanadaPortalCommissionsPage() {
   const [filter, setFilter] = useState<'all' | 'paid' | 'earned' | 'pending'>('all')
 
   useEffect(() => {
-    canadaSalesDemoData.commissions().then(c => { setCommissions(c); setLoading(false) })
+    canadaLeadsService.list().then(deals => {
+      setCommissions(deriveCommissionsFromLeads(deals))
+      setLoading(false)
+    })
   }, [])
 
   const filtered = commissions.filter(c => {

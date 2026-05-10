@@ -16,9 +16,10 @@ import {
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import {
-  canadaSalesDemoData,
   STAGE_CONFIG,
   STAGE_ORDER,
+  deriveClientsFromLeads,
+  deriveCommissionsFromLeads,
   type SalesOverview,
   type Deal,
   type DealStage,
@@ -84,12 +85,11 @@ export default function CanadaPortalDashboardPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
-    Promise.all([
-      canadaLeadsService.list(),
-      canadaSalesDemoData.clients(),
-      canadaSalesDemoData.commissions(),
-    ]).then(([d, c, cm]) => {
+    canadaLeadsService.list().then(d => {
       setDeals(d)
+
+      const c = deriveClientsFromLeads(d)
+      const cm = deriveCommissionsFromLeads(d)
       setClients(c)
       setCommissions(cm)
 

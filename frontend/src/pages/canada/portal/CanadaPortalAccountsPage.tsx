@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Wifi, Calendar, ChevronRight, RefreshCw } from 'lucide-react'
-import { canadaSalesDemoData, type SalesClient } from '@/lib/canada-sales-demo-data'
+import { deriveClientsFromLeads, type SalesClient } from '@/lib/canada-sales-demo-data'
+import { canadaLeadsService } from '@/lib/canada-leads-service'
 
 function formatCurrency(value: number): string {
   return 'CA$' + value.toLocaleString('en-CA')
@@ -34,7 +35,10 @@ export default function CanadaPortalAccountsPage() {
   const [syncingId, setSyncingId] = useState<string | null>(null)
 
   useEffect(() => {
-    canadaSalesDemoData.clients().then(c => { setClients(c); setLoading(false) })
+    canadaLeadsService.list().then(deals => {
+      setClients(deriveClientsFromLeads(deals))
+      setLoading(false)
+    })
   }, [])
 
   const filtered = clients.filter(c => {

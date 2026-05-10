@@ -1,7 +1,9 @@
 import { supabase } from './supabase'
 import type { Deal, DealStage } from './canada-sales-demo-data'
+import { getSeedDeals } from './canada-sales-demo-data'
 
 const STORAGE_KEY = 'meridian_canada_leads'
+const SEEDED_FLAG = 'meridian_canada_leads_seeded'
 
 function loadLocal(): Deal[] {
   try {
@@ -12,6 +14,24 @@ function loadLocal(): Deal[] {
 
 function saveLocal(deals: Deal[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(deals))
+}
+
+/** Seed localStorage with demo deals on first-ever load (once only). */
+function ensureSeeded(): void {
+  try {
+    if (localStorage.getItem(SEEDED_FLAG)) return
+    const existing = loadLocal()
+    if (existing.length > 0) {
+      // Already has data, mark as seeded and skip
+      localStorage.setItem(SEEDED_FLAG, '1')
+      return
+    }
+    const seed = getSeedDeals()
+    saveLocal(seed)
+    localStorage.setItem(SEEDED_FLAG, '1')
+  } catch {
+    // localStorage unavailable, skip silently
+  }
 }
 
 function rowToDeal(row: Record<string, unknown>): Deal {
@@ -42,8 +62,10 @@ export const canadaLeadsService = {
         .from('canada_leads')
         .select('*')
         .order('created_at', { ascending: false })
-      if (!error && data) return data.map(rowToDeal)
+      if (!error && data && data.length > 0) return data.map(rowToDeal)
     }
+    // Ensure seed data exists for first-time users
+    ensureSeeded()
     return loadLocal()
   },
 
