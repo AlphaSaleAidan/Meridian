@@ -76,7 +76,7 @@ export default function CanadaPortalLoginPage() {
 
         <p className="text-center text-[11px] text-[#A1A1A8]/50 mt-5">
           Business owner?{' '}
-          <Link to="/canada/login" className="text-[#1A8FD6] hover:text-[#1A8FD6]/80 transition-colors font-medium">
+          <Link to="/canada/login" className="text-[#00d4aa] hover:text-[#00d4aa]/80 transition-colors font-medium">
             Sign in here
           </Link>
         </p>

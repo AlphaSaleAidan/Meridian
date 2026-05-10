@@ -88,7 +88,7 @@ export default function CanadaPortalAccountsPage() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Monthly Recurring</p>
-              <p className="text-lg font-bold text-white">{formatCurrency(totalMRR)}</p>
+              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(totalMRR)}</p>
             </div>
           </div>
         </div>
@@ -99,7 +99,7 @@ export default function CanadaPortalAccountsPage() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Weekly Revenue</p>
-              <p className="text-lg font-bold text-white">{formatCurrency(weeklyRevenue)}</p>
+              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(weeklyRevenue)}</p>
             </div>
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function CanadaPortalAccountsPage() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Monthly Revenue</p>
-              <p className="text-lg font-bold text-white">{formatCurrency(totalMRR)}</p>
+              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(totalMRR)}</p>
             </div>
           </div>
         </div>

@@ -80,7 +80,7 @@ function AccessDenied() {
           <div className="space-y-2">
             <Link
               to="/canada/login"
-              className="block w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-semibold rounded-lg hover:bg-[#1A8FD6]/90 transition-all text-center"
+              className="block w-full py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all text-center"
             >
               Go to Customer Dashboard
             </Link>
