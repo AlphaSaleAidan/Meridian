@@ -18,6 +18,7 @@ export interface TranscriptLine {
 }
 
 export type CallStatus = 'order_placed' | 'no_order' | 'transferred' | 'in_progress'
+export type PaymentStatus = 'paid' | 'pending' | 'expired' | 'none'
 
 export interface PhoneCallEntry {
   id: string
@@ -33,6 +34,9 @@ export interface PhoneCallEntry {
   orderType: 'pickup' | 'delivery' | 'dine_in'
   transcript: TranscriptLine[]
   createdAt: string
+  paymentStatus: PaymentStatus
+  paymentLink: string
+  smsSent: boolean
 }
 
 export interface PhoneBizConfig {
@@ -56,6 +60,9 @@ export interface PhoneStats {
   revenue: number
   avgOrder: number
   avgDurationSec: number
+  paid: number
+  pending: number
+  paidRevenue: number
 }
 
 function h(s: string): number {
@@ -282,7 +289,8 @@ function buildTranscript(
   const lines: TranscriptLine[] = [{ speaker: 'agent', text: biz.greeting, time: '0:00' }]
 
   if (status === 'order_placed') {
-    lines.push({ speaker: 'caller', text: `Hi, I'd like to place an order for ${ot}.`, time: '0:03' })
+    const otLabel = ot.replace('_', ' ')
+    lines.push({ speaker: 'caller', text: `Hi, I'd like to place an order for ${otLabel}.`, time: '0:03' })
     lines.push({ speaker: 'agent', text: 'Of course! What would you like?', time: '0:05' })
     let t = 8
     for (const item of items) {
@@ -294,8 +302,8 @@ function buildTranscript(
     }
     lines.push({ speaker: 'caller', text: "That's everything.", time: fmtT(t) })
     t += 3
-    const sub = items.reduce((s, i) => s + i.price * i.qty, 0)
-    const tot = sub + sub * biz.taxRate
+    const sub = Math.round(items.reduce((s, i) => s + i.price * i.qty, 0) * 100) / 100
+    const tot = Math.round((sub + sub * biz.taxRate) * 100) / 100
     lines.push({ speaker: 'agent', text: `Your total comes to ${biz.currency}${tot.toFixed(2)} with tax. Name for the order?`, time: fmtT(t) })
     t += 5
     lines.push({ speaker: 'caller', text: name, time: fmtT(t) })
@@ -395,6 +403,18 @@ export function generateCalls(biz: PhoneBizConfig, days: number): PhoneCallEntry
       const [ot, s13] = rngPick(biz.orderTypes, seed); seed = s13
       const callerName = status === 'no_order' && durR < 0.3 ? '' : `${fn} ${ln}`
 
+      let paymentStatus: PaymentStatus = 'none'
+      let smsSent = false
+      const paymentLink = status === 'order_placed' ? `https://pay.meridian.ai/checkout/${biz.id}-${d}-${c}` : ''
+      if (status === 'order_placed') {
+        smsSent = true
+        const [payR, s14] = rng(seed); seed = s14
+        if (d === 0 && c === count - 1) paymentStatus = 'pending'
+        else if (payR < 0.78) paymentStatus = 'paid'
+        else if (payR < 0.92) paymentStatus = 'pending'
+        else paymentStatus = 'expired'
+      }
+
       calls.push({
         id: `${biz.id}-${d}-${c}`,
         phone: `+1 (${ac}) ${String(pn).slice(0, 3)}-${String(pn).slice(3)}`,
@@ -409,6 +429,9 @@ export function generateCalls(biz: PhoneBizConfig, days: number): PhoneCallEntry
         orderType: ot,
         transcript: buildTranscript(biz, status, items, callerName || 'Caller', ot),
         createdAt: callDate.toISOString(),
+        paymentStatus,
+        paymentLink,
+        smsSent,
       })
     }
   }
@@ -427,6 +450,9 @@ export function getPhoneStats(calls: PhoneCallEntry[], period: 'today' | '7d' | 
   const filtered = calls.filter(c => new Date(c.createdAt) >= cutoff)
   const orders = filtered.filter(c => c.status === 'order_placed')
   const rev = orders.reduce((s, c) => s + c.total, 0)
+  const paidOrders = orders.filter(c => c.paymentStatus === 'paid')
+  const pendingOrders = orders.filter(c => c.paymentStatus === 'pending')
+  const paidRev = paidOrders.reduce((s, c) => s + c.total, 0)
 
   return {
     totalCalls: filtered.length,
@@ -434,6 +460,9 @@ export function getPhoneStats(calls: PhoneCallEntry[], period: 'today' | '7d' | 
     conversion: filtered.length > 0 ? Math.round(orders.length / filtered.length * 100) : 0,
     revenue: Math.round(rev * 100) / 100,
     avgOrder: orders.length > 0 ? Math.round(rev / orders.length * 100) / 100 : 0,
+    paid: paidOrders.length,
+    pending: pendingOrders.length,
+    paidRevenue: Math.round(paidRev * 100) / 100,
     avgDurationSec: filtered.length > 0 ? Math.round(filtered.reduce((s, c) => s + c.durationSec, 0) / filtered.length) : 0,
   }
 }

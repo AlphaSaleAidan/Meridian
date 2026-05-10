@@ -34,6 +34,8 @@ class MerchantPhoneConfig:
     order_types: list[str]
     special_instructions_enabled: bool
     transfer_number: str
+    pos_webhook_url: str
+    sms_checkout_enabled: bool
 
 
 async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]:
@@ -78,6 +80,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 order_types=row.get("order_types", ["pickup", "delivery"]),
                 special_instructions_enabled=row.get("special_instructions_enabled", True),
                 transfer_number=row.get("transfer_number", ""),
+                pos_webhook_url=row.get("pos_webhook_url", ""),
+                sms_checkout_enabled=row.get("sms_checkout_enabled", True),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
@@ -154,4 +158,6 @@ def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
         order_types=["pickup", "delivery", "dine_in"],
         special_instructions_enabled=True,
         transfer_number="",
+        pos_webhook_url="",
+        sms_checkout_enabled=True,
     )

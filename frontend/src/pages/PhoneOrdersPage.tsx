@@ -1,18 +1,19 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { clsx } from 'clsx'
 import {
   Phone, PhoneCall, PhoneOff, PhoneIncoming, Settings, Mic, Volume2,
   CheckCircle2, TrendingUp, MessageSquare, X, Search, ChevronRight,
-  ArrowRight, ArrowLeft, Store, ListOrdered, Route, Zap, FileText,
-  Clock, DollarSign, Filter,
+  ArrowRight, ArrowLeft, Store, ListOrdered, Route, Zap,
+  Clock, DollarSign, Link2, Copy, Info, Play, Square,
+  CreditCard, SendHorizontal, AlertCircle,
 } from 'lucide-react'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import { useIsDemo, useOrgId } from '@/hooks/useOrg'
+import { useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { posSystems } from '@/data/pos-systems'
 import {
   getPhoneDemoData, getPhoneStats, VOICE_OPTIONS,
-  type PhoneCallEntry, type PhoneBizConfig, type CallStatus,
+  type PhoneCallEntry, type PhoneBizConfig, type CallStatus, type PaymentStatus,
 } from '@/lib/phone-orders-demo-data'
 
 const STATUS_CFG: Record<CallStatus, { label: string; color: string; bg: string; icon: typeof Phone }> = {
@@ -20,6 +21,13 @@ const STATUS_CFG: Record<CallStatus, { label: string; color: string; bg: string;
   no_order: { label: 'No Order', color: 'text-[#A1A1A8]', bg: 'bg-[#A1A1A8]/10', icon: PhoneOff },
   transferred: { label: 'Transferred', color: 'text-amber-400', bg: 'bg-amber-400/10', icon: Phone },
   in_progress: { label: 'In Progress', color: 'text-[#1A8FD6]', bg: 'bg-[#1A8FD6]/10', icon: PhoneCall },
+}
+
+const PAYMENT_CFG: Record<PaymentStatus, { label: string; color: string; bg: string; icon: typeof Phone }> = {
+  paid: { label: 'Paid', color: 'text-[#17C5B0]', bg: 'bg-[#17C5B0]/10', icon: CheckCircle2 },
+  pending: { label: 'Pending', color: 'text-amber-400', bg: 'bg-amber-400/10', icon: CreditCard },
+  expired: { label: 'Expired', color: 'text-red-400', bg: 'bg-red-400/10', icon: AlertCircle },
+  none: { label: '', color: '', bg: '', icon: Phone },
 }
 
 const WIZARD_STEPS = [
@@ -46,6 +54,57 @@ function fmtMoney(n: number, cur: string): string {
 }
 
 const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
+
+const VOICE_SAMPLES: Record<string, { text: string; pitch: number; rate: number }> = {
+  af_bella: { text: "Thank you for calling! I'd be happy to help you place an order today.", pitch: 1.1, rate: 0.95 },
+  af_sarah: { text: "Hey there! Welcome in — what can I get started for you?", pitch: 1.2, rate: 1.05 },
+  am_adam: { text: "Good evening. I'll take your order whenever you're ready.", pitch: 0.8, rate: 0.9 },
+  am_michael: { text: "Hi! Thanks for calling — let me know what sounds good to you.", pitch: 0.95, rate: 1.0 },
+}
+
+function VoicePlayButton({ voiceId, isSelected }: { voiceId: string; isSelected: boolean }) {
+  const [playing, setPlaying] = useState(false)
+
+  function handlePlay(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (playing) {
+      window.speechSynthesis.cancel()
+      setPlaying(false)
+      return
+    }
+    window.speechSynthesis.cancel()
+    const sample = VOICE_SAMPLES[voiceId]
+    if (!sample) return
+    const utter = new SpeechSynthesisUtterance(sample.text)
+    utter.pitch = sample.pitch
+    utter.rate = sample.rate
+    const voices = window.speechSynthesis.getVoices()
+    const isFemale = voiceId.startsWith('af_')
+    const preferred = voices.find(v =>
+      isFemale
+        ? /samantha|karen|victoria|zira|female/i.test(v.name)
+        : /daniel|alex|david|male|mark/i.test(v.name)
+    )
+    if (preferred) utter.voice = preferred
+    utter.onend = () => setPlaying(false)
+    utter.onerror = () => setPlaying(false)
+    setPlaying(true)
+    window.speechSynthesis.speak(utter)
+  }
+
+  return (
+    <button onClick={handlePlay}
+      className={clsx(
+        'w-6 h-6 rounded-full flex items-center justify-center transition-all flex-shrink-0',
+        playing
+          ? 'bg-[#1A8FD6] text-white'
+          : isSelected ? 'bg-[#1A8FD6]/15 text-[#1A8FD6] hover:bg-[#1A8FD6]/25' : 'bg-[#1F1F23] text-[#A1A1A8] hover:bg-[#2A2A30]'
+      )}
+      title={playing ? 'Stop' : 'Preview voice'}>
+      {playing ? <Square size={8} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
+    </button>
+  )
+}
 
 function SetupWizard({ biz, onDone, connectedPos }: { biz: PhoneBizConfig; onDone: () => void; connectedPos: string | null }) {
   const [step, setStep] = useState(0)
@@ -105,7 +164,7 @@ function SetupWizard({ biz, onDone, connectedPos }: { biz: PhoneBizConfig; onDon
               <div>
                 <label className="text-xs text-[#A1A1A8] block mb-1">Phone Number</label>
                 <input className={inputCls} value={cfg.phone} readOnly />
-                <p className="text-[9px] text-[#A1A1A8]/50 mt-1">Provisioned via Fonoster SIP trunk</p>
+                <p className="text-[9px] text-[#A1A1A8]/50 mt-1">Auto-provisioned for your business</p>
               </div>
             </div>
           </>
@@ -128,7 +187,8 @@ function SetupWizard({ biz, onDone, connectedPos }: { biz: PhoneBizConfig; onDon
                         cfg.voice === v.id ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
                       <div className="flex items-center gap-1.5">
                         <Volume2 size={12} className={cfg.voice === v.id ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]'} />
-                        <p className={clsx('text-xs font-medium', cfg.voice === v.id ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>{v.label}</p>
+                        <p className={clsx('text-xs font-medium flex-1', cfg.voice === v.id ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>{v.label}</p>
+                        <VoicePlayButton voiceId={v.id} isSelected={cfg.voice === v.id} />
                       </div>
                       <p className="text-[9px] text-[#A1A1A8]/60 mt-0.5">{v.desc}</p>
                     </button>
@@ -277,8 +337,8 @@ function SetupWizard({ biz, onDone, connectedPos }: { biz: PhoneBizConfig; onDon
               <div className="flex items-start gap-2">
                 <Mic size={14} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
                 <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
-                  <span className="text-[#F5F5F7] font-medium">100% self-hosted.</span>{' '}
-                  Fonoster SIP + WhisperLiveKit STT + Llama 3.3 + Kokoro TTS. Only external cost: SIP trunk ~$0.004/min.
+                  <span className="text-[#F5F5F7] font-medium">Powered by Meridian AI.</span>{' '}
+                  Enterprise-grade voice agent included with your plan. No per-call fees.
                 </p>
               </div>
             </div>
@@ -353,6 +413,33 @@ function TranscriptModal({ call, biz, onClose }: { call: PhoneCallEntry; biz: Ph
               <span className="text-[#F5F5F7]">Total</span>
               <span className="text-[#17C5B0] font-mono">{biz.currency}{call.total.toFixed(2)}</span>
             </div>
+            {call.paymentStatus !== 'none' && (
+              <div className="border-t border-[#1F1F23] mt-3 pt-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {call.smsSent && (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[#1A8FD6]">
+                        <SendHorizontal size={10} /> SMS sent
+                      </span>
+                    )}
+                    {(() => {
+                      const pc = PAYMENT_CFG[call.paymentStatus]
+                      return (
+                        <span className={clsx('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full', pc.bg, pc.color)}>
+                          <pc.icon size={10} /> {pc.label}
+                        </span>
+                      )
+                    })()}
+                  </div>
+                  {call.paymentLink && call.paymentStatus === 'pending' && (
+                    <button onClick={() => navigator.clipboard.writeText(call.paymentLink)}
+                      className="flex items-center gap-1 text-[10px] text-[#1A8FD6] hover:text-[#1A8FD6]/80 transition-colors">
+                      <Copy size={10} /> Copy link
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -360,8 +447,8 @@ function TranscriptModal({ call, biz, onClose }: { call: PhoneCallEntry; biz: Ph
   )
 }
 
-function OverviewTab({ calls, biz, period, setPeriod, onViewCall }: {
-  calls: PhoneCallEntry[]; biz: PhoneBizConfig; period: string; setPeriod: (p: 'today' | '7d' | '30d' | '90d') => void; onViewCall: (c: PhoneCallEntry) => void
+function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
+  calls: PhoneCallEntry[]; biz: PhoneBizConfig; period: string; setPeriod: (p: 'today' | '7d' | '30d' | '90d') => void; onViewCall: (c: PhoneCallEntry) => void; onConnect: () => void
 }) {
   const stats = useMemo(() => getPhoneStats(calls, period as any), [calls, period])
   const liveCalls = calls.filter(c => c.status === 'in_progress')
@@ -400,6 +487,32 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall }: {
         ))}
       </div>
 
+      {stats.orders > 0 && (
+        <div className="card p-4 border-[#17C5B0]/10">
+          <div className="flex items-center gap-2 mb-3">
+            <CreditCard size={14} className="text-[#17C5B0]" />
+            <h3 className="text-sm font-semibold text-[#F5F5F7]">Text-to-Pay Checkout</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-[#111113] rounded-lg px-3 py-2">
+              <p className="text-[10px] text-[#A1A1A8]">Collected</p>
+              <p className="text-sm font-bold text-[#17C5B0] font-mono">{fmtMoney(stats.paidRevenue, biz.currency)}</p>
+              <p className="text-[9px] text-[#A1A1A8]/60">{stats.paid} paid</p>
+            </div>
+            <div className="bg-[#111113] rounded-lg px-3 py-2">
+              <p className="text-[10px] text-[#A1A1A8]">Pending</p>
+              <p className="text-sm font-bold text-amber-400 font-mono">{stats.pending}</p>
+              <p className="text-[9px] text-[#A1A1A8]/60">awaiting payment</p>
+            </div>
+            <div className="bg-[#111113] rounded-lg px-3 py-2">
+              <p className="text-[10px] text-[#A1A1A8]">Collection Rate</p>
+              <p className="text-sm font-bold text-[#F5F5F7] font-mono">{stats.orders > 0 ? Math.round(stats.paid / stats.orders * 100) : 0}%</p>
+              <p className="text-[9px] text-[#A1A1A8]/60">of orders paid</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="card p-4 border-[#1A8FD6]/10">
           <div className="flex items-start gap-2">
@@ -407,9 +520,9 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall }: {
               <Mic size={16} className="text-[#1A8FD6]" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-[#F5F5F7]">Open Source Stack</h3>
+              <h3 className="text-sm font-semibold text-[#F5F5F7]">AI Voice Agent</h3>
               <p className="text-[10px] text-[#A1A1A8] mt-1 leading-relaxed">
-                Fonoster SIP &rarr; WhisperLiveKit STT &rarr; Llama 3.3 LLM &rarr; Kokoro TTS. Self-hosted, ~$0.004/min.
+                Answers calls 24/7, takes orders conversationally, and routes them to your POS. Included with your plan.
               </p>
             </div>
           </div>
@@ -431,6 +544,8 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall }: {
           <p className="text-xl font-bold text-amber-400 font-mono">{fmtMoney(stats.avgOrder, biz.currency)}</p>
         </div>
       </div>
+
+      <PhoneSetupCard biz={biz} onConnect={onConnect} />
 
       {liveCalls.length > 0 && (
         <div className="card overflow-hidden border-[#17C5B0]/20">
@@ -519,11 +634,12 @@ function CallLogTab({ calls, biz, onViewCall }: { calls: PhoneCallEntry[]; biz: 
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="pm-table min-w-[650px]">
+          <table className="pm-table min-w-[750px]">
             <thead>
               <tr>
                 <th className="text-left">Caller</th>
                 <th className="text-left">Status</th>
+                <th className="text-left">Payment</th>
                 <th className="text-left">Type</th>
                 <th className="text-right">Duration</th>
                 <th className="text-right">Total</th>
@@ -534,6 +650,7 @@ function CallLogTab({ calls, biz, onViewCall }: { calls: PhoneCallEntry[]; biz: 
               {filtered.slice(0, 50).map(call => {
                 const sc = STATUS_CFG[call.status]
                 const Icon = sc.icon
+                const pc = call.paymentStatus !== 'none' ? PAYMENT_CFG[call.paymentStatus] : null
                 return (
                   <tr key={call.id} onClick={() => onViewCall(call)} className="cursor-pointer hover:bg-[#111113]">
                     <td>
@@ -544,6 +661,15 @@ function CallLogTab({ calls, biz, onViewCall }: { calls: PhoneCallEntry[]; biz: 
                       <span className={clsx('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full', sc.bg, sc.color)}>
                         <Icon size={10} /> {sc.label}
                       </span>
+                    </td>
+                    <td>
+                      {pc ? (
+                        <span className={clsx('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full', pc.bg, pc.color)}>
+                          <pc.icon size={10} /> {pc.label}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[#A1A1A8]/40">—</span>
+                      )}
                     </td>
                     <td className="text-xs text-[#A1A1A8] capitalize">{call.orderType.replace('_', ' ')}</td>
                     <td className="text-right font-mono text-[#A1A1A8]">{call.duration}</td>
@@ -566,7 +692,7 @@ function CallLogTab({ calls, biz, onViewCall }: { calls: PhoneCallEntry[]; biz: 
   )
 }
 
-function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig; onReconfigure: () => void; connectedPos: string | null }) {
+function SettingsTab({ biz, onReconfigure, connectedPos, onConnect }: { biz: PhoneBizConfig; onReconfigure: () => void; connectedPos: string | null; onConnect: () => void }) {
   const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
   const hasDirectApi = connectedPos ? DIRECT_API_SYSTEMS.has(connectedPos) : false
   const [cfg, setCfg] = useState({
@@ -575,6 +701,7 @@ function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig
     voice: biz.voice,
     businessName: biz.name,
     orderTypes: [...biz.orderTypes] as string[],
+    smsCheckout: true,
   })
 
   return (
@@ -615,7 +742,8 @@ function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig
                   cfg.voice === v.id ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
                 <div className="flex items-center gap-1.5">
                   <Volume2 size={12} className={cfg.voice === v.id ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]'} />
-                  <p className={clsx('text-xs font-medium', cfg.voice === v.id ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>{v.label}</p>
+                  <p className={clsx('text-xs font-medium flex-1', cfg.voice === v.id ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>{v.label}</p>
+                  <VoicePlayButton voiceId={v.id} isSelected={cfg.voice === v.id} />
                 </div>
                 <p className="text-[9px] text-[#A1A1A8]/60 mt-0.5">{v.desc}</p>
               </button>
@@ -637,6 +765,39 @@ function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig
         </div>
       </div>
 
+      <div className="card p-4 sm:p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Link2 size={14} className="text-[#1A8FD6]" />
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Phone Connection</h3>
+        </div>
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-lg p-3 mb-3">
+          <p className="text-[10px] text-[#A1A1A8] mb-0.5">AI Agent Number</p>
+          <p className="text-sm font-mono font-medium text-[#F5F5F7]">{biz.phone}</p>
+        </div>
+        <div className="space-y-2 mb-3">
+          <div className="flex items-start gap-2">
+            <div className="w-4 h-4 rounded-full bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-[8px] font-bold text-[#1A8FD6]">1</span>
+            </div>
+            <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
+              <span className="text-[#F5F5F7] font-medium">Forward your store line</span> to this number, or publish it as your dedicated order line on Google, your website, and in-store signage.
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <div className="w-4 h-4 rounded-full bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span className="text-[8px] font-bold text-[#1A8FD6]">2</span>
+            </div>
+            <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
+              <span className="text-[#F5F5F7] font-medium">Test it</span> &mdash; call the number from your cell phone. The AI agent will greet you and take a test order.
+            </p>
+          </div>
+        </div>
+        <button onClick={onConnect}
+          className="w-full flex items-center justify-center gap-1.5 py-2 bg-[#1A8FD6] text-white text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors">
+          <Phone size={12} /> Full Setup Instructions
+        </button>
+      </div>
+
       <div className="card p-4">
         <div className="flex items-center gap-2 mb-3">
           <ListOrdered size={14} className="text-[#1A8FD6]" />
@@ -652,6 +813,48 @@ function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig
               <span className="text-xs font-mono text-[#17C5B0]">{biz.currency}{item.price.toFixed(2)}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="card p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <CreditCard size={14} className="text-[#17C5B0]" />
+            <h3 className="text-sm font-semibold text-[#F5F5F7]">Text-to-Pay Checkout</h3>
+          </div>
+          <button onClick={() => setCfg(p => ({ ...p, smsCheckout: !p.smsCheckout }))}
+            className={clsx('relative w-10 h-5 rounded-full transition-colors', cfg.smsCheckout ? 'bg-[#17C5B0]' : 'bg-[#2A2A30]')}>
+            <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform', cfg.smsCheckout ? 'left-5' : 'left-0.5')} />
+          </button>
+        </div>
+        <div className="space-y-2">
+          <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
+            After each phone order, the customer receives an SMS with their order confirmation and a secure payment link from your POS system.
+          </p>
+          <div className="bg-[#111113] rounded-lg p-3 space-y-2">
+            <p className="text-[10px] text-[#A1A1A8] font-medium">How it works:</p>
+            <div className="flex items-start gap-2">
+              <SendHorizontal size={10} className="text-[#1A8FD6] mt-0.5 flex-shrink-0" />
+              <p className="text-[10px] text-[#A1A1A8]">Customer calls and places an order with the AI agent</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <MessageSquare size={10} className="text-[#1A8FD6] mt-0.5 flex-shrink-0" />
+              <p className="text-[10px] text-[#A1A1A8]">They receive an SMS with order details and a payment link</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <CreditCard size={10} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
+              <p className="text-[10px] text-[#A1A1A8]">
+                {posInfo
+                  ? `Payment is processed through ${posInfo.name} — funds go directly to your account`
+                  : 'Payment is processed through your connected POS — funds go directly to your account'}
+              </p>
+            </div>
+          </div>
+          {!posInfo && (
+            <p className="text-[10px] text-amber-400/80">
+              Connect a POS system to enable direct payment processing. Without a POS, customers pay via Meridian-hosted checkout.
+            </p>
+          )}
         </div>
       </div>
 
@@ -690,9 +893,9 @@ function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig
         <div className="flex items-start gap-3">
           <Phone size={16} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
           <div>
-            <h3 className="text-sm font-semibold text-[#F5F5F7]">Self-Hosted Phone System</h3>
+            <h3 className="text-sm font-semibold text-[#F5F5F7]">Meridian AI Phone Agent</h3>
             <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-              Your phone agent runs on Meridian's self-hosted infrastructure. No third-party voice APIs &mdash; only cost is SIP trunk at ~$0.004/min.
+              Your phone agent answers calls 24/7, takes orders, and routes them directly to your POS. Included with your Meridian plan.
             </p>
           </div>
         </div>
@@ -706,6 +909,116 @@ function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig
   )
 }
 
+function ConnectPhoneModal({ biz, onClose }: { biz: PhoneBizConfig; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  function copyNumber() {
+    navigator.clipboard.writeText(biz.phone.replace(/[^+\d]/g, ''))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-[#0A0A0B] border border-[#1F1F23] rounded-xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
+          <div className="flex items-center gap-2">
+            <Link2 size={16} className="text-[#1A8FD6]" />
+            <h3 className="text-sm font-semibold text-[#F5F5F7]">Connect Your Store Phone</h3>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] transition-colors"><X size={16} className="text-[#A1A1A8]" /></button>
+        </div>
+        <div className="px-5 py-5 space-y-5">
+          <div className="bg-[#111113] border border-[#1F1F23] rounded-lg p-4">
+            <p className="text-[10px] text-[#A1A1A8] mb-1">Your AI Agent Phone Number</p>
+            <div className="flex items-center gap-2">
+              <p className="text-lg font-bold font-mono text-[#F5F5F7]">{biz.phone}</p>
+              <button onClick={copyNumber} className="p-1.5 rounded-lg hover:bg-[#1F1F23] transition-colors">
+                {copied ? <CheckCircle2 size={14} className="text-[#17C5B0]" /> : <Copy size={14} className="text-[#A1A1A8]" />}
+              </button>
+            </div>
+            <p className="text-[9px] text-[#A1A1A8]/60 mt-1">Auto-provisioned for your business</p>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold text-[#F5F5F7] mb-3">How to connect your store phone</h4>
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-bold text-[#1A8FD6]">1</span>
+                </div>
+                <div>
+                  <p className="text-xs text-[#F5F5F7] font-medium">Set up call forwarding</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-0.5 leading-relaxed">
+                    Forward your store's main phone line to the number above. Most carriers support this &mdash; dial *72 + the number, or set it in your phone system's admin panel.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-bold text-[#1A8FD6]">2</span>
+                </div>
+                <div>
+                  <p className="text-xs text-[#F5F5F7] font-medium">Or use as a dedicated order line</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-0.5 leading-relaxed">
+                    Publish the AI number as your ordering line on Google Business, your website, and signage. Keep your main line for other calls.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-6 h-6 rounded-full bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center flex-shrink-0">
+                  <span className="text-[10px] font-bold text-[#1A8FD6]">3</span>
+                </div>
+                <div>
+                  <p className="text-xs text-[#F5F5F7] font-medium">Test with a quick call</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-0.5 leading-relaxed">
+                    Call the number from your cell phone to hear the AI agent greet you and take a test order. Orders appear in the dashboard instantly.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#17C5B0]/5 border border-[#17C5B0]/15 rounded-lg p-3">
+            <div className="flex items-start gap-2">
+              <Info size={12} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
+              <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
+                <span className="text-[#17C5B0] font-medium">No hardware needed.</span>{' '}
+                The AI agent answers calls 24/7. It greets callers, takes orders, reads back totals, and sends orders to your POS automatically. Calls that need a human are transferred to your staff number.
+              </p>
+            </div>
+          </div>
+
+          <button onClick={onClose} className="w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors">
+            Got It
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PhoneSetupCard({ biz, onConnect }: { biz: PhoneBizConfig; onConnect: () => void }) {
+  return (
+    <div className="card p-4 border-[#1A8FD6]/15">
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0">
+          <Link2 size={16} className="text-[#1A8FD6]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Connect Your Store Phone</h3>
+          <p className="text-[10px] text-[#A1A1A8] mt-1 leading-relaxed">
+            Forward your store number to <span className="text-[#F5F5F7] font-mono font-medium">{biz.phone}</span> or publish it as your order line. The AI agent answers calls, takes orders, and routes them to your POS.
+          </p>
+          <button onClick={onConnect}
+            className="mt-2 flex items-center gap-1.5 px-3 py-1.5 bg-[#1A8FD6] text-white text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors">
+            <Phone size={12} /> Setup Instructions
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 type Tab = 'overview' | 'calls' | 'settings'
 
 export default function PhoneOrdersPage() {
@@ -715,10 +1028,11 @@ export default function PhoneOrdersPage() {
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d'>('30d')
   const [selectedCall, setSelectedCall] = useState<PhoneCallEntry | null>(null)
   const [showWizard, setShowWizard] = useState(false)
+  const [showConnect, setShowConnect] = useState(false)
 
   const connectedPos = org?.pos_provider || null
   const setupKey = 'meridian_phone_setup'
-  const [setupDone, setSetupDone] = useState(() => localStorage.getItem(setupKey) === '1')
+  const [setupDone, setSetupDone] = useState(() => isDemo || localStorage.getItem(setupKey) === '1')
 
   const { business, calls } = useMemo(() => getPhoneDemoData('midtown-kitchen'), [])
 
@@ -741,9 +1055,13 @@ export default function PhoneOrdersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#F5F5F7]">Phone Orders</h1>
-          <p className="text-sm text-[#A1A1A8] mt-1">AI phone agent &mdash; 100% open source, self-hosted</p>
+          <p className="text-sm text-[#A1A1A8] mt-1">AI-powered phone ordering for your business</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowConnect(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1A8FD6] text-white text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors">
+            <Phone size={14} /> Connect Phone
+          </button>
           <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#17C5B0]/10 text-[#17C5B0]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0] animate-pulse" />
             Active
@@ -764,11 +1082,12 @@ export default function PhoneOrdersPage() {
         ))}
       </div>
 
-      {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} />}
+      {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
-      {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} />}
+      {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} />}
 
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}
+      {showConnect && <ConnectPhoneModal biz={business} onClose={() => setShowConnect(false)} />}
     </div>
   )
 }

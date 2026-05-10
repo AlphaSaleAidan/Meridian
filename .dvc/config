@@ -1,0 +1,7 @@
+[core]
+    remote = b2-archive
+['remote "b2-archive"']
+    url = s3://meridian-data-raw
+    endpointurl = ${B2_ENDPOINT}
+    access_key_id = ${B2_KEY_ID}
+    secret_access_key = ${B2_APP_KEY}

@@ -114,7 +114,7 @@ export default function OnboardingWizard() {
                 {[
                   'Connect your POS system securely',
                   'We import up to 18 months of transaction history',
-                  '15 AI agents start analyzing your data immediately',
+                  '26 AI agents start analyzing your data immediately',
                 ].map(t => (
                   <div key={t} className="flex items-start gap-2">
                     <Check size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
