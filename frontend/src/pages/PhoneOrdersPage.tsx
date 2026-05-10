@@ -7,7 +7,9 @@ import {
   Clock, DollarSign, Filter,
 } from 'lucide-react'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import { useIsDemo } from '@/hooks/useOrg'
+import { useIsDemo, useOrgId } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
+import { posSystems } from '@/data/pos-systems'
 import {
   getPhoneDemoData, getPhoneStats, VOICE_OPTIONS,
   type PhoneCallEntry, type PhoneBizConfig, type CallStatus,
@@ -43,8 +45,14 @@ function fmtMoney(n: number, cur: string): string {
   return `${cur}${n.toFixed(2)}`
 }
 
-function SetupWizard({ biz, onDone }: { biz: PhoneBizConfig; onDone: () => void }) {
+const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
+
+function SetupWizard({ biz, onDone, connectedPos }: { biz: PhoneBizConfig; onDone: () => void; connectedPos: string | null }) {
   const [step, setStep] = useState(0)
+  const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
+  const hasDirectApi = connectedPos ? DIRECT_API_SYSTEMS.has(connectedPos) : false
+  const hasMenuSync = posInfo?.dataAvailable?.menuItems ?? false
+
   const [cfg, setCfg] = useState({
     businessName: biz.name,
     phone: biz.phone,
@@ -52,7 +60,7 @@ function SetupWizard({ biz, onDone }: { biz: PhoneBizConfig; onDone: () => void 
     voice: biz.voice,
     orderTypes: [...biz.orderTypes] as string[],
     menuPasted: false,
-    routing: 'pos' as 'pos' | 'sms' | 'email',
+    routing: (connectedPos ? 'pos' : 'sms') as 'pos' | 'webhook' | 'sms' | 'email',
   })
 
   const inputCls = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50'
@@ -147,7 +155,13 @@ function SetupWizard({ biz, onDone }: { biz: PhoneBizConfig; onDone: () => void 
         {step === 2 && (
           <>
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Menu Items</h3>
-            <p className="text-xs text-[#A1A1A8]">Your menu has been loaded from your POS. Review below:</p>
+            <p className="text-xs text-[#A1A1A8]">
+              {posInfo && hasMenuSync
+                ? `Menu synced from ${posInfo.name}. Review below:`
+                : posInfo
+                  ? `${posInfo.name} doesn't support menu sync. Add items manually or paste below:`
+                  : 'No POS connected. Add your menu items below:'}
+            </p>
             <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
               {biz.menu.map(item => (
                 <div key={item.id} className="flex items-center justify-between px-3 py-2 bg-[#111113] rounded-lg">
@@ -173,19 +187,55 @@ function SetupWizard({ biz, onDone }: { biz: PhoneBizConfig; onDone: () => void 
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Order Routing</h3>
             <p className="text-xs text-[#A1A1A8]">Where should confirmed orders be sent?</p>
             <div className="space-y-2">
-              {[
-                { key: 'pos' as const, label: 'POS System', desc: 'Send directly to Square, Toast, or Clover' },
-                { key: 'sms' as const, label: 'SMS Alert', desc: 'Text order details to your phone' },
-                { key: 'email' as const, label: 'Email', desc: 'Send order confirmation via email' },
-              ].map(opt => (
-                <button key={opt.key} onClick={() => setCfg(p => ({ ...p, routing: opt.key }))}
+              {posInfo && (
+                <button onClick={() => setCfg(p => ({ ...p, routing: hasDirectApi ? 'pos' : 'webhook' }))}
                   className={clsx('w-full px-4 py-3 rounded-lg border text-left transition-all',
-                    cfg.routing === opt.key ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
-                  <p className={clsx('text-sm font-medium', cfg.routing === opt.key ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>{opt.label}</p>
-                  <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">{opt.desc}</p>
+                    (cfg.routing === 'pos' || cfg.routing === 'webhook') ? 'border-[#17C5B0]/30 bg-[#17C5B0]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
+                  <div className="flex items-center gap-2">
+                    <p className={clsx('text-sm font-medium', (cfg.routing === 'pos' || cfg.routing === 'webhook') ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>
+                      {posInfo.name}
+                    </p>
+                    {hasDirectApi && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#17C5B0]/10 text-[#17C5B0] font-medium">Direct API</span>}
+                    {!hasDirectApi && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#1A8FD6]/10 text-[#1A8FD6] font-medium">Webhook</span>}
+                  </div>
+                  <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">
+                    {hasDirectApi
+                      ? `Orders sent directly to ${posInfo.name} via API — appears in your POS instantly`
+                      : `Orders sent via webhook to ${posInfo.name} — appears in your POS within seconds`}
+                  </p>
                 </button>
-              ))}
+              )}
+              {!posInfo && (
+                <button onClick={() => setCfg(p => ({ ...p, routing: 'pos' }))}
+                  className={clsx('w-full px-4 py-3 rounded-lg border text-left transition-all',
+                    cfg.routing === 'pos' ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
+                  <p className={clsx('text-sm font-medium', cfg.routing === 'pos' ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>POS System</p>
+                  <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">Connect your POS in Settings to enable direct order routing</p>
+                </button>
+              )}
+              <button onClick={() => setCfg(p => ({ ...p, routing: 'sms' }))}
+                className={clsx('w-full px-4 py-3 rounded-lg border text-left transition-all',
+                  cfg.routing === 'sms' ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
+                <p className={clsx('text-sm font-medium', cfg.routing === 'sms' ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>SMS Alert</p>
+                <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">Text order details to your phone for manual POS entry</p>
+              </button>
+              <button onClick={() => setCfg(p => ({ ...p, routing: 'email' }))}
+                className={clsx('w-full px-4 py-3 rounded-lg border text-left transition-all',
+                  cfg.routing === 'email' ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
+                <p className={clsx('text-sm font-medium', cfg.routing === 'email' ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>Email</p>
+                <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">Send formatted order confirmation via email</p>
+              </button>
             </div>
+            {posInfo && !hasDirectApi && (
+              <div className="card p-3 border-[#1A8FD6]/10 mt-2">
+                <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
+                  <span className="text-[#F5F5F7] font-medium">How it works:</span>{' '}
+                  Orders are sent to {posInfo.name} via webhook. If the webhook is unavailable,
+                  orders are saved to your Meridian dashboard and you're notified via SMS for manual entry.
+                  All 80+ POS systems are supported.
+                </p>
+              </div>
+            )}
           </>
         )}
 
@@ -211,7 +261,12 @@ function SetupWizard({ biz, onDone }: { biz: PhoneBizConfig; onDone: () => void 
               </div>
               <div className="flex justify-between py-2 border-b border-[#1F1F23]">
                 <span className="text-[#A1A1A8]">Order Routing</span>
-                <span className="text-[#F5F5F7] capitalize">{cfg.routing === 'pos' ? 'POS System' : cfg.routing}</span>
+                <span className="text-[#F5F5F7]">
+                  {cfg.routing === 'pos' && posInfo ? `${posInfo.name} (Direct API)` :
+                   cfg.routing === 'webhook' && posInfo ? `${posInfo.name} (Webhook)` :
+                   cfg.routing === 'pos' ? 'POS System' :
+                   cfg.routing === 'sms' ? 'SMS Alert' : 'Email'}
+                </span>
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-[#A1A1A8]">Order Types</span>
@@ -511,7 +566,9 @@ function CallLogTab({ calls, biz, onViewCall }: { calls: PhoneCallEntry[]; biz: 
   )
 }
 
-function SettingsTab({ biz, onReconfigure }: { biz: PhoneBizConfig; onReconfigure: () => void }) {
+function SettingsTab({ biz, onReconfigure, connectedPos }: { biz: PhoneBizConfig; onReconfigure: () => void; connectedPos: string | null }) {
+  const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
+  const hasDirectApi = connectedPos ? DIRECT_API_SYSTEMS.has(connectedPos) : false
   const [cfg, setCfg] = useState({
     active: true,
     greeting: biz.greeting,
@@ -598,6 +655,37 @@ function SettingsTab({ biz, onReconfigure }: { biz: PhoneBizConfig; onReconfigur
         </div>
       </div>
 
+      <div className="card p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Route size={14} className="text-[#17C5B0]" />
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Order Routing</h3>
+        </div>
+        {posInfo ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-3 py-2 bg-[#111113] rounded-lg">
+              <div>
+                <p className="text-xs text-[#F5F5F7] font-medium">{posInfo.name}</p>
+                <p className="text-[9px] text-[#A1A1A8]">
+                  {hasDirectApi ? 'Direct API — orders appear in POS instantly' : 'Webhook — orders sent within seconds'}
+                </p>
+              </div>
+              <span className={clsx('text-[9px] px-1.5 py-0.5 rounded font-medium',
+                hasDirectApi ? 'bg-[#17C5B0]/10 text-[#17C5B0]' : 'bg-[#1A8FD6]/10 text-[#1A8FD6]')}>
+                {hasDirectApi ? 'Direct' : 'Webhook'}
+              </span>
+            </div>
+            <p className="text-[10px] text-[#A1A1A8]/60 px-1">
+              Fallback: orders saved to Meridian dashboard + SMS notification if POS is unreachable
+            </p>
+          </div>
+        ) : (
+          <div className="px-3 py-3 bg-[#111113] rounded-lg">
+            <p className="text-xs text-[#A1A1A8]">No POS connected. Orders will be sent via SMS/email notification.</p>
+            <p className="text-[10px] text-[#1A8FD6] mt-1">Connect a POS in merchant settings for direct order routing.</p>
+          </div>
+        )}
+      </div>
+
       <div className="card p-4 border-[#17C5B0]/10">
         <div className="flex items-start gap-3">
           <Phone size={16} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
@@ -622,11 +710,13 @@ type Tab = 'overview' | 'calls' | 'settings'
 
 export default function PhoneOrdersPage() {
   const isDemo = useIsDemo()
+  const { org } = useAuth()
   const [tab, setTab] = useState<Tab>('overview')
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d'>('30d')
   const [selectedCall, setSelectedCall] = useState<PhoneCallEntry | null>(null)
   const [showWizard, setShowWizard] = useState(false)
 
+  const connectedPos = org?.pos_provider || null
   const setupKey = 'meridian_phone_setup'
   const [setupDone, setSetupDone] = useState(() => localStorage.getItem(setupKey) === '1')
 
@@ -641,7 +731,7 @@ export default function PhoneOrdersPage() {
   if (!setupDone || showWizard) {
     return (
       <div className="space-y-6">
-        <SetupWizard biz={business} onDone={handleWizardDone} />
+        <SetupWizard biz={business} onDone={handleWizardDone} connectedPos={connectedPos} />
       </div>
     )
   }
@@ -676,7 +766,7 @@ export default function PhoneOrdersPage() {
 
       {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
-      {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} />}
+      {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} />}
 
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}
     </div>
