@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import {
   Lock, Sparkles, User, Users, CheckSquare,
   ChevronRight, ChevronLeft, Check, Eye, EyeOff,
@@ -7,6 +7,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import { onboardingEmails } from '@/lib/email-service'
 import { MeridianEmblem } from '@/components/MeridianLogo'
+import { supabase } from '@/lib/supabase'
 
 const STEPS = [
   { id: 'password', label: 'Password', icon: Lock },
@@ -61,7 +62,7 @@ export default function CanadaPortalOnboardingPage() {
     if (stepIdx > 0) setStep(STEPS[stepIdx - 1].id)
   }
 
-  function handlePasswordSubmit() {
+  async function handlePasswordSubmit() {
     if (password.length < 8) {
       setPasswordError('Password must be at least 8 characters')
       return
@@ -71,11 +72,25 @@ export default function CanadaPortalOnboardingPage() {
       return
     }
     setPasswordError('')
+    if (supabase) {
+      const { error } = await supabase.auth.updateUser({ password })
+      if (error) {
+        setPasswordError(error.message)
+        return
+      }
+    }
     setCheckedItems(prev => new Set([...prev, 'password']))
     nextStep()
   }
 
-  function handleProfileSubmit() {
+  async function handleProfileSubmit() {
+    if (supabase && rep) {
+      await supabase.from('sales_reps').update({
+        name: profile.display_name || rep.name,
+        phone: profile.phone,
+        location: profile.city && profile.province ? `${profile.city}, ${profile.province}` : undefined,
+      }).eq('email', rep.email).then(() => {})
+    }
     setCheckedItems(prev => new Set([...prev, 'profile']))
     nextStep()
   }
@@ -416,9 +431,9 @@ export default function CanadaPortalOnboardingPage() {
                     <ChevronLeft size={16} /> Back
                   </button>
                   <div className="flex gap-2">
-                    <a href="/canada/portal/training" className={btnSecondary + ' border border-[#1a2420] rounded-lg px-4'}>
+                    <Link to="/canada/portal/training" className={btnSecondary + ' border border-[#1a2420] rounded-lg px-4'}>
                       Go to Training
-                    </a>
+                    </Link>
                     <button
                       onClick={handleFinish}
                       disabled={!allRequiredDone}

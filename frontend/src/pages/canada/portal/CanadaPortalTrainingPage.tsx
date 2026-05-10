@@ -179,6 +179,10 @@ const SECTIONS = [
 export default function CanadaPortalTrainingPage() {
   const [expandedId, setExpandedId] = useState<string | null>('onboarding')
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('meridian_training_progress')
+    if (saved) {
+      try { return new Set(JSON.parse(saved) as string[]) } catch { /* fall through */ }
+    }
     const initial = new Set<string>()
     MODULES.forEach(m => m.lessons.forEach(l => { if (l.completed) initial.add(l.id) }))
     return initial
@@ -193,6 +197,7 @@ export default function CanadaPortalTrainingPage() {
       const next = new Set(prev)
       if (next.has(lessonId)) next.delete(lessonId)
       else next.add(lessonId)
+      localStorage.setItem('meridian_training_progress', JSON.stringify([...next]))
       return next
     })
   }

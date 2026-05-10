@@ -5,7 +5,6 @@ import {
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
-import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
   prospecting: 1,
@@ -261,8 +260,8 @@ export default function CanadaPortalLeadsPage() {
                         {deal.vertical}
                       </span>
                     )}
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#00d4aa]/10 text-[#00d4aa] font-medium">
-                      CA${Math.round(deal.monthly_value * CAD_RATE).toLocaleString()}/mo
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0b429]/10 text-[#f0b429] font-medium">
+                      CA${deal.monthly_value.toLocaleString()}/mo
                     </span>
                   </div>
                   <p className="text-xs text-[#6b7a74] mt-0.5 truncate">{deal.contact_name}</p>

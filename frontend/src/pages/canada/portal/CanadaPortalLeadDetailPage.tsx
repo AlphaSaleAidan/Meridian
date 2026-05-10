@@ -7,7 +7,7 @@ import {
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
-import { CAD_RATE, getPlan, toCad } from '@/lib/canada-proposal-plans'
+import { getPlan } from '@/lib/canada-proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -158,7 +158,7 @@ export default function CanadaPortalLeadDetailPage() {
       ownerName: deal.contact_name,
       email: deal.contact_email,
       plan,
-      customPrice: toCad(monthlyPrice),
+      customPrice: monthlyPrice,
       setupFee: Number(setupFee) || 0,
       firstMonthFree,
       rep,
@@ -233,7 +233,7 @@ export default function CanadaPortalLeadDetailPage() {
             rep_name: rep?.name || '',
             rep_email: rep?.email || '',
             plan_name: monthlyPrice >= 750 ? 'Command' : monthlyPrice >= 375 ? 'Premium' : 'Standard',
-            monthly_price: `CA$${toCad(monthlyPrice).toLocaleString()}`,
+            monthly_price: `CA$${monthlyPrice.toLocaleString()}`,
           },
         }),
       })
@@ -256,7 +256,7 @@ export default function CanadaPortalLeadDetailPage() {
     canadaLeadsService.getById(id!).then(found => {
       setDeal(found)
       if (found) {
-        setMonthlyPrice(Math.round(found.monthly_value / 100) || 500)
+        setMonthlyPrice(found.monthly_value || 500)
       }
       setLoading(false)
     })
@@ -302,7 +302,7 @@ export default function CanadaPortalLeadDetailPage() {
       <div>
         <h1 className="text-2xl font-bold text-white">{deal.business_name}</h1>
         <p className="text-sm text-[#6b7a74] mt-1">
-          {deal.contact_name} &middot; CA${Math.round(deal.monthly_value * CAD_RATE).toLocaleString()}/mo &middot; {deal.contact_email}
+          {deal.contact_name} &middot; <span className="text-[#f0b429] font-semibold">CA${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
         </p>
       </div>
 
@@ -328,7 +328,7 @@ export default function CanadaPortalLeadDetailPage() {
               onChange={e => setMonthlyPrice(Number(e.target.value))}
               className="flex-1 h-2 bg-[#1a2420] rounded-full appearance-none cursor-pointer accent-[#00d4aa]"
             />
-            <span className="text-sm font-semibold text-white w-28 text-right">CA${Math.round(monthlyPrice * CAD_RATE)}/mo</span>
+            <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">CA${monthlyPrice.toLocaleString()}/mo</span>
           </div>
         </div>
 

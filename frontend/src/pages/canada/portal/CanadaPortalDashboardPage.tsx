@@ -28,14 +28,12 @@ import { canadaLeadsService } from '@/lib/canada-leads-service'
 
 const CAD_RATE = 1.37
 
-function formatCentsToCad(cents: number): string {
-  const cad = (cents / 100) * CAD_RATE
-  return 'CA$' + cad.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function formatCad(value: number): string {
+  return 'CA$' + Math.round(value * CAD_RATE).toLocaleString('en-CA')
 }
 
-function formatDollarsCad(value: number): string {
-  const cad = Math.round(value * CAD_RATE)
-  return 'CA$' + cad.toLocaleString('en-CA') + '/mo'
+function formatCadMo(value: number): string {
+  return 'CA$' + value.toLocaleString('en-CA') + '/mo'
 }
 
 function titleCase(name: string): string {
@@ -184,7 +182,7 @@ export default function CanadaPortalDashboardPage() {
         />
         <StatCard
           label="MRR"
-          value={formatCentsToCad(mrr)}
+          value={formatCad(mrr)}
           subtitle="Monthly recurring revenue"
           icon={<DollarSign size={18} className="text-[#f0b429]" />}
           iconBg="bg-[#f0b429]/15"
@@ -195,7 +193,7 @@ export default function CanadaPortalDashboardPage() {
         <StatCard
           label="In Pipeline"
           value={String(pipelineDeals.length)}
-          subtitle={`CA$${Math.round(pipelineValue * CAD_RATE).toLocaleString('en-CA')}/mo potential`}
+          subtitle={`CA$${Math.round(pipelineValue).toLocaleString('en-CA')}/mo potential`}
           icon={<TrendingUp size={18} className="text-[#00d4aa]" />}
           iconBg="bg-[#00d4aa]/15"
           bars={[55, 40, 70, 60, 85, 50]}
@@ -203,8 +201,8 @@ export default function CanadaPortalDashboardPage() {
         />
         <StatCard
           label="Commissions"
-          value={formatCentsToCad(overview.total_earned)}
-          subtitle={`${commissionRate}% rate | ${formatCentsToCad(overview.pending_payout)} pending`}
+          value={formatCad(overview.total_earned)}
+          subtitle={`${commissionRate}% rate | ${formatCad(overview.pending_payout)} pending`}
           icon={<CreditCard size={18} className="text-[#f0b429]" />}
           iconBg="bg-[#f0b429]/15"
           valueColor="#f0b429"
@@ -224,7 +222,7 @@ export default function CanadaPortalDashboardPage() {
             Start building your pipeline by creating your first lead. Track every stage from prospecting through close.
           </p>
           <button
-            onClick={() => navigate('/canada/portal/leads')}
+            onClick={() => navigate('/canada/portal/leads?new=true')}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold hover:bg-[#00d4aa]/90 transition-colors"
           >
             <Plus size={16} />
@@ -291,7 +289,7 @@ export default function CanadaPortalDashboardPage() {
                                   className="text-[11px] font-semibold mt-1.5"
                                   style={{ color: cfg.color }}
                                 >
-                                  {formatDollarsCad(deal.monthly_value)}
+                                  {formatCadMo(deal.monthly_value)}
                                 </p>
                               </Link>
                             ))}
@@ -354,7 +352,7 @@ export default function CanadaPortalDashboardPage() {
                         <p className="text-[11px] text-[#6b7a74]">
                           <span style={{ color: cfg.color }}>{cfg.label}</span>
                           <span className="mx-1.5 text-[#2a3430]">|</span>
-                          {formatDollarsCad(deal.monthly_value)}
+                          {formatCadMo(deal.monthly_value)}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 text-[11px] text-[#4a5550] flex-shrink-0">
@@ -375,12 +373,12 @@ export default function CanadaPortalDashboardPage() {
         <QuickAction
           icon={<Plus size={16} />}
           label="New Lead"
-          onClick={() => navigate('/canada/portal/leads')}
+          onClick={() => navigate('/canada/portal/leads?new=true')}
         />
         <QuickAction
           icon={<FileText size={16} />}
           label="Generate Proposal"
-          onClick={() => navigate('/canada/portal/leads')}
+          onClick={() => navigate('/canada/portal/new-customer')}
         />
         <QuickAction
           icon={<GraduationCap size={16} />}
@@ -390,7 +388,7 @@ export default function CanadaPortalDashboardPage() {
         <QuickAction
           icon={<MessageCircle size={16} />}
           label="Contact Manager"
-          onClick={() => navigate('/canada/portal/settings')}
+          onClick={() => navigate('/canada/portal/team')}
         />
       </div>
     </div>

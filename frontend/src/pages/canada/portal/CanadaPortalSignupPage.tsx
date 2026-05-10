@@ -32,6 +32,7 @@ export default function CanadaPortalSignupPage() {
       return
     }
     setSuccess(true)
+    setTimeout(() => navigate('/canada/portal/onboarding', { replace: true }), 1200)
   }
 
   const inputClass = 'w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'

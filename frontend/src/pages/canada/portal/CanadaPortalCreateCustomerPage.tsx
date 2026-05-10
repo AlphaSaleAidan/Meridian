@@ -619,7 +619,7 @@ export default function CanadaPortalCreateCustomerPage() {
           monthly_value: price,
           commission_rate: rep?.commission_rate || 35,
           country: 'CA',
-          notes: form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
+          notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
           rep_id: rep?.rep_id || null,
         })
         if (dealErr) console.warn('Deal creation warning:', dealErr.message)
