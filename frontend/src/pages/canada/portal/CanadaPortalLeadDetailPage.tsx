@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2,
-  FileText, Eye, Mail,
+  FileText, Eye, Mail, CheckCircle2, Loader2,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { CAD_RATE } from '@/lib/canada-proposal-plans'
+import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 
 const STAGE_TO_STEP: Record<DealStage, number> = {
   prospecting: 1,
@@ -86,6 +87,58 @@ export default function CanadaPortalLeadDetailPage() {
 
   // Step 4 state
   const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
+  const [posConnecting, setPosConnecting] = useState(false)
+  const [posConnected, setPosConnected] = useState(false)
+  const [posError, setPosError] = useState<string | null>(null)
+
+  async function handleCredentialSubmit(posKey: string, credentials: Record<string, string>) {
+    const system = getPosSystem(posKey)
+    if (!system) return
+
+    const { valid, errors } = validateCredentials(system, credentials)
+    if (!valid) {
+      const firstError = Object.values(errors)[0]
+      setPosError(firstError)
+      return
+    }
+
+    setPosConnecting(true)
+    setPosError(null)
+
+    const { provider, credentials: creds } = serializeCredentials(system, credentials)
+
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${API_BASE}/api/onboarding/connect-pos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deal_id: deal?.id,
+          provider,
+          credentials: creds,
+          business_name: deal?.business_name,
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setPosError(body.detail || 'Connection failed — check credentials and try again.')
+        setPosConnecting(false)
+        return
+      }
+
+      setPosConnected(true)
+      setPosConnecting(false)
+
+      if (deal && deal.stage === 'proposal_sent') {
+        await canadaLeadsService.updateStage(deal.id, 'negotiation')
+        setDeal(prev => prev ? { ...prev, stage: 'negotiation' } : prev)
+      }
+    } catch {
+      setPosError('Network error — please try again.')
+      setPosConnecting(false)
+    }
+  }
 
   // Files state
   const [files, setFiles] = useState(DEMO_FILES)
@@ -209,10 +262,42 @@ export default function CanadaPortalLeadDetailPage() {
       {/* Step 4 - Connect POS */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Step 4 — Connect POS</h2>
-        <POSSystemPicker value={selectedPOS} onChange={setSelectedPOS} mode="lead-detail" portalContext="canada" />
-        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">
-          <Wifi size={16} /> Save & Test Connection
-        </button>
+        <POSSystemPicker
+          value={selectedPOS}
+          onChange={k => { setSelectedPOS(k); setPosConnected(false); setPosError(null) }}
+          onCredentialSubmit={handleCredentialSubmit}
+          mode="lead-detail"
+          portalContext="canada"
+        />
+
+        {posError && (
+          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+            {posError}
+          </div>
+        )}
+
+        {posConnected && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+            <span className="text-xs text-[#00d4aa] font-medium">
+              POS connected — the swarm is pulling data now.
+            </span>
+          </div>
+        )}
+
+        {!posConnected && selectedPOS && (
+          <button
+            onClick={() => handleCredentialSubmit(selectedPOS, {})}
+            disabled={posConnecting}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          >
+            {posConnecting ? (
+              <><Loader2 size={16} className="animate-spin" /> Connecting...</>
+            ) : (
+              <><Wifi size={16} /> Save & Test Connection</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Project Files */}

@@ -10,6 +10,7 @@ import { posSystems, type POSSystem, type POSSystemKey } from '@/data/pos-system
 interface POSSystemPickerProps {
   value: string | null
   onChange: (posKey: string) => void
+  onCredentialSubmit?: (posKey: string, credentials: Record<string, string>) => void
   mode: 'lead-detail' | 'new-customer'
   portalContext: 'us' | 'canada'
   currency?: 'USD' | 'CAD'
@@ -92,6 +93,7 @@ const themes: Record<'us' | 'canada', PickerTheme> = {
 export default function POSSystemPicker({
   value,
   onChange,
+  onCredentialSubmit,
   mode,
   portalContext,
   currency = portalContext === 'canada' ? 'CAD' : 'USD',
@@ -246,6 +248,7 @@ export default function POSSystemPicker({
           portalContext={portalContext}
           credentialValues={credentialValues}
           onCredentialChange={updateCredential}
+          onCredentialSubmit={onCredentialSubmit ? () => onCredentialSubmit(selected.key, credentialValues) : undefined}
           waitlistEmail={waitlistEmail}
           onWaitlistEmailChange={setWaitlistEmail}
           waitlistSubmitted={waitlistSubmitted}
@@ -260,7 +263,7 @@ type Theme = PickerTheme
 
 function DetailCard({
   system, theme: t, mode, portalContext,
-  credentialValues, onCredentialChange,
+  credentialValues, onCredentialChange, onCredentialSubmit,
   waitlistEmail, onWaitlistEmailChange, waitlistSubmitted, onWaitlistSubmit,
 }: {
   system: POSSystem
@@ -269,6 +272,7 @@ function DetailCard({
   portalContext: 'us' | 'canada'
   credentialValues: Record<string, string>
   onCredentialChange: (fieldId: string, val: string) => void
+  onCredentialSubmit?: () => void
   waitlistEmail: string
   onWaitlistEmailChange: (v: string) => void
   waitlistSubmitted: boolean
@@ -301,6 +305,7 @@ function DetailCard({
           system={system} theme={t} mode={mode}
           credentialValues={credentialValues}
           onCredentialChange={onCredentialChange}
+          onCredentialSubmit={onCredentialSubmit}
         />
       )}
       {system.status === 'coming_soon' && (
@@ -329,13 +334,14 @@ function DetailCard({
 }
 
 function IntegratedContent({
-  system, theme: t, mode, credentialValues, onCredentialChange,
+  system, theme: t, mode, credentialValues, onCredentialChange, onCredentialSubmit,
 }: {
   system: POSSystem
   theme: Theme
   mode: 'lead-detail' | 'new-customer'
   credentialValues: Record<string, string>
   onCredentialChange: (fieldId: string, val: string) => void
+  onCredentialSubmit?: () => void
 }) {
   const reqs = system.merchantRequirements ?? []
   const steps: { step: number; title: string; instruction: string; srAction?: string }[] =
@@ -427,10 +433,11 @@ function IntegratedContent({
       {/* Connect button */}
       <button
         type="button"
+        onClick={onCredentialSubmit}
         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all text-white"
         style={{ backgroundColor: t.accent }}
       >
-        <Wifi size={16} /> Connect {system.name} (Demo)
+        <Wifi size={16} /> {onCredentialSubmit ? `Save & Connect ${system.name}` : `Connect ${system.name} (Demo)`}
       </button>
 
       {/* SR notes */}
