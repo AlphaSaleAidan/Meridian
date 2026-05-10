@@ -714,8 +714,10 @@ export default function CanadaPortalCreateCustomerPage() {
       <div className="flex items-center gap-3 mb-8">
         <button
           onClick={() => {
-            if (step === 'details') navigate('/canada/portal/leads')
-            else setStep(steps[currentIdx - 1])
+            if (step === 'details') {
+              const leadId = searchParams.get('lead')
+              navigate(leadId ? `/canada/portal/leads/${leadId}` : '/canada/portal/leads')
+            } else setStep(steps[currentIdx - 1])
           }}
           className="p-2 rounded-lg text-[#6b7a74] hover:text-white hover:bg-[#1a2420] transition-colors"
         >

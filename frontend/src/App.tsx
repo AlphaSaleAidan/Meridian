@@ -53,6 +53,7 @@ const CanadaPortalLeadDetailPage = lazy(() => import('@/pages/canada/portal/Cana
 const CanadaPortalAccountsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalAccountsPage'))
 const CanadaPortalTeamPage = lazy(() => import('@/pages/canada/portal/CanadaPortalTeamPage'))
 const CanadaPortalTrainingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalTrainingPage'))
+const CanadaPortalCommissionsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalCommissionsPage'))
 const CanadaPortalSettingsPage = lazy(() => import('@/pages/canada/portal/CanadaPortalSettingsPage'))
 const CanadaPortalCreateCustomerPage = lazy(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
 const CanadaPortalOnboardingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
@@ -259,6 +260,7 @@ export default function App() {
                 <Route path="leads/:id" element={<CanadaPortalLeadDetailPage />} />
                 <Route path="new-customer" element={<CanadaPortalCreateCustomerPage />} />
                 <Route path="accounts" element={<CanadaPortalAccountsPage />} />
+                <Route path="commissions" element={<CanadaPortalCommissionsPage />} />
                 <Route path="training" element={<CanadaPortalTrainingPage />} />
                 <Route path="team" element={<CanadaPortalTeamPage />} />
                 <Route path="settings" element={<CanadaPortalSettingsPage />} />

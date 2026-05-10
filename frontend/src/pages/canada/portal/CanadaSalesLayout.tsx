@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Target,
   Building2,
+  Wallet,
   GraduationCap,
   Users,
   Menu,
@@ -22,6 +23,7 @@ const salesNavItems = [
   { path: '/canada/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/canada/portal/leads', icon: Target, label: 'Leads' },
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
+  { path: '/canada/portal/commissions', icon: Wallet, label: 'Commissions' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
 ] as const

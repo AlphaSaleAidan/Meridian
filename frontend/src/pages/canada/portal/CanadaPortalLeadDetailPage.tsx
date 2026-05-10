@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2,
-  FileText, Eye, Mail, CheckCircle2, Loader2, Download, ChevronRight,
+  FileText, Eye, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
@@ -23,12 +23,12 @@ const STAGE_TO_STEP: Record<DealStage, number> = {
 }
 
 const STEPS = [
-  { num: 1, label: 'Lead Created' },
-  { num: 2, label: 'Proposal' },
-  { num: 3, label: 'Checkout' },
-  { num: 4, label: 'Connect POS' },
-  { num: 5, label: 'Monitoring' },
-  { num: 6, label: 'Sale Complete' },
+  { num: 1, label: 'Prospecting' },
+  { num: 2, label: 'Contacted' },
+  { num: 3, label: 'Demo' },
+  { num: 4, label: 'Proposal Sent' },
+  { num: 5, label: 'Negotiation' },
+  { num: 6, label: 'Closed Won' },
 ]
 
 const DEMO_FILES = [
@@ -82,6 +82,9 @@ export default function CanadaPortalLeadDetailPage() {
   const { rep } = useSalesAuth()
   const [deal, setDeal] = useState<Deal | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '' })
+  const [editSaving, setEditSaving] = useState(false)
 
   // Step 2 state
   const [monthlyPrice, setMonthlyPrice] = useState(500)
@@ -312,12 +315,59 @@ export default function CanadaPortalLeadDetailPage() {
       </Link>
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">{deal.business_name}</h1>
-        <p className="text-sm text-[#6b7a74] mt-1">
-          {deal.contact_name} &middot; <span className="text-[#f0b429] font-semibold">CA${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
-        </p>
-      </div>
+      {editing ? (
+        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[#00d4aa]">Edit Lead</h2>
+            <button onClick={() => setEditing(false)} className="text-xs text-[#6b7a74] hover:text-white">Cancel</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input value={editForm.business_name} onChange={e => setEditForm(f => ({ ...f, business_name: e.target.value }))} className={inputClass} placeholder="Business Name" />
+            <input value={editForm.contact_name} onChange={e => setEditForm(f => ({ ...f, contact_name: e.target.value }))} className={inputClass} placeholder="Contact Name" />
+            <input value={editForm.contact_email} onChange={e => setEditForm(f => ({ ...f, contact_email: e.target.value }))} className={inputClass} placeholder="Email" />
+            <input value={editForm.contact_phone} onChange={e => setEditForm(f => ({ ...f, contact_phone: e.target.value }))} className={inputClass} placeholder="Phone" />
+            <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes" />
+          </div>
+          <button
+            disabled={editSaving}
+            onClick={async () => {
+              setEditSaving(true)
+              await canadaLeadsService.update(deal.id, editForm)
+              setDeal(prev => prev ? { ...prev, ...editForm } : prev)
+              setEditing(false)
+              setEditSaving(false)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          >
+            {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Save Changes
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-white">{deal.business_name}</h1>
+            <p className="text-sm text-[#6b7a74] mt-1">
+              {deal.contact_name} &middot; <span className="text-[#f0b429] font-semibold">CA${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditForm({
+                business_name: deal.business_name,
+                contact_name: deal.contact_name,
+                contact_email: deal.contact_email,
+                contact_phone: deal.contact_phone,
+                notes: deal.notes,
+              })
+              setEditing(true)
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#6b7a74] border border-[#1a2420] rounded-lg hover:text-white hover:border-[#2a3430] transition-colors"
+          >
+            <Pencil size={12} /> Edit
+          </button>
+        </div>
+      )}
 
       {/* Stepper */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
@@ -326,7 +376,7 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Step 2 - Proposal */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white">Step 2 — Proposal</h2>
+        <h2 className="text-sm font-semibold text-white">Proposal</h2>
 
         {/* Monthly Price Slider */}
         <div>
@@ -416,7 +466,7 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Step 4 - Connect POS */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white">Step 4 — Connect POS</h2>
+        <h2 className="text-sm font-semibold text-white">Connect POS</h2>
         <POSSystemPicker
           value={selectedPOS}
           onChange={k => { setSelectedPOS(k); setPosConnected(false); setPosError(null) }}
@@ -496,6 +546,7 @@ export default function CanadaPortalLeadDetailPage() {
           {deal.stage === 'negotiation' ? (
             <button
               onClick={async () => {
+                if (!confirm('Close this deal as won? This will mark it as a completed sale.')) return
                 await canadaLeadsService.updateStage(deal.id, 'closed_won')
                 setDeal(prev => prev ? { ...prev, stage: 'closed_won' } : prev)
               }}
@@ -507,9 +558,11 @@ export default function CanadaPortalLeadDetailPage() {
             <button
               onClick={async () => {
                 const order: DealStage[] = ['prospecting', 'contacted', 'demo_scheduled', 'proposal_sent', 'negotiation']
+                const stageLabels: Record<string, string> = { contacted: 'Contacted', demo_scheduled: 'Demo Scheduled', proposal_sent: 'Proposal Sent', negotiation: 'Negotiation' }
                 const idx = order.indexOf(deal.stage)
                 if (idx >= 0 && idx < order.length - 1) {
                   const nextStage = order[idx + 1]
+                  if (!confirm(`Advance this deal to "${stageLabels[nextStage]}"?`)) return
                   await canadaLeadsService.updateStage(deal.id, nextStage)
                   setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
                 }
@@ -545,6 +598,7 @@ export default function CanadaPortalLeadDetailPage() {
       {deal.stage !== 'closed_won' && deal.stage !== 'closed_lost' && (
         <button
           onClick={async () => {
+            if (!confirm('Mark this deal as lost? You can still view it in the Closed tab.')) return
             await canadaLeadsService.updateStage(deal.id, 'closed_lost')
             navigate('/canada/portal/leads')
           }}

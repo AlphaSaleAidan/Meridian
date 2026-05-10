@@ -17,12 +17,12 @@ const STAGE_TO_STEP: Record<DealStage, number> = {
 }
 
 const STEP_LABELS: Record<number, string> = {
-  1: 'Step 1: Lead Created',
-  2: 'Step 2: Contacted',
-  3: 'Step 3: Demo/Proposal',
-  4: 'Step 4: Connect POS',
-  5: 'Step 5: Monitoring',
-  6: 'Step 6: Sale Complete',
+  1: 'Prospecting',
+  2: 'Contacted',
+  3: 'Demo Scheduled',
+  4: 'Proposal Sent',
+  5: 'Negotiation',
+  6: 'Closed Won',
 }
 
 function StepPill({ step }: { step: number }) {
@@ -84,7 +84,7 @@ export default function CanadaPortalLeadsPage() {
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [tab, setTab] = useState<'active' | 'new'>('active')
+  const [tab, setTab] = useState<'active' | 'new' | 'closed'>('active')
   const [showNew, setShowNew] = useState(searchParams.get('new') === 'true')
 
   const [newDeal, setNewDeal] = useState({
@@ -99,8 +99,9 @@ export default function CanadaPortalLeadsPage() {
 
   const activeDeals = deals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
   const newLeads = deals.filter(d => d.stage === 'prospecting')
+  const closedDeals = deals.filter(d => d.stage === 'closed_won' || d.stage === 'closed_lost')
 
-  const displayed = (tab === 'active' ? activeDeals : newLeads)
+  const displayed = (tab === 'active' ? activeDeals : tab === 'new' ? newLeads : closedDeals)
     .filter(d => {
       if (!search) return true
       const s = search.toLowerCase()
@@ -172,6 +173,14 @@ export default function CanadaPortalLeadsPage() {
           }`}
         >
           New Leads
+        </button>
+        <button
+          onClick={() => setTab('closed')}
+          className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+            tab === 'closed' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
+          }`}
+        >
+          Closed ({closedDeals.length})
         </button>
       </div>
 
