@@ -96,6 +96,24 @@ class CloverConfig:
         )
 
 
+# ─── Toast Configuration ─────────────────────────────────
+
+@dataclass(frozen=True)
+class ToastConfig:
+    """Toast API configuration (client_credentials auth)."""
+    client_id: str = os.getenv("TOAST_CLIENT_ID", "")
+    client_secret: str = os.getenv("TOAST_CLIENT_SECRET", "")
+    environment: str = os.getenv("TOAST_ENVIRONMENT", "sandbox")
+
+    @property
+    def auth_url(self) -> str:
+        return "https://authentication.toasttab.com/authentication/v1/authentication/login"
+
+    @property
+    def api_base_url(self) -> str:
+        return "https://ws-api.toasttab.com"
+
+
 # ─── Sync Configuration ───────────────────────────────────
 
 @dataclass(frozen=True)
@@ -137,6 +155,7 @@ class RetryConfig:
 # Singleton instances
 square = SquareConfig()
 clover = CloverConfig()
+toast = ToastConfig()
 sync = SyncConfig()
 app = AppConfig()
 retry = RetryConfig()

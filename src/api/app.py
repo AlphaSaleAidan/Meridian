@@ -58,6 +58,7 @@ from .routes.training import router as training_router
 from .routes.email import router as email_api_router
 from ..email.webhooks import router as email_webhook_router
 from .routes.phone import router as phone_router
+from .routes.pos_connections import router as pos_connections_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -101,6 +102,17 @@ async def lifespan(app: FastAPI):
         _trainer_task = asyncio.create_task(trainer.start_autonomous(interval))
         logger.info(f"Autonomous swarm trainer started (every {interval}s)")
 
+    # Start POS sync scheduler
+    _pos_scheduler_started = False
+    if os.environ.get("ENABLE_POS_SYNC", "1") == "1":
+        try:
+            from ..services.pos_scheduler import start_scheduler
+            start_scheduler()
+            _pos_scheduler_started = True
+            logger.info("POS sync scheduler started")
+        except Exception as e:
+            logger.warning(f"POS sync scheduler failed to start: {e}")
+
     yield
 
     if _trainer_task:
@@ -108,6 +120,9 @@ async def lifespan(app: FastAPI):
         get_swarm_trainer().stop()
         _trainer_task.cancel()
         logger.info("Autonomous swarm trainer stopped")
+    if _pos_scheduler_started:
+        from ..services.pos_scheduler import stop_scheduler
+        stop_scheduler()
     await close_db()
     logger.info("Meridian server shut down.")
 
@@ -163,6 +178,7 @@ app.include_router(training_router)
 app.include_router(email_api_router)
 app.include_router(email_webhook_router)
 app.include_router(phone_router)
+app.include_router(pos_connections_router)
 if _has_billing:
     app.include_router(billing_router)
 if _has_marketplace:

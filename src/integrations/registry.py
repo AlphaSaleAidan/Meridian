@@ -40,3 +40,8 @@ def _register_defaults():
         register("clover", CloverSyncEngine)
     except ImportError:
         logger.debug("Clover sync engine not available")
+    try:
+        from ..toast.sync_engine import ToastSyncEngine
+        register("toast", ToastSyncEngine)
+    except ImportError:
+        logger.debug("Toast sync engine not available")
