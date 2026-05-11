@@ -1,7 +1,8 @@
 """
 LLM Enhancement Layer — Transforms statistical analysis into actionable business intelligence.
 
-Uses GPT-4o to rewrite raw statistical insights with:
+Uses LiteLLM for multi-model routing (GPT-4o, Claude, Gemini) with automatic
+fallback. Rewrites raw statistical insights with:
   - Natural language explanations
   - Specific dollar-amount recommendations
   - Industry-contextualized advice
@@ -15,7 +16,14 @@ import os
 
 logger = logging.getLogger("meridian.ai.llm_layer")
 
-_OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
+try:
+    from litellm import acompletion
+    HAS_LITELLM = True
+except ImportError:
+    HAS_LITELLM = False
+
+_DEFAULT_MODEL = os.environ.get("MERIDIAN_LLM_MODEL", "gpt-4o")
+_FALLBACK_MODEL = os.environ.get("MERIDIAN_LLM_FALLBACK", "claude-3-5-haiku-20241022")
 
 SYSTEM_PROMPT = """You are Meridian's AI business analyst for small businesses.
 You receive statistical analysis results from POS transaction data.
@@ -28,6 +36,64 @@ Rules:
 - Keep each insight under 3 sentences
 - Match your tone to the business vertical (casual for coffee shops, professional for retail)
 - If data is insufficient, say so honestly rather than speculating"""
+
+
+async def _call_llm(messages: list[dict], response_format: dict | None = None) -> dict | None:
+    """Route LLM call through LiteLLM with fallback, or raw httpx as last resort."""
+    if HAS_LITELLM:
+        for model in [_DEFAULT_MODEL, _FALLBACK_MODEL]:
+            try:
+                kwargs = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "max_tokens": 2000,
+                }
+                if response_format and "gpt" in model:
+                    kwargs["response_format"] = response_format
+                resp = await acompletion(**kwargs)
+                content = resp.choices[0].message.content
+                logger.info(f"LLM response from {model}")
+                return json.loads(content)
+            except Exception as e:
+                logger.warning(f"LiteLLM {model} failed: {e}")
+                continue
+        return None
+
+    # Fallback: raw httpx to OpenAI (original behavior)
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        return None
+
+    try:
+        import httpx
+        payload = {
+            "model": "gpt-4o",
+            "temperature": 0.3,
+            "max_tokens": 2000,
+            "messages": messages,
+        }
+        if response_format:
+            payload["response_format"] = response_format
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=payload,
+                headers={
+                    "Authorization": f"Bearer {openai_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        if resp.status_code != 200:
+            logger.warning(f"OpenAI API returned {resp.status_code}: {resp.text[:200]}")
+            return None
+
+        content = resp.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
+    except Exception as e:
+        logger.warning(f"Raw OpenAI call failed: {e}")
+        return None
 
 
 async def enhance_insights(
@@ -45,87 +111,68 @@ async def enhance_insights(
         Enhanced insights with 'enhanced_description' field added.
         Falls back to original insights if LLM is unavailable.
     """
-    if not _OPENAI_KEY:
-        logger.info("OPENAI_API_KEY not set — skipping LLM enhancement")
+    if not HAS_LITELLM and not os.environ.get("OPENAI_API_KEY"):
+        logger.info("No LLM provider configured — skipping enhancement")
         return raw_insights
 
     if not raw_insights:
         return raw_insights
 
     try:
-        import httpx
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": json.dumps({
+                    "business_context": business_context,
+                    "insights": [
+                        {
+                            "id": i.get("id", ""),
+                            "category": i.get("category", ""),
+                            "title": i.get("title", ""),
+                            "description": i.get("description", ""),
+                            "metric_value": i.get("metric_value"),
+                            "benchmark_value": i.get("benchmark_value"),
+                            "priority": i.get("priority", "medium"),
+                        }
+                        for i in raw_insights[:20]
+                    ],
+                }),
+            },
+        ]
 
-        payload = {
-            "model": "gpt-4o",
-            "temperature": 0.3,
-            "max_tokens": 2000,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": json.dumps({
-                        "business_context": business_context,
-                        "insights": [
-                            {
-                                "id": i.get("id", ""),
-                                "category": i.get("category", ""),
-                                "title": i.get("title", ""),
-                                "description": i.get("description", ""),
-                                "metric_value": i.get("metric_value"),
-                                "benchmark_value": i.get("benchmark_value"),
-                                "priority": i.get("priority", "medium"),
-                            }
-                            for i in raw_insights[:20]
-                        ],
-                    }),
-                },
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "enhanced_insights",
-                    "strict": True,
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "insights": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "string"},
-                                        "enhanced_description": {"type": "string"},
-                                        "revenue_impact_cents": {"type": ["integer", "null"]},
-                                        "action_item": {"type": "string"},
-                                    },
-                                    "required": ["id", "enhanced_description", "revenue_impact_cents", "action_item"],
-                                    "additionalProperties": False,
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "enhanced_insights",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "insights": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "id": {"type": "string"},
+                                    "enhanced_description": {"type": "string"},
+                                    "revenue_impact_cents": {"type": ["integer", "null"]},
+                                    "action_item": {"type": "string"},
                                 },
+                                "required": ["id", "enhanced_description", "revenue_impact_cents", "action_item"],
+                                "additionalProperties": False,
                             },
                         },
-                        "required": ["insights"],
-                        "additionalProperties": False,
                     },
+                    "required": ["insights"],
+                    "additionalProperties": False,
                 },
             },
         }
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {_OPENAI_KEY}",
-                    "Content-Type": "application/json",
-                },
-            )
-
-        if resp.status_code != 200:
-            logger.warning(f"LLM API returned {resp.status_code}: {resp.text[:200]}")
+        enhanced = await _call_llm(messages, response_format)
+        if not enhanced:
             return raw_insights
-
-        content = resp.json()["choices"][0]["message"]["content"]
-        enhanced = json.loads(content)
 
         enhanced_map = {e["id"]: e for e in enhanced.get("insights", [])}
 
