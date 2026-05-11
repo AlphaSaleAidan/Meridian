@@ -20,6 +20,350 @@
 
 ---
 
+## Deployment & Build Safety
+
+### Pre-Push Checklist (MANDATORY)
+
+Every push to `main` triggers a Vercel production deployment. Broken builds block ALL subsequent features until fixed. Before pushing:
+
+```bash
+cd frontend && npm run build && echo "BUILD CLEAN" || echo "BUILD BROKEN — DO NOT PUSH"
+```
+
+Do NOT push unless you see `BUILD CLEAN`. This is non-negotiable.
+
+### Build Error Triage
+
+When `npm run build` fails:
+
+1. Collect all errors: `npm run build 2>&1 | grep "error TS" | sort -u`
+2. Fix type errors — never use `// @ts-ignore` or `as any` to suppress them
+3. If a missing npm package: `npm install <package>` and verify it appears in `package.json`
+4. If a missing local import (`@/lib/...`): check if the file exists, was renamed, or was deleted
+5. Re-run build to confirm clean, then commit and push
+
+### Vercel Configuration
+
+- **Project:** meridian-dun-nu.vercel.app
+- **Build command:** `npm run build` (runs `tsc && vite build`)
+- **Output directory:** `dist`
+- **Framework:** Vite
+- **Node version:** 20.x
+- **Config file:** `frontend/vercel.json`
+
+### Railway Configuration (Backend)
+
+- **Build:** Dockerfile (Python 3.11-slim)
+- **Entrypoint:** `uvicorn src.api.app:app` on `$PORT`
+- **ML packages:** Installed separately via `requirements-ml.txt` (non-critical, skipped on failure)
+- **Procfile:** `web: uvicorn src.api.app:app --host 0.0.0.0 --port ${PORT:-8000}`
+
+### Common Build Killers (Historical)
+
+| Root Cause | Symptom | Fix |
+|-----------|---------|-----|
+| Missing npm package | `error TS2307: Cannot find module 'X'` | `npm install X` |
+| Bad `vercel.json` | 0s build duration, instant failure | Validate JSON syntax, check field names |
+| Type mismatch after refactor | `error TS2352` or `TS2345` | Fix the type, don't cast to `any` |
+| Invalid component props | `TS2322: Property 'X' does not exist` | Remove prop or add to component interface |
+| Deleted file still imported | `TS2307: Cannot find module '@/lib/X'` | Remove import or restore file |
+
+---
+
+## Dual-Market Architecture (US + Canada)
+
+Meridian runs two parallel sales portals — US and Canada — with shared infrastructure but market-specific branding, data, and pricing.
+
+### US Portal
+
+- **Route prefix:** `/sales/` (redirects to Viktor Space CRM) + embedded React portal
+- **Currency:** USD
+- **Branding:** Blue theme (`#1A8FD6`)
+- **Commission rate:** 70% of $250/mo = $175/deal
+- **Auth:** `frontend/src/lib/sales-auth.tsx` (Supabase JWT)
+- **Demo data:** `frontend/src/lib/sales-demo-data.ts`
+
+### Canada Portal
+
+- **Route prefix:** `/canada/`
+- **Currency:** CAD (displayed as `CA$`, stored in cents, 1.37x USD multiplier)
+- **Branding:** Green theme
+- **Commission rate:** 70% of CA$250/mo
+- **Auth:** `frontend/src/lib/sales-auth.tsx` (shared with US)
+- **Demo data:** `frontend/src/lib/canada-sales-demo-data.ts`
+- **Leads service:** `frontend/src/lib/canada-leads-service.ts`
+- **Proposals:** `frontend/src/lib/canada-proposal-plans.ts`
+
+### Canada Portal Pages
+
+| Page | File | Purpose |
+|------|------|---------|
+| Landing | `pages/canada/CanadaLandingPage.tsx` | Canadian marketing page |
+| Careers | `pages/canada/CanadaCareersPage.tsx` | Canadian job listings |
+| Login | `pages/canada/portal/CanadaPortalLoginPage.tsx` | Sales rep login |
+| Signup | `pages/canada/portal/CanadaPortalSignupPage.tsx` | Sales rep registration |
+| Dashboard | `pages/canada/portal/CanadaPortalDashboardPage.tsx` | MRR, pipeline, metrics |
+| Leads | `pages/canada/portal/CanadaPortalLeadsPage.tsx` | Lead management |
+| Lead Detail | `pages/canada/portal/CanadaPortalLeadDetailPage.tsx` | Individual lead view |
+| Accounts | `pages/canada/portal/CanadaPortalAccountsPage.tsx` | Customer accounts |
+| Create Customer | `pages/canada/portal/CanadaPortalCreateCustomerPage.tsx` | New customer wizard |
+| Onboarding | `pages/canada/portal/CanadaPortalOnboardingPage.tsx` | Customer onboarding |
+| Onboarding Wizard | `pages/canada/portal/CanadaCustomerOnboardingWizard.tsx` | Step-by-step setup |
+| Commissions | `pages/canada/portal/CanadaPortalCommissionsPage.tsx` | Rep commission tracking |
+| Team | `pages/canada/portal/CanadaPortalTeamPage.tsx` | Team management |
+| Training | `pages/canada/portal/CanadaPortalTrainingPage.tsx` | Sales training |
+| Settings | `pages/canada/portal/CanadaPortalSettingsPage.tsx` | Portal settings |
+
+### Shared Layout Components
+
+| Component | US | Canada |
+|-----------|------|--------|
+| Sales layout | `components/Layout.tsx` + `SalesLayout.tsx` | `pages/canada/portal/CanadaSalesLayout.tsx` |
+| Protected route | `components/ProtectedRoute.tsx` | `pages/canada/portal/CanadaSalesProtectedRoute.tsx` |
+| Logo | `components/MeridianLogo.tsx` | Same component, different color prop |
+
+### Canada-Specific Rules
+
+- All amounts displayed in CAD must use `CA$` prefix (never bare `$`)
+- Demo data must use the 1.37x multiplier from USD base values
+- Leads stored in Supabase via `canada-leads-service.ts`, not the US leads table
+- Proposal plans in `canada-proposal-plans.ts` have CAD pricing
+- The demo portal mirrors production — every change goes in both US and Canada
+
+---
+
+## Services Architecture
+
+### Backend Services (Python)
+
+| Service | Location | Deploy Target | Purpose |
+|---------|----------|---------------|---------|
+| Main API | `src/api/` | Railway | FastAPI — 18 route modules, Supabase auth |
+| Phone Agent | `services/phone_agent/` | Docker/Railway | AI voice ordering — Twilio, SambaNova LLM |
+| Postal | `services/postal/` | Docker (self-hosted) | Self-hosted email (replaced Resend) |
+| Evolver | `services/evolver/` | Node.js cron | Self-evolution engine for codebase improvement |
+
+### Phone Agent Stack
+
+- **Voice:** Twilio Voice webhooks (`twilio_voice.py`)
+- **STT:** Speech-to-text service (`stt_service.py`)
+- **TTS:** Text-to-speech service (`tts_service.py`)
+- **LLM:** SambaNova primary, Anthropic fallback (`llm_service.py`)
+- **Orders:** POS routing to 80+ systems (`order_router.py`, `pos_connector.py`)
+- **Payments:** SMS checkout + payment links (`sms_checkout.py`, `payment_links.py`)
+
+### API Routes (18 modules)
+
+| Route File | Prefix | Purpose |
+|-----------|--------|---------|
+| `admin.py` | `/api/admin` | Admin operations |
+| `billing.py` | `/api/billing` | Stripe subscription management |
+| `canada.py` | `/api/canada` | Canada-specific endpoints |
+| `careers.py` | `/api/careers` | Job listings |
+| `cline.py` | `/api/cline` | Cline AI self-healing agent |
+| `dashboard.py` | `/api/dashboard` | Main dashboard data |
+| `email.py` | `/api/email` | Postal email sending |
+| `oauth.py` | `/api/oauth` | POS OAuth flows (Square, Clover) |
+| `onboarding.py` | `/api/onboarding` | Customer onboarding |
+| `payouts.py` | `/api/payouts` | Commission payouts (Stripe Connect) |
+| `phone.py` | `/api/phone` | Phone order endpoints |
+| `pos.py` | `/api/pos` | POS system management |
+| `predictive.py` | `/api/predictive` | ML predictions |
+| `spaces.py` | `/api/space` | 3D space/LiDAR scanning |
+| `training.py` | `/api/training` | Sales training content |
+| `vision.py` | `/api/vision` | Camera/vision intelligence |
+| `webhooks.py` | `/api/webhooks` | POS webhook receivers |
+
+---
+
+## Frontend Component Inventory
+
+### Core Layout
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Main layout | `components/Layout.tsx` | Navigation, sidebar, demo badge |
+| Sales layout | `components/SalesLayout.tsx` | Sales rep portal wrapper |
+| Canada layout | `components/CanadaLayout.tsx` | Canada portal wrapper |
+| Demo layout | `components/DemoLayout.tsx` | Demo mode header/badge |
+| Protected route | `components/ProtectedRoute.tsx` | Auth guard |
+| Error boundary | `components/ErrorBoundary.tsx` | React error boundary |
+
+### Dashboard Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Money Left Card | `components/MoneyLeftCard.tsx` | Core "money left on table" metric |
+| Revenue Chart | `components/RevenueChart.tsx` | Revenue trend visualization |
+| Stat Card | `components/StatCard.tsx` | KPI stat display |
+| Insight Card | `components/InsightCard.tsx` | AI insight display |
+| Tilt Card | `components/DashboardTiltCard.tsx` | 3D tilt effect card |
+| Connection Badge | `components/ConnectionBadge.tsx` | POS connection status |
+| Transaction Drill | `components/TransactionDrillDown.tsx` | Transaction detail view |
+| Scroll Reveal | `components/ScrollReveal.tsx` | Scroll animation wrapper |
+
+### POS Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| POS Picker | `components/POSSystemPicker.tsx` | 80-system POS selector |
+| POS Logo | `components/POSLogo.tsx` | POS system logo renderer |
+| POS Selector | `components/POSSelectorPanel.tsx` | POS selection panel |
+| POS data | `data/pos-systems.ts` | All 80 POS system definitions |
+
+### AI/Agent Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Cline Chat | `components/ClineChatWidget.tsx` | AI chat widget |
+| Cline AI Chat | `components/ClineAIChatWidget.tsx` | Enhanced AI chat |
+| Cline Error | `components/ClineErrorBoundary.tsx` | Cline-specific error handling |
+| Cline Alert | `components/ClineProactiveAlert.tsx` | Proactive AI alerts |
+
+### Hooks
+
+| Hook | File | Purpose |
+|------|------|---------|
+| `useApi` | `hooks/useApi.ts` | Backend API client |
+| `useOrg` | `hooks/useOrg.ts` | Organization context |
+| `useCline` | `hooks/useCline.ts` | Cline AI integration |
+
+### Lib (Business Logic)
+
+| Module | File | Purpose |
+|--------|------|---------|
+| Auth | `lib/auth.tsx` | Supabase auth provider |
+| Sales Auth | `lib/sales-auth.tsx` | Sales portal auth |
+| Supabase | `lib/supabase.ts` | Supabase client |
+| API | `lib/api.ts` | API utility functions |
+| Format | `lib/format.ts` | Number/currency formatting |
+| Utils | `lib/utils.ts` | General utilities (shadcn/ui) |
+| Agent Data | `lib/agent-data.ts` | 27 agent definitions |
+| Demo Data | `lib/demo-data.ts` | US demo data |
+| Demo Context | `lib/demo-context.tsx` | Demo mode context provider |
+| Demo Industries | `lib/demo-industries.ts` | Industry-specific demo data |
+| Sales Demo | `lib/sales-demo-data.ts` | US sales demo data |
+| Canada Demo | `lib/canada-sales-demo-data.ts` | Canada sales demo data |
+| Canada Leads | `lib/canada-leads-service.ts` | Canada lead management |
+| Canada Plans | `lib/canada-proposal-plans.ts` | Canada proposal plans |
+| US Plans | `lib/proposal-plans.ts` | US proposal plans |
+| Email | `lib/email-service.ts` | Email sending service |
+| PDF | `lib/generate-proposal-pdf.ts` | Proposal PDF generation |
+| Phone Orders | `lib/phone-orders-demo-data.ts` | Phone order demo data |
+| POS Creds | `lib/pos-credentials.ts` | POS credential management |
+| Spaces | `lib/spaces-service.ts` | 3D space service |
+
+---
+
+## Full Directory Map
+
+```
+Meridian/
+├── src/                          # Backend source code (Python)
+│   ├── ai/
+│   │   ├── agents/               # 24 AI analysis agents
+│   │   │   ├── base.py           # Base agent class
+│   │   │   ├── basket_analysis.py
+│   │   │   ├── benchmark.py
+│   │   │   ├── cash_flow.py
+│   │   │   ├── cashflow_forecast.py
+│   │   │   ├── category_mix.py
+│   │   │   ├── customer_ltv.py
+│   │   │   ├── day_of_week.py
+│   │   │   ├── discount_analyzer.py
+│   │   │   ├── employee_perf.py
+│   │   │   ├── forecaster.py
+│   │   │   ├── growth_score.py
+│   │   │   ├── inventory_intel.py
+│   │   │   ├── money_left.py      # Core "Money Left on Table" metric
+│   │   │   ├── payment_optimizer.py
+│   │   │   ├── peak_hours.py
+│   │   │   ├── pricing_power.py
+│   │   │   ├── product_velocity.py
+│   │   │   ├── promo_roi.py
+│   │   │   ├── revenue_trend.py
+│   │   │   ├── seasonality.py
+│   │   │   ├── staffing.py
+│   │   │   └── waste_shrinkage.py
+│   │   ├── analyzers/            # Core analysis engines
+│   │   │   ├── money_left.py
+│   │   │   ├── patterns.py
+│   │   │   ├── products.py
+│   │   │   └── revenue.py
+│   │   ├── predictive/           # ML prediction modules
+│   │   │   ├── churn_warning.py
+│   │   │   ├── demand_forecast.py
+│   │   │   ├── dynamic_pricing.py
+│   │   │   ├── goal_tracker.py
+│   │   │   ├── root_cause.py
+│   │   │   └── scenario_engine.py
+│   │   ├── generators/           # Output generators
+│   │   │   ├── forecasts.py
+│   │   │   ├── insights.py
+│   │   │   └── reports.py
+│   │   ├── engine.py             # Main AI pipeline orchestrator
+│   │   └── llm_layer.py          # LLM abstraction (OpenAI + Anthropic)
+│   ├── api/
+│   │   ├── app.py                # FastAPI app + CORS
+│   │   └── routes/               # 18 route modules (see API Routes table)
+│   ├── billing/
+│   │   └── billing_service.py    # Stripe subscription billing
+│   ├── square/                   # Square POS integration
+│   │   ├── client.py             # Async httpx client (custom, not SDK)
+│   │   ├── mappers.py            # Data mapping Square → Supabase
+│   │   ├── oauth.py
+│   │   ├── rate_limiter.py
+│   │   ├── sync_engine.py        # Backfill + incremental + webhooks
+│   │   └── webhook_handlers.py
+│   ├── clover/                   # Clover POS integration (same structure)
+│   ├── db/                       # Database clients & queries
+│   ├── payouts/                  # Commission payout logic
+│   ├── security/                 # Security utilities
+│   ├── sync/                     # Data sync coordination
+│   ├── workers/                  # Background workers
+│   ├── config.py                 # All config from env vars
+│   └── pipeline.py               # Main data pipeline orchestrator
+├── frontend/                     # Vite + React + Tailwind (Vercel)
+│   ├── src/
+│   │   ├── pages/                # All dashboard + portal pages
+│   │   │   ├── canada/           # Canada market pages
+│   │   │   │   ├── portal/       # 15 Canada sales portal pages
+│   │   │   │   ├── CanadaLandingPage.tsx
+│   │   │   │   └── CanadaCareersPage.tsx
+│   │   │   ├── admin/            # Admin pages
+│   │   │   ├── customer/         # Customer portal pages
+│   │   │   ├── sales/            # US sales rep pages
+│   │   │   └── *.tsx             # 23 main dashboard pages
+│   │   ├── components/           # Reusable components
+│   │   │   ├── landing/          # Landing page components
+│   │   │   ├── space/            # 3D space viewer
+│   │   │   ├── ui/               # shadcn/ui components
+│   │   │   ├── vision/           # Camera/vision components
+│   │   │   └── *.tsx             # 25+ shared components
+│   │   ├── hooks/                # useApi, useOrg, useCline
+│   │   ├── lib/                  # Business logic (21 modules)
+│   │   └── data/                 # Static data (pos-systems.ts)
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   └── vercel.json               # Vercel deployment config
+├── services/
+│   ├── phone_agent/              # AI voice ordering service
+│   ├── postal/                   # Self-hosted email (Docker)
+│   └── evolver/                  # Self-evolution engine
+├── docs/                         # Architecture decisions, SOPs
+├── supabase/migrations/          # Database migration files
+├── scripts/                      # Pipeline + verification scripts
+├── ruflo.config.yaml             # 27-agent swarm configuration
+├── Dockerfile                    # Railway backend deployment
+├── Procfile                      # Railway process file
+├── requirements.txt              # Python core dependencies
+├── requirements-ml.txt           # Python ML dependencies (optional)
+└── .env.example                  # Required environment variables
+```
+
+---
+
 ## Project Overview
 
 **Meridian** is an AI-powered POS analytics platform for independent business owners (restaurants, smoke shops, cafes, retail). It connects to existing POS systems (Square, Clover, Toast) and delivers actionable intelligence — not just charts.
