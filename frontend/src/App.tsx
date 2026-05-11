@@ -260,15 +260,15 @@ export default function App() {
                 </CanadaSalesProtectedRoute>
               }>
                 <Route index element={<Navigate to="/canada/portal/dashboard" replace />} />
-                <Route path="dashboard" element={<CanadaPortalDashboardPage />} />
-                <Route path="leads" element={<CanadaPortalLeadsPage />} />
-                <Route path="leads/:id" element={<CanadaPortalLeadDetailPage />} />
-                <Route path="new-customer" element={<CanadaPortalCreateCustomerPage />} />
-                <Route path="accounts" element={<CanadaPortalAccountsPage />} />
-                <Route path="commissions" element={<CanadaPortalCommissionsPage />} />
-                <Route path="training" element={<CanadaPortalTrainingPage />} />
-                <Route path="team" element={<CanadaPortalTeamPage />} />
-                <Route path="settings" element={<CanadaPortalSettingsPage />} />
+                <Route path="dashboard" element={<Suspense fallback={null}><CanadaPortalDashboardPage /></Suspense>} />
+                <Route path="leads" element={<Suspense fallback={null}><CanadaPortalLeadsPage /></Suspense>} />
+                <Route path="leads/:id" element={<Suspense fallback={null}><CanadaPortalLeadDetailPage /></Suspense>} />
+                <Route path="new-customer" element={<Suspense fallback={null}><CanadaPortalCreateCustomerPage /></Suspense>} />
+                <Route path="accounts" element={<Suspense fallback={null}><CanadaPortalAccountsPage /></Suspense>} />
+                <Route path="commissions" element={<Suspense fallback={null}><CanadaPortalCommissionsPage /></Suspense>} />
+                <Route path="training" element={<Suspense fallback={null}><CanadaPortalTrainingPage /></Suspense>} />
+                <Route path="team" element={<Suspense fallback={null}><CanadaPortalTeamPage /></Suspense>} />
+                <Route path="settings" element={<Suspense fallback={null}><CanadaPortalSettingsPage /></Suspense>} />
               </Route>
 
               {/* ══════════════════════════════════════════════

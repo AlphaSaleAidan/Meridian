@@ -38,7 +38,7 @@ const ADMIN_EMAILS = [
   'aidanpierce72@gmail.com',
   'aidanpierce@meridian.tips',
   'cheungenochmgmt@gmail.com',
-  'aidan.nguyen@meridian.tips',
+  'aidanvietnguyen@gmail.com',
 ]
 
 type NavHeading = { heading: string }

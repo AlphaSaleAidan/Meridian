@@ -37,13 +37,13 @@ const ADMIN_EMAILS = [
   'aidanpierce72@gmail.com',
   'aidanpierce@meridian.tips',
   'cheungenochmgmt@gmail.com',
-  'aidan.nguyen@meridian.tips',
+  'aidanvietnguyen@gmail.com',
 ]
 
 const DEMO_TEAM: TeamMember[] = [
   { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2025-09-15', role: 'admin', location: 'Toronto, ON' },
   { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03', role: 'admin', location: 'Vancouver, BC' },
-  { id: '3', name: 'Aidan Nguyen', email: 'aidan.nguyen@meridian.tips', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-09', role: 'admin', location: 'Toronto, ON' },
+  { id: '3', name: 'Aidan Nguyen', email: 'aidanvietnguyen@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-09', role: 'admin', location: 'Toronto, ON' },
 ]
 
 const AVATAR_COLORS = ['#00d4aa', '#7c3aed', '#f59e0b', '#1a8fd6']

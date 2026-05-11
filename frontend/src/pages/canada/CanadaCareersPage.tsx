@@ -72,7 +72,7 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
     company: 'Meridian',
     bio: 'Handles onboarding support, training materials, and account setup. Reach out for any technical or portal questions.',
     linkedin_url: 'https://www.linkedin.com/company/nexusconsulting',
-    email: 'aidan.nguyen@meridian.tips',
+    email: 'aidanvietnguyen@gmail.com',
     photo_url: null,
     region: 'canada',
     active: true,
