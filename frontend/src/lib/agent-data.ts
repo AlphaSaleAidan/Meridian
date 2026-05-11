@@ -115,6 +115,9 @@ export interface CustomerProfile {
   daysSinceVisit: number
   topItem: string
   retentionRisk: 'low' | 'medium' | 'high'
+  ltvCents?: number
+  churnRiskPct?: number
+  pAlive?: number
 }
 
 export interface ForecastPeriod {
@@ -125,6 +128,11 @@ export interface ForecastPeriod {
   upperCents: number
   confidence: number
   growthPct: number
+  errorRate?: number
+  scenarioOptimisticCents?: number
+  scenarioExpectedCents?: number
+  scenarioPessimisticCents?: number
+  modelMethod?: string
 }
 
 function hoursAgo(h: number): string {
@@ -451,29 +459,29 @@ export function generateCustomerRankings(): CustomerProfile[] {
     return dt.toISOString()
   }
   return [
-    { id: 'c1', name: 'Rachel M.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1580, totalSpentCents: 284400, visitsPerMonth: 18, lastVisit: daysAgo(1), daysSinceVisit: 1, topItem: 'Iced Latte + Avocado Toast', retentionRisk: 'low' },
-    { id: 'c2', name: 'David K.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1420, totalSpentCents: 255600, visitsPerMonth: 16, lastVisit: daysAgo(1), daysSinceVisit: 1, topItem: 'Cold Brew + Croissant', retentionRisk: 'low' },
-    { id: 'c3', name: 'Sarah T.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 1250, totalSpentCents: 150000, visitsPerMonth: 12, lastVisit: daysAgo(2), daysSinceVisit: 2, topItem: 'Cappuccino + Blueberry Muffin', retentionRisk: 'low' },
-    { id: 'c4', name: 'Michael B.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1680, totalSpentCents: 302400, visitsPerMonth: 20, lastVisit: daysAgo(0), daysSinceVisit: 0, topItem: 'Matcha Latte + Breakfast Sandwich', retentionRisk: 'low' },
-    { id: 'c5', name: 'Lisa W.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 1180, totalSpentCents: 141600, visitsPerMonth: 10, lastVisit: daysAgo(3), daysSinceVisit: 3, topItem: 'Espresso + Croissant', retentionRisk: 'low' },
-    { id: 'c6', name: 'James P.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 980, totalSpentCents: 117600, visitsPerMonth: 8, lastVisit: daysAgo(4), daysSinceVisit: 4, topItem: 'Drip Coffee x2', retentionRisk: 'low' },
-    { id: 'c7', name: 'Amanda R.', segment: 'Potential', segmentColor: '#7C5CFF', avgOrderCents: 1340, totalSpentCents: 80400, visitsPerMonth: 6, lastVisit: daysAgo(5), daysSinceVisit: 5, topItem: 'Iced Latte + Avocado Toast', retentionRisk: 'low' },
-    { id: 'c8', name: 'Chris H.', segment: 'Potential', segmentColor: '#7C5CFF', avgOrderCents: 890, totalSpentCents: 53400, visitsPerMonth: 5, lastVisit: daysAgo(6), daysSinceVisit: 6, topItem: 'Cappuccino', retentionRisk: 'medium' },
-    { id: 'c9', name: 'Nicole F.', segment: 'Needs Attention', segmentColor: '#FBBF24', avgOrderCents: 1560, totalSpentCents: 46800, visitsPerMonth: 3, lastVisit: daysAgo(14), daysSinceVisit: 14, topItem: 'Matcha Latte + Avocado Toast', retentionRisk: 'medium' },
-    { id: 'c10', name: 'Robert G.', segment: 'At Risk', segmentColor: '#F97316', avgOrderCents: 1450, totalSpentCents: 174000, visitsPerMonth: 1, lastVisit: daysAgo(28), daysSinceVisit: 28, topItem: 'Cold Brew + Breakfast Sandwich', retentionRisk: 'high' },
-    { id: 'c11', name: 'Emily S.', segment: 'Promising', segmentColor: '#60A5FA', avgOrderCents: 720, totalSpentCents: 28800, visitsPerMonth: 4, lastVisit: daysAgo(7), daysSinceVisit: 7, topItem: 'Drip Coffee + Muffin', retentionRisk: 'low' },
-    { id: 'c12', name: 'Tom L.', segment: 'At Risk', segmentColor: '#F97316', avgOrderCents: 1320, totalSpentCents: 158400, visitsPerMonth: 1, lastVisit: daysAgo(35), daysSinceVisit: 35, topItem: 'Iced Latte + Croissant', retentionRisk: 'high' },
-    { id: 'c13', name: 'Jennifer C.', segment: 'Recent', segmentColor: '#4FE3C1', avgOrderCents: 650, totalSpentCents: 13000, visitsPerMonth: 2, lastVisit: daysAgo(3), daysSinceVisit: 3, topItem: 'Cappuccino', retentionRisk: 'medium' },
-    { id: 'c14', name: 'Brian N.', segment: 'Hibernating', segmentColor: '#EF4444', avgOrderCents: 980, totalSpentCents: 58800, visitsPerMonth: 0, lastVisit: daysAgo(62), daysSinceVisit: 62, topItem: 'Espresso + Croissant', retentionRisk: 'high' },
-    { id: 'c15', name: 'Karen A.', segment: 'Recent', segmentColor: '#4FE3C1', avgOrderCents: 480, totalSpentCents: 9600, visitsPerMonth: 2, lastVisit: daysAgo(5), daysSinceVisit: 5, topItem: 'Drip Coffee', retentionRisk: 'medium' },
+    { id: 'c1', name: 'Rachel M.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1580, totalSpentCents: 284400, visitsPerMonth: 18, lastVisit: daysAgo(1), daysSinceVisit: 1, topItem: 'Iced Latte + Avocado Toast', retentionRisk: 'low', ltvCents: 420000, churnRiskPct: 3, pAlive: 0.97 },
+    { id: 'c2', name: 'David K.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1420, totalSpentCents: 255600, visitsPerMonth: 16, lastVisit: daysAgo(1), daysSinceVisit: 1, topItem: 'Cold Brew + Croissant', retentionRisk: 'low', ltvCents: 384000, churnRiskPct: 5, pAlive: 0.95 },
+    { id: 'c3', name: 'Sarah T.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 1250, totalSpentCents: 150000, visitsPerMonth: 12, lastVisit: daysAgo(2), daysSinceVisit: 2, topItem: 'Cappuccino + Blueberry Muffin', retentionRisk: 'low', ltvCents: 264000, churnRiskPct: 8, pAlive: 0.92 },
+    { id: 'c4', name: 'Michael B.', segment: 'Champion', segmentColor: '#17C5B0', avgOrderCents: 1680, totalSpentCents: 302400, visitsPerMonth: 20, lastVisit: daysAgo(0), daysSinceVisit: 0, topItem: 'Matcha Latte + Breakfast Sandwich', retentionRisk: 'low', ltvCents: 480000, churnRiskPct: 2, pAlive: 0.98 },
+    { id: 'c5', name: 'Lisa W.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 1180, totalSpentCents: 141600, visitsPerMonth: 10, lastVisit: daysAgo(3), daysSinceVisit: 3, topItem: 'Espresso + Croissant', retentionRisk: 'low', ltvCents: 216000, churnRiskPct: 10, pAlive: 0.90 },
+    { id: 'c6', name: 'James P.', segment: 'Loyal', segmentColor: '#1A8FD6', avgOrderCents: 980, totalSpentCents: 117600, visitsPerMonth: 8, lastVisit: daysAgo(4), daysSinceVisit: 4, topItem: 'Drip Coffee x2', retentionRisk: 'low', ltvCents: 168000, churnRiskPct: 12, pAlive: 0.88 },
+    { id: 'c7', name: 'Amanda R.', segment: 'Potential', segmentColor: '#7C5CFF', avgOrderCents: 1340, totalSpentCents: 80400, visitsPerMonth: 6, lastVisit: daysAgo(5), daysSinceVisit: 5, topItem: 'Iced Latte + Avocado Toast', retentionRisk: 'low', ltvCents: 144000, churnRiskPct: 18, pAlive: 0.82 },
+    { id: 'c8', name: 'Chris H.', segment: 'Potential', segmentColor: '#7C5CFF', avgOrderCents: 890, totalSpentCents: 53400, visitsPerMonth: 5, lastVisit: daysAgo(6), daysSinceVisit: 6, topItem: 'Cappuccino', retentionRisk: 'medium', ltvCents: 96000, churnRiskPct: 25, pAlive: 0.75 },
+    { id: 'c9', name: 'Nicole F.', segment: 'Needs Attention', segmentColor: '#FBBF24', avgOrderCents: 1560, totalSpentCents: 46800, visitsPerMonth: 3, lastVisit: daysAgo(14), daysSinceVisit: 14, topItem: 'Matcha Latte + Avocado Toast', retentionRisk: 'medium', ltvCents: 72000, churnRiskPct: 42, pAlive: 0.58 },
+    { id: 'c10', name: 'Robert G.', segment: 'At Risk', segmentColor: '#F97316', avgOrderCents: 1450, totalSpentCents: 174000, visitsPerMonth: 1, lastVisit: daysAgo(28), daysSinceVisit: 28, topItem: 'Cold Brew + Breakfast Sandwich', retentionRisk: 'high', ltvCents: 48000, churnRiskPct: 68, pAlive: 0.32 },
+    { id: 'c11', name: 'Emily S.', segment: 'Promising', segmentColor: '#60A5FA', avgOrderCents: 720, totalSpentCents: 28800, visitsPerMonth: 4, lastVisit: daysAgo(7), daysSinceVisit: 7, topItem: 'Drip Coffee + Muffin', retentionRisk: 'low', ltvCents: 60000, churnRiskPct: 15, pAlive: 0.85 },
+    { id: 'c12', name: 'Tom L.', segment: 'At Risk', segmentColor: '#F97316', avgOrderCents: 1320, totalSpentCents: 158400, visitsPerMonth: 1, lastVisit: daysAgo(35), daysSinceVisit: 35, topItem: 'Iced Latte + Croissant', retentionRisk: 'high', ltvCents: 36000, churnRiskPct: 75, pAlive: 0.25 },
+    { id: 'c13', name: 'Jennifer C.', segment: 'Recent', segmentColor: '#4FE3C1', avgOrderCents: 650, totalSpentCents: 13000, visitsPerMonth: 2, lastVisit: daysAgo(3), daysSinceVisit: 3, topItem: 'Cappuccino', retentionRisk: 'medium', ltvCents: 24000, churnRiskPct: 30, pAlive: 0.70 },
+    { id: 'c14', name: 'Brian N.', segment: 'Hibernating', segmentColor: '#EF4444', avgOrderCents: 980, totalSpentCents: 58800, visitsPerMonth: 0, lastVisit: daysAgo(62), daysSinceVisit: 62, topItem: 'Espresso + Croissant', retentionRisk: 'high', ltvCents: 12000, churnRiskPct: 88, pAlive: 0.12 },
+    { id: 'c15', name: 'Karen A.', segment: 'Recent', segmentColor: '#4FE3C1', avgOrderCents: 480, totalSpentCents: 9600, visitsPerMonth: 2, lastVisit: daysAgo(5), daysSinceVisit: 5, topItem: 'Drip Coffee', retentionRisk: 'medium', ltvCents: 18000, churnRiskPct: 35, pAlive: 0.65 },
   ]
 }
 
 export function generateForecastPeriods(): ForecastPeriod[] {
   return [
-    { label: '7-Day', days: 7, predictedCents: 1350000, lowerCents: 1150000, upperCents: 1550000, confidence: 89, growthPct: 4.2 },
-    { label: '30-Day', days: 30, predictedCents: 5480000, lowerCents: 4850000, upperCents: 6110000, confidence: 82, growthPct: 8.3 },
-    { label: '90-Day', days: 90, predictedCents: 18400000, lowerCents: 15800000, upperCents: 21000000, confidence: 71, growthPct: 12.1 },
+    { label: '7-Day', days: 7, predictedCents: 1350000, lowerCents: 1150000, upperCents: 1550000, confidence: 89, growthPct: 4.2, errorRate: 0.10, scenarioOptimisticCents: 1553000, scenarioExpectedCents: 1350000, scenarioPessimisticCents: 1148000, modelMethod: 'AutoETS + AutoARIMA ensemble' },
+    { label: '30-Day', days: 30, predictedCents: 5480000, lowerCents: 4850000, upperCents: 6110000, confidence: 82, growthPct: 8.3, errorRate: 0.13, scenarioOptimisticCents: 6302000, scenarioExpectedCents: 5480000, scenarioPessimisticCents: 4658000, modelMethod: 'AutoARIMA + AutoETS + AutoTheta ensemble' },
+    { label: '90-Day', days: 90, predictedCents: 18400000, lowerCents: 15800000, upperCents: 21000000, confidence: 71, growthPct: 12.1, errorRate: 0.18, scenarioOptimisticCents: 21160000, scenarioExpectedCents: 18400000, scenarioPessimisticCents: 15640000, modelMethod: 'AutoARIMA + AutoETS + AutoTheta ensemble' },
   ]
 }
 
@@ -552,15 +560,18 @@ export interface Anomaly {
   deviationPct: number
   agentSource: string
   acknowledged: boolean
+  zScore?: number
+  luminolScore?: number
+  detectionMethod?: 'zscore' | 'luminol' | 'ensemble'
 }
 
 export function generateAnomalies(): Anomaly[] {
   return [
-    { id: 'a1', type: 'void_spike', severity: 'critical', title: 'Void transactions 3x normal', description: 'Tuesday 6-9PM saw 14 void transactions vs. 4-5 average. Concentrated on Register 2. Possible training issue or policy abuse.', detectedAt: minutesAgo(45), metric: 'void_count', expected: 5, actual: 14, deviationPct: 180, agentSource: 'transaction-analyst', acknowledged: false },
-    { id: 'a2', type: 'revenue_drop', severity: 'warning', title: 'Morning revenue down 22%', description: 'Revenue between 7-9AM dropped 22% vs. prior 4-week average. Weather was clear, no holidays. Possible competitor event or staffing issue.', detectedAt: hoursAgo(3), metric: 'peak_revenue', expected: 48000, actual: 37440, deviationPct: -22, agentSource: 'peak-hour-optimizer', acknowledged: false },
-    { id: 'a3', type: 'cost_spike', severity: 'warning', title: 'Oat milk usage up 40%', description: 'Oat milk consumption jumped 40% without corresponding sales increase. Possible over-portioning or waste issue.', detectedAt: hoursAgo(8), metric: 'ingredient_usage_oz', expected: 320, actual: 448, deviationPct: 40, agentSource: 'inventory-intelligence', acknowledged: true },
-    { id: 'a4', type: 'traffic_anomaly', severity: 'info', title: 'Unusual Saturday surge', description: 'Transactions 35% above Saturday average. Nearby event (farmers market) likely driving foot traffic. Consider staffing up for recurring events.', detectedAt: hoursAgo(26), metric: 'transaction_count', expected: 180, actual: 243, deviationPct: 35, agentSource: 'peak-hour-optimizer', acknowledged: true },
-    { id: 'a5', type: 'refund_surge', severity: 'warning', title: 'Refund rate doubled this week', description: 'Refund rate hit 4.2% vs. 2.1% trailing average. 6 of 8 refunds were on Breakfast Sandwich — possible quality issue with current batch.', detectedAt: hoursAgo(5), metric: 'refund_rate_pct', expected: 2.1, actual: 4.2, deviationPct: 100, agentSource: 'transaction-analyst', acknowledged: false },
+    { id: 'a1', type: 'void_spike', severity: 'critical', title: 'Void transactions 3x normal', description: 'Tuesday 6-9PM saw 14 void transactions vs. 4-5 average. Concentrated on Register 2. Possible training issue or policy abuse.', detectedAt: minutesAgo(45), metric: 'void_count', expected: 5, actual: 14, deviationPct: 180, agentSource: 'transaction-analyst', acknowledged: false, zScore: -3.8, luminolScore: 142, detectionMethod: 'ensemble' },
+    { id: 'a2', type: 'revenue_drop', severity: 'warning', title: 'Morning revenue down 22%', description: 'Revenue between 7-9AM dropped 22% vs. prior 4-week average. Weather was clear, no holidays. Possible competitor event or staffing issue.', detectedAt: hoursAgo(3), metric: 'peak_revenue', expected: 48000, actual: 37440, deviationPct: -22, agentSource: 'peak-hour-optimizer', acknowledged: false, zScore: -2.4, luminolScore: 87, detectionMethod: 'ensemble' },
+    { id: 'a3', type: 'cost_spike', severity: 'warning', title: 'Oat milk usage up 40%', description: 'Oat milk consumption jumped 40% without corresponding sales increase. Possible over-portioning or waste issue.', detectedAt: hoursAgo(8), metric: 'ingredient_usage_oz', expected: 320, actual: 448, deviationPct: 40, agentSource: 'inventory-intelligence', acknowledged: true, zScore: 2.1, detectionMethod: 'zscore' },
+    { id: 'a4', type: 'traffic_anomaly', severity: 'info', title: 'Unusual Saturday surge', description: 'Transactions 35% above Saturday average. Nearby event (farmers market) likely driving foot traffic. Consider staffing up for recurring events.', detectedAt: hoursAgo(26), metric: 'transaction_count', expected: 180, actual: 243, deviationPct: 35, agentSource: 'peak-hour-optimizer', acknowledged: true, zScore: 1.8, luminolScore: 64, detectionMethod: 'luminol' },
+    { id: 'a5', type: 'refund_surge', severity: 'warning', title: 'Refund rate doubled this week', description: 'Refund rate hit 4.2% vs. 2.1% trailing average. 6 of 8 refunds were on Breakfast Sandwich — possible quality issue with current batch.', detectedAt: hoursAgo(5), metric: 'refund_rate_pct', expected: 2.1, actual: 4.2, deviationPct: 100, agentSource: 'transaction-analyst', acknowledged: false, zScore: -2.8, luminolScore: 95, detectionMethod: 'ensemble' },
   ]
 }
 

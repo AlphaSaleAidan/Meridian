@@ -54,6 +54,32 @@ function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
                 {isNegative ? '' : '+'}{anomaly.deviationPct}%
               </span>
             </div>
+            {anomaly.zScore != null && (
+              <div>
+                <span className="text-[#A1A1A8]/40">Z-Score: </span>
+                <span className={clsx('font-mono font-semibold', Math.abs(anomaly.zScore) >= 3 ? 'text-red-400' : 'text-amber-400')}>
+                  {anomaly.zScore > 0 ? '+' : ''}{anomaly.zScore.toFixed(1)}
+                </span>
+              </div>
+            )}
+            {anomaly.luminolScore != null && anomaly.luminolScore > 0 && (
+              <div>
+                <span className="text-[#A1A1A8]/40">Luminol: </span>
+                <span className="font-mono font-semibold text-[#7C5CFF]">{anomaly.luminolScore}</span>
+              </div>
+            )}
+            {anomaly.detectionMethod && (
+              <div>
+                <span className={clsx(
+                  'px-1.5 py-0.5 rounded-full border text-[8px] font-medium',
+                  anomaly.detectionMethod === 'ensemble' ? 'bg-[#7C5CFF]/10 text-[#7C5CFF] border-[#7C5CFF]/20' :
+                  anomaly.detectionMethod === 'luminol' ? 'bg-[#1A8FD6]/10 text-[#1A8FD6] border-[#1A8FD6]/20' :
+                  'bg-[#A1A1A8]/10 text-[#A1A1A8] border-[#A1A1A8]/20'
+                )}>
+                  {anomaly.detectionMethod === 'ensemble' ? 'Z + Luminol' : anomaly.detectionMethod === 'luminol' ? 'Luminol' : 'Z-Score'}
+                </span>
+              </div>
+            )}
             <div>
               <span className="text-[#A1A1A8]/40">Source: </span>
               <span className="text-[#1A8FD6] font-medium">{anomaly.agentSource}</span>

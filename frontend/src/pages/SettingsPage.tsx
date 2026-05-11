@@ -113,7 +113,8 @@ function BusinessTuningPanel() {
 function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
   const [billing, setBilling] = useState<{
     status: string; tier: string | null; monthly_price_cents?: number;
-    current_period_end?: string; auto_renew?: boolean
+    current_period_end?: string; auto_renew?: boolean;
+    card_brand?: string; card_last4?: string; billing_method?: string
   } | null>(null)
   const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
 
@@ -178,6 +179,22 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
           <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
             <span className="text-[#A1A1A8]/60">Next Renewal</span>
             <span className="text-[#A1A1A8]">{new Date(billing.current_period_end).toLocaleDateString()}</span>
+          </div>
+        )}
+        {billing?.card_brand && billing?.card_last4 && (
+          <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
+            <span className="text-[#A1A1A8]/60">Card on File</span>
+            <span className="text-[#F5F5F7] font-mono">{billing.card_brand} ****{billing.card_last4}</span>
+          </div>
+        )}
+        {billing?.billing_method && (
+          <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
+            <span className="text-[#A1A1A8]/60">Billing</span>
+            <span className={clsx('text-xs font-medium',
+              billing.billing_method === 'auto_subscription' ? 'text-[#17C5B0]' : 'text-[#A1A1A8]'
+            )}>
+              {billing.billing_method === 'auto_subscription' ? 'Auto-Recurring' : 'Invoice'}
+            </span>
           </div>
         )}
         <div className="flex items-center justify-between py-1.5">

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
 import {
-  Users, Shield, AlertTriangle, Heart,
+  Users, Shield, AlertTriangle, Heart, DollarSign,
   TrendingUp, TrendingDown, Minus, Search, CalendarDays,
   Camera, Wifi, WifiOff,
 } from 'lucide-react'
@@ -256,6 +256,10 @@ export default function CustomersPage() {
   const vipCount = segments.filter(s => s.name === 'Champions' || s.name === 'Loyal').reduce((s, seg) => s + seg.count, 0)
   const atRiskCount = segments.filter(s => s.name === 'At Risk' || s.name === 'Needs Attention').reduce((s, seg) => s + seg.count, 0)
   const avgRetention = Math.round(segments.reduce((s, seg) => s + seg.retentionScore * seg.count, 0) / totalCustomers)
+  const avgLtv = customers.length > 0
+    ? Math.round(customers.reduce((s, c) => s + (c.ltvCents || 0), 0) / customers.length)
+    : 0
+  const highChurnCount = customers.filter(c => (c.churnRiskPct || 0) >= 40).length
 
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -299,7 +303,7 @@ export default function CustomersPage() {
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">
@@ -329,12 +333,12 @@ export default function CustomersPage() {
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-400/10 flex items-center justify-center">
-                <AlertTriangle size={16} className="text-amber-400" />
+              <div className="w-8 h-8 rounded-lg bg-[#7C5CFF]/10 flex items-center justify-center">
+                <DollarSign size={16} className="text-[#7C5CFF]" />
               </div>
               <div>
-                <p className="stat-label">At Risk</p>
-                <p className="text-lg font-bold text-amber-400 font-mono">{atRiskCount}</p>
+                <p className="stat-label">Avg LTV</p>
+                <p className="text-lg font-bold text-[#7C5CFF] font-mono">{formatCentsCompact(avgLtv)}</p>
               </div>
             </div>
           </DashboardTiltCard>
@@ -342,12 +346,25 @@ export default function CustomersPage() {
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#7C5CFF]/10 flex items-center justify-center">
-                <Heart size={16} className="text-[#7C5CFF]" />
+              <div className="w-8 h-8 rounded-lg bg-amber-400/10 flex items-center justify-center">
+                <AlertTriangle size={16} className="text-amber-400" />
+              </div>
+              <div>
+                <p className="stat-label">Churn Risk</p>
+                <p className="text-lg font-bold text-amber-400 font-mono">{highChurnCount}</p>
+              </div>
+            </div>
+          </DashboardTiltCard>
+        </StaggerItem>
+        <StaggerItem>
+          <DashboardTiltCard className="card p-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center">
+                <Heart size={16} className="text-[#17C5B0]" />
               </div>
               <div>
                 <p className="stat-label">Retention</p>
-                <p className="text-lg font-bold text-[#7C5CFF] font-mono">{avgRetention}%</p>
+                <p className="text-lg font-bold text-[#17C5B0] font-mono">{avgRetention}%</p>
               </div>
             </div>
           </DashboardTiltCard>
@@ -400,16 +417,17 @@ export default function CustomersPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="pm-table min-w-[700px]">
+            <table className="pm-table min-w-[850px]">
               <thead>
                 <tr>
                   <th className="text-center w-8">#</th>
                   <th className="text-left">Customer</th>
                   <th className="text-left">Segment</th>
+                  <th className="text-right">LTV</th>
                   <th className="text-right">Avg Order</th>
                   <th className="text-right">Total Spent</th>
                   <th className="text-right">Visits/Mo</th>
-                  <th className="text-left">Top Item</th>
+                  <th className="text-right">Churn %</th>
                   <th className="text-center">Status</th>
                 </tr>
               </thead>
@@ -436,10 +454,19 @@ export default function CustomersPage() {
                         <span className="text-xs text-[#F5F5F7]">{c.segment}</span>
                       </div>
                     </td>
+                    <td className="text-right font-mono font-semibold text-[#7C5CFF]">{c.ltvCents ? formatCentsCompact(c.ltvCents) : '—'}</td>
                     <td className="text-right font-mono font-semibold text-[#F5F5F7]">{formatCents(c.avgOrderCents)}</td>
                     <td className="text-right font-mono text-[#F5F5F7]">{formatCentsCompact(c.totalSpentCents)}</td>
                     <td className="text-right font-mono text-[#F5F5F7]">{c.visitsPerMonth}x</td>
-                    <td className="text-xs text-[#A1A1A8] max-w-[140px] truncate">{c.topItem}</td>
+                    <td className="text-right">
+                      {c.churnRiskPct != null ? (
+                        <span className={clsx('text-xs font-mono font-semibold',
+                          c.churnRiskPct >= 60 ? 'text-red-400' : c.churnRiskPct >= 30 ? 'text-amber-400' : 'text-[#17C5B0]'
+                        )}>
+                          {c.churnRiskPct}%
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td className="text-center"><RiskBadge risk={c.retentionRisk} /></td>
                   </tr>
                 ))}

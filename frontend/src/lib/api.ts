@@ -149,6 +149,13 @@ export interface Forecast {
   lower_bound_cents: number | null
   upper_bound_cents: number | null
   confidence: number | null
+  horizon_days?: number
+  error_rate?: number
+  scenario_analysis?: {
+    optimistic_cents: number
+    expected_cents: number
+    pessimistic_cents: number
+  }
 }
 
 export interface Notification {

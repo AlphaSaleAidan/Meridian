@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { clsx } from 'clsx'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
@@ -8,6 +10,8 @@ import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
+import { generateForecastPeriods } from '@/lib/agent-data'
+import { TrendingUp, TrendingDown, Minus, Target, BarChart3 } from 'lucide-react'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -100,6 +104,61 @@ export default function ForecastsPage() {
           </DashboardTiltCard>
         </StaggerItem>
       </StaggerContainer>
+
+      {/* Scenario Analysis + Ensemble Model Info */}
+      {(() => {
+        const periods = generateForecastPeriods()
+        return (
+          <ScrollReveal variant="fadeUp" delay={0.05}>
+            <div className="card p-4 sm:p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <Target size={14} className="text-[#7C5CFF]" />
+                <h3 className="text-sm font-semibold text-[#F5F5F7]">Scenario Analysis</h3>
+                <span className="text-[9px] text-[#A1A1A8]/40 ml-auto font-mono">{periods[0]?.modelMethod || 'ensemble'}</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {periods.map(p => (
+                  <div key={p.label} className="rounded-lg border border-[#1F1F23] p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-[#F5F5F7]">{p.label}</span>
+                      {p.errorRate != null && (
+                        <span className="text-[9px] font-mono text-[#A1A1A8]/40">{(p.errorRate * 100).toFixed(0)}% error rate</span>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <TrendingUp size={10} className="text-[#17C5B0]" />
+                          <span className="text-[10px] text-[#A1A1A8]">Optimistic</span>
+                        </div>
+                        <span className="text-[11px] font-mono text-[#17C5B0]">{formatCentsCompact(p.scenarioOptimisticCents || Math.round(p.predictedCents * 1.15))}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Minus size={10} className="text-[#1A8FD6]" />
+                          <span className="text-[10px] text-[#A1A1A8]">Expected</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-semibold text-[#F5F5F7]">{formatCentsCompact(p.scenarioExpectedCents || p.predictedCents)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <TrendingDown size={10} className="text-red-400" />
+                          <span className="text-[10px] text-[#A1A1A8]">Pessimistic</span>
+                        </div>
+                        <span className="text-[11px] font-mono text-red-400">{formatCentsCompact(p.scenarioPessimisticCents || Math.round(p.predictedCents * 0.85))}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-[#1F1F23]/50 flex items-center justify-between">
+                      <span className="text-[9px] text-[#A1A1A8]/40">Confidence</span>
+                      <span className="text-[10px] font-mono text-[#F5F5F7]">{p.confidence}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ScrollReveal>
+        )
+      })()}
 
       {/* Chart: Historical + Forecast */}
       {chartData.length > 0 && (

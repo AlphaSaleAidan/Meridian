@@ -433,6 +433,8 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
       lower_bound_cents: lower,
       upper_bound_cents: upper,
       confidence,
+      horizon_days: i <= 7 ? 7 : 30,
+      error_rate: i <= 7 ? 0.10 : 0.15,
     })
   }
 
@@ -446,6 +448,13 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
     lower_bound_cents: 1150000,
     upper_bound_cents: 1550000,
     confidence: 0.84,
+    horizon_days: 7,
+    error_rate: 0.10,
+    scenario_analysis: {
+      optimistic_cents: 1553000,
+      expected_cents: 1350000,
+      pessimistic_cents: 1148000,
+    },
   })
 
   return { forecasts, total: forecasts.length }
