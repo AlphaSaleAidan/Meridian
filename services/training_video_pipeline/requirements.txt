@@ -2,6 +2,11 @@
 edge-tts>=6.1.0
 Pillow>=10.0.0
 python-dotenv>=1.0.0
+playwright>=1.40.0
 
 # Optional: Supabase upload (only if you want cloud hosting)
 # supabase>=2.0.0
+
+# System deps (install once):
+#   apt install ffmpeg fonts-dejavu-core
+#   playwright install chromium
