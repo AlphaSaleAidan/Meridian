@@ -50,9 +50,3 @@ luminol>=0.4
 
 # Multi-Model LLM Routing
 litellm>=1.40.0
-
-# Pose Estimation / SkeletonTracker
-torch
-torchvision
-yacs
-skellytracker[mediapipe]
