@@ -41,7 +41,7 @@ function StaffCard({ member, rank }: { member: StaffMember; rank: number }) {
           <p className="text-[10px] text-[#A1A1A8]/40">rev/hour</p>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-2 text-center">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
         <div>
           <p className="text-[10px] text-[#A1A1A8]/40">Avg Ticket</p>
           <p className="text-xs font-bold font-mono text-[#F5F5F7]">{formatCents(member.avgTicketCents)}</p>

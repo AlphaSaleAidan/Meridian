@@ -144,7 +144,7 @@ export default function LandingPage() {
 
           {/* Headline */}
           <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-bold text-[#F5F5F7] tracking-tight leading-[1.05] max-w-4xl mx-auto text-balance">
-            <TextRevealStagger staggerDelay={0.06} baseDelay={0.3}>
+            <TextRevealStagger staggerDelay={0.06} baseDelay={0.15}>
               {[
                 <span key="1">See the revenue you're</span>,
                 <span key="2">
@@ -158,7 +158,7 @@ export default function LandingPage() {
           <motion.p
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: EASE, delay: 0.55 }}
+            transition={{ duration: 0.7, ease: EASE, delay: 0.3 }}
             className="mt-6 text-[#A1A1A8] text-lg max-w-xl mx-auto leading-relaxed"
           >
             Connect your Square, Clover, or Toast POS. Meridian's AI finds pricing gaps, upsell
@@ -169,7 +169,7 @@ export default function LandingPage() {
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: EASE, delay: 0.7 }}
+            transition={{ duration: 0.7, ease: EASE, delay: 0.4 }}
             className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
           >
             <MagneticButton
@@ -192,7 +192,7 @@ export default function LandingPage() {
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: EASE, delay: 0.9 }}
+            transition={{ duration: 1, ease: EASE, delay: 0.55 }}
             className="mt-16 relative max-w-3xl mx-auto"
           >
             <div className="animate-float-slow">

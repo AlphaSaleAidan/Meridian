@@ -35,7 +35,7 @@ export function formatNumber(n: number | null | undefined): string {
 
 export function formatPercent(pct: number | null | undefined, decimals = 1): string {
   if (pct == null) return '0%'
-  return `${pct >= 0 ? '+' : ''}${pct.toFixed(decimals)}%`
+  return `${pct > 0 ? '+' : ''}${pct.toFixed(decimals)}%`
 }
 
 export function formatConfidence(score: number | null | undefined): string {

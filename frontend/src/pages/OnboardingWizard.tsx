@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Wifi, ChevronRight, Check, Loader2, ShieldCheck } from 'lucide-react'
+import { Wifi, ChevronRight, Check, Loader2, ShieldCheck, CreditCard, Tag } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+
+const SQUARE_CHECKOUT_URL = 'https://square.link/u/0ScYp9tI'
 
 const providers = [
   { id: 'square', label: 'Square', desc: 'POS, payments, inventory', color: '#006AFF' },
@@ -29,7 +31,8 @@ const providerFields: Record<string, { label: string; placeholder: string }[]> =
   ],
 }
 
-type Step = 'welcome' | 'provider' | 'credentials' | 'connecting' | 'done'
+type Step = 'welcome' | 'pricing' | 'provider' | 'credentials' | 'connecting' | 'done'
+type BillingCycle = 'monthly' | 'weekly'
 
 export default function OnboardingWizard() {
   const { org, connectPos } = useAuth()
@@ -37,6 +40,8 @@ export default function OnboardingWizard() {
   const [provider, setProvider] = useState<string | null>(null)
   const [fields, setFields] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
+  const [promoCode, setPromoCode] = useState('')
 
   function selectProvider(id: string) {
     setProvider(id)
@@ -65,8 +70,8 @@ export default function OnboardingWizard() {
     setStep('done')
   }
 
-  const stepIndex = { welcome: 0, provider: 1, credentials: 2, connecting: 3, done: 4 }
-  const progress = ['Account Created', 'Select POS', 'Enter Credentials', 'Connecting', 'Live']
+  const stepIndex: Record<Step, number> = { welcome: 0, pricing: 1, provider: 2, credentials: 3, connecting: 4, done: 5 }
+  const progress = ['Account Created', 'Choose Plan', 'Select POS', 'Enter Credentials', 'Connecting', 'Live']
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
@@ -123,10 +128,94 @@ export default function OnboardingWizard() {
                 ))}
               </div>
               <button
+                onClick={() => setStep('pricing')}
+                className="w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-semibold rounded-lg hover:bg-[#1A8FD6]/90 transition-all flex items-center justify-center gap-2"
+              >
+                Get Started <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Pricing */}
+          {step === 'pricing' && (
+            <div className="space-y-4">
+              <div className="text-center">
+                <div className="w-14 h-14 rounded-2xl bg-[#1A8FD6]/10 flex items-center justify-center mx-auto mb-3">
+                  <CreditCard size={24} className="text-[#1A8FD6]" />
+                </div>
+                <h2 className="text-lg font-bold text-[#F5F5F7]">Choose Your Plan</h2>
+                <p className="text-xs text-[#A1A1A8] mt-1">Select a billing cycle that works for your business</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setBillingCycle('monthly')}
+                  className={clsx(
+                    'p-4 rounded-lg border text-left transition-all',
+                    billingCycle === 'monthly'
+                      ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
+                      : 'border-[#1F1F23] hover:border-[#1A8FD6]/30'
+                  )}
+                >
+                  <p className="text-lg font-bold text-[#F5F5F7]">$250<span className="text-xs font-normal text-[#A1A1A8]">/mo</span></p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-1">Monthly billing</p>
+                  {billingCycle === 'monthly' && (
+                    <div className="mt-2 flex items-center gap-1">
+                      <Check size={10} className="text-[#1A8FD6]" />
+                      <span className="text-[9px] text-[#1A8FD6] font-medium">Selected</span>
+                    </div>
+                  )}
+                </button>
+                <button
+                  onClick={() => setBillingCycle('weekly')}
+                  className={clsx(
+                    'p-4 rounded-lg border text-left transition-all',
+                    billingCycle === 'weekly'
+                      ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
+                      : 'border-[#1F1F23] hover:border-[#1A8FD6]/30'
+                  )}
+                >
+                  <p className="text-lg font-bold text-[#F5F5F7]">$65<span className="text-xs font-normal text-[#A1A1A8]">/wk</span></p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-1">Weekly billing</p>
+                  {billingCycle === 'weekly' && (
+                    <div className="mt-2 flex items-center gap-1">
+                      <Check size={10} className="text-[#1A8FD6]" />
+                      <span className="text-[9px] text-[#1A8FD6] font-medium">Selected</span>
+                    </div>
+                  )}
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">
+                  <Tag size={10} className="inline mr-1" />
+                  Promo Code
+                </label>
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={e => setPromoCode(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50 focus:ring-1 focus:ring-[#1A8FD6]/20 transition-colors"
+                  placeholder="Enter code (optional)"
+                />
+                {promoCode.toUpperCase() === 'FREEMONTH' && (
+                  <p className="text-[11px] text-[#17C5B0] mt-1.5 flex items-center gap-1">
+                    <Check size={10} /> First month free!
+                  </p>
+                )}
+              </div>
+
+              <button
                 onClick={() => setStep('provider')}
                 className="w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-semibold rounded-lg hover:bg-[#1A8FD6]/90 transition-all flex items-center justify-center gap-2"
               >
-                Connect POS <ChevronRight size={16} />
+                Continue to POS Setup <ChevronRight size={16} />
+              </button>
+              <button
+                onClick={() => setStep('welcome')}
+                className="w-full text-center text-[11px] text-[#A1A1A8] hover:text-[#1A8FD6] transition-colors pt-1"
+              >
+                Back
               </button>
             </div>
           )}
@@ -162,7 +251,7 @@ export default function OnboardingWizard() {
                 ))}
               </div>
               <button
-                onClick={() => setStep('welcome')}
+                onClick={() => setStep('pricing')}
                 className="w-full text-center text-[11px] text-[#A1A1A8] hover:text-[#1A8FD6] transition-colors pt-1"
               >
                 Back
@@ -275,6 +364,14 @@ export default function OnboardingWizard() {
               >
                 Go to Dashboard
               </button>
+              <a
+                href={SQUARE_CHECKOUT_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full text-center text-[11px] text-[#A1A1A8] hover:text-[#1A8FD6] transition-colors pt-1 inline-block"
+              >
+                Manage billing
+              </a>
             </div>
           )}
         </div>

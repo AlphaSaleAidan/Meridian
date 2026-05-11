@@ -27,7 +27,7 @@ function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
           <Icon size={16} className={cfg.color} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <h4 className="text-sm font-semibold text-[#F5F5F7]">{anomaly.title}</h4>
             <span className={clsx('text-[9px] font-medium px-1.5 py-0.5 rounded-full border', cfg.bg, cfg.color, cfg.border)}>
               {cfg.label}
@@ -112,7 +112,7 @@ export default function AnomaliesPage() {
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">

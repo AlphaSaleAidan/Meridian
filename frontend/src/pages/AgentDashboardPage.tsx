@@ -195,11 +195,11 @@ export default function AgentDashboardPage() {
       </StaggerContainer>
 
       <ScrollReveal variant="fadeUp" delay={0.05}>
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 no-scrollbar">
           <button
             onClick={() => setFilter('')}
             className={clsx(
-              'px-3 py-1.5 text-xs font-medium rounded-full transition-all border whitespace-nowrap',
+              'px-3 py-2 sm:py-1.5 text-xs font-medium rounded-full transition-all border whitespace-nowrap',
               !filter ? 'bg-[#1A8FD6]/10 text-[#1A8FD6] border-[#1A8FD6]/20' : 'text-[#A1A1A8] border-[#1F1F23] hover:text-[#F5F5F7]'
             )}
           >
@@ -210,7 +210,7 @@ export default function AgentDashboardPage() {
               key={cat}
               onClick={() => setFilter(cat)}
               className={clsx(
-                'px-3 py-1.5 text-xs font-medium rounded-full transition-all border whitespace-nowrap capitalize',
+                'px-3 py-2 sm:py-1.5 text-xs font-medium rounded-full transition-all border whitespace-nowrap capitalize',
                 filter === cat ? 'bg-[#1A8FD6]/10 text-[#1A8FD6] border-[#1A8FD6]/20' : 'text-[#A1A1A8] border-[#1F1F23] hover:text-[#F5F5F7]'
               )}
             >

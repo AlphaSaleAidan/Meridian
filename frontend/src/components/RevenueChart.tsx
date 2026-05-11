@@ -47,7 +47,7 @@ export default function RevenueChart({ data, height = 300 }: Props) {
             tick={{ fill: '#A1A1A8', fontSize: 11, fontFamily: 'Geist Mono, monospace' }}
             axisLine={false}
             tickLine={false}
-            interval={0}
+            interval="preserveStartEnd"
             angle={-35}
             textAnchor="end"
             height={50}
@@ -59,12 +59,14 @@ export default function RevenueChart({ data, height = 300 }: Props) {
             tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(1)}K` : v}`}
             width={55}
             tickCount={5}
+            domain={['dataMin', 'auto']}
           />
           <Tooltip
             contentStyle={tooltipStyle}
             itemStyle={{ color: '#F5F5F7' }}
             labelStyle={{ color: '#A1A1A8' }}
             formatter={(value: number) => [`${formatCents(value * 100)}`, 'Revenue']}
+            labelFormatter={(label: string) => label}
             cursor={{ stroke: '#7C5CFF', strokeWidth: 1, strokeDasharray: '4 4' }}
           />
           <Area
