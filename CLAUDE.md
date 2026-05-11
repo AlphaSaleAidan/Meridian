@@ -1754,3 +1754,110 @@ New agents this enables:
 |---------|-------|---------|----------|
 | `Nixtla/mlforecast` | 1,000+ | ML-based forecasting (LightGBM/XGBoost on time series). | `src/ai/agents/forecaster.py` |
 | `whylabs/whylogs` | 3,000+ | Data logging for ML pipelines. Audit every prediction. | Pipeline monitoring |
+
+
+---
+
+## Pending Decisions — Aidan Must Complete
+
+> These are infrastructure actions that require owner access or credentials Claude cannot touch.
+> Work through these in order — items 2 and 5 are blockers for Toast going live.
+
+---
+
+### 1. Push `.github/workflows/syntax-check.yml` (needs workflow scope token)
+
+**Status:** File exists locally but cannot be pushed — the GitHub token in use does not have the `workflow` scope.
+
+**What to do:**
+1. Confirm the token at `services/evolver/.env` (`GITHUB_TOKEN`) has `workflow` scope — verify at https://github.com/settings/tokens
+2. Then push from the server:
+```bash
+cd /root/Meridian
+git push origin main
+```
+3. Confirm the Actions tab shows the workflow running: https://github.com/AlphaSaleAidan/Meridian/actions
+
+---
+
+### 2. Run Supabase Migration (BLOCKER for Toast)
+
+**File:** `supabase/migrations/20260511_pos_credentials_encrypted.sql`
+
+**Why it matters:** Toast POS connections store OAuth credentials. This migration creates the encrypted credentials table. Without it, Toast connections will fail at the DB layer.
+
+**What to do:**
+1. Go to your Supabase dashboard → SQL Editor: https://supabase.com/dashboard
+2. Open the migration file locally:
+```bash
+cat /root/Meridian/supabase/migrations/20260511_pos_credentials_encrypted.sql
+```
+3. Paste and run the SQL in the Supabase SQL Editor
+4. Verify the table exists:
+```sql
+SELECT table_name FROM information_schema.tables WHERE table_name = 'pos_credentials_encrypted';
+```
+
+**Do this before any Toast merchant tries to connect.**
+
+---
+
+### 3. Add Toast Env Vars to Railway
+
+**Required vars (if you have Toast partner credentials):**
+
+| Variable | Value |
+|---|---|
+| `TOAST_CLIENT_ID` | Your Toast partner client ID |
+| `TOAST_CLIENT_SECRET` | Your Toast partner client secret |
+
+**What to do:**
+1. Log into Railway: https://railway.app/dashboard
+2. Select the Meridian project → Variables tab
+3. Add both vars above
+4. Redeploy the service
+
+**Note:** If you do not have Toast partner credentials yet, apply at https://pos.toasttab.com/partners
+
+---
+
+### 4. Vercel Dashboard Cleanup
+
+**A) Remove 5 backend secrets from Vercel**
+
+Backend secrets belong in Railway, not Vercel. Having them in both places is a security risk.
+
+1. Go to: https://vercel.com/dashboard → Meridian project → Settings → Environment Variables
+2. Remove any backend-only secrets (database URLs, service keys, API secrets not needed by the Next.js frontend)
+3. Keep only frontend-safe vars: `NEXT_PUBLIC_*`, `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+**B) Enable Deployment Protection**
+
+1. In Vercel project → Settings → Deployment Protection
+2. Enable "Vercel Authentication" or "Password Protection" for preview deployments
+3. This prevents unauthenticated access to preview URLs
+
+---
+
+### 5. Railway: Enable "Wait for CI" (do after item 1)
+
+**Why:** Prevents broken code from auto-deploying to production before GitHub Actions pass.
+
+**What to do (after workflow file is pushed in item 1):**
+1. Go to Railway: https://railway.app/dashboard → Meridian project
+2. Click the service → Settings → Deploy
+3. Toggle on **"Wait for CI checks to pass"**
+4. Save — Railway will now wait for the `syntax-check.yml` workflow to pass before deploying
+
+**Order matters:** Item 1 must be done first or Railway will have no CI checks to wait for.
+
+---
+
+### Completion Checklist
+
+- [ ] 1. Workflow file pushed + Actions tab shows green
+- [ ] 2. Supabase migration run + table confirmed
+- [ ] 3. Toast env vars added to Railway (or skipped if no partner creds yet)
+- [ ] 4a. 5 backend secrets removed from Vercel
+- [ ] 4b. Deployment Protection enabled on Vercel
+- [ ] 5. "Wait for CI" enabled on Railway
