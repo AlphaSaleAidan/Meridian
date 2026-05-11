@@ -7,3 +7,6 @@ __pycache__/
 node_modules/
 logs/
 tools/update_supa_key.sh
+services/deerflow/
+services/training_video_pipeline/output/
+services/training_video_pipeline/.env

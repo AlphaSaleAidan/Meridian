@@ -11,6 +11,8 @@ interface Lesson {
   title: string
   completed: boolean
   content: string[]
+  videoUrl?: string
+  videoDuration?: number
 }
 
 interface Module {
@@ -501,6 +503,21 @@ export default function CanadaPortalTrainingPage() {
 
                             {isLessonOpen && (
                               <div className="px-5 pb-4 pl-12 space-y-3">
+                                {lesson.videoUrl && (
+                                  <div className="relative rounded-xl overflow-hidden bg-[#0d1117] border border-[#1a2420] shadow-lg mb-4">
+                                    <video
+                                      src={lesson.videoUrl}
+                                      controls
+                                      className="w-full"
+                                      style={{ maxHeight: '400px' }}
+                                    />
+                                    {lesson.videoDuration && (
+                                      <p className="text-[10px] text-[#4a5550] px-3 py-1.5">
+                                        {Math.ceil(lesson.videoDuration / 60)} min video
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                                 {lesson.content.map((paragraph, pi) => (
                                   <p key={pi} className="text-[12px] leading-relaxed text-[#9ca3a0]">{paragraph}</p>
                                 ))}

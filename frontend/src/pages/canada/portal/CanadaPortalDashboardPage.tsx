@@ -158,8 +158,23 @@ export default function CanadaPortalDashboardPage() {
         <p className="text-sm text-[#6b7a74] mt-1">{getFormattedDate()}</p>
       </div>
 
+      {/* ── Pending Approval Banner ── */}
+      {rep && !rep.is_active && (
+        <div className="bg-[#1a1a10] border border-[#c8a82c]/30 rounded-xl p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#c8a82c]/15 flex items-center justify-center flex-shrink-0">
+              <Clock size={18} className="text-[#c8a82c]" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-white">Application Pending Approval</h3>
+              <p className="text-xs text-[#6b7a74] mt-0.5">Your account is being reviewed by the team. You'll get full access once an admin approves your application.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── First 30 Days Banner ── */}
-      {showFirst30Banner && (
+      {showFirst30Banner && rep?.is_active && (
         <div className="relative bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 overflow-hidden">
           <button
             onClick={() => setBannerDismissed(true)}
