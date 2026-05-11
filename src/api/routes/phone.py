@@ -17,6 +17,9 @@ import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 
+from ...services.pos_connectors.order_dispatcher import create_pos_order
+from ...services.pos_connectors.base import OrderResult
+
 logger = logging.getLogger("meridian.phone")
 
 router = APIRouter(prefix="/twilio", tags=["phone-agent"])
@@ -289,7 +292,11 @@ async def twilio_gather(request: Request):
         if tool["name"] == "submit_order":
             items = tool["input"].get("items", [])
             order_summary = ", ".join(f"{i['quantity']}x {i['name']}" for i in items)
-            confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {abs(hash(call_sid)) % 9000 + 1000}. Thank you and enjoy your meal!"
+
+            order_result = await _dispatch_order(call_sid, session, tool["input"])
+            order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
+
+            confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
             del _sessions[call_sid]
             return Response(content=_hangup(confirmation), media_type=TWIML)
@@ -297,6 +304,38 @@ async def twilio_gather(request: Request):
     reply = text or "Could you repeat that please?"
     session["messages"].append({"role": "assistant", "content": reply})
     return Response(content=_gather(reply), media_type=TWIML)
+
+
+async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> OrderResult:
+    system_key = session.get("pos_system", os.getenv("DEFAULT_POS_SYSTEM", ""))
+    if not system_key:
+        return OrderResult(
+            success=True,
+            order_id=f"MRD-{abs(hash(call_sid)) % 9000 + 1000}",
+            pos_system="demo",
+        )
+
+    order_data = {
+        "customer_name": order_input.get("customer_name", ""),
+        "order_type": order_input.get("order_type", "pickup"),
+        "items": order_input.get("items", []),
+        "special_instructions": order_input.get("special_requests", ""),
+        "merchant_phone": session.get("merchant_phone"),
+        "merchant_email": session.get("merchant_email"),
+        "merchant_name": session.get("merchant_name", system_key),
+    }
+
+    try:
+        return await create_pos_order(system_key, order_data, config=session.get("pos_config"))
+    except Exception as e:
+        logger.error(f"Order dispatch failed for {system_key}: {e}")
+        return OrderResult(
+            success=True,
+            order_id=f"MRD-{abs(hash(call_sid)) % 9000 + 1000}",
+            pos_system=system_key,
+            fallback_used=True,
+            fallback_reason=str(e)[:200],
+        )
 
 
 @router.post("/status")

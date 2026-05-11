@@ -18,6 +18,12 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from ...security.encryption import encrypt_token, decrypt_token
+from ...services.pos_connectors import (
+    GenericRESTConnector,
+    POSConnectionConfig,
+    get_connector_config,
+    normalize_transaction,
+)
 
 logger = logging.getLogger("meridian.api.pos_connections")
 
@@ -52,6 +58,19 @@ async def test_connection(req: TestConnectionRequest):
         return await _test_square(req.credentials)
     if req.pos_system == "clover":
         return await _test_clover(req.credentials)
+
+    api_config = get_connector_config(req.pos_system)
+    if api_config and api_config.get("auth_type") != "csv_only":
+        conn_config = POSConnectionConfig(
+            system_key=req.pos_system,
+            system_name=req.pos_system.replace("-", " ").title(),
+            tier=3,
+            auth_method=api_config.get("auth_type", "bearer"),
+            base_url=api_config.get("base_url", ""),
+            credentials=req.credentials,
+        )
+        connector = GenericRESTConnector(conn_config, api_config)
+        return await connector.test_connection()
 
     return {
         "success": False,
@@ -423,7 +442,42 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
                 engine = ToastSyncEngine(client=client, org_id=org_id, pos_connection_id=connection["id"])
                 result = await engine.run_incremental_sync(since=since)
         else:
-            logger.info(f"No incremental sync for {pos_system}")
+            api_config = get_connector_config(pos_system)
+            if not api_config or api_config.get("auth_type") == "csv_only":
+                logger.info(f"No incremental sync for {pos_system} (CSV-only)")
+                return
+
+            creds = connection.get("credentials_encrypted", {})
+            decrypted = {k: decrypt_token(v) for k, v in creds.items()}
+            conn_config = POSConnectionConfig(
+                system_key=pos_system,
+                system_name=pos_system.replace("-", " ").title(),
+                tier=3,
+                auth_method=api_config.get("auth_type", "bearer"),
+                base_url=api_config.get("base_url", ""),
+                credentials=decrypted,
+                merchant_id=connection.get("merchant_id", ""),
+            )
+            connector = GenericRESTConnector(conn_config, api_config)
+            sync_result = await connector.run_sync(since=since)
+
+            result_transactions = [
+                normalize_transaction(t, pos_system, org_id=org_id)
+                for t in sync_result.transactions
+            ]
+            if result_transactions:
+                await db.batch_upsert("transactions", result_transactions, on_conflict="org_id,external_id")
+
+            await db.update(
+                "pos_connections",
+                {
+                    "last_sync_at": datetime.now(timezone.utc).isoformat(),
+                    "last_error": None,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                filters={"id": f"eq.{connection['id']}"},
+            )
+            logger.info(f"Generic sync complete for {org_id}/{pos_system}: {sync_result.records_fetched} records")
             return
 
         if result.transactions:
