@@ -7,6 +7,8 @@ import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import DemoLayout from '@/components/DemoLayout'
+import { DemoContextProvider } from '@/lib/demo-context'
+import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 
 import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
 import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
@@ -222,9 +224,12 @@ export default function App() {
               <Route path="/canada/login" element={<CanadaLoginPage />} />
               <Route path="/canada/dashboard" element={
                 <CanadaProtectedRoute>
-                  <Suspense fallback={<LazyFallback />}>
-                    <CanadaLayout />
-                  </Suspense>
+                  <DemoContextProvider>
+                    <BusinessTypeSelector />
+                    <Suspense fallback={<LazyFallback />}>
+                      <CanadaLayout />
+                    </Suspense>
+                  </DemoContextProvider>
                 </CanadaProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}

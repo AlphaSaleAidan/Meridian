@@ -41,6 +41,15 @@ export function useDemoContext() {
 let _activeBusinessType: BusinessType = 'coffee_shop'
 export function getActiveBusinessType(): BusinessType { return _activeBusinessType }
 
+export function isCanadaPath(): boolean {
+  return typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
+}
+
+const CAD_RATE = 1.38
+export function getCurrencyMultiplier(): number {
+  return isCanadaPath() ? CAD_RATE : 1.0
+}
+
 export function DemoContextProvider({ children }: { children: ReactNode }) {
   const [businessType, setBusinessTypeState] = useState<BusinessType | null>(null)
   const [showSelector, setShowSelector] = useState(true)

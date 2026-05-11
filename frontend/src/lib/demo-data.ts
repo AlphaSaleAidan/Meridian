@@ -13,6 +13,9 @@ import type {
   InventoryData, InventoryItem,
 } from './api'
 
+import { getActiveBusinessType, getCurrencyMultiplier, isCanadaPath } from './demo-context'
+import { getProducts, getRevenueConfig, getHourlyPattern, getBusinessName, getBusinessProfile, type ProductDef } from './business-config'
+
 // ─── Helpers ────────────────────────────────────────────
 
 function uuid(): string {
@@ -59,29 +62,66 @@ function seededRandRange(min: number, max: number): number {
   return Math.floor(seededRand() * (max - min + 1)) + min
 }
 
+function cx(cents: number): number {
+  return Math.round(cents * getCurrencyMultiplier())
+}
+
 // ─── Products ───────────────────────────────────────────
 
-const PRODUCTS = [
-  { name: 'Espresso', sku: 'ESP-001', price: 350, category: 'drinks', popularity: 0.95 },
-  { name: 'Cappuccino', sku: 'CAP-001', price: 525, category: 'drinks', popularity: 0.90 },
-  { name: 'Iced Latte', sku: 'ICL-001', price: 575, category: 'drinks', popularity: 0.85 },
-  { name: 'Cold Brew', sku: 'CDB-001', price: 500, category: 'drinks', popularity: 0.80 },
-  { name: 'Matcha Latte', sku: 'MAT-001', price: 625, category: 'drinks', popularity: 0.65 },
-  { name: 'Hot Chocolate', sku: 'HOT-001', price: 475, category: 'drinks', popularity: 0.50 },
-  { name: 'Chai Latte', sku: 'CHA-001', price: 550, category: 'drinks', popularity: 0.55 },
-  { name: 'Drip Coffee', sku: 'DRP-001', price: 275, category: 'drinks', popularity: 0.70 },
-  { name: 'Blueberry Muffin', sku: 'MUF-001', price: 395, category: 'food', popularity: 0.75 },
-  { name: 'Croissant', sku: 'CRO-001', price: 425, category: 'food', popularity: 0.80 },
-  { name: 'Avocado Toast', sku: 'AVO-001', price: 895, category: 'food', popularity: 0.60 },
-  { name: 'Breakfast Sandwich', sku: 'BKF-001', price: 795, category: 'food', popularity: 0.70 },
-  { name: 'Banana Bread', sku: 'BAN-001', price: 375, category: 'food', popularity: 0.55 },
-  { name: 'Cookie', sku: 'COK-001', price: 295, category: 'food', popularity: 0.45 },
-]
+function getActiveProducts(): ProductDef[] {
+  return getProducts(getActiveBusinessType())
+}
+
+// ─── Business-Aware Text Substitution ──────────────────
+
+function bizSub(text: string): string {
+  const p = getActiveProducts()
+  const bt = getActiveBusinessType()
+  const labels: Record<string, string> = {
+    coffee_shop: 'Coffee Shop / Café',
+    restaurant: 'Full-Service Restaurant',
+    fast_food: 'Quick-Service Restaurant',
+    auto_shop: 'Automotive Service',
+    smoke_shop: 'Tobacco & Accessories',
+  }
+  const shortLabels: Record<string, string> = {
+    coffee_shop: 'Coffee Shop',
+    restaurant: 'Restaurant',
+    fast_food: 'Fast Food',
+    auto_shop: 'Auto Shop',
+    smoke_shop: 'Smoke Shop',
+  }
+  const replacements: [string, string][] = [
+    ['Matcha Latte', p[4]?.name || 'Item E'],
+    ['Cold Brew', p[3]?.name || 'Item D'],
+    ['Avocado Toast', p[10]?.name || 'Item K'],
+    ['Cappuccino', p[1]?.name || 'Item B'],
+    ['Iced Latte', p[2]?.name || 'Item C'],
+    ['Croissant', p[9]?.name || 'Item J'],
+    ['Espresso', p[0]?.name || 'Item A'],
+    ['Blueberry Muffin', p[8]?.name || 'Item I'],
+    ['Breakfast Sandwich', p[11]?.name || 'Item L'],
+    ['Drip Coffee', p[7]?.name || 'Item H'],
+    ['Hot Chocolate', p[5]?.name || 'Item F'],
+    ['Banana Bread', p[12]?.name || 'Item M'],
+    ['Cookie', p[13]?.name || 'Item N'],
+    ['Chai Latte', p[6]?.name || 'Item G'],
+    ['Sunrise Coffee Co.', getBusinessName(bt)],
+    ['Coffee Shop / Café', labels[bt] || bt],
+    ['Coffee Shop', shortLabels[bt] || bt],
+  ]
+  let result = text
+  for (const [from, to] of replacements) {
+    result = result.split(from).join(to)
+  }
+  return result
+}
 
 // ─── Daily Revenue ──────────────────────────────────────
 
 function generateDailyRevenue(days: number): DailyRevenue[] {
   seed = 42 // Reset seed for consistency
+  const rc = getRevenueConfig(getActiveBusinessType())
   const result: DailyRevenue[] = []
 
   for (let i = days - 1; i >= 0; i--) {
@@ -92,15 +132,15 @@ function generateDailyRevenue(days: number): DailyRevenue[] {
     // Base revenue: weekends higher, Mon-Fri varies
     const isWeekend = dow === 0 || dow === 6
     const baseRevenue = isWeekend
-      ? seededRandRange(180000, 260000)  // $1800-$2600
-      : seededRandRange(120000, 200000)  // $1200-$2000
+      ? seededRandRange(rc.weekendMin, rc.weekendMax)
+      : seededRandRange(rc.weekdayMin, rc.weekdayMax)
 
     // Add slight upward trend over 30 days
     const trendBoost = Math.floor((days - i) * 800)
     const revenue = baseRevenue + trendBoost
 
-    // Transactions: ~$8-12 avg ticket
-    const avgTicket = seededRandRange(850, 1200)
+    // Transactions based on business avg ticket
+    const avgTicket = seededRandRange(rc.avgTicketMin, rc.avgTicketMax)
     const transactions = Math.floor(revenue / avgTicket)
     const customers = Math.floor(transactions * 0.85)
     const refunds = seededRandRange(0, 3) * seededRandRange(300, 800)
@@ -110,13 +150,13 @@ function generateDailyRevenue(days: number): DailyRevenue[] {
 
     result.push({
       date,
-      revenue_cents: revenue,
+      revenue_cents: cx(revenue),
       transactions,
-      avg_ticket_cents: avgTicket,
-      refund_cents: refunds,
-      tax_cents: tax,
-      tip_cents: tip,
-      discount_cents: discount,
+      avg_ticket_cents: cx(avgTicket),
+      refund_cents: cx(refunds),
+      tax_cents: cx(tax),
+      tip_cents: cx(tip),
+      discount_cents: cx(discount),
       customers,
     })
   }
@@ -150,13 +190,7 @@ function generateWeeklyRevenue(daily: DailyRevenue[]): WeeklyRevenue[] {
 // ─── Hourly Revenue ─────────────────────────────────────
 
 function generateHourlyData(): HourlyData {
-  // Typical coffee shop hourly pattern
-  const hourlyPattern = [
-    0, 0, 0, 0, 0, 5,       // 12am-5am
-    15, 45, 85, 70, 55, 65,  // 6am-11am (morning rush)
-    80, 70, 50, 40, 35, 30,  // 12pm-5pm (lunch + afternoon)
-    20, 10, 5, 0, 0, 0,      // 6pm-11pm
-  ]
+  const hourlyPattern = getHourlyPattern(getActiveBusinessType())
 
   return {
     hourly: hourlyPattern.map((pct, hour) => {
@@ -164,10 +198,10 @@ function generateHourlyData(): HourlyData {
       const sales = Math.max(1, Math.floor(pct * 2.8))
       return {
         hour: `${hour.toString().padStart(2, '0')}:00`,
-        revenue_cents: revenue * 100,
+        revenue_cents: cx(revenue * 100),
         sales,
         refunds: pct > 40 ? rand(0, 1) : 0,
-        avg_ticket_cents: pct > 0 ? rand(800, 1200) : 0,
+        avg_ticket_cents: cx(pct > 0 ? rand(800, 1200) : 0),
         customers: Math.floor(sales * 0.85),
       }
     }),
@@ -179,7 +213,7 @@ function generateHourlyData(): HourlyData {
 function generateProducts(days: number): ProductsData {
   seed = 100
 
-  const products: ProductPerf[] = PRODUCTS.map(p => {
+  const products: ProductPerf[] = getActiveProducts().map(p => {
     const baseQty = Math.floor(p.popularity * 15 * days)
     const qty = seededRandRange(Math.floor(baseQty * 0.8), Math.floor(baseQty * 1.2))
     const revenue = qty * p.price
@@ -192,7 +226,7 @@ function generateProducts(days: number): ProductsData {
       )
       daily.push({
         date: daysAgo(i),
-        revenue_cents: dayQty * p.price,
+        revenue_cents: cx(dayQty * p.price),
         quantity: dayQty,
       })
     }
@@ -201,8 +235,8 @@ function generateProducts(days: number): ProductsData {
       product_id: uuid(),
       name: p.name,
       sku: p.sku,
-      price_cents: p.price,
-      total_revenue_cents: revenue,
+      price_cents: cx(p.price),
+      total_revenue_cents: cx(revenue),
       total_quantity: qty,
       times_sold: Math.floor(qty * 0.9),
       daily,
@@ -222,23 +256,28 @@ function generateProducts(days: number): ProductsData {
 // ─── Insights ───────────────────────────────────────────
 
 function generateInsights(): { insights: Insight[]; total: number } {
+  const p = getActiveProducts()
+  const bt = getActiveBusinessType()
+  const profile = getBusinessProfile(bt)
+  const deadItems = profile.deadStockItems
+
   const insights: Insight[] = [
     {
       id: uuid(),
       type: 'money_left',
-      title: '💸 $2,340/Month Left on the Table — Here\'s How to Capture It',
-      summary: 'Meridian\'s Money Left on Table analysis identifies $2,340/month in unrealized revenue across your operations. This score is calculated using five economic dimensions, each benchmarked against industry standards:\n\n*Component breakdown:*\n  • Pricing Optimization: $840/mo\n  • Peak Hour Staffing: $520/mo\n  • Dead Stock Clearance: $450/mo\n  • Discount Leakage: $310/mo\n  • Schedule Gap Recovery: $220/mo\n\nMcKinsey research confirms most SMBs leave 2-7% of revenue on the table through suboptimal pricing, staffing, and inventory management — and that structured optimization yields an average 3.3% revenue lift [McKinsey & Company, 2024].\n\n*Prioritized action plan:*\n1. Increase Matcha Latte and Cold Brew prices by $0.50-$0.75 (est. $840/mo)\n2. Add one staff member during 7-9am peak window (est. $520/mo)\n3. Clear 4 dead-stock items via bundles or markdowns (est. $450/mo)',
+      title: bizSub('💸 $2,340/Month Left on the Table — Here\'s How to Capture It'),
+      summary: bizSub('Meridian\'s Money Left on Table analysis identifies $2,340/month in unrealized revenue across your operations. This score is calculated using five economic dimensions, each benchmarked against industry standards:\n\n*Component breakdown:*\n  • Pricing Optimization: $840/mo\n  • Peak Hour Staffing: $520/mo\n  • Dead Stock Clearance: $450/mo\n  • Discount Leakage: $310/mo\n  • Schedule Gap Recovery: $220/mo\n\nMcKinsey research confirms most SMBs leave 2-7% of revenue on the table through suboptimal pricing, staffing, and inventory management — and that structured optimization yields an average 3.3% revenue lift [McKinsey & Company, 2024].\n\n*Prioritized action plan:*\n1. Increase Matcha Latte and Cold Brew prices by $0.50-$0.75 (est. $840/mo)\n2. Add one staff member during 7-9am peak window (est. $520/mo)\n3. Clear 4 dead-stock items via bundles or markdowns (est. $450/mo)'),
       details: {
         components: {
-          pricing: { amount_cents: 84000, detail: 'Underpriced items with inelastic demand' },
-          staffing: { amount_cents: 52000, detail: 'Understaffed peak hours losing throughput' },
-          dead_stock: { amount_cents: 45000, detail: 'Zero-velocity inventory holding costs' },
-          discounts: { amount_cents: 31000, detail: 'Excessive discounting above 3% benchmark' },
-          scheduling: { amount_cents: 22000, detail: 'Revenue gaps in recoverable dayparts' },
+          pricing: { amount_cents: cx(84000), detail: 'Underpriced items with inelastic demand' },
+          staffing: { amount_cents: cx(52000), detail: 'Understaffed peak hours losing throughput' },
+          dead_stock: { amount_cents: cx(45000), detail: 'Zero-velocity inventory holding costs' },
+          discounts: { amount_cents: cx(31000), detail: 'Excessive discounting above 3% benchmark' },
+          scheduling: { amount_cents: cx(22000), detail: 'Revenue gaps in recoverable dayparts' },
         },
         citations: ['mckinsey_pricing', 'hbr_pricing_power', 'mit_sloan_scheduling', 'nra_food_waste'],
       },
-      impact_cents: 234000,
+      impact_cents: cx(234000),
       confidence: 0.65,
       action_status: 'accepted',
       valid_until: daysFromNow(30),
@@ -247,17 +286,17 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'pricing',
-      title: '💰 3 Data-Backed Pricing Opportunities — $840/Month Potential',
-      summary: 'Our analysis identified 3 products where data supports a price adjustment. Top opportunity: *Matcha Latte* — current price $6.25, demand elasticity analysis shows highly inelastic demand (elasticity: -0.3), supporting a $0.75 increase.\n\n*Economic rationale:*\nHarvard Business Review research demonstrates that a 1% price increase yields an average 11.1% improvement in operating profit — making pricing the single highest-leverage variable in the P&L [Harvard Business Review, 2023]. Restaurants using data-driven menu engineering achieve 8-15% higher gross margins vs. cost-plus pricing [Cornell Hospitality Quarterly, 2024].\n\nMeta-analysis data shows food service items with <5% price increases exhibit near-zero demand reduction (mean elasticity: -1.2 for staples) [Journal of Marketing Research, 2023].\n\n*Implementation:*\n1. Matcha Latte: $6.25 → $7.00 (+12%, still below competitor avg of $7.50)\n2. Cold Brew: $5.00 → $5.50 (+10%, high demand inelasticity)\n3. Avocado Toast: $8.95 → $9.95 (+11%, premium positioning supports it)\n4. Total combined potential: $840/month',
+      title: bizSub('💰 3 Data-Backed Pricing Opportunities — $840/Month Potential'),
+      summary: bizSub('Our analysis identified 3 products where data supports a price adjustment. Top opportunity: *Matcha Latte* — current price $6.25, demand elasticity analysis shows highly inelastic demand (elasticity: -0.3), supporting a $0.75 increase.\n\n*Economic rationale:*\nHarvard Business Review research demonstrates that a 1% price increase yields an average 11.1% improvement in operating profit — making pricing the single highest-leverage variable in the P&L [Harvard Business Review, 2023]. Restaurants using data-driven menu engineering achieve 8-15% higher gross margins vs. cost-plus pricing [Cornell Hospitality Quarterly, 2024].\n\nMeta-analysis data shows food service items with <5% price increases exhibit near-zero demand reduction (mean elasticity: -1.2 for staples) [Journal of Marketing Research, 2023].\n\n*Implementation:*\n1. Matcha Latte: $6.25 → $7.00 (+12%, still below competitor avg of $7.50)\n2. Cold Brew: $5.00 → $5.50 (+10%, high demand inelasticity)\n3. Avocado Toast: $8.95 → $9.95 (+11%, premium positioning supports it)\n4. Total combined potential: $840/month'),
       details: {
         opportunities: [
-          { name: 'Matcha Latte', current: 625, suggested: 700, elasticity: -0.3 },
-          { name: 'Cold Brew', current: 500, suggested: 550, elasticity: -0.4 },
-          { name: 'Avocado Toast', current: 895, suggested: 995, elasticity: -0.6 },
+          { name: p[4]?.name || 'Item E', current: p[4]?.price || 625, suggested: Math.floor((p[4]?.price || 625) * 1.12), elasticity: -0.3 },
+          { name: p[3]?.name || 'Item D', current: p[3]?.price || 500, suggested: Math.floor((p[3]?.price || 500) * 1.10), elasticity: -0.4 },
+          { name: p[10]?.name || 'Item K', current: p[10]?.price || 895, suggested: Math.floor((p[10]?.price || 895) * 1.11), elasticity: -0.6 },
         ],
         citations: ['hbr_pricing_power', 'cornell_menu_pricing', 'jmr_elasticity', 'mckinsey_pricing'],
       },
-      impact_cents: 84000,
+      impact_cents: cx(84000),
       confidence: 0.82,
       action_status: 'pending',
       valid_until: daysFromNow(30),
@@ -266,14 +305,14 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'staffing',
-      title: '🔥 Golden Window: 7:00–10:00 AM — 47% of Revenue in 3 Hours',
-      summary: 'Your most profitable operating window is 7:00-10:00 AM, concentrating 47% of daily revenue into roughly 3 hours. This exceeds the industry benchmark of 45% for Coffee Shop / Café businesses.\n\n*Staffing economics:*\nMIT Sloan research shows each understaffed peak hour costs 8-15% of that hour\'s potential revenue through lost sales, longer wait times, and reduced upselling capacity [MIT Sloan Management Review, 2024]. Cornell\'s demand-driven scheduling research found that aligning staff to 15-minute demand blocks (vs. shift-based) improves revenue-per-labor-hour by 18% [Cornell Center for Hospitality Research, 2023].\n\n*Action items:*\n1. Ensure maximum staffing during 7:00-10:00 AM — every position filled\n2. Pre-prep high-volume items 30 min before peak to maximize throughput\n3. Schedule breaks and training during off-peak hours only\n4. Track revenue-per-labor-hour weekly to optimize scheduling',
+      title: bizSub('🔥 Golden Window: 7:00–10:00 AM — 47% of Revenue in 3 Hours'),
+      summary: bizSub('Your most profitable operating window is 7:00-10:00 AM, concentrating 47% of daily revenue into roughly 3 hours. This exceeds the industry benchmark of 45% for Coffee Shop / Café businesses.\n\n*Staffing economics:*\nMIT Sloan research shows each understaffed peak hour costs 8-15% of that hour\'s potential revenue through lost sales, longer wait times, and reduced upselling capacity [MIT Sloan Management Review, 2024]. Cornell\'s demand-driven scheduling research found that aligning staff to 15-minute demand blocks (vs. shift-based) improves revenue-per-labor-hour by 18% [Cornell Center for Hospitality Research, 2023].\n\n*Action items:*\n1. Ensure maximum staffing during 7:00-10:00 AM — every position filled\n2. Pre-prep high-volume items 30 min before peak to maximize throughput\n3. Schedule breaks and training during off-peak hours only\n4. Track revenue-per-labor-hour weekly to optimize scheduling'),
       details: {
-        golden_window: { label: '7:00-10:00 AM', revenue_share_pct: 47 },
+        golden_window: { label: profile.peakLabel, revenue_share_pct: 47 },
         benchmark_share_pct: 45,
         citations: ['mit_sloan_scheduling', 'cornell_labor_scheduling', 'bls_labor_costs'],
       },
-      impact_cents: 52000,
+      impact_cents: cx(52000),
       confidence: 0.88,
       action_status: 'completed',
       valid_until: daysFromNow(14),
@@ -282,13 +321,13 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'product_recommendation',
-      title: '⭐ Star Products Identified — Protect & Promote These Revenue Drivers',
-      summary: 'Your top performers (Cappuccino, Iced Latte, Croissant) collectively account for 42% of total revenue. In menu engineering terms, these are your "Stars" — high popularity, high profitability items that form the backbone of your product mix [Cornell Hospitality Quarterly, 2024].\n\n*Strategic recommendations:*\n1. *Never stock out* — Each lost sale of a star product costs your average ticket plus the probability of a walk-away (estimated 15-20% of customers leave rather than substitute)\n2. *Feature prominently* — Position at eye level, menu board prime spots, and as first recommendations from staff\n3. *Test selective premiumization* — Star products tolerate 3-5% price increases with minimal volume impact due to their inelastic demand [Journal of Marketing Research, 2023]\n4. *Build combos around them* — Pair with underperforming items to lift average ticket and move slow inventory',
+      title: bizSub('⭐ Star Products Identified — Protect & Promote These Revenue Drivers'),
+      summary: bizSub('Your top performers (Cappuccino, Iced Latte, Croissant) collectively account for 42% of total revenue. In menu engineering terms, these are your "Stars" — high popularity, high profitability items that form the backbone of your product mix [Cornell Hospitality Quarterly, 2024].\n\n*Strategic recommendations:*\n1. *Never stock out* — Each lost sale of a star product costs your average ticket plus the probability of a walk-away (estimated 15-20% of customers leave rather than substitute)\n2. *Feature prominently* — Position at eye level, menu board prime spots, and as first recommendations from staff\n3. *Test selective premiumization* — Star products tolerate 3-5% price increases with minimal volume impact due to their inelastic demand [Journal of Marketing Research, 2023]\n4. *Build combos around them* — Pair with underperforming items to lift average ticket and move slow inventory'),
       details: {
         stars: [
-          { name: 'Cappuccino', revenue_pct: 18, trend: 'growing' },
-          { name: 'Iced Latte', revenue_pct: 14, trend: 'growing' },
-          { name: 'Croissant', revenue_pct: 10, trend: 'stable' },
+          { name: p[1]?.name || 'Top Item', revenue_pct: 18, trend: 'growing' as const },
+          { name: p[2]?.name || 'Second Item', revenue_pct: 14, trend: 'growing' as const },
+          { name: p[9]?.name || 'Side Item', revenue_pct: 10, trend: 'stable' as const },
         ],
         citations: ['cornell_menu_pricing', 'jmr_elasticity'],
       },
@@ -301,18 +340,18 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'inventory',
-      title: '🚫 4 Dead Stock Items — $450/Month Hidden Cost',
-      summary: '4 products have generated zero revenue over the past 30 days: Hot Chocolate, Banana Bread, Cookie, and Chai Latte (seasonal decline).\n\n*The hidden economics of dead stock:*\nAccording to NRF research, dead stock accounts for 25-30% of total inventory shrinkage, which averages 1.6% of annual revenue [National Retail Federation, 2024]. Beyond direct cost, dead stock occupies shelf space that could house your top performers, and perishable items compound losses through spoilage. The National Restaurant Association estimates reducing food waste by 20% improves net margin by 1-3 points [National Restaurant Association / ReFED, 2024].\n\n*Action plan:*\n1. Immediate: Mark down remaining inventory 40-60% or bundle with star products\n2. Within 7 days: Remove from active ordering. Redirect budget to top performers\n3. Going forward: Set a 14-day zero-sales trigger for automatic review',
+      title: bizSub('🚫 4 Dead Stock Items — $450/Month Hidden Cost'),
+      summary: bizSub('4 products have generated zero revenue over the past 30 days: Hot Chocolate, Banana Bread, Cookie, and Chai Latte (seasonal decline).\n\n*The hidden economics of dead stock:*\nAccording to NRF research, dead stock accounts for 25-30% of total inventory shrinkage, which averages 1.6% of annual revenue [National Retail Federation, 2024]. Beyond direct cost, dead stock occupies shelf space that could house your top performers, and perishable items compound losses through spoilage. The National Restaurant Association estimates reducing food waste by 20% improves net margin by 1-3 points [National Restaurant Association / ReFED, 2024].\n\n*Action plan:*\n1. Immediate: Mark down remaining inventory 40-60% or bundle with star products\n2. Within 7 days: Remove from active ordering. Redirect budget to top performers\n3. Going forward: Set a 14-day zero-sales trigger for automatic review'),
       details: {
         dead_stock: [
-          { name: 'Hot Chocolate', days_since_sale: 30 },
-          { name: 'Banana Bread', days_since_sale: 25 },
-          { name: 'Cookie', days_since_sale: 22 },
-          { name: 'Chai Latte', days_since_sale: 18 },
+          { name: deadItems[0] || 'Item 1', days_since_sale: 30 },
+          { name: deadItems[1] || 'Item 2', days_since_sale: 25 },
+          { name: deadItems[2] || 'Item 3', days_since_sale: 22 },
+          { name: deadItems[3] || 'Item 4', days_since_sale: 18 },
         ],
         citations: ['nrf_inventory_shrink', 'nra_food_waste', 'ibisworld_retail_efficiency'],
       },
-      impact_cents: 45000,
+      impact_cents: cx(45000),
       confidence: 0.72,
       action_status: 'accepted',
       valid_until: daysFromNow(7),
@@ -321,15 +360,15 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'staffing',
-      title: '📅 Monday Revenue Gap: 38% Below Saturday — $620/Mo Recovery Potential',
-      summary: 'Saturday averages $2,180 while Monday generates only $1,350 — a 38% revenue gap.\n\nNRA daypart research shows businesses capturing 3+ strong dayparts achieve 40% higher revenue per square foot [National Restaurant Association, 2025]. Counter-seasonal promotions can recover 30-50% of the weakest day\'s revenue gap [National Restaurant Association, 2025].\n\n*Monday recovery playbook:*\n1. Launch a Monday-specific promotion (e.g., "Happy Monday" with a featured item at 15% off)\n2. Test a loyalty multiplier (2x points on Mondays)\n3. Shift marketing spend to drive traffic on slow days\n4. *Target:* Close 25% of the gap = $620/month',
+      title: bizSub('📅 Monday Revenue Gap: 38% Below Saturday — $620/Mo Recovery Potential'),
+      summary: bizSub('Saturday averages $2,180 while Monday generates only $1,350 — a 38% revenue gap.\n\nNRA daypart research shows businesses capturing 3+ strong dayparts achieve 40% higher revenue per square foot [National Restaurant Association, 2025]. Counter-seasonal promotions can recover 30-50% of the weakest day\'s revenue gap [National Restaurant Association, 2025].\n\n*Monday recovery playbook:*\n1. Launch a Monday-specific promotion (e.g., "Happy Monday" with a featured item at 15% off)\n2. Test a loyalty multiplier (2x points on Mondays)\n3. Shift marketing spend to drive traffic on slow days\n4. *Target:* Close 25% of the gap = $620/month'),
       details: {
         best_day: { name: 'Saturday', avg_cents: 218000 },
         worst_day: { name: 'Monday', avg_cents: 135000 },
         gap_pct: 38,
         citations: ['nra_daypart_analysis', 'nra_seasonal_trends'],
       },
-      impact_cents: 62000,
+      impact_cents: cx(62000),
       confidence: 0.6,
       action_status: 'pending',
       valid_until: daysFromNow(21),
@@ -338,13 +377,13 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'anomaly',
-      title: '📈 Statistical Anomaly: 42% Above Expected (Last Saturday)',
-      summary: 'Revenue of $3,180 last Saturday represents a 42% deviation from the expected $2,240 (z-score: 2.8σ, confidence: 56%).\n\n*Positive anomaly investigation:*\nIdentify the driver — was it higher traffic, larger tickets, or a specific product? If replicable, this pattern could be worth ~$940/occurrence. McKinsey\'s customer analytics research shows businesses that identify and replicate positive anomalies see 10-30% lift in targeted segments [McKinsey & Company, 2024].\n\nPreliminary analysis suggests the spike correlated with a local farmers market event. Consider partnering with the market for recurring cross-promotion.',
+      title: bizSub('📈 Statistical Anomaly: 42% Above Expected (Last Saturday)'),
+      summary: bizSub('Revenue of $3,180 last Saturday represents a 42% deviation from the expected $2,240 (z-score: 2.8σ, confidence: 56%).\n\n*Positive anomaly investigation:*\nIdentify the driver — was it higher traffic, larger tickets, or a specific product? If replicable, this pattern could be worth ~$940/occurrence. McKinsey\'s customer analytics research shows businesses that identify and replicate positive anomalies see 10-30% lift in targeted segments [McKinsey & Company, 2024].\n\nPreliminary analysis suggests the spike correlated with a local farmers market event. Consider partnering with the market for recurring cross-promotion.'),
       details: {
         anomaly: { date: daysAgo(2), revenue_cents: 318000, expected_cents: 224000, z_score: 2.8, type: 'spike' },
         citations: ['mckinsey_customer_analytics', 'nra_seasonal_trends'],
       },
-      impact_cents: 94000,
+      impact_cents: cx(94000),
       confidence: 0.56,
       action_status: 'viewed',
       valid_until: daysFromNow(7),
@@ -353,15 +392,15 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'pricing',
-      title: '🏷️ Discount Rate at 4.8% — Margin Erosion Risk',
-      summary: 'Your discount rate (4.8%) exceeds the industry benchmark of 3.0%. This costs you an estimated $310 in unnecessary margin erosion. Shift from blanket discounts to targeted, time-limited promotions — research shows targeted promotions outperform blanket discounts 3:1.\n\nResearch from Harvard Business Review shows that targeted, time-limited promotions outperform blanket discounts by a 3:1 margin in terms of incremental revenue generated [Harvard Business Review, 2023].\n\n*Recommended strategy:*\n1. Audit current discount triggers — identify which are driving new customers vs. subsidizing existing ones\n2. Cap blanket discounts at 3% of revenue\n3. Shift budget to targeted offers: loyalty rewards, slow-day promotions, and new customer incentives',
+      title: bizSub('🏷️ Discount Rate at 4.8% — Margin Erosion Risk'),
+      summary: bizSub('Your discount rate (4.8%) exceeds the industry benchmark of 3.0%. This costs you an estimated $310 in unnecessary margin erosion. Shift from blanket discounts to targeted, time-limited promotions — research shows targeted promotions outperform blanket discounts 3:1.\n\nResearch from Harvard Business Review shows that targeted, time-limited promotions outperform blanket discounts by a 3:1 margin in terms of incremental revenue generated [Harvard Business Review, 2023].\n\n*Recommended strategy:*\n1. Audit current discount triggers — identify which are driving new customers vs. subsidizing existing ones\n2. Cap blanket discounts at 3% of revenue\n3. Shift budget to targeted offers: loyalty rewards, slow-day promotions, and new customer incentives'),
       details: {
         actual_rate_pct: 4.8,
         benchmark_rate_pct: 3.0,
         excess_cents: 31000,
         citations: ['hbr_discount_strategy', 'mckinsey_pricing'],
       },
-      impact_cents: 31000,
+      impact_cents: cx(31000),
       confidence: 0.7,
       action_status: 'pending',
       valid_until: daysFromNow(14),
@@ -370,8 +409,8 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'general',
-      title: '💡 Tip Rate at 12.4% — Optimization Can Boost Staff Retention',
-      summary: 'Your tip rate (12.4%) is 5.6 points below the optimal 18.0%. Research from Cornell shows that POS tip prompts with suggested amounts (18%/20%/25%) increase average tips by 38% vs. open-entry fields. Implementing this alone could add ~$480/month to your staff\'s take-home pay, improving retention [Cornell Hospitality Quarterly, 2023].\n\nHigher tips don\'t just help your staff — they directly reduce turnover. With labor costs averaging 28% of revenue in Coffee Shop / Café businesses [Bureau of Labor Statistics, 2025], reducing turnover through better tip income is one of the highest-ROI operational changes available.\n\n*Implementation:* Update your POS tip screen to show preset buttons at 18%, 20%, and 25% (plus custom). Cornell research shows this single change increases tip probability by 27%.',
+      title: bizSub('💡 Tip Rate at 12.4% — Optimization Can Boost Staff Retention'),
+      summary: bizSub('Your tip rate (12.4%) is 5.6 points below the optimal 18.0%. Research from Cornell shows that POS tip prompts with suggested amounts (18%/20%/25%) increase average tips by 38% vs. open-entry fields. Implementing this alone could add ~$480/month to your staff\'s take-home pay, improving retention [Cornell Hospitality Quarterly, 2023].\n\nHigher tips don\'t just help your staff — they directly reduce turnover. With labor costs averaging 28% of revenue in Coffee Shop / Café businesses [Bureau of Labor Statistics, 2025], reducing turnover through better tip income is one of the highest-ROI operational changes available.\n\n*Implementation:* Update your POS tip screen to show preset buttons at 18%, 20%, and 25% (plus custom). Cornell research shows this single change increases tip probability by 27%.'),
       details: {
         current_rate_pct: 12.4,
         optimal_rate_pct: 18.0,
@@ -379,7 +418,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
         monthly_potential_cents: 48000,
         citations: ['cornell_tipping', 'bls_labor_costs', 'square_payments_report'],
       },
-      impact_cents: 48000,
+      impact_cents: cx(48000),
       confidence: 0.65,
       action_status: 'accepted',
       valid_until: daysFromNow(30),
@@ -388,8 +427,8 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'general',
-      title: '📈 Strong Revenue Momentum — Compounding Growth Detected',
-      summary: 'Week-over-week revenue grew +8.3%, reflecting sustained demand acceleration. Your trailing average of $1,680/day across 118 daily transactions indicates healthy throughput. Relative to the Coffee Shop / Café industry benchmark, your daily revenue places you in the above median (+16.2% vs. industry median of $1,450/day).\n\nAt this trajectory, annualized revenue projects to ~$613,200, assuming no seasonal adjustment. To sustain this growth curve, ensure staffing scales proportionally — understaffed peak hours cost 8-15% of potential revenue [MIT Sloan Management Review, 2024].\n\n*Recommended actions:*\n1. Lock in supplier agreements at current volume to protect margins\n2. Evaluate whether current peak-hour staffing can support continued growth\n3. Consider modest price increases on top sellers while demand is strong — a 1% price lift yields ~11% operating profit improvement [Harvard Business Review, 2023]',
+      title: bizSub('📈 Strong Revenue Momentum — Compounding Growth Detected'),
+      summary: bizSub('Week-over-week revenue grew +8.3%, reflecting sustained demand acceleration. Your trailing average of $1,680/day across 118 daily transactions indicates healthy throughput. Relative to the Coffee Shop / Café industry benchmark, your daily revenue places you in the above median (+16.2% vs. industry median of $1,450/day).\n\nAt this trajectory, annualized revenue projects to ~$613,200, assuming no seasonal adjustment. To sustain this growth curve, ensure staffing scales proportionally — understaffed peak hours cost 8-15% of potential revenue [MIT Sloan Management Review, 2024].\n\n*Recommended actions:*\n1. Lock in supplier agreements at current volume to protect margins\n2. Evaluate whether current peak-hour staffing can support continued growth\n3. Consider modest price increases on top sellers while demand is strong — a 1% price lift yields ~11% operating profit improvement [Harvard Business Review, 2023]'),
       details: {
         wow_growth_pct: 8.3,
         avg_daily_cents: 168000,
@@ -410,6 +449,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
 // ─── Forecasts ──────────────────────────────────────────
 
 function generateForecasts(): { forecasts: Forecast[]; total: number } {
+  const rc = getRevenueConfig(getActiveBusinessType())
   const forecasts: Forecast[] = []
 
   // Daily revenue forecasts for next 14 days
@@ -419,7 +459,7 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
     const dow = d.getDay()
     const isWeekend = dow === 0 || dow === 6
 
-    const base = isWeekend ? rand(210000, 280000) : rand(150000, 220000)
+    const base = isWeekend ? rand(rc.weekendMin, rc.weekendMax) : rand(rc.weekdayMin, rc.weekdayMax)
     const lower = Math.floor(base * 0.82)
     const upper = Math.floor(base * 1.18)
     const confidence = randFloat(0.72, 0.92)
@@ -429,31 +469,32 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
       type: 'daily_revenue',
       period_start: date,
       period_end: date,
-      predicted_cents: base,
-      lower_bound_cents: lower,
-      upper_bound_cents: upper,
+      predicted_cents: cx(base),
+      lower_bound_cents: cx(lower),
+      upper_bound_cents: cx(upper),
       confidence,
       horizon_days: i <= 7 ? 7 : 30,
       error_rate: i <= 7 ? 0.10 : 0.15,
     })
   }
 
-  // Weekly forecast
+  // Weekly forecast — computed from business revenue config
+  const weeklyAvg = Math.floor(((rc.weekdayMin + rc.weekdayMax) / 2) * 5 + ((rc.weekendMin + rc.weekendMax) / 2) * 2)
   forecasts.push({
     id: uuid(),
     type: 'weekly_revenue',
     period_start: daysFromNow(1),
     period_end: daysFromNow(7),
-    predicted_cents: 1350000,
-    lower_bound_cents: 1150000,
-    upper_bound_cents: 1550000,
+    predicted_cents: cx(weeklyAvg),
+    lower_bound_cents: cx(Math.floor(weeklyAvg * 0.85)),
+    upper_bound_cents: cx(Math.floor(weeklyAvg * 1.15)),
     confidence: 0.84,
     horizon_days: 7,
     error_rate: 0.10,
     scenario_analysis: {
-      optimistic_cents: 1553000,
-      expected_cents: 1350000,
-      pessimistic_cents: 1148000,
+      optimistic_cents: cx(Math.floor(weeklyAvg * 1.15)),
+      expected_cents: cx(weeklyAvg),
+      pessimistic_cents: cx(Math.floor(weeklyAvg * 0.85)),
     },
   })
 
@@ -477,7 +518,7 @@ function generateNotifications(): { notifications: Notification[]; total: number
     {
       id: uuid(),
       title: 'New AI insight available',
-      body: 'A new pricing optimization opportunity was detected for your Matcha Latte. Review it in the Insights tab.',
+      body: `A new pricing optimization opportunity was detected for your ${getActiveProducts()[4]?.name || 'top item'}. Review it in the Insights tab.`,
       priority: 'normal',
       source_type: 'insight',
       status: 'unread',
@@ -497,7 +538,7 @@ function generateNotifications(): { notifications: Notification[]; total: number
     {
       id: uuid(),
       title: 'Unusual refund activity detected',
-      body: '5 Cold Brew refunds in one day is 3x your normal rate. This may indicate a quality issue.',
+      body: `5 ${getActiveProducts()[3]?.name || 'item'} refunds in one day is 3x your normal rate. This may indicate a quality issue.`,
       priority: 'high',
       source_type: 'alert',
       status: 'read',
@@ -571,13 +612,13 @@ function generateOverview(daily: DailyRevenue[]): Overview {
 
   const moneyLeft: MoneyLeftScore = {
     id: uuid(),
-    total_score_cents: 234000,
+    total_score_cents: cx(234000),
     components: {
-      underpriced_products: { amount_cents: 52000, label: 'Pricing', description: 'Items underpriced vs market' },
-      peak_hour_missed: { amount_cents: 84000, label: 'Peak Hours', description: 'Revenue lost from understaffed peak hours' },
-      dead_stock: { amount_cents: 38000, label: 'Dead Stock', description: 'Zero-velocity inventory holding costs' },
-      staffing_waste: { amount_cents: 32000, label: 'Staffing', description: 'Labor cost optimization' },
-      discount_leakage: { amount_cents: 28000, label: 'Discounts', description: 'Excessive discounting eroding margins' },
+      underpriced_products: { amount_cents: cx(52000), label: 'Pricing', description: 'Items underpriced vs market' },
+      peak_hour_missed: { amount_cents: cx(84000), label: 'Peak Hours', description: 'Revenue lost from understaffed peak hours' },
+      dead_stock: { amount_cents: cx(38000), label: 'Dead Stock', description: 'Zero-velocity inventory holding costs' },
+      staffing_waste: { amount_cents: cx(32000), label: 'Staffing', description: 'Labor cost optimization' },
+      discount_leakage: { amount_cents: cx(28000), label: 'Discounts', description: 'Excessive discounting eroding margins' },
     },
     scored_at: hoursAgo(1),
   }
@@ -600,6 +641,7 @@ function generateOverview(daily: DailyRevenue[]): Overview {
 // ─── Transaction Drill-Down ─────────────────────────────
 
 function generateDayTransactions(date: string): DayTransactions {
+  const products = getActiveProducts()
   // Seed from date for consistency
   const dateSeed = date.split('-').reduce((a, b) => a + parseInt(b), 0)
   let localSeed = dateSeed * 16807
@@ -632,11 +674,11 @@ function generateDayTransactions(date: string): DayTransactions {
     for (let j = 0; j < itemCount; j++) {
       let pIdx: number
       do {
-        pIdx = lrRange(0, PRODUCTS.length - 1)
-      } while (usedProducts.has(pIdx) && usedProducts.size < PRODUCTS.length)
+        pIdx = lrRange(0, products.length - 1)
+      } while (usedProducts.has(pIdx) && usedProducts.size < products.length)
       usedProducts.add(pIdx)
 
-      const p = PRODUCTS[pIdx]
+      const p = products[pIdx]
       const qty = lr() < 0.8 ? 1 : 2
       const itemTotal = p.price * qty
       txTotal += itemTotal
@@ -648,8 +690,8 @@ function generateDayTransactions(date: string): DayTransactions {
         product_name: p.name,
         sku: p.sku,
         quantity: qty,
-        unit_price_cents: p.price,
-        total_cents: itemTotal,
+        unit_price_cents: cx(p.price),
+        total_cents: cx(itemTotal),
         category: p.category,
       })
     }
@@ -664,10 +706,10 @@ function generateDayTransactions(date: string): DayTransactions {
     transactions.push({
       id: uuid(),
       created_at: timestamp,
-      total_cents: txTotal - discountCents + tipCents,
-      tip_cents: tipCents,
-      discount_cents: discountCents,
-      refund_cents: refundCents,
+      total_cents: cx(txTotal - discountCents + tipCents),
+      tip_cents: cx(tipCents),
+      discount_cents: cx(discountCents),
+      refund_cents: cx(refundCents),
       payment_method: paymentMethods[lrRange(0, paymentMethods.length - 1)],
       items,
     })
@@ -706,7 +748,7 @@ function generateDayTransactions(date: string): DayTransactions {
 // ─── Inventory ──────────────────────────────────────────
 
 function generateInventory(): InventoryData {
-  const items: InventoryItem[] = PRODUCTS.map((p, i) => {
+  const items: InventoryItem[] = getActiveProducts().map((p, i) => {
     seed = 100 + i * 7
     const dailyUsage = Math.floor(p.popularity * seededRandRange(8, 35))
     const currentStock = seededRandRange(dailyUsage * 2, dailyUsage * 14)
@@ -742,14 +784,25 @@ function generateInventory(): InventoryData {
 
 // ─── Public API ─────────────────────────────────────────
 
-const daily30 = generateDailyRevenue(30)
-const daily90 = generateDailyRevenue(90)
+let _cacheKey: string | null = null
+let _daily30: DailyRevenue[] = []
+let _daily90: DailyRevenue[] = []
+
+function getDaily(days: 30 | 90): DailyRevenue[] {
+  const key = `${getActiveBusinessType()}_${isCanadaPath() ? 'ca' : 'us'}`
+  if (_cacheKey !== key) {
+    _cacheKey = key
+    _daily30 = generateDailyRevenue(30)
+    _daily90 = generateDailyRevenue(90)
+  }
+  return days === 30 ? _daily30 : _daily90
+}
 
 export const demoData = {
-  overview: () => generateOverview(daily30),
+  overview: () => generateOverview(getDaily(30)),
 
   revenue: (days: number): RevenueData => {
-    const daily = days <= 30 ? daily30 : daily90.slice(-days)
+    const daily = days <= 30 ? getDaily(30) : getDaily(90).slice(-days)
     return {
       daily,
       weekly: generateWeeklyRevenue(daily),
@@ -781,9 +834,9 @@ export const demoData = {
   weeklyReport: () => ({
     report: {
       period: `${daysAgo(7)} to ${daysAgo(1)}`,
-      total_revenue_cents: 1285000,
+      total_revenue_cents: cx(1285000),
       revenue_change_pct: 8.2,
-      top_product: 'Cappuccino',
+      top_product: getActiveProducts()[1]?.name || 'Top Product',
       insights_generated: 3,
       forecast_accuracy: 0.94,
     },
