@@ -19,7 +19,7 @@ class CameraPipeline:
         self,
         merchant_id: str,
         camera_configs: list[dict[str, Any]],
-        model_size: str = "yolov8n",
+        model_size: str = "yolo11n",
     ) -> None:
         self._merchant_id = merchant_id
         self._camera_configs = camera_configs

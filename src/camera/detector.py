@@ -14,7 +14,7 @@ PERSON_CLASS = 0
 
 class MeridianDetector:
 
-    def __init__(self, model_size: str = "yolov8n", confidence: float = 0.35) -> None:
+    def __init__(self, model_size: str = "yolo11n", confidence: float = 0.35) -> None:
         self._model = YOLO(model_size)
         self._tracker = sv.ByteTrack()
         self._confidence = confidence

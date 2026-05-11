@@ -53,7 +53,7 @@ class CameraProcessor:
         self.zone_config = camera_config.get("zone_config", {})
         self.active_hours = camera_config.get("active_hours", {"start": "07:00", "end": "22:00"})
 
-        self.model = YOLO("yolov8n.pt")
+        self.model = YOLO("yolo11n.pt")
         self.tracker = None
         self._init_tracker()
 
