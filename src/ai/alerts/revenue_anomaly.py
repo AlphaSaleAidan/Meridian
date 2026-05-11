@@ -2,6 +2,9 @@ from .base import BaseAlert, AlertSeverity
 import statistics
 
 try:
+    import numpy as _np
+    if not hasattr(_np, "asscalar"):
+        _np.asscalar = lambda a: a.item()
     from luminol.anomaly_detector import AnomalyDetector as LuminolDetector
     HAS_LUMINOL = True
 except ImportError:

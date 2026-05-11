@@ -91,7 +91,8 @@ class CustomerLTVAgent(BaseAgent):
                             observation_period_end=df["date"].max(),
                         )
 
-                        bgf = BetaGeoFitter(penalizer_coef=0.01)
+                        penalizer = 0.1 if len(rfm) < 100 else 0.01
+                        bgf = BetaGeoFitter(penalizer_coef=penalizer)
                         bgf.fit(rfm["frequency"], rfm["recency"], rfm["T"])
 
                         rfm["p_alive"] = bgf.conditional_probability_alive(
