@@ -4,8 +4,6 @@ import { Wifi, ChevronRight, Check, Loader2, ShieldCheck, CreditCard, Tag } from
 import { useAuth } from '@/lib/auth'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 
-const SQUARE_CHECKOUT_URL = 'https://square.link/u/0ScYp9tI'
-
 const providers = [
   { id: 'square', label: 'Square', desc: 'POS, payments, inventory', color: '#006AFF' },
   { id: 'clover', label: 'Clover', desc: 'POS, orders, reporting', color: '#43B02A' },
@@ -364,14 +362,9 @@ export default function OnboardingWizard() {
               >
                 Go to Dashboard
               </button>
-              <a
-                href={SQUARE_CHECKOUT_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full text-center text-[11px] text-[#A1A1A8] hover:text-[#1A8FD6] transition-colors pt-1 inline-block"
-              >
-                Manage billing
-              </a>
+              <p className="text-[11px] text-[#A1A1A8]/60 pt-1">
+                Your invoice will be sent separately via text and email.
+              </p>
             </div>
           )}
         </div>

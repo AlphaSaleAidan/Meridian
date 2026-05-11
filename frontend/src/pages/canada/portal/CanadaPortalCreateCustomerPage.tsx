@@ -644,6 +644,7 @@ export default function CanadaPortalCreateCustomerPage() {
             body: JSON.stringify({
               org_id: businessId,
               email: form.email,
+              phone: form.phone || null,
               owner_name: form.ownerName,
               business_name: form.businessName,
               plan: form.plan,

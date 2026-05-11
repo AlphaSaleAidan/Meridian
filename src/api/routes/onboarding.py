@@ -191,6 +191,7 @@ class ProvisionCustomerRequest(BaseModel):
     email: EmailStr
     owner_name: str
     business_name: str
+    phone: str | None = None
     plan: str = "starter"
     monthly_price: int = 500
     rep_id: str | None = None
@@ -204,6 +205,7 @@ class ProvisionCustomerResponse(BaseModel):
     login_url: str
     invoices_sent: bool
     welcome_email_sent: bool
+    invoice_sms_sent: bool = False
 
 
 @router.post("/provision-customer", response_model=ProvisionCustomerResponse)
@@ -324,6 +326,27 @@ async def provision_customer(req: ProvisionCustomerRequest):
     except Exception as e:
         logger.warning(f"Invoice creation failed: {e}")
 
+    # 3b. Send invoice SMS to customer phone
+    sms_sent = False
+    if invoices_sent and req.phone:
+        try:
+            from src.sms.client import send_invoice_sms
+            plan_label = req.plan.replace("_", " ").title()
+            invoice_url = setup_result.invoice_url if setup_result else None
+            sms_result = await send_invoice_sms(
+                phone=req.phone,
+                owner_name=req.owner_name,
+                business_name=req.business_name,
+                invoice_url=invoice_url,
+                plan_label=plan_label,
+                amount_display=f"${req.monthly_price}/mo",
+            )
+            sms_sent = sms_result.get("sent", False)
+            if sms_sent:
+                logger.info(f"Invoice SMS sent to {req.phone} for {req.email}")
+        except Exception as e:
+            logger.warning(f"Invoice SMS failed for {req.phone}: {e}")
+
     # 4. Send welcome email with credentials via Postal
     welcome_sent = False
     login_url = f"{_FRONTEND_URL}/customer/login"
@@ -356,7 +379,42 @@ async def provision_customer(req: ProvisionCustomerRequest):
         login_url=login_url,
         invoices_sent=invoices_sent,
         welcome_email_sent=welcome_sent,
+        invoice_sms_sent=sms_sent,
     )
+
+
+class SendInvoiceSmsRequest(BaseModel):
+    phone: str
+    owner_name: str
+    business_name: str
+    invoice_url: str
+    plan_label: str = "Starter"
+    amount_display: str = "$250/mo"
+
+
+@router.post("/send-invoice-sms")
+async def send_invoice_sms_endpoint(req: SendInvoiceSmsRequest):
+    """Manual resend: sales rep triggers invoice SMS to customer."""
+    from src.sms.client import send_invoice_sms
+
+    result = await send_invoice_sms(
+        phone=req.phone,
+        owner_name=req.owner_name,
+        business_name=req.business_name,
+        invoice_url=req.invoice_url,
+        plan_label=req.plan_label,
+        amount_display=req.amount_display,
+    )
+
+    if not result.get("sent"):
+        raise HTTPException(502, f"SMS delivery failed: {result.get('reason', 'unknown')}")
+
+    return {
+        "status": "sent",
+        "phone": req.phone,
+        "method": result.get("method"),
+        "message_sid": result.get("message_sid"),
+    }
 
 
 def _generate_password() -> str:

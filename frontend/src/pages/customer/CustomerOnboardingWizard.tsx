@@ -378,6 +378,7 @@ export default function CustomerOnboardingWizard() {
             body: JSON.stringify({
               org_id: org?.org_id || prefill.token,
               email: account.email,
+              phone: account.phone || null,
               owner_name: account.ownerName,
               business_name: account.businessName,
               plan: prefill.plan || 'starter',
@@ -751,14 +752,15 @@ export default function CustomerOnboardingWizard() {
                 </div>
                 <p className="text-[14px] font-medium text-[#F5F5F7]">Invoices Sent!</p>
                 <p className="text-[12px] text-[#A1A1A8] mt-1">
-                  Two invoices sent to <span className="text-[#F5F5F7]">{account.email}</span>:
+                  Two invoices sent to <span className="text-[#F5F5F7]">{account.email}</span>
+                  {account.phone && <> and texted to <span className="text-[#F5F5F7]">{account.phone}</span></>}:
                 </p>
                 <div className="mt-2 space-y-1 text-[11px] text-[#A1A1A8]">
                   <p>1. <span className="text-[#F5F5F7]">${monthlyPrice}</span> — Setup fee (due in 3 days)</p>
                   <p>2. <span className="text-[#F5F5F7]">${monthlyPrice}/mo</span> — Monthly recurring (due in 30 days)</p>
                 </div>
                 <p className="text-[11px] text-[#A1A1A8]/60 mt-2">
-                  Pay via the links in your email — your dashboard is ready to use now
+                  Pay via the link in your text or email — your dashboard is ready to use now
                 </p>
               </div>
             ) : (

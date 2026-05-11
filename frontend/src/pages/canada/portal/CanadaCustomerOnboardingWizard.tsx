@@ -307,6 +307,7 @@ export default function CanadaCustomerOnboardingWizard() {
             body: JSON.stringify({
               org_id: org?.org_id || prefill.token,
               email: account.email,
+              phone: account.phone || null,
               owner_name: account.ownerName,
               business_name: account.businessName,
               plan: prefill.plan || 'starter',
