@@ -59,6 +59,11 @@ class AnalysisContext:
     vision_visits: list[dict] = field(default_factory=list)
     vision_visitors: list[dict] = field(default_factory=list)
 
+    # Cross-reference data (camera + POS fusion)
+    customer_journeys: list[dict] = field(default_factory=list)
+    skeletal_data: list[dict] = field(default_factory=list)
+    staff_positions: list[dict] = field(default_factory=list)
+
     # Merchant metadata
     business_vertical: str = "other"
     timezone: str = "America/Los_Angeles"
@@ -86,7 +91,7 @@ class AnalysisResult:
     pattern_analysis: dict = field(default_factory=dict)
     money_left_score: dict = field(default_factory=dict)
 
-    # Agent swarm outputs (27 agents: 22 POS + 5 vision)
+    # Agent swarm outputs (37 agents: 22 POS + 5 vision + 10 cross-ref)
     agent_outputs: dict = field(default_factory=dict)
 
     # Alerts fired
@@ -321,7 +326,34 @@ class MeridianAI:
             logger.error(f"Agent swarm failed: {e}", exc_info=True)
             result.errors.append(f"agent_swarm: {str(e)}")
 
-        # ── Phase 5c: Autonomous Swarm Training ──────────────
+        # ── Phase 5c: Cross-Reference Intelligence (camera + POS) ──
+        if ctx.customer_journeys:
+            try:
+                from .cross_reference_orchestrator import CrossReferenceOrchestrator
+                xref = CrossReferenceOrchestrator(org_id=ctx.org_id)
+                xref_outputs = await xref.analyze_batch(
+                    journeys=ctx.customer_journeys,
+                    transactions=ctx.transactions,
+                    vision_traffic=ctx.vision_traffic,
+                    vision_visitors=ctx.vision_visitors,
+                    vision_visits=ctx.vision_visits,
+                    skeletal_data=ctx.skeletal_data,
+                )
+                result.agent_outputs.update(xref_outputs)
+
+                for agent_name, output in xref_outputs.items():
+                    if isinstance(output, dict) and output.get("status") == "complete":
+                        for insight in output.get("insights", []):
+                            insight.setdefault("source_agent", agent_name)
+                            result.insights.append(insight)
+
+                await xref.persist_insights(xref_outputs)
+                logger.info(f"Cross-reference analysis: {len(xref_outputs)} agents")
+            except Exception as e:
+                logger.error(f"Cross-reference analysis failed: {e}", exc_info=True)
+                result.errors.append(f"cross_reference: {str(e)}")
+
+        # ── Phase 5d: Autonomous Swarm Training ──────────────
         if result.agent_outputs:
             try:
                 from .swarm_trainer import get_swarm_trainer

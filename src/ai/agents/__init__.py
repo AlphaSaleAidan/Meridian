@@ -26,3 +26,20 @@ from .dwell_time import DwellTimeAgent
 from .customer_recognizer import CustomerRecognizerAgent
 from .demographic_profiler import DemographicProfilerAgent
 from .queue_monitor import QueueMonitorAgent
+
+# Cross-Reference Intelligence Agents (camera + POS fusion)
+from .cross_ref import (
+    BaseCrossRefAgent,
+    CrossRefContext,
+    PathToPurchaseAgent,
+    ZoneConversionAgent,
+    LostSaleAgent,
+    InfluenceZoneAgent,
+    StaffEffectAgent,
+    PeakBasketAgent,
+    ReturnCustomerAgent,
+    QueueBasketAgent,
+    PosturePurchaseAgent,
+    ProductPlacementAgent,
+    ALL_CROSS_REF_AGENTS,
+)

@@ -222,16 +222,26 @@ class BaseAgent(ABC):
         ]
 
     def detect_anomalies(self, values: list[float], contamination: float = 0.05) -> list[int]:
-        """Anomaly detection: PyOD IsolationForest or z-score fallback."""
+        """Anomaly detection: PyOD multi-algorithm ensemble or z-score fallback."""
         if len(values) >= 20:
             try:
                 import numpy as np
                 from pyod.models.iforest import IForest
+                from pyod.models.lof import LOF
+                from pyod.models.knn import KNN
 
                 arr = np.array(values).reshape(-1, 1)
-                clf = IForest(contamination=contamination, random_state=42)
-                clf.fit(arr)
-                return clf.labels_.tolist()
+                models = [
+                    IForest(contamination=contamination, random_state=42),
+                    LOF(contamination=contamination, n_neighbors=min(20, len(values) // 2)),
+                    KNN(contamination=contamination, n_neighbors=min(10, len(values) // 3)),
+                ]
+                votes = np.zeros(len(values))
+                for m in models:
+                    m.fit(arr)
+                    votes += m.labels_
+                # Majority vote: anomaly if >=2 of 3 models agree
+                return [1 if v >= 2 else 0 for v in votes]
             except ImportError:
                 logger.debug("PyOD not installed — using z-score fallback")
             except Exception as e:

@@ -1,12 +1,12 @@
 name: meridian-pos-intelligence
-version: 2.0.0
-description: 27-agent POS + Vision Intelligence swarm for Meridian analytics platform
+version: 3.0.0
+description: 37-agent POS + Vision + Cross-Reference Intelligence swarm for Meridian analytics platform
 
 model: claude-haiku-3-5-20251001
 max_tokens: 4096
 
 topology: hierarchical
-max_agents: 27
+max_agents: 37
 strategy: specialized
 consensus: raft
 
@@ -181,6 +181,16 @@ agents:
       - customer-recognizer
       - dwell-time-optimizer
       - demographic-profiler
+      - path-to-purchase
+      - zone-conversion
+      - lost-sale
+      - influence-zone
+      - staff-effect
+      - peak-basket
+      - return-customer
+      - queue-basket
+      - posture-purchase
+      - product-placement
 
   - id: action-prioritizer
     name: Action Prioritizer
@@ -266,6 +276,129 @@ agents:
     schedule: daily
     dependencies: [customer-recognizer, foot-traffic-analyst]
 
+  # ── Cross-Reference Intelligence Agents ──────────────────
+  # Fuse camera journey data with POS transactions
+
+  - id: path-to-purchase
+    name: Path to Purchase
+    role: >
+      Maps the physical zone sequences customers take before buying.
+      Identifies "golden paths" that lead to purchase and "dead-end"
+      routes that lead to walkaway. Uses ReID journey tracking data.
+    inputs: [customer_journeys, transactions]
+    outputs: [golden_paths, dead_end_paths, path_conversion_rates]
+    priority: high
+    schedule: daily
+    dependencies: [foot-traffic-analyst, customer-recognizer]
+
+  - id: zone-conversion
+    name: Zone Conversion
+    role: >
+      Measures per-zone conversion rates and identifies which zones
+      act as purchase accelerators vs dead zones. Calculates conversion
+      lift from visiting specific zones.
+    inputs: [customer_journeys, transactions]
+    outputs: [zone_conversion_rates, accelerator_zones, dead_zones]
+    priority: high
+    schedule: daily
+    dependencies: [foot-traffic-analyst, dwell-time-optimizer]
+
+  - id: lost-sale
+    name: Lost Sale Analyzer
+    role: >
+      Identifies revenue lost from walkaway customers. Analyzes where
+      and why customers leave without buying. Estimates recoverable
+      revenue from high-intent walkaways.
+    inputs: [customer_journeys, transactions]
+    outputs: [walkaway_patterns, exit_zones, recoverable_revenue]
+    priority: high
+    schedule: daily
+    dependencies: [path-to-purchase, zone-conversion]
+
+  - id: influence-zone
+    name: Influence Zone
+    role: >
+      Identifies zones that influence basket size. Measures how visiting
+      certain zones correlates with larger transaction amounts. Finds
+      "upsell zones" that increase ticket size.
+    inputs: [customer_journeys, transactions]
+    outputs: [zone_basket_correlation, upsell_zones, basket_influence_map]
+    priority: medium
+    schedule: daily
+    dependencies: [zone-conversion]
+
+  - id: staff-effect
+    name: Staff Effect
+    role: >
+      Correlates staff proximity with customer conversion rates and
+      basket sizes. Identifies zones that benefit most from staff
+      attention and measures conversion lift from staff presence.
+    inputs: [customer_journeys, transactions, staff_positions]
+    outputs: [staff_conversion_lift, staffing_priorities, zone_staff_impact]
+    priority: medium
+    schedule: daily
+    dependencies: [zone-conversion, staff-performance-analyst]
+
+  - id: peak-basket
+    name: Peak Basket
+    role: >
+      Correlates traffic density with basket composition and size.
+      Finds how crowding affects purchase patterns and whether high-
+      traffic periods produce different basket characteristics.
+    inputs: [customer_journeys, transactions, vision_traffic]
+    outputs: [peak_basket_patterns, traffic_basket_correlation]
+    priority: medium
+    schedule: daily
+    dependencies: [foot-traffic-analyst, peak-hour-optimizer]
+
+  - id: return-customer
+    name: Return Customer
+    role: >
+      Analyzes multi-visit customer behavior by cross-referencing ReID
+      person tracking with POS data. Compares returning vs first-time
+      customer journey and spend patterns.
+    inputs: [customer_journeys, vision_visitors, transactions]
+    outputs: [return_vs_new_stats, loyalty_journey_patterns]
+    priority: medium
+    schedule: daily
+    dependencies: [customer-recognizer, path-to-purchase]
+
+  - id: queue-basket
+    name: Queue Basket
+    role: >
+      Correlates checkout queue wait time with basket size and abandonment.
+      Measures how waiting affects final purchase amount and whether long
+      waits cause item removal or complete abandonment.
+    inputs: [customer_journeys, transactions]
+    outputs: [queue_basket_impact, abandonment_rate, wait_revenue_loss]
+    priority: high
+    schedule: daily
+    dependencies: [queue-monitor, zone-conversion]
+
+  - id: posture-purchase
+    name: Posture Purchase
+    role: >
+      Correlates body gestures (reaching, browsing, carrying) with
+      purchase behavior using FreeMoCap skeletal data. Identifies
+      gesture-based purchase signals and intent indicators.
+    inputs: [customer_journeys, skeletal_data, transactions]
+    outputs: [gesture_purchase_signals, posture_conversion_correlation]
+    priority: low
+    schedule: daily
+    dependencies: [path-to-purchase, zone-conversion]
+
+  - id: product-placement
+    name: Product Placement
+    role: >
+      Optimizes product positioning by cross-referencing which zones get
+      the most dwell time with which products sell best. Identifies
+      placement mismatches and optimization opportunities.
+    inputs: [customer_journeys, transactions, products]
+    outputs: [placement_recommendations, zone_product_alignment, hero_product_map]
+    priority: medium
+    schedule: daily
+    dependencies: [influence-zone, product-intelligence]
+
 coordination:
   shared_context:
     - All agents share a common data context to avoid duplicate analysis
@@ -276,10 +409,11 @@ coordination:
     level_0: [transaction-analyst]
     level_1: [revenue-forecaster, product-intelligence, customer-segmentor, staff-performance-analyst, foot-traffic-analyst, queue-monitor]
     level_2: [retention-strategist, peak-hour-optimizer, inventory-intelligence, margin-optimizer, customer-recognizer]
-    level_3: [competitor-benchmarker, loyalty-architect, location-analyst, dwell-time-optimizer, demographic-profiler]
-    level_4: [insight-narrator]
-    level_5: [action-prioritizer]
-    level_6: [feature-engineer]
+    level_3: [competitor-benchmarker, loyalty-architect, location-analyst, dwell-time-optimizer, demographic-profiler, path-to-purchase, zone-conversion, peak-basket, return-customer, queue-basket]
+    level_4: [lost-sale, influence-zone, staff-effect, posture-purchase, product-placement]
+    level_5: [insight-narrator]
+    level_6: [action-prioritizer]
+    level_7: [feature-engineer]
 
 training:
   enabled: true
