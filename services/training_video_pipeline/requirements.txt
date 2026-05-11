@@ -1,4 +1,7 @@
-mem0ai>=0.1.0
-supabase>=2.0.0
+# 100% free — no paid API keys required for video generation
+edge-tts>=6.1.0
+Pillow>=10.0.0
 python-dotenv>=1.0.0
-httpx>=0.27.0
+
+# Optional: Supabase upload (only if you want cloud hosting)
+# supabase>=2.0.0
