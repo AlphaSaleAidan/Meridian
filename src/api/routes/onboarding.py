@@ -280,32 +280,35 @@ async def provision_customer(req: ProvisionCustomerRequest):
         except Exception as e:
             logger.warning(f"Business upsert warning: {e}")
 
-    # 3. Send Square invoices (setup fee + monthly recurring)
+    # 3. Send setup fee invoice (card stored on payment → auto-billing starts)
     invoices_sent = False
+    setup_result = None
     try:
         from src.billing.billing_service import BillingService
         billing = BillingService(db)
 
         plan_label = req.plan.replace("_", " ").title()
 
+        # Single invoice for setup fee — store_card=True so card is saved
+        # when customer pays. Monthly auto-billing via Square Subscription
+        # is created by the webhook after this invoice is paid.
         setup_result = await billing.create_invoice(
             org_id=req.org_id,
             amount_cents=req.monthly_price * 100,
             customer_email=req.email,
-            description=f"Meridian Analytics - {plan_label} Plan (Setup Fee)",
+            description=f"Meridian Analytics - {plan_label} Plan (Setup + First Month)",
             due_days=3,
-        )
-        recurring_result = await billing.create_invoice(
-            org_id=req.org_id,
-            amount_cents=req.monthly_price * 100,
-            customer_email=req.email,
-            description=f"Meridian Analytics - {plan_label} Plan (Monthly Recurring)",
-            due_days=30,
+            store_card=True,
         )
 
-        invoices_sent = setup_result.success and recurring_result.success
+        invoices_sent = setup_result.success
         if invoices_sent:
-            logger.info(f"Sent invoices for {req.email}: setup={setup_result.invoice_id}, recurring={recurring_result.invoice_id}")
+            logger.info(f"Sent setup invoice for {req.email}: {setup_result.invoice_id}")
+
+            # Get or create Square customer for subscription later
+            customer_id = await billing._get_or_create_customer(
+                req.email, req.owner_name, req.business_name,
+            )
 
             period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
             await db.upsert("subscriptions", {
@@ -319,8 +322,9 @@ async def provision_customer(req: ProvisionCustomerRequest):
                     "payment_method": "square_invoice",
                     "setup_invoice_id": setup_result.invoice_id,
                     "setup_invoice_url": setup_result.invoice_url,
-                    "recurring_invoice_id": recurring_result.invoice_id,
-                    "recurring_invoice_url": recurring_result.invoice_url,
+                    "square_customer_id": customer_id,
+                    "awaiting_auto_subscription": True,
+                    "target_monthly_cents": req.monthly_price * 100,
                     "created_via": "sr_provision",
                     "rep_id": req.rep_id,
                     "auto_renew": True,

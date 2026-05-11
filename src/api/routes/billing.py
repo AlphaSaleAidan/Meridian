@@ -291,11 +291,11 @@ async def check_expiring_trials():
 async def handle_billing_webhook(request: Request):
     """
     Handle Square payment webhook events for subscription billing.
-    Activated when a customer completes a checkout payment.
 
     Key events:
-    - payment.completed → Activate subscription
-    - invoice.payment_made → Record renewal payment
+    - payment.completed → Activate subscription (from checkout)
+    - invoice.payment_made → Card now on file → create Square Subscription
+      for automatic monthly billing (no more manual invoices)
     """
     try:
         body = await request.json()
@@ -311,15 +311,18 @@ async def handle_billing_webhook(request: Request):
             order_id = payment.get("order_id", "")
 
             if order_id:
-                subs = db.table("subscriptions").select("*, organizations(name, email, contact_email)").execute()
+                subs = db.table("subscriptions").select(
+                    "*, organizations(name, email, contact_email, owner_name)"
+                ).execute()
                 for sub in (subs.data or []):
                     meta = sub.get("metadata") or {}
                     if meta.get("square_order_id") == order_id:
+                        now = datetime.now(timezone.utc)
                         db.table("subscriptions").update({
                             "status": "active",
                             "metadata": {
                                 **meta,
-                                "payment_completed_at": datetime.now(timezone.utc).isoformat(),
+                                "payment_completed_at": now.isoformat(),
                                 "square_payment_id": payment.get("id"),
                             },
                         }).eq("id", sub["id"]).execute()
@@ -350,16 +353,72 @@ async def handle_billing_webhook(request: Request):
             invoice_id = invoice.get("id", "")
 
             if invoice_id:
-                subs = db.table("subscriptions").select("*").execute()
+                subs = db.table("subscriptions").select(
+                    "*, organizations(name, email, contact_email, owner_name)"
+                ).execute()
                 for sub in (subs.data or []):
                     meta = sub.get("metadata") or {}
-                    if meta.get("renewal_invoice_id") == invoice_id:
-                        if sub.get("status") == "past_due":
-                            db.table("subscriptions").update({
-                                "status": "active",
-                            }).eq("id", sub["id"]).execute()
-                            logger.info(f"Reactivated subscription from invoice {invoice_id}")
-                        break
+                    matched = (
+                        meta.get("setup_invoice_id") == invoice_id
+                        or meta.get("renewal_invoice_id") == invoice_id
+                    )
+                    if not matched:
+                        continue
+
+                    now = datetime.now(timezone.utc)
+                    org = sub.get("organizations") or {}
+
+                    # Activate if pending/past_due
+                    if sub.get("status") in ("pending_payment", "past_due"):
+                        db.table("subscriptions").update({
+                            "status": "active",
+                            "metadata": {
+                                **meta,
+                                "payment_completed_at": now.isoformat(),
+                            },
+                        }).eq("id", sub["id"]).execute()
+                        logger.info(f"Activated subscription from invoice {invoice_id}")
+
+                    # Create Square auto-subscription if awaiting
+                    if meta.get("awaiting_auto_subscription") and not meta.get("square_subscription_id"):
+                        try:
+                            from src.billing.billing_service import BillingService
+                            billing = BillingService(db)
+                            amount = meta.get("target_monthly_cents") or sub.get("monthly_price_cents", 0)
+
+                            sub_result = await billing.create_auto_subscription(
+                                org_id=sub["org_id"],
+                                amount_cents=amount,
+                                customer_email=org.get("email") or org.get("contact_email", ""),
+                                customer_name=org.get("owner_name", ""),
+                                business_name=org.get("name", ""),
+                                plan=sub.get("tier", "starter"),
+                            )
+
+                            if sub_result.success:
+                                db.table("subscriptions").update({
+                                    "metadata": {
+                                        **meta,
+                                        "square_subscription_id": sub_result.subscription_id,
+                                        "auto_billing": True,
+                                        "awaiting_auto_subscription": False,
+                                        "subscription_start_date": sub_result.start_date,
+                                        "payment_completed_at": now.isoformat(),
+                                    },
+                                }).eq("id", sub["id"]).execute()
+                                logger.info(
+                                    f"Auto-subscription created for org {sub['org_id']}: "
+                                    f"{sub_result.subscription_id}, starts {sub_result.start_date}"
+                                )
+                            else:
+                                logger.warning(
+                                    f"Auto-subscription failed for org {sub['org_id']}: "
+                                    f"{sub_result.error} — will fall back to cron renewals"
+                                )
+                        except Exception as e:
+                            logger.warning(f"Auto-subscription setup error: {e}")
+
+                    break
 
         return {"status": "ok"}
 
