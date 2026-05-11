@@ -1,10 +1,9 @@
 from .base import BaseAgent
 from datetime import datetime, timedelta
 
-# Optional: statsforecast for higher-quality forecasting
 try:
     from statsforecast import StatsForecast
-    from statsforecast.models import AutoARIMA
+    from statsforecast.models import AutoARIMA, AutoETS, AutoTheta, SeasonalNaive
     HAS_STATSFORECAST = True
 except ImportError:
     HAS_STATSFORECAST = False
@@ -55,26 +54,53 @@ class ForecasterAgent(BaseAgent):
                 df["unique_id"] = "revenue"
                 df = df[["unique_id", "ds", "y"]].sort_values("ds").reset_index(drop=True)
 
-                sf = StatsForecast(
-                    models=[AutoARIMA(season_length=7)],
-                    freq="D",
-                    n_jobs=1,
-                )
+                # Adaptive model selection by data availability
+                if n < 30:
+                    models = [SeasonalNaive(season_length=7)]
+                    model_names = ["SeasonalNaive"]
+                elif n < 90:
+                    models = [AutoETS(season_length=7), AutoARIMA(season_length=7)]
+                    model_names = ["AutoETS", "AutoARIMA"]
+                else:
+                    models = [
+                        AutoARIMA(season_length=7),
+                        AutoETS(season_length=7),
+                        AutoTheta(season_length=7),
+                    ]
+                    model_names = ["AutoARIMA", "AutoETS", "AutoTheta"]
+
+                sf = StatsForecast(models=models, freq="D", n_jobs=1)
                 sf.fit(df)
 
                 for horizon_key, horizon_days in [("7_day", 7), ("30_day", 30), ("90_day", 90)]:
                     if n < horizon_days // 4:
                         continue
-                    fc = sf.predict(h=horizon_days, level=[90])
+                    fc = sf.predict(h=horizon_days, level=[80, 95])
                     fc = fc.reset_index()
+
+                    # Ensemble: average across all model point predictions
+                    point_cols = [c for c in fc.columns if c in model_names]
+                    if point_cols:
+                        fc["ensemble_mean"] = fc[point_cols].mean(axis=1)
+                    else:
+                        fc["ensemble_mean"] = fc.iloc[:, 2]
+
+                    # Conservative bounds: widest 80% interval across models
+                    lo_cols = [c for c in fc.columns if c.endswith("-lo-80")]
+                    hi_cols = [c for c in fc.columns if c.endswith("-hi-80")]
+
                     for _, row in fc.iterrows():
-                        day_i = int((_ + 1) if isinstance(_, int) else 1)
                         ds = row["ds"]
                         date_str = ds.strftime("%Y-%m-%d") if hasattr(ds, "strftime") else str(ds)
-                        predicted = max(0, round(row["AutoARIMA"]))
-                        lower = max(0, round(row.get("AutoARIMA-lo-90", predicted * 0.85)))
-                        upper = max(0, round(row.get("AutoARIMA-hi-90", predicted * 1.15)))
-                        # Match the sampling pattern of the manual approach
+                        predicted = max(0, round(row["ensemble_mean"]))
+
+                        if lo_cols and hi_cols:
+                            lower = max(0, round(min(row[c] for c in lo_cols)))
+                            upper = max(0, round(max(row[c] for c in hi_cols)))
+                        else:
+                            lower = max(0, int(predicted * 0.85))
+                            upper = int(predicted * 1.15)
+
                         idx = int(_) + 1
                         if (
                             horizon_key == "7_day"
@@ -90,12 +116,12 @@ class ForecasterAgent(BaseAgent):
                             })
 
                 sf_used = True
-                # Derive slope from statsforecast predictions for summary
                 if forecasts.get("7_day"):
                     first_pred = forecasts["7_day"][0]["predicted_cents"]
                     last_pred = forecasts["7_day"][-1]["predicted_cents"]
                     slope = (last_pred - first_pred) / max(len(forecasts["7_day"]) - 1, 1)
-                error_rate = 0.15  # statsforecast is more accurate
+                # Ensemble is more accurate than single-model
+                error_rate = 0.10 if len(models) >= 3 else 0.15
             except Exception as e:
                 import logging
                 logging.getLogger("meridian.ai.agents").warning(

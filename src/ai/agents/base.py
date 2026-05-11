@@ -106,13 +106,13 @@ class BaseAgent(ABC):
     # ─── ML Engine Methods (lazy-loaded, graceful fallback) ──
 
     def forecast(self, series: list[dict], periods: int = 30) -> list[dict]:
-        """Forecast using statsforecast (preferred), Prophet, or manual fallback."""
-        if len(series) >= 7:
-            # --- Tier 1: statsforecast AutoARIMA (fast, no cmdstan dependency) ---
+        """Forecast using statsforecast ensemble (preferred), Prophet, or manual fallback."""
+        n = len(series)
+        if n >= 7:
             try:
                 import pandas as pd
                 from statsforecast import StatsForecast
-                from statsforecast.models import AutoARIMA
+                from statsforecast.models import AutoARIMA, AutoETS, AutoTheta, SeasonalNaive
 
                 df = pd.DataFrame(series)
                 if "date" in df.columns:
@@ -124,23 +124,46 @@ class BaseAgent(ABC):
                 df["unique_id"] = "series_1"
                 df = df[["unique_id", "ds", "y"]].sort_values("ds").reset_index(drop=True)
 
-                season_length = 7  # weekly seasonality
-                sf = StatsForecast(
-                    models=[AutoARIMA(season_length=season_length)],
-                    freq="D",
-                    n_jobs=1,
-                )
+                if n < 30:
+                    models = [SeasonalNaive(season_length=7)]
+                    model_names = ["SeasonalNaive"]
+                elif n < 90:
+                    models = [AutoETS(season_length=7), AutoARIMA(season_length=7)]
+                    model_names = ["AutoETS", "AutoARIMA"]
+                else:
+                    models = [AutoARIMA(season_length=7), AutoETS(season_length=7), AutoTheta(season_length=7)]
+                    model_names = ["AutoARIMA", "AutoETS", "AutoTheta"]
+
+                sf = StatsForecast(models=models, freq="D", n_jobs=1)
                 sf.fit(df)
-                fc = sf.predict(h=periods, level=[90])
-                return [
-                    {
-                        "date": row["ds"].strftime("%Y-%m-%d") if hasattr(row["ds"], "strftime") else str(row["ds"]),
-                        "predicted": round(row["AutoARIMA"]),
-                        "lower": round(row.get("AutoARIMA-lo-90", row["AutoARIMA"] * 0.85)),
-                        "upper": round(row.get("AutoARIMA-hi-90", row["AutoARIMA"] * 1.15)),
-                    }
-                    for _, row in fc.reset_index().iterrows()
-                ]
+                fc = sf.predict(h=periods, level=[90]).reset_index()
+
+                point_cols = [c for c in fc.columns if c in model_names]
+                if point_cols:
+                    fc["ensemble_mean"] = fc[point_cols].mean(axis=1)
+                else:
+                    fc["ensemble_mean"] = fc.iloc[:, 2]
+
+                lo_cols = [c for c in fc.columns if c.endswith("-lo-90")]
+                hi_cols = [c for c in fc.columns if c.endswith("-hi-90")]
+
+                results = []
+                for _, row in fc.iterrows():
+                    predicted = round(row["ensemble_mean"])
+                    if lo_cols and hi_cols:
+                        lower = round(min(row[c] for c in lo_cols))
+                        upper = round(max(row[c] for c in hi_cols))
+                    else:
+                        lower = int(predicted * 0.85)
+                        upper = int(predicted * 1.15)
+                    ds = row["ds"]
+                    results.append({
+                        "date": ds.strftime("%Y-%m-%d") if hasattr(ds, "strftime") else str(ds),
+                        "predicted": predicted,
+                        "lower": lower,
+                        "upper": upper,
+                    })
+                return results
             except ImportError:
                 logger.debug("statsforecast not installed — trying Prophet")
             except Exception as e:
