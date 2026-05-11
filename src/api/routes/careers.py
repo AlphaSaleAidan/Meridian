@@ -106,6 +106,25 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
     except Exception as e:
         logger.warning("Could not create notification for career application: %s", e)
 
+    # For Canadian applications, also create a sales_reps row so it appears
+    # in the SR portal Team > Applications tab for admin approval.
+    if country == "CA":
+        try:
+            await db.insert("sales_reps", {
+                "id": str(uuid4()),
+                "name": req.name,
+                "email": req.email,
+                "phone": req.phone or None,
+                "commission_rate": 70,
+                "is_active": False,
+                "total_earned": 0,
+                "total_paid": 0,
+                "created_at": now,
+            })
+            logger.info("Created pending sales_reps row for CA applicant %s", req.email)
+        except Exception as e:
+            logger.warning("Could not create sales_reps row for CA applicant: %s", e)
+
     logger.info(
         "%s career application saved: %s (%s) for %s in %s [id=%s]",
         country_label, req.name, req.email, req.position, req.city, app_id,

@@ -1,14 +1,12 @@
 import { useState } from 'react'
-import { Settings, User, Bell, Shield, Check, Wifi, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Settings, User, Bell, Shield, Check, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { supabase } from '@/lib/supabase'
-import POSSystemPicker from '@/components/POSSystemPicker'
 
 export default function CanadaPortalSettingsPage() {
   const { rep } = useSalesAuth()
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
   const [name, setName] = useState(rep?.name || '')
   const [phone, setPhone] = useState(rep?.phone || '')
 
@@ -91,20 +89,6 @@ export default function CanadaPortalSettingsPage() {
             <input type="text" value={rep ? `${rep.commission_rate}%` : ''} className={inputClass} readOnly />
           </div>
         </div>
-      </div>
-
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Wifi size={16} className="text-[#00d4aa]" />
-          <h2 className="text-sm font-semibold text-white">POS System</h2>
-        </div>
-        <p className="text-sm text-[#6b7a74] mb-4">Connect your POS system to sync transactions, inventory, and customer data.</p>
-        <POSSystemPicker
-          value={selectedPOS}
-          onChange={setSelectedPOS}
-          mode="new-customer"
-          portalContext="canada"
-        />
       </div>
 
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">

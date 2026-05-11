@@ -49,24 +49,23 @@ function clearRep() {
 async function resolveRepProfile(email: string): Promise<SalesRepProfile | null> {
   if (!supabase) return null
 
-  // 1. Try to find existing record
+  // 1. Try to find existing record (active or pending approval)
   const { data: repData } = await supabase
     .from('sales_reps')
     .select('*')
     .eq('email', email)
-    .eq('is_active', true)
     .single()
 
   if (repData) return repFromRow(repData)
 
-  // 2. No record — try to auto-create one
+  // 2. No record — try to auto-create one (pending approval)
   const { data: inserted, error: insertErr } = await supabase
     .from('sales_reps')
     .insert({
       name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       email,
       commission_rate: 70,
-      is_active: true,
+      is_active: false,
       total_earned: 0,
       total_paid: 0,
     })
@@ -226,10 +225,10 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     if (error) return error.message
     if (!data.user) return 'Signup failed'
 
-    // 2. Try to create sales_reps record
+    // 2. Create sales_reps record (pending admin approval)
     const { error: insertErr } = await supabase
       .from('sales_reps')
-      .insert({ name, email, phone: phone || null, commission_rate: 70, is_active: true, total_earned: 0, total_paid: 0 })
+      .insert({ name, email, phone: phone || null, commission_rate: 70, is_active: false, total_earned: 0, total_paid: 0 })
 
     // 3. Resolve profile (handles INSERT failure gracefully)
     const profile = await resolveRepProfile(email)
