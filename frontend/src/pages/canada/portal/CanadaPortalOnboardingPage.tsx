@@ -296,7 +296,7 @@ export default function CanadaPortalOnboardingPage() {
                     <div>
                       <p className="text-sm font-semibold text-white">Enoch Cheung</p>
                       <p className="text-xs text-[#6b7a74]">Canadian Regional Director</p>
-                      <p className="text-[10px] text-[#00d4aa] mt-0.5">Nexus Consulting</p>
+                      <p className="text-[10px] text-[#00d4aa] mt-0.5">Meridian AI Business Solutions — CRO</p>
                     </div>
                   </div>
                   <p className="text-xs text-[#6b7a74] mt-4 leading-relaxed">

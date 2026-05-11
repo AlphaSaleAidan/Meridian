@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, ChevronRight, Shield, Clock } from 'lucide-react'
 
-import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
+import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import { TextRevealStagger } from '@/components/landing/TextReveal'
 import ScrollReveal from '@/components/landing/ScrollReveal'
@@ -62,9 +62,12 @@ export default function CanadaLandingPage() {
       {/* NAV */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MeridianLogo size={28} showWordmark showTagline={false} />
-            <span className="text-[9px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] -ml-1 mt-3 self-end">Canada</span>
+          <div className="flex items-center gap-2.5">
+            <MeridianEmblem size={28} />
+            <div className="flex flex-col">
+              <MeridianWordmark height={14} />
+              <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <MagneticButton onClick={() => navigate('/demo')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200">
@@ -274,8 +277,11 @@ export default function CanadaLandingPage() {
         <div className="max-w-content mx-auto px-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <MeridianLogo size={20} showWordmark showTagline={false} />
-              <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] -ml-1">Canada</span>
+              <MeridianEmblem size={20} />
+              <div className="flex flex-col">
+                <MeridianWordmark height={10} />
+                <span className="text-[7px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+              </div>
               <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
                 <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0]" />
                 All systems operational

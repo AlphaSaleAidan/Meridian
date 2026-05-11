@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2, AlertCircle, Linkedin, UserCircle } from 'lucide-react'
-import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
+import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import MagneticButton from '@/components/landing/MagneticButton'
 import { supabase } from '@/lib/supabase'
@@ -56,9 +56,9 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
     id: '1',
     name: 'Enoch Cheung',
     title: 'Canadian Regional Director',
-    company: 'Nexus Consulting',
+    company: 'Meridian AI Business Solutions',
     bio: "Leading Meridian's expansion across Canadian markets. Your primary contact for pipeline strategy, deal support, and regional questions.",
-    linkedin_url: 'https://www.linkedin.com/company/nexusconsulting',
+    linkedin_url: 'https://www.linkedin.com/company/meridian-ai-business-solutions',
     email: 'cheungenochmgmt@gmail.com',
     photo_url: null,
     region: 'canada',
@@ -134,11 +134,12 @@ export default function CanadaCareersPage() {
       {/* NAV */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <MeridianLogo size={28} showWordmark showTagline={false} />
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-red-500/30 text-red-400 bg-red-500/10 font-medium flex items-center gap-1">
-              <span aria-label="CN Tower">&#128508;</span> Canada
-            </span>
+          <div className="flex items-center gap-2.5">
+            <MeridianEmblem size={28} />
+            <div className="flex flex-col">
+              <MeridianWordmark height={14} />
+              <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+            </div>
           </div>
           <MagneticButton onClick={() => navigate('/canada')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200 flex items-center gap-1.5">
             <ArrowLeft size={14} />

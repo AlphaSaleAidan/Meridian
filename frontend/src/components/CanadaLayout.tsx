@@ -52,10 +52,7 @@ export default function CanadaLayout() {
           <MeridianEmblem size={28} animate={false} />
           <div className="flex flex-col">
             <MeridianWordmark height={13} />
-            <div className="flex items-center gap-1 mt-0.5">
-              <MapPin size={8} className="text-red-400" />
-              <span className="text-[8px] text-red-400 font-medium uppercase tracking-wider">Canada</span>
-            </div>
+            <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
           </div>
         </div>
 
