@@ -171,8 +171,8 @@ export default function GarryWidget() {
                               style={{ width: 'auto', height: '44px' }}
                             >
                             <Sparkles size={16} />
-                            <span className="text-[13px] font-bold">Garry</span>span>
-                  </button>button>
+                            <span className="text-[13px] font-bold">Garry</span>
+                  </button>
               )}
         
           {open && (
@@ -182,23 +182,23 @@ export default function GarryWidget() {
                                         <div className="flex items-center gap-2.5">
                                                       <div className="w-8 h-8 rounded-full bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center">
                                                                       <Sparkles size={15} className="text-[#00d4aa]" />
-                                                      </div>div>
+                                                      </div>
                                                       <div>
-                                                                      <p className="text-sm font-bold text-white">Garry</p>p>
-                                                                      <p className="text-[10px] text-[#6b7a74]">Meridian Marketing AI · powered by DeerFlow</p>p>
-                                                      </div>div>
-                                        </div>div>
+                                                                      <p className="text-sm font-bold text-white">Garry</p>
+                                                                      <p className="text-[10px] text-[#6b7a74]">Meridian Marketing AI · powered by DeerFlow</p>
+                                                      </div>
+                                        </div>
                                         <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors">
                                                       <X size={16} />
-                                        </button>button>
-                            </div>div>
+                                        </button>
+                            </div>
                   
                     {/* Messages */}
                             <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[220px] max-h-[420px]">
                               {messages.length === 0 && (
                                   <div className="py-4">
-                                                  <p className="text-sm font-semibold text-white mb-1">Hey, I'm Garry 👋</p>p>
-                                                  <p className="text-xs text-[#6b7a74] mb-4">Your Meridian marketing co-pilot. Give me a brief and I'll write the copy.</p>p>
+                                                  <p className="text-sm font-semibold text-white mb-1">Hey, I'm Garry 👋</p>
+                                                  <p className="text-xs text-[#6b7a74] mb-4">Your Meridian marketing co-pilot. Give me a brief and I'll write the copy.</p>
                                                   <div className="space-y-1.5">
                                                     {QUICK_ACTIONS.map(a => (
                                                         <button
@@ -206,12 +206,12 @@ export default function GarryWidget() {
                                                                                 onClick={() => send(a.prompt)}
                                                                                 className="w-full flex items-center justify-between px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-left hover:border-[#00d4aa]/30 hover:bg-[#1a2420]/50 transition-all group"
                                                                               >
-                                                                              <span className="text-[11px] text-[#6b7a74] group-hover:text-white transition-colors">{a.label}</span>span>
+                                                                              <span className="text-[11px] text-[#6b7a74] group-hover:text-white transition-colors">{a.label}</span>
                                                                               <ChevronRight size={11} className="text-[#4a5550] flex-shrink-0" />
-                                                        </button>button>
+                                                        </button>
                                                       ))}
-                                                  </div>div>
-                                  </div>div>
+                                                  </div>
+                                  </div>
                                         )}
                               {messages.map(msg => (
                                   <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -222,10 +222,10 @@ export default function GarryWidget() {
                                   }`}>
                                                     {msg.text}
                                                     {msg.streaming && <span className="inline-block w-1.5 h-3 bg-[#00d4aa] ml-0.5 animate-pulse rounded-sm" />}
-                                                  </div>div>
-                                  </div>div>
+                                                  </div>
+                                  </div>
                                 ))}
-                            </div>div>
+                            </div>
                   
                     {/* Input */}
                             <div className="px-3 py-3 border-t border-[#1a2420]">
@@ -245,7 +245,7 @@ export default function GarryWidget() {
                                                         className="w-8 h-8 rounded-lg bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center hover:bg-red-500/30 transition-all flex-shrink-0"
                                                       >
                                                       <Square size={12} />
-                                    </button>button>
+                                    </button>
                                   ) : (
                                     <button
                                                         type="submit"
@@ -253,13 +253,13 @@ export default function GarryWidget() {
                                                         className="w-8 h-8 rounded-lg bg-[#00d4aa] text-[#0a0f0d] flex items-center justify-center disabled:opacity-30 hover:bg-[#00d4aa]/90 transition-all flex-shrink-0"
                                                       >
                                                       <Send size={13} />
-                                    </button>button>
+                                    </button>
                                                       )}
-                                        </form>form>
-                                        <p className="text-[9px] text-[#4a5550] mt-1.5 text-center">Shift+Enter for new line · Enter to send</p>p>
-                            </div>div>
-                  </div>div>
+                                        </form>
+                                        <p className="text-[9px] text-[#4a5550] mt-1.5 text-center">Shift+Enter for new line · Enter to send</p>
+                            </div>
+                  </div>
               )}
-        </>>
+        </>
       )
-}</>
+}

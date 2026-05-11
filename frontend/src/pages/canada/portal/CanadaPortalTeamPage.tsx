@@ -606,12 +606,17 @@ export default function CanadaPortalTeamPage() {
             <div className="flex justify-end gap-2 mt-5">
               <button onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
                   const name = editName.trim() || editingMember.name
                   setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
                   if (supabase) {
-                    supabase.from('sales_reps').update({ name, commission_rate: rate }).eq('id', editingMember.id).then(() => {})
+                    const { error } = await supabase.from('sales_reps').update({ name, commission_rate: rate }).eq('id', editingMember.id)
+                    if (error) {
+                      console.error('Failed to save:', error)
+                      alert(`Save failed: ${error.message}`)
+                      return
+                    }
                   }
                   setEditingMember(null)
                 }}
