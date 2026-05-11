@@ -123,6 +123,7 @@ export default function CanadaPortalTeamPage() {
   const [activeTab, setActiveTab] = useState<'reps' | 'payouts' | 'applications'>('reps')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
+  const [editName, setEditName] = useState('')
 
   useEffect(() => {
     async function fetchData() {
@@ -410,7 +411,7 @@ export default function CanadaPortalTeamPage() {
 
                     {admin && (
                       <button
-                        onClick={() => { setEditingMember(member); setEditRate(String(member.commission_rate)) }}
+                        onClick={() => { setEditingMember(member); setEditRate(String(member.commission_rate)); setEditName(member.name) }}
                         className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors"
                       >
                         <MoreVertical size={14} />
@@ -587,12 +588,16 @@ export default function CanadaPortalTeamPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-sm bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-semibold text-white">Edit Payout Rate</h3>
+              <h3 className="text-base font-semibold text-white">Edit Team Member</h3>
               <button onClick={() => setEditingMember(null)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
                 <X size={18} className="text-[#6b7a74]" />
               </button>
             </div>
-            <p className="text-sm text-[#6b7a74] mb-4">{editingMember.name}</p>
+            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Display Name</label>
+            <input
+              type="text" value={editName} onChange={e => setEditName(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white focus:outline-none focus:border-[#00d4aa]/50 mb-4"
+            />
             <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate (%)</label>
             <input
               type="number" min={0} max={100} value={editRate} onChange={e => setEditRate(e.target.value)}
@@ -603,9 +608,10 @@ export default function CanadaPortalTeamPage() {
               <button
                 onClick={() => {
                   const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
-                  setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, commission_rate: rate } : m))
+                  const name = editName.trim() || editingMember.name
+                  setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
                   if (supabase) {
-                    supabase.from('sales_reps').update({ commission_rate: rate }).eq('id', editingMember.id).then(() => {})
+                    supabase.from('sales_reps').update({ name, commission_rate: rate }).eq('id', editingMember.id).then(() => {})
                   }
                   setEditingMember(null)
                 }}
