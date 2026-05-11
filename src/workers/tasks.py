@@ -222,6 +222,29 @@ def train_swarm(self, org_id: str = ""):
         raise self.retry(exc=exc)
 
 
+@shared_task(name="src.workers.tasks.process_billing_renewals")
+def process_billing_renewals():
+    """Daily: create Square invoices for subscriptions due for renewal."""
+    logger.info("Processing billing renewals")
+
+    async def _renewals():
+        from ..db import init_db, close_db
+        from ..billing.billing_service import BillingService
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            billing = BillingService(db)
+            await billing.process_renewals()
+            return {"status": "complete"}
+        finally:
+            await close_db()
+
+    return run_async(_renewals())
+
+
 @shared_task(name="src.workers.tasks.train_swarm_batch")
 def train_swarm_batch():
     """Train swarm on all active merchants' latest outputs."""

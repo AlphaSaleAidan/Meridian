@@ -184,6 +184,63 @@ async def get_billing_status(org_id: str):
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
 
 
+@router.post("/process-renewals")
+async def process_renewals():
+    """
+    Manually trigger subscription renewal processing.
+    Creates Square invoices for any subscriptions past their period end.
+    Normally run by daily Celery beat task.
+    """
+    try:
+        from src.billing.billing_service import BillingService
+
+        db = get_db()
+        service = BillingService(db)
+        await service.process_renewals()
+        return {"status": "ok"}
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Billing service not configured.")
+    except Exception as e:
+        logger.exception("Manual renewal processing failed")
+        raise HTTPException(status_code=500, detail="Renewal processing failed")
+
+
+@router.get("/invoice-url/{org_id}")
+async def get_invoice_url(org_id: str):
+    """
+    Get the latest invoice URL for an org — used for in-platform pay buttons.
+    Returns the most recent setup or recurring invoice link.
+    """
+    try:
+        db = get_db()
+        result = db.table("subscriptions").select("metadata").eq("org_id", org_id).single().execute()
+
+        if not result.data:
+            raise HTTPException(404, "No subscription found")
+
+        meta = result.data.get("metadata") or {}
+
+        renewal_url = meta.get("renewal_invoice_url")
+        setup_url = meta.get("setup_invoice_url")
+        recurring_url = meta.get("recurring_invoice_url")
+
+        invoice_url = renewal_url or recurring_url or setup_url
+
+        if not invoice_url:
+            raise HTTPException(404, "No invoice URL available")
+
+        return {
+            "invoice_url": invoice_url,
+            "org_id": org_id,
+            "type": "renewal" if renewal_url else ("recurring" if recurring_url else "setup"),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Invoice URL lookup failed for {org_id}")
+        raise HTTPException(500, "Could not retrieve invoice URL")
+
+
 @router.post("/check-trials")
 async def check_expiring_trials():
     """

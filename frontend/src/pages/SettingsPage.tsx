@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check, CreditCard } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
@@ -104,6 +104,87 @@ function BusinessTuningPanel() {
               ))}
             </div>
           </DashboardTiltCard>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
+  const [billing, setBilling] = useState<{
+    status: string; tier: string | null; monthly_price_cents?: number;
+    current_period_end?: string; auto_renew?: boolean
+  } | null>(null)
+  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!orgId) return
+    fetch(`${apiUrl}/api/billing/status/${orgId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setBilling(d))
+      .catch(() => {})
+    fetch(`${apiUrl}/api/billing/invoice-url/${orgId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => d && setInvoiceUrl(d.invoice_url))
+      .catch(() => {})
+  }, [orgId, apiUrl])
+
+  const statusLabel = billing?.status === 'active' ? 'Active' :
+    billing?.status === 'pending_payment' ? 'Pending Payment' :
+    billing?.status === 'past_due' ? 'Past Due' :
+    billing?.status === 'trialing' ? 'Trial' : 'No Plan'
+
+  const statusColor = billing?.status === 'active' ? 'text-[#17C5B0]' :
+    billing?.status === 'past_due' ? 'text-red-400' :
+    billing?.status === 'pending_payment' ? 'text-amber-400' : 'text-[#A1A1A8]'
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <CreditCard size={14} className="text-[#7C5CFF]" />
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Billing & Subscription</h3>
+        </div>
+        {invoiceUrl && (
+          <a
+            href={invoiceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 text-xs font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all inline-flex items-center gap-2"
+          >
+            <ExternalLink size={12} />
+            Pay Invoice
+          </a>
+        )}
+      </div>
+      <div className="p-4 sm:p-5 space-y-2 text-xs">
+        <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
+          <span className="text-[#A1A1A8]/60">Status</span>
+          <span className={clsx('font-semibold', statusColor)}>{statusLabel}</span>
+        </div>
+        {billing?.tier && (
+          <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
+            <span className="text-[#A1A1A8]/60">Plan</span>
+            <span className="text-[#F5F5F7] font-medium">{billing.tier.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+          </div>
+        )}
+        {billing?.monthly_price_cents != null && billing.monthly_price_cents > 0 && (
+          <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
+            <span className="text-[#A1A1A8]/60">Monthly</span>
+            <span className="text-[#F5F5F7] font-mono">{formatCents(billing.monthly_price_cents)}</span>
+          </div>
+        )}
+        {billing?.current_period_end && (
+          <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
+            <span className="text-[#A1A1A8]/60">Next Renewal</span>
+            <span className="text-[#A1A1A8]">{new Date(billing.current_period_end).toLocaleDateString()}</span>
+          </div>
+        )}
+        <div className="flex items-center justify-between py-1.5">
+          <span className="text-[#A1A1A8]/60">Auto-Renew</span>
+          <span className={billing?.auto_renew !== false ? 'text-[#17C5B0]' : 'text-[#A1A1A8]'}>
+            {billing?.auto_renew !== false ? 'On' : 'Off'}
+          </span>
         </div>
       </div>
     </div>
@@ -221,8 +302,13 @@ export default function SettingsPage() {
         <BusinessTuningPanel />
       </ScrollReveal>
 
-      {/* API Info */}
+      {/* Billing & Subscription */}
       <ScrollReveal variant="fadeUp" delay={0.2}>
+        <BillingCard orgId={orgId} apiUrl={API_URL} />
+      </ScrollReveal>
+
+      {/* API Info */}
+      <ScrollReveal variant="fadeUp" delay={0.25}>
         <div className="card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-[#F5F5F7] mb-3">API Configuration</h3>
           <div className="space-y-2 text-xs">

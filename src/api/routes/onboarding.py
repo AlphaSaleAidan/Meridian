@@ -7,7 +7,7 @@ Onboarding Routes — New customer account creation and welcome flow.
 import logging
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -307,18 +307,23 @@ async def provision_customer(req: ProvisionCustomerRequest):
         if invoices_sent:
             logger.info(f"Sent invoices for {req.email}: setup={setup_result.invoice_id}, recurring={recurring_result.invoice_id}")
 
+            period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
             await db.upsert("subscriptions", {
                 "org_id": req.org_id,
                 "tier": req.plan,
                 "status": "pending_payment",
                 "monthly_price_cents": req.monthly_price * 100,
                 "current_period_start": now,
+                "current_period_end": period_end,
                 "metadata": {
                     "payment_method": "square_invoice",
                     "setup_invoice_id": setup_result.invoice_id,
+                    "setup_invoice_url": setup_result.invoice_url,
                     "recurring_invoice_id": recurring_result.invoice_id,
+                    "recurring_invoice_url": recurring_result.invoice_url,
                     "created_via": "sr_provision",
                     "rep_id": req.rep_id,
+                    "auto_renew": True,
                 },
             }, on_conflict="org_id")
     except ImportError:

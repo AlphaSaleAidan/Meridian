@@ -304,7 +304,7 @@ class BillingService:
 
             # Find active subscriptions where current_period_end is today or past
             result = self.db.table("subscriptions").select(
-                "*, organizations(name, email, owner_name)"
+                "*, organizations(name, email, owner_name, phone)"
             ).eq(
                 "status", "active"
             ).lte(
@@ -347,7 +347,6 @@ class BillingService:
                 )
 
                 if inv_result.success:
-                    # Update subscription period
                     new_start = now
                     new_end = now + timedelta(days=30)
 
@@ -358,11 +357,29 @@ class BillingService:
                             **(sub.get("metadata") or {}),
                             "last_renewal": now.isoformat(),
                             "renewal_invoice_id": inv_result.invoice_id,
+                            "renewal_invoice_url": inv_result.invoice_url,
                             "months_active": months_active + 1,
                         },
                     }).eq("id", sub["id"]).execute()
 
                     logger.info(f"Renewed subscription for org {org_id}: invoice {inv_result.invoice_id}")
+
+                    # Send renewal SMS if phone on file
+                    phone = org.get("phone")
+                    if phone and inv_result.invoice_url:
+                        try:
+                            from src.sms.client import send_invoice_sms
+                            tier = sub.get("tier", "Standard").replace("_", " ").title()
+                            await send_invoice_sms(
+                                phone=phone,
+                                owner_name=org.get("owner_name", "there"),
+                                business_name=org.get("name", "your business"),
+                                invoice_url=inv_result.invoice_url,
+                                plan_label=f"{tier} (Renewal)",
+                                amount_display=f"${amount / 100:.0f}/mo",
+                            )
+                        except Exception as sms_err:
+                            logger.warning(f"Renewal SMS failed for {org_id}: {sms_err}")
                 else:
                     logger.error(f"Renewal failed for org {org_id}: {inv_result.error}")
 

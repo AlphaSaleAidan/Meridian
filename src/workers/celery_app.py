@@ -58,5 +58,10 @@ celery_app.conf.update(
             "schedule": 21600.0,  # 6 hours
             "options": {"queue": "analysis"},
         },
+        "billing-renewals": {
+            "task": "src.workers.tasks.process_billing_renewals",
+            "schedule": 86400.0,  # 24 hours
+            "options": {"queue": "default"},
+        },
     },
 )
