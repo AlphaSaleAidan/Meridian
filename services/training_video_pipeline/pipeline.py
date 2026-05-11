@@ -267,28 +267,45 @@ Available screen names: {', '.join(screens)}
 
     def _fallback(self, lid, title, content, screens):
         paras = [p.strip() for p in content.split("\n") if p.strip()]
+
+        # Split long paragraphs into sentence groups for more scenes
+        chunks = []
+        for para in paras:
+            sentences = [s.strip() for s in para.replace(". ", ".\n").split("\n") if s.strip()]
+            # Group into chunks of 2-3 sentences for natural narration pace
+            for j in range(0, len(sentences), 2):
+                chunk = " ".join(sentences[j:j + 2])
+                if len(chunk) > 30:
+                    chunks.append(chunk)
+
         scenes = []
         scenes.append({
             "number": 1,
-            "text": f"Welcome to lesson {lid}: {title}. This is going to level up your sales game. Let's dive in.",
+            "text": f"Let's talk about {title}. We'll break this down so you can put it into action right away.",
             "key_point": title,
             "screen": screens[0] if screens else "overview",
             "tone": "Confident",
         })
-        for i, para in enumerate(paras[:6], start=2):
-            key = para[:80].rsplit(" ", 1)[0] if len(para) > 80 else para
-            if not key.endswith("."):
-                key += "..."
+
+        for i, chunk in enumerate(chunks, start=2):
+            # Extract a clean key point: first sentence, truncated to 75 chars
+            first_sent = chunk.split(".")[0].strip()
+            if len(first_sent) > 75:
+                key = first_sent[:72].rsplit(" ", 1)[0] + "..."
+            else:
+                key = first_sent
+
             scenes.append({
                 "number": i,
-                "text": para[:500],
+                "text": chunk,
                 "key_point": key,
-                "screen": screens[i % len(screens)] if screens else "overview",
-                "tone": "Direct",
+                "screen": screens[(i - 1) % len(screens)] if screens else "overview",
+                "tone": "Direct" if i % 3 != 0 else "Warm",
             })
+
         scenes.append({
             "number": len(scenes) + 1,
-            "text": "That covers everything for this lesson. Mark it complete below and keep building your pipeline. Every lesson makes you a stronger closer.",
+            "text": "That wraps up this lesson. Mark it complete in the portal and move on to the next one. You're building real skills here.",
             "key_point": "Mark Complete & Continue",
             "screen": screens[0] if screens else "overview",
             "tone": "Warm",
@@ -633,6 +650,19 @@ async def main():
     logger.info("All done.")
 
 
+CONTENT_JSON = PIPELINE_ROOT / "lesson_content.json"
+
+def _load_local_content():
+    if CONTENT_JSON.exists():
+        try:
+            return json.loads(CONTENT_JSON.read_text())
+        except Exception:
+            pass
+    return {}
+
+_LOCAL_CONTENT = _load_local_content()
+
+
 async def _fetch(lid, sb):
     if sb:
         try:
@@ -641,6 +671,8 @@ async def _fetch(lid, sb):
                 return f"{r.data[0].get('content', '')}\n\n{r.data[0].get('key_takeaways', '')}"
         except Exception:
             pass
+    if lid in _LOCAL_CONTENT:
+        return _LOCAL_CONTENT[lid]["content"]
     return f"Lesson {lid} — content from curriculum config."
 
 

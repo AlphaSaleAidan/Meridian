@@ -6,6 +6,27 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://kbuzufjxwflrutowwnfl.supabase.co'
+const VIDEO_BUCKET = 'training-videos'
+
+const LESSON_VIDEO_KEY: Record<string, string> = {
+  '1': '1_1', '2': '1_2', '3': '1_3', '4': '1_4', '5': '1_5',
+  '6': '2_1', '7': '2_2', '8': '2_3', '9': '2_4',
+  '10': '3_1', '11': '3_2', '12': '3_3', '13': '3_4',
+  '14': '4_1', '15': '4_2', '16': '4_3', '17': '4_4', '18': '4_5',
+  '19': '5_1', '20': '5_2', '21': '5_3', '22': '5_4',
+  '23': '6_1', '24': '6_2', '25': '6_3',
+  '26': '7_1', '27': '7_2', '28': '7_3', '29': '7_4', '30': '7_5',
+  '31': '8_1', '32': '8_2', '33': '8_3', '34': '8_4',
+  '35': '9_1', '36': '9_2', '37': '9_3', '38': '9_4',
+}
+
+function getVideoUrl(lessonId: string): string | undefined {
+  const key = LESSON_VIDEO_KEY[lessonId]
+  if (!key || !SUPABASE_URL) return undefined
+  return `${SUPABASE_URL}/storage/v1/object/public/${VIDEO_BUCKET}/final_${key}.mp4`
+}
+
 interface Lesson {
   id: string
   title: string
@@ -503,19 +524,14 @@ export default function CanadaPortalTrainingPage() {
 
                             {isLessonOpen && (
                               <div className="px-5 pb-4 pl-12 space-y-3">
-                                {lesson.videoUrl && (
+                                {getVideoUrl(lesson.id) && (
                                   <div className="relative rounded-xl overflow-hidden bg-[#0d1117] border border-[#1a2420] shadow-lg mb-4">
                                     <video
-                                      src={lesson.videoUrl}
+                                      src={getVideoUrl(lesson.id)}
                                       controls
                                       className="w-full"
                                       style={{ maxHeight: '400px' }}
                                     />
-                                    {lesson.videoDuration && (
-                                      <p className="text-[10px] text-[#4a5550] px-3 py-1.5">
-                                        {Math.ceil(lesson.videoDuration / 60)} min video
-                                      </p>
-                                    )}
                                   </div>
                                 )}
                                 {lesson.content.map((paragraph, pi) => (
