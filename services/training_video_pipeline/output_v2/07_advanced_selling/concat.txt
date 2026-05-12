@@ -1,0 +1,7 @@
+file '/root/Meridian/services/training_video_pipeline/output_v2/07_advanced_selling/seg_00_title.mp4'
+file '/root/Meridian/services/training_video_pipeline/output_v2/07_advanced_selling/seg_01.mp4'
+file '/root/Meridian/services/training_video_pipeline/output_v2/07_advanced_selling/seg_02.mp4'
+file '/root/Meridian/services/training_video_pipeline/output_v2/07_advanced_selling/seg_03.mp4'
+file '/root/Meridian/services/training_video_pipeline/output_v2/07_advanced_selling/seg_04.mp4'
+file '/root/Meridian/services/training_video_pipeline/output_v2/07_advanced_selling/seg_05.mp4'
+file '/root/Meridian/services/training_video_pipeline/output_v2/07_advanced_selling/seg_99_outro.mp4'

@@ -1,0 +1,15 @@
+{
+  "id": "session-1778480423771",
+  "startedAt": "2026-05-11T06:20:23.771Z",
+  "platform": "linux",
+  "cwd": "/root/Meridian/frontend",
+  "context": {},
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "endedAt": "2026-05-11T07:37:53.780Z",
+  "duration": 4650010
+}

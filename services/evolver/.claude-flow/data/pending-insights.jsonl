@@ -1,0 +1,11 @@
+{"type":"edit","file":"/root/Meridian/AGENTS.md","timestamp":1778212650431}
+{"type":"edit","file":"/root/Meridian/docs/reasoning/remaining-tasks.md","timestamp":1778213490681}
+{"type":"edit","file":"/root/Meridian/services/postal/postal.yml","timestamp":1778213620228}
+{"type":"edit","file":"/root/Meridian/services/postal/docker-compose.yml","timestamp":1778213626678}
+{"type":"edit","file":"/root/Meridian/services/postal/docker-compose.yml","timestamp":1778213675861}
+{"type":"edit","file":"/root/Meridian/scripts/swarm-trainer-daemon.py","timestamp":1778554502747}
+{"type":"edit","file":"/root/Meridian/scripts/scraper-daemon.py","timestamp":1778554526777}
+{"type":"edit","file":"/root/Meridian/scripts/evolver-daemon.sh","timestamp":1778554539244}
+{"type":"edit","file":"/root/Meridian/scripts/start-all-daemons.sh","timestamp":1778554557417}
+{"type":"edit","file":"/root/Meridian/scripts/worker-entrypoint.py","timestamp":1778554710188}
+{"type":"edit","file":"/root/Meridian/Dockerfile.worker","timestamp":1778554718221}

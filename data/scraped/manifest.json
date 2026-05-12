@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "created_at": "2026-05-10T18:07:35.822565+00:00",
+  "sources": {
+    "mckinsey": {
+      "name": "McKinsey & Company",
+      "documents": 0,
+      "words": 0,
+      "ids": []
+    },
+    "hbr": {
+      "name": "Harvard Business Review",
+      "documents": 3,
+      "words": 6653,
+      "ids": [
+        "hbr_baf07e36fe9eef28",
+        "hbr_6c09754b6731d461",
+        "hbr_d5b762eae0852739"
+      ]
+    },
+    "deloitte": {
+      "name": "Deloitte Insights",
+      "documents": 1,
+      "words": 50,
+      "ids": [
+        "deloitte_a87f19abc0f39904"
+      ]
+    },
+    "mit_sloan": {
+      "name": "MIT Sloan Management Review",
+      "documents": 2,
+      "words": 1707,
+      "ids": [
+        "mit_sloan_4ee97023b1dcbc8e",
+        "mit_sloan_19c710ff45ae459e"
+      ]
+    },
+    "a16z": {
+      "name": "Andreessen Horowitz",
+      "documents": 0,
+      "words": 0,
+      "ids": []
+    }
+  },
+  "total_documents": 6,
+  "total_words": 8410
+}

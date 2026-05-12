@@ -512,6 +512,10 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
     from .agents.customer_recognizer import CustomerRecognizerAgent
     from .agents.demographic_profiler import DemographicProfilerAgent
     from .agents.queue_monitor import QueueMonitorAgent
+    from .agents.loyalty_architect import LoyaltyArchitectAgent
+    from .agents.location_analyst import LocationAnalystAgent
+    from .agents.action_prioritizer import ActionPrioritizerAgent
+    from .agents.feature_engineer import FeatureEngineerAgent
 
     tier_1_4_agents = [
         RevenueTrendAgent(ctx),
@@ -530,10 +534,12 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
         WasteShrinkageAgent(ctx),
         StaffingAgent(ctx),
         FootTrafficAgent(ctx),
+        DwellTimeAgent(ctx),
         QueueMonitorAgent(ctx),
         CustomerRecognizerAgent(ctx),
-        DwellTimeAgent(ctx),
         DemographicProfilerAgent(ctx),
+        LoyaltyArchitectAgent(ctx),
+        LocationAnalystAgent(ctx),
     ]
 
     use_reasoning = os.environ.get("MERIDIAN_REASONING", "1") == "1"
@@ -566,6 +572,8 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
         PromoROIAgent(ctx),
         CashFlowForecastAgent(ctx),
         GrowthScoreAgent(ctx),
+        ActionPrioritizerAgent(ctx),
+        FeatureEngineerAgent(ctx),
     ]
 
     if use_reasoning:

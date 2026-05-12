@@ -1,0 +1,13 @@
+{"type":"edit","file":"/root/Meridian/services/deerflow/config.yaml","timestamp":1778529800023}
+{"type":"edit","file":"/root/Meridian/services/training_video_pipeline/.env.example","timestamp":1778529804487}
+{"type":"edit","file":"/root/Meridian/services/training_video_pipeline/requirements.txt","timestamp":1778529805240}
+{"type":"edit","file":"/root/Meridian/services/deerflow/skills/meridian/SKILL.md","timestamp":1778529815116}
+{"type":"edit","file":"/root/Meridian/services/deerflow/skills/meridian/training-script-writer.md","timestamp":1778529826813}
+{"type":"edit","file":"/root/Meridian/services/deerflow/skills/meridian/video-director.md","timestamp":1778529837586}
+{"type":"edit","file":"/root/Meridian/services/deerflow/skills/meridian/training-integrator.md","timestamp":1778529843858}
+{"type":"edit","file":"/root/Meridian/services/training_video_pipeline/__init__.py","timestamp":1778529850659}
+{"type":"edit","file":"/root/Meridian/services/training_video_pipeline/config.py","timestamp":1778529872329}
+{"type":"edit","file":"/root/Meridian/services/training_video_pipeline/pipeline.py","timestamp":1778529953335}
+{"type":"edit","file":"/root/Meridian/supabase/migrations/20260511_training_video_fields.sql","timestamp":1778529966548}
+{"type":"edit","file":"/root/Meridian/frontend/src/pages/canada/portal/CanadaPortalTrainingPage.tsx","timestamp":1778529974626}
+{"type":"edit","file":"/root/Meridian/frontend/src/pages/canada/portal/CanadaPortalTrainingPage.tsx","timestamp":1778529982235}
