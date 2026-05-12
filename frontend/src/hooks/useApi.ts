@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useDemoContext } from '@/lib/demo-context'
 
 interface UseApiState<T> {
   data: T | null
@@ -10,6 +11,7 @@ export function useApi<T>(
   fetcher: () => Promise<T>,
   deps: any[] = []
 ): UseApiState<T> & { refetch: () => void } {
+  const { businessType } = useDemoContext()
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
     loading: true,
@@ -24,7 +26,7 @@ export function useApi<T>(
     } catch (err: any) {
       setState({ data: null, loading: false, error: err.message || 'Unknown error' })
     }
-  }, deps) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [...deps, businessType]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch()

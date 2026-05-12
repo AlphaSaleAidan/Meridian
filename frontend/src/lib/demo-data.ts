@@ -51,8 +51,15 @@ function randFloat(min: number, max: number): number {
   return min + Math.random() * (max - min)
 }
 
-// Seed-based pseudo-random for consistent demo data per session
+// Seed-based pseudo-random for consistent demo data per business type
 let seed = 42
+function resetSeed(): void {
+  const bt = getActiveBusinessType()
+  const SEED_MAP: Record<string, number> = {
+    coffee_shop: 42, restaurant: 137, fast_food: 271, auto_shop: 389, smoke_shop: 523,
+  }
+  seed = SEED_MAP[bt] ?? 42
+}
 function seededRand(): number {
   seed = (seed * 16807) % 2147483647
   return (seed - 1) / 2147483646
@@ -792,9 +799,10 @@ function getDaily(days: 30 | 90): DailyRevenue[] {
 }
 
 export const demoData = {
-  overview: () => generateOverview(getDaily(30)),
+  overview: () => { resetSeed(); return generateOverview(getDaily(30)) },
 
   revenue: (days: number): RevenueData => {
+    resetSeed()
     const daily = days <= 30 ? getDaily(30) : getDaily(90).slice(-days)
     return {
       daily,
@@ -802,36 +810,41 @@ export const demoData = {
     }
   },
 
-  hourlyRevenue: (): HourlyData => generateHourlyData(),
+  hourlyRevenue: (): HourlyData => { resetSeed(); return generateHourlyData() },
 
-  products: (days: number): ProductsData => generateProducts(days),
+  products: (days: number): ProductsData => { resetSeed(); return generateProducts(days) },
 
   insights: (limit: number) => {
+    resetSeed()
     const all = generateInsights()
     return { insights: all.insights.slice(0, limit), total: all.total }
   },
 
-  forecasts: () => generateForecasts(),
+  forecasts: () => { resetSeed(); return generateForecasts() },
 
   notifications: (limit: number) => {
+    resetSeed()
     const all = generateNotifications()
     return { notifications: all.notifications.slice(0, limit), total: all.total }
   },
 
-  connection: () => generateConnection(),
+  connection: () => { resetSeed(); return generateConnection() },
 
-  dayTransactions: (date: string) => generateDayTransactions(date),
+  dayTransactions: (date: string) => { resetSeed(); return generateDayTransactions(date) },
 
-  inventory: () => generateInventory(),
+  inventory: () => { resetSeed(); return generateInventory() },
 
-  weeklyReport: () => ({
-    report: {
-      period: `${daysAgo(7)} to ${daysAgo(1)}`,
-      total_revenue_cents: cx(1285000),
-      revenue_change_pct: 8.2,
-      top_product: getActiveProducts()[1]?.name || 'Top Product',
-      insights_generated: 3,
-      forecast_accuracy: 0.94,
-    },
-  }),
+  weeklyReport: () => {
+    resetSeed()
+    return {
+      report: {
+        period: `${daysAgo(7)} to ${daysAgo(1)}`,
+        total_revenue_cents: cx(1285000),
+        revenue_change_pct: 8.2,
+        top_product: getActiveProducts()[1]?.name || 'Top Product',
+        insights_generated: 3,
+        forecast_accuracy: 0.94,
+      },
+    }
+  },
 }
