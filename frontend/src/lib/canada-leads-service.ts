@@ -1,38 +1,5 @@
 import { supabase } from './supabase'
 import type { Deal, DealStage } from './canada-sales-demo-data'
-import { getSeedDeals } from './canada-sales-demo-data'
-
-const STORAGE_KEY = 'meridian_canada_leads'
-const SEEDED_FLAG = 'meridian_canada_leads_seeded'
-
-function loadLocal(): Deal[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
-}
-
-function saveLocal(deals: Deal[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(deals))
-}
-
-/** Seed localStorage with demo deals on first-ever load (once only). */
-function ensureSeeded(): void {
-  try {
-    if (localStorage.getItem(SEEDED_FLAG)) return
-    const existing = loadLocal()
-    if (existing.length > 0) {
-      // Already has data, mark as seeded and skip
-      localStorage.setItem(SEEDED_FLAG, '1')
-      return
-    }
-    const seed = getSeedDeals()
-    saveLocal(seed)
-    localStorage.setItem(SEEDED_FLAG, '1')
-  } catch {
-    // localStorage unavailable, skip silently
-  }
-}
 
 function rowToDeal(row: Record<string, unknown>): Deal {
   return {
@@ -57,98 +24,72 @@ function rowToDeal(row: Record<string, unknown>): Deal {
 
 export const canadaLeadsService = {
   async list(): Promise<Deal[]> {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('canada_leads')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (!error && data && data.length > 0) return data.map(rowToDeal)
-    }
-    // Ensure seed data exists for first-time users
-    ensureSeeded()
-    return loadLocal()
+    if (!supabase) return []
+    const { data, error } = await supabase
+      .from('canada_leads')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error || !data) return []
+    return data.map(rowToDeal)
   },
 
   async getById(id: string): Promise<Deal | null> {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('canada_leads')
-        .select('*')
-        .eq('id', id)
-        .single()
-      if (!error && data) return rowToDeal(data)
-    }
-    return loadLocal().find(d => d.id === id) ?? null
+    if (!supabase) return null
+    const { data, error } = await supabase
+      .from('canada_leads')
+      .select('*')
+      .eq('id', id)
+      .single()
+    if (error || !data) return null
+    return rowToDeal(data)
   },
 
   async create(deal: Deal): Promise<Deal> {
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('canada_leads')
-        .insert({
-          id: deal.id,
-          business_name: deal.business_name,
-          contact_name: deal.contact_name,
-          contact_email: deal.contact_email,
-          contact_phone: deal.contact_phone,
-          vertical: deal.vertical,
-          stage: deal.stage,
-          monthly_value: deal.monthly_value,
-          commission_rate: deal.commission_rate,
-          expected_close_date: deal.expected_close_date,
-          notes: deal.notes,
-          source: deal.source || '',
-          city: deal.city || '',
-          province: deal.province || '',
-        })
-        .select()
-        .single()
-      if (!error && data) return rowToDeal(data)
-    }
-    const all = loadLocal()
-    all.unshift(deal)
-    saveLocal(all)
+    if (!supabase) return deal
+    const { data, error } = await supabase
+      .from('canada_leads')
+      .insert({
+        id: deal.id,
+        business_name: deal.business_name,
+        contact_name: deal.contact_name,
+        contact_email: deal.contact_email,
+        contact_phone: deal.contact_phone,
+        vertical: deal.vertical,
+        stage: deal.stage,
+        monthly_value: deal.monthly_value,
+        commission_rate: deal.commission_rate,
+        expected_close_date: deal.expected_close_date,
+        notes: deal.notes,
+        source: deal.source || '',
+        city: deal.city || '',
+        province: deal.province || '',
+      })
+      .select()
+      .single()
+    if (!error && data) return rowToDeal(data)
     return deal
   },
 
   async updateStage(id: string, stage: DealStage): Promise<void> {
+    if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    if (supabase) {
-      await supabase
-        .from('canada_leads')
-        .update({ stage, updated_at: now })
-        .eq('id', id)
-    }
-    const all = loadLocal()
-    const idx = all.findIndex(d => d.id === id)
-    if (idx >= 0) {
-      all[idx].stage = stage
-      all[idx].updated_at = now
-      saveLocal(all)
-    }
+    await supabase
+      .from('canada_leads')
+      .update({ stage, updated_at: now })
+      .eq('id', id)
   },
 
   async update(id: string, updates: Partial<Deal>): Promise<void> {
+    if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    if (supabase) {
-      await supabase
-        .from('canada_leads')
-        .update({ ...updates, updated_at: now })
-        .eq('id', id)
-    }
-    const all = loadLocal()
-    const idx = all.findIndex(d => d.id === id)
-    if (idx >= 0) {
-      all[idx] = { ...all[idx], ...updates, updated_at: now }
-      saveLocal(all)
-    }
+    await supabase
+      .from('canada_leads')
+      .update({ ...updates, updated_at: now })
+      .eq('id', id)
   },
 
   async delete(id: string): Promise<void> {
-    if (supabase) {
-      await supabase.from('canada_leads').delete().eq('id', id)
-    }
-    const all = loadLocal().filter(d => d.id !== id)
-    saveLocal(all)
+    if (!supabase) return
+    await supabase.from('canada_leads').delete().eq('id', id)
   },
 }

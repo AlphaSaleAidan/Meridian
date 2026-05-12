@@ -275,10 +275,7 @@ export function canAccessPortal(rep: SalesRepProfile | null, portal: 'us' | 'can
   return rep.portal_context === portal
 }
 
-function resolvePortalContext(email: string): PortalContext {
-  const e = email.toLowerCase()
-  if (e.includes('enoch')) return 'canada'
-  if (e.includes('aidan')) return 'all'
+function resolvePortalContext(_email: string): PortalContext {
   return 'all'
 }
 

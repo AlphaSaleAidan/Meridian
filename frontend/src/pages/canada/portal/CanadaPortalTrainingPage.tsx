@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://kbuzufjxwflrutowwnfl.supabase.co'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
 const VIDEO_BUCKET = 'training-videos'
 
 const LESSON_VIDEO_KEY: Record<string, string> = {
