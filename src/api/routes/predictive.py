@@ -38,13 +38,56 @@ async def _load_ctx_and_outputs(org_id: str, days: int = 30):
 
     # SupabaseREST uses .select(); SupabaseDB uses direct query methods
     if hasattr(db, "get_daily_revenue"):
-        daily, hourly, products, transactions, inventory = await _asyncio.gather(
+        # get_recent_transactions is the correct method name in SupabaseREST
+        # (get_transaction_details does not exist)
+        _get_transactions = getattr(db, "get_transaction_details", None) or getattr(db, "get_recent_transactions", None)
+        _get_inventory = getattr(db, "get_inventory_current", None)
+
+        daily, hourly, products = await _asyncio.gather(
             db.get_daily_revenue(org_id, days),
             db.get_hourly_revenue(org_id, days),
             db.get_product_performance(org_id, days),
-            db.get_transaction_details(org_id, days),
-            db.get_inventory_current(org_id),
         )
+
+        # Fetch transactions and inventory with graceful fallback
+        transactions = []
+        inventory = []
+        if _get_transactions:
+            try:
+                transactions = await _get_transactions(org_id, days)
+            except Exception as e:
+                logger.warning(f"Failed to load transactions: {e}")
+        else:
+            # Fallback: use SupabaseREST.select() directly
+            try:
+                from datetime import datetime, timezone, timedelta
+                cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+                transactions = await db.select(
+                    "transactions",
+                    filters={
+                        "org_id": f"eq.{org_id}",
+                        "transaction_at": f"gte.{cutoff}",
+                    },
+                    order="transaction_at.desc",
+                    limit=5000,
+                )
+            except Exception as e:
+                logger.warning(f"Fallback transactions query failed: {e}")
+
+        if _get_inventory:
+            try:
+                inventory = await _get_inventory(org_id)
+            except Exception as e:
+                logger.warning(f"Failed to load inventory: {e}")
+        else:
+            # Fallback: use SupabaseREST.select() directly
+            try:
+                inventory = await db.select(
+                    "inventory",
+                    filters={"org_id": f"eq.{org_id}"},
+                )
+            except Exception as e:
+                logger.warning(f"Fallback inventory query failed: {e}")
     else:
         daily = hourly = products = transactions = inventory = []
 

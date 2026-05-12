@@ -407,6 +407,20 @@ class SupabaseREST:
             limit=limit,
         )
 
+    # Aliases used by predictive routes
+    async def get_transaction_details(
+        self, org_id: str, days: int = 30, limit: int = 5000
+    ) -> list[dict]:
+        """Alias for get_recent_transactions (used by predictive engine)."""
+        return await self.get_recent_transactions(org_id, days, limit)
+
+    async def get_inventory_current(self, org_id: str) -> list[dict]:
+        """Get current inventory levels for an org."""
+        return await self.select(
+            "inventory",
+            filters={"org_id": f"eq.{org_id}"},
+        )
+
     async def save_insights(self, insights: list[dict]) -> int:
         """Persist AI-generated insights."""
         if not insights:
