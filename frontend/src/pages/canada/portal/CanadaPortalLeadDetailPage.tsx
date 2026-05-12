@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2,
-  FileText, Eye, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
+  ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
+  FileText, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
@@ -10,25 +10,32 @@ import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { getPlan } from '@/lib/canada-proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
+import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type InvoiceInput } from '@/lib/generate-invoice-pdf'
+import { generateSlaDocument, type SlaInput } from '@/lib/generate-sla-pdf'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { supabase } from '@/lib/supabase'
 
-const STAGE_TO_STEP: Record<DealStage, number> = {
-  prospecting: 1,
-  contacted: 2,
-  demo_scheduled: 3,
-  proposal_sent: 4,
-  negotiation: 5,
-  closed_won: 6,
+const STAGE_TO_STEP: Record<string, number> = {
+  proposal_shown: 1,
+  customer_checkout: 2,
+  pos_connected: 3,
+  customer_walkthrough: 4,
   closed_lost: 0,
+  // Legacy mappings
+  appointment_set: 1,
+  prospecting: 1,
+  contacted: 1,
+  demo_scheduled: 1,
+  proposal_sent: 1,
+  negotiation: 2,
+  closed_won: 4,
 }
 
 const STEPS = [
-  { num: 1, label: 'Prospecting' },
-  { num: 2, label: 'Contacted' },
-  { num: 3, label: 'Demo' },
-  { num: 4, label: 'Proposal Sent' },
-  { num: 5, label: 'Negotiation' },
-  { num: 6, label: 'Closed Won' },
+  { num: 1, label: 'Proposal Shown' },
+  { num: 2, label: 'Customer Checkout' },
+  { num: 3, label: 'POS Connected' },
+  { num: 4, label: 'Customer Walkthrough' },
 ]
 
 const DEMO_FILES = [
@@ -97,11 +104,38 @@ export default function CanadaPortalLeadDetailPage() {
   const [proposalEmailing, setProposalEmailing] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
 
+  // Invoice state
+  const [invoiceBlob, setInvoiceBlob] = useState<Blob | null>(null)
+  const [invoiceGenerating, setInvoiceGenerating] = useState(false)
+  const [invoiceNumber, setInvoiceNumber] = useState('')
+  const [invoiceEmailing, setInvoiceEmailing] = useState(false)
+  const [invoiceEmailed, setInvoiceEmailed] = useState(false)
+
+  // SLA state
+  const [slaBlob, setSlaBlob] = useState<Blob | null>(null)
+  const [slaGenerating, setSlaGenerating] = useState(false)
+  const [slaSigned, setSlaSigned] = useState(false)
+  const [slaSignature, setSlaSignature] = useState('')
+  const [slaSigning, setSlaSigning] = useState(false)
+  const [slaEmailing, setSlaEmailing] = useState(false)
+  const [slaEmailed, setSlaEmailed] = useState(false)
+  const [showSlaSign, setShowSlaSign] = useState(false)
+
   // Step 4 state
   const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
   const [posConnecting, setPosConnecting] = useState(false)
   const [posConnected, setPosConnected] = useState(false)
   const [posError, setPosError] = useState<string | null>(null)
+
+  const [posVerifying, setPosVerifying] = useState(false)
+  const [posPending, setPosPending] = useState<string | null>(null)
+
+  // Customer account creation state
+  const [customerCreating, setCustomerCreating] = useState(false)
+  const [customerCredentials, setCustomerCredentials] = useState<{ email: string; password: string } | null>(null)
+  const [customerError, setCustomerError] = useState<string | null>(null)
+  const [credentialEmailing, setCredentialEmailing] = useState(false)
+  const [credentialEmailed, setCredentialEmailed] = useState(false)
 
   async function handleCredentialSubmit(posKey: string, credentials: Record<string, string>) {
     const system = getPosSystem(posKey)
@@ -109,13 +143,20 @@ export default function CanadaPortalLeadDetailPage() {
 
     const { valid, errors } = validateCredentials(system, credentials)
     if (!valid) {
-      const firstError = Object.values(errors)[0]
-      setPosError(firstError)
+      const allErrors = Object.values(errors)
+      setPosError(allErrors.length > 1 ? `Missing fields: ${allErrors.join(', ')}` : allErrors[0])
+      return
+    }
+
+    const filledCount = Object.values(credentials).filter(v => v.trim()).length
+    if (filledCount === 0) {
+      setPosError('Please fill in the required credential fields above.')
       return
     }
 
     setPosConnecting(true)
     setPosError(null)
+    setPosPending(null)
 
     const { provider, credentials: creds } = serializeCredentials(system, credentials)
 
@@ -134,21 +175,352 @@ export default function CanadaPortalLeadDetailPage() {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        setPosError(body.detail || 'Connection failed — check credentials and try again.')
+        setPosError(body.detail || `Connection failed for ${system.name}. Double-check your credentials and try again.`)
         setPosConnecting(false)
         return
       }
 
-      setPosConnected(true)
       setPosConnecting(false)
+      setPosVerifying(true)
 
-      if (deal && deal.stage === 'proposal_sent') {
-        await canadaLeadsService.updateStage(deal.id, 'negotiation')
-        setDeal(prev => prev ? { ...prev, stage: 'negotiation' } : prev)
+      const verifyRes = await fetch(`${API_BASE}/api/onboarding/verify-pos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deal_id: deal?.id, provider }),
+      }).catch(() => null)
+
+      if (verifyRes && verifyRes.ok) {
+        setPosConnected(true)
+        setPosVerifying(false)
+        if (deal) {
+          await canadaLeadsService.updateStage(deal.id, 'pos_connected')
+          setDeal(prev => prev ? { ...prev, stage: 'pos_connected' } : prev)
+        }
+      } else {
+        setPosVerifying(false)
+        setPosPending(`${system.name} credentials saved — waiting for data verification. The swarm will confirm data is flowing and notify you.`)
+        if (deal && deal.stage !== 'pos_connected' && deal.stage !== 'customer_walkthrough') {
+          await canadaLeadsService.updateStage(deal.id, 'customer_checkout')
+          setDeal(prev => prev ? { ...prev, stage: 'customer_checkout' } : prev)
+        }
       }
     } catch {
-      setPosError('Network error — please try again.')
+      setPosError(`Could not reach the server. Check your internet connection and try again.`)
       setPosConnecting(false)
+    }
+  }
+
+  function generatePassword(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
+    let pw = ''
+    for (let i = 0; i < 12; i++) pw += chars[Math.floor(Math.random() * chars.length)]
+    return pw
+  }
+
+  async function handleCreateCustomerAccount() {
+    if (!deal) return
+    setCustomerCreating(true)
+    setCustomerError(null)
+
+    const email = deal.contact_email
+    const password = generatePassword()
+
+    try {
+      if (!supabase) throw new Error('Database not connected')
+
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${API_BASE}/api/canada/create-customer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          business_name: deal.business_name,
+          contact_name: deal.contact_name,
+          phone: deal.contact_phone,
+          vertical: deal.vertical,
+          deal_id: deal.id,
+          monthly_price: monthlyPrice,
+          portal: 'canada',
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.detail || 'Failed to create customer account')
+      }
+
+      setCustomerCredentials({ email, password })
+      await canadaLeadsService.updateStage(deal.id, 'customer_walkthrough')
+      setDeal(prev => prev ? { ...prev, stage: 'customer_walkthrough' } : prev)
+    } catch (err) {
+      setCustomerError(err instanceof Error ? err.message : 'Failed to create account')
+    } finally {
+      setCustomerCreating(false)
+    }
+  }
+
+  async function handleEmailCredentials() {
+    if (!deal || !customerCredentials) return
+    setCredentialEmailing(true)
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      await fetch(`${API_BASE}/api/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: 'customer_credentials',
+          to: deal.contact_email,
+          first_name: deal.contact_name.split(' ')[0],
+          portal: 'canada',
+          extra: {
+            business_name: deal.business_name,
+            email: customerCredentials.email,
+            password: customerCredentials.password,
+            login_url: `${window.location.origin}/canada/login`,
+            rep_name: rep?.name || '',
+            rep_email: rep?.email || '',
+          },
+        }),
+      })
+      setCredentialEmailed(true)
+    } catch {
+      setCustomerError('Failed to send email — you can share the credentials manually.')
+    } finally {
+      setCredentialEmailing(false)
+    }
+  }
+
+  async function handleGenerateInvoice() {
+    if (!deal || !rep) return
+    setInvoiceGenerating(true)
+    try {
+      const invNum = invoiceNumber || generateInvoiceNumber()
+      if (!invoiceNumber) setInvoiceNumber(invNum)
+
+      const now = new Date()
+      const dueDate = new Date(now)
+      dueDate.setDate(dueDate.getDate() + 30)
+
+      const planName = monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard'
+      const priceCents = Math.round(monthlyPrice * 100)
+      const setupFeeCents = Math.round((Number(setupFee) || 0) * 100)
+
+      let checkoutUrl = generateInvoiceUrl(invNum)
+
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      try {
+        const checkoutRes = await fetch(`${API_BASE}/api/billing/create-checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            org_id: deal.id,
+            plan: planName.toLowerCase(),
+            monthly_price_cents: priceCents,
+            customer_email: deal.contact_email,
+            customer_name: deal.contact_name,
+            business_name: deal.business_name,
+            return_url: `${window.location.origin}/canada/login`,
+            setup_fee_cents: setupFeeCents,
+            first_month_free: firstMonthFree,
+            rep_id: rep.rep_id || '',
+            rep_name: rep.name,
+          }),
+        })
+        if (checkoutRes.ok) {
+          const data = await checkoutRes.json()
+          if (data.checkout_url) checkoutUrl = data.checkout_url
+        }
+      } catch {
+        // Square checkout unavailable — fall back to local invoice URL
+      }
+
+      const input: InvoiceInput = {
+        invoiceNumber: invNum,
+        businessName: deal.business_name,
+        contactName: deal.contact_name,
+        contactEmail: deal.contact_email,
+        contactPhone: deal.contact_phone,
+        monthlyPrice,
+        setupFee: Number(setupFee) || 0,
+        firstMonthFree,
+        planName,
+        billingDate: now.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' }),
+        dueDate: dueDate.toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' }),
+        repName: rep.name,
+        repEmail: rep.email,
+        recurring: true,
+        invoiceUrl: checkoutUrl,
+      }
+
+      const blob = await generateInvoicePdf(input)
+      setInvoiceBlob(blob)
+
+      if (deal.stage === 'proposal_shown' || deal.stage === 'appointment_set') {
+        await canadaLeadsService.updateStage(deal.id, 'customer_checkout')
+        setDeal(prev => prev ? { ...prev, stage: 'customer_checkout' } : prev)
+      }
+    } catch (err) {
+      console.error('[Invoice] Generation failed:', err)
+    } finally {
+      setInvoiceGenerating(false)
+    }
+  }
+
+  function handleDownloadInvoice() {
+    if (!invoiceBlob || !deal) return
+    const url = URL.createObjectURL(invoiceBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Meridian_Invoice_${invoiceNumber || 'draft'}_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleEmailInvoice() {
+    if (!deal) return
+    if (!invoiceBlob) await handleGenerateInvoice()
+    setInvoiceEmailing(true)
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      await fetch(`${API_BASE}/api/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: 'invoice_sent',
+          to: deal.contact_email,
+          first_name: deal.contact_name.split(' ')[0],
+          portal: 'canada',
+          extra: {
+            business_name: deal.business_name,
+            invoice_number: invoiceNumber,
+            amount: `CA$${monthlyPrice.toLocaleString()}`,
+            rep_name: rep?.name || '',
+            rep_email: rep?.email || '',
+            invoice_url: generateInvoiceUrl(invoiceNumber),
+            recurring: true,
+          },
+        }),
+      })
+      setInvoiceEmailed(true)
+    } catch (err) {
+      console.error('[Invoice] Email failed:', err)
+    } finally {
+      setInvoiceEmailing(false)
+    }
+  }
+
+  async function handleGenerateSla() {
+    if (!deal || !rep) return
+    setSlaGenerating(true)
+    try {
+      const slaInput: SlaInput = {
+        clientCompanyName: deal.business_name,
+        province: deal.province || 'Ontario',
+        posSystem: selectedPOS || 'Unknown',
+        repName: rep.name || 'Sales Representative',
+        monthlyPriceCad: monthlyPrice * 100,
+        setupFeeCad: (Number(setupFee) || 0) * 100,
+        startDate: new Date().toISOString().slice(0, 10),
+      }
+      const blob = await generateSlaDocument(slaInput)
+      setSlaBlob(blob)
+    } catch (err) {
+      console.error('[SLA] Generation failed:', err)
+    } finally {
+      setSlaGenerating(false)
+    }
+  }
+
+  function handleDownloadSla() {
+    if (!slaBlob || !deal) return
+    const url = URL.createObjectURL(slaBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Meridian_SLA_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  async function handleSignSla() {
+    if (!slaSignature.trim() || !deal || !rep) return
+    setSlaSigning(true)
+    try {
+      const slaInput: SlaInput = {
+        clientCompanyName: deal.business_name,
+        province: deal.province || 'Ontario',
+        posSystem: selectedPOS || 'Unknown',
+        repName: rep.name || 'Sales Representative',
+        monthlyPriceCad: monthlyPrice * 100,
+        setupFeeCad: (Number(setupFee) || 0) * 100,
+        startDate: new Date().toISOString().slice(0, 10),
+        clientSignature: slaSignature,
+      }
+      const signedBlob = await generateSlaDocument(slaInput)
+      setSlaBlob(signedBlob)
+      setSlaSigned(true)
+      setShowSlaSign(false)
+
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      try {
+        await fetch(`${API_BASE}/api/email/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: deal.contact_email,
+            template: 'sla_signed',
+            portal: 'canada',
+            extra: {
+              business_name: deal.business_name,
+              rep_name: rep.name || '',
+              rep_email: rep.email || '',
+              signed_by: slaSignature,
+              signed_date: new Date().toLocaleDateString('en-CA'),
+              provider_signatory: 'Aidan Pierce, Founder & CEO',
+            },
+          }),
+        })
+        setSlaEmailed(true)
+      } catch {
+        // Email send is best-effort — SLA is still signed
+      }
+    } catch (err) {
+      console.error('[SLA] Sign failed:', err)
+    } finally {
+      setSlaSigning(false)
+    }
+  }
+
+  async function handleEmailSla() {
+    if (!deal || !slaBlob) return
+    setSlaEmailing(true)
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      await fetch(`${API_BASE}/api/email/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: deal.contact_email,
+          template: 'sla_signed',
+          portal: 'canada',
+          extra: {
+            business_name: deal.business_name,
+            rep_name: rep?.name || '',
+            rep_email: rep?.email || '',
+            signed_by: slaSignature,
+            signed_date: new Date().toLocaleDateString('en-CA'),
+          },
+        }),
+      })
+      setSlaEmailed(true)
+    } catch (err) {
+      console.error('[SLA] Email failed:', err)
+    } finally {
+      setSlaEmailing(false)
     }
   }
 
@@ -176,9 +548,9 @@ export default function CanadaPortalLeadDetailPage() {
     try {
       const blob = await generateProposalPdf(input)
       setProposalBlob(blob)
-      if (deal && deal.stage === 'prospecting') {
-        await canadaLeadsService.updateStage(deal.id, 'contacted')
-        setDeal(prev => prev ? { ...prev, stage: 'contacted' } : prev)
+      if (deal && (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted')) {
+        await canadaLeadsService.updateStage(deal.id, 'proposal_shown')
+        setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
       }
     } catch (err) {
       console.error('[Proposal] Generation failed:', err)
@@ -200,9 +572,15 @@ export default function CanadaPortalLeadDetailPage() {
         setProposalGenerating(false)
       }
     }
-    if (blob) {
+    if (blob && deal) {
       const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Meridian_Proposal_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     }
   }
 
@@ -242,9 +620,9 @@ export default function CanadaPortalLeadDetailPage() {
         }),
       })
       setProposalSent(true)
-      if (deal.stage === 'contacted' || deal.stage === 'demo_scheduled') {
-        await canadaLeadsService.updateStage(deal.id, 'proposal_sent')
-        setDeal(prev => prev ? { ...prev, stage: 'proposal_sent' } : prev)
+      if (deal.stage === 'appointment_set' || deal.stage === 'proposal_shown' || deal.stage === 'contacted' || deal.stage === 'demo_scheduled') {
+        await canadaLeadsService.updateStage(deal.id, 'proposal_shown')
+        setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
       }
     } catch (err) {
       console.error('[Proposal] Email failed:', err)
@@ -375,25 +753,26 @@ export default function CanadaPortalLeadDetailPage() {
         <HorizontalStepper currentStep={currentStep} />
       </div>
 
-      {/* Step 2 - Proposal */}
+      {/* Step 1 - Proposal (always visible) */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Proposal</h2>
 
         {/* Monthly Price Slider */}
         <div>
-          <label className="text-xs text-[#6b7a74] block mb-1.5">Monthly Price</label>
+          <label className="text-xs text-[#6b7a74] block mb-1.5">Monthly Price (CAD)</label>
           <div className="flex items-center gap-3">
             <input
               type="range"
-              min={250}
-              max={1000}
-              step={25}
+              min={350}
+              max={1400}
+              step={50}
               value={monthlyPrice}
               onChange={e => setMonthlyPrice(Number(e.target.value))}
               className="flex-1 h-2 bg-[#1a2420] rounded-full appearance-none cursor-pointer accent-[#00d4aa]"
             />
             <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">CA${monthlyPrice.toLocaleString()}/mo</span>
           </div>
+          <p className="text-[10px] text-[#4a5550] mt-1">~US${Math.round(monthlyPrice / 1.37).toLocaleString()}/mo</p>
         </div>
 
         {/* Setup Fee */}
@@ -447,7 +826,7 @@ export default function CanadaPortalLeadDetailPage() {
             disabled={proposalGenerating}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
           >
-            <Eye size={16} /> View Proposal
+            <Download size={16} /> Download Proposal
           </button>
           <button
             onClick={handleEmailProposal}
@@ -465,49 +844,227 @@ export default function CanadaPortalLeadDetailPage() {
         </div>
       </div>
 
-      {/* Step 4 - Connect POS */}
+      {/* Step 2 - Invoice / Customer Checkout (visible at step 2+) */}
+      {currentStep >= 2 && (
+      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+        <h2 className="text-sm font-semibold text-white">Invoice &amp; Checkout</h2>
+        <p className="text-xs text-[#6b7a74]">
+          Generate a custom invoice in CAD with a QR code the customer can scan to view. Invoices recur monthly.
+        </p>
+
+        <button
+          onClick={handleGenerateInvoice}
+          disabled={invoiceGenerating}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+        >
+          {invoiceGenerating ? (
+            <><Loader2 size={16} className="animate-spin" /> Generating Invoice…</>
+          ) : (
+            <><FileText size={16} /> {invoiceBlob ? 'Regenerate Invoice' : 'Generate Invoice (CAD)'}</>
+          )}
+        </button>
+
+        {invoiceBlob && (
+          <>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+              <CheckCircle2 size={16} className="text-[#00d4aa]" />
+              <span className="text-xs text-[#00d4aa] font-medium">
+                Invoice #{invoiceNumber} ready — includes QR code for online viewing.
+              </span>
+              <button onClick={handleDownloadInvoice} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+                <Download size={14} />
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={handleDownloadInvoice}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
+              >
+                <Download size={16} /> Download Invoice
+              </button>
+              <button
+                onClick={handleEmailInvoice}
+                disabled={invoiceEmailing}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+              >
+                {invoiceEmailing ? (
+                  <><Loader2 size={16} className="animate-spin" /> Sending…</>
+                ) : invoiceEmailed ? (
+                  <><CheckCircle2 size={16} className="text-[#00d4aa]" /> Invoice Sent!</>
+                ) : (
+                  <><Mail size={16} /> Email Invoice</>
+                )}
+              </button>
+            </div>
+            <p className="text-[10px] text-[#4a5550]">
+              Recurring monthly — customer will be billed CA${monthlyPrice.toLocaleString()}/mo automatically.
+            </p>
+          </>
+        )}
+      </div>
+      )}
+
+      {/* Step 2b - SLA Document (visible at step 2+) */}
+      {currentStep >= 2 && (
+      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <FileText size={16} className="text-[#00d4aa]" />
+          <h2 className="text-sm font-semibold text-white">Service Level Agreement</h2>
+        </div>
+        <p className="text-xs text-[#6b7a74]">
+          Generate an SLA document for the client to sign. {deal?.province && (deal.province.toLowerCase().includes('quebec') || deal.province.toLowerCase() === 'qc') ? 'Includes PIPEDA + Quebec Law 25 compliance.' : 'Includes PIPEDA compliance.'}
+        </p>
+
+        <button
+          onClick={handleGenerateSla}
+          disabled={slaGenerating}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1a2420] border border-[#2a3830] text-white text-sm font-semibold rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+        >
+          {slaGenerating ? (
+            <><Loader2 size={16} className="animate-spin" /> Generating SLA…</>
+          ) : (
+            <><FileText size={16} /> {slaBlob ? 'Regenerate SLA' : 'Generate SLA Document'}</>
+          )}
+        </button>
+
+        {slaBlob && (
+          <>
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+              <CheckCircle2 size={16} className="text-[#00d4aa]" />
+              <span className="text-xs text-[#00d4aa] font-medium">
+                SLA document ready{slaSigned ? ' — signed' : ''}.
+              </span>
+              <button onClick={handleDownloadSla} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+                <Download size={14} />
+              </button>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleDownloadSla}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
+              >
+                <Download size={16} /> Download SLA
+              </button>
+              {!slaSigned ? (
+                <button
+                  onClick={() => setShowSlaSign(true)}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+                >
+                  <Pencil size={16} /> Sign SLA
+                </button>
+              ) : (
+                <button
+                  onClick={handleEmailSla}
+                  disabled={slaEmailing}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+                >
+                  {slaEmailing ? (
+                    <><Loader2 size={16} className="animate-spin" /> Sending…</>
+                  ) : slaEmailed ? (
+                    <><CheckCircle2 size={16} className="text-[#00d4aa]" /> SLA Sent!</>
+                  ) : (
+                    <><Mail size={16} /> Email Signed SLA</>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {slaSigned && (
+              <div className="text-[10px] text-[#4a5550] space-y-0.5">
+                <p>Provider: Aidan Pierce, Founder & CEO — {new Date().toLocaleDateString('en-CA')}</p>
+                <p>Client: {slaSignature} — {new Date().toLocaleDateString('en-CA')}</p>
+                {slaEmailed && <p className="text-[#00d4aa]">Signed copy emailed to {deal?.contact_email}</p>}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Signature Modal */}
+        {showSlaSign && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="w-full max-w-lg bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base font-semibold text-white">Sign Service Level Agreement</h3>
+                <button onClick={() => setShowSlaSign(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
+                  <X size={18} className="text-[#6b7a74]" />
+                </button>
+              </div>
+              <p className="text-xs text-[#6b7a74] mb-4">
+                By typing your full legal name below, you acknowledge that you have read and agree to the terms of the Service Level Agreement between Meridian AI Business Solutions and {deal?.business_name}. A signed copy will be emailed to both parties.
+              </p>
+              <div className="space-y-4">
+                {/* Provider signature — pre-filled */}
+                <div className="p-4 bg-[#0a0f0d] border border-[#1a2420] rounded-lg">
+                  <p className="text-[10px] text-[#6b7a74] mb-1">Provider — Meridian AI Business Solutions</p>
+                  <p className="text-lg font-serif italic text-[#00d4aa]">Aidan Pierce</p>
+                  <p className="text-[10px] text-[#4a5550] mt-1">Founder & CEO</p>
+                </div>
+
+                {/* Client signature */}
+                <div>
+                  <label className="text-xs text-[#6b7a74] mb-1.5 block">Client — {deal?.business_name}</label>
+                  <input
+                    type="text"
+                    value={slaSignature}
+                    onChange={e => setSlaSignature(e.target.value)}
+                    placeholder="Client signatory full legal name"
+                    className="w-full px-3 py-2.5 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors"
+                  />
+                </div>
+                {slaSignature.trim() && (
+                  <div className="p-4 bg-[#0a0f0d] border border-[#1a2420] rounded-lg">
+                    <p className="text-[10px] text-[#6b7a74] mb-1">Client signature preview</p>
+                    <p className="text-xl font-serif italic text-white">{slaSignature}</p>
+                  </div>
+                )}
+
+                <p className="text-[10px] text-[#4a5550]">
+                  Date: {new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+                <div className="flex justify-end gap-2 mt-4">
+                  <button onClick={() => setShowSlaSign(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
+                  <button
+                    onClick={handleSignSla}
+                    disabled={!slaSignature.trim() || slaSigning}
+                    className="px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                  >
+                    {slaSigning ? 'Signing…' : 'Sign & Send Copies'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* Step 3 - Connect POS (visible at step 3+) */}
+      {currentStep >= 3 && (
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Connect POS System</h2>
 
-        {/* Quick-select tiles for top POS systems */}
-        {!posConnected && (
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { key: 'square', name: 'Square', color: '#006AFF' },
-              { key: 'clover', name: 'Clover', color: '#43B02A' },
-              { key: 'toast', name: 'Toast', color: '#FF6600' },
-            ].map(pos => (
-              <button
-                key={pos.key}
-                type="button"
-                onClick={() => { setSelectedPOS(pos.key); setPosConnected(false); setPosError(null) }}
-                className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-all ${
-                  selectedPOS === pos.key
-                    ? 'border-[#00d4aa] bg-[#00d4aa]/5'
-                    : 'border-[#1a2420] hover:border-[#2a3430] bg-[#0a0f0d]'
-                }`}
-              >
-                <div
-                  className="w-10 h-10 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                  style={{ backgroundColor: pos.color }}
-                >
-                  {pos.name[0]}
-                </div>
-                <span className={`text-xs font-medium ${selectedPOS === pos.key ? 'text-[#00d4aa]' : 'text-white'}`}>
-                  {pos.name}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
         <POSSystemPicker
           value={selectedPOS}
-          onChange={k => { setSelectedPOS(k); setPosConnected(false); setPosError(null) }}
+          onChange={k => { setSelectedPOS(k); setPosConnected(false); setPosError(null); setPosPending(null) }}
           onCredentialSubmit={handleCredentialSubmit}
           mode="lead-detail"
           portalContext="canada"
         />
+
+        {posConnecting && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
+            <Loader2 size={16} className="text-[#f0b429] animate-spin" />
+            <span className="text-xs text-[#f0b429] font-medium">Connecting — saving credentials...</span>
+          </div>
+        )}
+
+        {posVerifying && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
+            <Loader2 size={16} className="text-[#f0b429] animate-spin" />
+            <span className="text-xs text-[#f0b429] font-medium">Verifying — checking if we can pull data with these credentials...</span>
+          </div>
+        )}
 
         {posError && (
           <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
@@ -515,29 +1072,23 @@ export default function CanadaPortalLeadDetailPage() {
           </div>
         )}
 
-        {posConnected && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <span className="text-xs text-[#00d4aa] font-medium">
-              POS connected — the swarm is pulling data now.
-            </span>
+        {posPending && !posError && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
+            <Clock size={16} className="text-[#f0b429]" />
+            <span className="text-xs text-[#f0b429] font-medium">{posPending}</span>
           </div>
         )}
 
-        {!posConnected && selectedPOS && (
-          <button
-            onClick={() => handleCredentialSubmit(selectedPOS, {})}
-            disabled={posConnecting}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
-          >
-            {posConnecting ? (
-              <><Loader2 size={16} className="animate-spin" /> Connecting...</>
-            ) : (
-              <><Wifi size={16} /> Save & Test Connection</>
-            )}
-          </button>
+        {posConnected && !posVerifying && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+            <span className="text-xs text-[#00d4aa] font-medium">
+              POS connected and verified — data is flowing. This deal is now active.
+            </span>
+          </div>
         )}
       </div>
+      )}
 
       {/* Project Files */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
@@ -574,65 +1125,110 @@ export default function CanadaPortalLeadDetailPage() {
       </div>
 
       {/* Stage Advancement */}
-      {deal.stage !== 'closed_won' && deal.stage !== 'closed_lost' && (
+      {currentStep > 0 && currentStep < 4 && deal.stage !== 'closed_lost' && (
         <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
           <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
-          {deal.stage === 'negotiation' ? (
-            <button
-              onClick={async () => {
-                if (!confirm('Close this deal as won? This will mark it as a completed sale.')) return
-                await canadaLeadsService.updateStage(deal.id, 'closed_won')
-                setDeal(prev => prev ? { ...prev, stage: 'closed_won' } : prev)
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
-            >
-              <CheckCircle2 size={16} /> Close Deal — Sale Complete
-            </button>
-          ) : (
-            <button
-              onClick={async () => {
-                const order: DealStage[] = ['prospecting', 'contacted', 'demo_scheduled', 'proposal_sent', 'negotiation']
-                const stageLabels: Record<string, string> = { contacted: 'Contacted', demo_scheduled: 'Demo Scheduled', proposal_sent: 'Proposal Sent', negotiation: 'Negotiation' }
-                const idx = order.indexOf(deal.stage)
-                if (idx >= 0 && idx < order.length - 1) {
-                  const nextStage = order[idx + 1]
-                  if (!confirm(`Advance this deal to "${stageLabels[nextStage]}"?`)) return
-                  await canadaLeadsService.updateStage(deal.id, nextStage)
-                  setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
-                }
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 transition-all"
-            >
-              <ChevronRight size={16} /> Advance to Next Stage
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Convert to Customer (when closed_won) */}
-      {deal.stage === 'closed_won' && (
-        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <h2 className="text-sm font-semibold text-[#00d4aa]">Deal Closed — Ready to Onboard</h2>
-          </div>
-          <p className="text-xs text-[#6b7a74]">
-            This deal is closed. Create a customer account to provision their Meridian dashboard, connect their POS, and start billing.
-          </p>
           <button
-            onClick={() => navigate(`/canada/portal/new-customer?lead=${deal.id}&name=${encodeURIComponent(deal.business_name)}&contact=${encodeURIComponent(deal.contact_name)}&email=${encodeURIComponent(deal.contact_email)}&phone=${encodeURIComponent(deal.contact_phone)}&vertical=${encodeURIComponent(deal.vertical)}`)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+            onClick={async () => {
+              const order: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
+              const stageLabels: Record<string, string> = {
+                proposal_shown: 'Proposal Shown',
+                customer_checkout: 'Customer Checkout', pos_connected: 'POS Connected',
+                customer_walkthrough: 'Customer Walkthrough',
+              }
+              const currentNorm = order.find(s => STAGE_TO_STEP[s] === currentStep) || deal.stage
+              const idx = order.indexOf(currentNorm)
+              if (idx >= 0 && idx < order.length - 1) {
+                const nextStage = order[idx + 1]
+                await canadaLeadsService.updateStage(deal.id, nextStage)
+                setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 transition-all"
           >
-            <Sparkles size={16} /> Create Customer Account
+            <ChevronRight size={16} /> Advance to Next Stage
           </button>
         </div>
       )}
 
+      {/* Create Customer Account Login (visible at step 3+) */}
+      {currentStep >= 3 && (
+        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+            <h2 className="text-sm font-semibold text-[#00d4aa]">Create Customer Account Login</h2>
+          </div>
+          <p className="text-xs text-[#6b7a74]">
+            Generate a login for {deal.contact_name} to access the Meridian customer portal. They'll be guided through a walkthrough to verify their POS connection, set up cameras, and explore their dashboard.
+          </p>
+
+          {customerCredentials ? (
+            <div className="space-y-3">
+              <div className="p-4 rounded-lg bg-[#0a0f0d] border border-[#1a2420] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#6b7a74]">Email</span>
+                  <span className="text-sm text-white font-mono">{customerCredentials.email}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#6b7a74]">Password</span>
+                  <span className="text-sm text-white font-mono">{customerCredentials.password}</span>
+                </div>
+                <p className="text-[10px] text-[#4a5550] mt-1">Share these credentials with the customer. They can change their password after first login.</p>
+              </div>
+              <button
+                onClick={handleEmailCredentials}
+                disabled={credentialEmailing || credentialEmailed}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 disabled:opacity-50 transition-all"
+              >
+                {credentialEmailing ? (
+                  <><Loader2 size={16} className="animate-spin" /> Sending...</>
+                ) : credentialEmailed ? (
+                  <><CheckCircle2 size={16} /> Login Emailed to {deal.contact_name}</>
+                ) : (
+                  <><Mail size={16} /> Email Login to {deal.contact_name}</>
+                )}
+              </button>
+            </div>
+          ) : (
+            <>
+              {customerError && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                  {customerError}
+                </div>
+              )}
+              <button
+                onClick={handleCreateCustomerAccount}
+                disabled={customerCreating}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+              >
+                {customerCreating ? (
+                  <><Loader2 size={16} className="animate-spin" /> Creating Account...</>
+                ) : (
+                  <><Sparkles size={16} /> Create Customer Account Login</>
+                )}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Customer Walkthrough status */}
+      {deal.stage === 'customer_walkthrough' && (
+        <div className="bg-[#0f1512] border border-[#00d4aa]/20 rounded-xl p-5 space-y-2">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+            <h2 className="text-sm font-semibold text-[#00d4aa]">Active Deal — Customer Onboarding</h2>
+          </div>
+          <p className="text-xs text-[#6b7a74]">
+            This deal is active. The customer has been set up and is going through their onboarding walkthrough.
+          </p>
+        </div>
+      )}
+
       {/* Mark as Lost */}
-      {deal.stage !== 'closed_won' && deal.stage !== 'closed_lost' && (
+      {deal.stage !== 'customer_walkthrough' && deal.stage !== 'closed_won' && deal.stage !== 'closed_lost' && (
         <button
           onClick={async () => {
-            if (!confirm('Mark this deal as lost? You can still view it in the Closed tab.')) return
             await canadaLeadsService.updateStage(deal.id, 'closed_lost')
             navigate('/canada/portal/leads')
           }}

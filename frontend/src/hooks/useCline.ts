@@ -34,7 +34,7 @@ export function useCline(): UseClineReturn {
   const [isThinking, setIsThinking] = useState(false)
   const [hasAlert, setHasAlert] = useState(false)
   const [alertMessage, setAlertMessage] = useState('')
-  const convIdRef = useRef<string>(crypto.randomUUID?.() || msgId())
+  const convIdRef = useRef<string>(msgId())
 
   const sendMessage = useCallback(async (text: string) => {
     const userMsg: ClineMessage = { id: msgId(), role: 'user', content: text, timestamp: Date.now() }

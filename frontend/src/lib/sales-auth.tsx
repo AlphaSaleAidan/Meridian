@@ -279,13 +279,17 @@ function resolvePortalContext(_email: string): PortalContext {
   return 'all'
 }
 
+function normalizeRate(v: number): number {
+  return v <= 1 ? Math.round(v * 100) : v
+}
+
 function repFromRow(data: Record<string, unknown>): SalesRepProfile {
   return {
     rep_id: data.id as string,
     name: data.name as string,
     email: data.email as string,
     phone: (data.phone as string) || null,
-    commission_rate: Number(data.commission_rate) || 70,
+    commission_rate: normalizeRate(Number(data.commission_rate) || 0.7),
     recruiter: (data.recruiter as string) || null,
     is_active: data.is_active as boolean,
     total_earned: Number(data.total_earned) || 0,

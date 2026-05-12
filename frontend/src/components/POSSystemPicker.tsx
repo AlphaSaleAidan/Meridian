@@ -588,22 +588,18 @@ function AutoCredentialFields({
   const creds = system.connectionRequirements.requiredCredentials
 
   if (auth === 'oauth2') {
+    const keyFields = creds.filter(c => !c.toLowerCase().includes('oauth') && !c.toLowerCase().includes('login'))
+    if (keyFields.length === 0) keyFields.push('API Key')
     return (
       <>
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all text-white"
-          style={{ backgroundColor: t.accent }}
-        >
-          <ExternalLink size={14} /> Authorize with {system.name}
-        </button>
-        {creds.filter(c => !c.toLowerCase().includes('oauth')).map(cred => {
+        {keyFields.map(cred => {
           const fieldId = cred.toLowerCase().replace(/[^a-z0-9]+/g, '_')
+          const isSecret = /secret|password|key|token/i.test(cred)
           return (
             <div key={fieldId}>
               <label className={clsx('text-xs block mb-1.5', t.textMuted)}>{cred}</label>
               <input
-                type="text"
+                type={isSecret ? 'password' : 'text'}
                 value={credentialValues[fieldId] || ''}
                 onChange={e => onCredentialChange(fieldId, e.target.value)}
                 className={clsx(

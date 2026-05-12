@@ -101,6 +101,24 @@ async def send_email(req: SendEmailRequest):
             invoice_url=req.extra.get("invoice_url", ""),
             org_id=req.org_id,
         ),
+        "sla_signed": lambda: email_send.send_sla_signed(
+            to=req.to,
+            business_name=req.extra.get("business_name", ""),
+            rep_name=req.extra.get("rep_name", ""),
+            signed_by=req.extra.get("signed_by", ""),
+            signed_date=req.extra.get("signed_date", ""),
+            provider_signatory=req.extra.get("provider_signatory", "Aidan Pierce, Founder & CEO"),
+            org_id=req.org_id,
+        ),
+        "customer_credentials": lambda: email_send.send_customer_credentials(
+            to=req.to,
+            business_name=req.extra.get("business_name", ""),
+            email=req.extra.get("email", req.to),
+            password=req.extra.get("password", ""),
+            login_url=req.extra.get("login_url", "https://meridian.tips/canada/login"),
+            rep_name=req.extra.get("rep_name", ""),
+            org_id=req.org_id,
+        ),
     }
 
     handler = fn_map.get(req.template)

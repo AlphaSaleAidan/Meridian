@@ -639,13 +639,13 @@ export async function generateProposalPdf(input: ProposalInput): Promise<Blob> {
       const canvas = await html2canvas(slideEl, {
         width: 1920,
         height: 1080,
-        scale: 1,
+        scale: 2,
         useCORS: true,
         backgroundColor: '#0A0A0B',
       })
 
       if (i > 0) pdf.addPage([1920, 1080], 'landscape')
-      pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 1920, 1080)
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 1920, 1080, undefined, 'FAST')
     }
   } finally {
     document.body.removeChild(container)

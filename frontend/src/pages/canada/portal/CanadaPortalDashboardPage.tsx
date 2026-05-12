@@ -71,7 +71,7 @@ function isWithin30Days(dateStr: string): boolean {
   return diffMs <= 30 * 24 * 60 * 60 * 1000
 }
 
-const KANBAN_STAGES: DealStage[] = ['prospecting', 'contacted', 'demo_scheduled', 'proposal_sent', 'negotiation']
+const KANBAN_STAGES: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected']
 const MONTH1_MRR_GOAL = 2025
 
 export default function CanadaPortalDashboardPage() {
@@ -93,8 +93,8 @@ export default function CanadaPortalDashboardPage() {
       setClients(c)
       setCommissions(cm)
 
-      const activePipeline = d.filter((deal: Deal) => !['closed_won', 'closed_lost'].includes(deal.stage))
-      const closedWon = d.filter((deal: Deal) => deal.stage === 'closed_won')
+      const activePipeline = d.filter((deal: Deal) => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(deal.stage))
+      const closedWon = d.filter((deal: Deal) => deal.stage === 'customer_walkthrough' || deal.stage === 'closed_won' || deal.stage === 'pos_connected')
       const allDeals = d.filter((deal: Deal) => deal.stage !== 'closed_lost')
       const totalEarned = cm.reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
       const totalPaid = cm.filter((cItem: Commission) => cItem.status === 'paid').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
@@ -131,9 +131,9 @@ export default function CanadaPortalDashboardPage() {
 
   const activeClients = clients.filter(c => c.is_active && c.pos_connected)
   const clientMrr = activeClients.reduce((sum, c) => sum + c.monthly_revenue, 0)
-  const wonDealsMrr = deals.filter(d => d.stage === 'closed_won').reduce((sum, d) => sum + d.monthly_value, 0)
+  const wonDealsMrr = deals.filter(d => d.stage === 'customer_walkthrough' || d.stage === 'closed_won' || d.stage === 'pos_connected').reduce((sum, d) => sum + d.monthly_value, 0)
   const mrr = Math.max(clientMrr, wonDealsMrr)
-  const pipelineDeals = deals.filter(d => !['closed_won', 'closed_lost'].includes(d.stage))
+  const pipelineDeals = deals.filter(d => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(d.stage))
   const pipelineValue = pipelineDeals.reduce((sum, d) => sum + d.monthly_value, 0)
   const commissionRate = rep?.commission_rate ?? 70
   const totalCommEarned = commissions.reduce((s, c) => s + c.commission_amount, 0)
@@ -259,7 +259,7 @@ export default function CanadaPortalDashboardPage() {
           </div>
           <h2 className="text-lg font-bold text-white mb-2">Your first deal is waiting.</h2>
           <p className="text-sm text-[#6b7a74] max-w-md mx-auto mb-6">
-            Start building your pipeline by creating your first lead. Track every stage from prospecting through close.
+            Start building your pipeline by creating your first lead. Track every stage from appointment through onboarding.
           </p>
           <button
             onClick={() => navigate('/canada/portal/leads?new=true')}

@@ -1,4 +1,12 @@
-export type DealStage = 'prospecting' | 'contacted' | 'demo_scheduled' | 'proposal_sent' | 'negotiation' | 'closed_won' | 'closed_lost'
+export type DealStage =
+  | 'appointment_set'
+  | 'proposal_shown'
+  | 'customer_checkout'
+  | 'pos_connected'
+  | 'customer_walkthrough'
+  | 'closed_lost'
+  // Legacy stages — kept for backward compatibility with existing DB rows
+  | 'prospecting' | 'contacted' | 'demo_scheduled' | 'proposal_sent' | 'negotiation' | 'closed_won'
 
 export interface Deal {
   id: string
@@ -88,31 +96,31 @@ function daysFromNow(n: number): string {
 const DEMO_DEALS: Deal[] = [
   {
     id: stableId('golden-dragon-dim-sum'), business_name: 'Golden Dragon Dim Sum', contact_name: 'Kevin Lau', contact_email: 'kevin@goldendragon.ca', contact_phone: '(604) 555-2345',
-    vertical: 'Restaurant', stage: 'prospecting', monthly_value: 685, commission_rate: 70, expected_close_date: daysFromNow(21), notes: 'High-volume dim sum spot in Richmond. 4 POS terminals, wants inventory tracking.', source: 'Referral', city: 'Richmond', province: 'BC', created_at: daysAgo(2), updated_at: daysAgo(1),
+    vertical: 'Restaurant', stage: 'proposal_shown', monthly_value: 685, commission_rate: 70, expected_close_date: daysFromNow(21), notes: 'High-volume dim sum spot in Richmond. 4 POS terminals, wants inventory tracking.', source: 'Referral', city: 'Richmond', province: 'BC', created_at: daysAgo(2), updated_at: daysAgo(1),
   },
   {
     id: stableId('cloud-nine-vape-yvr'), business_name: 'Cloud Nine Vape YVR', contact_name: 'Marcus Gill', contact_email: 'marcus@cloudninevape.ca', contact_phone: '(604) 555-3456',
-    vertical: 'Smoke Shop', stage: 'contacted', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(14), notes: 'Currently on Clover. Wants anomaly detection for theft. 2 Vancouver locations.', source: 'Cold Call', city: 'Vancouver', province: 'BC', created_at: daysAgo(5), updated_at: daysAgo(3),
+    vertical: 'Smoke Shop', stage: 'proposal_shown', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(14), notes: 'Currently on Clover. Wants anomaly detection for theft. 2 Vancouver locations.', source: 'Cold Call', city: 'Vancouver', province: 'BC', created_at: daysAgo(5), updated_at: daysAgo(3),
   },
   {
     id: stableId('kensington-coffee-house'), business_name: 'Kensington Coffee House', contact_name: 'Sarah Olsen', contact_email: 'sarah@kensingtoncoffee.ca', contact_phone: '(403) 555-4567',
-    vertical: 'Café', stage: 'demo_scheduled', monthly_value: 343, commission_rate: 70, expected_close_date: daysFromNow(7), notes: 'Demo set for Thursday 2pm MST. Interested in predictive ordering for pastry inventory.', source: 'Website', city: 'Calgary', province: 'AB', created_at: daysAgo(8), updated_at: daysAgo(1),
+    vertical: 'Café', stage: 'proposal_shown', monthly_value: 343, commission_rate: 70, expected_close_date: daysFromNow(7), notes: 'Demo set for Thursday 2pm MST. Interested in predictive ordering for pastry inventory.', source: 'Website', city: 'Calgary', province: 'AB', created_at: daysAgo(8), updated_at: daysAgo(1),
   },
   {
     id: stableId('queen-west-threads'), business_name: 'Queen West Threads', contact_name: 'Priya Patel', contact_email: 'priya@queenwestthreads.ca', contact_phone: '(416) 555-5678',
-    vertical: 'Boutique', stage: 'proposal_sent', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(5), notes: 'Sent Premium tier proposal. Owner reviewing with business partner.', source: 'Referral', city: 'Toronto', province: 'ON', created_at: daysAgo(12), updated_at: daysAgo(2),
+    vertical: 'Boutique', stage: 'proposal_shown', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(5), notes: 'Sent Premium tier proposal. Owner reviewing with business partner.', source: 'Referral', city: 'Toronto', province: 'ON', created_at: daysAgo(12), updated_at: daysAgo(2),
   },
   {
     id: stableId('the-pilot-taphouse'), business_name: 'The Pilot Taphouse', contact_name: 'David Fong', contact_email: 'david@pilottaphouse.ca', contact_phone: '(416) 555-6789',
-    vertical: 'Bar', stage: 'negotiation', monthly_value: 1000, commission_rate: 70, expected_close_date: daysFromNow(3), notes: 'Wants camera intelligence. 3 patios. Very close to signing.', source: 'Event', city: 'Toronto', province: 'ON', created_at: daysAgo(15), updated_at: daysAgo(0),
+    vertical: 'Bar', stage: 'customer_checkout', monthly_value: 1000, commission_rate: 70, expected_close_date: daysFromNow(3), notes: 'Wants camera intelligence. 3 patios. Very close to signing.', source: 'Event', city: 'Toronto', province: 'ON', created_at: daysAgo(15), updated_at: daysAgo(0),
   },
   {
     id: stableId('chez-benny-poutine'), business_name: 'Chez Benny Poutine', contact_name: 'Benoît Tremblay', contact_email: 'benoit@chezbenny.ca', contact_phone: '(514) 555-7890',
-    vertical: 'Restaurant', stage: 'closed_won', monthly_value: 343, commission_rate: 70, expected_close_date: daysAgo(2), notes: 'Signed! Onboarding started. Moneris integration in progress.', source: 'Referral', city: 'Montreal', province: 'QC', created_at: daysAgo(20), updated_at: daysAgo(2),
+    vertical: 'Restaurant', stage: 'customer_walkthrough', monthly_value: 343, commission_rate: 70, expected_close_date: daysAgo(2), notes: 'Signed! Onboarding started. Moneris integration in progress.', source: 'Referral', city: 'Montreal', province: 'QC', created_at: daysAgo(20), updated_at: daysAgo(2),
   },
   {
     id: stableId('lux-hair-studio'), business_name: 'Lux Hair Studio', contact_name: 'Tanya Chen', contact_email: 'tanya@luxhair.ca', contact_phone: '(604) 555-8901',
-    vertical: 'Salon', stage: 'closed_won', monthly_value: 500, commission_rate: 70, expected_close_date: daysAgo(10), notes: 'Active client. POS connected via Square Canada. First commission earned.', source: 'Website', city: 'Vancouver', province: 'BC', created_at: daysAgo(30), updated_at: daysAgo(10),
+    vertical: 'Salon', stage: 'customer_walkthrough', monthly_value: 500, commission_rate: 70, expected_close_date: daysAgo(10), notes: 'Active client. POS connected via Square Canada. First commission earned.', source: 'Website', city: 'Vancouver', province: 'BC', created_at: daysAgo(30), updated_at: daysAgo(10),
   },
   {
     id: stableId('maple-quick-mart'), business_name: 'Maple Quick Mart', contact_name: 'Ali Farah', contact_email: 'ali@maplequickmart.ca', contact_phone: '(905) 555-9012',
@@ -120,11 +128,11 @@ const DEMO_DEALS: Deal[] = [
   },
   {
     id: stableId('taco-madre'), business_name: 'Taco Madre', contact_name: 'Maria Santos', contact_email: 'maria@tacomadre.ca', contact_phone: '(403) 555-0123',
-    vertical: 'Restaurant', stage: 'prospecting', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(28), notes: 'Referral from Chez Benny. First call scheduled for next week.', source: 'Referral', city: 'Calgary', province: 'AB', created_at: daysAgo(1), updated_at: daysAgo(0),
+    vertical: 'Restaurant', stage: 'proposal_shown', monthly_value: 500, commission_rate: 70, expected_close_date: daysFromNow(28), notes: 'Referral from Chez Benny. First call scheduled for next week.', source: 'Referral', city: 'Calgary', province: 'AB', created_at: daysAgo(1), updated_at: daysAgo(0),
   },
   {
     id: stableId('byward-smoke-co'), business_name: 'Byward Smoke Co.', contact_name: 'Kyle Bennett', contact_email: 'kyle@bywardsmoke.ca', contact_phone: '(613) 555-1122',
-    vertical: 'Smoke Shop', stage: 'demo_scheduled', monthly_value: 343, commission_rate: 70, expected_close_date: daysFromNow(10), notes: 'Demo next Tuesday. Interested in anomaly detection for high-value inventory.', source: 'Website', city: 'Ottawa', province: 'ON', created_at: daysAgo(6), updated_at: daysAgo(1),
+    vertical: 'Smoke Shop', stage: 'proposal_shown', monthly_value: 343, commission_rate: 70, expected_close_date: daysFromNow(10), notes: 'Demo next Tuesday. Interested in anomaly detection for high-value inventory.', source: 'Website', city: 'Ottawa', province: 'ON', created_at: daysAgo(6), updated_at: daysAgo(1),
   },
 ]
 
@@ -148,8 +156,8 @@ function delay<T>(data: T, ms = 300): Promise<T> {
 
 export const canadaSalesDemoData = {
   overview: (): Promise<SalesOverview> => {
-    const activePipeline = DEMO_DEALS.filter(d => !['closed_won', 'closed_lost'].includes(d.stage))
-    const closedWon = DEMO_DEALS.filter(d => d.stage === 'closed_won')
+    const activePipeline = DEMO_DEALS.filter(d => !['customer_walkthrough', 'closed_won', 'closed_lost'].includes(d.stage))
+    const closedWon = DEMO_DEALS.filter(d => d.stage === 'customer_walkthrough' || d.stage === 'closed_won')
     const allDeals = DEMO_DEALS.filter(d => d.stage !== 'closed_lost')
     const totalEarned = DEMO_COMMISSIONS.reduce((s, c) => s + c.commission_amount, 0)
     const totalPaid = DEMO_COMMISSIONS.filter(c => c.status === 'paid').reduce((s, c) => s + c.commission_amount, 0)
@@ -187,7 +195,7 @@ export function getSeedDeals(): Deal[] {
  */
 export function deriveClientsFromLeads(deals: Deal[]): SalesClient[] {
   return deals
-    .filter(d => d.stage === 'closed_won')
+    .filter(d => d.stage === 'customer_walkthrough' || d.stage === 'closed_won' || d.stage === 'pos_connected')
     .map(d => {
       const plan = d.monthly_value >= 1000 ? 'command' : d.monthly_value >= 500 ? 'premium' : 'standard'
       // Infer POS provider from notes if available
@@ -219,7 +227,7 @@ export function deriveClientsFromLeads(deals: Deal[]): SalesClient[] {
  * Generates one commission entry per billing month since the deal was closed.
  */
 export function deriveCommissionsFromLeads(deals: Deal[]): Commission[] {
-  const closedWon = deals.filter(d => d.stage === 'closed_won')
+  const closedWon = deals.filter(d => d.stage === 'customer_walkthrough' || d.stage === 'closed_won' || d.stage === 'pos_connected')
   const commissions: Commission[] = []
 
   closedWon.forEach(d => {
@@ -263,14 +271,32 @@ export function deriveCommissionsFromLeads(deals: Deal[]): Commission[] {
   return commissions.sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
-export const STAGE_CONFIG: Record<DealStage, { label: string; color: string; bg: string; border: string }> = {
-  prospecting:    { label: 'Prospecting',     color: '#A1A1A8', bg: '#A1A1A8/10', border: '#A1A1A8/20' },
-  contacted:      { label: 'Contacted',       color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
-  demo_scheduled: { label: 'Demo Scheduled',  color: '#7C5CFF', bg: '#7C5CFF/10', border: '#7C5CFF/20' },
-  proposal_sent:  { label: 'Proposal Sent',   color: '#F59E0B', bg: '#F59E0B/10', border: '#F59E0B/20' },
-  negotiation:    { label: 'Negotiation',     color: '#F97316', bg: '#F97316/10', border: '#F97316/20' },
-  closed_won:     { label: 'Closed Won',      color: '#17C5B0', bg: '#17C5B0/10', border: '#17C5B0/20' },
-  closed_lost:    { label: 'Closed Lost',     color: '#EF4444', bg: '#EF4444/10', border: '#EF4444/20' },
+export const STAGE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  proposal_shown:       { label: 'Proposal Shown',       color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
+  customer_checkout:    { label: 'Customer Checkout',     color: '#F59E0B', bg: '#F59E0B/10', border: '#F59E0B/20' },
+  pos_connected:        { label: 'POS Connected',         color: '#F97316', bg: '#F97316/10', border: '#F97316/20' },
+  customer_walkthrough: { label: 'Customer Walkthrough',  color: '#17C5B0', bg: '#17C5B0/10', border: '#17C5B0/20' },
+  closed_lost:          { label: 'Closed Lost',           color: '#EF4444', bg: '#EF4444/10', border: '#EF4444/20' },
+  // Legacy mappings
+  appointment_set:{ label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
+  prospecting:    { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
+  contacted:      { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
+  demo_scheduled: { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
+  proposal_sent:  { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
+  negotiation:    { label: 'Customer Checkout',  color: '#F59E0B', bg: '#F59E0B/10', border: '#F59E0B/20' },
+  closed_won:     { label: 'Customer Walkthrough', color: '#17C5B0', bg: '#17C5B0/10', border: '#17C5B0/20' },
 }
 
-export const STAGE_ORDER: DealStage[] = ['prospecting', 'contacted', 'demo_scheduled', 'proposal_sent', 'negotiation', 'closed_won', 'closed_lost']
+export const STAGE_ORDER: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
+
+export function normalizeLegacyStage(stage: string): DealStage {
+  const map: Record<string, DealStage> = {
+    prospecting: 'proposal_shown',
+    contacted: 'proposal_shown',
+    demo_scheduled: 'proposal_shown',
+    proposal_sent: 'proposal_shown',
+    negotiation: 'customer_checkout',
+    closed_won: 'customer_walkthrough',
+  }
+  return (map[stage] || stage) as DealStage
+}

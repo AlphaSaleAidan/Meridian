@@ -616,7 +616,7 @@ export default function CanadaPortalCreateCustomerPage() {
           contact_email: form.email,
           contact_phone: form.phone,
           vertical: form.vertical || 'Other',
-          stage: 'proposal_sent',
+          stage: 'proposal_shown',
           monthly_value: price,
           commission_rate: rep?.commission_rate || 70,
           country: 'CA',

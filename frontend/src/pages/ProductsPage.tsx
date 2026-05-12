@@ -5,7 +5,7 @@ import {
 import { Package, Search } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
-import { formatCents, formatCentsCompact, formatNumber } from '@/lib/format'
+import { formatCents, formatCentsCompact, formatNumber, formatChartTick } from '@/lib/format'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
 import { useOrgId } from '@/hooks/useOrg'
@@ -83,7 +83,7 @@ export default function ProductsPage() {
               <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 5, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" horizontal={false} />
                 <XAxis type="number" tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
-                  tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`} />
+                  tickFormatter={formatChartTick} />
                 <YAxis type="category" dataKey="name" tick={{ fill: '#A1A1A8', fontSize: 10 }} axisLine={false}
                   tickLine={false} width={110} />
                 <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number) => [formatCents(v * 100), 'Revenue']}

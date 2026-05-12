@@ -5,7 +5,7 @@ import {
 } from 'recharts'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
-import { formatCents, formatCentsCompact, formatNumber, formatChartDate } from '@/lib/format'
+import { formatCents, formatCentsCompact, formatNumber, formatChartDate, formatChartTick } from '@/lib/format'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
@@ -133,7 +133,7 @@ export default function RevenuePage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
               <XAxis dataKey="date" tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
               <YAxis tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
-                tickFormatter={v => `$${v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}`} width={45} />
+                tickFormatter={formatChartTick} width={55} />
               <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number, name: string) => [formatCents(v * 100), name]}
                 cursor={{ stroke: '#1A8FD6', strokeWidth: 1, strokeDasharray: '4 4' }} />
               <Area type="monotone" dataKey="revenue" stroke="#1A8FD6" strokeWidth={2} fill="url(#revGrad)" dot={false}

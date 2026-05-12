@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
@@ -8,6 +8,8 @@ import {
   MapPin, Phone,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
+import CustomerWalkthrough from './CustomerWalkthrough'
+import { useAuth } from '@/lib/auth'
 
 const navItems = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
@@ -32,8 +34,18 @@ const navItems = [
 
 export default function CanadaLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [showWalkthrough, setShowWalkthrough] = useState(false)
   const location = useLocation()
   const basePath = '/canada/dashboard'
+  const { user } = useAuth()
+
+  useEffect(() => {
+    if (!user?.id) return
+    const key = `meridian_walkthrough_${user.id}`
+    if (localStorage.getItem(key) !== 'completed') {
+      setShowWalkthrough(true)
+    }
+  }, [user?.id])
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">
@@ -111,6 +123,13 @@ export default function CanadaLayout() {
           <Outlet />
         </div>
       </main>
+
+      {showWalkthrough && user?.id && (
+        <CustomerWalkthrough
+          userId={user.id}
+          onDismiss={() => setShowWalkthrough(false)}
+        />
+      )}
     </div>
   )
 }

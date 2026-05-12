@@ -60,6 +60,7 @@ const CanadaPortalSettingsPage = lazy(() => import('@/pages/canada/portal/Canada
 const CanadaPortalCreateCustomerPage = lazy(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
 const CanadaPortalOnboardingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
 const CanadaCustomerOnboardingWizard = lazy(() => import('@/pages/canada/portal/CanadaCustomerOnboardingWizard'))
+const CanadaInvoicePage = lazy(() => import('@/pages/canada/CanadaInvoicePage'))
 
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -222,6 +223,7 @@ export default function App() {
                   CANADA — customer auth + dashboard
                   ══════════════════════════════════════════════ */}
               <Route path="/canada/login" element={<CanadaLoginPage />} />
+              <Route path="/canada/invoice/:invoiceId" element={<Suspense fallback={<LazyFallback />}><CanadaInvoicePage /></Suspense>} />
               <Route path="/canada/dashboard" element={
                 <CanadaProtectedRoute>
                   <DemoContextProvider>

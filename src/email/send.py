@@ -20,6 +20,8 @@ from .templates import (
     lead_assigned,
     trial_expiring,
     payment_receipt,
+    sla_signed,
+    customer_credentials,
 )
 
 logger = logging.getLogger("meridian.email.send")
@@ -278,4 +280,50 @@ async def send_payment_receipt(
     subject = f"Payment Receipt — {amount}"
     result = await _client.send(to, subject, html, tag="payment_receipt")
     await _log_send(to, "payment_receipt", subject, result, org_id=org_id, tag="payment_receipt")
+    return result
+
+
+async def send_sla_signed(
+    to: str,
+    business_name: str,
+    rep_name: str,
+    signed_by: str,
+    signed_date: str,
+    provider_signatory: str = "Aidan Pierce, Founder & CEO",
+    *,
+    org_id: Optional[str] = None,
+) -> dict:
+    html = sla_signed.render(
+        business_name=business_name,
+        rep_name=rep_name,
+        signed_by=signed_by,
+        signed_date=signed_date,
+        provider_signatory=provider_signatory,
+    )
+    subject = f"Signed SLA — {business_name}"
+    result = await _client.send(to, subject, html, tag="sla_signed")
+    await _log_send(to, "sla_signed", subject, result, org_id=org_id, tag="sla_signed")
+    return result
+
+
+async def send_customer_credentials(
+    to: str,
+    business_name: str,
+    email: str,
+    password: str,
+    login_url: str,
+    rep_name: str = "",
+    *,
+    org_id: Optional[str] = None,
+) -> dict:
+    html = customer_credentials.render(
+        business_name=business_name,
+        email=email,
+        password=password,
+        login_url=login_url,
+        rep_name=rep_name,
+    )
+    subject = f"Your Meridian Login — {business_name}"
+    result = await _client.send(to, subject, html, tag="customer_credentials")
+    await _log_send(to, "customer_credentials", subject, result, org_id=org_id, tag="customer_credentials")
     return result

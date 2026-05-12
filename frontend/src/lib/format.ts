@@ -74,6 +74,12 @@ export function formatRelative(iso: string | null | undefined): string {
   return formatDate(iso)
 }
 
+export function formatChartTick(v: number): string {
+  const sym = getLocaleConfig().currency === 'CAD' ? 'CA$' : '$'
+  if (v >= 1000) return `${sym}${(v / 1000).toFixed(0)}K`
+  return `${sym}${v}`
+}
+
 export function formatChartDate(iso: string): string {
   const { locale } = getLocaleConfig()
   const d = new Date(iso)

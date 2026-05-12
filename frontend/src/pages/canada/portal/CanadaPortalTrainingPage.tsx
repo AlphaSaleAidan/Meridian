@@ -75,7 +75,7 @@ const MODULES: Module[] = [
         'Your commission: 70% of monthly subscription value, paid every month the account stays active. A single Standard deal = CA$240/mo recurring. Close 10 deals = CA$2,400/mo passive income.',
       ]},
       { id: '4', title: 'Setting Up Your Pipeline', completed: false, content: [
-        'Your pipeline lives in this portal under the Leads tab. Every prospect goes through these stages: Prospecting → Contacted → Demo Scheduled → Proposal Sent → Negotiation → Closed Won/Lost.',
+        'Your pipeline lives in this portal under the Leads tab. Every prospect goes through these stages: Proposal Shown → Customer Checkout → POS Connected → Customer Walkthrough.',
         'Lead sources that work best in Canada: (1) Walk-ins — visit the business, ask what POS they use, mention "I noticed you\'re on Square, most Square merchants are leaving money on the table." (2) Referrals — ask every closed client for 3 introductions. (3) Local business associations — BIAs, chambers of commerce, restaurant associations.',
         'Aim for 20 new leads per week. Of those, 5 will book demos, 2–3 will receive proposals, and 1 will close. That\'s 4 deals/month = CA$960+/mo in recurring commissions within 60 days.',
         'Log every interaction in the Leads tab. Update the stage as conversations progress. Notes are critical — write down their POS system, pain points, and any objections they raised.',
@@ -85,7 +85,7 @@ const MODULES: Module[] = [
         'Day 2: Identify 30 target businesses in your city. Focus on restaurants, cafes, and smoke shops first — they have the highest close rates. Add them as leads in the portal.',
         'Day 3–4: Start outreach. Visit 10 businesses in person. Call or email the other 20. Use the 60-second pitch from Module 2.',
         'Day 5: Follow up on all conversations. Book at least 2 demos for the following week. Report your pipeline status to your team lead.',
-        'Weekly rhythm going forward: Monday = prospecting + new leads, Tuesday–Thursday = demos + follow-ups, Friday = pipeline review + admin.',
+        'Weekly rhythm going forward: Monday = outreach + new leads, Tuesday–Thursday = demos + follow-ups, Friday = pipeline review + admin.',
       ]},
     ],
   },

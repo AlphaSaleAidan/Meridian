@@ -10,3 +10,4 @@ tools/update_supa_key.sh
 services/deerflow/
 services/training_video_pipeline/output/
 services/training_video_pipeline/.env
+services/mike/

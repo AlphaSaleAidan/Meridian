@@ -46,6 +46,10 @@ const DEMO_TEAM: TeamMember[] = [
   { id: '3', name: 'Aidan Nguyen', email: 'aidanvietnguyen@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-09', role: 'admin', location: 'Toronto, ON' },
 ]
 
+function normalizeRate(v: number): number {
+  return v <= 1 ? Math.round(v * 100) : v
+}
+
 const AVATAR_COLORS = ['#00d4aa', '#7c3aed', '#f59e0b', '#1a8fd6']
 const AVG_LIFETIME_MONTHS = 18
 
@@ -88,8 +92,8 @@ function computeTeamStats(team: TeamMember[], deals: Deal[]) {
     const repDeals = deals.filter(d => (d as any).rep_id === member.id)
     repDeals.forEach(d => assignedDealIds.add(d.id))
 
-    const openDeals = repDeals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
-    const wonDeals = repDeals.filter(d => d.stage === 'closed_won')
+    const openDeals = repDeals.filter(d => d.stage !== 'customer_walkthrough' && d.stage !== 'pos_connected' && d.stage !== 'closed_won' && d.stage !== 'closed_lost')
+    const wonDeals = repDeals.filter(d => d.stage === 'customer_walkthrough' || d.stage === 'pos_connected' || d.stage === 'closed_won')
 
     const monthlyMrr = wonDeals.reduce((s, d) => s + d.monthly_value, 0)
     const mrrCad = Math.round(monthlyMrr)
@@ -133,6 +137,7 @@ export default function CanadaPortalTeamPage() {
           const { data, error } = await supabase
             .from('sales_reps')
             .select('*')
+            .in('portal_context', ['canada', 'all'])
             .order('created_at', { ascending: true })
 
           if (data && !error && data.length > 0) {
@@ -144,7 +149,7 @@ export default function CanadaPortalTeamPage() {
                 name: r.name as string,
                 email,
                 phone: (r.phone as string) || '',
-                commission_rate: Number(r.commission_rate) || 70,
+                commission_rate: normalizeRate(Number(r.commission_rate) || 0.7),
                 deals_open: 0,
                 deals_won: 0,
                 total_mrr: 0,
@@ -178,6 +183,7 @@ export default function CanadaPortalTeamPage() {
             .from('sales_reps')
             .select('*')
             .eq('is_active', false)
+            .in('portal_context', ['canada', 'all'])
             .order('created_at', { ascending: false })
 
           if (data && data.length > 0) {
@@ -217,8 +223,8 @@ export default function CanadaPortalTeamPage() {
   const totalOnboarding = enrichedTeam.filter(m => m.role === 'onboarding').length
 
   // Pipeline = all open deals from signed reps
-  const openDeals = deals.filter(d => d.stage !== 'closed_won' && d.stage !== 'closed_lost')
-  const wonDeals = deals.filter(d => d.stage === 'closed_won')
+  const openDeals = deals.filter(d => d.stage !== 'customer_walkthrough' && d.stage !== 'pos_connected' && d.stage !== 'closed_won' && d.stage !== 'closed_lost')
+  const wonDeals = deals.filter(d => d.stage === 'customer_walkthrough' || d.stage === 'pos_connected' || d.stage === 'closed_won')
   const pipelineMrr = Math.round(openDeals.reduce((s, d) => s + d.monthly_value, 0))
 
   // Total Commission = sum of each rep's (commission_rate% * their won MRR * avg lifetime)
@@ -611,7 +617,7 @@ export default function CanadaPortalTeamPage() {
                   const name = editName.trim() || editingMember.name
                   setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
                   if (supabase) {
-                    const { error } = await supabase.from('sales_reps').update({ name, commission_rate: rate }).eq('id', editingMember.id)
+                    const { error } = await supabase.from('sales_reps').update({ name, commission_rate: rate / 100 }).eq('id', editingMember.id)
                     if (error) {
                       console.error('Failed to save:', error)
                       alert(`Save failed: ${error.message}`)
