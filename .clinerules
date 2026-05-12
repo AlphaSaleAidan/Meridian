@@ -1,0 +1,17 @@
+# Cline Rules — Meridian
+
+## Before touching any file
+1. Read CONTEXT.md in the repo root
+2. Run `cat frontend/package.json` to check existing dependencies
+3. Never assume Next.js, Vercel, or CDN fonts
+
+## Code changes
+- After any frontend edit: `cd frontend && npx tsc --noEmit`
+- After any backend edit: `cd src && python -m py_compile api/routes/<file>.py`
+- Never install a package that's already in package.json under a different name
+
+## Stack rules
+- Vite + React, not Next.js
+- Railway, not Vercel
+- Supabase, not raw PostgreSQL drivers
+- Geist fonts from npm, not Google Fonts CDN
