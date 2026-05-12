@@ -219,6 +219,11 @@ export default function App() {
               <Route path="/canada/landing" element={<CanadaLandingPage />} />
               <Route path="/canada/careers" element={<CanadaCareersPage />} />
 
+              {/* Canada Demo — same dashboard with CAD currency */}
+              <Route path="/canada/demo" element={<DemoLayout />}>
+                {CustomerDashboardRoutes()}
+              </Route>
+
               {/* ══════════════════════════════════════════════
                   CANADA — customer auth + dashboard
                   ══════════════════════════════════════════════ */}

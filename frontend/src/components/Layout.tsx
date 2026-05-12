@@ -56,7 +56,10 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { org, logout } = useAuth()
-  const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
+  const basePath = location.pathname.startsWith('/app') ? '/app'
+    : location.pathname.startsWith('/canada/demo') ? '/canada/demo'
+    : location.pathname.startsWith('/canada/dashboard') ? '/canada/dashboard'
+    : '/demo'
   const isApp = basePath === '/app'
   const needsOnboarding = isApp && org && !org.pos_connected && !org.onboarded
 

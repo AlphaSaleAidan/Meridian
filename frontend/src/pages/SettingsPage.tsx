@@ -210,7 +210,9 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
 
 export default function SettingsPage() {
   const location = useLocation()
-  const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
+  const basePath = location.pathname.startsWith('/app') ? '/app'
+    : location.pathname.startsWith('/canada/demo') ? '/canada/demo'
+    : '/demo'
   const orgId = useOrgId()
   const conn = useApi(() => api.connection(orgId), [orgId])
 

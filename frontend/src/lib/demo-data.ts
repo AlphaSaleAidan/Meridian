@@ -127,7 +127,7 @@ function bizSub(text: string): string {
 // ─── Daily Revenue ──────────────────────────────────────
 
 function generateDailyRevenue(days: number): DailyRevenue[] {
-  seed = 42 // Reset seed for consistency
+  resetSeed()
   const rc = getRevenueConfig(getActiveBusinessType())
   const result: DailyRevenue[] = []
 

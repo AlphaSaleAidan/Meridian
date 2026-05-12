@@ -21,7 +21,9 @@ import { AnalyzingSection } from '@/components/AnalyzingDataState'
 
 export default function OverviewPage() {
   const location = useLocation()
-  const basePath = location.pathname.startsWith('/app') ? '/app' : '/demo'
+  const basePath = location.pathname.startsWith('/app') ? '/app'
+    : location.pathname.startsWith('/canada/demo') ? '/canada/demo'
+    : '/demo'
   const orgId = useOrgId()
   const tier = useTier()
   const limits = tierLimits[tier]
