@@ -28,8 +28,5 @@ evidently>=0.4.0
 whylogs>=1.3.0
 ydata-profiling>=4.6.0
 
-# Pose Estimation / SkeletonTracker
-torch
-torchvision
-yacs
-skellytracker[mediapipe]
+# Pose Estimation / SkeletonTracker — too heavy for Railway build (torch ~2GB).
+# Install on-demand: pip install torch torchvision yacs 'skellytracker[mediapipe]'
