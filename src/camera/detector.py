@@ -4,8 +4,13 @@ import logging
 from typing import Any
 
 import numpy as np
-import supervision as sv
-from ultralytics import YOLO
+
+try:
+    import supervision as sv
+    from ultralytics import YOLO
+except ImportError:
+    sv = None
+    YOLO = None
 
 logger = logging.getLogger("meridian.camera.detector")
 

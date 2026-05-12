@@ -24,29 +24,8 @@ pyyaml>=6.0
 # Analytics
 duckdb>=1.0.0
 
-# Vision — Camera Detection Pipeline
-ultralytics>=8.0.0
-supervision>=0.25.0
-opencv-python-headless>=4.8.0
-
-# Prompt Optimization
-dspy>=2.5.0
-
 # LLM Observability
 langfuse>=2.40.0
-
-# Agent Memory
-mem0ai>=0.1.0
-
-# Forecasting Ensemble
-statsforecast>=2.0.0
-
-# Customer LTV — Probabilistic CLV
-lifetimes>=0.11.0
-
-# Anomaly Detection
-pyod>=2.0.0
-luminol>=0.4
 
 # Multi-Model LLM Routing
 litellm>=1.40.0
