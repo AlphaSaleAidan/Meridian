@@ -1130,18 +1130,23 @@ export default function CanadaPortalLeadDetailPage() {
           <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
           <button
             onClick={async () => {
-              const order: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
-              const stageLabels: Record<string, string> = {
-                proposal_shown: 'Proposal Shown',
-                customer_checkout: 'Customer Checkout', pos_connected: 'POS Connected',
-                customer_walkthrough: 'Customer Walkthrough',
-              }
-              const currentNorm = order.find(s => STAGE_TO_STEP[s] === currentStep) || deal.stage
-              const idx = order.indexOf(currentNorm)
-              if (idx >= 0 && idx < order.length - 1) {
-                const nextStage = order[idx + 1]
-                await canadaLeadsService.updateStage(deal.id, nextStage)
-                setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
+              try {
+                const order: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
+                const currentNorm = order.find(s => STAGE_TO_STEP[s] === currentStep) || deal.stage as DealStage
+                const idx = order.indexOf(currentNorm)
+                if (idx < 0) {
+                  const nextStage: DealStage = 'proposal_shown'
+                  await canadaLeadsService.updateStage(deal.id, nextStage)
+                  setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
+                  return
+                }
+                if (idx < order.length - 1) {
+                  const nextStage = order[idx + 1]
+                  await canadaLeadsService.updateStage(deal.id, nextStage)
+                  setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
+                }
+              } catch (err) {
+                console.error('Stage advance failed:', err)
               }
             }}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 transition-all"
@@ -1229,8 +1234,12 @@ export default function CanadaPortalLeadDetailPage() {
       {deal.stage !== 'customer_walkthrough' && deal.stage !== 'closed_won' && deal.stage !== 'closed_lost' && (
         <button
           onClick={async () => {
-            await canadaLeadsService.updateStage(deal.id, 'closed_lost')
-            navigate('/canada/portal/leads')
+            try {
+              await canadaLeadsService.updateStage(deal.id, 'closed_lost')
+              navigate('/canada/portal/leads')
+            } catch (err) {
+              console.error('Mark as lost failed:', err)
+            }
           }}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/15 transition-all"
         >

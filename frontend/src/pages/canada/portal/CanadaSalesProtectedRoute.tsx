@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { useAuth } from '@/lib/auth'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { ShieldX } from 'lucide-react'
 
 export default function CanadaSalesProtectedRoute({ children }: { children: React.ReactNode }) {
   const { ready, authenticated, rep } = useSalesAuth()
-  const customerAuth = useAuth()
   const location = useLocation()
 
   const [showRetry, setShowRetry] = useState(false)
@@ -16,6 +14,8 @@ export default function CanadaSalesProtectedRoute({ children }: { children: Reac
     if (!ready) {
       const timer = setTimeout(() => setShowRetry(true), 4000)
       return () => clearTimeout(timer)
+    } else {
+      setShowRetry(false)
     }
   }, [ready])
 
@@ -38,10 +38,6 @@ export default function CanadaSalesProtectedRoute({ children }: { children: Reac
         )}
       </div>
     )
-  }
-
-  if (customerAuth.authenticated && customerAuth.org && !rep) {
-    return <AccessDenied />
   }
 
   if (!authenticated) {
