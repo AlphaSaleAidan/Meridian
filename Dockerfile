@@ -1,17 +1,12 @@
-# syntax=docker/dockerfile:1
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install core requirements (with pip cache for faster rebuilds)
 COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install ML requirements separately (optional heavy packages)
 COPY requirements-ml.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements-ml.txt || echo "ML packages skipped (non-critical)"
+RUN pip install --no-cache-dir -r requirements-ml.txt || echo "ML packages skipped (non-critical)"
 
 COPY src/ ./src/
 
