@@ -3,16 +3,19 @@ Billing Service — Square-based subscription billing for Meridian.
 
 Handles:
   - Creating Square checkout links for initial payment
-  - Creating Square invoices (setup fees, one-time charges)
-  - Auto-recurring subscriptions via Square Subscriptions API
-  - Card-on-file storage for automatic monthly charges
-  - Subscription lifecycle (create, cancel, fallback renewal)
+  - Creating Square invoices for custom amounts
+  - Recurring billing (monthly auto-charge)
+  - Subscription lifecycle (create, renew, cancel)
+  - 3-month auto-renewal cycles
+  - Setup fees (one-time line items)
+  - First-month-free (Square discount)
 
-Flow:
-  1. SR onboards customer → setup fee invoice sent (card stored on payment)
-  2. Customer pays invoice → webhook fires → card on file
-  3. Square Subscription created with stored card → auto-bills monthly
-  4. process_renewals() exists as fallback for non-subscription customers
+Uses Square catalog items:
+  - $250/month (Standard)
+  - $500/month (Premium)
+  - $1,000/month (Command)
+  - $65/week (weekly plan)
+  - Custom amounts via invoice API
 """
 
 import logging
@@ -33,7 +36,25 @@ SQUARE_APP_ID = os.getenv("SQUARE_APP_ID", "sq0idp-3yhWe5-jCcvTFnilu22dtg")
 
 CATALOG_ITEMS = {
     "standard_monthly": os.getenv("SQUARE_ITEM_250_MONTHLY", ""),
+    "premium_monthly": os.getenv("SQUARE_ITEM_500_MONTHLY", ""),
+    "command_monthly": os.getenv("SQUARE_ITEM_1000_MONTHLY", ""),
     "weekly": os.getenv("SQUARE_ITEM_65_WEEKLY", ""),
+}
+
+# Plan tier pricing (cents)
+PLAN_PRICES = {
+    "standard": 25000,   # $250/mo
+    "premium": 50000,    # $500/mo
+    "command": 100000,   # $1,000/mo
+    "weekly": 6500,      # $65/wk
+}
+
+# Map plan names to catalog keys
+PLAN_CATALOG_KEY = {
+    "standard": "standard_monthly",
+    "premium": "premium_monthly",
+    "command": "command_monthly",
+    "weekly": "weekly",
 }
 
 
@@ -88,30 +109,74 @@ class BillingService:
         business_name: str,
         plan: str = "standard",
         return_url: str = "",
+        setup_fee_cents: int = 0,
+        first_month_free: bool = False,
+        rep_id: str = "",
+        rep_name: str = "",
     ) -> CheckoutResult:
-        """Create a Square Checkout (Payment Link) for the initial subscription payment."""
+        """Create a Square Checkout (Payment Link) for a new customer subscription."""
         try:
             idempotency_key = str(uuid4())
             customer_id = await self._get_or_create_customer(
                 customer_email, customer_name, business_name
             )
 
+            line_items = []
+
+            subscription_item = {
+                "name": f"Meridian Analytics - {plan.title()} Plan (Monthly)",
+                "quantity": "1",
+                "base_price_money": {
+                    "amount": amount_cents,
+                    "currency": "USD",
+                },
+                "note": f"Monthly subscription for {business_name}",
+            }
+            line_items.append(subscription_item)
+
+            if setup_fee_cents > 0:
+                line_items.append({
+                    "name": "One-Time Setup Fee",
+                    "quantity": "1",
+                    "base_price_money": {
+                        "amount": setup_fee_cents,
+                        "currency": "USD",
+                    },
+                    "note": f"Setup & installation for {business_name}",
+                })
+
+            discounts = []
+            if first_month_free:
+                discounts.append({
+                    "name": "First Month Free",
+                    "type": "FIXED_AMOUNT",
+                    "amount_money": {
+                        "amount": amount_cents,
+                        "currency": "USD",
+                    },
+                    "scope": "LINE_ITEM",
+                })
+
+            order = {
+                "location_id": SQUARE_LOCATION_ID,
+                "line_items": line_items,
+                "metadata": {
+                    "org_id": org_id,
+                    "plan": plan,
+                    "billing_type": "subscription_initial",
+                    "setup_fee_cents": str(setup_fee_cents),
+                    "first_month_free": str(first_month_free).lower(),
+                    "rep_id": rep_id,
+                    "rep_name": rep_name,
+                },
+            }
+
+            if discounts:
+                order["discounts"] = discounts
+
             payload = {
                 "idempotency_key": idempotency_key,
-                "order": {
-                    "location_id": SQUARE_LOCATION_ID,
-                    "line_items": [{
-                        "name": f"Meridian Analytics - {plan.title()} Plan",
-                        "quantity": "1",
-                        "base_price_money": {"amount": amount_cents, "currency": "USD"},
-                        "note": f"Monthly subscription for {business_name}",
-                    }],
-                    "metadata": {
-                        "org_id": org_id,
-                        "plan": plan,
-                        "billing_type": "subscription_initial",
-                    },
-                },
+                "order": order,
                 "checkout_options": {
                     "redirect_url": return_url,
                     "merchant_support_email": "support@meridian.tips",
@@ -135,6 +200,10 @@ class BillingService:
                     square_customer_id=customer_id,
                     square_order_id=order_id,
                     status="pending_payment",
+                    setup_fee_cents=setup_fee_cents,
+                    first_month_free=first_month_free,
+                    rep_id=rep_id,
+                    rep_name=rep_name,
                 )
 
                 return CheckoutResult(
@@ -560,9 +629,37 @@ class BillingService:
         square_customer_id: Optional[str] = None,
         square_order_id: Optional[str] = None,
         status: str = "pending_payment",
+        setup_fee_cents: int = 0,
+        first_month_free: bool = False,
+        rep_id: str = "",
+        rep_name: str = "",
     ):
         """Record or update a subscription in the database."""
         now = datetime.now(timezone.utc)
+
+        metadata = {
+            "payment_method": "square",
+            "square_customer_id": square_customer_id,
+            "square_order_id": square_order_id,
+            "billing_cycle": "monthly",
+            "auto_renew": True,
+            "renewal_period_months": 3,
+            "created_via": "proposal_checkout",
+        }
+
+        # Track setup fee for commission
+        if setup_fee_cents > 0:
+            metadata["setup_fee_cents"] = setup_fee_cents
+            metadata["setup_fee_rep_id"] = rep_id
+            metadata["setup_fee_rep_name"] = rep_name
+
+        if first_month_free:
+            metadata["first_month_free"] = True
+            metadata["trial_ends_at"] = (now + timedelta(days=30)).isoformat()
+
+        if rep_id:
+            metadata["rep_id"] = rep_id
+            metadata["rep_name"] = rep_name
 
         self.db.table("subscriptions").upsert({
             "org_id": org_id,
@@ -571,12 +668,5 @@ class BillingService:
             "monthly_price_cents": amount_cents,
             "current_period_start": now.isoformat(),
             "current_period_end": (now + timedelta(days=30)).isoformat(),
-            "metadata": {
-                "payment_method": "square",
-                "square_customer_id": square_customer_id,
-                "square_order_id": square_order_id,
-                "billing_cycle": "monthly",
-                "auto_renew": True,
-                "created_via": "onboarding_checkout",
-            },
+            "metadata": metadata,
         }, on_conflict="org_id").execute()

@@ -160,6 +160,7 @@ export default function CanadaPortalLeadDetailPage() {
       businessName: deal.business_name,
       ownerName: deal.contact_name,
       email: deal.contact_email,
+      phone: deal.contact_phone || '',
       plan,
       customPrice: monthlyPrice,
       setupFee: Number(setupFee) || 0,
