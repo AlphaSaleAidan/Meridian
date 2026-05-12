@@ -489,13 +489,6 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
     lower_bound_cents: cx(Math.floor(weeklyAvg * 0.85)),
     upper_bound_cents: cx(Math.floor(weeklyAvg * 1.15)),
     confidence: 0.84,
-    horizon_days: 7,
-    error_rate: 0.10,
-    scenario_analysis: {
-      optimistic_cents: cx(Math.floor(weeklyAvg * 1.15)),
-      expected_cents: cx(weeklyAvg),
-      pessimistic_cents: cx(Math.floor(weeklyAvg * 0.85)),
-    },
   })
 
   return { forecasts, total: forecasts.length }

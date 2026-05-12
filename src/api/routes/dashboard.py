@@ -642,6 +642,7 @@ async def get_inventory(
     }
 
 
+
 # ─── Cache Management ───────────────────────────────────
 
 @router.post("/cache/flush")
