@@ -1,0 +1,33 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# System deps for crawl4ai headless browser
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium chromium-driver curl nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CHROME_BIN=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+
+# Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY requirements-ml.txt .
+RUN pip install --no-cache-dir -r requirements-ml.txt || echo "ML packages skipped"
+
+RUN pip install --no-cache-dir crawl4ai || echo "crawl4ai skipped"
+
+# Evolver deps
+COPY services/evolver/package.json services/evolver/package-lock.json ./services/evolver/
+RUN cd services/evolver && npm ci --production 2>/dev/null || npm install --production 2>/dev/null || echo "Evolver deps skipped"
+
+# Copy source
+COPY src/ ./src/
+COPY scripts/ ./scripts/
+COPY tools/ ./tools/
+COPY services/evolver/ ./services/evolver/
+COPY data/ ./data/ 2>/dev/null || true
+
+ENTRYPOINT ["python3", "scripts/worker-entrypoint.py"]
