@@ -15,6 +15,9 @@ Routes:
 import logging
 import os
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ── Sentry error tracking (must init before FastAPI) ──
 try:
