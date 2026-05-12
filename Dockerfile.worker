@@ -19,15 +19,9 @@ RUN pip install --no-cache-dir -r requirements-ml.txt || echo "ML packages skipp
 
 RUN pip install --no-cache-dir crawl4ai || echo "crawl4ai skipped"
 
-# Evolver deps
-COPY services/evolver/package.json services/evolver/package-lock.json ./services/evolver/
-RUN cd services/evolver && npm ci --production 2>/dev/null || npm install --production 2>/dev/null || echo "Evolver deps skipped"
-
 # Copy source
 COPY src/ ./src/
-COPY scripts/ ./scripts/
 COPY tools/ ./tools/
-COPY services/evolver/ ./services/evolver/
-COPY data/ ./data/ 2>/dev/null || true
+RUN mkdir -p ./data ./scripts ./services/evolver
 
-ENTRYPOINT ["python3", "scripts/worker-entrypoint.py"]
+ENTRYPOINT ["python3", "-m", "src.worker"]
