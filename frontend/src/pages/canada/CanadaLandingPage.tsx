@@ -126,6 +126,9 @@ export default function CanadaLandingPage() {
               See Live Demo <ChevronRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
           </motion.div>
+          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, ease: EASE, delay: 0.9 }} className="mt-4 text-[12px] text-[#A1A1A8]/50 text-center">
+            No credit card required &middot; 45-second setup &middot; Cancel anytime
+          </motion.p>
 
           {/* Dashboard preview */}
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1, ease: EASE, delay: 0.9 }} className="mt-16 relative max-w-3xl mx-auto">
@@ -263,11 +266,15 @@ export default function CanadaLandingPage() {
             <p className="mt-6 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
               Connect your Square, Clover, or Lightspeed POS and see exactly where your revenue is hiding. First month free — start seeing results in 60 seconds.
             </p>
-            <div className="mt-10">
+            <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
               <MagneticButton onClick={() => navigate('/canada/login')} className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(26,143,214,0.35)] inline-flex items-center gap-2">
                 Get Started Free <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
               </MagneticButton>
+              <MagneticButton onClick={() => navigate('/canada/demo')} className="group px-8 py-3.5 text-[15px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 inline-flex items-center gap-2">
+                Book a Demo <ChevronRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+              </MagneticButton>
             </div>
+            <p className="mt-3 text-[11px] text-[#A1A1A8]/40">No credit card &middot; No contracts &middot; First month free</p>
           </ScrollReveal>
         </div>
       </section>

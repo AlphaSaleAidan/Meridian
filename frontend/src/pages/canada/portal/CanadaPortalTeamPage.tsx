@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award } from 'lucide-react'
 import { clsx } from 'clsx'
 import { supabase } from '@/lib/supabase'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -124,7 +124,7 @@ export default function CanadaPortalTeamPage() {
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'reps' | 'payouts' | 'applications'>('reps')
+  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>('reps')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
@@ -337,6 +337,12 @@ export default function CanadaPortalTeamPage() {
           Sales Reps
         </button>
         <button
+          onClick={() => setActiveTab('leaderboard')}
+          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'text-[#6b7a74] hover:text-white')}
+        >
+          Leaderboard
+        </button>
+        <button
           onClick={() => setActiveTab('payouts')}
           className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'payouts' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
         >
@@ -429,6 +435,104 @@ export default function CanadaPortalTeamPage() {
             })}
           </div>
         </>
+      )}
+
+      {/* Leaderboard Tab */}
+      {activeTab === 'leaderboard' && (
+        <div className="space-y-4">
+          {/* Apple Vision Pro Incentive Banner */}
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-[#7c3aed]/30 rounded-xl p-5">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#7c3aed]/10 rounded-full blur-3xl" />
+            <div className="relative flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#7c3aed] to-[#a855f7] flex items-center justify-center flex-shrink-0">
+                <Award size={24} className="text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-white">Apple Vision Pro</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-[#7c3aed]/20 text-[#a855f7] text-[10px] font-bold border border-[#7c3aed]/30">ACTIVE INCENTIVE</span>
+                </div>
+                <p className="text-xs text-[#a1a1a8] mt-1">Top performing rep by December 31, 2026 wins an Apple Vision Pro. Ranked by total MRR signed.</p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-4 text-[10px] text-[#6b7a74]">
+              <span>Ends: Dec 31, 2026</span>
+              <span>Prize: Apple Vision Pro (CA$5,499 value)</span>
+              <span>Metric: Total MRR Signed</span>
+            </div>
+          </div>
+
+          {/* Ranked List */}
+          <div className="space-y-2">
+            {[...enrichedTeam]
+              .sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won)
+              .map((member, idx) => {
+                const avatarColor = getAvatarColor(member.name)
+                const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
+                const rankIcon = idx === 0 ? <Crown size={16} className="text-[#f59e0b]" /> : idx === 1 ? <Medal size={16} className="text-[#c0c0c0]" /> : idx === 2 ? <Medal size={16} className="text-[#cd7f32]" /> : <span className="text-xs text-[#6b7a74] font-bold w-4 text-center">{idx + 1}</span>
+
+                return (
+                  <div key={member.id} className={clsx(
+                    'bg-[#0f1512] border rounded-xl px-5 py-4 transition-all',
+                    idx === 0 ? 'border-[#f59e0b]/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]' : 'border-[#1a2420]'
+                  )}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 flex items-center justify-center flex-shrink-0">
+                        {rankIcon}
+                      </div>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
+                        <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-white">{member.name}</p>
+                          {idx === 0 && <Trophy size={12} className="text-[#f59e0b]" />}
+                        </div>
+                        <p className="text-[10px] text-[#6b7a74]">{member.location}</p>
+                      </div>
+                      <div className="flex items-center gap-6 text-center">
+                        <div>
+                          <p className="text-[10px] text-[#4a5550]">Deals Won</p>
+                          <p className="text-sm font-bold text-white">{member.deals_won}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-[#4a5550]">MRR</p>
+                          <p className="text-sm font-bold text-[#00d4aa]">{formatCad(member.total_mrr)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-[#4a5550]">Comm/mo</p>
+                          <p className="text-sm font-bold text-[#7c3aed]">{formatCad(monthlyComm)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-[#4a5550]">Pipeline</p>
+                          <p className="text-sm font-bold text-[#f59e0b]">{member.deals_open}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+
+          {/* Leaderboard Rules */}
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
+            <h3 className="text-xs font-semibold text-[#6b7a74] uppercase tracking-wider mb-3">How Rankings Work</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-[11px] text-[#4a5550]">
+              <div>
+                <p className="text-white font-medium mb-1">Primary: Total MRR</p>
+                <p>Ranked by total monthly recurring revenue from signed deals.</p>
+              </div>
+              <div>
+                <p className="text-white font-medium mb-1">Tiebreaker: Deals Won</p>
+                <p>If MRR is tied, the rep with more closed deals ranks higher.</p>
+              </div>
+              <div>
+                <p className="text-white font-medium mb-1">Apple Vision Pro</p>
+                <p>#1 ranked rep on Dec 31, 2026 wins the grand prize.</p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Payouts Tab */}

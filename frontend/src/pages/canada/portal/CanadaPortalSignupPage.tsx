@@ -22,6 +22,8 @@ export default function CanadaPortalSignupPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!name.trim()) { setError('Please enter your full name'); return }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Please enter a valid email address'); return }
     if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
 
@@ -79,6 +81,27 @@ export default function CanadaPortalSignupPage() {
             <div>
               <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
               <input type="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Min 8 characters" />
+              {password.length > 0 && (() => {
+                let strength = 0
+                if (password.length >= 8) strength++
+                if (password.length >= 12) strength++
+                if (/[A-Z]/.test(password) && /[a-z]/.test(password)) strength++
+                if (/[0-9]/.test(password)) strength++
+                if (/[^A-Za-z0-9]/.test(password)) strength++
+                const level = strength <= 1 ? 'Weak' : strength <= 2 ? 'Fair' : strength <= 3 ? 'Good' : 'Strong'
+                const color = strength <= 1 ? 'bg-red-500' : strength <= 2 ? 'bg-[#f59e0b]' : strength <= 3 ? 'bg-[#17C5B0]' : 'bg-[#00d4aa]'
+                const textColor = strength <= 1 ? 'text-red-400' : strength <= 2 ? 'text-[#f59e0b]' : strength <= 3 ? 'text-[#17C5B0]' : 'text-[#00d4aa]'
+                return (
+                  <div className="mt-2">
+                    <div className="flex gap-1">
+                      {[0, 1, 2, 3, 4].map(i => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-all ${i < strength ? color : 'bg-[#1F1F23]'}`} />
+                      ))}
+                    </div>
+                    <p className={`text-[10px] mt-1 ${textColor}`}>{level}{password.length < 8 && ' — need at least 8 characters'}</p>
+                  </div>
+                )
+              })()}
             </div>
             <button type="submit" disabled={loading} className={btnClass}>
               {loading ? 'Creating account...' : 'Create Account'}

@@ -18,11 +18,17 @@ export default function CanadaPortalSettingsPage() {
   const [pwError, setPwError] = useState('')
   const [showPw, setShowPw] = useState(false)
 
-  const [notifications, setNotifications] = useState({
-    email_new_lead: true,
-    email_commission: true,
-    email_payout: true,
-    email_weekly_report: true,
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const stored = localStorage.getItem('meridian_notification_prefs')
+      if (stored) return JSON.parse(stored)
+    } catch { /* ignore */ }
+    return {
+      email_new_lead: true,
+      email_commission: true,
+      email_payout: true,
+      email_weekly_report: true,
+    }
   })
 
   async function handleSave() {
@@ -109,7 +115,7 @@ export default function CanadaPortalSettingsPage() {
                 <p className="text-[10px] text-[#6b7a74]/40">{item.desc}</p>
               </div>
               <button
-                onClick={() => setNotifications(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                onClick={() => setNotifications((prev: Record<string, boolean>) => { const next = { ...prev, [item.key]: !prev[item.key] }; localStorage.setItem('meridian_notification_prefs', JSON.stringify(next)); return next })}
                 className={`w-9 h-5 rounded-full transition-colors relative ${notifications[item.key] ? 'bg-[#00d4aa]' : 'bg-[#1a2420]'}`}
               >
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${notifications[item.key] ? 'left-[18px]' : 'left-0.5'}`} />

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle,
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
@@ -54,6 +54,26 @@ function StepPill({ step }: { step: number }) {
   return (
     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#00d4aa]/20 text-[#00d4aa] font-semibold">
       {STEP_LABELS[step]}
+    </span>
+  )
+}
+
+function getDaysSince(dateStr: string): number {
+  const d = new Date(dateStr)
+  const now = new Date()
+  return Math.floor((now.getTime() - d.getTime()) / 86400000)
+}
+
+function StaleBadge({ days }: { days: number }) {
+  if (days < 3) return null
+  const isUrgent = days >= 7
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+      isUrgent
+        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+        : 'bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20'
+    }`}>
+      <AlertTriangle size={10} /> {days}d ago
     </span>
   )
 }
@@ -252,6 +272,7 @@ export default function CanadaPortalLeadsPage() {
         {displayed.map(deal => {
           const step = STAGE_TO_STEP[deal.stage]
           const isConnected = step >= 4
+          const daysSinceUpdate = getDaysSince(deal.updated_at)
           return (
             <Link
               key={deal.id}
@@ -280,8 +301,14 @@ export default function CanadaPortalLeadsPage() {
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0b429]/10 text-[#f0b429] font-medium">
                       CA${deal.monthly_value.toLocaleString()}/mo
                     </span>
+                    {!isConnected && <StaleBadge days={daysSinceUpdate} />}
                   </div>
-                  <p className="text-xs text-[#6b7a74] mt-0.5 truncate">{deal.contact_name}</p>
+                  <p className="text-xs text-[#6b7a74] mt-0.5 truncate">
+                    {deal.contact_name}
+                    {daysSinceUpdate >= 3 && !isConnected && (
+                      <span className="text-[#f59e0b] ml-2">Follow up needed</span>
+                    )}
+                  </p>
                 </div>
 
                 {/* Step pill + arrow */}

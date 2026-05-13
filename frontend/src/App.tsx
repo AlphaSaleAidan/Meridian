@@ -286,6 +286,7 @@ export default function App() {
               {/* ══════════════════════════════════════════════
                   LEGACY REDIRECTS
                   ══════════════════════════════════════════════ */}
+              <Route path="/try" element={<Navigate to="/canada/demo" replace />} />
               <Route path="/get-started" element={<Navigate to="/customer/signup" replace />} />
               <Route path="/portal" element={<Navigate to="/customer/login" replace />} />
               <Route path="/portal/*" element={<Navigate to="/customer/login" replace />} />

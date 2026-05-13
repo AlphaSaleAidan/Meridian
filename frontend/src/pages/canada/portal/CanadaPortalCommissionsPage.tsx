@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { DollarSign, TrendingUp, Clock, CheckCircle2, Search, ArrowUpRight, ArrowDownRight, Wallet } from 'lucide-react'
+import { DollarSign, TrendingUp, Clock, CheckCircle2, Search, ArrowUpRight, ArrowDownRight, Wallet, Target } from 'lucide-react'
 import { deriveCommissionsFromLeads, type Commission } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -111,6 +111,55 @@ export default function CanadaPortalCommissionsPage() {
               <p className="text-lg font-bold text-white">{commissionRate}%</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Projected Earnings + Goal Tracker */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp size={14} className="text-[#00d4aa]" />
+            <h3 className="text-xs font-semibold text-white">Projected Earnings</h3>
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-[11px] text-[#6b7a74]">This month</span>
+              <span className="text-sm font-bold text-[#00d4aa]">{formatCurrency(Math.round(totalEarned * 1.15))}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[11px] text-[#6b7a74]">Next month (est.)</span>
+              <span className="text-sm font-bold text-white">{formatCurrency(Math.round(totalEarned * 1.25))}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-[11px] text-[#6b7a74]">Annual pace</span>
+              <span className="text-sm font-bold text-[#f0b429]">{formatCurrency(Math.round(totalEarned * 12))}</span>
+            </div>
+          </div>
+        </div>
+        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Target size={14} className="text-[#7C5CFF]" />
+            <h3 className="text-xs font-semibold text-white">Monthly Goal</h3>
+          </div>
+          {(() => {
+            const goal = 5000
+            const progress = Math.min(100, Math.round((totalEarned / goal) * 100))
+            const dealsNeeded = totalEarned >= goal ? 0 : Math.ceil((goal - totalEarned) / (totalEarned / Math.max(commissions.length, 1)))
+            return (
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] text-[#6b7a74]">Target: {formatCurrency(goal)}/mo</span>
+                  <span className={`text-sm font-bold ${progress >= 100 ? 'text-[#00d4aa]' : 'text-[#7C5CFF]'}`}>{progress}%</span>
+                </div>
+                <div className="w-full h-2 bg-[#1a2420] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all ${progress >= 100 ? 'bg-[#00d4aa]' : 'bg-[#7C5CFF]'}`} style={{ width: `${progress}%` }} />
+                </div>
+                <p className="text-[10px] text-[#4a5550]">
+                  {progress >= 100 ? 'Goal reached! Keep pushing for stretch targets.' : `~${dealsNeeded} more deal${dealsNeeded !== 1 ? 's' : ''} to hit CA$${goal.toLocaleString()}/mo`}
+                </p>
+              </div>
+            )
+          })()}
         </div>
       </div>
 
