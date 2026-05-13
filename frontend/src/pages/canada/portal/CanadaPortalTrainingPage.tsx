@@ -1,39 +1,16 @@
 import { useState } from 'react'
 import {
-  GraduationCap, Play, CheckCircle2, ChevronRight, ChevronDown,
+  GraduationCap, CheckCircle2, ChevronRight, ChevronDown,
   BookOpen, Target, Users, Zap, Shield, BarChart3,
-  Camera, Lightbulb, Plug, X,
+  Camera, Lightbulb, Plug, Monitor,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
-const VIDEO_BUCKET = 'training-videos'
-
-const LESSON_VIDEO_KEY: Record<string, string> = {
-  '1': '1_1', '2': '1_2', '3': '1_3', '4': '1_4', '5': '1_5',
-  '6': '2_1', '7': '2_2', '8': '2_3', '9': '2_4',
-  '10': '3_1', '11': '3_2', '12': '3_3', '13': '3_4',
-  '14': '4_1', '15': '4_2', '16': '4_3', '17': '4_4', '18': '4_5',
-  '19': '5_1', '20': '5_2', '21': '5_3', '22': '5_4',
-  '23': '6_1', '24': '6_2', '25': '6_3',
-  '26': '7_1', '27': '7_2', '28': '7_3', '29': '7_4', '30': '7_5',
-  '31': '8_1', '32': '8_2', '33': '8_3', '34': '8_4',
-  '35': '9_1', '36': '9_2', '37': '9_3', '38': '9_4',
-}
-
-function getVideoUrl(lessonId: string): string | undefined {
-  const key = LESSON_VIDEO_KEY[lessonId]
-  if (!key || !SUPABASE_URL) return undefined
-  return `${SUPABASE_URL}/storage/v1/object/public/${VIDEO_BUCKET}/final_${key}.mp4`
-}
 
 interface Lesson {
   id: string
   title: string
   completed: boolean
   content: string[]
-  videoUrl?: string
-  videoDuration?: number
 }
 
 interface Module {
@@ -129,7 +106,7 @@ const MODULES: Module[] = [
     id: 'demo',
     title: 'Running a Great Demo',
     description: 'How to conduct product demos that convert prospects into clients.',
-    icon: Play,
+    icon: Monitor,
     duration: '25 min',
     category: 'Sales Skills',
     lessons: [
@@ -524,16 +501,6 @@ export default function CanadaPortalTrainingPage() {
 
                             {isLessonOpen && (
                               <div className="px-5 pb-4 pl-12 space-y-3">
-                                {getVideoUrl(lesson.id) && (
-                                  <div className="relative rounded-xl overflow-hidden bg-[#0d1117] border border-[#1a2420] shadow-lg mb-4">
-                                    <video
-                                      src={getVideoUrl(lesson.id)}
-                                      controls
-                                      className="w-full"
-                                      style={{ maxHeight: '400px' }}
-                                    />
-                                  </div>
-                                )}
                                 {lesson.content.map((paragraph, pi) => (
                                   <p key={pi} className="text-[12px] leading-relaxed text-[#9ca3a0]">{paragraph}</p>
                                 ))}
