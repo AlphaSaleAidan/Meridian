@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award } from 'lucide-react'
+
+const VisionProHero = lazy(() => import('@/components/VisionProHero'))
 import { clsx } from 'clsx'
 import { supabase } from '@/lib/supabase'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -79,155 +81,6 @@ function getRoleBadge(role: string) {
     default:
       return { text: 'Inactive', bg: 'bg-[#6b7a74]/10', textColor: 'text-[#6b7a74]', border: 'border-[#6b7a74]/20' }
   }
-}
-
-function VisionPro3D() {
-  return (
-    <div className="relative w-[140px] h-[100px] flex-shrink-0" style={{ perspective: '600px' }}>
-      <div
-        className="absolute inset-0"
-        style={{
-          transformStyle: 'preserve-3d',
-          animation: 'visionSpin 6s ease-in-out infinite',
-        }}
-      >
-        {/* Main visor — front face */}
-        <div
-          className="absolute"
-          style={{
-            width: '120px',
-            height: '52px',
-            top: '20px',
-            left: '10px',
-            borderRadius: '26px',
-            background: 'linear-gradient(135deg, #2a2a3e 0%, #1a1a2e 30%, #0d0d1a 70%, #1a1a2e 100%)',
-            boxShadow: '0 0 30px rgba(124,58,237,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
-            border: '1px solid rgba(124,58,237,0.2)',
-            transform: 'translateZ(12px)',
-          }}
-        >
-          {/* Glass lens gradient */}
-          <div
-            className="absolute"
-            style={{
-              inset: '3px',
-              borderRadius: '23px',
-              background: 'linear-gradient(145deg, rgba(124,58,237,0.15) 0%, rgba(26,143,214,0.1) 40%, rgba(23,197,176,0.08) 70%, rgba(124,58,237,0.12) 100%)',
-              backdropFilter: 'blur(4px)',
-            }}
-          >
-            {/* Reflection sweep */}
-            <div
-              style={{
-                position: 'absolute',
-                top: '4px',
-                left: '15%',
-                width: '70%',
-                height: '40%',
-                borderRadius: '50%',
-                background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%)',
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Top frame edge */}
-        <div
-          className="absolute"
-          style={{
-            width: '120px',
-            height: '52px',
-            top: '20px',
-            left: '10px',
-            borderRadius: '26px',
-            background: 'linear-gradient(180deg, #3a3a4e 0%, #2a2a3e 100%)',
-            transform: 'translateZ(14px)',
-            clipPath: 'inset(0 0 85% 0)',
-          }}
-        />
-
-        {/* Back face — cushion */}
-        <div
-          className="absolute"
-          style={{
-            width: '110px',
-            height: '44px',
-            top: '24px',
-            left: '15px',
-            borderRadius: '22px',
-            background: 'linear-gradient(135deg, #1a1a1a 0%, #111 100%)',
-            border: '1px solid rgba(255,255,255,0.03)',
-            transform: 'translateZ(-4px)',
-          }}
-        />
-
-        {/* Side band — left */}
-        <div
-          className="absolute"
-          style={{
-            width: '24px',
-            height: '8px',
-            top: '42px',
-            left: '0px',
-            borderRadius: '4px',
-            background: 'linear-gradient(90deg, #4a4a5e, #3a3a4e)',
-            transform: 'rotateY(-25deg) translateZ(6px)',
-          }}
-        />
-
-        {/* Side band — right */}
-        <div
-          className="absolute"
-          style={{
-            width: '24px',
-            height: '8px',
-            top: '42px',
-            right: '0px',
-            borderRadius: '4px',
-            background: 'linear-gradient(270deg, #4a4a5e, #3a3a4e)',
-            transform: 'rotateY(25deg) translateZ(6px)',
-          }}
-        />
-
-        {/* Digital crown — right side */}
-        <div
-          className="absolute"
-          style={{
-            width: '6px',
-            height: '6px',
-            top: '40px',
-            right: '4px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, #5a5a6e, #3a3a4e)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            transform: 'translateZ(10px)',
-          }}
-        />
-
-        {/* Ambient glow under the device */}
-        <div
-          className="absolute"
-          style={{
-            width: '80px',
-            height: '20px',
-            bottom: '6px',
-            left: '30px',
-            borderRadius: '50%',
-            background: 'radial-gradient(ellipse, rgba(124,58,237,0.2) 0%, transparent 70%)',
-            filter: 'blur(6px)',
-            transform: 'translateZ(-8px)',
-          }}
-        />
-      </div>
-
-      <style>{`
-        @keyframes visionSpin {
-          0%, 100% { transform: rotateY(-15deg) rotateX(5deg); }
-          50% { transform: rotateY(15deg) rotateX(-3deg); }
-        }
-      `}</style>
-    </div>
-  )
 }
 
 function isAdmin(email: string | undefined): boolean {
@@ -596,22 +449,31 @@ export default function CanadaPortalTeamPage() {
       {activeTab === 'leaderboard' && (
         <div className="space-y-4">
           {/* Apple Vision Pro Incentive Banner */}
-          <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-[#7c3aed]/30 rounded-xl p-5">
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-[#7c3aed]/30 rounded-xl">
             <div className="absolute top-0 right-0 w-40 h-40 bg-[#7c3aed]/8 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-[#1a8fd6]/5 rounded-full blur-3xl" />
-            <div className="relative flex items-center gap-2">
-              <VisionPro3D />
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-white">Apple Vision Pro</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-[#7c3aed]/20 text-[#a855f7] text-[10px] font-bold border border-[#7c3aed]/30 animate-pulse">ACTIVE INCENTIVE</span>
+
+            {/* 3D Vision Pro Hero */}
+            <Suspense fallback={
+              <div className="h-[200px] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-[#7c3aed]/10 border border-[#7c3aed]/20 flex items-center justify-center animate-pulse">
+                  <Award size={20} className="text-[#7c3aed]" />
                 </div>
-                <p className="text-xs text-[#a1a1a8] mt-1.5 leading-relaxed">Top performing rep by <span className="text-white font-medium">December 31, 2026</span> wins an Apple Vision Pro. Ranked by total MRR signed.</p>
-                <div className="mt-3 flex items-center gap-4 text-[10px] text-[#6b7a74]">
-                  <span className="flex items-center gap-1"><Clock size={10} /> Ends: Dec 31, 2026</span>
-                  <span className="flex items-center gap-1"><Award size={10} /> CA$5,499 value</span>
-                  <span className="flex items-center gap-1"><Trophy size={10} /> Top MRR wins</span>
-                </div>
+              </div>
+            }>
+              <VisionProHero />
+            </Suspense>
+
+            <div className="relative px-5 pb-5 -mt-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-white">Apple Vision Pro</h3>
+                <span className="px-2 py-0.5 rounded-full bg-[#7c3aed]/20 text-[#a855f7] text-[10px] font-bold border border-[#7c3aed]/30 animate-pulse">ACTIVE INCENTIVE</span>
+              </div>
+              <p className="text-xs text-[#a1a1a8] mt-1.5 leading-relaxed">Top performing rep by <span className="text-white font-medium">December 31, 2026</span> wins an Apple Vision Pro. Ranked by total MRR signed.</p>
+              <div className="mt-3 flex items-center gap-4 text-[10px] text-[#6b7a74]">
+                <span className="flex items-center gap-1"><Clock size={10} /> Ends: Dec 31, 2026</span>
+                <span className="flex items-center gap-1"><Award size={10} /> CA$5,499 value</span>
+                <span className="flex items-center gap-1"><Trophy size={10} /> Top MRR wins</span>
               </div>
             </div>
           </div>
