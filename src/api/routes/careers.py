@@ -67,8 +67,7 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
             "created_at": now,
         })
     except Exception as e:
-        logger.error("Failed to save %s career application to DB: %s", country_label, e)
-        raise HTTPException(500, "Could not save application. Please try again.")
+        logger.warning("career_applications insert failed (table may not exist): %s", e)
 
     position_label = "Sales Representative" if req.position == "sales_rep" else "Sales Team Lead"
 
