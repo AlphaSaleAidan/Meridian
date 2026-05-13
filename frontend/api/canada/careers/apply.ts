@@ -87,7 +87,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!repResp.ok) {
       const repErr = await repResp.text()
       console.error('sales_reps upsert failed:', repResp.status, repErr)
-      return res.status(500).json({ detail: 'Could not save application. Please try again.' })
+      return res.status(500).json({
+        detail: 'Could not save application. Please try again.',
+        debug: { status: repResp.status, error: repErr, hasUrl: !!supabaseUrl, hasKey: !!serviceKey },
+      })
     }
 
     return res.status(200).json({
