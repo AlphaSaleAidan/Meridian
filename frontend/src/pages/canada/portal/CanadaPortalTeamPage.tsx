@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award } from 'lucide-react'
 import { clsx } from 'clsx'
-import { supabase } from '@/lib/supabase'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
@@ -131,21 +130,20 @@ export default function CanadaPortalTeamPage() {
 
   useEffect(() => {
     async function fetchData() {
-      // Fetch team from Supabase
-      if (supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('sales_reps')
-            .select('*')
-            .in('portal_context', ['canada', 'all'])
-            .order('created_at', { ascending: true })
+      const apiBase = import.meta.env.VITE_API_URL || ''
 
-          if (data && !error && data.length > 0) {
-            setTeam(data.map((r: Record<string, unknown>) => {
+      // Fetch team + applicants from backend API (bypasses RLS)
+      try {
+        const resp = await fetch(`${apiBase}/api/canada/team`)
+        if (resp.ok) {
+          const { reps, applicants: apps } = await resp.json()
+          const allRows = [...reps, ...apps]
+          if (allRows.length > 0) {
+            setTeam(allRows.map((r: Record<string, unknown>) => {
               const email = (r.email as string) || ''
               const adminRole = ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
               return {
-                id: r.id as string || r.rep_id as string || '',
+                id: r.id as string || '',
                 name: r.name as string,
                 email,
                 phone: (r.phone as string) || '',
@@ -153,18 +151,28 @@ export default function CanadaPortalTeamPage() {
                 deals_open: 0,
                 deals_won: 0,
                 total_mrr: 0,
-                total_earned: Math.round(Number(r.total_earned || 0)),
-                total_paid: Math.round(Number(r.total_paid || 0)),
+                total_earned: 0,
+                total_paid: 0,
                 is_active: r.is_active as boolean,
                 joined: (r.created_at as string || '').slice(0, 10),
                 role: adminRole ? 'admin' : (r.is_active ? 'active' : 'inactive') as 'admin' | 'active' | 'inactive',
-                location: (r as any).location || 'Canada',
+                location: 'Canada',
               }
             }))
           }
-        } catch {
-          // fall back to demo data
+          if (apps && apps.length > 0) {
+            setApplicants(apps.map((r: Record<string, unknown>) => ({
+              id: r.id as string || '',
+              name: r.name as string || 'Unknown',
+              email: (r.email as string) || '',
+              phone: (r.phone as string) || '',
+              applied_at: (r.created_at as string || '').slice(0, 10),
+              status: 'pending' as const,
+            })))
+          }
         }
+      } catch {
+        // fall back to demo data
       }
 
       // Fetch deals for real pipeline calculation
@@ -174,31 +182,6 @@ export default function CanadaPortalTeamPage() {
         setDeals(fetchedDeals)
       } catch {
         // ignore
-      }
-
-      // Fetch applicants (new signups not yet activated)
-      if (supabase) {
-        try {
-          const { data } = await supabase
-            .from('sales_reps')
-            .select('*')
-            .eq('is_active', false)
-            .in('portal_context', ['canada', 'all'])
-            .order('created_at', { ascending: false })
-
-          if (data && data.length > 0) {
-            setApplicants(data.map((r: Record<string, unknown>) => ({
-              id: r.id as string || r.rep_id as string || '',
-              name: r.name as string || 'Unknown',
-              email: (r.email as string) || '',
-              phone: (r.phone as string) || '',
-              applied_at: (r.created_at as string || '').slice(0, 10),
-              status: 'pending' as const,
-            })))
-          }
-        } catch {
-          // ignore
-        }
       }
 
       // Derive commissions from leads data
@@ -238,8 +221,21 @@ export default function CanadaPortalTeamPage() {
   const balanceOwed = totalCommission - totalPaid
 
   async function handleApproveApplicant(applicant: Applicant) {
-    if (supabase) {
-      await supabase.from('sales_reps').update({ is_active: true }).eq('id', applicant.id)
+    const apiBase = import.meta.env.VITE_API_URL || ''
+    try {
+      const resp = await fetch(`${apiBase}/api/canada/rep-approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rep_id: applicant.id, admin_email: rep?.email }),
+      })
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        alert(err.detail || 'Failed to approve rep')
+        return
+      }
+    } catch {
+      alert('Network error — please try again')
+      return
     }
     setApplicants(prev => prev.filter(a => a.id !== applicant.id))
     setTeam(prev => [...prev, {
@@ -250,8 +246,22 @@ export default function CanadaPortalTeamPage() {
   }
 
   async function handleRejectApplicant(applicant: Applicant) {
-    if (supabase) {
-      await supabase.from('sales_reps').delete().eq('id', applicant.id)
+    if (!confirm(`Reject ${applicant.name}? This will permanently remove their application.`)) return
+    const apiBase = import.meta.env.VITE_API_URL || ''
+    try {
+      const resp = await fetch(`${apiBase}/api/canada/rep-reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rep_id: applicant.id, admin_email: rep?.email }),
+      })
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}))
+        alert(err.detail || 'Failed to reject rep')
+        return
+      }
+    } catch {
+      alert('Network error — please try again')
+      return
     }
     setApplicants(prev => prev.filter(a => a.id !== applicant.id))
   }
@@ -723,15 +733,23 @@ export default function CanadaPortalTeamPage() {
                 onClick={async () => {
                   const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
                   const name = editName.trim() || editingMember.name
-                  setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
-                  if (supabase) {
-                    const { error } = await supabase.from('sales_reps').update({ name, commission_rate: rate / 100 }).eq('id', editingMember.id)
-                    if (error) {
-                      console.error('Failed to save:', error)
-                      alert(`Save failed: ${error.message}`)
+                  const apiBase = import.meta.env.VITE_API_URL || ''
+                  try {
+                    const resp = await fetch(`${apiBase}/api/canada/rep-update`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ rep_id: editingMember.id, admin_email: rep?.email, name, commission_rate: rate / 100 }),
+                    })
+                    if (!resp.ok) {
+                      const err = await resp.json().catch(() => ({}))
+                      alert(err.detail || 'Failed to save')
                       return
                     }
+                  } catch {
+                    alert('Network error — please try again')
+                    return
                   }
+                  setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
                   setEditingMember(null)
                 }}
                 className="flex items-center gap-1.5 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"

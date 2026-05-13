@@ -165,3 +165,147 @@ async def create_customer(req: CreateCustomerRequest):
 @router.post("/careers/apply")
 async def submit_career_application(req: CareerApplication):
     return await submit_application(req, country="CA")
+
+
+class RepActionRequest(BaseModel):
+    rep_id: str
+    admin_email: EmailStr
+
+
+@router.post("/rep-approve")
+async def approve_rep(req: RepActionRequest):
+    """Admin approves a pending rep — sets is_active = true."""
+    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
+        raise HTTPException(403, "Not authorized")
+
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        raise HTTPException(503, "Supabase not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.patch(
+            f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json={"is_active": True},
+        )
+        if resp.status_code not in (200, 204):
+            logger.error("Rep approve failed: %s %s", resp.status_code, resp.text)
+            raise HTTPException(500, "Could not approve rep")
+
+    return {"ok": True, "rep_id": req.rep_id}
+
+
+@router.post("/rep-reject")
+async def reject_rep(req: RepActionRequest):
+    """Admin rejects a pending rep — deletes the sales_reps row."""
+    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
+        raise HTTPException(403, "Not authorized")
+
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        raise HTTPException(503, "Supabase not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.delete(
+            f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+            },
+        )
+        if resp.status_code not in (200, 204):
+            logger.error("Rep reject failed: %s %s", resp.status_code, resp.text)
+            raise HTTPException(500, "Could not reject rep")
+
+    return {"ok": True, "rep_id": req.rep_id}
+
+
+class RepUpdateRequest(BaseModel):
+    rep_id: str
+    admin_email: EmailStr
+    name: str | None = None
+    commission_rate: float | None = None
+
+
+@router.post("/rep-update")
+async def update_rep(req: RepUpdateRequest):
+    """Admin updates a rep's name or commission rate."""
+    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
+        raise HTTPException(403, "Not authorized")
+
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        raise HTTPException(503, "Supabase not configured")
+
+    updates: dict = {}
+    if req.name is not None:
+        updates["name"] = req.name
+    if req.commission_rate is not None:
+        updates["commission_rate"] = req.commission_rate
+    if not updates:
+        return {"ok": True, "rep_id": req.rep_id}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.patch(
+            f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=updates,
+        )
+        if resp.status_code not in (200, 204):
+            logger.error("Rep update failed: %s %s", resp.status_code, resp.text)
+            raise HTTPException(500, "Could not update rep")
+
+    return {"ok": True, "rep_id": req.rep_id}
+
+
+ADMIN_EMAILS = [
+    "apierce@alphasale.co",
+    "aidanpierce72@gmail.com",
+    "aidanpierce@meridian.tips",
+    "cheungenochmgmt@gmail.com",
+    "aidanvietnguyen@gmail.com",
+]
+
+
+@router.get("/team")
+async def get_team():
+    """Return all Canada sales reps (bypasses RLS via service key)."""
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        return {"reps": [], "applicants": []}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{supabase_url}/rest/v1/sales_reps?portal_context=in.(canada,all)&order=created_at.asc&select=id,name,email,phone,commission_rate,is_active,created_at,portal_context",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+            },
+        )
+        if resp.status_code != 200:
+            logger.error("Team fetch failed: %s", resp.text)
+            return {"reps": [], "applicants": []}
+
+        rows = resp.json()
+
+    reps = [r for r in rows if r.get("is_active")]
+    applicants = [r for r in rows if not r.get("is_active")]
+    return {"reps": reps, "applicants": applicants}
