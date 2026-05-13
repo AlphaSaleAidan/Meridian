@@ -112,13 +112,13 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
         try:
             await db.upsert("sales_reps", {
                 "id": str(uuid4()),
+                "org_id": "168b6df2-e9af-4b00-8fec-51e51149ff19",
                 "name": req.name,
                 "email": req.email,
                 "phone": req.phone or None,
-                "commission_rate": 70,
+                "commission_rate": 0.70,
                 "is_active": False,
-                "total_earned": 0,
-                "total_paid": 0,
+                "portal_context": "canada",
                 "created_at": now,
             }, on_conflict="email")
             logger.info("Upserted pending sales_reps row for CA applicant %s", req.email)

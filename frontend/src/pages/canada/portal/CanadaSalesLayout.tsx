@@ -25,12 +25,12 @@ const salesNavItems = [
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/canada/portal/commissions', icon: Wallet, label: 'Commissions' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
+  { path: '/canada/portal/team', icon: Users, label: 'Team' },
   { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
 ] as const
 
 const adminNavItems = [
   { heading: 'Admin' },
-  { path: '/canada/portal/team', icon: Users, label: 'Team Management' },
 ] as const
 
 const ADMIN_EMAILS = [

@@ -1,7 +1,5 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award } from 'lucide-react'
-
-const VisionProHero = lazy(() => import('@/components/VisionProHero'))
 import { clsx } from 'clsx'
 import { supabase } from '@/lib/supabase'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -449,22 +447,10 @@ export default function CanadaPortalTeamPage() {
       {activeTab === 'leaderboard' && (
         <div className="space-y-4">
           {/* Apple Vision Pro Incentive Banner */}
-          <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-[#7c3aed]/30 rounded-xl">
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-[#7c3aed]/30 rounded-xl p-5">
             <div className="absolute top-0 right-0 w-40 h-40 bg-[#7c3aed]/8 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-[#1a8fd6]/5 rounded-full blur-3xl" />
-
-            {/* 3D Vision Pro Hero */}
-            <Suspense fallback={
-              <div className="h-[200px] flex items-center justify-center">
-                <div className="w-10 h-10 rounded-xl bg-[#7c3aed]/10 border border-[#7c3aed]/20 flex items-center justify-center animate-pulse">
-                  <Award size={20} className="text-[#7c3aed]" />
-                </div>
-              </div>
-            }>
-              <VisionProHero />
-            </Suspense>
-
-            <div className="relative px-5 pb-5 -mt-4">
+            <div className="relative">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-bold text-white">Apple Vision Pro</h3>
                 <span className="px-2 py-0.5 rounded-full bg-[#7c3aed]/20 text-[#a855f7] text-[10px] font-bold border border-[#7c3aed]/30 animate-pulse">ACTIVE INCENTIVE</span>

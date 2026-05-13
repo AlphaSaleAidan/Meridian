@@ -66,15 +66,13 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
       email,
       commission_rate: 70,
       is_active: false,
-      total_earned: 0,
-      total_paid: 0,
     })
     .select()
     .single()
 
   if (inserted && !insertErr) return repFromRow(inserted)
 
-  // 3. INSERT blocked by RLS — create a local-only profile so the CRM is usable
+  // INSERT blocked by RLS — create a local-only profile so the CRM is usable
   const localProfile: SalesRepProfile = {
     rep_id: 'local_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
     name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
@@ -201,7 +199,6 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(async (name: string, email: string, password: string, phone?: string): Promise<string | null> => {
     if (!supabase) {
-      // No Supabase — demo mode, just create local rep
       const demoRep: SalesRepProfile = {
         rep_id: 'rep_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
         name,
@@ -220,27 +217,49 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
       return null
     }
 
-    // 1. Create Supabase auth account
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (error) return error.message
-    if (!data.user) return 'Signup failed'
+    const apiBase = import.meta.env.VITE_API_URL || ''
+    try {
+      const resp = await fetch(`${apiBase}/api/canada/rep-signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password, phone: phone || null }),
+      })
+      const body = await resp.json()
+      if (!resp.ok) {
+        return body.detail || body.message || 'Signup failed'
+      }
 
-    // 2. Create sales_reps record (pending admin approval)
-    const { error: insertErr } = await supabase
-      .from('sales_reps')
-      .insert({ name, email, phone: phone || null, commission_rate: 70, is_active: false, total_earned: 0, total_paid: 0 })
+      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInErr) {
+        const profile: SalesRepProfile = {
+          rep_id: body.rep_id || 'local_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
+          name,
+          email,
+          phone: phone || null,
+          commission_rate: 70,
+          recruiter: null,
+          is_active: false,
+          total_earned: 0,
+          total_paid: 0,
+          created_at: new Date().toISOString(),
+          portal_context: resolvePortalContext(email),
+        }
+        saveRep(profile)
+        setRep(profile)
+        return null
+      }
 
-    // 3. Resolve profile (handles INSERT failure gracefully)
-    const profile = await resolveRepProfile(email)
-    if (profile) {
-      // Override name from the signup form
-      profile.name = name
-      if (phone) profile.phone = phone
-      saveRep(profile)
-      setRep(profile)
+      const profile = await resolveRepProfile(email)
+      if (profile) {
+        profile.name = name
+        if (phone) profile.phone = phone
+        saveRep(profile)
+        setRep(profile)
+      }
+      return null
+    } catch (err) {
+      return 'Network error — please try again'
     }
-
-    return null
   }, [])
 
   const logout = useCallback(() => {
@@ -290,10 +309,10 @@ function repFromRow(data: Record<string, unknown>): SalesRepProfile {
     email: data.email as string,
     phone: (data.phone as string) || null,
     commission_rate: normalizeRate(Number(data.commission_rate) || 0.7),
-    recruiter: (data.recruiter as string) || null,
+    recruiter: null,
     is_active: data.is_active as boolean,
-    total_earned: Number(data.total_earned) || 0,
-    total_paid: Number(data.total_paid) || 0,
+    total_earned: 0,
+    total_paid: 0,
     created_at: data.created_at as string,
     portal_context: (data.portal_context as PortalContext) || resolvePortalContext(data.email as string),
   }
