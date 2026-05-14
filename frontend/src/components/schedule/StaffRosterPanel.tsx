@@ -1,4 +1,5 @@
-import { Plus, Sparkles, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Sparkles, ChevronRight, Pencil, Check } from 'lucide-react'
 import type { ScheduleStaffMember, ScheduleShift } from '@/lib/agent-data'
 
 interface Recommendation {
@@ -13,6 +14,7 @@ interface Recommendation {
 interface Props {
   staff: ScheduleStaffMember[]
   onAddStaff: () => void
+  onUpdateStaff?: (id: string, updates: Partial<ScheduleStaffMember>) => void
   recommendations: Recommendation[]
   onApplyRecommendation: (rec: Recommendation) => void
 }
@@ -25,10 +27,21 @@ const PRIORITY_STYLES = {
   optional: 'bg-[#1A8FD6]/10 text-[#1A8FD6] border-[#1A8FD6]/20',
 }
 
-function StaffCard({ member }: { member: ScheduleStaffMember }) {
+function StaffCard({ member, onUpdateRate }: { member: ScheduleStaffMember; onUpdateRate?: (id: string, cents: number) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [rateInput, setRateInput] = useState(String(member.hourlyRate / 100))
+
   const availDays = Object.entries(member.availability)
     .filter(([, v]) => v.available)
     .map(([k]) => k.charAt(0).toUpperCase() + k.slice(1, 3))
+
+  function commitRate() {
+    const parsed = parseFloat(rateInput)
+    if (!isNaN(parsed) && parsed >= 0 && parsed <= 500) {
+      onUpdateRate?.(member.id, Math.round(parsed * 100))
+    }
+    setEditing(false)
+  }
 
   return (
     <div className="flex items-center gap-2.5 p-2.5 rounded-lg hover:bg-[#1F1F23]/40 transition-colors cursor-default group">
@@ -44,8 +57,39 @@ function StaffCard({ member }: { member: ScheduleStaffMember }) {
           {member.role.replace(/_/g, ' ')}
         </div>
       </div>
-      <div className="text-[9px] text-[#A1A1A8]/30 font-mono flex-shrink-0">
-        {availDays.length}d
+      <div className="flex flex-col items-end flex-shrink-0">
+        {editing ? (
+          <div className="flex items-center gap-0.5">
+            <span className="text-[9px] text-[#A1A1A8]/40">$</span>
+            <input
+              type="number"
+              step="0.25"
+              min="0"
+              max="500"
+              value={rateInput}
+              onChange={e => setRateInput(e.target.value)}
+              onBlur={commitRate}
+              onKeyDown={e => { if (e.key === 'Enter') commitRate(); if (e.key === 'Escape') setEditing(false) }}
+              autoFocus
+              className="w-12 px-1 py-0.5 rounded bg-[#1F1F23] border border-[#1A8FD6]/40 text-[10px] text-[#F5F5F7] font-mono text-right focus:outline-none"
+            />
+            <button onClick={commitRate} className="p-0.5 text-[#17C5B0] hover:text-[#17C5B0]/80">
+              <Check size={10} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => { setRateInput(String(member.hourlyRate / 100)); setEditing(true) }}
+            className="flex items-center gap-0.5 text-[9px] text-[#17C5B0]/70 font-mono font-medium hover:text-[#17C5B0] transition-colors group/rate"
+            title="Click to edit hourly rate"
+          >
+            ${(member.hourlyRate / 100).toFixed(0)}/hr
+            <Pencil size={8} className="opacity-0 group-hover/rate:opacity-60 transition-opacity" />
+          </button>
+        )}
+        <span className="text-[9px] text-[#A1A1A8]/30 font-mono">
+          {availDays.length}d
+        </span>
       </div>
     </div>
   )
@@ -54,9 +98,14 @@ function StaffCard({ member }: { member: ScheduleStaffMember }) {
 export default function StaffRosterPanel({
   staff,
   onAddStaff,
+  onUpdateStaff,
   recommendations,
   onApplyRecommendation,
 }: Props) {
+  function handleUpdateRate(id: string, cents: number) {
+    onUpdateStaff?.(id, { hourlyRate: cents })
+  }
+
   const top3 = recommendations.slice(0, 3)
 
   return (
@@ -75,7 +124,7 @@ export default function StaffRosterPanel({
         </div>
         <div className="space-y-0.5">
           {staff.map((member) => (
-            <StaffCard key={member.id} member={member} />
+            <StaffCard key={member.id} member={member} onUpdateRate={handleUpdateRate} />
           ))}
         </div>
         {staff.length === 0 && (

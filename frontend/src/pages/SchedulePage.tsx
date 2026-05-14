@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
-import { Calendar } from 'lucide-react'
+import { Calendar, Send } from 'lucide-react'
 import {
   generateScheduleStaff,
   generateScheduleShifts,
@@ -59,22 +59,26 @@ export default function SchedulePage() {
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [selectedShift, setSelectedShift] = useState<ScheduleShift | null>(null)
   const [isPublished, setIsPublished] = useState(false)
+  const [publishBanner, setPublishBanner] = useState<string | null>(null)
+
+  // Sales reps on Canada portal should always see demo schedule
+  const showDemoSchedule = isDemo || isCanadaPath()
 
   // Demo staff roster — mutable so user can add
   const [staff, setStaff] = useState<ScheduleStaffMember[]>(() =>
-    isDemo ? generateScheduleStaff() : []
+    showDemoSchedule ? generateScheduleStaff() : []
   )
 
   // Demo shifts — mutable so user can edit/add/delete
   const [shifts, setShifts] = useState<ScheduleShift[]>(() =>
-    isDemo ? generateScheduleShifts(weekStartDate) : []
+    showDemoSchedule ? generateScheduleShifts(weekStartDate) : []
   )
 
   // Recommendations
   const recommendations = useMemo(() => {
-    if (!isDemo) return []
+    if (!showDemoSchedule) return []
     return generateRecommendedShifts(weekStartDate)
-  }, [isDemo, weekStartDate])
+  }, [showDemoSchedule, weekStartDate])
 
   // Peak hours for calendar background
   const peakHours = useMemo(() => generatePeakHourHeatmap(), [])
@@ -106,15 +110,17 @@ export default function SchedulePage() {
     const prev = addWeeks(weekStartDate, -1)
     setWeekStartDate(prev)
     setIsPublished(false)
-    if (isDemo) setShifts(generateScheduleShifts(prev))
-  }, [weekStartDate, isDemo])
+    setPublishBanner(null)
+    if (showDemoSchedule) setShifts(generateScheduleShifts(prev))
+  }, [weekStartDate, showDemoSchedule])
 
   const handleNextWeek = useCallback(() => {
     const next = addWeeks(weekStartDate, 1)
     setWeekStartDate(next)
     setIsPublished(false)
-    if (isDemo) setShifts(generateScheduleShifts(next))
-  }, [weekStartDate, isDemo])
+    setPublishBanner(null)
+    if (showDemoSchedule) setShifts(generateScheduleShifts(next))
+  }, [weekStartDate, showDemoSchedule])
 
   const handleAddStaff = useCallback((member: Omit<ScheduleStaffMember, 'id'>) => {
     const newMember: ScheduleStaffMember = {
@@ -122,6 +128,10 @@ export default function SchedulePage() {
       id: `staff-${Date.now()}`,
     }
     setStaff(prev => [...prev, newMember])
+  }, [])
+
+  const handleUpdateStaff = useCallback((id: string, updates: Partial<ScheduleStaffMember>) => {
+    setStaff(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))
   }, [])
 
   const handleShiftClick = useCallback((shift: ScheduleShift) => {
@@ -170,10 +180,26 @@ export default function SchedulePage() {
   const handlePublish = useCallback(() => {
     setIsPublished(true)
     setShifts(prev => prev.map(s => ({ ...s, status: 'published' as const })))
-  }, [])
+    const staffCount = new Set(
+      shifts.filter(s => !s.isRecommended && s.staffMemberId).map(s => s.staffMemberId)
+    ).size
+    setPublishBanner(`Schedule published — ${staffCount} staff notified`)
+    setTimeout(() => setPublishBanner(null), 5000)
+  }, [shifts])
 
-  // Non-demo: show analyzing state
-  if (!isDemo) {
+  const handleDownloadPdf = useCallback(async () => {
+    const { generateSchedulePdf } = await import('@/lib/generate-schedule-pdf')
+    const blob = await generateSchedulePdf({ shifts, staff, weekStartDate })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `schedule-${formatDateISO(weekStartDate)}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [shifts, staff, weekStartDate])
+
+  // Non-demo (and not Canada portal): show analyzing state
+  if (!showDemoSchedule) {
     return (
       <div className="space-y-6">
         <ScrollReveal variant="fadeUp">
@@ -209,6 +235,14 @@ export default function SchedulePage() {
         </div>
       </ScrollReveal>
 
+      {/* Publish banner */}
+      {publishBanner && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[#17C5B0] text-sm font-medium animate-in fade-in slide-in-from-top-2 duration-300">
+          <Send size={14} />
+          {publishBanner}
+        </div>
+      )}
+
       {/* 3-column layout */}
       <ScrollReveal variant="fadeUp" delay={0.05}>
         <div className="flex flex-col lg:flex-row gap-4">
@@ -217,6 +251,7 @@ export default function SchedulePage() {
             <StaffRosterPanel
               staff={staff}
               onAddStaff={() => setShowAddStaff(true)}
+              onUpdateStaff={handleUpdateStaff}
               recommendations={panelRecommendations}
               onApplyRecommendation={handleApplyRecommendation}
             />
@@ -249,6 +284,7 @@ export default function SchedulePage() {
               portalContext={portalContext as 'us' | 'ca'}
               onPrevWeek={handlePrevWeek}
               onNextWeek={handleNextWeek}
+              onDownloadPdf={handleDownloadPdf}
             />
           </div>
 
@@ -257,6 +293,7 @@ export default function SchedulePage() {
             <StaffRosterPanel
               staff={staff}
               onAddStaff={() => setShowAddStaff(true)}
+              onUpdateStaff={handleUpdateStaff}
               recommendations={panelRecommendations}
               onApplyRecommendation={handleApplyRecommendation}
             />

@@ -78,6 +78,7 @@ class PublishRequest(BaseModel):
     portal_context: str = "us"
     week_start_date: str
     published_by: str = ""
+    notify_staff: bool = True
 
 
 # ─── Demo Data (used until DB tables are created) ──────────────
@@ -194,11 +195,33 @@ async def publish_schedule(body: PublishRequest):
     """Publish the schedule for a week — marks all shifts as published."""
     logger.info(f"Publishing schedule for {body.merchant_id}, week {body.week_start_date}")
     # TODO: Update shift statuses and create published_schedules record
+
+    notified_count = 0
+    if body.notify_staff:
+        try:
+            from ...email.send import send_schedule_published
+            # In demo mode, send to a placeholder list.  Real implementation
+            # would query DB for staff emails linked to this merchant.
+            demo_staff_emails = [s["name"] for s in _demo_staff if s.get("active")]
+            for staff_member in _demo_staff:
+                if not staff_member.get("active"):
+                    continue
+                # In production, use real email address from DB
+                logger.info(
+                    "Would notify %s about published schedule for week %s",
+                    staff_member["name"],
+                    body.week_start_date,
+                )
+                notified_count += 1
+        except Exception as exc:
+            logger.warning("Staff notification failed (non-critical): %s", exc)
+
     return {
         "merchant_id": body.merchant_id,
         "week_start_date": body.week_start_date,
         "status": "published",
         "published_at": datetime.utcnow().isoformat(),
+        "notified_count": notified_count,
     }
 
 

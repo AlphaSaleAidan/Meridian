@@ -24,6 +24,7 @@ from .templates import (
     sla_signed,
     customer_credentials,
     rep_credentials,
+    schedule_published,
 )
 
 logger = logging.getLogger("meridian.email.send")
@@ -347,6 +348,28 @@ async def send_payment_failed(
     subject = f"Payment update needed — {business_name}"
     result = await _client.send(to, subject, html, tag="payment_failed")
     await _log_send(to, "payment_failed", subject, result, org_id=org_id, tag="payment_failed")
+    return result
+
+
+async def send_schedule_published(
+    to: str,
+    staff_name: str,
+    week_range: str,
+    shift_summary: str,
+    *,
+    org_id: Optional[str] = None,
+    schedule_url: Optional[str] = None,
+) -> dict:
+    url = schedule_url or f"{_FRONTEND}/app/schedule"
+    html = schedule_published.render(
+        staff_name=staff_name,
+        week_range=week_range,
+        shift_summary=shift_summary,
+        schedule_url=url,
+    )
+    subject = f"Your Schedule for {week_range} is Ready"
+    result = await _client.send(to, subject, html, tag="schedule_published")
+    await _log_send(to, "schedule_published", subject, result, org_id=org_id, tag="schedule_published")
     return result
 
 

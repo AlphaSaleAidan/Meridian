@@ -1,4 +1,4 @@
-import { Clock, DollarSign, AlertTriangle, Users, ChevronLeft, ChevronRight, Send } from 'lucide-react'
+import { Clock, DollarSign, AlertTriangle, Users, ChevronLeft, ChevronRight, Send, Download, TrendingUp, Lightbulb } from 'lucide-react'
 import type { ScheduleShift, ScheduleStaffMember, Holiday, PeakHourCell } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'
 
@@ -13,6 +13,7 @@ interface Props {
   portalContext: 'us' | 'ca'
   onPrevWeek: () => void
   onNextWeek: () => void
+  onDownloadPdf?: () => void
 }
 
 function pad2(n: number): string {
@@ -47,6 +48,7 @@ export default function WeekSummaryPanel({
   portalContext,
   onPrevWeek,
   onNextWeek,
+  onDownloadPdf,
 }: Props) {
   const staffMap = new Map<string, ScheduleStaffMember>()
   staff.forEach(s => staffMap.set(s.id, s))
@@ -66,6 +68,22 @@ export default function WeekSummaryPanel({
     const dur = (timeToMinutes(s.endTime) - timeToMinutes(s.startTime) - s.breakMinutes) / 60
     return sum + Math.round(member.hourlyRate * Math.max(0, dur))
   }, 0)
+
+  // Labor % (labor cost / estimated weekly revenue)
+  const ESTIMATED_WEEKLY_REVENUE_CENTS = 500000  // $5,000/week for demo
+  const laborPercent = ESTIMATED_WEEKLY_REVENUE_CENTS > 0
+    ? (totalLaborCents / ESTIMATED_WEEKLY_REVENUE_CENTS) * 100
+    : 0
+  const laborPercentColor = laborPercent > 35
+    ? 'text-red-400'
+    : laborPercent >= 30
+    ? 'text-amber-400'
+    : 'text-[#17C5B0]'
+  const laborPercentBg = laborPercent > 35
+    ? 'bg-red-500/10'
+    : laborPercent >= 30
+    ? 'bg-amber-500/10'
+    : 'bg-[#17C5B0]/10'
 
   // Coverage gaps: hours where scheduled staff < recommended
   // Simplified: compare staff count per hour against peak intensity thresholds
@@ -94,6 +112,57 @@ export default function WeekSummaryPanel({
       }
     }
     return gaps
+  })()
+
+  // Per-staff cost breakdown
+  const staffCosts = (() => {
+    const costs: { id: string; name: string; hours: number; cost: number; rate: number }[] = []
+    for (const member of staff) {
+      const memberShifts = realShifts.filter(s => s.staffMemberId === member.id)
+      const mins = memberShifts.reduce((sum, s) => {
+        const dur = timeToMinutes(s.endTime) - timeToMinutes(s.startTime) - s.breakMinutes
+        return sum + Math.max(0, dur)
+      }, 0)
+      if (mins > 0) {
+        costs.push({
+          id: member.id,
+          name: member.name,
+          hours: mins / 60,
+          cost: Math.round(member.hourlyRate * (mins / 60)),
+          rate: member.hourlyRate,
+        })
+      }
+    }
+    return costs.sort((a, b) => b.cost - a.cost)
+  })()
+
+  const avgHourlyRate = staffCosts.length > 0
+    ? Math.round(staffCosts.reduce((s, c) => s + c.rate, 0) / staffCosts.length)
+    : 0
+
+  // Labor optimization insights
+  const laborInsights: string[] = (() => {
+    const tips: string[] = []
+    if (staffCosts.length >= 2) {
+      const most = staffCosts[0]
+      const least = staffCosts[staffCosts.length - 1]
+      if (most.rate > least.rate * 1.5) {
+        tips.push(`${most.name} costs $${(most.rate / 100).toFixed(0)}/hr — swap some shifts with ${least.name} ($${(least.rate / 100).toFixed(0)}/hr) to save`)
+      }
+    }
+    if (laborPercent > 35) {
+      tips.push('Labor above 35% of revenue — reduce hours or shift to lower-cost staff')
+    }
+    if (coverageGaps > 3) {
+      tips.push(`${coverageGaps} coverage gaps — fill with lower-cost staff for savings`)
+    }
+    if (totalMinutes > 0 && staffCosts.length > 0) {
+      const costPerOpHour = totalLaborCents / (totalMinutes / 60)
+      if (costPerOpHour > 5000) {
+        tips.push(`$${(costPerOpHour / 100).toFixed(0)}/hr operating cost is high — balance shift distribution`)
+      }
+    }
+    return tips.slice(0, 3)
   })()
 
   // Overstaffed hours
@@ -176,6 +245,18 @@ export default function WeekSummaryPanel({
           </div>
 
           <div className="flex items-center gap-2.5">
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${laborPercentBg}`}>
+              <TrendingUp size={14} className={laborPercentColor} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-[#A1A1A8]/50">Labor %</p>
+              <p className={`text-sm font-bold font-mono ${laborPercentColor}`}>
+                {totalLaborCents > 0 ? `${laborPercent.toFixed(1)}%` : '--'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
             <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${coverageGaps > 0 ? 'bg-amber-500/10' : 'bg-[#17C5B0]/10'}`}>
               <AlertTriangle size={14} className={coverageGaps > 0 ? 'text-amber-400' : 'text-[#17C5B0]'} />
             </div>
@@ -201,6 +282,60 @@ export default function WeekSummaryPanel({
         </div>
       </div>
 
+      {/* Labor Insights */}
+      {staffCosts.length > 0 && (
+        <div className="card p-3 space-y-3">
+          <div className="flex items-center gap-1.5">
+            <Lightbulb size={13} className="text-amber-400" />
+            <h3 className="text-[11px] font-semibold text-[#A1A1A8]/60 uppercase tracking-wider">
+              Labor Insights
+            </h3>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-[#A1A1A8]/50">Avg Rate</span>
+              <span className="text-[11px] font-bold text-[#F5F5F7] font-mono">
+                ${(avgHourlyRate / 100).toFixed(0)}/hr
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-[#A1A1A8]/50">Cost/Op Hour</span>
+              <span className="text-[11px] font-bold text-[#F5F5F7] font-mono">
+                {totalMinutes > 0 ? `$${(totalLaborCents / (totalMinutes / 60) / 100).toFixed(0)}/hr` : '--'}
+              </span>
+            </div>
+          </div>
+
+          {/* Per-staff breakdown */}
+          <div className="space-y-1">
+            <p className="text-[9px] text-[#A1A1A8]/40 uppercase tracking-wider">Staff Breakdown</p>
+            {staffCosts.slice(0, 5).map(sc => (
+              <div key={sc.id} className="flex items-center justify-between">
+                <span className="text-[10px] text-[#A1A1A8]/60 truncate max-w-[120px]">{sc.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] text-[#A1A1A8]/30 font-mono">{sc.hours.toFixed(1)}h</span>
+                  <span className="text-[10px] font-medium text-[#F5F5F7] font-mono">
+                    ${(sc.cost / 100).toFixed(0)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Optimization tips */}
+          {laborInsights.length > 0 && (
+            <div className="space-y-1.5 pt-1 border-t border-[#1F1F23]">
+              {laborInsights.map((tip, i) => (
+                <p key={i} className="text-[9px] leading-relaxed text-amber-400/70">
+                  {tip}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Holiday alerts */}
       {holidays.length > 0 && (
         <div className="space-y-2">
@@ -223,21 +358,38 @@ export default function WeekSummaryPanel({
         </div>
       )}
 
-      {/* Publish button */}
-      <button
-        onClick={onPublish}
-        disabled={realShifts.length === 0 || isPublished}
-        className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-          isPublished
-            ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20 cursor-default'
-            : realShifts.length === 0
-            ? 'bg-[#1F1F23] text-[#A1A1A8]/30 cursor-not-allowed'
-            : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 active:scale-[0.98]'
-        }`}
-      >
-        <Send size={14} />
-        {isPublished ? 'Published' : 'Publish Schedule'}
-      </button>
+      {/* Action buttons */}
+      <div className="space-y-2">
+        <button
+          onClick={onPublish}
+          disabled={realShifts.length === 0 || isPublished}
+          className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            isPublished
+              ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20 cursor-default'
+              : realShifts.length === 0
+              ? 'bg-[#1F1F23] text-[#A1A1A8]/30 cursor-not-allowed'
+              : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 active:scale-[0.98]'
+          }`}
+        >
+          <Send size={14} />
+          {isPublished ? 'Published' : 'Publish Schedule'}
+        </button>
+
+        {onDownloadPdf && (
+          <button
+            onClick={onDownloadPdf}
+            disabled={realShifts.length === 0}
+            className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-[12px] font-semibold transition-all ${
+              realShifts.length === 0
+                ? 'bg-[#1F1F23] text-[#A1A1A8]/30 cursor-not-allowed'
+                : 'bg-[#1F1F23] text-[#A1A1A8] hover:bg-[#2A2A2E] hover:text-[#F5F5F7] active:scale-[0.98]'
+            }`}
+          >
+            <Download size={13} />
+            Download PDF
+          </button>
+        )}
+      </div>
     </div>
   )
 }
