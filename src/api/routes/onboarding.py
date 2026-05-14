@@ -356,14 +356,18 @@ async def provision_customer(req: ProvisionCustomerRequest):
         except Exception as e:
             logger.warning(f"Invoice SMS failed for {req.phone}: {e}")
 
-    # 4. Send welcome email with credentials via Postal
+    # 4. Send credentials email via Postal/Resend
     welcome_sent = False
-    login_url = f"{_FRONTEND_URL}/customer/login"
+    login_url = f"{_FRONTEND_URL}/canada/login"
     try:
-        from ...email.send import send_welcome_email
-        email_result = await send_welcome_email(
+        from ...email.send import send_customer_credentials
+        email_result = await send_customer_credentials(
             to=req.email,
-            first_name=req.owner_name.split()[0],
+            business_name=req.business_name,
+            email=req.email,
+            password=temp_password,
+            login_url=login_url,
+            rep_name=req.rep_name or "",
             org_id=req.org_id,
         )
         welcome_sent = email_result.get("status") == "sent"
@@ -372,14 +376,14 @@ async def provision_customer(req: ProvisionCustomerRequest):
             "id": str(uuid4()),
             "org_id": req.org_id,
             "title": f"Welcome to Meridian — {req.business_name}",
-            "body": f"Welcome email sent to {req.email}",
+            "body": f"Credentials email sent to {req.email}",
             "priority": "high",
             "source_type": "event",
             "status": "active",
             "created_at": now,
         })
     except Exception as e:
-        logger.warning(f"Welcome email failed: {e}")
+        logger.warning(f"Credentials email failed: {e}")
 
     return ProvisionCustomerResponse(
         org_id=req.org_id,
@@ -424,6 +428,69 @@ async def send_invoice_sms_endpoint(req: SendInvoiceSmsRequest):
         "method": result.get("method"),
         "message_sid": result.get("message_sid"),
     }
+
+
+class ConnectPosRequest(BaseModel):
+    deal_id: str | None = None
+    provider: str
+    credentials: dict
+    business_name: str | None = None
+
+
+class VerifyPosRequest(BaseModel):
+    deal_id: str | None = None
+    provider: str
+
+
+@router.post("/connect-pos")
+async def connect_pos_onboarding(req: ConnectPosRequest):
+    """Test POS credentials then save if valid. Called from lead detail page."""
+    from .pos_connections import test_connection, TestConnectionRequest
+
+    test_result = await test_connection(TestConnectionRequest(
+        pos_system=req.provider,
+        credentials=req.credentials,
+    ))
+
+    if not test_result.get("success"):
+        raise HTTPException(
+            400,
+            test_result.get("message", f"Could not connect to {req.provider}. Check your credentials."),
+        )
+
+    if req.deal_id:
+        db = get_db()
+        try:
+            await db.update(
+                "deals",
+                {"pos_system": req.provider, "pos_status": "connected"},
+                filters={"id": f"eq.{req.deal_id}"},
+            )
+        except Exception as e:
+            logger.warning("Could not update deal POS status: %s", e)
+
+    return {
+        "success": True,
+        "message": test_result.get("message", f"{req.provider.title()} connected successfully."),
+        "business_name": test_result.get("business_name"),
+    }
+
+
+@router.post("/verify-pos")
+async def verify_pos_onboarding(req: VerifyPosRequest):
+    """Quick verify that POS connection is still live."""
+    from .pos_connections import test_connection, TestConnectionRequest
+
+    if req.deal_id:
+        db = get_db()
+        try:
+            rows = await db.select("deals", filters={"id": f"eq.{req.deal_id}"}, limit=1)
+            if rows and rows[0].get("pos_status") == "connected":
+                return {"verified": True, "provider": req.provider}
+        except Exception:
+            pass
+
+    return {"verified": False, "provider": req.provider, "message": "Connection not verified yet."}
 
 
 def _generate_password() -> str:

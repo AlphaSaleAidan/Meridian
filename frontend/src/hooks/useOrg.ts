@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/auth'
 export type Tier = 'trial' | 'starter' | 'growth' | 'enterprise'
 
 function isDemoPath(pathname: string): boolean {
-  return pathname.startsWith('/demo') || pathname.startsWith('/canada')
+  return pathname.startsWith('/demo') || pathname === '/canada/demo'
 }
 
 export function useOrgId(): string {
