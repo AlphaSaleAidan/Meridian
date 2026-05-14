@@ -63,5 +63,10 @@ celery_app.conf.update(
             "schedule": 86400.0,  # 24 hours
             "options": {"queue": "default"},
         },
+        "daily-burn-rate": {
+            "task": "src.workers.tasks.send_daily_burn_rate",
+            "schedule": 86400.0,  # 24 hours
+            "options": {"queue": "reports"},
+        },
     },
 )

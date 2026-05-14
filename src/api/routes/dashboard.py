@@ -336,6 +336,46 @@ async def update_insight_action(
     return {"updated": len(result) > 0, "insight_id": insight_id, "action_status": action_status}
 
 
+@router.get("/insights/cooldown")
+async def get_insights_cooldown(
+    org_id: str = Query(..., description="Organization ID"),
+    db=Depends(_get_db),
+):
+    """Check if insight generation is still cooling down (2hr window)."""
+    COOLDOWN_HOURS = 2
+
+    # Check the most recent insight's created_at for this org
+    recent = await db.select(
+        "insights",
+        filters={"org_id": f"eq.{org_id}", "is_active": "eq.true"},
+        order="created_at.desc",
+        limit=1,
+    )
+
+    if not recent:
+        return {"cooling_down": False, "seconds_remaining": 0, "ready_at": None}
+
+    last_generated = datetime.fromisoformat(
+        recent[0]["created_at"].replace("Z", "+00:00")
+    )
+    ready_at = last_generated + timedelta(hours=COOLDOWN_HOURS)
+    now = datetime.now(timezone.utc)
+
+    if now >= ready_at:
+        return {
+            "cooling_down": False,
+            "seconds_remaining": 0,
+            "ready_at": ready_at.isoformat(),
+        }
+
+    remaining = int((ready_at - now).total_seconds())
+    return {
+        "cooling_down": True,
+        "seconds_remaining": remaining,
+        "ready_at": ready_at.isoformat(),
+    }
+
+
 # ─── Forecasts ────────────────────────────────────────────
 
 @router.get("/forecasts")
@@ -644,6 +684,15 @@ async def get_inventory(
 
 
 # ─── Cache Management ───────────────────────────────────
+
+@router.post("/burn-rate/send")
+async def trigger_burn_rate_sms():
+    """Manually trigger daily burn rate SMS. Admin only."""
+    from ...analytics.burn_rate import send_burn_rate_sms
+
+    result = await send_burn_rate_sms()
+    return result
+
 
 @router.post("/cache/flush")
 async def flush_cache(

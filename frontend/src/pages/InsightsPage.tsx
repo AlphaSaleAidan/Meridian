@@ -8,6 +8,7 @@ import InsightCard from '@/components/InsightCard'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
 import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
+import { useInsightsCooldown } from '@/hooks/useInsightsCooldown'
 
 const insightTypes = [
   { key: '', label: 'All' },
@@ -27,6 +28,7 @@ export default function InsightsPage() {
   const orgId = useOrgId()
   const tier = useTier()
   const limits = tierLimits[tier]
+  const { coolingDown, timeDisplay } = useInsightsCooldown()
   const insights = useApi(() => api.insights(orgId, 50), [orgId])
 
   if (insights.loading) return <LoadingPage />
@@ -53,6 +55,18 @@ export default function InsightsPage() {
           </p>
         </div>
       </ScrollReveal>
+
+      {coolingDown && timeDisplay && (
+        <ScrollReveal variant="fadeUp" delay={0.03}>
+          <div className="p-4 rounded-xl bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center gap-3">
+            <div className="text-2xl font-mono text-[#7C5CFF]">{timeDisplay}</div>
+            <div>
+              <p className="text-sm font-semibold text-[#7C5CFF]">AI Insights Generating</p>
+              <p className="text-xs text-[#A1A1A8]">New insights will be ready soon. Our AI swarm is analyzing your data for the best possible recommendations.</p>
+            </div>
+          </div>
+        </ScrollReveal>
+      )}
 
       {/* Filters — scrollable on mobile */}
       <ScrollReveal variant="fadeUp" delay={0.05}>

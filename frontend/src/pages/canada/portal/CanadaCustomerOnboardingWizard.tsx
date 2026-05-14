@@ -128,7 +128,7 @@ export default function CanadaCustomerOnboardingWizard() {
     'Preparing your dashboard...',
   ]
 
-  // Square checkout callback
+  // Square checkout callback — clear param after handling to prevent re-trigger
   useEffect(() => {
     const checkoutStatus = searchParams.get('checkout')
     if (checkoutStatus === 'success') {
@@ -136,6 +136,9 @@ export default function CanadaCustomerOnboardingWizard() {
       if (savedToken) sessionStorage.removeItem('meridian_onboard_token')
       setPaymentComplete(true)
       setStep('checkout')
+      const cleaned = new URLSearchParams(searchParams)
+      cleaned.delete('checkout')
+      window.history.replaceState({}, '', `${window.location.pathname}${cleaned.toString() ? '?' + cleaned.toString() : ''}`)
     }
   }, [searchParams])
 
@@ -148,9 +151,9 @@ export default function CanadaCustomerOnboardingWizard() {
   async function handleAccountNext() {
     if (!account.businessName.trim()) { setError('Business name is required'); return }
     if (!account.ownerName.trim()) { setError('Your name is required'); return }
-    if (!account.email.trim()) { setError('Email is required'); return }
+    if (!account.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account.email)) { setError('Please enter a valid email address'); return }
     if (!account.phone.trim()) { setError('Phone number is required'); return }
-    if (!account.password || account.password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (!account.password || account.password.length < 8) { setError('Password must be at least 8 characters'); return }
     if (account.password !== account.confirmPassword) { setError("Passwords don't match"); return }
     setSaving(true); setError(null)
     try {
@@ -211,6 +214,7 @@ export default function CanadaCustomerOnboardingWizard() {
 
   async function handleInventoryNext() {
     if (inventoryItems.length > 0 && supabase && org) {
+      if (!org.org_id) { setError('Account not fully created — go back and retry signup'); return }
       setSaving(true)
       try {
         const rows = inventoryItems.filter(item => item.name.trim()).map(item => ({
@@ -219,7 +223,7 @@ export default function CanadaCustomerOnboardingWizard() {
           supplier: item.supplier || null, unit: item.unit || 'each',
         }))
         if (rows.length > 0) await supabase.from('products').upsert(rows, { onConflict: 'org_id,name' })
-      } catch (err) { console.warn('Inventory save warning:', err) }
+      } catch (err: any) { setError(err.message || 'Failed to save inventory — please try again'); setSaving(false); return }
       finally { setSaving(false) }
     }
     setStep('staff')
@@ -234,6 +238,7 @@ export default function CanadaCustomerOnboardingWizard() {
 
   async function handleStaffNext() {
     if (staffMembers.length > 0 && supabase && org) {
+      if (!org.org_id) { setError('Account not fully created — go back and retry signup'); return }
       setSaving(true)
       try {
         const rows = staffMembers.filter(m => m.name.trim()).map(m => ({
@@ -241,7 +246,7 @@ export default function CanadaCustomerOnboardingWizard() {
           hourly_rate: m.hourlyRate ? parseFloat(m.hourlyRate) : null,
         }))
         if (rows.length > 0) await supabase.from('users').insert(rows)
-      } catch (err) { console.warn('Staff save warning:', err) }
+      } catch (err: any) { setError(err.message || 'Failed to save staff — please try again'); setSaving(false); return }
       finally { setSaving(false) }
     }
     setStep('schedule')
@@ -259,6 +264,7 @@ export default function CanadaCustomerOnboardingWizard() {
 
   async function handleScheduleNext() {
     if (scheduleImage && supabase && org) {
+      if (!org.org_id) { setError('Account not fully created — go back and retry signup'); return }
       setSaving(true)
       try {
         const fileName = `${org.org_id}/schedule_${Date.now()}.${scheduleImage.name.split('.').pop()}`
@@ -268,7 +274,7 @@ export default function CanadaCustomerOnboardingWizard() {
           notes: `Uploaded: ${scheduleImage.name}. Pending OCR processing.`,
           file_path: fileName, status: 'pending_processing',
         })
-      } catch (err) { console.warn('Schedule upload warning:', err) }
+      } catch (err: any) { setError(err.message || 'Failed to upload schedule — please try again'); setSaving(false); return }
       finally { setSaving(false) }
     }
     setStep('checkout')
@@ -276,6 +282,7 @@ export default function CanadaCustomerOnboardingWizard() {
 
   // ── Checkout ──
   async function handleSquareCheckout() {
+    if (!org?.org_id) { setCheckoutError('Account not fully created — go back and retry signup'); return }
     setCheckoutLoading(true); setCheckoutError(null)
     const planLabel = (prefill.plan || 'Standard').replace(/^\w/, (c: string) => c.toUpperCase())
     try {

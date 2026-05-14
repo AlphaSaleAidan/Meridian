@@ -72,6 +72,55 @@ SOURCES = {
         ],
         "topics": ["fintech", "marketplace", "saas", "ai", "growth"],
     },
+    "investopedia": {
+        "name": "Investopedia",
+        "base_url": "https://www.investopedia.com",
+        "start_paths": [
+            "/small-business-4427754",
+            "/financial-analysis-4427788",
+            "/terms/c/cashflow.asp",
+            "/terms/b/burnrate.asp",
+            "/terms/g/grossmargin.asp",
+        ],
+        "topics": ["finance", "small-business", "cash-flow", "margins", "accounting"],
+    },
+    "nra_restaurant": {
+        "name": "National Restaurant Association",
+        "base_url": "https://restaurant.org",
+        "start_paths": [
+            "/research-and-media/research",
+            "/education-and-resources/running-a-restaurant",
+        ],
+        "topics": ["restaurant", "food-service", "labor", "food-cost", "operations"],
+    },
+    "score_org": {
+        "name": "SCORE Small Business",
+        "base_url": "https://www.score.org",
+        "start_paths": [
+            "/resource-library/topics/financial-management",
+            "/resource-library/topics/marketing-and-sales",
+        ],
+        "topics": ["small-business", "finance", "marketing", "growth", "cash-flow"],
+    },
+    "toast_blog": {
+        "name": "Toast Restaurant Blog",
+        "base_url": "https://pos.toasttab.com",
+        "start_paths": [
+            "/blog/restaurant-management",
+            "/blog/restaurant-finance",
+            "/blog/restaurant-operations",
+        ],
+        "topics": ["restaurant", "pos", "operations", "finance", "food-cost"],
+    },
+    "lightspeed_blog": {
+        "name": "Lightspeed Blog",
+        "base_url": "https://www.lightspeedhq.com",
+        "start_paths": [
+            "/blog/category/restaurant-management",
+            "/blog/category/retail-management",
+        ],
+        "topics": ["retail", "restaurant", "pos", "inventory", "analytics"],
+    },
 }
 
 CLEANING_PATTERNS = [
@@ -103,6 +152,10 @@ def tag_metadata(text: str, source_key: str, url: str) -> dict:
                        "foot traffic", "conversion", "customer journey"]
     analytics_keywords = ["analytics", "data", "insight", "forecast", "predict", "metric", "kpi", "dashboard",
                           "visualization", "machine learning", "ai", "artificial intelligence"]
+    financial_keywords = ["profit", "margin", "cash flow", "burn rate", "revenue", "cogs",
+                          "cost of goods", "break even", "roi", "return on investment", "p&l",
+                          "profit and loss", "balance sheet", "accounts receivable", "payroll",
+                          "tax", "depreciation", "amortization", "working capital", "liquidity"]
 
     lower = text.lower()
     for kw in restaurant_keywords:
@@ -116,6 +169,10 @@ def tag_metadata(text: str, source_key: str, url: str) -> dict:
     for kw in analytics_keywords:
         if kw in lower:
             domain_tags.append("analytics")
+            break
+    for kw in financial_keywords:
+        if kw in lower:
+            domain_tags.append("finance")
             break
 
     return {

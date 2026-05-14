@@ -272,3 +272,19 @@ def train_swarm_batch():
             await close_db()
 
     return run_async(_batch())
+
+
+@shared_task(name="src.workers.tasks.send_daily_burn_rate")
+def send_daily_burn_rate():
+    """Send daily burn rate SMS to admin."""
+
+    async def _send():
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from ..analytics.burn_rate import send_burn_rate_sms
+            return await send_burn_rate_sms()
+        finally:
+            await close_db()
+
+    return run_async(_send())
