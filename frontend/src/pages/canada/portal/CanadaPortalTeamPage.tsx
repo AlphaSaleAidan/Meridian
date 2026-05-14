@@ -137,9 +137,8 @@ export default function CanadaPortalTeamPage() {
         const resp = await fetch(`${apiBase}/api/canada/team`)
         if (resp.ok) {
           const { reps, applicants: apps } = await resp.json()
-          const allRows = [...reps, ...apps]
-          if (allRows.length > 0) {
-            setTeam(allRows.map((r: Record<string, unknown>) => {
+          if (reps && reps.length > 0) {
+            setTeam(reps.map((r: Record<string, unknown>) => {
               const email = (r.email as string) || ''
               const adminRole = ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
               return {
@@ -153,9 +152,9 @@ export default function CanadaPortalTeamPage() {
                 total_mrr: 0,
                 total_earned: 0,
                 total_paid: 0,
-                is_active: r.is_active as boolean,
+                is_active: true,
                 joined: (r.created_at as string || '').slice(0, 10),
-                role: adminRole ? 'admin' : (r.is_active ? 'active' : 'inactive') as 'admin' | 'active' | 'inactive',
+                role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
                 location: 'Canada',
               }
             }))

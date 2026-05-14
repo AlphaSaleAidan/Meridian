@@ -22,6 +22,7 @@ from .templates import (
     payment_receipt,
     sla_signed,
     customer_credentials,
+    rep_credentials,
 )
 
 logger = logging.getLogger("meridian.email.send")
@@ -303,6 +304,25 @@ async def send_sla_signed(
     subject = f"Signed SLA — {business_name}"
     result = await _client.send(to, subject, html, tag="sla_signed")
     await _log_send(to, "sla_signed", subject, result, org_id=org_id, tag="sla_signed")
+    return result
+
+
+async def send_rep_credentials(
+    to: str,
+    rep_name: str,
+    email: str,
+    password: str,
+    login_url: str,
+) -> dict:
+    html = rep_credentials.render(
+        rep_name=rep_name,
+        email=email,
+        password=password,
+        login_url=login_url,
+    )
+    subject = f"Your Meridian Sales Portal Login — Welcome, {rep_name}!"
+    result = await _client.send(to, subject, html, tag="rep_credentials")
+    await _log_send(to, "rep_credentials", subject, result, tag="rep_credentials")
     return result
 
 

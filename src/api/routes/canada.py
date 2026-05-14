@@ -174,17 +174,21 @@ class RepActionRequest(BaseModel):
 
 @router.post("/rep-approve")
 async def approve_rep(req: RepActionRequest):
-    """Admin approves a pending rep — sets is_active = true."""
+    """Admin approves a pending rep — sets is_active=true, creates auth user if needed, sends credentials email."""
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized")
 
     import httpx
+    import secrets
+    import string
+
     supabase_url = os.environ.get("SUPABASE_URL", "")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        # 1. PATCH is_active = true and verify row was updated
         resp = await client.patch(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
@@ -196,10 +200,66 @@ async def approve_rep(req: RepActionRequest):
             json={"is_active": True},
         )
         if resp.status_code not in (200, 204):
-            logger.error("Rep approve failed: %s %s", resp.status_code, resp.text)
+            logger.error("Rep approve PATCH failed: %s %s", resp.status_code, resp.text)
             raise HTTPException(500, "Could not approve rep")
 
-    return {"ok": True, "rep_id": req.rep_id}
+        updated_rows = resp.json() if resp.status_code == 200 else []
+        if not updated_rows:
+            logger.error("Rep approve: no rows matched id=%s", req.rep_id)
+            raise HTTPException(404, "Rep not found — could not approve")
+
+        rep_row = updated_rows[0]
+        rep_email = rep_row.get("email", "")
+        rep_name = rep_row.get("name", "")
+
+        # 2. Create Supabase auth user if one doesn't exist yet
+        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+        auth_created = False
+
+        auth_resp = await client.post(
+            f"{supabase_url}/auth/v1/admin/users",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "email": rep_email,
+                "password": temp_password,
+                "email_confirm": True,
+                "user_metadata": {
+                    "full_name": rep_name,
+                    "role": "sales_rep",
+                    "portal": "canada",
+                },
+            },
+        )
+        if auth_resp.status_code in (200, 201):
+            auth_created = True
+            logger.info("Created auth user for approved rep %s", rep_email)
+        elif auth_resp.status_code == 422 and "already been registered" in auth_resp.text.lower():
+            logger.info("Auth user already exists for %s — skipping creation", rep_email)
+        else:
+            logger.warning("Auth user creation failed for %s: %s %s", rep_email, auth_resp.status_code, auth_resp.text)
+
+    # 3. Send credentials email (only if we created a new auth user with a temp password)
+    if auth_created and rep_email:
+        try:
+            from ...email.send import send_rep_credentials
+            login_url = "https://meridian.tips/canada/portal/login"
+            result = await send_rep_credentials(
+                to=rep_email,
+                rep_name=rep_name,
+                email=rep_email,
+                password=temp_password,
+                login_url=login_url,
+            )
+            logger.info("Sent credentials email to %s: %s", rep_email, result.get("status"))
+        except Exception as e:
+            logger.error("Failed to send credentials email to %s: %s", rep_email, e)
+
+    logger.info("Rep approved: %s (%s) by %s", rep_name, rep_email, req.admin_email)
+    return {"ok": True, "rep_id": req.rep_id, "email_sent": auth_created}
 
 
 @router.post("/rep-reject")
