@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircle, X, Send, Sparkles, ChevronRight, Square } from 'lucide-react'
 
-const DEERFLOW_URL = import.meta.env.VITE_DEERFLOW_URL ?? 'http://165.22.12.232:8001'
+const DEERFLOW_URL = import.meta.env.VITE_DEERFLOW_URL ?? 'http://209.126.80.45:8001'
 const DEERFLOW_EMAIL = import.meta.env.VITE_DEERFLOW_EMAIL ?? 'aidanpierce@meridian.tips'
 const DEERFLOW_PASSWORD = import.meta.env.VITE_DEERFLOW_PASSWORD ?? 'Meridian1!'
 
