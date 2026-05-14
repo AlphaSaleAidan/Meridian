@@ -385,6 +385,19 @@ async def provision_customer(req: ProvisionCustomerRequest):
     except Exception as e:
         logger.warning(f"Credentials email failed: {e}")
 
+    # 5. Dispatch autonomous swarm: POS sync → analysis → insight generation
+    try:
+        from src.workers.celery_app import celery_app
+        celery_app.send_task(
+            "src.workers.tasks.run_analysis",
+            args=[req.org_id],
+            countdown=120,  # 2-min delay to let POS data arrive
+            queue="analysis",
+        )
+        logger.info(f"Queued autonomous analysis for org={req.org_id} (2min delay)")
+    except Exception as e:
+        logger.warning(f"Could not queue analysis task: {e}")
+
     return ProvisionCustomerResponse(
         org_id=req.org_id,
         email=req.email,
