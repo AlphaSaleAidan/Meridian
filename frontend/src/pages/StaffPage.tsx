@@ -7,8 +7,6 @@ import { generateStaffPerformance, type StaffMember } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import AnalyzingDataState from '@/components/AnalyzingDataState'
-import { useIsDemo } from '@/hooks/useOrg'
 
 function TrendIcon({ trend }: { trend: string }) {
   if (trend === 'up') return <TrendingUp size={12} className="text-[#17C5B0]" />
@@ -66,27 +64,7 @@ function StaffCard({ member, rank }: { member: StaffMember; rank: number }) {
 }
 
 export default function StaffPage() {
-  const isDemo = useIsDemo()
   const staff = generateStaffPerformance()
-
-  if (!isDemo) {
-    return (
-      <div className="space-y-6">
-        <ScrollReveal variant="fadeUp">
-          <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">Staff Performance</h1>
-            <p className="text-sm text-[#A1A1A8] mt-1">
-              Powered by Staff Performance Analyst agent
-            </p>
-          </div>
-        </ScrollReveal>
-        <AnalyzingDataState
-          title="Analyzing staff performance"
-          description="Our AI is correlating transaction data with shift schedules to rank your team by revenue per hour, upsell rates, and customer satisfaction."
-        />
-      </div>
-    )
-  }
 
   const avgRevPerHour = Math.round(staff.reduce((s, m) => s + m.revenuePerHour, 0) / staff.length)
   const avgUpsell = Math.round(staff.reduce((s, m) => s + m.upsellRate, 0) / staff.length)

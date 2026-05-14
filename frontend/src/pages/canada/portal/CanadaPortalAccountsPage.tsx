@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Wifi, Calendar, ChevronRight, RefreshCw } from 'lucide-react'
+import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Wifi, Calendar, ChevronRight, RefreshCw, AlertTriangle, CreditCard, Loader2, Send } from 'lucide-react'
 import { deriveClientsFromLeads, type SalesClient } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
+import { useSalesAuth } from '@/lib/sales-auth'
 
 function formatCurrency(value: number): string {
   return 'CA$' + value.toLocaleString('en-CA')
@@ -27,12 +28,21 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+type BillingStatus = 'unchecked' | 'checking' | 'active' | 'pending' | 'past_due' | 'none'
+
 export default function CanadaPortalAccountsPage() {
+  const { rep } = useSalesAuth()
   const [clients, setClients] = useState<SalesClient[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  const [billingStatuses, setBillingStatuses] = useState<Record<string, BillingStatus>>({})
+  const [notifyingId, setNotifyingId] = useState<string | null>(null)
+  const [notifiedIds, setNotifiedIds] = useState<Set<string>>(new Set())
+  const [cardUpdateId, setCardUpdateId] = useState<string | null>(null)
 
   useEffect(() => {
     canadaLeadsService.list().then(deals => {
@@ -40,6 +50,63 @@ export default function CanadaPortalAccountsPage() {
       setLoading(false)
     })
   }, [])
+
+  async function checkBilling(clientId: string) {
+    setBillingStatuses(prev => ({ ...prev, [clientId]: 'checking' }))
+    try {
+      const res = await fetch(`${API_BASE}/api/billing/status/${clientId}`)
+      if (!res.ok) { setBillingStatuses(prev => ({ ...prev, [clientId]: 'none' })); return }
+      const data = await res.json()
+      const s = data.status as string
+      if (s === 'active') setBillingStatuses(prev => ({ ...prev, [clientId]: 'active' }))
+      else if (s === 'past_due') setBillingStatuses(prev => ({ ...prev, [clientId]: 'past_due' }))
+      else if (s === 'pending_payment') setBillingStatuses(prev => ({ ...prev, [clientId]: 'pending' }))
+      else setBillingStatuses(prev => ({ ...prev, [clientId]: 'none' }))
+    } catch {
+      setBillingStatuses(prev => ({ ...prev, [clientId]: 'none' }))
+    }
+  }
+
+  async function notifyClient(client: SalesClient) {
+    setNotifyingId(client.id)
+    try {
+      const res = await fetch(`${API_BASE}/api/billing/notify-payment-failed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: client.id,
+          customer_email: client.contact_email,
+          contact_name: client.contact_name,
+          business_name: client.business_name,
+          rep_name: rep?.name || '',
+          rep_email: rep?.email || '',
+        }),
+      })
+      if (res.ok) setNotifiedIds(prev => new Set(prev).add(client.id))
+    } catch {
+      window.alert('Failed to send notification. Please try again.')
+    }
+    setNotifyingId(null)
+  }
+
+  async function sendCardUpdate(client: SalesClient) {
+    setCardUpdateId(client.id)
+    try {
+      await fetch(`${API_BASE}/api/billing/update-payment-method`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: client.id,
+          customer_email: client.contact_email,
+          customer_name: client.contact_name,
+          business_name: client.business_name,
+        }),
+      })
+    } catch {
+      window.alert('Failed to send card update request. Please try again.')
+    }
+    setCardUpdateId(null)
+  }
 
   const filtered = clients.filter(c => {
     if (!search) return true
@@ -171,6 +238,25 @@ export default function CanadaPortalAccountsPage() {
                     <span className="text-[10px]">{formatDate(nextBilling)}</span>
                   </div>
 
+                  {/* Payment Status Badge */}
+                  {billingStatuses[client.id] === 'active' && (
+                    <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+                      <CheckCircle2 size={10} className="text-[#00d4aa]" />
+                      <span className="text-[10px] text-[#00d4aa] font-medium">Paid</span>
+                    </div>
+                  )}
+                  {billingStatuses[client.id] === 'pending' && (
+                    <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f0b429]/10 border border-[#f0b429]/20">
+                      <span className="text-[10px] text-[#f0b429] font-medium">Pending</span>
+                    </div>
+                  )}
+                  {billingStatuses[client.id] === 'past_due' && (
+                    <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20">
+                      <AlertTriangle size={10} className="text-red-400" />
+                      <span className="text-[10px] text-red-400 font-medium">Past Due</span>
+                    </div>
+                  )}
+
                   {/* Due In Badge */}
                   <div className="hidden md:flex items-center px-2.5 py-1 rounded-full bg-[#00d4aa]/10">
                     <span className="text-[10px] text-[#00d4aa] font-medium">Due in {daysLeft}d</span>
@@ -244,6 +330,69 @@ export default function CanadaPortalAccountsPage() {
                         <p className="text-xs text-white">{formatCurrency(client.monthly_revenue)}</p>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Billing Actions */}
+                  <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
+                        <CreditCard size={12} className="text-[#00d4aa]" /> Payment
+                      </h4>
+                      <button
+                        onClick={() => checkBilling(client.id)}
+                        disabled={billingStatuses[client.id] === 'checking'}
+                        className="text-[10px] text-[#6b7a74] hover:text-[#00d4aa] transition-colors flex items-center gap-1"
+                      >
+                        <RefreshCw size={10} className={billingStatuses[client.id] === 'checking' ? 'animate-spin' : ''} />
+                        Check Status
+                      </button>
+                    </div>
+
+                    {billingStatuses[client.id] === 'checking' && (
+                      <div className="flex items-center gap-2 text-xs text-[#6b7a74]">
+                        <Loader2 size={12} className="animate-spin" /> Checking...
+                      </div>
+                    )}
+                    {billingStatuses[client.id] === 'active' && (
+                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+                        <CheckCircle2 size={14} className="text-[#00d4aa]" />
+                        <span className="text-[11px] text-[#00d4aa] font-medium">Payment active — card on file</span>
+                      </div>
+                    )}
+                    {billingStatuses[client.id] === 'pending' && (
+                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
+                        <span className="text-[11px] text-[#f0b429] font-medium">Invoice sent — awaiting payment</span>
+                      </div>
+                    )}
+                    {billingStatuses[client.id] === 'past_due' && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
+                          <AlertTriangle size={14} className="text-red-400" />
+                          <span className="text-[11px] text-red-400 font-medium">Payment past due</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => notifyClient(client)}
+                            disabled={notifyingId === client.id || notifiedIds.has(client.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 disabled:opacity-50 transition-all"
+                          >
+                            {notifyingId === client.id ? <Loader2 size={12} className="animate-spin" /> : notifiedIds.has(client.id) ? <CheckCircle2 size={12} /> : <Send size={12} />}
+                            {notifiedIds.has(client.id) ? 'Notified' : 'Notify'}
+                          </button>
+                          <button
+                            onClick={() => sendCardUpdate(client)}
+                            disabled={cardUpdateId === client.id}
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium text-[#0a0f0d] bg-[#00d4aa] rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                          >
+                            {cardUpdateId === client.id ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
+                            Update Card
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {(!billingStatuses[client.id] || billingStatuses[client.id] === 'unchecked' || billingStatuses[client.id] === 'none') && billingStatuses[client.id] !== 'checking' && (
+                      <p className="text-[11px] text-[#4a5550]">Click "Check Status" to see billing status.</p>
+                    )}
                   </div>
 
                   {/* POS Sync */}

@@ -9,8 +9,6 @@ import { generateAgents, generateAgentChains, generateCalibrationHistory, type A
 import { formatRelative } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import AnalyzingDataState from '@/components/AnalyzingDataState'
-import { useIsDemo } from '@/hooks/useOrg'
 
 const categoryColors: Record<string, string> = {
   analysis: 'text-[#1A8FD6] bg-[#1A8FD6]/10',
@@ -96,30 +94,10 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
 }
 
 export default function AgentDashboardPage() {
-  const isDemo = useIsDemo()
   const agents = generateAgents()
   const chains = generateAgentChains()
   const calibration = generateCalibrationHistory()
   const [filter, setFilter] = useState<string>('')
-
-  if (!isDemo) {
-    return (
-      <div className="space-y-6">
-        <ScrollReveal variant="fadeUp">
-          <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">Agent Intelligence</h1>
-            <p className="text-sm text-[#A1A1A8] mt-1">
-              AI agents are being deployed to analyze your business data
-            </p>
-          </div>
-        </ScrollReveal>
-        <AnalyzingDataState
-          title="Agents are processing your data"
-          description="Our 22 AI agents are analyzing your POS transactions, customer patterns, and operational data. Agent findings and confidence scores will appear here shortly."
-        />
-      </div>
-    )
-  }
 
   const activeCount = agents.filter(a => a.status === 'active' || a.status === 'running').length
   const totalFindings = agents.reduce((s, a) => s + a.findings, 0)

@@ -63,6 +63,8 @@ from ..email.webhooks import router as email_webhook_router
 from .routes.phone import router as phone_router
 from .routes.pos_connections import router as pos_connections_router
 from .routes.inference import router as inference_router
+from .routes.website import router as website_router
+from .routes.schedule import router as schedule_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -184,6 +186,8 @@ app.include_router(email_webhook_router)
 app.include_router(phone_router)
 app.include_router(pos_connections_router)
 app.include_router(inference_router)
+app.include_router(website_router)
+app.include_router(schedule_router)
 if _has_billing:
     app.include_router(billing_router)
 if _has_marketplace:

@@ -8,7 +8,8 @@ Email API Routes — Frontend-facing endpoints for sending email via Postal.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from ..auth import require_admin
 from pydantic import BaseModel, EmailStr
 
 logger = logging.getLogger("meridian.api.email")
@@ -129,7 +130,7 @@ async def send_email(req: SendEmailRequest):
     return result
 
 
-@router.get("/log")
+@router.get("/log", dependencies=[Depends(require_admin)])
 async def email_log(
     org_id: Optional[str] = Query(None),
     template: Optional[str] = Query(None),
@@ -156,7 +157,7 @@ async def email_log(
     return {"data": rows, "count": len(rows)}
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_admin)])
 async def email_stats(org_id: Optional[str] = Query(None)):
     """Aggregate email delivery stats."""
     from ...db import get_db

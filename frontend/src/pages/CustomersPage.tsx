@@ -10,8 +10,6 @@ import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
-import AnalyzingDataState from '@/components/AnalyzingDataState'
-import { useIsDemo } from '@/hooks/useOrg'
 
 type SortKey = 'totalSpent' | 'avgOrder' | 'visits' | 'lastVisit'
 
@@ -224,7 +222,6 @@ function ConnectCamerasButton({ status, cameraCount, onConnect }: {
 }
 
 export default function CustomersPage() {
-  const isDemo = useIsDemo()
   const segments = generateRFMSegments()
   const customers = generateCustomerRankings()
   const cohorts = generateCohorts()
@@ -232,25 +229,6 @@ export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const [showCameraWizard, setShowCameraWizard] = useState(false)
   const [cameraStatus] = useState<CameraStatus>('none')
-
-  if (!isDemo) {
-    return (
-      <div className="space-y-6">
-        <ScrollReveal variant="fadeUp">
-          <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">Customer Intelligence</h1>
-            <p className="text-sm text-[#A1A1A8] mt-1">
-              Customer rankings, spend analysis & retention insights powered by AI agents
-            </p>
-          </div>
-        </ScrollReveal>
-        <AnalyzingDataState
-          title="Building your customer profiles"
-          description="Our AI is analyzing transaction patterns to build RFM segments, customer rankings, and cohort retention data. This typically takes 30-60 minutes after POS connection."
-        />
-      </div>
-    )
-  }
 
   const totalCustomers = segments.reduce((s, seg) => s + seg.count, 0)
   const vipCount = segments.filter(s => s.name === 'Champions' || s.name === 'Loyal').reduce((s, seg) => s + seg.count, 0)

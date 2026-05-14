@@ -986,6 +986,311 @@ export function generateBusinessProfiles(): BusinessTypeProfile[] {
   ]
 }
 
+// ─── Schedule Builder Types & Generators ──────────────────────
+
+export interface ScheduleStaffMember {
+  id: string
+  name: string
+  role: string
+  color: string
+  hourlyRate: number  // cents
+  availability: Record<string, { available: boolean; start: string; end: string }>
+}
+
+export interface ScheduleShift {
+  id: string
+  staffMemberId: string | null
+  dayOfWeek: number  // 0=Mon, 6=Sun
+  shiftDate: string
+  startTime: string  // "07:00"
+  endTime: string    // "15:00"
+  role: string
+  breakMinutes: number
+  notes: string
+  status: 'draft' | 'published' | 'confirmed'
+  isRecommended: boolean
+  recommendationReason?: string
+  priority?: 'critical' | 'recommended' | 'optional'
+}
+
+export interface Holiday {
+  date: string
+  name: string
+  type: 'federal' | 'provincial' | 'observance' | 'retail_peak'
+  trafficMultiplier: number
+  notes: string
+}
+
+const STAFF_COLORS = [
+  '#17C5B0', '#1A8FD6', '#E06B5E', '#D4A843', '#9B7FD4', '#4CAF50',
+  '#FF7043', '#26C6DA', '#AB47BC', '#78909C', '#EC407A', '#8D6E63',
+]
+
+const SCHEDULE_STAFF_BY_TYPE: Record<string, { name: string; role: string }[]> = {
+  coffee_shop: [
+    { name: 'Alex', role: 'barista' },
+    { name: 'Sam', role: 'barista' },
+    { name: 'Jordan', role: 'bar_lead' },
+    { name: 'Chris', role: 'cashier' },
+    { name: 'Taylor', role: 'supervisor' },
+  ],
+  restaurant: [
+    { name: 'Maria', role: 'server' },
+    { name: 'James', role: 'server' },
+    { name: 'Lin', role: 'bartender' },
+    { name: 'Sarah', role: 'host' },
+    { name: 'Mike', role: 'kitchen' },
+    { name: 'Pat', role: 'runner' },
+    { name: 'Dave', role: 'manager' },
+  ],
+  fast_food: [
+    { name: 'Emma', role: 'counter' },
+    { name: 'Ryan', role: 'drive_through' },
+    { name: 'Kai', role: 'kitchen' },
+    { name: 'Lisa', role: 'kitchen' },
+    { name: 'Tom', role: 'manager' },
+  ],
+  auto_shop: [
+    { name: 'Mark', role: 'technician' },
+    { name: 'Steve', role: 'technician' },
+    { name: 'Ana', role: 'technician' },
+    { name: 'Bob', role: 'advisor' },
+    { name: 'Jenny', role: 'advisor' },
+    { name: 'Carl', role: 'parts_counter' },
+  ],
+  smoke_shop: [
+    { name: 'Jesse', role: 'associate' },
+    { name: 'Mo', role: 'associate' },
+    { name: 'Priya', role: 'shift_lead' },
+  ],
+}
+
+const BIZ_HOURS: Record<string, { open: number; close: number }> = {
+  coffee_shop: { open: 5, close: 21 },
+  restaurant: { open: 10, close: 23 },
+  fast_food: { open: 5, close: 23 },
+  auto_shop: { open: 7, close: 19 },
+  smoke_shop: { open: 10, close: 22 },
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+function formatDateISO(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
+export function generateScheduleStaff(): ScheduleStaffMember[] {
+  const bizType = getActiveBusinessType()
+  const roster = SCHEDULE_STAFF_BY_TYPE[bizType] || SCHEDULE_STAFF_BY_TYPE.coffee_shop
+  const dayNames = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+  const hours = BIZ_HOURS[bizType] || BIZ_HOURS.coffee_shop
+
+  return roster.map((s, i) => {
+    const availability: Record<string, { available: boolean; start: string; end: string }> = {}
+    dayNames.forEach((day, di) => {
+      // Weekend availability varies; some staff off on weekends
+      const available = di < 5 || i % 3 !== 0
+      availability[day] = {
+        available,
+        start: `${pad2(hours.open)}:00`,
+        end: `${pad2(hours.close)}:00`,
+      }
+    })
+
+    const baseRate = bizType === 'auto_shop' ? 2800
+      : bizType === 'restaurant' ? 1800
+      : bizType === 'coffee_shop' ? 1600
+      : bizType === 'fast_food' ? 1400
+      : 1500
+    // Leads/supervisors/managers get higher rate
+    const roleBonus = s.role.includes('lead') || s.role.includes('supervisor') || s.role.includes('manager') ? 400 : 0
+
+    return {
+      id: `staff-${i + 1}`,
+      name: s.name,
+      role: s.role,
+      color: STAFF_COLORS[i % STAFF_COLORS.length],
+      hourlyRate: baseRate + roleBonus + (i * 50),
+      availability,
+    }
+  })
+}
+
+export function generateScheduleShifts(weekStartDate: Date): ScheduleShift[] {
+  const bizType = getActiveBusinessType()
+  const staff = generateScheduleStaff()
+  const hours = BIZ_HOURS[bizType] || BIZ_HOURS.coffee_shop
+  const shifts: ScheduleShift[] = []
+  let shiftId = 1
+
+  for (let day = 0; day < 7; day++) {
+    const shiftDate = addDays(weekStartDate, day)
+    const dateStr = formatDateISO(shiftDate)
+    const isWeekend = day >= 5
+
+    // Determine staffing: fewer staff on weekends for some biz types
+    const staffForDay = isWeekend
+      ? staff.filter((_, i) => i % 3 !== 0).slice(0, Math.max(2, staff.length - 1))
+      : staff
+
+    staffForDay.forEach((member) => {
+      // Create realistic shift patterns: openers and closers
+      const staffIdx = staff.indexOf(member)
+      const isOpener = staffIdx % 2 === 0
+      const openH = hours.open
+      const closeH = hours.close
+      const midPoint = Math.floor((openH + closeH) / 2)
+
+      const startH = isOpener ? openH : midPoint
+      const endH = isOpener ? midPoint + 1 : closeH
+      const breakMins = (endH - startH) >= 6 ? 30 : 0
+
+      shifts.push({
+        id: `shift-${shiftId++}`,
+        staffMemberId: member.id,
+        dayOfWeek: day,
+        shiftDate: dateStr,
+        startTime: `${pad2(startH)}:00`,
+        endTime: `${pad2(endH)}:00`,
+        role: member.role,
+        breakMinutes: breakMins,
+        notes: '',
+        status: 'draft',
+        isRecommended: false,
+      })
+    })
+  }
+
+  return shifts
+}
+
+export function generateRecommendedShifts(weekStartDate: Date): ScheduleShift[] {
+  const bizType = getActiveBusinessType()
+  const hours = BIZ_HOURS[bizType] || BIZ_HOURS.coffee_shop
+  const profile = getBusinessProfile(bizType)
+  const recommendations: ScheduleShift[] = []
+
+  // Find the peak hour from the hourly pattern
+  const peakHour = profile.hourlyPattern.indexOf(Math.max(...profile.hourlyPattern))
+
+  // Recommend extra coverage during peak hours on weekdays
+  const peakStart = Math.max(hours.open, peakHour - 1)
+  const peakEnd = Math.min(hours.close, peakHour + 2)
+
+  for (let day = 0; day < 5; day++) {
+    const shiftDate = addDays(weekStartDate, day)
+    recommendations.push({
+      id: `rec-${day + 1}`,
+      staffMemberId: null,
+      dayOfWeek: day,
+      shiftDate: formatDateISO(shiftDate),
+      startTime: `${pad2(peakStart)}:00`,
+      endTime: `${pad2(peakEnd)}:00`,
+      role: 'any',
+      breakMinutes: 0,
+      notes: '',
+      status: 'draft',
+      isRecommended: true,
+      recommendationReason: `Peak hour coverage — ${profile.peakLabel} sees highest transaction volume. Add 1 staff to reduce wait times.`,
+      priority: day < 2 ? 'critical' : 'recommended',
+    })
+  }
+
+  // Weekend recommendation
+  const satDate = addDays(weekStartDate, 5)
+  recommendations.push({
+    id: 'rec-sat',
+    staffMemberId: null,
+    dayOfWeek: 5,
+    shiftDate: formatDateISO(satDate),
+    startTime: `${pad2(hours.open + 1)}:00`,
+    endTime: `${pad2(hours.open + 5)}:00`,
+    role: 'any',
+    breakMinutes: 0,
+    notes: '',
+    status: 'draft',
+    isRecommended: true,
+    recommendationReason: 'Saturday morning coverage gap detected — current staffing is 1 below optimal based on last 4 weeks of transaction data.',
+    priority: 'optional',
+  })
+
+  return recommendations
+}
+
+export function getHolidaysForWeek(weekStart: Date, country: 'US' | 'CA'): Holiday[] {
+  const allHolidays: { date: string; name: string; type: Holiday['type']; mult: number; notes: string; country: string }[] = [
+    // US Federal
+    { date: '2025-01-01', name: 'New Year\'s Day', type: 'federal', mult: 0.6, notes: '', country: 'US' },
+    { date: '2025-01-20', name: 'MLK Day', type: 'federal', mult: 0.8, notes: '', country: 'US' },
+    { date: '2025-02-17', name: 'Presidents\' Day', type: 'federal', mult: 0.9, notes: '', country: 'US' },
+    { date: '2025-05-26', name: 'Memorial Day', type: 'federal', mult: 0.7, notes: '', country: 'US' },
+    { date: '2025-07-04', name: 'Independence Day', type: 'federal', mult: 0.5, notes: '', country: 'US' },
+    { date: '2025-09-01', name: 'Labor Day', type: 'federal', mult: 0.7, notes: '', country: 'US' },
+    { date: '2025-11-27', name: 'Thanksgiving', type: 'federal', mult: 0.3, notes: '', country: 'US' },
+    { date: '2025-12-25', name: 'Christmas Day', type: 'federal', mult: 0.2, notes: '', country: 'US' },
+    { date: '2026-01-01', name: 'New Year\'s Day', type: 'federal', mult: 0.6, notes: '', country: 'US' },
+    { date: '2026-05-25', name: 'Memorial Day', type: 'federal', mult: 0.7, notes: '', country: 'US' },
+    { date: '2026-07-04', name: 'Independence Day', type: 'federal', mult: 0.5, notes: '', country: 'US' },
+    { date: '2026-11-26', name: 'Thanksgiving', type: 'federal', mult: 0.3, notes: '', country: 'US' },
+    { date: '2026-12-25', name: 'Christmas Day', type: 'federal', mult: 0.2, notes: '', country: 'US' },
+    // US Retail Peaks
+    { date: '2025-02-14', name: 'Valentine\'s Day', type: 'retail_peak', mult: 1.5, notes: 'Gift & dining surge', country: 'US' },
+    { date: '2025-05-11', name: 'Mother\'s Day', type: 'retail_peak', mult: 2.5, notes: 'Highest brunch day', country: 'US' },
+    { date: '2025-11-28', name: 'Black Friday', type: 'retail_peak', mult: 2.5, notes: '', country: 'US' },
+    { date: '2025-12-24', name: 'Christmas Eve', type: 'retail_peak', mult: 1.8, notes: '', country: 'US' },
+    { date: '2025-12-31', name: 'New Year\'s Eve', type: 'retail_peak', mult: 1.8, notes: '', country: 'US' },
+    { date: '2026-02-14', name: 'Valentine\'s Day', type: 'retail_peak', mult: 1.5, notes: '', country: 'US' },
+    { date: '2026-05-10', name: 'Mother\'s Day', type: 'retail_peak', mult: 2.5, notes: '', country: 'US' },
+    { date: '2026-11-27', name: 'Black Friday', type: 'retail_peak', mult: 2.5, notes: '', country: 'US' },
+    { date: '2026-12-24', name: 'Christmas Eve', type: 'retail_peak', mult: 1.8, notes: '', country: 'US' },
+    { date: '2026-12-31', name: 'New Year\'s Eve', type: 'retail_peak', mult: 1.8, notes: '', country: 'US' },
+    // CA Federal
+    { date: '2025-01-01', name: 'New Year\'s Day', type: 'federal', mult: 0.6, notes: '', country: 'CA' },
+    { date: '2025-04-18', name: 'Good Friday', type: 'federal', mult: 0.5, notes: '', country: 'CA' },
+    { date: '2025-05-19', name: 'Victoria Day', type: 'federal', mult: 0.7, notes: '', country: 'CA' },
+    { date: '2025-07-01', name: 'Canada Day', type: 'federal', mult: 0.5, notes: '', country: 'CA' },
+    { date: '2025-09-01', name: 'Labour Day', type: 'federal', mult: 0.7, notes: '', country: 'CA' },
+    { date: '2025-10-13', name: 'Thanksgiving', type: 'federal', mult: 0.4, notes: '2nd Monday Oct', country: 'CA' },
+    { date: '2025-12-25', name: 'Christmas Day', type: 'federal', mult: 0.2, notes: '', country: 'CA' },
+    { date: '2025-12-26', name: 'Boxing Day', type: 'federal', mult: 2.0, notes: 'Major retail day', country: 'CA' },
+    { date: '2026-01-01', name: 'New Year\'s Day', type: 'federal', mult: 0.6, notes: '', country: 'CA' },
+    { date: '2026-04-03', name: 'Good Friday', type: 'federal', mult: 0.5, notes: '', country: 'CA' },
+    { date: '2026-07-01', name: 'Canada Day', type: 'federal', mult: 0.5, notes: '', country: 'CA' },
+    { date: '2026-10-12', name: 'Thanksgiving', type: 'federal', mult: 0.4, notes: '', country: 'CA' },
+    { date: '2026-12-25', name: 'Christmas Day', type: 'federal', mult: 0.2, notes: '', country: 'CA' },
+    { date: '2026-12-26', name: 'Boxing Day', type: 'federal', mult: 2.0, notes: '', country: 'CA' },
+    // CA Provincial
+    { date: '2025-02-17', name: 'Family Day', type: 'provincial', mult: 0.8, notes: 'ON/BC/AB/SK', country: 'CA' },
+    { date: '2025-06-24', name: 'St-Jean-Baptiste Day', type: 'provincial', mult: 0.6, notes: 'Quebec', country: 'CA' },
+    { date: '2025-08-04', name: 'Civic Holiday', type: 'provincial', mult: 0.8, notes: 'ON/BC/AB', country: 'CA' },
+    { date: '2026-02-16', name: 'Family Day', type: 'provincial', mult: 0.8, notes: 'ON/BC/AB/SK', country: 'CA' },
+    { date: '2026-06-24', name: 'St-Jean-Baptiste Day', type: 'provincial', mult: 0.6, notes: 'Quebec', country: 'CA' },
+    { date: '2026-08-03', name: 'Civic Holiday', type: 'provincial', mult: 0.8, notes: 'ON/BC/AB', country: 'CA' },
+  ]
+
+  const weekEnd = addDays(weekStart, 6)
+  const startStr = formatDateISO(weekStart)
+  const endStr = formatDateISO(weekEnd)
+
+  return allHolidays
+    .filter(h => h.country === country && h.date >= startStr && h.date <= endStr)
+    .map(h => ({
+      date: h.date,
+      name: h.name,
+      type: h.type,
+      trafficMultiplier: h.mult,
+      notes: h.notes,
+    }))
+}
+
 export function generateInsightsWithReasoning(): (Insight & { reasoning: ReasoningChain })[] {
   return generateTopActions().map((action, i) => ({
     id: `agent-insight-${i}`,

@@ -263,7 +263,7 @@ async def ingest_visits(req: VisitIngestRequest):
         )
         if existing.data:
             visitor_id = existing.data[0]["id"]
-            db.client.table("vision_visitors").update({
+            await db.client.table("vision_visitors").update({
                 "last_seen": datetime.now(timezone.utc).isoformat(),
                 "visit_count": existing.data[0].get("visit_count", 0) + 1,
             }).eq("id", visitor_id).execute()

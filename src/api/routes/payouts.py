@@ -81,7 +81,10 @@ def create_payout_routes(db_client):
         payout = db_client.table("payouts").select("*").eq(
             "id", payout_id
         ).single().execute()
-        
+
+        if payout.data is None:
+            raise HTTPException(status_code=404, detail="Payout not found")
+
         return {
             "payout_id": payout_id,
             "amount": float(payout.data["amount"]),

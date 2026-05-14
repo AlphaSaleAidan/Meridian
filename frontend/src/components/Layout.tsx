@@ -23,6 +23,8 @@ import {
   AlertTriangle,
   Box,
   Phone,
+  Globe,
+  Calendar,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useAuth } from '@/lib/auth'
@@ -44,8 +46,10 @@ const navItems = [
   { path: 'staff', icon: UserCheck, label: 'Staff' },
   { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },
   { path: 'inventory', icon: Layers, label: 'Inventory' },
+  { path: 'schedule', icon: Calendar, label: 'Schedule' },
   { path: 'space', icon: Box, label: '3D Space' },
   { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
+  { path: 'my-website', icon: Globe, label: 'My Website' },
   { path: 'insights', icon: Lightbulb, label: 'Insights' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },

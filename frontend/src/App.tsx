@@ -33,6 +33,10 @@ import AnomaliesPage from '@/pages/AnomaliesPage'
 import SpaceTab from '@/pages/SpaceTab'
 import PhoneOrdersPage from '@/pages/PhoneOrdersPage'
 
+const SchedulePage = lazy(() => import('@/pages/SchedulePage'))
+const MyWebsitePage = lazy(() => import('@/pages/MyWebsitePage'))
+const MerchantSitePage = lazy(() => import('@/pages/MerchantSitePage'))
+
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazy(() => import('@/components/CanadaLayout'))
 const CustomerOnboardingWizard = lazy(() => import('@/pages/customer/CustomerOnboardingWizard'))
@@ -94,8 +98,10 @@ function CustomerDashboardRoutes() {
       <Route path="margins" element={<MarginsPage />} />
       <Route path="menu-matrix" element={<MenuEngineeringPage />} />
       <Route path="anomalies" element={<AnomaliesPage />} />
+      <Route path="schedule" element={<Suspense fallback={null}><SchedulePage /></Suspense>} />
       <Route path="space" element={<SpaceTab />} />
       <Route path="phone-orders" element={<PhoneOrdersPage />} />
+      <Route path="my-website" element={<Suspense fallback={null}><MyWebsitePage /></Suspense>} />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>
@@ -126,6 +132,13 @@ export default function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/careers" element={<CareersPage />} />
+
+              {/* PUBLIC MERCHANT WEBSITES — no auth */}
+              <Route path="/sites/:slug" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <MerchantSitePage />
+                </Suspense>
+              } />
 
               {/* ══════════════════════════════════════════════
                   CUSTOMER ONBOARDING — public link from sales rep

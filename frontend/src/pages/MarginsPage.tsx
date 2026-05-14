@@ -8,8 +8,6 @@ import { generateMarginWaterfall, type MarginItem } from '@/lib/agent-data'
 import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import AnalyzingDataState from '@/components/AnalyzingDataState'
-import { useIsDemo } from '@/hooks/useOrg'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -68,27 +66,7 @@ function FormulaBreakdown({ item }: { item: MarginItem }) {
 }
 
 export default function MarginsPage() {
-  const isDemo = useIsDemo()
   const items = generateMarginWaterfall()
-
-  if (!isDemo) {
-    return (
-      <div className="space-y-6">
-        <ScrollReveal variant="fadeUp">
-          <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">Margin Analysis</h1>
-            <p className="text-sm text-[#A1A1A8] mt-1">
-              Powered by Margin Optimizer agent
-            </p>
-          </div>
-        </ScrollReveal>
-        <AnalyzingDataState
-          title="Calculating your margins"
-          description="Our AI is analyzing your product costs, waste factors, and pour costs to build waste-adjusted margin profiles for every item."
-        />
-      </div>
-    )
-  }
 
 
   const totalRevenue = items.reduce((s, i) => s + i.revenueCents, 0)

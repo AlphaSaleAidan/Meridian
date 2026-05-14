@@ -21,6 +21,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 
+from ..auth import require_admin
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
 
 logger = logging.getLogger("meridian.api.dashboard")
@@ -685,7 +686,7 @@ async def get_inventory(
 
 # ─── Cache Management ───────────────────────────────────
 
-@router.post("/burn-rate/send")
+@router.post("/burn-rate/send", dependencies=[Depends(require_admin)])
 async def trigger_burn_rate_sms():
     """Manually trigger daily burn rate SMS. Admin only."""
     from ...analytics.burn_rate import send_burn_rate_sms
@@ -694,7 +695,7 @@ async def trigger_burn_rate_sms():
     return result
 
 
-@router.post("/cache/flush")
+@router.post("/cache/flush", dependencies=[Depends(require_admin)])
 async def flush_cache(
     org_id: str = Query(..., description="Organization ID"),
 ):

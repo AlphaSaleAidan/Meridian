@@ -341,8 +341,8 @@ async def stripe_webhook(request: Request):
                         "status": "completed",
                         "completed_at": datetime.utcnow().isoformat(),
                     }).eq("stripe_session_id", session_id).execute()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Webhook processing error: {e}")
 
         elif event_type == "invoice.paid":
             subscription_id = data.get("subscription", "")
@@ -364,8 +364,8 @@ async def stripe_webhook(request: Request):
                             db.table("organizations").update({
                                 "metadata": {"payment_status": "cancelled"},
                             }).eq("id", s["org_id"]).execute()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Webhook processing error: {e}")
 
     except Exception as e:
         logger.exception(f"Webhook processing error for {event_type}")

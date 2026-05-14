@@ -73,7 +73,6 @@ export default function CustomerSignupPage() {
       if (result) { setError(result); return }
       setSuccess('Account created! Redirecting to your dashboard...')
     } catch (err: any) {
-      console.error('[Signup] Unhandled error:', err)
       setError(err.message || 'Something went wrong during signup. Please try again.')
     } finally {
       setLoading(false)

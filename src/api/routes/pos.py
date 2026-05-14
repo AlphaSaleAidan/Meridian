@@ -1,6 +1,7 @@
 """POS system selection, connection status, and waitlist API routes."""
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from ..auth import require_admin
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -64,7 +65,7 @@ async def join_waitlist(req: WaitlistRequest):
         raise HTTPException(status_code=500, detail="Failed to join waitlist")
 
 
-@router.get("/api/pos/coverage")
+@router.get("/api/pos/coverage", dependencies=[Depends(require_admin)])
 async def pos_coverage():
     """Admin endpoint: POS system coverage stats across all merchants."""
     from ...db import _db_instance as db

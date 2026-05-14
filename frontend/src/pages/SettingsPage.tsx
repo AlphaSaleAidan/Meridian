@@ -117,17 +117,19 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
     card_brand?: string; card_last4?: string; billing_method?: string
   } | null>(null)
   const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
+  const [billingError, setBillingError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!orgId) return
+    setBillingError(null)
     fetch(`${apiUrl}/api/billing/status/${orgId}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => d && setBilling(d))
-      .catch(() => {})
+      .catch(() => { setBillingError('Could not load billing info') })
     fetch(`${apiUrl}/api/billing/invoice-url/${orgId}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => d && setInvoiceUrl(d.invoice_url))
-      .catch(() => {})
+      .catch(() => { setBillingError('Could not load billing info') })
   }, [orgId, apiUrl])
 
   const statusLabel = billing?.status === 'active' ? 'Active' :
@@ -159,6 +161,9 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
         )}
       </div>
       <div className="p-4 sm:p-5 space-y-2 text-xs">
+        {billingError && (
+          <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{billingError}</div>
+        )}
         <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
           <span className="text-[#A1A1A8]/60">Status</span>
           <span className={clsx('font-semibold', statusColor)}>{statusLabel}</span>
