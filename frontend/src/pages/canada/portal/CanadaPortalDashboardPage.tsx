@@ -13,6 +13,7 @@ import {
   X,
   Rocket,
   Clock,
+  AlertTriangle,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import {
@@ -82,6 +83,7 @@ export default function CanadaPortalDashboardPage() {
   const [clients, setClients] = useState<SalesClient[]>([])
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
@@ -110,7 +112,8 @@ export default function CanadaPortalDashboardPage() {
         active_clients: c.filter((cl: SalesClient) => cl.is_active).length,
         conversion_rate: allDeals.length > 0 ? Math.round((closedWon.length / allDeals.length) * 100) : 0,
       })
-    }).catch(() => {
+    }).catch((err) => {
+      setLoadError(err?.message || 'Could not load data. Check your connection and refresh.')
       setOverview({
         total_deals: 0, pipeline_value: 0, closed_this_month: 0,
         monthly_commission_earned: 0, total_earned: 0, total_paid: 0,
@@ -157,6 +160,23 @@ export default function CanadaPortalDashboardPage() {
         </h1>
         <p className="text-sm text-[#6b7a74] mt-1">{getFormattedDate()}</p>
       </div>
+
+      {/* ── Connection Error Banner ── */}
+      {loadError && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3">
+          <AlertTriangle size={18} className="text-red-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-400">Could not load your data</p>
+            <p className="text-xs text-red-400/70 mt-0.5">{loadError}</p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 py-1.5 text-xs font-medium text-white border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* ── Pending Approval Banner ── */}
       {rep && !rep.is_active && (

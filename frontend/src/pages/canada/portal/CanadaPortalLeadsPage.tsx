@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2,
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
@@ -116,8 +116,12 @@ export default function CanadaPortalLeadsPage() {
     if (searchParams.get('new') === 'true') setShowNew(true)
   }, [searchParams])
 
+  const [listError, setListError] = useState('')
+
   useEffect(() => {
-    canadaLeadsService.list().then(d => { setDeals(d); setLoading(false) })
+    canadaLeadsService.list()
+      .then(d => { setDeals(d); setLoading(false) })
+      .catch(err => { setListError(err?.message || 'Could not load leads.'); setLoading(false) })
   }, [])
 
   const leads = deals.filter(d => d.stage !== 'customer_walkthrough' && d.stage !== 'closed_won' && d.stage !== 'pos_connected' && d.stage !== 'closed_lost')
@@ -324,7 +328,14 @@ export default function CanadaPortalLeadsPage() {
           )
         })}
 
-        {displayed.length === 0 && (
+        {listError && (
+          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3">
+            <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-400">{listError}</p>
+            <button onClick={() => window.location.reload()} className="ml-auto px-3 py-1 text-xs text-white border border-red-500/30 rounded-lg hover:bg-red-500/10">Retry</button>
+          </div>
+        )}
+        {!listError && displayed.length === 0 && (
           <div className="text-center py-16 text-sm text-[#6b7a74]">
             No leads found. {search ? 'Try adjusting your search.' : 'Click "New Lead" to add one.'}
           </div>

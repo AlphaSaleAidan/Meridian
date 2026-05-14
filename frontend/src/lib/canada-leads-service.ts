@@ -26,6 +26,13 @@ function rowToDeal(row: Record<string, unknown>): Deal {
   }
 }
 
+export class LeadsServiceError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'LeadsServiceError'
+  }
+}
+
 export const canadaLeadsService = {
   async list(): Promise<Deal[]> {
     if (!supabase) return []
@@ -33,7 +40,8 @@ export const canadaLeadsService = {
       .from('canada_leads')
       .select('*')
       .order('created_at', { ascending: false })
-    if (error || !data) return []
+    if (error) throw new LeadsServiceError(error.message)
+    if (!data) return []
     return data.map(rowToDeal)
   },
 
@@ -44,7 +52,8 @@ export const canadaLeadsService = {
       .select('*')
       .eq('id', id)
       .single()
-    if (error || !data) return null
+    if (error) throw new LeadsServiceError(error.message)
+    if (!data) return null
     return rowToDeal(data)
   },
 
@@ -87,10 +96,11 @@ export const canadaLeadsService = {
   async update(id: string, updates: Partial<Deal>): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    await supabase
+    const { error } = await supabase
       .from('canada_leads')
       .update({ ...updates, updated_at: now })
       .eq('id', id)
+    if (error) throw new LeadsServiceError(error.message)
   },
 
   async delete(id: string): Promise<void> {

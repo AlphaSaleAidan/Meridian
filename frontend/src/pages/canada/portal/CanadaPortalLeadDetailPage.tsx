@@ -223,6 +223,11 @@ export default function CanadaPortalLeadDetailPage() {
     setCustomerError(null)
 
     const email = deal.contact_email
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setCustomerError('Invalid email address. Edit the lead to fix it before creating an account.')
+      setCustomerCreating(false)
+      return
+    }
     const password = generatePassword()
 
     try {
@@ -265,7 +270,7 @@ export default function CanadaPortalLeadDetailPage() {
     setCredentialEmailing(true)
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
-      await fetch(`${API_BASE}/api/email/send`, {
+      const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -283,6 +288,7 @@ export default function CanadaPortalLeadDetailPage() {
           },
         }),
       })
+      if (!res.ok) throw new Error('Email delivery failed')
       setCredentialEmailed(true)
     } catch {
       setCustomerError('Failed to send email — you can share the credentials manually.')
@@ -385,7 +391,7 @@ export default function CanadaPortalLeadDetailPage() {
     setInvoiceEmailing(true)
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
-      await fetch(`${API_BASE}/api/email/send`, {
+      const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -404,9 +410,11 @@ export default function CanadaPortalLeadDetailPage() {
           },
         }),
       })
+      if (!res.ok) throw new Error('Email delivery failed')
       setInvoiceEmailed(true)
     } catch (err) {
       console.error('[Invoice] Email failed:', err)
+      setPosError('Invoice email failed to send. Try again or share the PDF directly.')
     } finally {
       setInvoiceEmailing(false)
     }
@@ -467,7 +475,7 @@ export default function CanadaPortalLeadDetailPage() {
 
       const API_BASE = import.meta.env.VITE_API_URL || ''
       try {
-        await fetch(`${API_BASE}/api/email/send`, {
+        const emailRes = await fetch(`${API_BASE}/api/email/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -484,7 +492,7 @@ export default function CanadaPortalLeadDetailPage() {
             },
           }),
         })
-        setSlaEmailed(true)
+        if (emailRes.ok) setSlaEmailed(true)
       } catch {
         // Email send is best-effort — SLA is still signed
       }
@@ -500,7 +508,7 @@ export default function CanadaPortalLeadDetailPage() {
     setSlaEmailing(true)
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
-      await fetch(`${API_BASE}/api/email/send`, {
+      const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -516,9 +524,11 @@ export default function CanadaPortalLeadDetailPage() {
           },
         }),
       })
+      if (!res.ok) throw new Error('Email delivery failed')
       setSlaEmailed(true)
     } catch (err) {
       console.error('[SLA] Email failed:', err)
+      setPosError('SLA email failed to send. Try again or download and share the PDF.')
     } finally {
       setSlaEmailing(false)
     }
@@ -602,7 +612,7 @@ export default function CanadaPortalLeadDetailPage() {
     setProposalEmailing(true)
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
-      await fetch(`${API_BASE}/api/email/send`, {
+      const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -619,6 +629,7 @@ export default function CanadaPortalLeadDetailPage() {
           },
         }),
       })
+      if (!res.ok) throw new Error('Email delivery failed')
       setProposalSent(true)
       if (deal.stage === 'appointment_set' || deal.stage === 'proposal_shown' || deal.stage === 'contacted' || deal.stage === 'demo_scheduled') {
         await canadaLeadsService.updateStage(deal.id, 'proposal_shown')
@@ -626,6 +637,7 @@ export default function CanadaPortalLeadDetailPage() {
       }
     } catch (err) {
       console.error('[Proposal] Email failed:', err)
+      setPosError('Proposal email failed to send. Try again or download and share the PDF.')
     } finally {
       setProposalEmailing(false)
     }
@@ -711,10 +723,15 @@ export default function CanadaPortalLeadDetailPage() {
             disabled={editSaving}
             onClick={async () => {
               setEditSaving(true)
-              await canadaLeadsService.update(deal.id, editForm)
-              setDeal(prev => prev ? { ...prev, ...editForm } : prev)
-              setEditing(false)
-              setEditSaving(false)
+              try {
+                await canadaLeadsService.update(deal.id, editForm)
+                setDeal(prev => prev ? { ...prev, ...editForm } : prev)
+                setEditing(false)
+              } catch (err) {
+                setPosError(err instanceof Error ? `Save failed: ${err.message}` : 'Failed to save changes. Please try again.')
+              } finally {
+                setEditSaving(false)
+              }
             }}
             className="flex items-center gap-2 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
           >

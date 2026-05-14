@@ -83,13 +83,20 @@ export default function CanadaPortalOnboardingPage() {
     nextStep()
   }
 
+  const [profileError, setProfileError] = useState('')
+
   async function handleProfileSubmit() {
+    setProfileError('')
     if (supabase && rep) {
-      await supabase.from('sales_reps').update({
+      const { error } = await supabase.from('sales_reps').update({
         name: profile.display_name || rep.name,
         phone: profile.phone,
         location: profile.city && profile.province ? `${profile.city}, ${profile.province}` : undefined,
-      }).eq('email', rep.email).then(() => {})
+      }).eq('email', rep.email)
+      if (error) {
+        setProfileError('Could not save profile. Please try again.')
+        return
+      }
     }
     setCheckedItems(prev => new Set([...prev, 'profile']))
     nextStep()
@@ -266,6 +273,9 @@ export default function CanadaPortalOnboardingPage() {
                   <textarea value={profile.bio} onChange={e => setProfile(p => ({ ...p, bio: e.target.value }))} className={inputClass + ' resize-none h-16'} placeholder="A few words about yourself..." />
                 </div>
               </div>
+              {profileError && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{profileError}</div>
+              )}
               <div className="flex justify-between">
                 <button onClick={prevStep} className={btnSecondary}>
                   <ChevronLeft size={16} /> Back

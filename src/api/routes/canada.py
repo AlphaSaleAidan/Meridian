@@ -243,6 +243,7 @@ async def approve_rep(req: RepActionRequest):
             logger.warning("Auth user creation failed for %s: %s %s", rep_email, auth_resp.status_code, auth_resp.text)
 
     # 3. Send credentials email (only if we created a new auth user with a temp password)
+    email_sent = False
     if auth_created and rep_email:
         try:
             from ...email.send import send_rep_credentials
@@ -254,12 +255,13 @@ async def approve_rep(req: RepActionRequest):
                 password=temp_password,
                 login_url=login_url,
             )
+            email_sent = result.get("status") == "sent" or result.get("id") is not None
             logger.info("Sent credentials email to %s: %s", rep_email, result.get("status"))
         except Exception as e:
             logger.error("Failed to send credentials email to %s: %s", rep_email, e)
 
     logger.info("Rep approved: %s (%s) by %s", rep_name, rep_email, req.admin_email)
-    return {"ok": True, "rep_id": req.rep_id, "email_sent": auth_created}
+    return {"ok": True, "rep_id": req.rep_id, "email_sent": email_sent}
 
 
 @router.post("/rep-reject")

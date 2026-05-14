@@ -34,14 +34,20 @@ export default function CanadaPortalSettingsPage() {
     }
   })
 
+  const [saveError, setSaveError] = useState('')
+
   async function handleSave() {
     setSaving(true)
+    setSaveError('')
     try {
       if (supabase && rep?.rep_id) {
-        await supabase.from('sales_reps').update({ name, phone }).eq('id', rep.rep_id)
+        const { error } = await supabase.from('sales_reps').update({ name, phone }).eq('id', rep.rep_id)
+        if (error) throw new Error(error.message)
       }
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Failed to save. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -192,6 +198,11 @@ export default function CanadaPortalSettingsPage() {
         )}
       </div>
 
+      {saveError && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+          <p className="text-xs text-red-400">{saveError}</p>
+        </div>
+      )}
       <div className="flex justify-end">
         <button
           onClick={handleSave}

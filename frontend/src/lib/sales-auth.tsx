@@ -277,7 +277,12 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + '/canada/portal/login',
     })
-    return error ? error.message : null
+    if (!error) return null
+    if (error.message.toLowerCase().includes('rate') || error.status === 429)
+      return 'Too many reset attempts. Please wait a few minutes and try again.'
+    if (error.message.toLowerCase().includes('email'))
+      return 'Please enter a valid email address.'
+    return 'Could not send reset email. Please try again later.'
   }, [])
 
   const logout = useCallback(() => {
