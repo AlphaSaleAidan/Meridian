@@ -1,0 +1,56 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install security tools
+        run: pip install bandit safety
+
+      - name: Bandit security lint
+        run: |
+          bandit -r src/ \
+            --severity-level high \
+            --confidence-level high \
+            -f txt || true
+          echo "Bandit scan complete"
+
+      - name: Dependency vulnerability check
+        run: |
+          pip install -r requirements.txt
+          safety check --short-report || true
+          echo "Safety scan complete"
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: cd frontend && npm ci
+
+      - name: npm audit
+        run: |
+          cd frontend
+          npm audit --audit-level=high || true
+          echo "npm audit complete"

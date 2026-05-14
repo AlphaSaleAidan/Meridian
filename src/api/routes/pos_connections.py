@@ -14,8 +14,9 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
+from ..middleware.rate_limiter import limiter
 
 from ...security.encryption import encrypt_token, decrypt_token
 from ...services.pos_connectors import (
@@ -50,7 +51,8 @@ class DisconnectRequest(BaseModel):
 # ─── Test Connection ─────────────────────────────────────────
 
 @router.post("/test-connection")
-async def test_connection(req: TestConnectionRequest):
+@limiter.limit("20/hour")
+async def test_connection(request: Request, req: TestConnectionRequest):
     """Validate POS credentials without saving. Returns success + business info."""
     if req.pos_system == "toast":
         return await _test_toast(req.credentials)
@@ -164,7 +166,8 @@ async def _test_clover(credentials: dict) -> dict:
 # ─── Connect (save credentials + start sync) ────────────────
 
 @router.post("/connect")
-async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
+@limiter.limit("10/hour")
+async def connect_pos(request: Request, req: ConnectRequest, background_tasks: BackgroundTasks):
     """Encrypt and store POS credentials, then trigger initial backfill."""
     from ...db import _db_instance as db
     if not db:

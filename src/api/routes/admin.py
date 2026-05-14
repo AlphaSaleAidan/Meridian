@@ -4,8 +4,9 @@ Admin Routes — One-time setup helpers.
 import logging
 from uuid import uuid4
 from datetime import datetime, timezone
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel, EmailStr
+from ..middleware.rate_limiter import limiter
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.admin")
@@ -20,7 +21,8 @@ class CreateRepRequest(BaseModel):
 
 
 @router.post("/create-rep")
-async def create_rep(req: CreateRepRequest):
+@limiter.limit("10/hour")
+async def create_rep(request: Request, req: CreateRepRequest):
     """Create a sales rep record."""
     try:
         db = get_db()

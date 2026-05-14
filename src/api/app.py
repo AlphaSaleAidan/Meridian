@@ -44,6 +44,10 @@ except ImportError:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from .middleware.security_headers import SecurityHeadersMiddleware
+from .middleware.rate_limiter import limiter
 from .routes.oauth import router as oauth_router
 from .routes.webhooks import router as webhook_router
 from .routes.dashboard import router as dashboard_router
@@ -141,7 +145,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow the frontend origins
+# ── Rate limiting ──
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── CORS — locked to known Meridian domains ──
 _allowed_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -154,7 +162,6 @@ _allowed_origins = [
     "https://www.meridian.tips",
 ]
 
-# Allow custom origin from env (e.g. Vercel preview deploys)
 _extra_origin = os.environ.get("FRONTEND_ORIGIN")
 if _extra_origin:
     _allowed_origins.append(_extra_origin)
@@ -164,8 +171,13 @@ app.add_middleware(
     allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
+    max_age=3600,
 )
+
+# ── Security headers — must be added after CORS (executes in reverse order) ──
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Register API routes
 app.include_router(oauth_router)

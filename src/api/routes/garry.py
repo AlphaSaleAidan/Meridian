@@ -15,9 +15,11 @@ import time
 from collections import defaultdict
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from ..middleware.rate_limiter import limiter
+from ...ai.security.input_sanitizer import sanitize_for_llm
 
 logger = logging.getLogger("meridian.api.garry")
 
@@ -55,9 +57,11 @@ class GarryChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def garry_chat(req: GarryChatRequest):
+@limiter.limit("30/minute")
+async def garry_chat(request: Request, req: GarryChatRequest):
+    safe_message = sanitize_for_llm(req.message, field_name="garry_chat", wrap_as_data=False)
     history = _conversations[req.thread_id]
-    history.append({"role": "user", "content": req.message})
+    history.append({"role": "user", "content": safe_message})
 
     # Keep history bounded
     if len(history) > MAX_HISTORY:
