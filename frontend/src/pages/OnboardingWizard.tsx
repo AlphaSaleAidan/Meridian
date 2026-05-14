@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Wifi, ChevronRight, Check, Loader2, ShieldCheck, CreditCard, Tag } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
@@ -33,6 +34,7 @@ type Step = 'welcome' | 'pricing' | 'provider' | 'credentials' | 'connecting' | 
 type BillingCycle = 'monthly' | 'weekly'
 
 export default function OnboardingWizard() {
+  const navigate = useNavigate()
   const { org, connectPos } = useAuth()
   const [step, setStep] = useState<Step>('welcome')
   const [provider, setProvider] = useState<string | null>(null)
@@ -57,15 +59,23 @@ export default function OnboardingWizard() {
     setError(null)
     setStep('connecting')
 
-    const err = await connectPos(provider, apiKey)
-    if (err) {
-      setError(err)
-      setStep('credentials')
-      return
-    }
+    const timeout = new Promise<string>((_, reject) =>
+      setTimeout(() => reject(new Error('Connection timed out — please try again')), 30000)
+    )
 
-    await new Promise(r => setTimeout(r, 2000))
-    setStep('done')
+    try {
+      const err = await Promise.race([connectPos(provider, apiKey), timeout]) as string | null
+      if (err) {
+        setError(err)
+        setStep('credentials')
+        return
+      }
+      await new Promise(r => setTimeout(r, 2000))
+      setStep('done')
+    } catch (e: any) {
+      setError(e.message || 'Connection failed — please try again')
+      setStep('credentials')
+    }
   }
 
   const stepIndex: Record<Step, number> = { welcome: 0, pricing: 1, provider: 2, credentials: 3, connecting: 4, done: 5 }
@@ -357,7 +367,7 @@ export default function OnboardingWizard() {
                 Historical data import usually takes 1-2 hours. Your AI agents will start generating insights as data flows in. We'll notify you when your first insights are ready.
               </div>
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => navigate('/dashboard')}
                 className="w-full py-2.5 bg-[#17C5B0] text-white text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
               >
                 Go to Dashboard

@@ -43,6 +43,11 @@ celery_app.conf.update(
         "src.workers.tasks.train_swarm_batch": {"queue": "analysis"},
         "src.workers.tasks.ingest_scraped_data": {"queue": "analysis"},
         "src.workers.tasks.batch_local_inference": {"queue": "analysis"},
+        "src.workers.tasks.rebuild_session_context": {"queue": "analysis"},
+        "src.workers.tasks.rebuild_all_context": {"queue": "analysis"},
+        "src.workers.tasks.rebuild_file_digest": {"queue": "analysis"},
+        "src.workers.tasks.rebuild_diff_summaries": {"queue": "analysis"},
+        "src.workers.tasks.compress_sessions": {"queue": "analysis"},
     },
     beat_schedule={
         "nightly-analysis": {
@@ -73,6 +78,16 @@ celery_app.conf.update(
         "vector-ingestion": {
             "task": "src.workers.tasks.ingest_scraped_data",
             "schedule": 21600.0,  # 6 hours — after each scraper cycle
+            "options": {"queue": "analysis"},
+        },
+        "context-rebuild": {
+            "task": "src.workers.tasks.rebuild_all_context",
+            "schedule": 21600.0,  # 6 hours — full token-saving pipeline
+            "options": {"queue": "analysis"},
+        },
+        "session-compression": {
+            "task": "src.workers.tasks.compress_sessions",
+            "schedule": 43200.0,  # 12 hours — compress completed Claude sessions
             "options": {"queue": "analysis"},
         },
     },

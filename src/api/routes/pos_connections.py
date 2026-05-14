@@ -170,11 +170,14 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
     if not db:
         raise HTTPException(503, "Database not available")
 
-    encrypted_creds = {
-        key: encrypt_token(value)
-        for key, value in req.credentials.items()
-        if value
-    }
+    encrypted_creds = {}
+    for key, value in req.credentials.items():
+        if not value:
+            continue
+        encrypted = encrypt_token(value)
+        if not encrypted:
+            raise HTTPException(500, f"Failed to encrypt credential '{key}' — check encryption config")
+        encrypted_creds[key] = encrypted
 
     connection_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()

@@ -307,9 +307,8 @@ export default function CanadaCustomerOnboardingWizard() {
         }),
       ])
       if (upfrontRes.ok && recurringRes.ok) {
-        // Provision customer: create business record, subscription, and send welcome email
         try {
-          await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
+          const provRes = await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               org_id: org?.org_id || prefill.token,
@@ -323,8 +322,14 @@ export default function CanadaCustomerOnboardingWizard() {
               rep_name: searchParams.get('rep_name') || null,
             }),
           })
+          if (!provRes.ok) {
+            const provBody = await provRes.json().catch(() => null)
+            console.error('Provision failed:', provBody)
+            setCheckoutError('Invoices sent but account setup had an issue. Contact support at help@meridian.tips if your dashboard isn\'t ready.')
+          }
         } catch (provisionErr) {
-          console.warn('Provision call failed (non-blocking):', provisionErr)
+          console.error('Provision call failed:', provisionErr)
+          setCheckoutError('Invoices sent but account setup had an issue. Contact support at help@meridian.tips if your dashboard isn\'t ready.')
         }
         setPaymentComplete(true)
         return

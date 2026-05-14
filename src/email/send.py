@@ -20,6 +20,7 @@ from .templates import (
     lead_assigned,
     trial_expiring,
     payment_receipt,
+    payment_failed,
     sla_signed,
     customer_credentials,
     rep_credentials,
@@ -323,6 +324,29 @@ async def send_rep_credentials(
     subject = f"Your Meridian Sales Portal Login — Welcome, {rep_name}!"
     result = await _client.send(to, subject, html, tag="rep_credentials")
     await _log_send(to, "rep_credentials", subject, result, tag="rep_credentials")
+    return result
+
+
+async def send_payment_failed(
+    to: str,
+    business_name: str,
+    contact_name: str,
+    amount: str,
+    update_url: str,
+    rep_name: str = "",
+    *,
+    org_id: Optional[str] = None,
+) -> dict:
+    html = payment_failed.render(
+        business_name=business_name,
+        contact_name=contact_name,
+        amount=amount,
+        update_url=update_url,
+        rep_name=rep_name,
+    )
+    subject = f"Payment update needed — {business_name}"
+    result = await _client.send(to, subject, html, tag="payment_failed")
+    await _log_send(to, "payment_failed", subject, result, org_id=org_id, tag="payment_failed")
     return result
 
 

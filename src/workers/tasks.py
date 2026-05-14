@@ -315,3 +315,58 @@ def batch_local_inference(prompts: list, system: str = "You are a business analy
 
     results = generate_batch(prompts, system=system)
     return {"status": "complete", "count": len(results), "results": results}
+
+
+@shared_task(name="src.workers.tasks.rebuild_session_context")
+def rebuild_session_context(use_llm: bool = True):
+    """Rebuild Claude session context via local LLM — writes memory files + vector DB."""
+    logger.info(f"Rebuilding session context (use_llm={use_llm})")
+    from ..inference.context_engine import rebuild_context
+
+    result = rebuild_context(use_llm=use_llm)
+    logger.info(f"Context rebuild complete: {result}")
+    return result
+
+
+@shared_task(name="src.workers.tasks.rebuild_all_context")
+def rebuild_all_context(use_llm: bool = True):
+    """Full token-saving pipeline: context + file digests + diff summaries + session compression."""
+    logger.info(f"Running full context rebuild pipeline (use_llm={use_llm})")
+    from ..inference.context_engine import rebuild_all
+
+    result = rebuild_all(use_llm=use_llm)
+    logger.info(f"Full pipeline complete: {list(result.keys())}")
+    return result
+
+
+@shared_task(name="src.workers.tasks.rebuild_file_digest")
+def rebuild_file_digest(use_llm: bool = True):
+    """Digest recently changed files via local LLM — compact summaries for Claude memory."""
+    logger.info(f"Rebuilding file digest (use_llm={use_llm})")
+    from ..inference.file_digest import rebuild_file_digest as _rebuild
+
+    result = _rebuild(use_llm=use_llm)
+    logger.info(f"File digest complete: {result}")
+    return result
+
+
+@shared_task(name="src.workers.tasks.rebuild_diff_summaries")
+def rebuild_diff_summaries(use_llm: bool = True, count: int = 10):
+    """Summarize recent commit diffs via local LLM — stores in vector DB."""
+    logger.info(f"Rebuilding diff summaries (use_llm={use_llm}, count={count})")
+    from ..inference.diff_summarizer import rebuild_diff_summaries as _rebuild
+
+    result = _rebuild(count=count, use_llm=use_llm)
+    logger.info(f"Diff summaries complete: {result}")
+    return result
+
+
+@shared_task(name="src.workers.tasks.compress_sessions")
+def compress_sessions(use_llm: bool = True, max_sessions: int = 3):
+    """Compress Claude sessions into learnings via local LLM."""
+    logger.info(f"Compressing sessions (use_llm={use_llm}, max={max_sessions})")
+    from ..inference.session_compressor import rebuild_session_learnings
+
+    result = rebuild_session_learnings(max_sessions=max_sessions, use_llm=use_llm)
+    logger.info(f"Session compression complete: {result}")
+    return result

@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
   FileText, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
+  AlertTriangle, CreditCard, RefreshCw, Send,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
@@ -136,6 +137,13 @@ export default function CanadaPortalLeadDetailPage() {
   const [customerError, setCustomerError] = useState<string | null>(null)
   const [credentialEmailing, setCredentialEmailing] = useState(false)
   const [credentialEmailed, setCredentialEmailed] = useState(false)
+
+  // Payment status tracking
+  const [paymentStatus, setPaymentStatus] = useState<'idle' | 'checking' | 'pending' | 'active' | 'past_due' | 'failed' | 'unavailable'>('idle')
+  const [paymentNotifying, setPaymentNotifying] = useState(false)
+  const [paymentNotified, setPaymentNotified] = useState(false)
+  const [cardUpdateSending, setCardUpdateSending] = useState(false)
+  const [cardUpdateUrl, setCardUpdateUrl] = useState<string | null>(null)
 
   async function handleCredentialSubmit(posKey: string, credentials: Record<string, string>) {
     const system = getPosSystem(posKey)
@@ -294,6 +302,79 @@ export default function CanadaPortalLeadDetailPage() {
       setCustomerError('Failed to send email — you can share the credentials manually.')
     } finally {
       setCredentialEmailing(false)
+    }
+  }
+
+  async function checkPaymentStatus() {
+    if (!deal) return
+    setPaymentStatus('checking')
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${API_BASE}/api/billing/status/${deal.id}`)
+      if (!res.ok) { setPaymentStatus('unavailable'); return }
+      const data = await res.json()
+      const status = data.status as string
+      if (status === 'active') setPaymentStatus('active')
+      else if (status === 'past_due') setPaymentStatus('past_due')
+      else if (status === 'canceled') setPaymentStatus('failed')
+      else if (status === 'pending_payment') setPaymentStatus('pending')
+      else if (status === 'none' || status === 'unavailable') setPaymentStatus('unavailable')
+      else setPaymentStatus('pending')
+    } catch {
+      setPaymentStatus('unavailable')
+    }
+  }
+
+  async function handleNotifyPaymentFailed() {
+    if (!deal || !rep) return
+    setPaymentNotifying(true)
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${API_BASE}/api/billing/notify-payment-failed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: deal.id,
+          customer_email: deal.contact_email,
+          contact_name: deal.contact_name,
+          business_name: deal.business_name,
+          rep_name: rep.name,
+          rep_email: rep.email,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to send notification')
+      const data = await res.json()
+      setPaymentNotified(true)
+      if (data.update_url) setCardUpdateUrl(data.update_url)
+    } catch (err) {
+      setPosError('Failed to send payment notification. Try again.')
+    } finally {
+      setPaymentNotifying(false)
+    }
+  }
+
+  async function handleSendCardUpdateLink() {
+    if (!deal || !rep) return
+    setCardUpdateSending(true)
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${API_BASE}/api/billing/update-payment-method`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: deal.id,
+          customer_email: deal.contact_email,
+          customer_name: deal.contact_name,
+          business_name: deal.business_name,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to create payment link')
+      const data = await res.json()
+      setCardUpdateUrl(data.invoice_url)
+    } catch (err) {
+      setPosError('Failed to create payment update link. Try again.')
+    } finally {
+      setCardUpdateSending(false)
     }
   }
 
@@ -917,6 +998,128 @@ export default function CanadaPortalLeadDetailPage() {
               Recurring monthly — customer will be billed CA${monthlyPrice.toLocaleString()}/mo automatically.
             </p>
           </>
+        )}
+      </div>
+      )}
+
+      {/* Payment Status & Card Management (visible at step 2+) */}
+      {currentStep >= 2 && (
+      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CreditCard size={16} className="text-[#00d4aa]" />
+            <h2 className="text-sm font-semibold text-white">Payment Status</h2>
+          </div>
+          <button
+            onClick={checkPaymentStatus}
+            disabled={paymentStatus === 'checking'}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium text-[#6b7a74] border border-[#1a2420] rounded-lg hover:text-[#00d4aa] hover:border-[#00d4aa]/30 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={10} className={paymentStatus === 'checking' ? 'animate-spin' : ''} />
+            {paymentStatus === 'idle' ? 'Check Status' : 'Refresh'}
+          </button>
+        </div>
+
+        {paymentStatus === 'idle' && (
+          <p className="text-xs text-[#6b7a74]">Click "Check Status" to see if the customer has paid.</p>
+        )}
+
+        {paymentStatus === 'checking' && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1a2420]">
+            <Loader2 size={14} className="text-[#00d4aa] animate-spin" />
+            <span className="text-xs text-[#6b7a74]">Checking payment status...</span>
+          </div>
+        )}
+
+        {paymentStatus === 'active' && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
+            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+            <div>
+              <span className="text-xs text-[#00d4aa] font-medium">Payment confirmed — subscription active</span>
+              <p className="text-[10px] text-[#4a5550] mt-0.5">Card on file is being used for recurring billing.</p>
+            </div>
+          </div>
+        )}
+
+        {paymentStatus === 'pending' && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
+            <Clock size={16} className="text-[#f0b429]" />
+            <div>
+              <span className="text-xs text-[#f0b429] font-medium">Payment pending — invoice sent, awaiting payment</span>
+              <p className="text-[10px] text-[#4a5550] mt-0.5">The customer has been invoiced but hasn't paid yet.</p>
+            </div>
+          </div>
+        )}
+
+        {(paymentStatus === 'past_due' || paymentStatus === 'failed') && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+              <AlertTriangle size={16} className="text-red-400" />
+              <div>
+                <span className="text-xs text-red-400 font-medium">
+                  {paymentStatus === 'past_due' ? 'Payment past due' : 'Payment failed'}
+                </span>
+                <p className="text-[10px] text-[#4a5550] mt-0.5">
+                  {paymentStatus === 'past_due'
+                    ? 'Invoice is overdue. Notify the customer or send a new payment link.'
+                    : 'The customer\'s payment was declined. Send them a link to update their card.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleNotifyPaymentFailed}
+                disabled={paymentNotifying || paymentNotified}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-red-500/30 text-red-400 text-sm font-medium rounded-lg hover:bg-red-500/10 disabled:opacity-50 transition-all"
+              >
+                {paymentNotifying ? (
+                  <><Loader2 size={14} className="animate-spin" /> Sending...</>
+                ) : paymentNotified ? (
+                  <><CheckCircle2 size={14} /> Customer Notified</>
+                ) : (
+                  <><Send size={14} /> Notify Customer</>
+                )}
+              </button>
+              <button
+                onClick={handleSendCardUpdateLink}
+                disabled={cardUpdateSending}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+              >
+                {cardUpdateSending ? (
+                  <><Loader2 size={14} className="animate-spin" /> Creating Link...</>
+                ) : (
+                  <><CreditCard size={14} /> Send Card Update Link</>
+                )}
+              </button>
+            </div>
+
+            {cardUpdateUrl && (
+              <div className="p-3 rounded-lg bg-[#0a0f0d] border border-[#1a2420] space-y-2">
+                <p className="text-[10px] text-[#6b7a74]">Payment update link (sent to customer):</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={cardUpdateUrl}
+                    className="flex-1 px-2 py-1.5 bg-[#0f1512] border border-[#1a2420] rounded text-[11px] text-white font-mono truncate"
+                  />
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(cardUpdateUrl); }}
+                    className="px-3 py-1.5 text-[10px] text-[#00d4aa] border border-[#00d4aa]/30 rounded hover:bg-[#00d4aa]/10 transition-colors"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {paymentStatus === 'unavailable' && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1a2420]">
+            <span className="text-xs text-[#6b7a74]">No billing record found yet — invoice may not have been created.</span>
+          </div>
         )}
       </div>
       )}

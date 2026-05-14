@@ -13,13 +13,15 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ...db import get_db
 
 logger = logging.getLogger("meridian.billing.routes")
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
+
+MAX_AMOUNT_CENTS = 10_000_00  # $10,000 safety cap
 
 
 # ── Request/Response Models ──
@@ -37,6 +39,24 @@ class CheckoutRequest(BaseModel):
     rep_id: str = ""                  # Sales rep ID for commission tracking
     rep_name: str = ""                # Sales rep name
 
+    @field_validator("monthly_price_cents")
+    @classmethod
+    def validate_monthly_price(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("monthly_price_cents must be positive")
+        if v > MAX_AMOUNT_CENTS:
+            raise ValueError(f"monthly_price_cents exceeds maximum ({MAX_AMOUNT_CENTS})")
+        return v
+
+    @field_validator("setup_fee_cents")
+    @classmethod
+    def validate_setup_fee(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("setup_fee_cents cannot be negative")
+        if v > MAX_AMOUNT_CENTS:
+            raise ValueError(f"setup_fee_cents exceeds maximum ({MAX_AMOUNT_CENTS})")
+        return v
+
 
 class InvoiceRequest(BaseModel):
     org_id: str
@@ -45,10 +65,35 @@ class InvoiceRequest(BaseModel):
     description: str = "Meridian Analytics Subscription"
     due_days: int = 3
 
+    @field_validator("amount_cents")
+    @classmethod
+    def validate_amount(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("amount_cents must be positive")
+        if v > MAX_AMOUNT_CENTS:
+            raise ValueError(f"amount_cents exceeds maximum ({MAX_AMOUNT_CENTS})")
+        return v
+
 
 class CancelRequest(BaseModel):
     org_id: str
     reason: str = ""
+
+
+class UpdatePaymentMethodRequest(BaseModel):
+    org_id: str
+    customer_email: str
+    customer_name: str
+    business_name: str
+
+
+class PaymentNotifyRequest(BaseModel):
+    org_id: str
+    customer_email: str
+    contact_name: str
+    business_name: str
+    rep_name: str = ""
+    rep_email: str = ""
 
 
 # ── Route handlers ──
@@ -202,6 +247,120 @@ async def get_billing_status(org_id: str):
     except Exception as e:
         logger.exception(f"Status check failed for org {org_id}")
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
+
+
+@router.post("/update-payment-method")
+async def update_payment_method(req: UpdatePaymentMethodRequest):
+    """
+    Generate a new Square invoice so the customer can update their card on file.
+    Creates a fresh invoice at the current subscription price with card storage enabled.
+    Returns the invoice URL to send to the customer.
+    """
+    try:
+        from src.billing.billing_service import BillingService
+
+        db = get_db()
+
+        result = db.table("subscriptions").select("*").eq("org_id", req.org_id).single().execute()
+        amount_cents = 25000
+        plan = "standard"
+        if result.data:
+            amount_cents = result.data.get("monthly_price_cents", 25000)
+            plan = result.data.get("tier", "standard")
+
+        service = BillingService(db)
+        inv_result = await service.create_invoice(
+            org_id=req.org_id,
+            amount_cents=amount_cents,
+            customer_email=req.customer_email,
+            description=f"Meridian Analytics - {plan.title()} Plan (Payment Update)",
+            due_days=7,
+            store_card=True,
+        )
+
+        if inv_result.success:
+            meta = (result.data or {}).get("metadata", {})
+            db.table("subscriptions").update({
+                "metadata": {
+                    **meta,
+                    "update_invoice_id": inv_result.invoice_id,
+                    "update_invoice_url": inv_result.invoice_url,
+                    "update_requested_at": datetime.now(timezone.utc).isoformat(),
+                },
+            }).eq("org_id", req.org_id).execute()
+
+            return {
+                "ok": True,
+                "invoice_url": inv_result.invoice_url,
+                "invoice_id": inv_result.invoice_id,
+                "amount_cents": amount_cents,
+            }
+        else:
+            raise HTTPException(400, inv_result.error or "Could not create payment update link")
+
+    except ImportError:
+        raise HTTPException(501, "Billing service not configured")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Payment method update failed")
+        raise HTTPException(500, "Could not create payment update link")
+
+
+@router.post("/notify-payment-failed")
+async def notify_payment_failed(req: PaymentNotifyRequest):
+    """
+    Send a 'payment failed' email to the customer with a link to update their card.
+    Auto-generates a new invoice link if one doesn't already exist.
+    """
+    try:
+        db = get_db()
+        sub = db.table("subscriptions").select("*").eq("org_id", req.org_id).single().execute()
+
+        meta = (sub.data or {}).get("metadata", {}) if sub.data else {}
+        update_url = meta.get("update_invoice_url") or meta.get("renewal_invoice_url")
+        amount_cents = (sub.data or {}).get("monthly_price_cents", 25000) if sub.data else 25000
+
+        if not update_url:
+            try:
+                from src.billing.billing_service import BillingService
+                service = BillingService(db)
+                inv = await service.create_invoice(
+                    org_id=req.org_id,
+                    amount_cents=amount_cents,
+                    customer_email=req.customer_email,
+                    description="Meridian Analytics - Payment Update",
+                    due_days=7,
+                    store_card=True,
+                )
+                if inv.success:
+                    update_url = inv.invoice_url
+            except ImportError:
+                pass
+
+        if not update_url:
+            update_url = f"https://meridian.tips/canada/login"
+
+        from ...email.send import send_payment_failed
+        amount_display = f"${amount_cents / 100:.2f}"
+        result = await send_payment_failed(
+            to=req.customer_email,
+            business_name=req.business_name,
+            contact_name=req.contact_name,
+            amount=amount_display,
+            update_url=update_url,
+            rep_name=req.rep_name,
+            org_id=req.org_id,
+        )
+
+        email_sent = result.get("status") == "sent" or result.get("id") is not None
+        return {"ok": True, "email_sent": email_sent, "update_url": update_url}
+
+    except RuntimeError:
+        raise HTTPException(503, "Database not available")
+    except Exception as e:
+        logger.exception("Payment failed notification error")
+        raise HTTPException(500, "Could not send payment notification")
 
 
 @router.post("/process-renewals")
