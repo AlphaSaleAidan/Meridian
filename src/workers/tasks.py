@@ -288,3 +288,30 @@ def send_daily_burn_rate():
             await close_db()
 
     return run_async(_send())
+
+
+@shared_task(name="src.workers.tasks.ingest_scraped_data")
+def ingest_scraped_data():
+    """Ingest scraped articles into vector store for RAG."""
+    logger.info("Ingesting scraped data into vector store")
+    from pathlib import Path
+    from ..inference.embeddings import ingest_scraper_output, stats
+
+    data_dir = Path(__file__).parent.parent.parent / "data" / "scraped"
+    if not data_dir.exists():
+        return {"status": "skipped", "reason": "No scraped data directory"}
+
+    count = ingest_scraper_output(data_dir)
+    st = stats()
+    logger.info(f"Ingestion complete: {count} new, {st['documents']} total docs")
+    return {"status": "complete", "ingested": count, **st}
+
+
+@shared_task(name="src.workers.tasks.batch_local_inference")
+def batch_local_inference(prompts: list, system: str = "You are a business analytics assistant."):
+    """Process a batch of prompts through local LLM (zero API cost)."""
+    logger.info(f"Running batch local inference: {len(prompts)} prompts")
+    from ..inference.local_llm import generate_batch
+
+    results = generate_batch(prompts, system=system)
+    return {"status": "complete", "count": len(results), "results": results}

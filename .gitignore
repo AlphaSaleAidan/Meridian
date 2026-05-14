@@ -12,3 +12,12 @@ services/training_video_pipeline/output/
 services/training_video_pipeline/.env
 services/mike/
 .vercel
+data/models/
+data/vectors.db
+celerybeat-schedule
+supabase/.temp/
+.claude-flow/sessions/
+.claude-flow/data/
+frontend/.claude-flow/sessions/
+frontend/.claude-flow/data/
+services/postal/.claude/

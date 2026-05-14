@@ -41,6 +41,8 @@ celery_app.conf.update(
         "src.workers.tasks.generate_report": {"queue": "reports"},
         "src.workers.tasks.train_swarm": {"queue": "analysis"},
         "src.workers.tasks.train_swarm_batch": {"queue": "analysis"},
+        "src.workers.tasks.ingest_scraped_data": {"queue": "analysis"},
+        "src.workers.tasks.batch_local_inference": {"queue": "analysis"},
     },
     beat_schedule={
         "nightly-analysis": {
@@ -67,6 +69,11 @@ celery_app.conf.update(
             "task": "src.workers.tasks.send_daily_burn_rate",
             "schedule": 86400.0,  # 24 hours
             "options": {"queue": "reports"},
+        },
+        "vector-ingestion": {
+            "task": "src.workers.tasks.ingest_scraped_data",
+            "schedule": 21600.0,  # 6 hours — after each scraper cycle
+            "options": {"queue": "analysis"},
         },
     },
 )

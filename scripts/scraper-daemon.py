@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools", "scraper"))
 
 SCRAPE_INTERVAL = 6 * 3600  # 6 hours between full cycles
+MAX_PAGES_PER_SOURCE = 5
 OUTPUT_DIR = Path(__file__).parent.parent / "data" / "scraped"
 MANIFEST = OUTPUT_DIR / "manifest.json"
 
@@ -24,61 +25,19 @@ try:
 except ImportError:
     HAS_CRAWL4AI = False
 
-SOURCES = {
-    "mckinsey": {
-        "name": "McKinsey & Company",
-        "base_url": "https://www.mckinsey.com",
-        "paths": [
-            "/industries/retail/our-insights",
-            "/industries/consumer-packaged-goods/our-insights",
-        ],
-    },
-    "hbr": {
-        "name": "Harvard Business Review",
-        "base_url": "https://hbr.org",
-        "paths": [
-            "/topic/subject/analytics-and-data-science",
-            "/topic/subject/customer-experience",
-        ],
-    },
-    "deloitte": {
-        "name": "Deloitte Insights",
-        "base_url": "https://www2.deloitte.com",
-        "paths": [
-            "/us/en/insights/industry/retail-distribution.html",
-        ],
-    },
-    "mit_sloan": {
-        "name": "MIT Sloan Management Review",
-        "base_url": "https://sloanreview.mit.edu",
-        "paths": [
-            "/topic/data-and-analytics",
-            "/topic/digital-transformation",
-        ],
-    },
-    "nrf": {
-        "name": "National Retail Federation",
-        "base_url": "https://nrf.com",
-        "paths": [
-            "/blog",
-            "/research-insights",
-        ],
-    },
-    "restaurant_business": {
-        "name": "Restaurant Business Online",
-        "base_url": "https://www.restaurantbusinessonline.com",
-        "paths": [
-            "/technology",
-            "/operations",
-        ],
-    },
-}
+from sources import SOURCES
 
 
 def load_manifest() -> dict:
+    default = {"scraped_urls": [], "total_articles": 0, "last_cycle": None}
     if MANIFEST.exists():
-        return json.loads(MANIFEST.read_text())
-    return {"scraped_urls": [], "total_articles": 0, "last_cycle": None}
+        data = json.loads(MANIFEST.read_text())
+        if "scraped_urls" not in data:
+            data["scraped_urls"] = []
+        if "total_articles" not in data:
+            data["total_articles"] = data.get("total_documents", 0)
+        return data
+    return default
 
 
 def save_manifest(manifest: dict):
@@ -88,7 +47,8 @@ def save_manifest(manifest: dict):
 
 async def scrape_source(crawler, source_key: str, source: dict, manifest: dict) -> int:
     new_articles = 0
-    for path in source["paths"]:
+    paths = source.get("start_paths") or source.get("paths", [])
+    for path in paths[:MAX_PAGES_PER_SOURCE]:
         url = source["base_url"] + path
         if url in manifest["scraped_urls"]:
             continue

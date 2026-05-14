@@ -1,29 +1,19 @@
 """
 LLM Enhancement Layer — Transforms statistical analysis into actionable business intelligence.
 
-Uses LiteLLM for multi-model routing (GPT-4o, Claude, Gemini) with automatic
-fallback. Rewrites raw statistical insights with:
+Routes through local Llama 3.1 8B (zero cost) first, falls back to API if needed.
+Rewrites raw statistical insights with:
   - Natural language explanations
   - Specific dollar-amount recommendations
   - Industry-contextualized advice
   - Priority-ranked action items
-
-Gracefully falls back to raw statistical output if LLM is unavailable.
 """
 import json
 import logging
 import os
+import re
 
 logger = logging.getLogger("meridian.ai.llm_layer")
-
-try:
-    from litellm import acompletion
-    HAS_LITELLM = True
-except ImportError:
-    HAS_LITELLM = False
-
-_DEFAULT_MODEL = os.environ.get("MERIDIAN_LLM_MODEL", "gpt-4o")
-_FALLBACK_MODEL = os.environ.get("MERIDIAN_LLM_FALLBACK", "claude-3-5-haiku-20241022")
 
 SYSTEM_PROMPT = """You are Meridian's AI business analyst for small businesses.
 You receive statistical analysis results from POS transaction data.
@@ -35,92 +25,129 @@ Rules:
 - Include expected revenue impact in dollars when possible
 - Keep each insight under 3 sentences
 - Match your tone to the business vertical (casual for coffee shops, professional for retail)
-- If data is insufficient, say so honestly rather than speculating"""
+- If data is insufficient, say so honestly rather than speculating
+- ALWAYS respond with valid JSON only — no markdown, no explanation outside the JSON"""
 
 
-async def _call_llm(messages: list[dict], response_format: dict | None = None) -> dict | None:
-    """Route LLM call through LiteLLM with fallback, or raw httpx as last resort."""
-    if HAS_LITELLM:
-        for model in [_DEFAULT_MODEL, _FALLBACK_MODEL]:
+def _extract_json(text: str) -> dict | None:
+    """Extract JSON object from LLM response that may contain extra text."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+        text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+async def _call_local(messages: list[dict]) -> dict | None:
+    """Call local Llama model via llama-cpp-python."""
+    try:
+        import asyncio
+        from ..inference.local_llm import get_llm
+
+        def _run():
+            llm = get_llm()
+            resp = llm.create_chat_completion(
+                messages=messages,
+                max_tokens=2000,
+                temperature=0.3,
+            )
+            return resp["choices"][0]["message"]["content"]
+
+        loop = asyncio.get_event_loop()
+        content = await loop.run_in_executor(None, _run)
+        result = _extract_json(content)
+        if result:
+            logger.info("LLM response from local llama-3.1-8b")
+            return result
+        logger.warning(f"Local LLM returned non-JSON: {content[:200]}")
+        return None
+    except Exception as e:
+        logger.warning(f"Local LLM failed: {e}")
+        return None
+
+
+async def _call_api(messages: list[dict], response_format: dict | None = None) -> dict | None:
+    """Fallback: call OpenAI or LiteLLM API."""
+    try:
+        from litellm import acompletion
+        for model in ["gpt-4o-mini", "gpt-4o"]:
             try:
-                kwargs = {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "max_tokens": 2000,
-                }
+                kwargs = {"model": model, "messages": messages, "temperature": 0.3, "max_tokens": 2000}
                 if response_format and "gpt" in model:
                     kwargs["response_format"] = response_format
                 resp = await acompletion(**kwargs)
                 content = resp.choices[0].message.content
-                logger.info(f"LLM response from {model}")
-                return json.loads(content)
+                result = _extract_json(content)
+                if result:
+                    logger.info(f"LLM response from API {model}")
+                    return result
             except Exception as e:
                 logger.warning(f"LiteLLM {model} failed: {e}")
                 continue
-        return None
+    except ImportError:
+        pass
 
-    # Fallback: raw httpx to OpenAI (original behavior)
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if not openai_key:
         return None
 
     try:
         import httpx
-        payload = {
-            "model": "gpt-4o",
-            "temperature": 0.3,
-            "max_tokens": 2000,
-            "messages": messages,
-        }
+        payload = {"model": "gpt-4o-mini", "temperature": 0.3, "max_tokens": 2000, "messages": messages}
         if response_format:
             payload["response_format"] = response_format
-
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 json=payload,
-                headers={
-                    "Authorization": f"Bearer {openai_key}",
-                    "Content-Type": "application/json",
-                },
+                headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
             )
         if resp.status_code != 200:
-            logger.warning(f"OpenAI API returned {resp.status_code}: {resp.text[:200]}")
             return None
-
         content = resp.json()["choices"][0]["message"]["content"]
-        return json.loads(content)
+        return _extract_json(content)
     except Exception as e:
         logger.warning(f"Raw OpenAI call failed: {e}")
         return None
+
+
+async def _call_llm(messages: list[dict], response_format: dict | None = None) -> dict | None:
+    """Route LLM call: local first, API fallback."""
+    result = await _call_local(messages)
+    if result:
+        return result
+    logger.info("Local LLM unavailable or failed — falling back to API")
+    return await _call_api(messages, response_format)
 
 
 async def enhance_insights(
     raw_insights: list[dict],
     business_context: dict,
 ) -> list[dict]:
-    """
-    Enhance statistical insights with LLM-generated natural language.
-
-    Args:
-        raw_insights: List of insight dicts from the statistical analyzers
-        business_context: Dict with org_id, business_vertical, org_name, etc.
-
-    Returns:
-        Enhanced insights with 'enhanced_description' field added.
-        Falls back to original insights if LLM is unavailable.
-    """
-    if not HAS_LITELLM and not os.environ.get("OPENAI_API_KEY"):
-        logger.info("No LLM provider configured — skipping enhancement")
-        return raw_insights
-
+    """Enhance statistical insights with LLM-generated natural language."""
     if not raw_insights:
         return raw_insights
 
     try:
+        json_instruction = (
+            'Respond with ONLY a JSON object in this exact format: '
+            '{"insights": [{"id": "...", "enhanced_description": "...", '
+            '"revenue_impact_cents": 12300 or null, "action_item": "..."}]}'
+        )
+
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPT + "\n\n" + json_instruction},
             {
                 "role": "user",
                 "content": json.dumps({
