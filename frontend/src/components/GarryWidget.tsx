@@ -1,23 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { MessageCircle, X, Send, Sparkles, ChevronRight, Square } from 'lucide-react'
 
-const DEERFLOW_URL = import.meta.env.VITE_DEERFLOW_URL ?? 'http://209.126.80.45:8001'
-const DEERFLOW_EMAIL = import.meta.env.VITE_DEERFLOW_EMAIL ?? 'aidanpierce@meridian.tips'
-const DEERFLOW_PASSWORD = import.meta.env.VITE_DEERFLOW_PASSWORD ?? 'Meridian1!'
-
-const GARRY_SYSTEM = `You are Garry, Meridian's dedicated AI marketing strategist. You have deep knowledge of the Meridian brand: a dark-green/teal aesthetic (#00d4aa accent), focused on AI-powered POS analytics for independent Canadian and US businesses (restaurants, smoke shops, cafes, salons, retail).
-
-Your job: help the Meridian team create compelling marketing content. You produce:
-- Social media posts (LinkedIn, Instagram, X) — punchy, conversion-focused
-- Email campaigns — subject lines, body copy, CTAs
-- Ad copy — Google, Meta, short-form video scripts
-- Blog/content outlines — thought leadership, SEO-driven
-- Pitch decks and one-pagers — structured, benefit-led
-- Sales enablement — objection handlers, talk tracks, case study templates
-
-Tone: confident, direct, data-driven. Meridian's voice is "the smart operator's unfair advantage." Never fluffy. Always anchor to dollar amounts and ROI. Use CA$ for Canadian content.
-
-When generating content, always provide ready-to-use copy — not just suggestions. Structure outputs clearly with headers.`
+const API_BASE = import.meta.env.VITE_API_URL || ''
 
 const QUICK_ACTIONS = [
   { label: 'Write a LinkedIn post', prompt: 'Write a LinkedIn post about how Meridian helps restaurant owners find hidden revenue. Make it punchy and include a hook stat.' },
@@ -35,20 +19,6 @@ interface Message {
     streaming?: boolean
 }
 
-let cachedToken: string | null = null
-
-async function getToken(): Promise<string> {
-    if (cachedToken) return cachedToken
-    const resp = await fetch(`${DEERFLOW_URL}/api/v1/auth/login/local`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ username: DEERFLOW_EMAIL, password: DEERFLOW_PASSWORD }),
-    })
-    if (!resp.ok) throw new Error('Garry auth failed')
-    const data = await resp.json()
-    cachedToken = data.access_token
-    return cachedToken!
-}
 
 export default function GarryWidget() {
     const [open, setOpen] = useState(false)
@@ -78,26 +48,14 @@ export default function GarryWidget() {
               ])
 
                                try {
-                                       const token = await getToken()
                                        abortRef.current = new AbortController()
 
-          const resp = await fetch(`${DEERFLOW_URL}/runs/stream`, {
+          const resp = await fetch(`${API_BASE}/api/garry/chat`, {
                     method: 'POST',
-                    headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${token}`,
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                                assistant_id: 'agent',
+                                message: msg,
                                 thread_id: threadId,
-                                input: {
-                                              messages: [
-                                                { role: 'system', content: GARRY_SYSTEM },
-                                                { role: 'user', content: msg },
-                                                            ],
-                                },
-                                stream_mode: ['messages'],
-                                config: { configurable: { thread_id: threadId } },
                     }),
                     signal: abortRef.current.signal,
           })

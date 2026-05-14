@@ -26,9 +26,13 @@ from pydantic import BaseModel
 
 from ...db import get_db
 
+import re
+
 logger = logging.getLogger("meridian.api.website")
 
 router = APIRouter(prefix="/api/website", tags=["website"])
+
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
 
 
 # ── Request/Response Models ───────────────────────────────────
@@ -120,6 +124,9 @@ async def get_website_config(merchant_id: str = Query(...)):
     Return the merchant's website configuration.
     If no record exists, returns {exists: false}.
     """
+    if not _UUID_RE.match(merchant_id):
+        return {"exists": False, "merchant_id": merchant_id}
+
     db = get_db()
 
     rows = await db.select(
@@ -487,6 +494,8 @@ async def get_analytics_summary(merchant_id: str):
     Return an analytics summary for the merchant's website.
     Aggregates visitors today, this week, top referrers, device split, and UTM data.
     """
+    if not _UUID_RE.match(merchant_id):
+        raise HTTPException(400, "Invalid merchant_id format")
     db = get_db()
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
@@ -647,6 +656,8 @@ async def get_merchant_orders(
     offset: int = Query(0, ge=0),
 ):
     """Return recent orders for this merchant, newest first."""
+    if not _UUID_RE.match(merchant_id):
+        raise HTTPException(400, "Invalid merchant_id format")
     db = get_db()
 
     orders = await db.select(
@@ -667,6 +678,8 @@ async def soft_delete_website(merchant_id: str):
     Sets published=false and subdomain_active=false.
     Does not remove the record.
     """
+    if not _UUID_RE.match(merchant_id):
+        raise HTTPException(400, "Invalid merchant_id format")
     db = get_db()
 
     rows = await db.select(
