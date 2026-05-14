@@ -44,10 +44,8 @@ except ImportError:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
 from .middleware.security_headers import SecurityHeadersMiddleware
-from .middleware.rate_limiter import limiter
+from .middleware.rate_limiter import RateLimitMiddleware
 from .routes.oauth import router as oauth_router
 from .routes.webhooks import router as webhook_router
 from .routes.dashboard import router as dashboard_router
@@ -145,10 +143,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── Rate limiting ──
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
 # ── CORS — locked to known Meridian domains ──
 _allowed_origins = [
     "http://localhost:3000",
@@ -176,8 +170,9 @@ app.add_middleware(
     max_age=3600,
 )
 
-# ── Security headers — must be added after CORS (executes in reverse order) ──
+# ── Security middleware (reverse order: last added = outermost = runs first) ──
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 # Register API routes
 app.include_router(oauth_router)
