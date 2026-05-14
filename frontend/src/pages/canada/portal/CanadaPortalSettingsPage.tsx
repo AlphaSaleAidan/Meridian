@@ -1,16 +1,19 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Settings, User, Bell, Shield, Check, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { supabase } from '@/lib/supabase'
 
 export default function CanadaPortalSettingsPage() {
   const { rep } = useSalesAuth()
+  const [searchParams] = useSearchParams()
+  const isPasswordReset = searchParams.get('reset') === '1'
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [name, setName] = useState(rep?.name || '')
   const [phone, setPhone] = useState(rep?.phone || '')
 
-  const [showPwSection, setShowPwSection] = useState(false)
+  const [showPwSection, setShowPwSection] = useState(isPasswordReset)
   const [pw, setPw] = useState('')
   const [pwConfirm, setPwConfirm] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
@@ -67,6 +70,12 @@ export default function CanadaPortalSettingsPage() {
 
   return (
     <div className="space-y-6 max-w-2xl">
+      {isPasswordReset && (
+        <div className="p-4 rounded-xl bg-[#f59e0b]/10 border border-[#f59e0b]/20">
+          <p className="text-sm font-semibold text-[#f59e0b]">Set your new password</p>
+          <p className="text-xs text-[#f59e0b]/70 mt-0.5">Enter a new password below to complete your password reset.</p>
+        </div>
+      )}
       <div>
         <h1 className="text-xl font-bold text-white">Settings</h1>
         <p className="text-sm text-[#6b7a74] mt-0.5">Manage your account preferences.</p>

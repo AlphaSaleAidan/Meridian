@@ -23,6 +23,7 @@ export interface SalesAuthState {
   rep: SalesRepProfile | null
   login: (email: string, password: string) => Promise<string | null>
   signup: (name: string, email: string, password: string, phone?: string) => Promise<string | null>
+  resetPassword: (email: string) => Promise<string | null>
   logout: () => void
 }
 
@@ -136,7 +137,16 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    const { data: { subscription } } = sb.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && session?.user?.email) {
+        const profile = await resolveRepProfile(session.user.email)
+        if (profile) {
+          saveRep(profile)
+          setRep(profile)
+        }
+        window.location.replace('/canada/portal/settings?reset=1')
+        return
+      }
       if (session?.user?.email) {
         const profile = await resolveRepProfile(session.user.email)
         if (profile) {
@@ -262,6 +272,14 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const resetPassword = useCallback(async (email: string): Promise<string | null> => {
+    if (!supabase) return 'Password reset is not available in demo mode'
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/canada/portal/login',
+    })
+    return error ? error.message : null
+  }, [])
+
   const logout = useCallback(() => {
     if (supabase) supabase.auth.signOut()
     setRep(null)
@@ -275,6 +293,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
       rep,
       login,
       signup,
+      resetPassword,
       logout,
     }}>
       {children}

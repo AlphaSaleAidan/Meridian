@@ -6,7 +6,7 @@ import { MeridianEmblem } from '@/components/MeridianLogo'
 export default function CanadaPortalLoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { authenticated, login } = useSalesAuth()
+  const { authenticated, login, resetPassword } = useSalesAuth()
 
   const from = (location.state as { from?: string })?.from || '/canada/portal/dashboard'
 
@@ -14,6 +14,8 @@ export default function CanadaPortalLoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showForgot, setShowForgot] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
     if (authenticated) navigate(from, { replace: true })
@@ -27,6 +29,21 @@ export default function CanadaPortalLoginPage() {
     setLoading(false)
     if (err) setError(err)
     else navigate(from, { replace: true })
+  }
+
+  async function handleForgot(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    setSuccess(null)
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Please enter a valid email address')
+      return
+    }
+    setLoading(true)
+    const err = await resetPassword(email)
+    setLoading(false)
+    if (err) { setError(err); return }
+    setSuccess('If that email is registered, a reset link has been sent. Check your inbox.')
   }
 
   const inputClass = 'w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'
@@ -45,26 +62,51 @@ export default function CanadaPortalLoginPage() {
 
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
           <p className="text-sm text-[#A1A1A8] text-center mb-6">
-            Sign in to access your pipeline and leads.
+            {showForgot ? "Enter your email and we'll send a reset link." : 'Sign in to access your pipeline and leads.'}
           </p>
 
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{error}</div>
           )}
+          {success && (
+            <div className="mb-4 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-xs text-[#17C5B0]">{success}</div>
+          )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@meridian.com" />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
-            </div>
-            <button type="submit" disabled={loading} className={btnClass}>
-              {loading ? 'Signing in...' : 'Sign In'}
-            </button>
-          </form>
+          {!showForgot ? (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@meridian.com" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
+                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
+              </div>
+              <button type="submit" disabled={loading} className={btnClass}>
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+              <div className="text-center">
+                <button type="button" onClick={() => { setShowForgot(true); setError(null); setSuccess(null) }} className="text-[11px] text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors">
+                  Forgot password?
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleForgot} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@meridian.com" />
+              </div>
+              <button type="submit" disabled={loading} className={btnClass}>
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+              <p className="text-center text-[11px] text-[#A1A1A8]">
+                <button type="button" onClick={() => { setShowForgot(false); setError(null); setSuccess(null) }} className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors">
+                  Back to sign in
+                </button>
+              </p>
+            </form>
+          )}
 
           <p className="text-center text-[11px] text-[#A1A1A8] mt-5">
             New sales rep?{' '}
