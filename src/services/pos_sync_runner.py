@@ -29,8 +29,9 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
         elif provider == "toast":
             result = await _sync_toast(org_id, conn_id, connection, since)
         else:
-            logger.debug(f"No sync engine for provider: {provider}")
-            return
+            result = await _sync_generic(org_id, conn_id, connection, provider, since)
+            if result is None:
+                return
 
         if result.transactions:
             await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
@@ -93,3 +94,64 @@ async def _sync_toast(org_id, conn_id, connection, since):
     ) as client:
         engine = ToastSyncEngine(client=client, org_id=org_id, pos_connection_id=conn_id)
         return await engine.run_incremental_sync(since=since)
+
+
+async def _sync_generic(org_id, conn_id, connection, provider, since):
+    from ..services.pos_connectors import (
+        GenericRESTConnector, POSConnectionConfig, get_connector_config, normalize_transaction,
+    )
+    from ..db import get_db
+
+    api_config = get_connector_config(provider)
+    if not api_config or api_config.get("auth_type") == "csv_only":
+        logger.debug(f"No sync engine for provider: {provider} (CSV-only or unknown)")
+        return None
+
+    db = get_db()
+    creds = connection.get("credentials_encrypted", {})
+    decrypted = {k: decrypt_token(v) for k, v in creds.items()}
+
+    conn_config = POSConnectionConfig(
+        system_key=provider,
+        system_name=provider.replace("-", " ").title(),
+        tier=api_config.get("tier", 3),
+        auth_method=api_config.get("auth_type", "bearer"),
+        base_url=api_config.get("base_url", ""),
+        credentials=decrypted,
+        merchant_id=connection.get("merchant_id", ""),
+        org_id=org_id,
+    )
+    connector = GenericRESTConnector(conn_config, api_config)
+    sync_result = await connector.run_sync(since=since)
+
+    normalized = [
+        normalize_transaction(t, provider, org_id=org_id)
+        for t in sync_result.transactions
+    ]
+    if normalized:
+        await db.batch_upsert("transactions", normalized, on_conflict="org_id,external_id")
+
+    if sync_result.catalog_items:
+        await db.batch_upsert("products", [
+            {"org_id": org_id, "source_system": provider, **item}
+            for item in sync_result.catalog_items
+        ], on_conflict="org_id,external_id")
+
+    await db.update(
+        "pos_connections",
+        {
+            "last_sync_at": datetime.now(timezone.utc).isoformat(),
+            "last_error": None,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        filters={"id": f"eq.{conn_id}"},
+    )
+
+    logger.info(f"Generic sync {org_id}/{provider}: {sync_result.records_fetched} records, {len(sync_result.errors)} errors")
+
+    class _Result:
+        transactions = normalized
+        transaction_items = []
+        summary = f"{sync_result.records_fetched} records via GenericREST"
+
+    return _Result()

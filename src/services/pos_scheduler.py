@@ -21,6 +21,7 @@ PROVIDER_SYNC_MINUTES = {
     "square": 15,
     "toast": 30,
     "clover": 30,
+    # All other API systems default to 60 minutes via .get(provider, 60)
 }
 
 

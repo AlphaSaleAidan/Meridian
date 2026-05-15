@@ -23,6 +23,7 @@ from ...services.pos_connectors import (
     POSConnectionConfig,
     get_connector_config,
     normalize_transaction,
+    import_csv_for_system,
 )
 
 logger = logging.getLogger("meridian.api.pos_connections")
@@ -216,10 +217,10 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             "updated_at": now,
         })
 
-    await db.table("organizations").update({
+    await db.update("organizations", {
         "pos_system": req.pos_system,
         "pos_connection_status": "connected",
-    }).eq("id", req.org_id).execute()
+    }, filters={"id": f"eq.{req.org_id}"})
 
     if req.pos_system == "toast":
         background_tasks.add_task(
@@ -228,6 +229,16 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             connection_id=connection_id,
             credentials=req.credentials,
         )
+    elif req.pos_system not in ("square", "clover"):
+        api_config = get_connector_config(req.pos_system)
+        if api_config and api_config.get("auth_type") != "csv_only":
+            background_tasks.add_task(
+                _run_generic_backfill,
+                org_id=req.org_id,
+                connection_id=connection_id,
+                pos_system=req.pos_system,
+                credentials=req.credentials,
+            )
 
     return {
         "success": True,
@@ -300,6 +311,138 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         )
 
 
+async def _run_generic_backfill(org_id: str, connection_id: str, pos_system: str, credentials: dict):
+    """Background task: run initial backfill for any GenericREST POS system."""
+    from ...db import get_db
+    db = get_db()
+
+    try:
+        api_config = get_connector_config(pos_system)
+        conn_config = POSConnectionConfig(
+            system_key=pos_system,
+            system_name=pos_system.replace("-", " ").title(),
+            tier=api_config.get("tier", 3),
+            auth_method=api_config.get("auth_type", "bearer"),
+            base_url=api_config.get("base_url", ""),
+            credentials=credentials,
+            org_id=org_id,
+        )
+        connector = GenericRESTConnector(conn_config, api_config)
+        sync_result = await connector.run_sync()
+
+        normalized = [
+            normalize_transaction(t, pos_system, org_id=org_id)
+            for t in sync_result.transactions
+        ]
+        if normalized:
+            await db.batch_upsert("transactions", normalized, on_conflict="org_id,external_id")
+
+        if sync_result.catalog_items:
+            await db.batch_upsert("products", [
+                {"org_id": org_id, "source_system": pos_system, **item}
+                for item in sync_result.catalog_items
+            ], on_conflict="org_id,external_id")
+
+        await db.update(
+            "pos_connections",
+            {
+                "historical_import_complete": True,
+                "last_sync_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            filters={"id": f"eq.{connection_id}"},
+        )
+        logger.info(
+            f"Generic backfill complete for {org_id}/{pos_system}: "
+            f"{sync_result.records_fetched} records, {len(sync_result.errors)} errors"
+        )
+
+    except Exception as e:
+        logger.error(f"Generic backfill failed for {org_id}/{pos_system}: {e}", exc_info=True)
+        await db.update(
+            "pos_connections",
+            {"status": "error", "last_error": str(e)[:500]},
+            filters={"id": f"eq.{connection_id}"},
+        )
+
+
+# ─── CSV Upload ──────────────────────────────────────────────
+
+@router.post("/upload-csv")
+async def upload_csv(
+    background_tasks: BackgroundTasks,
+    org_id: str = "",
+    pos_system: str = "",
+    file: bytes = b"",
+    filename: str = "",
+):
+    """Upload a CSV/Excel export from a non-API POS system."""
+    from ...db import _db_instance as db
+    if not db:
+        raise HTTPException(503, "Database not available")
+
+    api_config = get_connector_config(pos_system)
+    if not api_config:
+        raise HTTPException(400, f"Unknown POS system: {pos_system}")
+
+    csv_columns = api_config.get("csv_columns", {})
+    if not csv_columns:
+        raise HTTPException(
+            400,
+            f"{pos_system} does not have CSV column mappings configured. "
+            "Contact support to add this system.",
+        )
+
+    records, errors = import_csv_for_system(pos_system, csv_columns, file, filename)
+
+    if not records:
+        return {
+            "success": False,
+            "records_imported": 0,
+            "errors": errors[:10],
+            "message": "No valid records found. Check that the file matches the expected format.",
+        }
+
+    normalized = [
+        normalize_transaction(r, pos_system, org_id=org_id)
+        for r in records
+    ]
+
+    await db.batch_upsert("transactions", normalized, on_conflict="org_id,external_id")
+
+    existing = await db.select(
+        "pos_connections",
+        filters={"org_id": f"eq.{org_id}", "provider": f"eq.{pos_system}"},
+        limit=1,
+    )
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        await db.update("pos_connections", {
+            "last_sync_at": now,
+            "historical_import_complete": True,
+            "updated_at": now,
+        }, filters={"id": f"eq.{existing[0]['id']}"})
+    else:
+        await db.insert("pos_connections", {
+            "id": str(uuid4()),
+            "org_id": org_id,
+            "provider": pos_system,
+            "status": "connected",
+            "merchant_id": "",
+            "historical_import_complete": True,
+            "last_sync_at": now,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+    return {
+        "success": True,
+        "records_imported": len(normalized),
+        "errors": errors[:10],
+        "message": f"Imported {len(normalized)} transactions from {pos_system}.",
+    }
+
+
 # ─── Connection Status ──────────────────────────────────────
 
 @router.get("/connections/{org_id}")
@@ -367,9 +510,9 @@ async def disconnect_pos(req: DisconnectRequest):
         filters={"id": f"eq.{conn['id']}"},
     )
 
-    await db.table("organizations").update({
+    await db.update("organizations", {
         "pos_connection_status": None,
-    }).eq("id", req.org_id).execute()
+    }, filters={"id": f"eq.{req.org_id}"})
 
     return {"success": True, "message": f"{req.pos_system.title()} disconnected."}
 

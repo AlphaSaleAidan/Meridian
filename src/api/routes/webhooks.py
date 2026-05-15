@@ -247,3 +247,151 @@ async def webhook_health():
         "signature_key_configured": bool(sq_config.webhook_signature_key),
         "webhook_url": app_config.webhook_url,
     }
+
+
+# ─── Clover Webhooks ─────────────────────────────────────────
+
+@router.post("/clover")
+async def clover_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Receive Clover webhook events.
+
+    Clover payload: {appId, merchants: {MERCHANT_ID: [{type, objectId, ts}]}}
+    Must respond 200 within 5 seconds.
+    """
+    body = await request.body()
+
+    try:
+        event = json.loads(body)
+    except json.JSONDecodeError:
+        return Response(status_code=400)
+
+    merchants = event.get("merchants", {})
+    if not merchants:
+        return Response(status_code=200)
+
+    background_tasks.add_task(_process_clover_webhook, merchants)
+    return Response(status_code=200)
+
+
+async def _process_clover_webhook(merchants: dict):
+    """Process Clover webhook events asynchronously."""
+    from ...clover.webhook_handlers import CloverWebhookProcessor
+
+    clover_processor = CloverWebhookProcessor(
+        get_connection=_get_connection_by_provider_merchant,
+        upsert_transaction=_upsert_transaction,
+        upsert_catalog=_upsert_catalog,
+        upsert_inventory=_upsert_inventory,
+        disconnect_merchant=_disconnect_merchant,
+        send_notification=_send_notification,
+    )
+
+    for merchant_id, events in merchants.items():
+        connection = await _get_connection_by_provider_merchant("clover", merchant_id)
+        if not connection and events:
+            logger.warning(f"No Clover connection for merchant {merchant_id}")
+            continue
+
+        try:
+            results = await clover_processor.handle(merchant_id, events, connection)
+            logger.info(f"Clover webhook for {merchant_id}: {len(results)} events processed")
+            if connection:
+                from ...db.cache import dashboard_cache
+                dashboard_cache.invalidate_org(connection.get("org_id", ""))
+        except Exception as e:
+            logger.error(f"Clover webhook failed for {merchant_id}: {e}", exc_info=True)
+
+
+# ─── Toast Webhooks ──────────────────────────────────────────
+
+@router.post("/toast")
+async def toast_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Receive Toast webhook events.
+
+    Toast sends: {eventType, restaurantGuid, webhookId, data: {...}}
+    Must respond 200 quickly.
+    """
+    body = await request.body()
+
+    try:
+        event = json.loads(body)
+    except json.JSONDecodeError:
+        return Response(status_code=400)
+
+    event_type = event.get("eventType", "unknown")
+    restaurant_guid = event.get("restaurantGuid", "")
+
+    logger.info(f"Toast webhook: {event_type} (restaurant={restaurant_guid})")
+
+    background_tasks.add_task(
+        _process_toast_webhook,
+        event_type=event_type,
+        event=event,
+        restaurant_guid=restaurant_guid,
+    )
+    return Response(status_code=200)
+
+
+async def _process_toast_webhook(event_type: str, event: dict, restaurant_guid: str):
+    """Process Toast webhook event asynchronously."""
+    connection = await _get_connection_by_provider_merchant("toast", restaurant_guid)
+    if not connection:
+        logger.warning(f"No Toast connection for restaurant {restaurant_guid}")
+        return
+
+    org_id = connection.get("org_id", "")
+
+    try:
+        if event_type in ("order.created", "order.updated", "order.closed"):
+            from ...services.pos_sync_runner import run_incremental
+            await run_incremental(org_id, "toast", connection)
+        elif event_type == "restaurant.disconnected":
+            await _disconnect_merchant(connection.get("id", ""))
+            await _send_notification(
+                org_id=org_id,
+                title="Toast Disconnected",
+                body="Your Toast POS connection was removed. Reconnect in Settings.",
+                priority="urgent",
+            )
+        else:
+            logger.info(f"Toast event {event_type} — no handler, syncing as fallback")
+            from ...services.pos_sync_runner import run_incremental
+            await run_incremental(org_id, "toast", connection)
+
+        from ...db.cache import dashboard_cache
+        dashboard_cache.invalidate_org(org_id)
+    except Exception as e:
+        logger.error(f"Toast webhook processing failed: {e}", exc_info=True)
+
+
+# ─── Shared Helpers ──────────────────────────────────────────
+
+async def _get_connection_by_provider_merchant(provider: str, merchant_id: str) -> dict | None:
+    """Look up an active connection by provider + merchant ID."""
+    from ...db import _db_instance
+    if not _db_instance:
+        return None
+
+    rows = await _db_instance.select(
+        "pos_connections",
+        filters={
+            "provider": f"eq.{provider}",
+            "merchant_id": f"eq.{merchant_id}",
+            "status": "eq.connected",
+        },
+        limit=1,
+    )
+    if not rows:
+        return None
+
+    conn = rows[0]
+    conn["access_token"] = conn.get("access_token_encrypted", "")
+    return conn
