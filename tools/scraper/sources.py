@@ -718,6 +718,7 @@ SOURCES = {
 
     # ═══════════════════════════════════════════════════════════
     # LEADERSHIP & MANAGEMENT (TOP BUSINESS AUTHORS)
+    # source_type: "author_content" — extract principles only, strip voice
     # ═══════════════════════════════════════════════════════════
     "simon_sinek": {
         "name": "Simon Sinek Blog",
@@ -726,6 +727,7 @@ SOURCES = {
             "/stories/",
         ],
         "topics": ["leadership", "management", "culture", "purpose"],
+        "source_type": "author_content",
     },
     "seth_godin": {
         "name": "Seth Godin Blog",
@@ -734,6 +736,7 @@ SOURCES = {
             "/",
         ],
         "topics": ["marketing", "leadership", "entrepreneurship", "strategy"],
+        "source_type": "author_content",
     },
     "james_clear": {
         "name": "James Clear (Atomic Habits)",
@@ -743,6 +746,7 @@ SOURCES = {
             "/best-articles/",
         ],
         "topics": ["habits", "productivity", "leadership", "self-improvement"],
+        "source_type": "author_content",
     },
     "adam_grant": {
         "name": "Adam Grant Articles",
@@ -751,6 +755,7 @@ SOURCES = {
             "/articles/",
         ],
         "topics": ["management", "leadership", "organizational-psychology"],
+        "source_type": "author_content",
     },
     "gary_vee": {
         "name": "GaryVee Blog",
@@ -759,6 +764,7 @@ SOURCES = {
             "/blog/",
         ],
         "topics": ["entrepreneurship", "marketing", "growth", "social-media"],
+        "source_type": "author_content",
     },
     "naval_blog": {
         "name": "Naval Ravikant (Almanack)",
@@ -767,6 +773,7 @@ SOURCES = {
             "/",
         ],
         "topics": ["wealth", "entrepreneurship", "investing", "philosophy"],
+        "source_type": "author_content",
     },
     "tim_ferriss": {
         "name": "Tim Ferriss Blog",
@@ -775,6 +782,7 @@ SOURCES = {
             "/",
         ],
         "topics": ["productivity", "entrepreneurship", "investing", "optimization"],
+        "source_type": "author_content",
     },
     "first_round": {
         "name": "First Round Review",
@@ -787,7 +795,7 @@ SOURCES = {
 
     # ═══════════════════════════════════════════════════════════
     # BOOK SUMMARIES & EXPERT KNOWLEDGE
-    # (Public summaries, reviews, and author content)
+    # source_type: "book_summary" — extract principles only, strip author voice
     # ═══════════════════════════════════════════════════════════
     "fourminutebooks": {
         "name": "Four Minute Books",
@@ -796,6 +804,7 @@ SOURCES = {
             "/book-summaries/",
         ],
         "topics": ["book-summaries", "business", "finance", "self-improvement", "leadership"],
+        "source_type": "book_summary",
     },
     "readingraphics": {
         "name": "Readingraphics Book Summaries",
@@ -804,6 +813,7 @@ SOURCES = {
             "/book-summary/",
         ],
         "topics": ["book-summaries", "business", "strategy", "management"],
+        "source_type": "book_summary",
     },
     "getstoryshots": {
         "name": "StoryShots Book Summaries",
@@ -812,6 +822,7 @@ SOURCES = {
             "/books/",
         ],
         "topics": ["book-summaries", "business", "finance", "self-help"],
+        "source_type": "book_summary",
     },
     "sam_thomas_davies": {
         "name": "Sam Thomas Davies Summaries",
@@ -820,6 +831,7 @@ SOURCES = {
             "/book-summaries/",
         ],
         "topics": ["book-summaries", "business", "productivity", "finance"],
+        "source_type": "book_summary",
     },
 
     # ═══════════════════════════════════════════════════════════
@@ -868,6 +880,7 @@ SOURCES = {
             "/letters/letters.html",
         ],
         "topics": ["investing", "value-investing", "buffett", "business-analysis"],
+        "source_type": "financial_expert",
     },
     "bridgewater": {
         "name": "Bridgewater (Ray Dalio)",
@@ -876,6 +889,7 @@ SOURCES = {
             "/research-and-insights/",
         ],
         "topics": ["investing", "macro", "economics", "principles", "risk"],
+        "source_type": "financial_expert",
     },
     "oaktree_memos": {
         "name": "Oaktree Capital (Howard Marks)",
@@ -884,6 +898,7 @@ SOURCES = {
             "/insights/memos/",
         ],
         "topics": ["investing", "risk", "value-investing", "markets", "cycles"],
+        "source_type": "financial_expert",
     },
 
     # ═══════════════════════════════════════════════════════════
@@ -1214,7 +1229,7 @@ SOURCES = {
 
     # ═══════════════════════════════════════════════════════════
     # FINANCIAL BOOKS & DEEP KNOWLEDGE
-    # (Public summaries, author blogs, key excerpts — NOT pirated books)
+    # source_type: "book_summary" — extract principles only, strip author voice
     # ═══════════════════════════════════════════════════════════
     "blinkist_free": {
         "name": "Blinkist Magazine",
@@ -1223,6 +1238,7 @@ SOURCES = {
             "/magazine/",
         ],
         "topics": ["book-summaries", "finance", "business", "leadership"],
+        "source_type": "book_summary",
     },
     "investopedia": {
         "name": "Investopedia",
@@ -1346,6 +1362,7 @@ SOURCES = {
 
     # ═══════════════════════════════════════════════════════════
     # ADDITIONAL FINANCIAL EXPERTS & THOUGHT LEADERS
+    # source_type: "financial_expert" — extract principles only, strip voice
     # ═══════════════════════════════════════════════════════════
     "damodaran": {
         "name": "Aswath Damodaran (NYU Stern)",
@@ -1354,6 +1371,7 @@ SOURCES = {
             "/",
         ],
         "topics": ["valuation", "corporate-finance", "investing", "risk"],
+        "source_type": "financial_expert",
     },
     "ycharts_blog": {
         "name": "YCharts Blog",
@@ -1378,6 +1396,7 @@ SOURCES = {
             "/",
         ],
         "topics": ["macro", "investing", "finance", "economics"],
+        "source_type": "financial_expert",
     },
     "abnormal_returns": {
         "name": "Abnormal Returns",
@@ -1386,6 +1405,7 @@ SOURCES = {
             "/",
         ],
         "topics": ["investing", "finance", "markets", "economics"],
+        "source_type": "financial_expert",
     },
     "collaborative_fund": {
         "name": "Collaborative Fund Blog (Morgan Housel)",
@@ -1394,6 +1414,7 @@ SOURCES = {
             "/blog/",
         ],
         "topics": ["investing", "psychology", "finance", "business"],
+        "source_type": "financial_expert",
     },
     "stratechery": {
         "name": "Stratechery (Ben Thompson)",
@@ -1402,6 +1423,7 @@ SOURCES = {
             "/",
         ],
         "topics": ["strategy", "technology", "business-models", "platforms"],
+        "source_type": "author_content",
     },
 
     # ═══════════════════════════════════════════════════════════

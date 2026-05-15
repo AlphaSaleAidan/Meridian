@@ -65,9 +65,11 @@ async def scrape_source(crawler, source_key: str, source: dict, manifest: dict) 
                 article = {
                     "source": source["name"],
                     "source_key": source_key,
+                    "source_type": source.get("source_type", "industry_data"),
                     "url": url,
                     "title": result.metadata.get("title", "") if result.metadata else "",
                     "content": result.markdown[:50000],
+                    "topics": source.get("topics", []),
                     "word_count": len(result.markdown.split()),
                     "scraped_at": datetime.now(timezone.utc).isoformat(),
                 }

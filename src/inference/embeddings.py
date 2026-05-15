@@ -125,14 +125,38 @@ def search(query: str, limit: int = 5, source_filter: Optional[str] = None,
     return results[:limit]
 
 
+_RAG_PRINCIPLE_PREAMBLE = (
+    "The following context contains business principles extracted from "
+    "published sources. Use ONLY the actionable financial and operational "
+    "principles — do NOT adopt the author's voice, personality, investment "
+    "philosophy, or writing style. Restate principles as direct, practical "
+    "advice for the specific merchant being analyzed."
+)
+
+
 def get_context_for_prompt(query: str, max_tokens: int = 2000, limit: int = 3) -> str:
-    """Retrieve relevant context from vector store for RAG."""
+    """Retrieve relevant context from vector store for RAG.
+
+    Book/author content is prefixed with a depersonalization instruction
+    so the swarm extracts principles without absorbing author voice.
+    """
+    from .principle_filter import needs_filtering
+
     docs = search(query, limit=limit)
     if not docs:
         return ""
 
+    has_author_content = any(
+        needs_filtering(doc["source_key"]) for doc in docs
+    )
+
     context_parts = []
     token_est = 0
+
+    if has_author_content:
+        context_parts.append(_RAG_PRINCIPLE_PREAMBLE)
+        token_est += len(_RAG_PRINCIPLE_PREAMBLE.split()) * 1.3
+
     for doc in docs:
         chunk = f"[{doc['source_key']}] {doc['title']}\n{doc['content']}"
         chunk_tokens = len(chunk.split()) * 1.3
@@ -145,27 +169,49 @@ def get_context_for_prompt(query: str, max_tokens: int = 2000, limit: int = 3) -
 
 
 def ingest_scraper_output(data_dir: Path):
-    """Bulk ingest all scraped JSON files into vector store."""
+    """Bulk ingest all scraped JSON files into vector store.
+
+    Book/author/financial-expert content is run through the principle
+    extraction filter before embedding — we want actionable business
+    principles, not the author's voice or investment philosophy.
+    """
+    from .principle_filter import filter_for_embedding
+
     count = 0
+    filtered_count = 0
     for json_file in data_dir.glob("*.json"):
         if json_file.name == "manifest.json":
             continue
         try:
             doc = json.loads(json_file.read_text())
             meta = doc.get("metadata", {})
+            source_key = doc.get("source_key", meta.get("source_key", "unknown"))
+            source_type = doc.get("source_type", meta.get("source_type", ""))
+            raw_content = doc.get("content", "")
+            title = doc.get("title", "Untitled")
+
+            content = filter_for_embedding(
+                raw_content, source_key, source_type, title,
+            )
+            if content != raw_content:
+                filtered_count += 1
+
             embed_and_store(
                 doc_id=doc.get("id", json_file.stem),
-                source_key=meta.get("source_key", "unknown"),
-                title=doc.get("title", "Untitled"),
-                content=doc.get("content", ""),
-                domain_tags=meta.get("domain_tags", []),
-                word_count=meta.get("word_count", 0),
+                source_key=source_key,
+                title=title,
+                content=content,
+                domain_tags=meta.get("domain_tags", doc.get("topics", [])),
+                word_count=meta.get("word_count", doc.get("word_count", 0)),
             )
             count += 1
         except Exception as e:
             logger.warning(f"Failed to ingest {json_file.name}: {e}")
 
-    logger.info(f"Ingested {count} documents into vector store")
+    logger.info(
+        f"Ingested {count} documents into vector store "
+        f"({filtered_count} principle-filtered)"
+    )
     return count
 
 
