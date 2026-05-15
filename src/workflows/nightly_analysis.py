@@ -179,6 +179,28 @@ async def nightly_analysis(batch_size: int = 10, include_reports: bool = False):
     succeeded = sum(1 for r in analysis_results if r.get("status") == "complete")
     failed = len(analysis_results) - succeeded
 
+    # Step 4: Post-analysis training for successfully analyzed merchants
+    import os
+    if os.environ.get("ENABLE_SWARM_TRAINING", "1") == "1":
+        try:
+            from ..services.training_scheduler import run_post_analysis_training
+            trained_orgs = [
+                m["org_id"] for m, r in zip(valid_merchants, analysis_results)
+                if r.get("status") == "complete"
+            ]
+            if trained_orgs:
+                training_tasks = await asyncio.gather(
+                    *[run_post_analysis_training(oid) for oid in trained_orgs[:batch_size]],
+                    return_exceptions=True,
+                )
+                trained_ok = sum(
+                    1 for t in training_tasks
+                    if not isinstance(t, Exception) and isinstance(t, dict) and t.get("status") == "complete"
+                )
+                logger.info(f"Post-analysis training: {trained_ok}/{len(trained_orgs)} orgs trained")
+        except Exception as e:
+            logger.warning(f"Post-analysis training failed: {e}")
+
     logger.info(
         f"Nightly analysis complete: {succeeded} succeeded, {failed} failed "
         f"out of {len(merchants)} merchants"

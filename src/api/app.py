@@ -68,6 +68,9 @@ from .routes.inference import router as inference_router
 from .routes.website import router as website_router
 from .routes.schedule import router as schedule_router
 from .routes.garry import router as garry_router
+from .routes.garry_patches import router as garry_patches_router
+from .routes.archives import router as archives_router
+from .routes.intelligence import router as intelligence_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -122,6 +125,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"POS sync scheduler failed to start: {e}")
 
+    # Start training scheduler (6-hour consolidation loop)
+    _training_scheduler_started = False
+    if os.environ.get("ENABLE_SWARM_TRAINING", "1") == "1":
+        try:
+            from ..services.training_scheduler import start_training_scheduler
+            start_training_scheduler()
+            _training_scheduler_started = True
+            logger.info("Training scheduler started (6h consolidation)")
+        except Exception as e:
+            logger.warning(f"Training scheduler failed to start: {e}")
+
     yield
 
     if _trainer_task:
@@ -129,6 +143,9 @@ async def lifespan(app: FastAPI):
         get_swarm_trainer().stop()
         _trainer_task.cancel()
         logger.info("Autonomous swarm trainer stopped")
+    if _training_scheduler_started:
+        from ..services.training_scheduler import stop_training_scheduler
+        stop_training_scheduler()
     if _pos_scheduler_started:
         from ..services.pos_scheduler import stop_scheduler
         stop_scheduler()
@@ -136,11 +153,16 @@ async def lifespan(app: FastAPI):
     logger.info("Meridian server shut down.")
 
 
+_is_production = os.environ.get("ENVIRONMENT", "production") == "production"
+
 app = FastAPI(
     title="Meridian",
     description="AI-Powered POS Analytics Platform",
     version="0.2.0",
     lifespan=lifespan,
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
 )
 
 # ── CORS — locked to known Meridian domains ──
@@ -197,6 +219,9 @@ app.include_router(inference_router)
 app.include_router(website_router)
 app.include_router(schedule_router)
 app.include_router(garry_router)
+app.include_router(garry_patches_router)
+app.include_router(archives_router)
+app.include_router(intelligence_router)
 if _has_billing:
     app.include_router(billing_router)
 if _has_marketplace:

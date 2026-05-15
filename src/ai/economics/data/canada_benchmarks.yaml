@@ -1,0 +1,600 @@
+# Canadian Industry Benchmarks — Provincial and national adjustments.
+# Applied as overlays on top of base US benchmarks.
+# All monetary values in CAD cents unless noted.
+# Sources: Statistics Canada, CRFA, CFIB, provincial regulators.
+
+_meta:
+  currency: CAD
+  exchange_rate_usd_to_cad: 1.38
+  gst_rate_pct: 5.0
+  last_updated: "2025-Q1"
+  sources:
+    - "Statistics Canada Table 21-10-0019-01 — Monthly survey of food services and drinking places"
+    - "Statistics Canada Table 20-10-0008-01 — Retail trade by province and territory"
+    - "Statistics Canada Table 36-10-0402-01 — GDP by industry, monthly"
+    - "Canadian Restaurant and Foodservices Association (CRFA) 2025 Industry Report"
+    - "Canadian Federation of Independent Business (CFIB) Small Business Pulse Survey 2025"
+    - "Restaurants Canada Foodservice Facts 2025"
+    - "Bank of Canada Quarterly Economic Review Q1 2025"
+    - "Conference Board of Canada — Canadian Industrial Outlook 2025"
+
+provincial_tax:
+  alberta:
+    pst: 0.0
+    total: 5.0
+    note: "GST only — no provincial sales tax"
+  british_columbia:
+    pst: 7.0
+    total: 12.0
+    note: "GST + PST"
+  manitoba:
+    pst: 7.0
+    total: 12.0
+    note: "GST + RST"
+  new_brunswick:
+    hst: 15.0
+    total: 15.0
+    note: "HST harmonized"
+  newfoundland_labrador:
+    hst: 15.0
+    total: 15.0
+    note: "HST harmonized"
+  northwest_territories:
+    pst: 0.0
+    total: 5.0
+    note: "GST only"
+  nova_scotia:
+    hst: 15.0
+    total: 15.0
+    note: "HST harmonized"
+  nunavut:
+    pst: 0.0
+    total: 5.0
+    note: "GST only"
+  ontario:
+    hst: 13.0
+    total: 13.0
+    note: "HST harmonized"
+  prince_edward_island:
+    hst: 15.0
+    total: 15.0
+    note: "HST harmonized"
+  quebec:
+    qst: 9.975
+    total: 14.975
+    note: "GST + QST"
+  saskatchewan:
+    pst: 6.0
+    total: 11.0
+    note: "GST + PST"
+  yukon:
+    pst: 0.0
+    total: 5.0
+    note: "GST only"
+
+provincial_minimum_wage_cad:
+  alberta: 15.00
+  british_columbia: 17.40
+  manitoba: 15.80
+  new_brunswick: 15.30
+  newfoundland_labrador: 15.60
+  northwest_territories: 16.05
+  nova_scotia: 15.20
+  nunavut: 19.00
+  ontario: 16.55
+  prince_edward_island: 15.40
+  quebec: 15.75
+  saskatchewan: 15.00
+  yukon: 17.59
+
+# ─────────────────────────────────────────────────────────────
+# Adjustments per vertical — overlays on base US benchmarks.
+# Positive adjustments = higher than US base; negative = lower.
+# ─────────────────────────────────────────────────────────────
+
+adjustments:
+  coffee_shop:
+    avg_daily_revenue_cad_cents: 195000
+    median_daily_revenue_cad_cents: 155000
+    avg_ticket_cad_cents: 720
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +2.0
+    net_margin_adjustment_pct: -1.5
+    seasonal_peak_months: [6, 7, 8]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 18.0
+    canadian_specific_insights:
+      - "Tim Hortons dominance (4,900+ locations) means independent shops must differentiate on quality and experience"
+      - "Seasonal patio revenue can add 15-25% in summer months (Jun-Aug)"
+      - "Drive-through penetration higher than US — 65% of coffee purchases in winter"
+      - "Canadian per-capita coffee consumption is 6.5 cups/week, 40% above US average"
+      - "Plant-based milk upcharges are standard ($0.70-$1.00 CAD) and widely accepted"
+    competitive_landscape:
+      dominant_chains: ["Tim Hortons", "Starbucks", "Second Cup", "Bridgehead"]
+      independent_market_share_pct: 22.0
+    source: "CRFA 2025 + StatCan Table 21-10-0019-01"
+
+  restaurant:
+    avg_daily_revenue_cad_cents: 490000
+    median_daily_revenue_cad_cents: 375000
+    avg_ticket_cad_cents: 3200
+    labor_cost_adjustment_pct: +4.0
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [6, 7, 8, 12]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 22.0
+    canadian_specific_insights:
+      - "Mandatory gratuity is less common; average tip rate is 15-18% vs. US 18-22%"
+      - "Alcohol markup regulations vary by province — ON/QC have LCBO/SAQ controlled pricing"
+      - "Winter heating costs add 2-4% to overhead Dec-Mar in most provinces"
+      - "Immigration-driven labor pool helps with staffing but requires ESL training investment"
+      - "Delivery app penetration (UberEats, DoorDash, SkipTheDishes) at 38% of orders in urban areas"
+    competitive_landscape:
+      dominant_chains: ["Swiss Chalet", "The Keg", "Earls", "Milestones", "Cactus Club"]
+      independent_market_share_pct: 55.0
+    source: "Restaurants Canada Foodservice Facts 2025 + StatCan Table 21-10-0019-01"
+
+  quick_service:
+    avg_daily_revenue_cad_cents: 350000
+    median_daily_revenue_cad_cents: 280000
+    avg_ticket_cad_cents: 1600
+    labor_cost_adjustment_pct: +3.5
+    cogs_adjustment_pct: +2.5
+    net_margin_adjustment_pct: -1.5
+    seasonal_peak_months: [6, 7, 8]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 15.0
+    canadian_specific_insights:
+      - "SkipTheDishes (Canadian-founded) has strongest QSR delivery presence outside GTA/Vancouver"
+      - "Poutine and regional menu items drive higher ticket in Quebec locations"
+      - "Drive-through accounts for 70%+ of QSR revenue in suburban Canadian markets"
+      - "Franchise fees and royalty structures differ under Canadian franchise disclosure laws"
+    competitive_landscape:
+      dominant_chains: ["Tim Hortons", "McDonald's", "A&W Canada", "Harvey's", "Mary Brown's"]
+      independent_market_share_pct: 15.0
+    source: "CRFA 2025 + Restaurants Canada Foodservice Facts 2025"
+
+  retail:
+    avg_daily_revenue_cad_cents: 380000
+    median_daily_revenue_cad_cents: 270000
+    avg_ticket_cad_cents: 3800
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +4.0
+    net_margin_adjustment_pct: -1.5
+    seasonal_peak_months: [11, 12]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 25.0
+    canadian_specific_insights:
+      - "Cross-border shopping competition — Canadians near US border shop stateside for lower prices"
+      - "Boxing Day (Dec 26) is the biggest sale day, replacing Black Friday in importance"
+      - "Higher import duties and shipping costs raise COGS 3-5% vs. US equivalents"
+      - "Bilingual packaging requirements (FR/EN) add production costs for Canadian SKUs"
+      - "E-commerce penetration growing but lags US by ~2 years at 14% of total retail"
+    competitive_landscape:
+      dominant_chains: ["Canadian Tire", "Hudson's Bay", "Shoppers Drug Mart", "Loblaws"]
+      independent_market_share_pct: 30.0
+    source: "StatCan Table 20-10-0008-01 + Retail Council of Canada 2025"
+
+  smoke_shop:
+    avg_daily_revenue_cad_cents: 240000
+    median_daily_revenue_cad_cents: 185000
+    avg_ticket_cad_cents: 2000
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +8.0
+    net_margin_adjustment_pct: -3.0
+    seasonal_peak_months: [6, 7, 8]
+    seasonal_trough_months: [1, 2]
+    seasonal_revenue_variance_pct: 12.0
+    canadian_specific_insights:
+      - "Federal excise tax on tobacco is significantly higher than US — $0.119/cigarette"
+      - "Vape product regulations tightened under Tobacco and Vaping Products Act (TVPA)"
+      - "Provincial tobacco display bans (power walls prohibited) reduce impulse sales"
+      - "Cannabis legalization has cannibalized ~15-20% of smoke shop revenue since 2018"
+      - "Flavoured vape bans in several provinces further reduce product selection"
+    source: "Health Canada Tobacco Control + StatCan Table 20-10-0008-01"
+
+  bar:
+    avg_daily_revenue_cad_cents: 410000
+    median_daily_revenue_cad_cents: 300000
+    avg_ticket_cad_cents: 2500
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +5.0
+    net_margin_adjustment_pct: -2.5
+    seasonal_peak_months: [6, 7, 8, 12]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 28.0
+    canadian_specific_insights:
+      - "Provincial liquor boards (LCBO, SAQ, BCLDB) control wholesale pricing — no private negotiation"
+      - "Patio season (May-Sep) is critical — 30-40% of annual profit in many markets"
+      - "Last call varies by province: ON/AB 2:00am, QC 3:00am, BC 2:00am"
+      - "Craft beer explosion — 1,200+ craft breweries in Canada, strong local preference"
+      - "Spirits markup by provincial boards adds 100-200% vs. US wholesale"
+    source: "CRFA 2025 + Provincial Liquor Board Annual Reports"
+
+  grocery:
+    avg_daily_revenue_cad_cents: 550000
+    median_daily_revenue_cad_cents: 420000
+    avg_ticket_cad_cents: 2800
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -0.5
+    seasonal_peak_months: [11, 12]
+    seasonal_trough_months: [1, 2]
+    seasonal_revenue_variance_pct: 10.0
+    canadian_specific_insights:
+      - "Big 3 oligopoly (Loblaw, Sobeys/Empire, Metro) controls 60%+ of market"
+      - "Supply management system keeps dairy/poultry prices 30-50% above US"
+      - "Grocery Code of Conduct adopted 2024 — impacts supplier negotiations"
+      - "Fresh produce costs 15-25% more than US due to shorter growing seasons and import logistics"
+      - "Bilingual labeling mandatory under Consumer Packaging and Labelling Act"
+    competitive_landscape:
+      dominant_chains: ["Loblaws/No Frills", "Sobeys/FreshCo", "Metro", "Costco", "Walmart"]
+      independent_market_share_pct: 12.0
+    source: "StatCan Table 20-10-0008-01 + CFIB Grocery Survey 2025"
+
+  salon:
+    avg_daily_revenue_cad_cents: 220000
+    median_daily_revenue_cad_cents: 165000
+    avg_ticket_cad_cents: 5000
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +1.0
+    net_margin_adjustment_pct: -1.0
+    seasonal_peak_months: [5, 6, 11, 12]
+    seasonal_trough_months: [1, 2]
+    seasonal_revenue_variance_pct: 15.0
+    canadian_specific_insights:
+      - "Chair rental model less common than US — most stylists are employees with benefits"
+      - "Provincial licensing requirements vary — ON requires 2,000+ apprenticeship hours"
+      - "Product retail attachment rate lower than US (25% vs 35%) due to Amazon/online competition"
+      - "Tip culture slightly lower — 15% is standard vs. US 20%"
+    source: "StatCan Table 20-10-0008-01 + Allied Beauty Association Canada 2025"
+
+  auto_repair:
+    avg_daily_revenue_cad_cents: 380000
+    median_daily_revenue_cad_cents: 300000
+    avg_ticket_cad_cents: 27000
+    labor_cost_adjustment_pct: +2.5
+    cogs_adjustment_pct: +5.0
+    net_margin_adjustment_pct: -1.5
+    seasonal_peak_months: [3, 4, 10, 11]
+    seasonal_trough_months: [7, 8]
+    seasonal_revenue_variance_pct: 20.0
+    canadian_specific_insights:
+      - "Winter tire changeover (Oct-Nov, Mar-Apr) creates two major seasonal peaks"
+      - "Salt/road damage from winter creates consistent rust repair demand"
+      - "Provincial safety inspection requirements vary — ON has annual emission testing"
+      - "Parts import costs 5-10% higher due to CAD exchange and cross-border logistics"
+      - "EV adoption growing — federal ZEV mandate impacts service revenue long-term"
+    source: "StatCan Table 20-10-0008-01 + Automotive Industries Association of Canada 2025"
+
+  fitness:
+    avg_daily_revenue_cad_cents: 330000
+    median_daily_revenue_cad_cents: 240000
+    avg_ticket_cad_cents: 5500
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +1.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [1, 2, 9]
+    seasonal_trough_months: [6, 7, 8]
+    seasonal_revenue_variance_pct: 22.0
+    canadian_specific_insights:
+      - "January spike is 30-40% above average due to New Year's resolution memberships"
+      - "Summer attrition higher than US — outdoor activities replace gym in Jun-Aug"
+      - "GoodLife Fitness dominates with 400+ locations — independents compete on niche/boutique"
+      - "HST/GST on memberships is a competitive disadvantage vs. home fitness equipment"
+      - "Condo/building gyms growing in urban Toronto/Vancouver — reducing commercial gym demand"
+    competitive_landscape:
+      dominant_chains: ["GoodLife Fitness", "Fit4Less", "Anytime Fitness", "YMCA"]
+      independent_market_share_pct: 35.0
+    source: "StatCan NAICS 71394 + CFIB Small Business Survey 2025"
+
+  other:
+    avg_daily_revenue_cad_cents: 305000
+    median_daily_revenue_cad_cents: 220000
+    avg_ticket_cad_cents: 2200
+    labor_cost_adjustment_pct: +2.5
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -1.5
+    seasonal_peak_months: [6, 7, 8, 11, 12]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 18.0
+    canadian_specific_insights:
+      - "CFIB reports 65% of Canadian small businesses operate with less than 3 months cash reserves"
+      - "Canada Small Business Financing Program provides government-backed loans up to $1M"
+      - "Business registration and compliance costs average $3,500 CAD/year more than US equivalents"
+      - "Bilingual service requirements in Quebec add operational complexity"
+    source: "CFIB Small Business Pulse Survey 2025 + StatCan"
+
+  # ─────────────────────────────────────────────────────
+  # New verticals — Canadian adjustments
+  # ─────────────────────────────────────────────────────
+
+  cannabis:
+    avg_daily_revenue_cad_cents: 480000
+    median_daily_revenue_cad_cents: 360000
+    avg_ticket_cad_cents: 3800
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +6.0
+    net_margin_adjustment_pct: -5.0
+    seasonal_peak_months: [4, 7, 10, 12]
+    seasonal_trough_months: [1, 2]
+    seasonal_revenue_variance_pct: 12.0
+    canadian_specific_insights:
+      - "Federally legal since Oct 2018 under Cannabis Act — mature regulatory framework"
+      - "Provincial distribution varies: OCS (ON) online-only then private retail, SQDC (QC) government-only, AGLC (AB) private licensed"
+      - "Excise tax: greater of $1/gram or 10% of selling price — significant margin compression"
+      - "Price compression ongoing: average gram price fell from $10.23 (2019) to $5.80 (2025)"
+      - "Packaging regulations (plain packaging, child-proof) add $0.50-$1.00 per unit vs. US markets"
+      - "Ontario has 1,800+ licensed stores — market saturation causing consolidation"
+      - "Edibles limited to 10mg THC per package — limits ticket size vs. US markets"
+    provincial_regulations:
+      ontario: {regulator: "AGCO", distributor: "OCS", private_retail: true, store_cap: "no cap"}
+      quebec: {regulator: "SQDC", distributor: "SQDC", private_retail: false, store_cap: "government only"}
+      alberta: {regulator: "AGLC", distributor: "AGLC", private_retail: true, store_cap: "no cap"}
+      british_columbia: {regulator: "LCRB", distributor: "BC LDB", private_retail: true, store_cap: "no cap"}
+    source: "Health Canada Cannabis Market Data 2025 + Provincial Regulator Reports"
+
+  brewery:
+    avg_daily_revenue_cad_cents: 310000
+    median_daily_revenue_cad_cents: 230000
+    avg_ticket_cad_cents: 3300
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +4.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [6, 7, 8, 9]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 30.0
+    canadian_specific_insights:
+      - "Canada has 1,200+ craft breweries — BC and QC have highest density per capita"
+      - "Provincial small-brewer tax credits significantly reduce excise burden"
+      - "Taproom revenue model is dominant — 60-70% of craft brewery revenue is on-site"
+      - "Patio and summer festival season is critical — some breweries make 50% of annual profit Jun-Sep"
+      - "Distribution through provincial liquor boards is mandatory — limits direct-to-consumer"
+      - "Beer Canada reports total beer market declining 1-2%/year but craft segment growing 5-8%"
+    competitive_landscape:
+      dominant_craft: ["Moosehead", "Big Rock", "Steam Whistle", "Unibroue", "Phillips"]
+      independent_market_share_pct: 70.0
+    source: "Canadian Brewers Association 2025 + Beer Canada Annual Statistical Bulletin"
+
+  bakery:
+    avg_daily_revenue_cad_cents: 175000
+    median_daily_revenue_cad_cents: 135000
+    avg_ticket_cad_cents: 1050
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +4.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [11, 12]
+    seasonal_trough_months: [1, 2, 7]
+    seasonal_revenue_variance_pct: 20.0
+    canadian_specific_insights:
+      - "Flour and dairy costs higher due to supply management — butter 2x US price"
+      - "Strong artisanal bread culture in Quebec (boulangerie tradition) drives premium pricing"
+      - "Holiday season (Nov-Dec) can account for 25-30% of annual revenue"
+      - "Gluten-free and specialty diet trends growing 8-10% annually"
+    source: "Baking Association of Canada 2025 + StatCan Table 20-10-0008-01"
+
+  hotel:
+    avg_daily_revenue_cad_cents: 1350000
+    median_daily_revenue_cad_cents: 950000
+    avg_ticket_cad_cents: 20000
+    labor_cost_adjustment_pct: +4.0
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [6, 7, 8]
+    seasonal_trough_months: [1, 2, 3, 11]
+    seasonal_revenue_variance_pct: 35.0
+    canadian_specific_insights:
+      - "Tourism highly seasonal — Banff/Whistler have inverse seasonality (winter ski + summer hiking)"
+      - "Municipal accommodation taxes (MAT) 3-6% on top of HST/GST — varies by city"
+      - "Airbnb regulations tightening in Toronto, Vancouver, Montreal — benefits traditional hotels"
+      - "Business travel market in Toronto/Calgary/Vancouver drives weekday occupancy"
+      - "Labour shortages acute — Temporary Foreign Worker Program (TFWP) is critical for staffing"
+    source: "Hotel Association of Canada 2025 + StatCan Table 21-10-0019-01"
+
+  pharmacy:
+    avg_daily_revenue_cad_cents: 900000
+    median_daily_revenue_cad_cents: 700000
+    avg_ticket_cad_cents: 3500
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +1.0
+    net_margin_adjustment_pct: -0.5
+    seasonal_peak_months: [1, 2, 10, 11]
+    seasonal_trough_months: [6, 7, 8]
+    seasonal_revenue_variance_pct: 10.0
+    canadian_specific_insights:
+      - "Provincial drug plans and formularies control prescription pricing — lower margin than US"
+      - "Pharmacists can prescribe for minor ailments in most provinces — drives foot traffic"
+      - "Generic drug pricing regulated under pan-Canadian Pharmaceutical Alliance (pCPA)"
+      - "Shoppers Drug Mart/Pharmaprix (Loblaw-owned) dominates with 1,300+ locations"
+      - "Front-store (non-rx) margin higher (30-40%) vs. dispensing (18-22%)"
+    competitive_landscape:
+      dominant_chains: ["Shoppers Drug Mart", "Rexall", "Jean Coutu", "London Drugs"]
+      independent_market_share_pct: 25.0
+    source: "Canadian Pharmacists Association 2025 + CIHI Prescription Drug Spending 2025"
+
+  pet_store:
+    avg_daily_revenue_cad_cents: 305000
+    median_daily_revenue_cad_cents: 230000
+    avg_ticket_cad_cents: 4600
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +5.0
+    net_margin_adjustment_pct: -1.5
+    seasonal_peak_months: [11, 12, 6]
+    seasonal_trough_months: [1, 2]
+    seasonal_revenue_variance_pct: 15.0
+    canadian_specific_insights:
+      - "Canadian pet ownership at 58% of households — growing post-pandemic"
+      - "Premium pet food import costs 8-12% higher than US due to exchange and duties"
+      - "Winter pet apparel and safety gear (booties, coats) are a significant seasonal category"
+      - "Pet insurance adoption lower than US — 3% vs. 5% — limits premium vet referrals"
+    source: "Canadian Animal Health Institute 2025 + StatCan Table 20-10-0008-01"
+
+  electronics:
+    avg_daily_revenue_cad_cents: 520000
+    median_daily_revenue_cad_cents: 380000
+    avg_ticket_cad_cents: 13500
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +6.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [11, 12]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 30.0
+    canadian_specific_insights:
+      - "Apple tax — electronics consistently priced 10-20% higher than US after exchange"
+      - "Best Buy Canada dominates big-box; Canada Computers strong in DIY/PC market"
+      - "Cross-border online shopping and de minimis threshold ($20 CAD) impacts local sales"
+      - "Right to Repair legislation advancing in QC and ON — affects service revenue"
+    competitive_landscape:
+      dominant_chains: ["Best Buy Canada", "Canada Computers", "The Source", "Staples"]
+      independent_market_share_pct: 15.0
+    source: "StatCan Table 20-10-0008-01 + Conference Board of Canada Tech Sector Report 2025"
+
+  convenience:
+    avg_daily_revenue_cad_cents: 380000
+    median_daily_revenue_cad_cents: 295000
+    avg_ticket_cad_cents: 1250
+    labor_cost_adjustment_pct: +2.5
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -1.0
+    seasonal_peak_months: [6, 7, 8]
+    seasonal_trough_months: [1, 2, 3]
+    seasonal_revenue_variance_pct: 14.0
+    canadian_specific_insights:
+      - "Couche-Tard/Circle K dominates Canadian convenience market with 2,100+ stores"
+      - "Tobacco display bans and flavoured vape restrictions reduce high-margin impulse categories"
+      - "Lottery and scratch-ticket revenue is a significant traffic driver (6-8% of revenue)"
+      - "Gas station attached c-stores account for 65% of the market"
+    competitive_landscape:
+      dominant_chains: ["Couche-Tard/Circle K", "Parkland/On the Run", "7-Eleven", "Petro-Canada"]
+      independent_market_share_pct: 20.0
+    source: "CCSA Canadian Convenience Store Survey 2025 + StatCan Table 20-10-0008-01"
+
+  florist:
+    avg_daily_revenue_cad_cents: 200000
+    median_daily_revenue_cad_cents: 145000
+    avg_ticket_cad_cents: 6000
+    labor_cost_adjustment_pct: +2.5
+    cogs_adjustment_pct: +8.0
+    net_margin_adjustment_pct: -3.0
+    seasonal_peak_months: [2, 5, 12]
+    seasonal_trough_months: [1, 3, 7]
+    seasonal_revenue_variance_pct: 35.0
+    canadian_specific_insights:
+      - "Valentine's Day and Mother's Day account for 30-35% of annual revenue"
+      - "Most fresh flowers imported — Colombian/Ecuadorian roses through Miami add transit cost"
+      - "Canadian growing season is 3-4 months shorter — domestic supply limited May-Sep only"
+      - "Online delivery competition from 1-800-Flowers and BloomThis growing at 12%/year"
+    source: "Canadian Ornamental Horticulture Alliance 2025 + StatCan"
+
+  food_truck:
+    avg_daily_revenue_cad_cents: 130000
+    median_daily_revenue_cad_cents: 95000
+    avg_ticket_cad_cents: 1550
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -4.0
+    seasonal_peak_months: [6, 7, 8]
+    seasonal_trough_months: [11, 12, 1, 2, 3]
+    seasonal_revenue_variance_pct: 55.0
+    canadian_specific_insights:
+      - "Severely weather-dependent — most operators shut down Nov-Mar in most provinces"
+      - "Operating season is effectively 5-7 months vs. year-round in southern US"
+      - "Municipal permitting varies wildly — Toronto has 125 street food vendor permits, Vancouver has 100+"
+      - "Festival and event revenue critical — Calgary Stampede, CNE, PNE drive peak weeks"
+      - "Commissary kitchen requirements in most cities add $800-$1,500/month overhead"
+    source: "CRFA 2025 + Municipal licensing data"
+
+  juice_bar:
+    avg_daily_revenue_cad_cents: 155000
+    median_daily_revenue_cad_cents: 115000
+    avg_ticket_cad_cents: 1200
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +5.0
+    net_margin_adjustment_pct: -2.5
+    seasonal_peak_months: [5, 6, 7, 8, 9]
+    seasonal_trough_months: [11, 12, 1, 2]
+    seasonal_revenue_variance_pct: 30.0
+    canadian_specific_insights:
+      - "Strong summer demand but significant winter drop — smoothie bowls and hot options help"
+      - "Fresh produce costs 20-30% higher in winter due to import reliance"
+      - "Health food trends growing in urban centers (Toronto, Vancouver) — 8% annual growth"
+      - "Jugo Juice and Booster Juice are dominant Canadian chains with 300+ combined locations"
+    competitive_landscape:
+      dominant_chains: ["Booster Juice", "Jugo Juice", "Jamba"]
+      independent_market_share_pct: 40.0
+    source: "CRFA 2025 + StatCan Table 21-10-0019-01"
+
+  pizza:
+    avg_daily_revenue_cad_cents: 330000
+    median_daily_revenue_cad_cents: 250000
+    avg_ticket_cad_cents: 2500
+    labor_cost_adjustment_pct: +3.0
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -1.5
+    seasonal_peak_months: [1, 2, 10, 11]
+    seasonal_trough_months: [6, 7, 8]
+    seasonal_revenue_variance_pct: 12.0
+    canadian_specific_insights:
+      - "Counter-seasonal to many food businesses — pizza delivery thrives in cold/bad weather months"
+      - "Canadian pizza market is $8B+ CAD — delivery mix is 45% vs. US 35%"
+      - "Pizza Pizza and Panago are dominant Canadian chains competing with Domino's/Pizza Hut"
+      - "Cheese costs higher due to supply management — mozzarella is 40-60% above US pricing"
+      - "Delivery radius norms are tighter in dense Canadian urban cores — 3-5km vs. US 5-8mi"
+    competitive_landscape:
+      dominant_chains: ["Pizza Pizza", "Domino's", "Pizza Hut", "Panago", "Pizza Nova"]
+      independent_market_share_pct: 35.0
+    source: "Restaurants Canada 2025 + CRFA Industry Report"
+
+  auto_dealer:
+    avg_daily_revenue_cad_cents: 2800000
+    median_daily_revenue_cad_cents: 2000000
+    avg_ticket_cad_cents: 50000
+    labor_cost_adjustment_pct: +2.0
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -0.5
+    seasonal_peak_months: [3, 4, 5, 6]
+    seasonal_trough_months: [12, 1, 2]
+    seasonal_revenue_variance_pct: 25.0
+    canadian_specific_insights:
+      - "Federal luxury tax on vehicles over $100K CAD (10% or 20% of value above $100K)"
+      - "Provincial registration fees and transfer taxes vary — ON has 13% HST on vehicles"
+      - "Winter tire packages are a major upsell — mandatory in QC, recommended everywhere"
+      - "ZEV (Zero Emission Vehicle) federal mandate: 20% of new sales by 2026, 100% by 2035"
+      - "Used vehicle supply constrained — Canadian market smaller, less inventory churn"
+    source: "Canadian Automobile Dealers Association (CADA) 2025 + DesRosiers Automotive Consultants"
+
+  spa:
+    avg_daily_revenue_cad_cents: 385000
+    median_daily_revenue_cad_cents: 285000
+    avg_ticket_cad_cents: 13500
+    labor_cost_adjustment_pct: +4.0
+    cogs_adjustment_pct: +2.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [2, 5, 11, 12]
+    seasonal_trough_months: [1, 6, 7]
+    seasonal_revenue_variance_pct: 20.0
+    canadian_specific_insights:
+      - "Gift card sales for Mother's Day and Christmas account for 20-25% of annual revenue"
+      - "RMT (Registered Massage Therapist) designation regulated provincially — affects pricing"
+      - "Extended health benefits often cover RMT — drives massage bookings (60%+ have coverage)"
+      - "Banff/Whistler/Muskoka destination spas have distinct tourism-driven seasonality"
+      - "HST on spa services is fully applied — no health-service exemptions except RMT in some provinces"
+    source: "Spa Industry Association of Canada 2025 + StatCan"
+
+  laundromat:
+    avg_daily_revenue_cad_cents: 135000
+    median_daily_revenue_cad_cents: 100000
+    avg_ticket_cad_cents: 1350
+    labor_cost_adjustment_pct: +1.5
+    cogs_adjustment_pct: +3.0
+    net_margin_adjustment_pct: -2.0
+    seasonal_peak_months: [9, 10]
+    seasonal_trough_months: [6, 7, 8]
+    seasonal_revenue_variance_pct: 10.0
+    canadian_specific_insights:
+      - "Winter clothing (heavy coats, comforters) drives higher per-load revenue Oct-Mar"
+      - "Energy costs vary significantly by province — QC (hydro) cheapest, AB (natural gas) moderate"
+      - "Urban condo boom in Toronto/Vancouver reduces personal laundry access — drives demand"
+      - "Water utility costs rising 4-6%/year across most municipalities"
+    source: "CFIB Small Business Survey 2025 + StatCan Household Spending"

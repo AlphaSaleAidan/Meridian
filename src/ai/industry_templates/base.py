@@ -91,6 +91,10 @@ def register(cls: type[IndustryAnalyzer]) -> type[IndustryAnalyzer]:
 
 def get_industry_analyzer(business_type: str, org_id: str) -> IndustryAnalyzer:
     # Import all template modules to trigger @register decorators
-    from . import restaurant, smoke_shop, retail, bar_nightclub, salon, coffee_shop
+    from . import (
+        restaurant, smoke_shop, retail, bar_nightclub, salon, coffee_shop,
+        cannabis, auto_repair, fitness, grocery, brewery, bakery,
+        convenience, food_truck, pizza, spa,
+    )
     cls = REGISTRY.get(business_type, GenericAnalyzer)
     return cls(org_id=org_id)

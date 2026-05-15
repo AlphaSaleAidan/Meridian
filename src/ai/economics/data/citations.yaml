@@ -148,3 +148,229 @@ nra_seasonal_trends:
   year: 2025
   finding: "Average restaurant revenue varies +/-15-20% seasonally. Businesses running counter-seasonal promotions recover 30-50% of the seasonal dip."
   url: "https://restaurant.org/research-and-media/research/"
+
+# --- New US Vertical Sources ---
+headset_cannabis_benchmarks:
+  source: Headset Inc.
+  title: "Cannabis Industry Benchmarking Report"
+  year: 2025
+  finding: "Average dispensary transaction is $42-55, with gross margins of 48-58% depending on product mix. Flower margin declining while edibles and concentrates grow."
+  url: "https://www.headset.io/industry-reports"
+
+bdsa_cannabis_market:
+  source: BDSA (Brightfield Group)
+  title: "Cannabis Market Intelligence — US State-Level Analysis"
+  year: 2025
+  finding: "US legal cannabis market reached $33B in 2024. Average store revenue ranges from $2M-$6M annually depending on state maturity and competition density."
+  url: "https://bdsa.com/cannabis-market-intelligence/"
+
+leafly_market_report:
+  source: Leafly
+  title: "Leafly Cannabis Market Report"
+  year: 2025
+  finding: "Cannabis COGS average 40-50% of revenue. METRC compliance and seed-to-sale tracking add 2-5% overhead vs. unregulated retail."
+  url: "https://www.leafly.com/news/industry"
+
+brewers_association_benchmarks:
+  source: Brewers Association
+  title: "Benchmarking Report for Craft Breweries"
+  year: 2025
+  finding: "Taproom draft beer achieves 80-88% gross margin. Packaged beer margins are 40-55%. Taproom revenue averages 60-70% of total for small craft breweries."
+  url: "https://www.brewersassociation.org/statistics-and-data/"
+
+aba_bakery_report:
+  source: American Bakers Association
+  title: "US Baking Industry Annual Report"
+  year: 2025
+  finding: "Artisan bakeries achieve 65-78% gross margin on baked goods. Flour and dairy costs account for 20-30% of COGS. Morning peak (6-10am) captures 50%+ of daily revenue."
+  url: "https://www.americanbakers.org/"
+
+str_hotel_benchmarks:
+  source: STR (Smith Travel Research)
+  title: "US Hotel Industry Performance Benchmarks"
+  year: 2025
+  finding: "US hotel occupancy averaged 63% in 2024. RevPAR (revenue per available room) reached $98. F&B departments average 18-25% of total hotel revenue."
+  url: "https://str.com/data-insights"
+
+ahla_state_of_industry:
+  source: American Hotel & Lodging Association
+  title: "State of the Hotel Industry 2025"
+  year: 2025
+  finding: "Hotel labor costs average 33% of revenue, the highest among hospitality segments. Housekeeping and F&B are the largest labor line items."
+  url: "https://www.ahla.com/issues/state-of-the-industry"
+
+nacds_pharmacy_profile:
+  source: National Association of Chain Drug Stores
+  title: "Chain Pharmacy Industry Profile 2025"
+  year: 2025
+  finding: "Prescription drugs have gross margins of 18-24%. Front-of-store OTC and health/beauty achieve 35-45%. Average pharmacy fills 200+ prescriptions/day."
+  url: "https://www.nacds.org/"
+
+appa_pet_industry:
+  source: American Pet Products Association
+  title: "National Pet Owners Survey 2025"
+  year: 2025
+  finding: "US pet industry reached $147B in 2024. Pet food/treats are 42% of spending. Premium/natural pet food segment growing 12% annually with 40-50% gross margins."
+  url: "https://www.americanpetproducts.org/"
+
+cta_electronics:
+  source: Consumer Technology Association
+  title: "US Consumer Technology Market Research 2025"
+  year: 2025
+  finding: "Electronics retail gross margins average 18-25%, with accessories and warranties generating 40-60% margin that subsidizes low-margin hardware sales."
+  url: "https://www.cta.tech/Resources/Newsroom"
+
+nacs_convenience_2025:
+  source: National Association of Convenience Stores
+  title: "NACS State of the Industry Report 2025"
+  year: 2025
+  finding: "In-store sales averaged $350K/month per store. Foodservice/prepared food achieved 48-55% gross margin — the highest-margin category. Tobacco still 28% of in-store revenue."
+  url: "https://www.convenience.org/Research"
+
+saf_florist_survey:
+  source: Society of American Florists
+  title: "Floral Industry Survey 2025"
+  year: 2025
+  finding: "Average floral shop gross margin is 52-65%. Valentine's Day and Mother's Day together account for 30% of annual revenue. Wire services declining as direct-to-consumer grows."
+  url: "https://safnow.org/research/"
+
+ibisworld_food_trucks:
+  source: IBISWorld
+  title: "Food Trucks in the US — Industry Report"
+  year: 2025
+  finding: "Food truck industry revenue reached $1.7B. Average truck generates $250K-$500K annually. Low overhead (no rent) yields 12-22% net margins vs. 3-8% for brick-and-mortar."
+  url: "https://www.ibisworld.com/united-states/market-research-reports/food-trucks-industry/"
+
+ibisworld_juice_bars:
+  source: IBISWorld
+  title: "Juice & Smoothie Bars in the US — Industry Report"
+  year: 2025
+  finding: "Juice bar gross margins of 68-82% are among the highest in food service. Fresh produce cost volatility is the primary margin risk. Industry growing 7% annually."
+  url: "https://www.ibisworld.com/united-states/market-research-reports/juice-smoothie-bars-industry/"
+
+pmq_pizza_industry:
+  source: PMQ Pizza Magazine
+  title: "Pizza Industry Census & Power Report 2025"
+  year: 2025
+  finding: "Average independent pizzeria does $600K-$900K in annual revenue. Food cost is 28-32% of revenue. Delivery mix averages 35% of orders, growing 4%/year."
+  url: "https://pmq.com/pizza-power-report/"
+
+nada_financial_profile:
+  source: National Automobile Dealers Association
+  title: "NADA Annual Financial Profile of America's Franchised New-Car Dealerships 2025"
+  year: 2025
+  finding: "Average dealership gross margin is 14-20% overall. Parts department achieves 45-55% gross margin. Service & parts combined generate 60% of dealership gross profit."
+  url: "https://www.nada.org/nada-data"
+
+ispa_industry_study:
+  source: International Spa Association
+  title: "ISPA US Spa Industry Study 2025"
+  year: 2025
+  finding: "US spa industry revenue reached $22B. Labor costs average 45-55% of revenue. Massage services are the top revenue driver (35-40% of total). Membership models growing."
+  url: "https://experienceispa.com/resources/research"
+
+cla_laundromat_survey:
+  source: Coin Laundry Association
+  title: "Industry Survey and Operating Cost Comparison 2025"
+  year: 2025
+  finding: "Average laundromat net margin of 20-30% — highest among small retail. Labor is only 8-15% of revenue. Average store serves 2,500-4,000 loads/month."
+  url: "https://www.coinlaundry.org/research"
+
+# --- Canadian Sources ---
+statcan_food_services:
+  source: Statistics Canada
+  title: "Table 21-10-0019-01 — Monthly survey of food services and drinking places"
+  year: 2025
+  finding: "Canadian food service receipts reached $98B CAD in 2024, up 5.2% YoY. Full-service restaurants account for 38% of total food service revenue."
+  url: "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=2110001901"
+
+statcan_retail_trade:
+  source: Statistics Canada
+  title: "Table 20-10-0008-01 — Retail trade by province and territory"
+  year: 2025
+  finding: "Canadian retail sales totaled $680B CAD in 2024. Ontario (38%) and Quebec (22%) account for 60% of national retail volume. E-commerce is 14% of total."
+  url: "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=2010000801"
+
+statcan_gdp_industry:
+  source: Statistics Canada
+  title: "Table 36-10-0402-01 — GDP by industry, monthly"
+  year: 2025
+  finding: "Accommodation and food services GDP grew 3.8% in 2024, outpacing overall economy growth of 1.9%."
+  url: "https://www150.statcan.gc.ca/t1/tbl1/en/tv.action?pid=3610040201"
+
+crfa_industry_report:
+  source: Canadian Restaurant and Foodservices Association (Restaurants Canada)
+  title: "2025 Foodservice Industry Forecast"
+  year: 2025
+  finding: "Canadian food service industry employs 1.2M workers. Average restaurant labor cost is 33-37% of revenue, 3-5 percentage points higher than US average due to higher minimum wages."
+  url: "https://www.restaurantscanada.org/resources/foodservice-facts/"
+
+cfib_pulse_survey:
+  source: Canadian Federation of Independent Business
+  title: "Small Business Pulse Survey — Q1 2025"
+  year: 2025
+  finding: "65% of Canadian small businesses report cash reserves under 3 months. Carbon tax and minimum wage increases cited as top cost pressures. Average wage increase budgeted at 4.2%."
+  url: "https://www.cfib-fcei.ca/en/research-economic-analysis"
+
+bank_of_canada_economic:
+  source: Bank of Canada
+  title: "Quarterly Economic Review — Q1 2025"
+  year: 2025
+  finding: "Consumer spending growth moderated to 1.8% annualized. Household debt-to-income ratio at 174%. Mortgage renewals at higher rates constraining discretionary spending through 2026."
+  url: "https://www.bankofcanada.ca/publications/mpr/"
+
+conference_board_outlook:
+  source: Conference Board of Canada
+  title: "Canadian Industrial Outlook — Spring 2025"
+  year: 2025
+  finding: "Small business confidence index at 58.3 (neutral). Service sector outperforming goods-producing sector. Immigration-driven population growth supporting consumer spending."
+  url: "https://www.conferenceboard.ca/research"
+
+canadian_brewers_association:
+  source: Canadian Brewers Association (Beer Canada)
+  title: "Annual Statistical Bulletin 2025"
+  year: 2025
+  finding: "Canada has 1,200+ breweries producing 24M hectolitres annually. Craft beer market share reached 17% by volume. Provincial excise tax rates vary from $0.306-$0.614 per litre."
+  url: "https://beercanada.com/statistics/"
+
+restaurants_canada_facts:
+  source: Restaurants Canada
+  title: "Foodservice Facts 2025"
+  year: 2025
+  finding: "Total Canadian foodservice sales reached $100B+ CAD. Quick-service represents 63% of commercial food service traffic. Delivery/takeout is 38% of orders in urban markets."
+  url: "https://www.restaurantscanada.org/resources/"
+
+health_canada_cannabis:
+  source: Health Canada
+  title: "Cannabis Market Data — Annual Report 2025"
+  year: 2025
+  finding: "Legal cannabis sales reached $6.2B CAD in 2024. Average gram price declined to $5.80 from $10.23 at legalization. Legal market share estimated at 75% nationally."
+  url: "https://www.canada.ca/en/health-canada/services/drugs-medication/cannabis/research-data.html"
+
+retail_council_canada:
+  source: Retail Council of Canada
+  title: "Canadian Retail Outlook 2025"
+  year: 2025
+  finding: "Canadian retailers face 3-5% higher COGS than US counterparts due to import duties, exchange rates, and bilingual packaging requirements. Boxing Day remains the peak sales event."
+  url: "https://www.retailcouncil.org/research/"
+
+cada_dealer_report:
+  source: Canadian Automobile Dealers Association
+  title: "CADA Dealership Financial Profile 2025"
+  year: 2025
+  finding: "Canadian dealerships average $45M CAD in annual revenue. Federal luxury tax on vehicles over $100K impacted premium segment sales by 8-12%. Service departments generate 55% of gross profit."
+  url: "https://www.cada.ca/research/"
+
+hotel_association_canada:
+  source: Hotel Association of Canada
+  title: "Canadian Lodging Industry Annual Report 2025"
+  year: 2025
+  finding: "Canadian hotel occupancy averaged 61% in 2024. RevPAR reached $112 CAD. Municipal accommodation taxes (3-6%) add to consumer cost burden. Labour shortages persist across all provinces."
+  url: "https://www.hotelassociation.ca/research/"
+
+spa_industry_canada:
+  source: Spa Industry Association of Canada
+  title: "Canadian Spa Industry Report 2025"
+  year: 2025
+  finding: "Canadian spa industry valued at $5.1B CAD. RMT coverage by extended health benefits drives massage bookings — 60%+ of Canadians with benefits use them for massage."
+  url: "https://spaassociationofcanada.com/"

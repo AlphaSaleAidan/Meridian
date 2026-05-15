@@ -286,3 +286,393 @@ other:
     avg_daily_revenue_cents: {low: 120000, mid: 280000, high: 550000, source: "SBA Small Business Financial Benchmarks 2024"}
     inventory_turnover_per_year: {low: 6.0, mid: 12.0, high: 20.0, source: "SBA Small Business Financial Benchmarks 2024"}
     peak_hour_revenue_share_pct: {low: 28.0, mid: 40.0, high: 55.0, source: "SBA Small Business Financial Benchmarks 2024"}
+
+cannabis:
+  label: "Cannabis Dispensary"
+  avg_daily_revenue_cents: 550000
+  median_daily_revenue_cents: 420000
+  avg_ticket_cents: 4500
+  median_transactions_per_day: 95
+  gross_margin_pct: 52.0
+  net_margin_pct: 12.0
+  labor_cost_pct: 18.0
+  cogs_pct: 48.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 3.0
+  inventory_turnover_per_year: 14.0
+  peak_hour_revenue_share_pct: 35.0
+  healthy_wow_growth_pct: 3.0
+  strong_growth_pct: 7.0
+  ranges:
+    gross_margin_pct: {low: 42.0, mid: 52.0, high: 62.0, source: "Headset.io Cannabis Industry Benchmarks 2025"}
+    net_margin_pct: {low: 5.0, mid: 12.0, high: 22.0, source: "BDSA Cannabis Market Intelligence 2025"}
+    labor_cost_pct: {low: 12.0, mid: 18.0, high: 25.0, source: "Headset.io Dispensary Operations Report 2025"}
+    cogs_pct: {low: 38.0, mid: 48.0, high: 58.0, source: "Leafly Market Report 2025"}
+    avg_ticket_cents: {low: 3500, mid: 4500, high: 5500, source: "Headset.io Cannabis Industry Benchmarks 2025"}
+    avg_daily_revenue_cents: {low: 280000, mid: 550000, high: 1000000, source: "BDSA Cannabis Market Intelligence 2025"}
+    inventory_turnover_per_year: {low: 8.0, mid: 14.0, high: 22.0, source: "Headset.io Dispensary Operations Report 2025"}
+    peak_hour_revenue_share_pct: {low: 25.0, mid: 35.0, high: 48.0, source: "BDSA Cannabis Market Intelligence 2025"}
+
+brewery:
+  label: "Brewery / Taproom"
+  avg_daily_revenue_cents: 280000
+  median_daily_revenue_cents: 210000
+  avg_ticket_cents: 3000
+  median_transactions_per_day: 65
+  gross_margin_pct: 78.0
+  net_margin_pct: 9.0
+  labor_cost_pct: 24.0
+  cogs_pct: 22.0
+  optimal_tip_rate_pct: 18.0
+  healthy_discount_rate_pct: 2.0
+  inventory_turnover_per_year: 12.0
+  peak_hour_revenue_share_pct: 55.0
+  healthy_wow_growth_pct: 2.0
+  strong_growth_pct: 5.0
+  ranges:
+    gross_margin_pct: {low: 65.0, mid: 78.0, high: 88.0, source: "Brewers Association Benchmarking Report 2025"}
+    net_margin_pct: {low: 3.0, mid: 9.0, high: 18.0, source: "Brewers Association Benchmarking Report 2025"}
+    labor_cost_pct: {low: 18.0, mid: 24.0, high: 32.0, source: "Brewers Association Benchmarking Report 2025"}
+    cogs_pct: {low: 14.0, mid: 22.0, high: 30.0, source: "Brewers Association Benchmarking Report 2025"}
+    avg_ticket_cents: {low: 2000, mid: 3000, high: 4500, source: "Brewers Association Benchmarking Report 2025"}
+    avg_daily_revenue_cents: {low: 140000, mid: 280000, high: 520000, source: "IBISWorld Craft Breweries 2025"}
+    inventory_turnover_per_year: {low: 7.0, mid: 12.0, high: 18.0, source: "Brewers Association Benchmarking Report 2025"}
+    peak_hour_revenue_share_pct: {low: 42.0, mid: 55.0, high: 70.0, source: "IBISWorld Craft Breweries 2025"}
+
+bakery:
+  label: "Bakery / Patisserie"
+  avg_daily_revenue_cents: 160000
+  median_daily_revenue_cents: 125000
+  avg_ticket_cents: 950
+  median_transactions_per_day: 130
+  gross_margin_pct: 70.0
+  net_margin_pct: 8.0
+  labor_cost_pct: 30.0
+  cogs_pct: 28.0
+  optimal_tip_rate_pct: 10.0
+  healthy_discount_rate_pct: 3.0
+  inventory_turnover_per_year: 30.0
+  peak_hour_revenue_share_pct: 50.0
+  healthy_wow_growth_pct: 2.0
+  strong_growth_pct: 5.0
+  ranges:
+    gross_margin_pct: {low: 58.0, mid: 70.0, high: 80.0, source: "American Bakers Association Industry Report 2025"}
+    net_margin_pct: {low: 3.0, mid: 8.0, high: 14.0, source: "American Bakers Association Industry Report 2025"}
+    labor_cost_pct: {low: 22.0, mid: 30.0, high: 38.0, source: "BLS QCEW Food Manufacturing 2025"}
+    cogs_pct: {low: 20.0, mid: 28.0, high: 36.0, source: "American Bakers Association Industry Report 2025"}
+    avg_ticket_cents: {low: 600, mid: 950, high: 1500, source: "Square Seller Insights 2025"}
+    avg_daily_revenue_cents: {low: 80000, mid: 160000, high: 300000, source: "IBISWorld Bakeries 2025"}
+    inventory_turnover_per_year: {low: 20.0, mid: 30.0, high: 42.0, source: "IBISWorld Bakeries 2025"}
+    peak_hour_revenue_share_pct: {low: 38.0, mid: 50.0, high: 65.0, source: "IBISWorld Bakeries 2025"}
+
+hotel:
+  label: "Hotel / Hospitality"
+  avg_daily_revenue_cents: 1200000
+  median_daily_revenue_cents: 850000
+  avg_ticket_cents: 18000
+  median_transactions_per_day: 45
+  gross_margin_pct: 72.0
+  net_margin_pct: 8.0
+  labor_cost_pct: 33.0
+  cogs_pct: 18.0
+  optimal_tip_rate_pct: 15.0
+  healthy_discount_rate_pct: 5.0
+  inventory_turnover_per_year: 20.0
+  peak_hour_revenue_share_pct: 35.0
+  healthy_wow_growth_pct: 1.5
+  strong_growth_pct: 4.0
+  ranges:
+    gross_margin_pct: {low: 60.0, mid: 72.0, high: 82.0, source: "STR Hotel Industry Benchmarks 2025"}
+    net_margin_pct: {low: 2.0, mid: 8.0, high: 16.0, source: "AHLA State of the Hotel Industry 2025"}
+    labor_cost_pct: {low: 25.0, mid: 33.0, high: 42.0, source: "AHLA State of the Hotel Industry 2025"}
+    cogs_pct: {low: 12.0, mid: 18.0, high: 26.0, source: "STR Hotel Industry Benchmarks 2025"}
+    avg_ticket_cents: {low: 10000, mid: 18000, high: 35000, source: "STR Hotel Industry Benchmarks 2025"}
+    avg_daily_revenue_cents: {low: 500000, mid: 1200000, high: 2500000, source: "STR Hotel Industry Benchmarks 2025"}
+    inventory_turnover_per_year: {low: 14.0, mid: 20.0, high: 28.0, source: "AHLA State of the Hotel Industry 2025"}
+    peak_hour_revenue_share_pct: {low: 25.0, mid: 35.0, high: 48.0, source: "STR Hotel Industry Benchmarks 2025"}
+
+pharmacy:
+  label: "Pharmacy / Drug Store"
+  avg_daily_revenue_cents: 800000
+  median_daily_revenue_cents: 620000
+  avg_ticket_cents: 3200
+  median_transactions_per_day: 180
+  gross_margin_pct: 24.0
+  net_margin_pct: 3.0
+  labor_cost_pct: 12.0
+  cogs_pct: 76.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 2.0
+  inventory_turnover_per_year: 12.0
+  peak_hour_revenue_share_pct: 30.0
+  healthy_wow_growth_pct: 1.0
+  strong_growth_pct: 3.0
+  ranges:
+    gross_margin_pct: {low: 18.0, mid: 24.0, high: 32.0, source: "NACDS Chain Pharmacy Industry Profile 2025"}
+    net_margin_pct: {low: 1.0, mid: 3.0, high: 6.0, source: "Drug Store News Industry Report 2025"}
+    labor_cost_pct: {low: 8.0, mid: 12.0, high: 18.0, source: "BLS QCEW Health Retail 2025"}
+    cogs_pct: {low: 68.0, mid: 76.0, high: 82.0, source: "NACDS Chain Pharmacy Industry Profile 2025"}
+    avg_ticket_cents: {low: 1500, mid: 3200, high: 6000, source: "NACDS Chain Pharmacy Industry Profile 2025"}
+    avg_daily_revenue_cents: {low: 400000, mid: 800000, high: 1500000, source: "Drug Store News Industry Report 2025"}
+    inventory_turnover_per_year: {low: 8.0, mid: 12.0, high: 18.0, source: "NACDS Chain Pharmacy Industry Profile 2025"}
+    peak_hour_revenue_share_pct: {low: 22.0, mid: 30.0, high: 40.0, source: "Drug Store News Industry Report 2025"}
+
+pet_store:
+  label: "Pet Store / Supplies"
+  avg_daily_revenue_cents: 280000
+  median_daily_revenue_cents: 210000
+  avg_ticket_cents: 4200
+  median_transactions_per_day: 50
+  gross_margin_pct: 45.0
+  net_margin_pct: 6.0
+  labor_cost_pct: 18.0
+  cogs_pct: 55.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 4.0
+  inventory_turnover_per_year: 7.0
+  peak_hour_revenue_share_pct: 30.0
+  healthy_wow_growth_pct: 2.0
+  strong_growth_pct: 5.0
+  ranges:
+    gross_margin_pct: {low: 38.0, mid: 45.0, high: 55.0, source: "APPA National Pet Owners Survey 2025"}
+    net_margin_pct: {low: 2.0, mid: 6.0, high: 12.0, source: "APPA National Pet Owners Survey 2025"}
+    labor_cost_pct: {low: 12.0, mid: 18.0, high: 25.0, source: "BLS QCEW Retail 2025"}
+    cogs_pct: {low: 45.0, mid: 55.0, high: 62.0, source: "Pet Industry Joint Advisory Council 2025"}
+    avg_ticket_cents: {low: 2500, mid: 4200, high: 7500, source: "APPA National Pet Owners Survey 2025"}
+    avg_daily_revenue_cents: {low: 140000, mid: 280000, high: 500000, source: "IBISWorld Pet Stores 2025"}
+    inventory_turnover_per_year: {low: 4.0, mid: 7.0, high: 12.0, source: "Pet Industry Joint Advisory Council 2025"}
+    peak_hour_revenue_share_pct: {low: 22.0, mid: 30.0, high: 42.0, source: "IBISWorld Pet Stores 2025"}
+
+electronics:
+  label: "Electronics / Tech Retail"
+  avg_daily_revenue_cents: 480000
+  median_daily_revenue_cents: 350000
+  avg_ticket_cents: 12000
+  median_transactions_per_day: 30
+  gross_margin_pct: 22.0
+  net_margin_pct: 3.5
+  labor_cost_pct: 14.0
+  cogs_pct: 78.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 4.0
+  inventory_turnover_per_year: 6.0
+  peak_hour_revenue_share_pct: 30.0
+  healthy_wow_growth_pct: 1.5
+  strong_growth_pct: 4.0
+  ranges:
+    gross_margin_pct: {low: 15.0, mid: 22.0, high: 30.0, source: "Consumer Technology Association Market Research 2025"}
+    net_margin_pct: {low: 1.0, mid: 3.5, high: 8.0, source: "Consumer Technology Association Market Research 2025"}
+    labor_cost_pct: {low: 8.0, mid: 14.0, high: 20.0, source: "BLS QCEW Retail 2025"}
+    cogs_pct: {low: 70.0, mid: 78.0, high: 85.0, source: "Consumer Technology Association Market Research 2025"}
+    avg_ticket_cents: {low: 5000, mid: 12000, high: 25000, source: "Consumer Technology Association Market Research 2025"}
+    avg_daily_revenue_cents: {low: 220000, mid: 480000, high: 900000, source: "IBISWorld Electronics Stores 2025"}
+    inventory_turnover_per_year: {low: 3.0, mid: 6.0, high: 10.0, source: "Consumer Technology Association Market Research 2025"}
+    peak_hour_revenue_share_pct: {low: 22.0, mid: 30.0, high: 42.0, source: "IBISWorld Electronics Stores 2025"}
+
+convenience:
+  label: "Convenience Store / Bodega"
+  avg_daily_revenue_cents: 350000
+  median_daily_revenue_cents: 270000
+  avg_ticket_cents: 1100
+  median_transactions_per_day: 250
+  gross_margin_pct: 32.0
+  net_margin_pct: 4.5
+  labor_cost_pct: 11.0
+  cogs_pct: 68.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 2.0
+  inventory_turnover_per_year: 22.0
+  peak_hour_revenue_share_pct: 28.0
+  healthy_wow_growth_pct: 1.0
+  strong_growth_pct: 3.0
+  ranges:
+    gross_margin_pct: {low: 25.0, mid: 32.0, high: 40.0, source: "NACS State of the Industry 2025"}
+    net_margin_pct: {low: 1.5, mid: 4.5, high: 8.0, source: "NACS State of the Industry 2025"}
+    labor_cost_pct: {low: 7.0, mid: 11.0, high: 16.0, source: "NACS State of the Industry 2025"}
+    cogs_pct: {low: 60.0, mid: 68.0, high: 75.0, source: "NACS State of the Industry 2025"}
+    avg_ticket_cents: {low: 700, mid: 1100, high: 1800, source: "NACS State of the Industry 2025"}
+    avg_daily_revenue_cents: {low: 180000, mid: 350000, high: 600000, source: "NACS State of the Industry 2025"}
+    inventory_turnover_per_year: {low: 15.0, mid: 22.0, high: 32.0, source: "NACS State of the Industry 2025"}
+    peak_hour_revenue_share_pct: {low: 20.0, mid: 28.0, high: 38.0, source: "NACS State of the Industry 2025"}
+
+florist:
+  label: "Florist / Garden Center"
+  avg_daily_revenue_cents: 180000
+  median_daily_revenue_cents: 130000
+  avg_ticket_cents: 5500
+  median_transactions_per_day: 25
+  gross_margin_pct: 58.0
+  net_margin_pct: 8.0
+  labor_cost_pct: 22.0
+  cogs_pct: 42.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 3.0
+  inventory_turnover_per_year: 24.0
+  peak_hour_revenue_share_pct: 35.0
+  healthy_wow_growth_pct: 1.5
+  strong_growth_pct: 4.0
+  ranges:
+    gross_margin_pct: {low: 48.0, mid: 58.0, high: 68.0, source: "Society of American Florists Industry Survey 2025"}
+    net_margin_pct: {low: 3.0, mid: 8.0, high: 15.0, source: "Society of American Florists Industry Survey 2025"}
+    labor_cost_pct: {low: 15.0, mid: 22.0, high: 30.0, source: "Society of American Florists Industry Survey 2025"}
+    cogs_pct: {low: 32.0, mid: 42.0, high: 52.0, source: "Society of American Florists Industry Survey 2025"}
+    avg_ticket_cents: {low: 3500, mid: 5500, high: 9000, source: "Society of American Florists Industry Survey 2025"}
+    avg_daily_revenue_cents: {low: 80000, mid: 180000, high: 350000, source: "IBISWorld Florists 2025"}
+    inventory_turnover_per_year: {low: 16.0, mid: 24.0, high: 36.0, source: "Society of American Florists Industry Survey 2025"}
+    peak_hour_revenue_share_pct: {low: 25.0, mid: 35.0, high: 48.0, source: "IBISWorld Florists 2025"}
+
+food_truck:
+  label: "Food Truck / Mobile Vendor"
+  avg_daily_revenue_cents: 120000
+  median_daily_revenue_cents: 90000
+  avg_ticket_cents: 1400
+  median_transactions_per_day: 70
+  gross_margin_pct: 68.0
+  net_margin_pct: 14.0
+  labor_cost_pct: 22.0
+  cogs_pct: 30.0
+  optimal_tip_rate_pct: 15.0
+  healthy_discount_rate_pct: 2.0
+  inventory_turnover_per_year: 28.0
+  peak_hour_revenue_share_pct: 60.0
+  healthy_wow_growth_pct: 2.5
+  strong_growth_pct: 6.0
+  ranges:
+    gross_margin_pct: {low: 58.0, mid: 68.0, high: 78.0, source: "IBISWorld Food Trucks in the US 2025"}
+    net_margin_pct: {low: 7.0, mid: 14.0, high: 22.0, source: "IBISWorld Food Trucks in the US 2025"}
+    labor_cost_pct: {low: 15.0, mid: 22.0, high: 30.0, source: "IBISWorld Food Trucks in the US 2025"}
+    cogs_pct: {low: 22.0, mid: 30.0, high: 38.0, source: "IBISWorld Food Trucks in the US 2025"}
+    avg_ticket_cents: {low: 900, mid: 1400, high: 2200, source: "IBISWorld Food Trucks in the US 2025"}
+    avg_daily_revenue_cents: {low: 60000, mid: 120000, high: 220000, source: "IBISWorld Food Trucks in the US 2025"}
+    inventory_turnover_per_year: {low: 18.0, mid: 28.0, high: 40.0, source: "IBISWorld Food Trucks in the US 2025"}
+    peak_hour_revenue_share_pct: {low: 48.0, mid: 60.0, high: 75.0, source: "IBISWorld Food Trucks in the US 2025"}
+
+juice_bar:
+  label: "Juice Bar / Smoothie Shop"
+  avg_daily_revenue_cents: 140000
+  median_daily_revenue_cents: 105000
+  avg_ticket_cents: 1050
+  median_transactions_per_day: 100
+  gross_margin_pct: 72.0
+  net_margin_pct: 10.0
+  labor_cost_pct: 25.0
+  cogs_pct: 26.0
+  optimal_tip_rate_pct: 12.0
+  healthy_discount_rate_pct: 3.0
+  inventory_turnover_per_year: 32.0
+  peak_hour_revenue_share_pct: 48.0
+  healthy_wow_growth_pct: 2.5
+  strong_growth_pct: 6.0
+  ranges:
+    gross_margin_pct: {low: 62.0, mid: 72.0, high: 82.0, source: "IBISWorld Juice & Smoothie Bars 2025"}
+    net_margin_pct: {low: 4.0, mid: 10.0, high: 18.0, source: "IBISWorld Juice & Smoothie Bars 2025"}
+    labor_cost_pct: {low: 18.0, mid: 25.0, high: 33.0, source: "IBISWorld Juice & Smoothie Bars 2025"}
+    cogs_pct: {low: 18.0, mid: 26.0, high: 34.0, source: "IBISWorld Juice & Smoothie Bars 2025"}
+    avg_ticket_cents: {low: 700, mid: 1050, high: 1500, source: "IBISWorld Juice & Smoothie Bars 2025"}
+    avg_daily_revenue_cents: {low: 70000, mid: 140000, high: 260000, source: "IBISWorld Juice & Smoothie Bars 2025"}
+    inventory_turnover_per_year: {low: 22.0, mid: 32.0, high: 45.0, source: "IBISWorld Juice & Smoothie Bars 2025"}
+    peak_hour_revenue_share_pct: {low: 36.0, mid: 48.0, high: 62.0, source: "IBISWorld Juice & Smoothie Bars 2025"}
+
+pizza:
+  label: "Pizzeria"
+  avg_daily_revenue_cents: 300000
+  median_daily_revenue_cents: 230000
+  avg_ticket_cents: 2200
+  median_transactions_per_day: 100
+  gross_margin_pct: 65.0
+  net_margin_pct: 8.0
+  labor_cost_pct: 28.0
+  cogs_pct: 30.0
+  optimal_tip_rate_pct: 18.0
+  healthy_discount_rate_pct: 4.0
+  inventory_turnover_per_year: 22.0
+  peak_hour_revenue_share_pct: 55.0
+  healthy_wow_growth_pct: 2.0
+  strong_growth_pct: 5.0
+  ranges:
+    gross_margin_pct: {low: 55.0, mid: 65.0, high: 75.0, source: "PMQ Pizza Magazine Industry Report 2025"}
+    net_margin_pct: {low: 3.0, mid: 8.0, high: 15.0, source: "PMQ Pizza Magazine Industry Report 2025"}
+    labor_cost_pct: {low: 20.0, mid: 28.0, high: 35.0, source: "NRA 2025 State of the Industry"}
+    cogs_pct: {low: 22.0, mid: 30.0, high: 38.0, source: "PMQ Pizza Magazine Industry Report 2025"}
+    avg_ticket_cents: {low: 1400, mid: 2200, high: 3500, source: "PMQ Pizza Magazine Industry Report 2025"}
+    avg_daily_revenue_cents: {low: 150000, mid: 300000, high: 550000, source: "IBISWorld Pizza Restaurants 2025"}
+    inventory_turnover_per_year: {low: 15.0, mid: 22.0, high: 32.0, source: "PMQ Pizza Magazine Industry Report 2025"}
+    peak_hour_revenue_share_pct: {low: 42.0, mid: 55.0, high: 70.0, source: "NRA Daypart Analysis 2025"}
+
+auto_dealer:
+  label: "Auto Dealership / Service Center"
+  avg_daily_revenue_cents: 2500000
+  median_daily_revenue_cents: 1800000
+  avg_ticket_cents: 45000
+  median_transactions_per_day: 35
+  gross_margin_pct: 18.0
+  net_margin_pct: 2.5
+  labor_cost_pct: 15.0
+  cogs_pct: 82.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 3.0
+  inventory_turnover_per_year: 8.0
+  peak_hour_revenue_share_pct: 30.0
+  healthy_wow_growth_pct: 1.0
+  strong_growth_pct: 3.0
+  ranges:
+    gross_margin_pct: {low: 12.0, mid: 18.0, high: 28.0, source: "NADA Annual Financial Profile 2025"}
+    net_margin_pct: {low: 0.5, mid: 2.5, high: 5.0, source: "NADA Annual Financial Profile 2025"}
+    labor_cost_pct: {low: 10.0, mid: 15.0, high: 22.0, source: "NADA Annual Financial Profile 2025"}
+    cogs_pct: {low: 72.0, mid: 82.0, high: 88.0, source: "Automotive News Data Center 2025"}
+    avg_ticket_cents: {low: 20000, mid: 45000, high: 85000, source: "NADA Annual Financial Profile 2025"}
+    avg_daily_revenue_cents: {low: 1200000, mid: 2500000, high: 5000000, source: "NADA Annual Financial Profile 2025"}
+    inventory_turnover_per_year: {low: 5.0, mid: 8.0, high: 13.0, source: "Automotive News Data Center 2025"}
+    peak_hour_revenue_share_pct: {low: 22.0, mid: 30.0, high: 40.0, source: "NADA Annual Financial Profile 2025"}
+
+spa:
+  label: "Spa / Wellness Center"
+  avg_daily_revenue_cents: 350000
+  median_daily_revenue_cents: 260000
+  avg_ticket_cents: 12000
+  median_transactions_per_day: 22
+  gross_margin_pct: 78.0
+  net_margin_pct: 10.0
+  labor_cost_pct: 48.0
+  cogs_pct: 12.0
+  optimal_tip_rate_pct: 20.0
+  healthy_discount_rate_pct: 5.0
+  inventory_turnover_per_year: 5.0
+  peak_hour_revenue_share_pct: 45.0
+  healthy_wow_growth_pct: 2.0
+  strong_growth_pct: 5.0
+  ranges:
+    gross_margin_pct: {low: 68.0, mid: 78.0, high: 88.0, source: "ISPA U.S. Spa Industry Study 2025"}
+    net_margin_pct: {low: 4.0, mid: 10.0, high: 18.0, source: "ISPA U.S. Spa Industry Study 2025"}
+    labor_cost_pct: {low: 38.0, mid: 48.0, high: 58.0, source: "ISPA U.S. Spa Industry Study 2025"}
+    cogs_pct: {low: 6.0, mid: 12.0, high: 20.0, source: "ISPA U.S. Spa Industry Study 2025"}
+    avg_ticket_cents: {low: 7000, mid: 12000, high: 22000, source: "ISPA U.S. Spa Industry Study 2025"}
+    avg_daily_revenue_cents: {low: 160000, mid: 350000, high: 650000, source: "IBISWorld Day Spas 2025"}
+    inventory_turnover_per_year: {low: 3.0, mid: 5.0, high: 9.0, source: "ISPA U.S. Spa Industry Study 2025"}
+    peak_hour_revenue_share_pct: {low: 35.0, mid: 45.0, high: 58.0, source: "ISPA U.S. Spa Industry Study 2025"}
+
+laundromat:
+  label: "Laundromat / Dry Cleaner"
+  avg_daily_revenue_cents: 120000
+  median_daily_revenue_cents: 90000
+  avg_ticket_cents: 1200
+  median_transactions_per_day: 75
+  gross_margin_pct: 65.0
+  net_margin_pct: 20.0
+  labor_cost_pct: 10.0
+  cogs_pct: 18.0
+  optimal_tip_rate_pct: 0.0
+  healthy_discount_rate_pct: 2.0
+  inventory_turnover_per_year: 52.0
+  peak_hour_revenue_share_pct: 35.0
+  healthy_wow_growth_pct: 1.0
+  strong_growth_pct: 3.0
+  ranges:
+    gross_margin_pct: {low: 55.0, mid: 65.0, high: 78.0, source: "Coin Laundry Association Industry Survey 2025"}
+    net_margin_pct: {low: 12.0, mid: 20.0, high: 30.0, source: "Coin Laundry Association Industry Survey 2025"}
+    labor_cost_pct: {low: 5.0, mid: 10.0, high: 18.0, source: "Coin Laundry Association Industry Survey 2025"}
+    cogs_pct: {low: 10.0, mid: 18.0, high: 28.0, source: "Coin Laundry Association Industry Survey 2025"}
+    avg_ticket_cents: {low: 700, mid: 1200, high: 2200, source: "Coin Laundry Association Industry Survey 2025"}
+    avg_daily_revenue_cents: {low: 60000, mid: 120000, high: 250000, source: "IBISWorld Laundromats 2025"}
+    inventory_turnover_per_year: {low: 35.0, mid: 52.0, high: 70.0, source: "Coin Laundry Association Industry Survey 2025"}
+    peak_hour_revenue_share_pct: {low: 25.0, mid: 35.0, high: 48.0, source: "Coin Laundry Association Industry Survey 2025"}

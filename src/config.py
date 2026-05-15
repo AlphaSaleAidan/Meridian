@@ -170,3 +170,11 @@ OAUTH_SCOPES = [
     "EMPLOYEES_READ",
     "CUSTOMERS_READ",
 ]
+
+
+# ─── AI Feature Flags (all default ON) ──────────────────
+ENABLE_LLM_INSIGHTS: bool = os.getenv("ENABLE_LLM_INSIGHTS", "1").lower() in ("1", "true")
+ENABLE_REASONING: bool = os.getenv("MERIDIAN_REASONING", "1") == "1"
+ENABLE_SWARM_TRAINING: bool = os.getenv("ENABLE_SWARM_TRAINING", "1").lower() in ("1", "true")
+ENABLE_CANADA_INTELLIGENCE: bool = os.getenv("ENABLE_CANADA_INTELLIGENCE", "1").lower() in ("1", "true")
+ENABLE_FINANCIAL_INTELLIGENCE: bool = os.getenv("ENABLE_FINANCIAL_INTELLIGENCE", "1").lower() in ("1", "true")

@@ -14,8 +14,8 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools", "scraper"))
 
-SCRAPE_INTERVAL = 6 * 3600  # 6 hours between full cycles
-MAX_PAGES_PER_SOURCE = 5
+SCRAPE_INTERVAL = 3 * 3600  # 3 hours between full cycles
+MAX_PAGES_PER_SOURCE = 8
 OUTPUT_DIR = Path(__file__).parent.parent / "data" / "scraped"
 MANIFEST = OUTPUT_DIR / "manifest.json"
 

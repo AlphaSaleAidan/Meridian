@@ -1099,6 +1099,214 @@ SOURCES = {
     },
 
     # ═══════════════════════════════════════════════════════════
+    # CANADA — FINANCIAL & INDUSTRY (EXPANDED)
+    # ═══════════════════════════════════════════════════════════
+    "bank_of_canada": {
+        "name": "Bank of Canada",
+        "base_url": "https://www.bankofcanada.ca",
+        "start_paths": [
+            "/publications/",
+            "/rates/",
+            "/2025/",
+        ],
+        "topics": ["canada", "economics", "interest-rates", "inflation", "monetary-policy"],
+    },
+    "conference_board_canada": {
+        "name": "Conference Board of Canada",
+        "base_url": "https://www.conferenceboard.ca",
+        "start_paths": [
+            "/topics/",
+            "/research/",
+        ],
+        "topics": ["canada", "economics", "business", "forecast", "policy"],
+    },
+    "statscan_food_services": {
+        "name": "Statistics Canada — Food Services",
+        "base_url": "https://www150.statcan.gc.ca",
+        "start_paths": [
+            "/t1/tbl1/en/tv.action?pid=2110001901",
+            "/t1/tbl1/en/tv.action?pid=2010000801",
+            "/n1/pub/11-627-m/index-eng.htm",
+        ],
+        "topics": ["canada", "food-service", "retail", "statistics", "restaurant"],
+    },
+    "canada_revenue_agency": {
+        "name": "CRA Small Business Resources",
+        "base_url": "https://www.canada.ca",
+        "start_paths": [
+            "/en/revenue-agency/services/tax/businesses/small-businesses-self-employed-income.html",
+            "/en/services/business/research.html",
+        ],
+        "topics": ["canada", "tax", "small-business", "compliance", "gst-hst"],
+    },
+    "canadian_brewers": {
+        "name": "Beer Canada",
+        "base_url": "https://www.beercanada.com",
+        "start_paths": [
+            "/resources/",
+            "/policy/",
+        ],
+        "topics": ["canada", "brewery", "craft-beer", "industry", "regulation"],
+    },
+    "cannabis_council_canada": {
+        "name": "Cannabis Council of Canada",
+        "base_url": "https://www.cannabis-council.ca",
+        "start_paths": [
+            "/resources/",
+            "/policy/",
+        ],
+        "topics": ["canada", "cannabis", "regulation", "policy", "retail"],
+    },
+    "ocs_cannabis": {
+        "name": "Ontario Cannabis Store (Market Data)",
+        "base_url": "https://ocs.ca",
+        "start_paths": [
+            "/pages/cannabis-market-data",
+        ],
+        "topics": ["canada", "cannabis", "ontario", "market-data", "retail"],
+    },
+    "canadian_franchise_assoc": {
+        "name": "Canadian Franchise Association",
+        "base_url": "https://www.cfa.ca",
+        "start_paths": [
+            "/resources/",
+        ],
+        "topics": ["canada", "franchise", "restaurant", "retail", "operations"],
+    },
+    "financial_post": {
+        "name": "Financial Post (Postmedia)",
+        "base_url": "https://financialpost.com",
+        "start_paths": [
+            "/category/fp-finance/",
+            "/category/news/economy/",
+            "/category/entrepreneur/",
+        ],
+        "topics": ["canada", "finance", "economy", "business", "entrepreneurship"],
+    },
+    "globe_business": {
+        "name": "Globe and Mail Business",
+        "base_url": "https://www.theglobeandmail.com",
+        "start_paths": [
+            "/business/small-business/",
+            "/business/industry-news/",
+        ],
+        "topics": ["canada", "business", "small-business", "economy", "finance"],
+    },
+    "moneysense_ca": {
+        "name": "MoneySense Canada",
+        "base_url": "https://www.moneysense.ca",
+        "start_paths": [
+            "/save/",
+            "/spend/",
+            "/invest/",
+        ],
+        "topics": ["canada", "personal-finance", "investing", "tax", "money"],
+    },
+    "futurpreneur": {
+        "name": "Futurpreneur Canada",
+        "base_url": "https://www.futurpreneur.ca",
+        "start_paths": [
+            "/resources/",
+            "/blog/",
+        ],
+        "topics": ["canada", "entrepreneurship", "startup", "youth", "finance"],
+    },
+
+    # ═══════════════════════════════════════════════════════════
+    # FINANCIAL BOOKS & DEEP KNOWLEDGE
+    # (Public summaries, author blogs, key excerpts — NOT pirated books)
+    # ═══════════════════════════════════════════════════════════
+    "blinkist_free": {
+        "name": "Blinkist Magazine",
+        "base_url": "https://www.blinkist.com",
+        "start_paths": [
+            "/magazine/",
+        ],
+        "topics": ["book-summaries", "finance", "business", "leadership"],
+    },
+    "investopedia": {
+        "name": "Investopedia",
+        "base_url": "https://www.investopedia.com",
+        "start_paths": [
+            "/terms/",
+            "/articles/investing/",
+            "/articles/personal-finance/",
+            "/financial-ratios-4689817",
+        ],
+        "topics": ["finance", "investing", "ratios", "accounting", "education"],
+    },
+    "accounting_tools": {
+        "name": "AccountingTools",
+        "base_url": "https://www.accountingtools.com",
+        "start_paths": [
+            "/articles/",
+        ],
+        "topics": ["accounting", "finance", "ratios", "bookkeeping", "standards"],
+    },
+    "corporate_finance_inst": {
+        "name": "CFI (Corporate Finance Institute)",
+        "base_url": "https://corporatefinanceinstitute.com",
+        "start_paths": [
+            "/resources/knowledge/finance/",
+            "/resources/knowledge/accounting/",
+            "/resources/knowledge/valuation/",
+        ],
+        "topics": ["finance", "valuation", "accounting", "ratios", "modeling"],
+    },
+    "wallstreetprep": {
+        "name": "Wall Street Prep Blog",
+        "base_url": "https://www.wallstreetprep.com",
+        "start_paths": [
+            "/knowledge/",
+        ],
+        "topics": ["finance", "valuation", "accounting", "modeling", "investing"],
+    },
+    "score_org": {
+        "name": "SCORE Small Business Resources",
+        "base_url": "https://www.score.org",
+        "start_paths": [
+            "/resource-library/",
+            "/blog/",
+        ],
+        "topics": ["small-business", "finance", "operations", "marketing", "startup"],
+    },
+    "sba_gov": {
+        "name": "US Small Business Administration",
+        "base_url": "https://www.sba.gov",
+        "start_paths": [
+            "/business-guide/",
+            "/funding-programs/",
+        ],
+        "topics": ["small-business", "finance", "lending", "policy", "startup"],
+    },
+    "nra_research": {
+        "name": "National Restaurant Association Research",
+        "base_url": "https://restaurant.org",
+        "start_paths": [
+            "/research-and-media/research/",
+            "/education-and-resources/",
+        ],
+        "topics": ["restaurant", "food-service", "benchmarks", "labor", "trends"],
+    },
+    "nrf_research": {
+        "name": "National Retail Federation Research",
+        "base_url": "https://nrf.com",
+        "start_paths": [
+            "/research/",
+            "/blog/",
+        ],
+        "topics": ["retail", "e-commerce", "benchmarks", "inventory", "trends"],
+    },
+    "franchise_times": {
+        "name": "Franchise Times",
+        "base_url": "https://www.franchisetimes.com",
+        "start_paths": [
+            "/",
+        ],
+        "topics": ["franchise", "restaurant", "retail", "finance", "growth"],
+    },
+
+    # ═══════════════════════════════════════════════════════════
     # AI & TECHNOLOGY
     # ═══════════════════════════════════════════════════════════
     "openai_blog": {
