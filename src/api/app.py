@@ -108,11 +108,14 @@ async def lifespan(app: FastAPI):
     import asyncio
     _trainer_task = None
     if os.environ.get("ENABLE_SWARM_TRAINING", "1") == "1":
-        from ..ai.swarm_trainer import get_swarm_trainer
-        trainer = get_swarm_trainer(db=_db_instance)
-        interval = int(os.environ.get("SWARM_TRAINING_INTERVAL", "300"))
-        _trainer_task = asyncio.create_task(trainer.start_autonomous(interval))
-        logger.info(f"Autonomous swarm trainer started (every {interval}s)")
+        try:
+            from ..ai.swarm_trainer import get_swarm_trainer
+            trainer = get_swarm_trainer(db=_db_instance)
+            interval = int(os.environ.get("SWARM_TRAINING_INTERVAL", "300"))
+            _trainer_task = asyncio.create_task(trainer.start_autonomous(interval))
+            logger.info(f"Autonomous swarm trainer started (every {interval}s)")
+        except Exception as e:
+            logger.warning(f"Swarm trainer failed to start: {e}")
 
     # Start POS sync scheduler
     _pos_scheduler_started = False
