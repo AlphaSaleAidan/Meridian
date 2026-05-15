@@ -82,7 +82,7 @@ export default function CanadaLandingPage() {
             <MagneticButton onClick={() => navigate('/canada/login')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200">
               Customer Login
             </MagneticButton>
-            <MagneticButton onClick={() => navigate('/canada/login')} className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] bg-[#1A8FD6] rounded-md hover:bg-[#1574B8] transition-colors duration-200">
+            <MagneticButton onClick={() => navigate('/canada/onboard')} className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] bg-[#1A8FD6] rounded-md hover:bg-[#1574B8] transition-colors duration-200">
               Get Started
             </MagneticButton>
           </div>
@@ -119,7 +119,7 @@ export default function CanadaLandingPage() {
           </motion.p>
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE, delay: 0.7 }} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <MagneticButton onClick={() => navigate('/canada/login')} className="group px-6 py-3 text-[14px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(26,143,214,0.3)] flex items-center gap-2">
+            <MagneticButton onClick={() => navigate('/canada/onboard')} className="group px-6 py-3 text-[14px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(26,143,214,0.3)] flex items-center gap-2">
               Get Started Free <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
             <MagneticButton onClick={() => navigate('/canada/demo')} className="group px-6 py-3 text-[14px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 flex items-center gap-2">
@@ -267,7 +267,7 @@ export default function CanadaLandingPage() {
               Connect your Square, Clover, or Lightspeed POS and see exactly where your revenue is hiding. First month free — start seeing results in 60 seconds.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <MagneticButton onClick={() => navigate('/canada/login')} className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(26,143,214,0.35)] inline-flex items-center gap-2">
+              <MagneticButton onClick={() => navigate('/canada/onboard')} className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(26,143,214,0.35)] inline-flex items-center gap-2">
                 Get Started Free <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
               </MagneticButton>
               <MagneticButton onClick={() => navigate('/canada/demo')} className="group px-8 py-3.5 text-[15px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 inline-flex items-center gap-2">
