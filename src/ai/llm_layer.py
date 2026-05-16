@@ -122,12 +122,59 @@ async def _call_api(messages: list[dict], response_format: dict | None = None) -
         return None
 
 
+async def _call_deepseek(messages: list[dict]) -> dict | None:
+    """Call DeepSeek V3 (671B MoE) — primary LLM for all Meridian AI."""
+    import httpx
+
+    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    if not api_key:
+        return None
+
+    try:
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            resp = await client.post(
+                "https://api.deepseek.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "deepseek-chat",
+                    "messages": messages,
+                    "max_tokens": 2000,
+                    "temperature": 0.3,
+                },
+            )
+        if resp.status_code != 200:
+            logger.warning("DeepSeek returned %d: %s", resp.status_code, resp.text[:200])
+            return None
+
+        data = resp.json()
+        content = data["choices"][0]["message"]["content"]
+        tokens = data.get("usage", {})
+        logger.info(
+            "DeepSeek V3: %d in / %d out tokens ($%.4f)",
+            tokens.get("prompt_tokens", 0),
+            tokens.get("completion_tokens", 0),
+            tokens.get("prompt_tokens", 0) * 0.00000027
+            + tokens.get("completion_tokens", 0) * 0.0000011,
+        )
+        return _extract_json(content)
+    except Exception as e:
+        logger.warning("DeepSeek call failed: %s", e)
+        return None
+
+
 async def _call_llm(messages: list[dict], response_format: dict | None = None) -> dict | None:
-    """Route LLM call: local first, API fallback."""
+    """Route LLM call: DeepSeek V3 first, local second, OpenAI fallback."""
+    result = await _call_deepseek(messages)
+    if result:
+        return result
+    logger.info("DeepSeek unavailable — trying local LLM")
     result = await _call_local(messages)
     if result:
         return result
-    logger.info("Local LLM unavailable or failed — falling back to API")
+    logger.info("Local LLM unavailable — falling back to OpenAI API")
     return await _call_api(messages, response_format)
 
 

@@ -1,9 +1,8 @@
-"""Smart inference router — DeepSeek API for reasoning, local Qwen for batch.
+"""Smart inference router — DeepSeek V3 (671B) as primary for ALL tasks.
 
 Routing:
-  User-facing (dashboard, insights, reports)  → DeepSeek V3 API
-  Batch/background (scraper, celery, training) → Local Qwen 7B (free)
-  Fallback if DeepSeek unavailable             → Local Qwen 7B
+  All tasks (real-time, batch, training, scraper) → DeepSeek V3 API
+  Fallback if DeepSeek unavailable                → Local Qwen 7B
 """
 
 import logging
@@ -41,21 +40,7 @@ REALTIME_KEYWORDS = [
 
 
 def classify_task(prompt: str, source: str = "unknown") -> InferenceTarget:
-    if source in BATCH_SOURCES:
-        return InferenceTarget.LOCAL
-
-    if source in REALTIME_SOURCES:
-        return InferenceTarget.DEEPSEEK if DEEPSEEK_API_KEY else InferenceTarget.LOCAL
-
-    lower = prompt.lower()
-    for kw in REALTIME_KEYWORDS:
-        if kw in lower:
-            return InferenceTarget.DEEPSEEK if DEEPSEEK_API_KEY else InferenceTarget.LOCAL
-
-    for kw in BATCH_KEYWORDS:
-        if kw in lower:
-            return InferenceTarget.LOCAL
-
+    """DeepSeek V3 for everything when available, local as fallback."""
     return InferenceTarget.DEEPSEEK if DEEPSEEK_API_KEY else InferenceTarget.LOCAL
 
 
@@ -102,7 +87,7 @@ async def _deepseek_inference(
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "deepseek-chat",
+                    "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
                     "messages": [
                         {"role": "system", "content": system},
                         {"role": "user", "content": prompt},
