@@ -27,6 +27,8 @@ function MiniRadar({ size = 32, label }: { size?: number; label?: string }) {
 }
 
 function ConnectCTA() {
+  const location = useLocation()
+  const settingsPath = location.pathname.startsWith('/canada') ? '/canada/dashboard/settings' : '/app/settings'
   const [tipIdx, setTipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
   useEffect(() => {
     const i = setInterval(() => setTipIdx(p => (p + 1) % TIPS.length), 6000)
@@ -39,7 +41,7 @@ function ConnectCTA() {
         <p className="text-[11px] text-[#A1A1A8]/70 leading-relaxed">{TIPS[tipIdx]}</p>
       </div>
       <Link
-        to="/canada/dashboard/settings"
+        to={settingsPath}
         className="flex items-center gap-2 px-4 py-2 bg-[#00d4aa] text-[#0A0A0B] text-xs font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
       >
         <Wifi size={14} /> Connect Your POS

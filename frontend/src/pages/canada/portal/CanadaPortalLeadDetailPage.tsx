@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
   FileText, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
-  AlertTriangle, CreditCard, RefreshCw, Send,
+  AlertTriangle, CreditCard, RefreshCw, Send, Eye, ExternalLink,
 } from 'lucide-react'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
@@ -457,15 +457,9 @@ export default function CanadaPortalLeadDetailPage() {
   }
 
   function handleDownloadInvoice() {
-    if (!invoiceBlob || !deal) return
+    if (!invoiceBlob) return
     const url = URL.createObjectURL(invoiceBlob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Meridian_Invoice_${invoiceNumber || 'draft'}_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    window.open(url, '_blank')
   }
 
   async function handleEmailInvoice() {
@@ -526,15 +520,9 @@ export default function CanadaPortalLeadDetailPage() {
   }
 
   function handleDownloadSla() {
-    if (!slaBlob || !deal) return
+    if (!slaBlob) return
     const url = URL.createObjectURL(slaBlob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Meridian_SLA_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    window.open(url, '_blank')
   }
 
   async function handleSignSla() {
@@ -665,28 +653,16 @@ export default function CanadaPortalLeadDetailPage() {
         setProposalGenerating(false)
       }
     }
-    if (blob && deal) {
+    if (blob) {
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Meridian_Proposal_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      window.open(url, '_blank')
     }
   }
 
   function handleDownloadProposal() {
-    if (!proposalBlob || !deal) return
+    if (!proposalBlob) return
     const url = URL.createObjectURL(proposalBlob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `Meridian_Proposal_${deal.business_name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    window.open(url, '_blank')
   }
 
   async function handleEmailProposal() {
@@ -924,9 +900,13 @@ export default function CanadaPortalLeadDetailPage() {
           <button
             onClick={handleViewProposal}
             disabled={proposalGenerating}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
           >
-            <Download size={16} /> Download Proposal
+            {proposalGenerating ? (
+              <><Loader2 size={16} className="animate-spin" /> Generating…</>
+            ) : (
+              <><Eye size={16} /> View Proposal</>
+            )}
           </button>
           <button
             onClick={handleEmailProposal}
@@ -980,7 +960,7 @@ export default function CanadaPortalLeadDetailPage() {
                 onClick={handleDownloadInvoice}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
               >
-                <Download size={16} /> Download Invoice
+                <Eye size={16} /> View Invoice
               </button>
               <button
                 onClick={handleEmailInvoice}
@@ -1166,7 +1146,7 @@ export default function CanadaPortalLeadDetailPage() {
                 onClick={handleDownloadSla}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
               >
-                <Download size={16} /> Download SLA
+                <Eye size={16} /> View SLA
               </button>
               {!slaSigned ? (
                 <button
@@ -1323,17 +1303,23 @@ export default function CanadaPortalLeadDetailPage() {
 
         <div className="space-y-2">
           {files.map(file => (
-            <div key={file.id} className="flex items-center gap-3 p-3 bg-[#0a0f0d] border border-[#1a2420] rounded-lg">
-              <FileText size={16} className="text-[#6b7a74] flex-shrink-0" />
+            <div key={file.id} className="flex items-center gap-3 p-3 bg-[#0a0f0d] border border-[#1a2420] rounded-lg hover:border-[#00d4aa]/20 transition-colors cursor-pointer group"
+              onClick={() => {
+                if (file.tag === 'Proposal' && proposalBlob) { const u = URL.createObjectURL(proposalBlob); window.open(u, '_blank') }
+                else if (file.tag === 'Contract' && slaBlob) { const u = URL.createObjectURL(slaBlob); window.open(u, '_blank') }
+              }}
+            >
+              <FileText size={16} className="text-[#6b7a74] flex-shrink-0 group-hover:text-[#00d4aa] transition-colors" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate">{file.name}</p>
+                <p className="text-xs font-medium text-white truncate group-hover:text-[#00d4aa] transition-colors">{file.name}</p>
                 <p className="text-[11px] text-[#4a5550]">{file.description}</p>
               </div>
               <span className="text-[10px] px-2 py-0.5 rounded bg-[#1a2420] text-[#6b7a74] font-medium flex-shrink-0">
                 {file.tag}
               </span>
+              <ExternalLink size={14} className="text-[#4a5550] group-hover:text-[#00d4aa] transition-colors flex-shrink-0" />
               <button
-                onClick={() => removeFile(file.id)}
+                onClick={(e) => { e.stopPropagation(); removeFile(file.id) }}
                 className="p-1 rounded hover:bg-red-500/10 transition-colors flex-shrink-0"
               >
                 <Trash2 size={14} className="text-[#6b7a74] hover:text-red-400" />

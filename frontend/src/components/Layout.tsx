@@ -33,28 +33,58 @@ import OnboardingWizard from '@/pages/OnboardingWizard'
 import ClineChatWidget from './ClineChatWidget'
 import ClineErrorBoundary from './ClineErrorBoundary'
 
-const navItems = [
-  { path: '', icon: LayoutDashboard, label: 'Overview' },
-  { path: 'revenue', icon: TrendingUp, label: 'Revenue' },
-  { path: 'insights', icon: Lightbulb, label: 'Insights' },
-  { path: 'actions', icon: Target, label: 'Top Actions' },
-  { path: 'agents', icon: Bot, label: 'Agents' },
-  { path: 'camera-intelligence', icon: Video, label: 'Camera Intel' },
-  { path: 'customers', icon: Users, label: 'Customers' },
-  { path: 'products', icon: Package, label: 'Products' },
-  { path: 'margins', icon: DollarSign, label: 'Margins' },
-  { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
-  { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },
-  { path: 'staff', icon: UserCheck, label: 'Staff' },
-  { path: 'schedule', icon: Calendar, label: 'Schedule' },
-  { path: 'inventory', icon: Layers, label: 'Inventory' },
-  { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
-  { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix' },
-  { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
-  { path: 'my-website', icon: Globe, label: 'My Website' },
-  { path: 'space', icon: Box, label: '3D Space' },
-  { path: 'notifications', icon: Bell, label: 'Notifications' },
-  { path: 'settings', icon: Settings, label: 'Settings' },
+const navGroups = [
+  {
+    label: null,
+    items: [
+      { path: '', icon: LayoutDashboard, label: 'Overview' },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { path: 'revenue', icon: TrendingUp, label: 'Revenue' },
+      { path: 'insights', icon: Lightbulb, label: 'Insights' },
+      { path: 'actions', icon: Target, label: 'Top Actions' },
+      { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
+      { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { path: 'products', icon: Package, label: 'Products' },
+      { path: 'margins', icon: DollarSign, label: 'Margins' },
+      { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix' },
+      { path: 'inventory', icon: Layers, label: 'Inventory' },
+      { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },
+    ],
+  },
+  {
+    label: 'People',
+    items: [
+      { path: 'customers', icon: Users, label: 'Customers' },
+      { path: 'staff', icon: UserCheck, label: 'Staff' },
+      { path: 'schedule', icon: Calendar, label: 'Schedule' },
+    ],
+  },
+  {
+    label: 'Tools',
+    items: [
+      { path: 'agents', icon: Bot, label: 'AI Agents' },
+      { path: 'camera-intelligence', icon: Video, label: 'Camera Intel' },
+      { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
+      { path: 'my-website', icon: Globe, label: 'My Website' },
+      { path: 'space', icon: Box, label: '3D Space' },
+    ],
+  },
+  {
+    label: null,
+    items: [
+      { path: 'notifications', icon: Bell, label: 'Notifications' },
+      { path: 'settings', icon: Settings, label: 'Settings' },
+    ],
+  },
 ]
 
 export default function Layout() {
@@ -109,28 +139,37 @@ export default function Layout() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 px-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ path, icon: Icon, label }) => {
-          const to = path ? `${basePath}/${path}` : basePath
-          return (
-            <NavLink
-              key={path}
-              to={to}
-              end={!path}
-              className={({ isActive }) =>
-                clsx(
-                  'group flex items-center gap-3 px-3 py-3 lg:py-2.5 rounded-lg text-sm font-medium transition-all duration-200',
-                  isActive
-                    ? 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/15'
-                    : 'text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23]/60 border border-transparent'
+      <nav className="flex-1 py-3 px-3 overflow-y-auto">
+        {navGroups.map((group, gi) => (
+          <div key={gi} className={gi > 0 ? 'mt-3' : ''}>
+            {group.label && (
+              <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#A1A1A8]/30">{group.label}</p>
+            )}
+            <div className="space-y-0.5">
+              {group.items.map(({ path, icon: Icon, label }) => {
+                const to = path ? `${basePath}/${path}` : basePath
+                return (
+                  <NavLink
+                    key={path}
+                    to={to}
+                    end={!path}
+                    className={({ isActive }) =>
+                      clsx(
+                        'group flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 min-h-[44px] lg:min-h-0',
+                        isActive
+                          ? 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/15'
+                          : 'text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23]/60 border border-transparent'
+                      )
+                    }
+                  >
+                    <Icon size={18} className="transition-transform duration-200 group-hover:scale-110" />
+                    {label}
+                  </NavLink>
                 )
-              }
-            >
-              <Icon size={18} className="transition-transform duration-200 group-hover:scale-110" />
-              {label}
-            </NavLink>
-          )
-        })}
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
 
       {/* Footer */}
@@ -176,7 +215,7 @@ export default function Layout() {
       {/* Mobile sidebar drawer */}
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 w-[260px] bg-[#0A0A0B] border-r border-[#1F1F23] flex flex-col transition-transform duration-300 ease-out lg:hidden',
+          'fixed inset-y-0 left-0 z-50 w-[85vw] max-w-[280px] bg-[#0A0A0B] border-r border-[#1F1F23] flex flex-col transition-transform duration-300 ease-out lg:hidden',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >

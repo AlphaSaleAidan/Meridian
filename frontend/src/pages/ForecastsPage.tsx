@@ -278,7 +278,7 @@ export default function ForecastsPage() {
       ) : (
         <EmptyState
           title="No forecasts yet"
-          description="Forecasts are generated after enough historical data has been analyzed."
+          description="Forecasts unlock after 30 days of POS data. Keep your POS connected and we'll start generating revenue predictions automatically."
         />
       )}
     </div>

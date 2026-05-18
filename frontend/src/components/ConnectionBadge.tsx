@@ -16,7 +16,17 @@ const statusConfig: Record<string, { label: string; icon: typeof Wifi; color: st
   disconnected: { label: 'Disconnected', icon: WifiOff, color: 'text-[#A1A1A8]/50', dot: 'bg-[#A1A1A8]/50' },
 }
 
-export default function ConnectionBadge({ status, provider, onConnect }: Props) {
+function formatRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+export default function ConnectionBadge({ status, provider, lastSync, onConnect }: Props) {
   const config = statusConfig[status] || statusConfig.disconnected
   const Icon = config.icon
 
@@ -29,6 +39,9 @@ export default function ConnectionBadge({ status, provider, onConnect }: Props) 
         <Icon size={14} className={config.color} />
         <span className="text-xs font-medium text-[#A1A1A8]">
           {provider ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} • ` : ''}{config.label}
+          {lastSync && status === 'connected' && (
+            <span className="text-[#A1A1A8]/50"> • {formatRelativeTime(lastSync)}</span>
+          )}
         </span>
       </div>
       {onConnect && status !== 'connected' && (

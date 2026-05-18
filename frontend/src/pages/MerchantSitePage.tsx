@@ -16,7 +16,7 @@ import WebsiteTracker from '@/components/website/WebsiteTracker'
 import { getTemplateById } from '@/data/websiteTemplates'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
-const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || 'AIzaSyBFw0Qbyq9zTFTd-tUY6dZWTgaQzuU17R8'
+const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY || ''
 
 /* ── Types ──────────────────────────────────────────────────── */
 
