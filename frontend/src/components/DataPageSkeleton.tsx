@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Wifi } from 'lucide-react'
 import { MeridianEmblem } from './MeridianLogo'
 import { useAuth } from '@/lib/auth'
@@ -236,8 +236,10 @@ interface DataPageSkeletonProps {
 
 export default function DataPageSkeleton({ title, children }: DataPageSkeletonProps) {
   const { org } = useAuth()
+  const location = useLocation()
+  const isDemo = location.pathname.startsWith('/demo') || location.pathname.startsWith('/canada/demo')
 
-  if (org?.pos_connected) return <>{children}</>
+  if (isDemo || org?.pos_connected) return <>{children}</>
 
   const config = PAGE_CONFIGS[title] || PAGE_CONFIGS['Revenue']
 
