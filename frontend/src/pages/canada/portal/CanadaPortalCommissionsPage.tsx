@@ -27,11 +27,11 @@ export default function CanadaPortalCommissionsPage() {
   const [filter, setFilter] = useState<'all' | 'paid' | 'earned' | 'pending'>('all')
 
   useEffect(() => {
-    canadaLeadsService.list().then(deals => {
+    canadaLeadsService.list(rep?.rep_id).then(deals => {
       setCommissions(deriveCommissionsFromLeads(deals))
       setLoading(false)
     })
-  }, [])
+  }, [rep?.rep_id])
 
   const filtered = commissions.filter(c => {
     if (filter !== 'all' && c.status !== filter) return false

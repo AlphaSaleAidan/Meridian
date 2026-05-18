@@ -45,11 +45,11 @@ export default function CanadaPortalAccountsPage() {
   const [cardUpdateId, setCardUpdateId] = useState<string | null>(null)
 
   useEffect(() => {
-    canadaLeadsService.list().then(deals => {
+    canadaLeadsService.list(rep?.rep_id).then(deals => {
       setClients(deriveClientsFromLeads(deals))
       setLoading(false)
     })
-  }, [])
+  }, [rep?.rep_id])
 
   async function checkBilling(clientId: string) {
     setBillingStatuses(prev => ({ ...prev, [clientId]: 'checking' }))

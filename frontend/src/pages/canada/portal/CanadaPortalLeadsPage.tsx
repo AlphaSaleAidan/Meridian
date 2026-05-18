@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
+import { useSalesAuth } from '@/lib/sales-auth'
 
 const STAGE_TO_STEP: Record<string, number> = {
   proposal_shown: 1,
@@ -97,6 +98,7 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
 }
 
 export default function CanadaPortalLeadsPage() {
+  const { rep } = useSalesAuth()
   const [searchParams] = useSearchParams()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
@@ -119,10 +121,10 @@ export default function CanadaPortalLeadsPage() {
   const [listError, setListError] = useState('')
 
   useEffect(() => {
-    canadaLeadsService.list()
+    canadaLeadsService.list(rep?.rep_id)
       .then(d => { setDeals(d); setLoading(false) })
       .catch(err => { setListError(err?.message || 'Could not load leads.'); setLoading(false) })
-  }, [])
+  }, [rep?.rep_id])
 
   const leads = deals.filter(d => d.stage !== 'customer_walkthrough' && d.stage !== 'closed_won' && d.stage !== 'pos_connected' && d.stage !== 'closed_lost')
   const activeDeals = deals.filter(d => d.stage === 'customer_walkthrough' || d.stage === 'closed_won' || d.stage === 'pos_connected')
@@ -149,7 +151,7 @@ export default function CanadaPortalLeadsPage() {
         created_at: new Date().toISOString().slice(0, 10),
         updated_at: new Date().toISOString().slice(0, 10),
       }
-      const saved = await canadaLeadsService.create(deal)
+      const saved = await canadaLeadsService.create(deal, rep?.rep_id)
       setDeals(prev => [saved, ...prev])
       setShowNew(false)
       setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '', pos_system: '' })

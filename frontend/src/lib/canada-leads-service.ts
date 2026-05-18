@@ -34,12 +34,14 @@ export class LeadsServiceError extends Error {
 }
 
 export const canadaLeadsService = {
-  async list(): Promise<Deal[]> {
+  async list(repId?: string): Promise<Deal[]> {
     if (!supabase) return []
-    const { data, error } = await supabase
+    let query = supabase
       .from('canada_leads')
       .select('*')
       .order('created_at', { ascending: false })
+    if (repId) query = query.eq('rep_id', repId)
+    const { data, error } = await query
     if (error) throw new LeadsServiceError(error.message)
     if (!data) return []
     return data.map(rowToDeal)
@@ -57,7 +59,7 @@ export const canadaLeadsService = {
     return rowToDeal(data)
   },
 
-  async create(deal: Deal): Promise<Deal> {
+  async create(deal: Deal, repId?: string): Promise<Deal> {
     if (!supabase) return deal
     const { data, error } = await supabase
       .from('canada_leads')
@@ -76,6 +78,7 @@ export const canadaLeadsService = {
         source: deal.source || '',
         city: deal.city || '',
         province: deal.province || '',
+        rep_id: repId || null,
       })
       .select()
       .single()

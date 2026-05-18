@@ -87,7 +87,7 @@ export default function CanadaPortalDashboardPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
-    canadaLeadsService.list().then(d => {
+    canadaLeadsService.list(rep?.rep_id).then(d => {
       setDeals(d)
 
       const c = deriveClientsFromLeads(d)
