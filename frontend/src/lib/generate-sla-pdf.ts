@@ -1,14 +1,22 @@
-import jsPDF from 'jspdf'
+/**
+ * SLA generator — opens a polished HTML legal document in a new browser tab.
+ * Crisp vector text, print-ready, responsive.
+ */
 
 export interface SlaInput {
   clientCompanyName: string
   province: string
   posSystem: string
   repName: string
+  planName?: string
   monthlyPriceCad: number
   setupFeeCad: number
   startDate: string
   clientSignature?: string
+}
+
+function esc(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function formatCad(cents: number): string {
@@ -20,338 +28,282 @@ function isQuebec(province: string): boolean {
   return p === 'qc' || p === 'quebec' || p === 'québec'
 }
 
-const BG = '#0a0f0d'
-const CARD = '#0f1512'
-const BORDER = '#1a2420'
-const ACCENT = '#00d4aa'
-const TEXT = '#e8ede8'
-const MUTED = '#6b7a74'
-const MARGIN = 20
-const PAGE_W = 210
-const CONTENT_W = PAGE_W - MARGIN * 2
-
-export async function generateSlaDocument(input: SlaInput): Promise<Blob> {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+function buildSlaHtml(input: SlaInput): string {
   const today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
   const effectiveDate = input.startDate
     ? new Date(input.startDate).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
     : today
 
-  let y = 0
+  const quebecSection = isQuebec(input.province) ? `
+      <h3>8A. Quebec Law 25 — Additional Obligations</h3>
+      <p>8A.1 The Provider designates a person responsible for the protection of personal information in accordance with Quebec&rsquo;s Act respecting the protection of personal information in the private sector (Quebec Law 25).</p>
+      <p>8A.2 Before implementing any new system involving personal information of Quebec residents, the Provider shall conduct a Privacy Impact Assessment (PIA).</p>
+      <p>8A.3 The Provider shall publish a clear privacy policy describing collection, purposes, rights, and retention periods.</p>
+      <p>8A.4 The Provider shall, upon request, cease disseminating personal information and de-index any hyperlink attached to that individual&rsquo;s name, in accordance with Law 25.</p>
+      <p>8A.5 Transfers of personal information outside Quebec shall require a privacy impact assessment ensuring adequate protection in the receiving jurisdiction.</p>
+      <p>8A.6 Confidentiality incidents involving Quebec residents shall be reported to the Commission d&rsquo;acc&egrave;s &agrave; l&rsquo;information du Qu&eacute;bec (CAI) and to affected individuals.</p>
+  ` : ''
 
-  function setColor(hex: string) {
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
-    doc.setTextColor(r, g, b)
-  }
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SLA — Meridian &amp; ${esc(input.clientCompanyName)}</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Serif+Display:ital@0;1&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#08080A;--surface:#0E0E12;--border:rgba(255,255,255,0.07);
+  --accent:#00d4aa;--violet:#7C5CFF;--white:#F5F5F7;--muted:#A1A1A8;--dim:#6B6B73;
+}
+body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.7}
 
-  function setFillColor(hex: string) {
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
-    doc.setFillColor(r, g, b)
-  }
+/* Print bar */
+.print-bar{position:fixed;top:0;left:0;right:0;z-index:200;background:rgba(8,8,10,0.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:12px 32px;display:flex;align-items:center;justify-content:space-between}
+.print-bar .logo{font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-size:20px;color:var(--white)}
+.print-btn{padding:8px 24px;background:var(--accent);color:#08080A;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
+.print-btn:hover{opacity:0.9}
 
-  function setDrawColor(hex: string) {
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
-    doc.setDrawColor(r, g, b)
-  }
+/* Document container */
+.doc{max-width:820px;margin:80px auto 60px;padding:0 24px}
 
-  function newPage() {
-    doc.addPage()
-    setFillColor(BG)
-    doc.rect(0, 0, 210, 297, 'F')
-    y = MARGIN
-  }
+/* Title block */
+.title-block{text-align:center;padding:48px 0 40px;border-bottom:1px solid var(--border)}
+.title-block h1{font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-size:clamp(28px,4vw,42px);color:var(--accent);margin-bottom:8px}
+.title-block .subtitle{font-size:14px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase}
 
-  function checkPage(needed: number) {
-    if (y + needed > 277) newPage()
-  }
+/* Parties card */
+.parties{margin:32px 0;padding:28px 32px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+.parties-grid{display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:14px}
+.parties-grid .label{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:0.06em;text-transform:uppercase}
+.parties-grid .value{color:var(--white)}
 
-  function heading(text: string) {
-    checkPage(14)
-    y += 6
-    doc.setFontSize(11)
-    doc.setFont('helvetica', 'bold')
-    setColor(ACCENT)
-    doc.text(text, MARGIN, y)
-    y += 2
-    setDrawColor(ACCENT)
-    doc.setLineWidth(0.3)
-    doc.line(MARGIN, y, MARGIN + CONTENT_W, y)
-    y += 5
-  }
+/* Sections */
+.section{margin-top:36px}
+.section h2{font-size:15px;font-weight:700;color:var(--accent);letter-spacing:0.04em;text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid rgba(0,212,170,0.2);margin-bottom:16px}
+.section h3{font-size:13px;font-weight:700;color:#b0d4c8;margin:20px 0 12px}
+.section p{font-size:13.5px;color:var(--white);margin-bottom:10px;line-height:1.75}
+.section ul{list-style:none;padding:0;margin-bottom:12px}
+.section ul li{font-size:13.5px;color:var(--white);padding:4px 0 4px 20px;position:relative;line-height:1.6}
+.section ul li::before{content:'\\2713';position:absolute;left:0;color:var(--accent);font-weight:700;font-size:12px}
 
-  function subheading(text: string) {
-    checkPage(10)
-    y += 3
-    doc.setFontSize(9.5)
-    doc.setFont('helvetica', 'bold')
-    setColor('#b0d4c8')
-    doc.text(text, MARGIN, y)
-    y += 5
-  }
+/* Table */
+.sla-table{width:100%;border-collapse:collapse;margin:12px 0 16px;font-size:13px}
+.sla-table th{background:rgba(0,212,170,0.08);color:var(--accent);font-weight:600;text-align:left;padding:10px 14px;border:1px solid var(--border);font-size:12px;letter-spacing:0.04em;text-transform:uppercase}
+.sla-table td{padding:10px 14px;border:1px solid var(--border);color:var(--white);background:var(--surface)}
 
-  function para(text: string) {
-    checkPage(8)
-    doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'normal')
-    setColor(TEXT)
-    const lines = doc.splitTextToSize(text, CONTENT_W)
-    for (const line of lines) {
-      checkPage(4.5)
-      doc.text(line, MARGIN, y)
-      y += 4
-    }
-    y += 2
-  }
+/* Signature blocks */
+.signatures{margin-top:48px;padding-top:32px;border-top:2px solid var(--border)}
+.signatures h2{font-size:16px;font-weight:700;color:var(--accent);text-align:center;margin-bottom:8px}
+.signatures .witness{font-size:13px;color:var(--muted);text-align:center;margin-bottom:32px}
+.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:640px){.sig-grid{grid-template-columns:1fr}}
+.sig-box{padding:24px;background:var(--surface);border:1px solid var(--border);border-radius:12px}
+.sig-box.signed{border-color:rgba(0,212,170,0.3)}
+.sig-box .role{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:16px}
+.sig-name{font-family:'DM Serif Display',Georgia,serif;font-style:italic;font-size:24px;color:var(--accent);margin-bottom:4px}
+.sig-title{font-size:12px;color:var(--muted)}
+.sig-date{font-size:12px;color:var(--muted);margin-top:4px}
+.sig-line{border:none;border-top:1px solid var(--muted);margin:20px 0 8px;opacity:0.4}
+.sig-placeholder{font-size:13px;font-style:italic;color:var(--dim)}
+.sig-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--dim)}
 
-  function bullet(text: string) {
-    checkPage(5)
-    doc.setFontSize(8.5)
-    doc.setFont('helvetica', 'normal')
-    setColor(TEXT)
-    const lines = doc.splitTextToSize(text, CONTENT_W - 6)
-    setColor(ACCENT)
-    doc.text('•', MARGIN + 2, y)
-    setColor(TEXT)
-    for (let i = 0; i < lines.length; i++) {
-      checkPage(4.5)
-      doc.text(lines[i], MARGIN + 6, y)
-      y += 4
-    }
-    y += 1
-  }
+/* Footer */
+.doc-footer{margin-top:40px;padding-top:20px;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--dim)}
 
-  function tableRow(cells: string[], widths: number[], isHeader = false) {
-    checkPage(8)
-    const rowH = 7
-    let x = MARGIN
-    for (let i = 0; i < cells.length; i++) {
-      setFillColor(isHeader ? '#142018' : CARD)
-      setDrawColor(BORDER)
-      doc.rect(x, y - 4.5, widths[i], rowH, 'FD')
-      doc.setFontSize(7.5)
-      doc.setFont('helvetica', isHeader ? 'bold' : 'normal')
-      setColor(isHeader ? ACCENT : TEXT)
-      doc.text(cells[i], x + 2, y)
-      x += widths[i]
-    }
-    y += rowH - 4.5 + 1
-  }
+/* Print styles */
+@media print{
+  .print-bar{display:none!important}
+  body{background:white;color:#111}
+  .doc{margin:0 auto;padding:0 20px}
+  .title-block{border-bottom:1px solid #ccc}
+  .title-block h1{color:#006B55}
+  .parties,.sig-box{border:1px solid #ddd;background:#f9f9f9}
+  .section h2{color:#006B55;border-bottom:1px solid #ddd}
+  .section h3{color:#333}
+  .section p,.section ul li{color:#222}
+  .section ul li::before{color:#006B55}
+  .sla-table th{background:#eee;color:#006B55;border-color:#ccc}
+  .sla-table td{background:white;border-color:#ccc;color:#222}
+  .signatures{border-top:2px solid #ccc}
+  .signatures h2{color:#006B55}
+  .sig-name{color:#006B55}
+  .doc-footer{border-top:1px solid #ccc;color:#888}
+}
+</style>
+</head>
+<body>
 
-  // Background
-  setFillColor(BG)
-  doc.rect(0, 0, 210, 297, 'F')
+<!-- Print / Share Bar -->
+<div class="print-bar">
+  <div class="logo">Meridian</div>
+  <div style="display:flex;gap:12px;align-items:center">
+    <span style="font-size:12px;color:var(--muted)">SLA &mdash; ${esc(input.clientCompanyName)}</span>
+    <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+  </div>
+</div>
 
-  // Title
-  y = 30
-  doc.setFontSize(18)
-  doc.setFont('helvetica', 'bold')
-  setColor(ACCENT)
-  doc.text('SERVICE LEVEL AGREEMENT', PAGE_W / 2, y, { align: 'center' })
-  y += 8
-  doc.setFontSize(10)
-  setColor(MUTED)
-  doc.text('MERIDIAN AI BUSINESS SOLUTIONS — CANADA', PAGE_W / 2, y, { align: 'center' })
-  y += 12
+<div class="doc">
 
-  // Parties card
-  setFillColor(CARD)
-  setDrawColor(BORDER)
-  doc.roundedRect(MARGIN, y, CONTENT_W, 42, 2, 2, 'FD')
-  y += 7
-  const pairs: [string, string][] = [
-    ['Provider:', 'Meridian AI Business Solutions'],
-    ['Client:', input.clientCompanyName],
-    ['Province:', input.province],
-    ['Effective Date:', effectiveDate],
-    ['Agreement Date:', today],
-  ]
-  for (const [label, val] of pairs) {
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'bold')
-    setColor(MUTED)
-    doc.text(label, MARGIN + 5, y)
-    doc.setFont('helvetica', 'normal')
-    setColor(TEXT)
-    doc.text(val, MARGIN + 40, y)
-    y += 7
-  }
-  y += 5
+  <!-- Title -->
+  <div class="title-block">
+    <h1>Service Level Agreement</h1>
+    <div class="subtitle">Meridian AI Business Solutions &mdash; Canada</div>
+  </div>
 
-  // 1. Services
-  heading('1. SERVICES PROVIDED')
-  para('1.1 Meridian AI Business Solutions ("Provider") agrees to provide the following services to the Client:')
-  bullet('AI-powered business intelligence and analytics dashboard')
-  bullet('Point-of-sale (POS) data integration and real-time monitoring')
-  bullet('Revenue forecasting and predictive analytics')
-  bullet('Customer behavior analysis and insights')
-  bullet('Inventory optimization recommendations')
-  bullet('AI camera analytics and foot traffic analysis (where applicable)')
-  bullet('3D space mapping and visualization')
-  para(`1.2 POS System Integration. The Provider shall integrate with the Client's existing POS system (${input.posSystem}) to enable data collection and analytics.`)
+  <!-- Parties -->
+  <div class="parties">
+    <div class="parties-grid">
+      <div class="label">Provider</div><div class="value">Meridian AI Business Solutions</div>
+      <div class="label">Client</div><div class="value">${esc(input.clientCompanyName)}</div>
+      <div class="label">Province</div><div class="value">${esc(input.province)}</div>
+      <div class="label">Effective Date</div><div class="value">${effectiveDate}</div>
+      <div class="label">Agreement Date</div><div class="value">${today}</div>
+    </div>
+  </div>
 
-  // 2. Service Levels
-  heading('2. SERVICE LEVEL COMMITMENTS')
-  para('2.1 Availability. The Provider commits to a service availability target of 99.5% measured on a monthly basis, excluding scheduled maintenance windows.')
-  para("2.2 Scheduled Maintenance. Maintenance windows shall occur between 2:00 AM and 6:00 AM ET and shall not exceed four (4) hours per month. At least 48 hours' advance notice will be provided.")
-  para('2.3 Data Processing. POS transaction data shall be processed and reflected in the dashboard within sixty (60) minutes of receipt.')
-  para('2.4 Incident Response Times:')
-  const tw = [40, 70, 60]
-  tableRow(['Severity', 'Description', 'Response Time'], tw, true)
-  tableRow(['Critical (P1)', 'Complete service outage or data loss', '1 hour'], tw)
-  tableRow(['High (P2)', 'Major feature unavailable', '4 hours'], tw)
-  tableRow(['Medium (P3)', 'Minor feature degradation', '1 business day'], tw)
-  tableRow(['Low (P4)', 'Cosmetic or informational', '3 business days'], tw)
-  y += 3
+  <!-- 1. Services -->
+  <div class="section">
+    <h2>1. Services Provided</h2>
+    <p>1.1 Meridian AI Business Solutions (&ldquo;Provider&rdquo;) agrees to provide the following services to the Client:</p>
+    <ul>
+      <li>AI-powered business intelligence and analytics dashboard</li>
+      <li>Point-of-sale (POS) data integration and real-time monitoring</li>
+      <li>Revenue forecasting and predictive analytics</li>
+      <li>Customer behavior analysis and insights</li>
+      <li>Inventory optimization recommendations</li>
+      <li>AI camera analytics and foot traffic analysis (where applicable)</li>
+      <li>3D space mapping and visualization</li>
+    </ul>
+    <p>1.2 <strong>POS System Integration.</strong> The Provider shall integrate with the Client&rsquo;s existing POS system (${esc(input.posSystem)}) to enable data collection and analytics.</p>
+  </div>
 
-  // 3. Fees
-  heading('3. FEES AND PAYMENT')
-  para(`3.1 Monthly Service Fee. The Client shall pay a monthly service fee of ${formatCad(input.monthlyPriceCad)} (plus applicable taxes) for the Services described herein.`)
-  para(input.setupFeeCad > 0
-    ? `3.2 Setup Fee. A one-time setup fee of ${formatCad(input.setupFeeCad)} (plus applicable taxes) is payable upon execution of this Agreement.`
-    : '3.2 Setup Fee. No setup fee is applicable under this Agreement.')
-  para('3.3 Payment Terms. All invoices are due and payable within thirty (30) days. Payments shall be made in Canadian Dollars (CAD).')
-  para('3.4 Taxes. All fees are exclusive of applicable federal and provincial taxes (GST/HST/QST).')
-  para('3.5 Late Payment. Overdue invoices shall bear interest at 1.5% per month (18% per annum) or the maximum rate permitted by law.')
+  <!-- 2. Service Levels -->
+  <div class="section">
+    <h2>2. Service Level Commitments</h2>
+    <p>2.1 <strong>Availability.</strong> The Provider commits to a service availability target of 99.5% measured on a monthly basis, excluding scheduled maintenance windows.</p>
+    <p>2.2 <strong>Scheduled Maintenance.</strong> Maintenance windows shall occur between 2:00 AM and 6:00 AM ET and shall not exceed four (4) hours per month. At least 48 hours&rsquo; advance notice will be provided.</p>
+    <p>2.3 <strong>Data Processing.</strong> POS transaction data shall be processed and reflected in the dashboard within sixty (60) minutes of receipt.</p>
+    <p>2.4 <strong>Incident Response Times:</strong></p>
+    <table class="sla-table">
+      <thead><tr><th>Severity</th><th>Description</th><th>Response Time</th></tr></thead>
+      <tbody>
+        <tr><td>Critical (P1)</td><td>Complete service outage or data loss</td><td>1 hour</td></tr>
+        <tr><td>High (P2)</td><td>Major feature unavailable</td><td>4 hours</td></tr>
+        <tr><td>Medium (P3)</td><td>Minor feature degradation</td><td>1 business day</td></tr>
+        <tr><td>Low (P4)</td><td>Cosmetic or informational</td><td>3 business days</td></tr>
+      </tbody>
+    </table>
+  </div>
 
-  // 4. Term
-  heading('4. TERM AND TERMINATION')
-  para(`4.1 Initial Term. This Agreement shall commence on ${effectiveDate} and continue for twelve (12) months.`)
-  para('4.2 Renewal. Following the Initial Term, this Agreement auto-renews for successive twelve (12) month periods unless either party provides thirty (30) days written notice of non-renewal.')
-  para('4.3 Termination for Cause. Either party may terminate immediately upon written notice if the other party commits a material breach and fails to cure within thirty (30) days.')
-  para('4.4 Effect of Termination. Upon termination, the Provider shall cease all Services, provide Client data in electronic format within thirty (30) days, and securely delete all Client data within sixty (60) days.')
+  <!-- 3. Fees -->
+  <div class="section">
+    <h2>3. Fees and Payment</h2>
+    <p>3.1 <strong>Monthly Service Fee.</strong> The Client shall pay a monthly service fee of <strong>${formatCad(input.monthlyPriceCad)}</strong> (plus applicable taxes) for the ${input.planName ? `Meridian <strong>${esc(input.planName)}</strong> plan` : 'Services described herein'}.</p>
+    <p>3.2 <strong>Setup Fee.</strong> ${input.setupFeeCad > 0 ? `A one-time setup fee of <strong>${formatCad(input.setupFeeCad)}</strong> (plus applicable taxes) is payable upon execution of this Agreement.` : 'No setup fee is applicable under this Agreement.'}</p>
+    <p>3.3 <strong>Payment Terms.</strong> All invoices are due and payable within thirty (30) days. Payments shall be made in Canadian Dollars (CAD).</p>
+    <p>3.4 <strong>Taxes.</strong> All fees are exclusive of applicable federal and provincial taxes (GST/HST/QST).</p>
+    <p>3.5 <strong>Late Payment.</strong> Overdue invoices shall bear interest at 1.5% per month (18% per annum) or the maximum rate permitted by law.</p>
+  </div>
 
-  // 5. IP
-  heading('5. INTELLECTUAL PROPERTY')
-  para("5.1 Client Data. The Client retains all right, title, and interest in and to all data provided by the Client or generated through the Client's use of the Services.")
-  para('5.2 Provider IP. The Provider retains all right, title, and interest in and to the Services, including all AI models, algorithms, software, and analytics methodologies.')
-  para('5.3 Aggregated Data. The Provider may use anonymized and aggregated Client Data for improving the Services, provided it cannot identify the Client or any individual.')
+  <!-- 4. Term -->
+  <div class="section">
+    <h2>4. Term and Termination</h2>
+    <p>4.1 <strong>Initial Term.</strong> This Agreement shall commence on ${effectiveDate} and continue for twelve (12) months.</p>
+    <p>4.2 <strong>Renewal.</strong> Following the Initial Term, this Agreement auto-renews for successive twelve (12) month periods unless either party provides thirty (30) days&rsquo; written notice of non-renewal.</p>
+    <p>4.3 <strong>Termination for Cause.</strong> Either party may terminate immediately upon written notice if the other party commits a material breach and fails to cure within thirty (30) days.</p>
+    <p>4.4 <strong>Effect of Termination.</strong> Upon termination, the Provider shall cease all Services, provide Client data in electronic format within thirty (30) days, and securely delete all Client data within sixty (60) days.</p>
+  </div>
 
-  // 6. Confidentiality
-  heading('6. CONFIDENTIALITY')
-  para('6.1 Each party agrees to maintain the confidentiality of all information received from the other party that is identified as confidential or that a reasonable person would understand to be confidential.')
-  para('6.2 Confidential information shall not be disclosed to any third party without prior written consent, except as required by law.')
-  para('6.3 The obligations of confidentiality shall survive termination for three (3) years.')
+  <!-- 5. IP -->
+  <div class="section">
+    <h2>5. Intellectual Property</h2>
+    <p>5.1 <strong>Client Data.</strong> The Client retains all right, title, and interest in and to all data provided by the Client or generated through the Client&rsquo;s use of the Services.</p>
+    <p>5.2 <strong>Provider IP.</strong> The Provider retains all right, title, and interest in and to the Services, including all AI models, algorithms, software, and analytics methodologies.</p>
+    <p>5.3 <strong>Aggregated Data.</strong> The Provider may use anonymized and aggregated Client Data for improving the Services, provided it cannot identify the Client or any individual.</p>
+  </div>
 
-  // 7. Liability
-  heading('7. LIMITATION OF LIABILITY')
-  para('7.1 NEITHER PARTY SHALL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF THIS AGREEMENT.')
-  para('7.2 THE TOTAL AGGREGATE LIABILITY OF EITHER PARTY SHALL NOT EXCEED THE TOTAL FEES PAID OR PAYABLE DURING THE TWELVE (12) MONTH PERIOD PRECEDING THE CLAIM.')
-  para('7.3 This limitation does not apply to breaches of confidentiality, data protection obligations, or willful misconduct.')
+  <!-- 6. Confidentiality -->
+  <div class="section">
+    <h2>6. Confidentiality</h2>
+    <p>6.1 Each party agrees to maintain the confidentiality of all information received from the other party that is identified as confidential or that a reasonable person would understand to be confidential.</p>
+    <p>6.2 Confidential information shall not be disclosed to any third party without prior written consent, except as required by law.</p>
+    <p>6.3 The obligations of confidentiality shall survive termination for three (3) years.</p>
+  </div>
 
-  // 8. Privacy
-  heading('8. DATA PROTECTION & PRIVACY COMPLIANCE')
-  para('8.1 PIPEDA Compliance. The Provider shall comply with the Personal Information Protection and Electronic Documents Act (PIPEDA) and all applicable provincial privacy legislation.')
-  para('8.2 Data Collection. The Provider shall collect only such personal information as is reasonably necessary for the Services.')
-  para('8.3 Data Security. The Provider shall implement reasonable administrative, technical, and physical safeguards to protect personal information.')
-  para('8.4 Breach Notification. In the event of a breach of security safeguards, the Provider shall notify the Client and the Office of the Privacy Commissioner of Canada.')
-  para('8.5 Data Retention. Personal information shall be retained only for so long as reasonably necessary or as required by applicable law.')
+  <!-- 7. Liability -->
+  <div class="section">
+    <h2>7. Limitation of Liability</h2>
+    <p>7.1 NEITHER PARTY SHALL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES ARISING OUT OF THIS AGREEMENT.</p>
+    <p>7.2 THE TOTAL AGGREGATE LIABILITY OF EITHER PARTY SHALL NOT EXCEED THE TOTAL FEES PAID OR PAYABLE DURING THE TWELVE (12) MONTH PERIOD PRECEDING THE CLAIM.</p>
+    <p>7.3 This limitation does not apply to breaches of confidentiality, data protection obligations, or willful misconduct.</p>
+  </div>
 
-  if (isQuebec(input.province)) {
-    subheading('8A. QUEBEC LAW 25 — ADDITIONAL OBLIGATIONS')
-    para("8A.1 The Provider designates a person responsible for the protection of personal information in accordance with Quebec's Act respecting the protection of personal information in the private sector (Quebec Law 25).")
-    para('8A.2 Before implementing any new system involving personal information of Quebec residents, the Provider shall conduct a Privacy Impact Assessment (PIA).')
-    para('8A.3 The Provider shall publish a clear privacy policy describing collection, purposes, rights, and retention periods.')
-    para("8A.4 The Provider shall, upon request, cease disseminating personal information and de-index any hyperlink attached to that individual's name, in accordance with Law 25.")
-    para('8A.5 Transfers of personal information outside Quebec shall require a privacy impact assessment ensuring adequate protection in the receiving jurisdiction.')
-    para("8A.6 Confidentiality incidents involving Quebec residents shall be reported to the Commission d'accès à l'information du Québec (CAI) and to affected individuals.")
-  }
+  <!-- 8. Privacy -->
+  <div class="section">
+    <h2>8. Data Protection &amp; Privacy Compliance</h2>
+    <p>8.1 <strong>PIPEDA Compliance.</strong> The Provider shall comply with the Personal Information Protection and Electronic Documents Act (PIPEDA) and all applicable provincial privacy legislation.</p>
+    <p>8.2 <strong>Data Collection.</strong> The Provider shall collect only such personal information as is reasonably necessary for the Services.</p>
+    <p>8.3 <strong>Data Security.</strong> The Provider shall implement reasonable administrative, technical, and physical safeguards to protect personal information.</p>
+    <p>8.4 <strong>Breach Notification.</strong> In the event of a breach of security safeguards, the Provider shall notify the Client and the Office of the Privacy Commissioner of Canada.</p>
+    <p>8.5 <strong>Data Retention.</strong> Personal information shall be retained only for so long as reasonably necessary or as required by applicable law.</p>
+    ${quebecSection}
+  </div>
 
-  // 9. General
-  heading('9. GENERAL PROVISIONS')
-  para('9.1 Governing Law. This Agreement shall be governed by the laws of the Province of ' + input.province + ' and the federal laws of Canada.')
-  para('9.2 Entire Agreement. This Agreement constitutes the entire agreement between the parties and supersedes all prior agreements.')
-  para('9.3 Amendment. This Agreement may be amended only by written instrument signed by both parties.')
-  para('9.4 Assignment. Neither party may assign without prior written consent, except in connection with a merger or acquisition.')
-  para('9.5 Force Majeure. Neither party shall be liable for failures due to circumstances beyond reasonable control.')
-  para('9.6 Severability. If any provision is held invalid, the remaining provisions continue in full force.')
+  <!-- 9. General -->
+  <div class="section">
+    <h2>9. General Provisions</h2>
+    <p>9.1 <strong>Governing Law.</strong> This Agreement shall be governed by the laws of the Province of ${esc(input.province)} and the federal laws of Canada.</p>
+    <p>9.2 <strong>Entire Agreement.</strong> This Agreement constitutes the entire agreement between the parties and supersedes all prior agreements.</p>
+    <p>9.3 <strong>Amendment.</strong> This Agreement may be amended only by written instrument signed by both parties.</p>
+    <p>9.4 <strong>Assignment.</strong> Neither party may assign without prior written consent, except in connection with a merger or acquisition.</p>
+    <p>9.5 <strong>Force Majeure.</strong> Neither party shall be liable for failures due to circumstances beyond reasonable control.</p>
+    <p>9.6 <strong>Severability.</strong> If any provision is held invalid, the remaining provisions continue in full force.</p>
+  </div>
 
-  // Signature page
-  newPage()
-  y = 35
-  doc.setFontSize(14)
-  doc.setFont('helvetica', 'bold')
-  setColor(ACCENT)
-  doc.text('SIGNATURES', PAGE_W / 2, y, { align: 'center' })
-  y += 8
-  para('IN WITNESS WHEREOF, the parties have executed this Service Level Agreement as of the date first written above.')
+  <!-- Signatures -->
+  <div class="signatures">
+    <h2>Signatures</h2>
+    <p class="witness">IN WITNESS WHEREOF, the parties have executed this Service Level Agreement as of the date first written above.</p>
 
-  // Provider signature box
-  y += 8
-  setFillColor(CARD)
-  setDrawColor(BORDER)
-  doc.roundedRect(MARGIN, y, CONTENT_W, 48, 2, 2, 'FD')
-  y += 8
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
-  setColor(MUTED)
-  doc.text('PROVIDER — MERIDIAN AI BUSINESS SOLUTIONS', MARGIN + 5, y)
-  y += 12
-  doc.setFontSize(16)
-  doc.setFont('times', 'italic')
-  setColor(ACCENT)
-  doc.text('Aidan Pierce', MARGIN + 5, y)
-  y += 6
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  setColor(MUTED)
-  doc.text('Founder & CEO', MARGIN + 5, y)
-  y += 5
-  doc.text(`Date: ${today}`, MARGIN + 5, y)
-  y += 10
-  setDrawColor(ACCENT)
-  doc.setLineWidth(0.2)
-  doc.line(MARGIN + 5, y, MARGIN + CONTENT_W - 5, y)
-  y += 10
+    <div class="sig-grid">
+      <!-- Provider -->
+      <div class="sig-box signed">
+        <div class="role">Provider &mdash; Meridian AI Business Solutions</div>
+        <div class="sig-name">Aidan Pierce</div>
+        <div class="sig-title">Founder &amp; CEO</div>
+        <div class="sig-date">Date: ${today}</div>
+        <hr class="sig-line"/>
+      </div>
 
-  // Client signature box
-  y += 5
-  setFillColor(CARD)
-  setDrawColor(input.clientSignature ? ACCENT : BORDER)
-  doc.roundedRect(MARGIN, y, CONTENT_W, 48, 2, 2, 'FD')
-  y += 8
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'bold')
-  setColor(MUTED)
-  doc.text(`CLIENT — ${input.clientCompanyName.toUpperCase()}`, MARGIN + 5, y)
-  y += 12
-  if (input.clientSignature) {
-    doc.setFontSize(16)
-    doc.setFont('times', 'italic')
-    setColor(TEXT)
-    doc.text(input.clientSignature, MARGIN + 5, y)
-    y += 6
-    doc.setFontSize(8)
-    doc.setFont('helvetica', 'normal')
-    setColor(MUTED)
-    doc.text('Authorized Signatory', MARGIN + 5, y)
-    y += 5
-    doc.text(`Date: ${today}`, MARGIN + 5, y)
-  } else {
-    doc.setFontSize(9)
-    doc.setFont('helvetica', 'italic')
-    setColor(MUTED)
-    doc.text('Awaiting client signature...', MARGIN + 5, y)
-    y += 10
-    setDrawColor(MUTED)
-    doc.setLineWidth(0.2)
-    doc.line(MARGIN + 5, y, MARGIN + CONTENT_W - 5, y)
-    y += 5
-    doc.setFontSize(7)
-    doc.text('Authorized Signatory                                                        Date', MARGIN + 5, y)
-  }
-  y += 14
+      <!-- Client -->
+      <div class="sig-box${input.clientSignature ? ' signed' : ''}">
+        <div class="role">Client &mdash; ${esc(input.clientCompanyName)}</div>
+        ${input.clientSignature
+          ? `<div class="sig-name" style="color:var(--white)">${esc(input.clientSignature)}</div>
+             <div class="sig-title">Authorized Signatory</div>
+             <div class="sig-date">Date: ${today}</div>
+             <hr class="sig-line"/>`
+          : `<div class="sig-placeholder">Awaiting client signature...</div>
+             <hr class="sig-line"/>
+             <div class="sig-labels"><span>Authorized Signatory</span><span>Date</span></div>`
+        }
+      </div>
+    </div>
+  </div>
 
-  // Footer
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'italic')
-  setColor(MUTED)
-  doc.text(`Sales Representative: ${input.repName}`, MARGIN, y)
+  <!-- Footer -->
+  <div class="doc-footer">
+    <p>Sales Representative: ${esc(input.repName)} &middot; Meridian AI Business Solutions &middot; meridian.tips</p>
+  </div>
 
-  return doc.output('blob')
+</div>
+</body>
+</html>`
+}
+
+export async function generateSlaDocument(input: SlaInput): Promise<Blob> {
+  const html = buildSlaHtml(input)
+  return new Blob([html], { type: 'text/html' })
 }
