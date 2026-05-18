@@ -13,6 +13,20 @@ import type {
   InventoryData, InventoryItem,
 } from './api'
 
+import {
+  generateStaffPerformance,
+  generateMarginWaterfall,
+  generateMenuEngineering,
+  generateAnomalies,
+  generateRFMSegments,
+  generateCustomerRankings,
+  generateCohorts,
+  generateAgents,
+  generateAgentChains,
+  generateCalibrationHistory,
+  generateTopActions,
+} from './agent-data'
+
 import { getActiveBusinessType, getCurrencyMultiplier, isCanadaPath } from './demo-context'
 import { getProducts, getRevenueConfig, getHourlyPattern, getBusinessName, getBusinessProfile, type ProductDef } from './business-config'
 
@@ -846,5 +860,48 @@ export const demoData = {
         forecast_accuracy: 0.94,
       },
     }
+  },
+
+  staff: () => {
+    resetSeed()
+    return { staff: generateStaffPerformance() }
+  },
+
+  margins: () => {
+    resetSeed()
+    return { items: generateMarginWaterfall() }
+  },
+
+  menuEngineering: () => {
+    resetSeed()
+    return { items: generateMenuEngineering() }
+  },
+
+  anomalies: () => {
+    resetSeed()
+    return { anomalies: generateAnomalies() }
+  },
+
+  customers: () => {
+    resetSeed()
+    return {
+      segments: generateRFMSegments(),
+      rankings: generateCustomerRankings(),
+      cohorts: generateCohorts(),
+    }
+  },
+
+  agents: () => {
+    resetSeed()
+    return {
+      agents: generateAgents(),
+      chains: generateAgentChains(),
+      calibration: generateCalibrationHistory(),
+    }
+  },
+
+  actions: () => {
+    resetSeed()
+    return { actions: generateTopActions() }
   },
 }

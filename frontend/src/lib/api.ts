@@ -8,6 +8,7 @@
  */
 
 import { demoData } from './demo-data'
+import { getAuthHeaders } from './supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -19,7 +20,7 @@ interface ApiOptions {
 
 async function apiFetch<T>(path: string, opts?: ApiOptions): Promise<T> {
   const url = new URL(`${API_BASE}${path}`, window.location.origin)
-  
+
   if (opts?.params) {
     Object.entries(opts.params).forEach(([k, v]) => {
       if (v !== undefined && v !== null) {
@@ -28,10 +29,12 @@ async function apiFetch<T>(path: string, opts?: ApiOptions): Promise<T> {
     })
   }
 
+  const authHeaders = await getAuthHeaders()
+
   const fetchOpts: RequestInit = {
     method: opts?.method || 'GET',
     credentials: 'include',
-    headers: { 'Accept': 'application/json' },
+    headers: { ...authHeaders, 'Accept': 'application/json' },
   }
 
   if (opts?.body) {
@@ -249,70 +252,122 @@ function isDemo(orgId: string): boolean {
   return orgId === 'demo'
 }
 
+const EMPTY = {
+  overview: { revenue_cents_30d: 0, revenue_change_pct: 0, transaction_count_30d: 0, avg_ticket_cents: 0, money_left_score: null, connection: { status: 'not_connected', provider: null, last_sync_at: null }, days_with_data: 0 } as Overview,
+  revenue: { daily: [], weekly: [] } as RevenueData,
+  hourly: { hourly: [] } as HourlyData,
+  products: { products: [], total_products: 0, period_days: 0 } as ProductsData,
+  insights: { insights: [], total: 0 },
+  forecasts: { forecasts: [], total: 0 },
+  notifications: { notifications: [], total: 0 },
+  connection: { connections: [] },
+  report: { report: null },
+  transactions: { date: '', transactions: [], summary: { total_revenue_cents: 0, transaction_count: 0, avg_ticket_cents: 0 } } as unknown as DayTransactions,
+  inventory: { items: [], total: 0, alerts: { low_stock: 0, overstocked: 0, expiring_soon: 0 }, low_stock: [], reorder_suggestions: [] } as unknown as InventoryData,
+  empty: {} as any,
+}
+
 export const api = {
   overview: (orgId: string) =>
-    isDemo(orgId)
-      ? delay(demoData.overview())
-      : apiFetch<Overview>('/api/dashboard/overview', { params: { org_id: orgId } }),
+    isDemo(orgId) ? delay(demoData.overview())
+    : !orgId ? delay(EMPTY.overview)
+    : apiFetch<Overview>('/api/dashboard/overview', { params: { org_id: orgId } }),
 
   revenue: (orgId: string, days = 30) =>
-    isDemo(orgId)
-      ? delay(demoData.revenue(days))
-      : apiFetch<RevenueData>('/api/dashboard/revenue', { params: { org_id: orgId, days } }),
+    isDemo(orgId) ? delay(demoData.revenue(days))
+    : !orgId ? delay(EMPTY.revenue)
+    : apiFetch<RevenueData>('/api/dashboard/revenue', { params: { org_id: orgId, days } }),
 
   hourlyRevenue: (orgId: string, days = 30) =>
-    isDemo(orgId)
-      ? delay(demoData.hourlyRevenue())
-      : apiFetch<HourlyData>('/api/dashboard/revenue/hourly', { params: { org_id: orgId, days } }),
+    isDemo(orgId) ? delay(demoData.hourlyRevenue())
+    : !orgId ? delay(EMPTY.hourly)
+    : apiFetch<HourlyData>('/api/dashboard/revenue/hourly', { params: { org_id: orgId, days } }),
 
   products: (orgId: string, days = 30) =>
-    isDemo(orgId)
-      ? delay(demoData.products(days))
-      : apiFetch<ProductsData>('/api/dashboard/products', { params: { org_id: orgId, days } }),
+    isDemo(orgId) ? delay(demoData.products(days))
+    : !orgId ? delay(EMPTY.products)
+    : apiFetch<ProductsData>('/api/dashboard/products', { params: { org_id: orgId, days } }),
 
   insights: (orgId: string, limit = 20) =>
-    isDemo(orgId)
-      ? delay(demoData.insights(limit))
-      : apiFetch<{ insights: Insight[]; total: number }>('/api/dashboard/insights', { params: { org_id: orgId, limit } }),
+    isDemo(orgId) ? delay(demoData.insights(limit))
+    : !orgId ? delay(EMPTY.insights)
+    : apiFetch<{ insights: Insight[]; total: number }>('/api/dashboard/insights', { params: { org_id: orgId, limit } }),
 
   forecasts: (orgId: string) =>
-    isDemo(orgId)
-      ? delay(demoData.forecasts())
-      : apiFetch<{ forecasts: Forecast[]; total: number }>('/api/dashboard/forecasts', { params: { org_id: orgId } }),
+    isDemo(orgId) ? delay(demoData.forecasts())
+    : !orgId ? delay(EMPTY.forecasts)
+    : apiFetch<{ forecasts: Forecast[]; total: number }>('/api/dashboard/forecasts', { params: { org_id: orgId } }),
 
   notifications: (orgId: string, limit = 20) =>
-    isDemo(orgId)
-      ? delay(demoData.notifications(limit))
-      : apiFetch<{ notifications: Notification[]; total: number }>('/api/dashboard/notifications', { params: { org_id: orgId, limit } }),
+    isDemo(orgId) ? delay(demoData.notifications(limit))
+    : !orgId ? delay(EMPTY.notifications)
+    : apiFetch<{ notifications: Notification[]; total: number }>('/api/dashboard/notifications', { params: { org_id: orgId, limit } }),
 
   connection: (orgId: string) =>
-    isDemo(orgId)
-      ? delay(demoData.connection())
-      : apiFetch<{ connections: ConnectionInfo[] }>('/api/dashboard/connection', { params: { org_id: orgId } }),
+    isDemo(orgId) ? delay(demoData.connection())
+    : !orgId ? delay(EMPTY.connection)
+    : apiFetch<{ connections: ConnectionInfo[] }>('/api/dashboard/connection', { params: { org_id: orgId } }),
 
   weeklyReport: (orgId: string) =>
-    isDemo(orgId)
-      ? delay(demoData.weeklyReport())
-      : apiFetch<{ report: any }>('/api/dashboard/weekly-report', { params: { org_id: orgId } }),
+    isDemo(orgId) ? delay(demoData.weeklyReport())
+    : !orgId ? delay(EMPTY.report)
+    : apiFetch<{ report: any }>('/api/dashboard/weekly-report', { params: { org_id: orgId } }),
 
   updateInsightAction: (insightId: string, orgId: string, status: string) =>
-    isDemo(orgId)
-      ? delay({ success: true })
-      : apiFetch<any>(`/api/dashboard/insights/${insightId}/action`, { method: 'PATCH', params: { org_id: orgId, action_status: status } }),
+    isDemo(orgId) ? delay({ success: true })
+    : !orgId ? delay({ success: false })
+    : apiFetch<any>(`/api/dashboard/insights/${insightId}/action`, { method: 'PATCH', params: { org_id: orgId, action_status: status } }),
 
-  // Transaction drill-down: get individual SKUs/products sold on a specific day
   dayTransactions: (orgId: string, date: string) =>
-    isDemo(orgId)
-      ? delay(demoData.dayTransactions(date))
-      : apiFetch<DayTransactions>('/api/dashboard/transactions/day', { params: { org_id: orgId, date } }),
+    isDemo(orgId) ? delay(demoData.dayTransactions(date))
+    : !orgId ? delay(EMPTY.transactions)
+    : apiFetch<DayTransactions>('/api/dashboard/transactions/day', { params: { org_id: orgId, date } }),
 
-  // Inventory management
   inventory: (orgId: string) =>
-    isDemo(orgId)
-      ? delay(demoData.inventory())
-      : apiFetch<InventoryData>('/api/dashboard/inventory', { params: { org_id: orgId } }),
+    isDemo(orgId) ? delay(demoData.inventory())
+    : !orgId ? delay(EMPTY.inventory)
+    : apiFetch<InventoryData>('/api/dashboard/inventory', { params: { org_id: orgId } }),
 
-  // OAuth URL for connecting Square
+  staff: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.staff())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<any>('/api/dashboard/staff', { params: { org_id: orgId } }),
+
+  margins: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.margins())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<any>('/api/dashboard/margins', { params: { org_id: orgId } }),
+
+  menuEngineering: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.menuEngineering())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<any>('/api/dashboard/menu-engineering', { params: { org_id: orgId } }),
+
+  anomalies: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.anomalies())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<any>('/api/dashboard/anomalies', { params: { org_id: orgId } }),
+
+  customers: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.customers())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<any>('/api/dashboard/customers', { params: { org_id: orgId } }),
+
+  agents: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.agents())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<any>('/api/dashboard/agents', { params: { org_id: orgId } }),
+
+  actions: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.actions())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<any>('/api/dashboard/actions', { params: { org_id: orgId } }),
+
   squareAuthorize: (orgId: string) =>
     `${API_BASE}/api/square/authorize?org_id=${orgId}`,
+
+  cameras: (orgId: string) =>
+    isDemo(orgId) ? delay({ org_id: orgId, cameras: [], total: 0 })
+    : !orgId ? delay({ org_id: '', cameras: [], total: 0 })
+    : apiFetch<{ org_id: string; cameras: any[]; total: number }>(`/api/vision/cameras/${orgId}`),
 }
