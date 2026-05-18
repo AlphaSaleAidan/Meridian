@@ -631,6 +631,8 @@ export default function CanadaPortalLeadDetailPage() {
     try {
       const blob = await generateProposalPdf(input)
       setProposalBlob(blob)
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
       if (deal && (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted')) {
         await canadaLeadsService.updateStage(deal.id, 'proposal_shown')
         setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
@@ -643,28 +645,23 @@ export default function CanadaPortalLeadDetailPage() {
   }
 
   async function handleViewProposal() {
-    let blob = proposalBlob
-    if (!blob) {
-      const input = buildProposalInput()
-      if (!input) return
-      setProposalGenerating(true)
-      try {
-        blob = await generateProposalPdf(input)
-        setProposalBlob(blob)
-      } finally {
-        setProposalGenerating(false)
-      }
-    }
-    if (blob) {
+    const input = buildProposalInput()
+    if (!input) return
+    setProposalGenerating(true)
+    try {
+      const blob = await generateProposalPdf(input)
+      setProposalBlob(blob)
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
+    } catch (err) {
+      console.error('[Proposal] Generation failed:', err)
+    } finally {
+      setProposalGenerating(false)
     }
   }
 
   function handleDownloadProposal() {
-    if (!proposalBlob) return
-    const url = URL.createObjectURL(proposalBlob)
-    window.open(url, '_blank')
+    handleViewProposal()
   }
 
   async function handleEmailProposal() {

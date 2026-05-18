@@ -76,12 +76,6 @@ export async function generateInvoicePdf(input: InvoiceInput): Promise<Blob> {
   doc.setTextColor(107, 122, 116)
   doc.text(`#${input.invoiceNumber}`, W - margin, 25, { align: 'right' })
 
-  if (input.recurring) {
-    doc.setFontSize(7)
-    doc.setTextColor(0, 212, 170)
-    doc.text('RECURRING MONTHLY', W - margin, 32, { align: 'right' })
-  }
-
   y = 55
 
   // Bill to / Invoice details
