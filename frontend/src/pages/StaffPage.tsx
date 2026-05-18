@@ -7,6 +7,11 @@ import { generateStaffPerformance, type StaffMember } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { api } from '@/lib/api'
+import { useApi } from '@/hooks/useApi'
+import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 function TrendIcon({ trend }: { trend: string }) {
   if (trend === 'up') return <TrendingUp size={12} className="text-[#17C5B0]" />
@@ -64,13 +69,21 @@ function StaffCard({ member, rank }: { member: StaffMember; rank: number }) {
 }
 
 export default function StaffPage() {
-  const staff = generateStaffPerformance()
+  const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const apiData = useApi(() => api.staff(orgId), [orgId])
 
-  const avgRevPerHour = Math.round(staff.reduce((s, m) => s + m.revenuePerHour, 0) / staff.length)
-  const avgUpsell = Math.round(staff.reduce((s, m) => s + m.upsellRate, 0) / staff.length)
-  const topPerformer = staff[0]
+  const staff: StaffMember[] = isDemo ? generateStaffPerformance() : (apiData.data?.staff ?? [])
+
+  if (!isDemo && apiData.loading) return <LoadingPage />
+  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+
+  const avgRevPerHour = staff.length ? Math.round(staff.reduce((s, m) => s + m.revenuePerHour, 0) / staff.length) : 0
+  const avgUpsell = staff.length ? Math.round(staff.reduce((s, m) => s + m.upsellRate, 0) / staff.length) : 0
+  const topPerformer = staff[0] ?? null
 
   return (
+    <DataPageSkeleton title="Staff" layout="table">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -164,5 +177,6 @@ export default function StaffPage() {
         </div>
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

@@ -8,6 +8,11 @@ import { generateMarginWaterfall, type MarginItem } from '@/lib/agent-data'
 import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { api } from '@/lib/api'
+import { useApi } from '@/hooks/useApi'
+import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -66,14 +71,20 @@ function FormulaBreakdown({ item }: { item: MarginItem }) {
 }
 
 export default function MarginsPage() {
-  const items = generateMarginWaterfall()
+  const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const apiData = useApi(() => api.margins(orgId), [orgId])
 
+  const items: MarginItem[] = isDemo ? generateMarginWaterfall() : (apiData.data?.items ?? [])
+
+  if (!isDemo && apiData.loading) return <LoadingPage />
+  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 
   const totalRevenue = items.reduce((s, i) => s + i.revenueCents, 0)
   const totalCost = items.reduce((s, i) => s + i.costCents, 0)
   const totalMargin = items.reduce((s, i) => s + i.marginCents, 0)
   const totalLeakage = items.reduce((s, i) => s + i.leakageCents, 0)
-  const avgMarginPct = Math.round(totalMargin / totalRevenue * 100)
+  const avgMarginPct = totalRevenue ? Math.round(totalMargin / totalRevenue * 100) : 0
 
   const chartData = items.map(i => ({
     name: i.name.length > 12 ? i.name.slice(0, 10) + '..' : i.name,
@@ -85,6 +96,7 @@ export default function MarginsPage() {
 
 
   return (
+    <DataPageSkeleton title="Margins" layout="chart">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -292,5 +304,6 @@ export default function MarginsPage() {
         </div>
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

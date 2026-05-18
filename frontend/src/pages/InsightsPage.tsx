@@ -7,8 +7,10 @@ import { formatCentsCompact } from '@/lib/format'
 import InsightCard from '@/components/InsightCard'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
-import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
+import { useOrgId, useTier, tierLimits, useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { useInsightsCooldown } from '@/hooks/useInsightsCooldown'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const insightTypes = [
   { key: '', label: 'All' },
@@ -26,15 +28,20 @@ const insightTypes = [
 export default function InsightsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const tier = useTier()
   const limits = tierLimits[tier]
   const { coolingDown, timeDisplay } = useInsightsCooldown()
   const insights = useApi(() => api.insights(orgId, 50), [orgId])
 
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Insights"><div /></DataPageSkeleton>
   if (insights.loading) return <LoadingPage />
   if (insights.error) return <ErrorState message={insights.error} onRetry={insights.refetch} />
+  if (!insights.data) return <LoadingPage />
 
-  const data = insights.data!
+  const data = insights.data
   const allFiltered = typeFilter
     ? data.insights.filter(i => i.type === typeFilter)
     : data.insights
@@ -45,6 +52,7 @@ export default function InsightsPage() {
   const actionable = filtered.filter(i => i.action_status === 'pending').length
 
   return (
+    <DataPageSkeleton title="Insights" layout="grid">
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
@@ -116,5 +124,6 @@ export default function InsightsPage() {
         />
       )}
     </div>
+    </DataPageSkeleton>
   )
 }

@@ -11,6 +11,7 @@ export interface OrgProfile {
   pos_connected: boolean
   created_at: string
   onboarded: boolean
+  business_type?: string | null
 }
 
 export interface AuthState {
@@ -22,11 +23,12 @@ export interface AuthState {
   isSalesRep: boolean
   pendingBusiness: { id: string; name: string; ownerName: string; email: string } | null
   login: (email: string, password: string) => Promise<string | null>
-  signup: (email: string, password: string, fullName: string, businessName: string) => Promise<string | null>
+  signup: (email: string, password: string, fullName: string, businessName: string, meta?: Record<string, string>) => Promise<string | null>
   logout: () => Promise<void>
   validateToken: (token: string) => Promise<string | null>
   connectPos: (provider: string, apiKey: string) => Promise<string | null>
   resetPassword: (email: string) => Promise<string | null>
+  markOnboarded: () => void
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -57,10 +59,11 @@ function orgFromBusiness(data: Record<string, unknown>, fallbackEmail: string): 
     owner_name: (data.owner_name as string) || '',
     email: (data.email as string) || fallbackEmail,
     plan: (data.plan_tier as OrgProfile['plan']) || 'trial',
-    pos_provider: (data.pos_provider as string) || null,
-    pos_connected: (data.pos_connected as boolean) || false,
+    pos_provider: (data.pos_provider as string) || (data.pos_system as string) || null,
+    pos_connected: (data.pos_connected as boolean) || (data.pos_connection_status === 'connected') || false,
     created_at: data.created_at as string,
     onboarded: (data.onboarded as boolean) || false,
+    business_type: (data.business_type as string) || (data.vertical as string) || null,
   }
 }
 
@@ -75,6 +78,20 @@ async function fetchBusinessForUser(userId: string, email: string): Promise<OrgP
 
   if (data) {
     const org = orgFromBusiness(data, email)
+    saveOrg(org)
+    return org
+  }
+
+  const { data: orgData } = await supabase
+    .from('organizations')
+    .select('*')
+    .eq('email', email)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (orgData) {
+    const org = orgFromBusiness(orgData, email)
     saveOrg(org)
     return org
   }
@@ -237,6 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = useCallback(async (
     email: string, password: string, fullName: string, businessName: string,
+    meta?: Record<string, string>,
   ): Promise<string | null> => {
     if (!supabase) {
       const org: OrgProfile = {
@@ -255,7 +273,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
-        data: { full_name: fullName, business_name: businessName },
+        data: { full_name: fullName, business_name: businessName, ...(meta || {}) },
         emailRedirectTo: window.location.origin + '/customer/login',
       },
     })
@@ -338,13 +356,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null
     }
 
-    const { error } = await supabase.rpc('connect_pos', { p_provider: provider, p_api_key: apiKey })
-    if (error) return error.message
+    if (!org) return 'No business found — please complete sign-up first'
+    if (!apiKey) return 'API key is required'
+
+    const apiUrl = import.meta.env.VITE_API_URL || ''
+
+    try {
+      const testRes = await fetch(`${apiUrl}/api/pos/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pos_system: provider, credentials: { access_token: apiKey } }),
+      })
+      const testData = await testRes.json()
+      if (!testRes.ok || !testData.valid) {
+        return testData.detail || testData.error || 'Invalid API key — could not connect to your POS'
+      }
+    } catch {
+      return 'Could not reach the server to validate your API key'
+    }
+
+    try {
+      const connectRes = await fetch(`${apiUrl}/api/pos/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: org.org_id,
+          pos_system: provider,
+          credentials: { access_token: apiKey },
+        }),
+      })
+      const connectData = await connectRes.json()
+      if (!connectRes.ok) {
+        return connectData.detail || 'Failed to save POS connection'
+      }
+    } catch {
+      return 'Could not reach the server to save your connection'
+    }
 
     const o = user ? await fetchBusinessForUser(user.id, user.email) : null
-    if (o) setOrg(o)
+    if (o) {
+      const updated = { ...o, pos_provider: provider, pos_connected: true, onboarded: true }
+      saveOrg(updated)
+      setOrg(updated)
+    }
     return null
   }, [user, org])
+
+  const markOnboarded = useCallback(() => {
+    if (!org) return
+    const updated = { ...org, onboarded: true }
+    saveOrg(updated)
+    setOrg(updated)
+    const apiUrl = import.meta.env.VITE_API_URL || ''
+    fetch(`${apiUrl}/api/onboarding/mark-onboarded`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ org_id: org.org_id }),
+    }).catch(() => {})
+  }, [org])
 
   const resetPassword = useCallback(async (email: string): Promise<string | null> => {
     if (!supabase) return null
@@ -357,7 +426,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       ready,
-      authenticated: !!org,
+      authenticated: !!user,
       isAdmin,
       user,
       org,
@@ -369,6 +438,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       validateToken,
       connectPos,
       resetPassword,
+      markOnboarded,
     }}>
       {children}
     </AuthContext.Provider>

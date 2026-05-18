@@ -7,11 +7,11 @@ import {
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import POSSystemPicker from '@/components/POSSystemPicker'
-import { supabase } from '@/lib/supabase'
+import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 
-type Step = 'details' | 'plan' | 'customize' | 'preview'
+type Step = 'details' | 'plan' | 'customize' | 'preview' | 'confirm'
 
 function uuid(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -178,7 +178,7 @@ function ProposalOverlay({
             <div className="bg-[#0f1512] border border-[#00d4aa]/20 rounded-xl p-6">
               <p className="text-[11px] font-mono text-[#00d4aa] tracking-wider mb-4">WHAT'S INCLUDED</p>
               <div className="space-y-3">
-                {plan.features.map(f => (
+                {(plan.features || []).map(f => (
                   <div key={f} className="flex items-start gap-2">
                     <CheckCircle2 size={14} className="text-[#00d4aa] mt-0.5 flex-shrink-0" />
                     <span className="text-[13px] text-white">{f}</span>
@@ -254,7 +254,7 @@ function ProposalOverlay({
                 <span className="text-[14px] text-[#6b7a74]">{interval}</span>
               </div>
               <div className="space-y-2">
-                {plan.features.map(f => (
+                {(plan.features || []).map(f => (
                   <div key={f} className="flex items-center gap-2">
                     <CheckCircle2 size={12} className="text-[#00d4aa]" />
                     <span className="text-[12px] text-[#6b7a74]">{f}</span>
@@ -502,6 +502,7 @@ export default function CanadaPortalCreateCustomerPage() {
   function validateDetails(): boolean {
     if (!form.businessName.trim()) { setError('Business name is required'); return false }
     if (!form.ownerName.trim()) { setError('Owner name is required'); return false }
+    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { setError('A valid email is required'); return false }
     return true
   }
 
@@ -581,89 +582,107 @@ export default function CanadaPortalCreateCustomerPage() {
     }
   }
 
+  const [tempPassword, setTempPassword] = useState('')
+  const [customerLoginUrl, setCustomerLoginUrl] = useState('')
+  const [customerPortalUrl, setCustomerPortalUrl] = useState('')
+  const [autoSendStatus, setAutoSendStatus] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false })
+
   async function handleCreateCustomer() {
     setSaving(true)
     setError(null)
     try {
-      const token = generateToken()
-      const businessId = uuid()
+      if (!form.email.trim()) {
+        throw new Error('Customer email is required to create their login')
+      }
 
-      if (supabase) {
-        const { error: bizErr } = await supabase.from('organizations').insert({
-          id: businessId,
-          name: form.businessName,
-          slug: form.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
-          email: form.email,
-          phone: form.phone || null,
-          vertical: (form.vertical as any) || 'other',
-          metadata: {
-            plan_tier: form.plan,
+      const businessId = uuid()
+      const token = generateToken()
+      const apiUrl = import.meta.env.VITE_API_URL || ''
+
+      const authHeaders = await getAuthHeaders()
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 30000)
+
+      let provRes: Response
+      try {
+        provRes = await fetch(`${apiUrl}/api/onboarding/provision-customer`, {
+          method: 'POST',
+          headers: authHeaders,
+          signal: controller.signal,
+          body: JSON.stringify({
+            org_id: businessId,
+            email: form.email,
+            phone: form.phone || null,
+            owner_name: form.ownerName,
+            business_name: form.businessName,
+            plan: form.plan,
             monthly_price: price,
             setup_fee: setupFee,
             first_month_free: form.firstMonthFree,
-            owner_name: form.ownerName,
-            created_by_rep: rep?.rep_id || null,
-            country: 'CA',
-            square_checkout_id: checkoutSessionId || null,
-          },
+            business_type: form.vertical || null,
+            pos_provider: form.pos || null,
+            rep_id: rep?.rep_id || null,
+            rep_name: rep?.name || null,
+          }),
         })
-        if (bizErr) throw new Error(bizErr.message)
-
-        const { error: dealErr } = await supabase.from('deals').insert({
-          id: uuid(),
-          business_name: form.businessName,
-          contact_name: form.ownerName,
-          contact_email: form.email,
-          contact_phone: form.phone,
-          vertical: form.vertical || 'Other',
-          stage: 'proposal_shown',
-          monthly_value: price,
-          commission_rate: rep?.commission_rate || 70,
-          country: 'CA',
-          notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
-          rep_id: rep?.rep_id || null,
-        })
-        if (dealErr) console.warn('Deal creation warning:', dealErr.message)
-      } else {
-        const existing = JSON.parse(localStorage.getItem('meridian_pending_customers_ca') || '[]')
-        existing.push({
-          id: businessId, token, ...form, price, setupFee,
-          plan: selectedPlan.label, repId: rep?.rep_id, repName: rep?.name,
-          country: 'CA', createdAt: new Date().toISOString(),
-        })
-        localStorage.setItem('meridian_pending_customers_ca', JSON.stringify(existing))
+      } catch (fetchErr: any) {
+        if (fetchErr.name === 'AbortError') {
+          throw new Error('Request timed out. The server may be busy — please try again.')
+        }
+        throw new Error('Unable to reach the server. Check your connection and try again.')
+      } finally {
+        clearTimeout(timeout)
       }
 
-      // Provision customer: create Supabase Auth user, send invoices + welcome email
-      // Only call if email is provided — rep can add it later
-      const API_URL = import.meta.env.VITE_API_URL || ''
-      if (form.email.trim()) {
+      if (!provRes.ok) {
+        const errBody = await provRes.json().catch(() => ({ detail: `Server error ${provRes.status}` }))
+        throw new Error(errBody.detail || errBody.message || `Provisioning failed (${provRes.status})`)
+      }
+
+      const provData = await provRes.json()
+      setTempPassword(provData.temporary_password || '')
+      setCustomerLoginUrl(provData.login_url || `${window.location.origin}/canada/login`)
+      setCustomerPortalUrl(provData.portal_url || '')
+
+      if (supabase) {
         try {
-          const provRes = await fetch(`${API_URL}/api/onboarding/provision-customer`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              org_id: businessId,
-              email: form.email,
-              phone: form.phone || null,
-              owner_name: form.ownerName,
-              business_name: form.businessName,
-              plan: form.plan,
-              monthly_price: price,
-              rep_id: rep?.rep_id || null,
-              rep_name: rep?.name || null,
-            }),
+          await supabase.from('canada_leads').insert({
+            business_name: form.businessName,
+            contact_name: form.ownerName,
+            contact_email: form.email,
+            contact_phone: form.phone || '',
+            vertical: form.vertical || '',
+            stage: 'closed_won',
+            monthly_value: price,
+            commission_rate: rep?.commission_rate || 70,
+            notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
+            rep_id: rep?.rep_id || null,
           })
-          if (provRes.ok) {
-            const provData = await provRes.json()
-            console.info('Customer provisioned:', provData.email, '— temp password generated, welcome email sent')
-          }
-        } catch (provisionErr) {
-          console.warn('Provision call failed (non-blocking):', provisionErr)
-        }
+        } catch { }
       }
 
       const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
       setOnboardingLink(link)
+
+      // Auto-send SMS (if phone provided) — track actual delivery status
+      if (form.phone.trim()) {
+        try {
+          const smsBody = `Hey ${form.ownerName.split(' ')[0]}! Your Meridian account is ready. Login: ${provData.login_url || `${window.location.origin}/canada/login`} — Password: ${provData.temporary_password || ''}`
+          const smsRes = await fetch(`${apiUrl}/api/sms/send`, {
+            method: 'POST',
+            headers: authHeaders,
+            body: JSON.stringify({ to: form.phone, body: smsBody }),
+          })
+          if (smsRes.ok) {
+            setAutoSendStatus(s => ({ ...s, sms: true }))
+          }
+        } catch { }
+      }
+
+      // Reflect actual backend email delivery status
+      setAutoSendStatus(s => ({ ...s, email: !!provData.welcome_email_sent }))
+
+      setStep('confirm')
     } catch (err: any) {
       setError(err.message || 'Failed to create customer')
     } finally {
@@ -705,8 +724,8 @@ export default function CanadaPortalCreateCustomerPage() {
   }
 
   const verticals = ['Restaurant', 'Cafe', 'Bar', 'Smoke Shop', 'Boutique', 'Salon', 'Food Truck', 'Convenience Store', 'Other']
-  const stepLabels = ['Business Details', 'Select Plan', 'Customize & Price', 'Generate Proposal']
-  const steps: Step[] = ['details', 'plan', 'customize', 'preview']
+  const stepLabels = ['Details', 'Plan', 'Price', 'Proposal', 'Confirm']
+  const steps: Step[] = ['details', 'plan', 'customize', 'preview', 'confirm']
   const currentIdx = steps.indexOf(step)
 
   return (
@@ -818,7 +837,7 @@ export default function CanadaPortalCreateCustomerPage() {
                   className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white placeholder-[#4a5550] focus:border-[#00d4aa]/50 focus:outline-none transition-colors" />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">Email</label>
+                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">Email *</label>
                 <input type="email" value={form.email} onChange={e => update('email', e.target.value)}
                   placeholder="james@luckydragon.com"
                   className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white placeholder-[#4a5550] focus:border-[#00d4aa]/50 focus:outline-none transition-colors" />
@@ -873,7 +892,7 @@ export default function CanadaPortalCreateCustomerPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-[12px] text-[#6b7a74] mt-0.5">{plan.features.slice(0, 3).join(' · ')}</p>
+                      <p className="text-[12px] text-[#6b7a74] mt-0.5">{(plan.features || []).slice(0, 3).join(' · ')}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-white">CA${plan.price}</p>
@@ -910,7 +929,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-[13px] font-semibold text-white">{selectedPlan.label} Plan</p>
-                  <p className="text-[11px] text-[#6b7a74]">{selectedPlan.features.length} features included</p>
+                  <p className="text-[11px] text-[#6b7a74]">{(selectedPlan.features || []).length} features included</p>
                 </div>
                 <p className="text-lg font-bold text-[#00d4aa]">CA${selectedPlan.price}{interval}</p>
               </div>
@@ -1155,18 +1174,37 @@ export default function CanadaPortalCreateCustomerPage() {
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-[13px] text-[#00d4aa]">
-                  <CheckCircle2 size={14} /> Customer created!
+                  <CheckCircle2 size={14} /> Customer account created!
                 </div>
-                <div className="flex gap-2">
-                  <input type="text" value={onboardingLink} readOnly
-                    className="flex-1 px-3 py-2.5 text-[12px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-[#6b7a74] font-mono truncate" />
-                  <button onClick={copyLink}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium rounded-lg border transition-all duration-200 ${
-                      copied ? 'bg-[#00d4aa]/10 border-[#00d4aa]/30 text-[#00d4aa]' : 'bg-[#1a2420] border-[#1a2420] text-white hover:bg-[#0f1512]'
-                    }`}>
-                    {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
-                    {copied ? 'Copied!' : 'Copy'}
-                  </button>
+
+                {tempPassword && (
+                  <div className="p-4 rounded-xl border border-[#00d4aa]/20 bg-[#00d4aa]/5 space-y-2">
+                    <p className="text-[11px] font-mono text-[#00d4aa] tracking-wider">CUSTOMER LOGIN CREDENTIALS</p>
+                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
+                      <span className="text-[#6b7a74]">Email:</span>
+                      <span className="text-white font-medium font-mono">{form.email}</span>
+                      <span className="text-[#6b7a74]">Password:</span>
+                      <span className="text-white font-medium font-mono">{tempPassword}</span>
+                      <span className="text-[#6b7a74]">Login:</span>
+                      <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#00d4aa] font-mono hover:underline truncate">{customerLoginUrl}</a>
+                    </div>
+                    <p className="text-[10px] text-[#6b7a74] mt-2">Customer will also receive these via email. They should change their password on first login.</p>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-mono text-[#6b7a74] tracking-wider">ONBOARDING LINK</p>
+                  <div className="flex gap-2">
+                    <input type="text" value={onboardingLink} readOnly
+                      className="flex-1 px-3 py-2.5 text-[12px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-[#6b7a74] font-mono truncate" />
+                    <button onClick={copyLink}
+                      className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium rounded-lg border transition-all duration-200 ${
+                        copied ? 'bg-[#00d4aa]/10 border-[#00d4aa]/30 text-[#00d4aa]' : 'bg-[#1a2420] border-[#1a2420] text-white hover:bg-[#0f1512]'
+                      }`}>
+                      {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                      {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={sendViaSms}
@@ -1175,7 +1213,7 @@ export default function CanadaPortalCreateCustomerPage() {
                   </button>
                   <button onClick={() => {
                     const subject = `Your Meridian Account is Ready!`
-                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up! Click the link below to complete your onboarding — it only takes about 3 minutes:\n\n${onboardingLink}\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in CAD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
+                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up! Here are your login credentials:\n\nEmail: ${form.email}\nTemporary Password: ${tempPassword}\nLogin: ${customerLoginUrl}\n\nPlease change your password on first login.\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in CAD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
                     window.open(`mailto:${form.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-white bg-[#1a2420] rounded-lg hover:bg-[#0f1512] border border-[#1a2420] transition-colors">
@@ -1195,6 +1233,10 @@ export default function CanadaPortalCreateCustomerPage() {
               setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
               setStep('details')
               setOnboardingLink('')
+              setTempPassword('')
+              setCustomerLoginUrl('')
+              setCustomerPortalUrl('')
+              setAutoSendStatus({ sms: false, email: false })
               setProposalGenerated(false)
               setShowProposal(false)
               setCheckoutUrl('')
@@ -1202,6 +1244,143 @@ export default function CanadaPortalCreateCustomerPage() {
             }}
               className="text-[12px] text-[#00d4aa] hover:text-white transition-colors">
               + Create Another Proposal
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ STEP 5: Confirmation & SOP Checklist ═══ */}
+      {step === 'confirm' && (
+        <div className="space-y-4">
+          {/* Success Banner */}
+          <div className="bg-[#00d4aa]/5 rounded-xl p-6 border border-[#00d4aa]/20">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-[#00d4aa] flex items-center justify-center">
+                <CheckCircle2 size={20} className="text-[#0a0f0d]" />
+              </div>
+              <div>
+                <h2 className="text-[16px] font-bold text-white">Customer Created Successfully</h2>
+                <p className="text-[12px] text-[#6b7a74]">{form.businessName} — {form.ownerName}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* SOP Checklist */}
+          <div className="bg-[#0f1512] rounded-xl p-6 border border-[#1a2420]">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle2 size={16} className="text-[#00d4aa]" />
+              <h2 className="text-[14px] font-semibold text-white">Onboarding SOP Checklist</h2>
+            </div>
+            <div className="space-y-3">
+              {[
+                { label: 'Account created in system', done: true },
+                { label: 'Credentials email sent', done: autoSendStatus.email },
+                { label: 'SMS notification sent', done: autoSendStatus.sms, skip: !form.phone.trim() },
+                { label: 'Checkout/payment link generated', done: !!checkoutUrl },
+                { label: 'Proposal shown to customer', done: proposalGenerated },
+                { label: 'POS system selected', done: !!form.pos },
+              ].filter(item => !('skip' in item && item.skip)).map(item => (
+                <div key={item.label} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[#0a0f0d] border border-[#1a2420]">
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
+                    item.done ? 'bg-[#00d4aa]' : 'border-2 border-[#4a5550]'
+                  }`}>
+                    {item.done && <Check size={12} className="text-[#0a0f0d]" />}
+                  </div>
+                  <span className={`text-[13px] ${item.done ? 'text-white' : 'text-[#6b7a74]'}`}>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Customer Portal URL */}
+          {customerPortalUrl && (
+            <div className="bg-[#0f1512] rounded-xl p-6 border border-[#7c3aed]/30">
+              <p className="text-[11px] font-mono text-[#7c3aed] tracking-wider mb-2">EXCLUSIVE CUSTOMER PORTAL URL</p>
+              <p className="text-[11px] text-[#6b7a74] mb-3">This is their unique, secure portal link. Share this with the customer.</p>
+              <div className="flex gap-2">
+                <input type="text" value={customerPortalUrl} readOnly
+                  className="flex-1 px-3 py-2.5 text-[12px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white font-mono truncate" />
+                <button onClick={() => { navigator.clipboard.writeText(customerPortalUrl); }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium rounded-lg border border-[#7c3aed]/30 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 transition-colors">
+                  <Copy size={14} /> Copy
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Customer Credentials Card */}
+          {tempPassword && (
+            <div className="bg-[#0f1512] rounded-xl p-6 border border-[#00d4aa]/20">
+              <p className="text-[11px] font-mono text-[#00d4aa] tracking-wider mb-3">CUSTOMER LOGIN CREDENTIALS</p>
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[13px]">
+                <span className="text-[#6b7a74]">Email:</span>
+                <span className="text-white font-medium font-mono">{form.email}</span>
+                <span className="text-[#6b7a74]">Password:</span>
+                <span className="text-white font-medium font-mono">{tempPassword}</span>
+                <span className="text-[#6b7a74]">Login:</span>
+                <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#00d4aa] font-mono hover:underline truncate">{customerLoginUrl}</a>
+              </div>
+            </div>
+          )}
+
+          {/* POS Connection Step */}
+          <div className="bg-[#0f1512] rounded-xl p-6 border border-[#1a2420]">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles size={16} className="text-[#7c3aed]" />
+              <h2 className="text-[14px] font-semibold text-white">Next: Help Customer Connect POS</h2>
+            </div>
+            <p className="text-[12px] text-[#6b7a74] mb-4">
+              Walk the customer through connecting their {form.pos || 'POS system'} while you're with them. This is the #1 factor in activation success.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/canada/onboard?token=${onboardingLink.split('token=')[1]?.split('&')[0] || ''}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
+                  window.open(url, '_blank')
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-[#0a0f0d] bg-[#00d4aa] rounded-lg hover:bg-[#00c49e] transition-colors"
+              >
+                <ExternalLink size={14} /> Open Onboarding Wizard Together
+              </button>
+              <button
+                onClick={() => {
+                  if (form.phone) {
+                    const msg = `Hey ${form.ownerName.split(' ')[0]}! Your Meridian setup link — takes 3 min: ${onboardingLink}`
+                    window.open(`sms:${form.phone}?body=${encodeURIComponent(msg)}`, '_blank')
+                  } else {
+                    const subject = `Connect your POS to Meridian`
+                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nHere's your setup link to connect your POS and activate analytics:\n${onboardingLink}\n\nTakes about 3 minutes!\n\n${rep?.name || 'Your Meridian Rep'}`
+                    window.open(`mailto:${form.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
+                  }
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-white bg-[#1a2420] rounded-lg hover:bg-[#0f1512] border border-[#1a2420] transition-colors"
+              >
+                <Send size={14} /> Send Setup Link
+              </button>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-between pt-2">
+            <button onClick={() => navigate('/canada/portal/leads')}
+              className="flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium text-[#6b7a74] hover:text-white transition-colors">
+              <ArrowLeft size={14} /> Back to Leads
+            </button>
+            <button onClick={() => {
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
+              setStep('details')
+              setOnboardingLink('')
+              setTempPassword('')
+              setCustomerLoginUrl('')
+              setCustomerPortalUrl('')
+              setProposalGenerated(false)
+              setShowProposal(false)
+              setCheckoutUrl('')
+              setCheckoutSessionId('')
+              setAutoSendStatus({ sms: false, email: false })
+            }}
+              className="flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium text-[#0a0f0d] bg-[#00d4aa] rounded-lg hover:bg-[#00c49e] transition-colors">
+              <Store size={14} /> Create Another Customer
             </button>
           </div>
         </div>

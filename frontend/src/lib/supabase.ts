@@ -14,3 +14,11 @@ export const supabase = supabaseUrl && supabaseAnonKey
       auth: { lock: noLock },
     })
   : null
+
+export async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (!supabase) return { 'Content-Type': 'application/json' }
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) return { 'Content-Type': 'application/json' }
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+}

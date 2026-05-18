@@ -1,7 +1,7 @@
-import { lazy, Suspense, useRef } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, ChevronRight, Shield, Clock } from 'lucide-react'
+import { ArrowRight, ChevronRight, Shield, Clock, Menu, X } from 'lucide-react'
 
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
@@ -50,6 +50,7 @@ const metrics = [
 
 export default function CanadaLandingPage() {
   const navigate = useNavigate()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
   const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
@@ -61,7 +62,7 @@ export default function CanadaLandingPage() {
 
       {/* NAV */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
-        <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-content mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <MeridianEmblem size={28} />
             <div className="flex flex-col">
@@ -69,7 +70,9 @@ export default function CanadaLandingPage() {
               <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Desktop nav links */}
+          <div className="hidden md:flex items-center gap-2">
             <MagneticButton onClick={() => navigate('/canada/demo')} className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200">
               Live Demo
             </MagneticButton>
@@ -86,7 +89,37 @@ export default function CanadaLandingPage() {
               Get Started
             </MagneticButton>
           </div>
+
+          {/* Mobile: CTA + hamburger */}
+          <div className="flex md:hidden items-center gap-2">
+            <button onClick={() => navigate('/canada/onboard')} className="px-3 py-1.5 text-[12px] font-medium text-[#F5F5F7] bg-[#1A8FD6] rounded-md">
+              Get Started
+            </button>
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1.5 rounded-lg hover:bg-[#111113]">
+              {mobileMenuOpen ? <X size={20} className="text-[#A1A1A8]" /> : <Menu size={20} className="text-[#A1A1A8]" />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-[#1F1F23]/60 bg-[#0A0A0B]/95 backdrop-blur-xl px-4 py-3 space-y-1">
+            {[
+              { label: 'Live Demo', path: '/canada/demo' },
+              { label: 'Customer Login', path: '/canada/login' },
+              { label: 'Careers', path: '/canada/careers' },
+              { label: 'Sales Portal', path: '/canada/portal/login' },
+            ].map(link => (
+              <button
+                key={link.path}
+                onClick={() => { navigate(link.path); setMobileMenuOpen(false) }}
+                className="block w-full text-left px-3 py-2.5 text-[14px] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#111113] rounded-lg transition-colors"
+              >
+                {link.label}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       {/* HERO */}
@@ -138,7 +171,7 @@ export default function CanadaLandingPage() {
                 <div className="flex-1 mx-4 h-5 rounded bg-[#0A0A0B] border border-[#1F1F23]" />
               </div>
               <div className="p-6 space-y-4">
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {dashboardStats.map(s => (
                     <div key={s.label} className="rounded-lg bg-[#0A0A0B] border border-[#1F1F23] p-3">
                       <p className="text-[10px] text-[#A1A1A8]">{s.label}</p>
@@ -281,28 +314,28 @@ export default function CanadaLandingPage() {
 
       {/* FOOTER */}
       <footer className="border-t border-[#1F1F23]/40 py-8">
-        <div className="max-w-content mx-auto px-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <MeridianEmblem size={20} />
-              <div className="flex flex-col">
-                <MeridianWordmark height={10} />
-                <span className="text-[7px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0]" />
-                All systems operational
-              </div>
-            </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-4 text-[12px] text-[#A1A1A8]/60">
-                <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
-                <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
-                <a onClick={() => navigate('/canada/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
-                <a onClick={() => navigate('/canada/portal/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
-                <a onClick={() => navigate('/canada/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>
+        <div className="max-w-content mx-auto px-4 sm:px-6">
+          <div className="flex flex-col gap-4 sm:gap-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <MeridianEmblem size={20} />
+                <div className="flex flex-col">
+                  <MeridianWordmark height={10} />
+                  <span className="text-[7px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0]" />
+                  All systems operational
+                </div>
               </div>
               <p className="text-[11px] text-[#A1A1A8]/30">&copy; 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 text-[12px] text-[#A1A1A8]/60">
+              <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
+              <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
+              <a onClick={() => navigate('/canada/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
+              <a onClick={() => navigate('/canada/portal/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
+              <a onClick={() => navigate('/canada/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>
             </div>
           </div>
         </div>

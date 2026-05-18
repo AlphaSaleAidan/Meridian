@@ -5,7 +5,9 @@ import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/format'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
-import { useOrgId } from '@/hooks/useOrg'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
+import { useAuth } from '@/lib/auth'
 
 const priorityConfig: Record<string, { color: string; dot: string }> = {
   urgent: { color: 'text-red-400', dot: 'bg-red-400' },
@@ -23,15 +25,21 @@ const sourceIcons: Record<string, typeof Bell> = {
 
 export default function NotificationsPage() {
   const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const notifs = useApi(() => api.notifications(orgId, 50), [orgId])
 
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Notifications"><div /></DataPageSkeleton>
   if (notifs.loading) return <LoadingPage />
   if (notifs.error) return <ErrorState message={notifs.error} onRetry={notifs.refetch} />
+  if (!notifs.data) return <LoadingPage />
 
-  const data = notifs.data!
+  const data = notifs.data
   const unread = data.notifications.filter(n => !n.acknowledged_at).length
 
   return (
+    <DataPageSkeleton title="Notifications" layout="grid">
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
@@ -102,5 +110,6 @@ export default function NotificationsPage() {
         />
       )}
     </div>
+    </DataPageSkeleton>
   )
 }

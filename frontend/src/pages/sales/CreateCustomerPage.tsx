@@ -395,7 +395,7 @@ export default function CreateCustomerPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-[12px] text-[#A1A1A8] mt-0.5">{plan.features.slice(0, 3).join(' · ')}</p>
+                      <p className="text-[12px] text-[#A1A1A8] mt-0.5">{(plan.features || []).slice(0, 3).join(' · ')}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-[#F5F5F7]">${plan.price}</p>
@@ -433,7 +433,7 @@ export default function CreateCustomerPage() {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-[13px] font-semibold text-[#F5F5F7]">{selectedPlan.label} Plan</p>
-                  <p className="text-[11px] text-[#A1A1A8]">{selectedPlan.features.length} features included</p>
+                  <p className="text-[11px] text-[#A1A1A8]">{(selectedPlan.features || []).length} features included</p>
                 </div>
                 <p className="text-lg font-bold text-[#7C5CFF]">${selectedPlan.price}{interval}</p>
               </div>

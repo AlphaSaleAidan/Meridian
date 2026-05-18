@@ -8,6 +8,11 @@ import { generateTopActions, type TopAction, type ReasoningChain } from '@/lib/a
 import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { api } from '@/lib/api'
+import { useApi } from '@/hooks/useApi'
+import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const priorityColors: Record<string, { bg: string; text: string; border: string }> = {
   Critical: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20' },
@@ -72,7 +77,7 @@ function ReasoningPanel({ reasoning }: { reasoning: ReasoningChain }) {
             </div>
             <span className="text-[10px] font-mono text-[#A1A1A8]">{reasoning.confidence}%</span>
           </div>
-          <span className={clsx('text-[10px] font-medium px-2 py-0.5 rounded-full border', priorityColors[reasoning.priority].bg, priorityColors[reasoning.priority].text, priorityColors[reasoning.priority].border)}>
+          <span className={clsx('text-[10px] font-medium px-2 py-0.5 rounded-full border', (priorityColors[reasoning.priority] || priorityColors.Medium).bg, (priorityColors[reasoning.priority] || priorityColors.Medium).text, (priorityColors[reasoning.priority] || priorityColors.Medium).border)}>
             {reasoning.priority}
           </span>
         </div>
@@ -83,7 +88,7 @@ function ReasoningPanel({ reasoning }: { reasoning: ReasoningChain }) {
 
 function ActionCard({ action }: { action: TopAction }) {
   const [expanded, setExpanded] = useState(false)
-  const pc = priorityColors[action.priority]
+  const pc = priorityColors[action.priority] || priorityColors.Medium
 
   return (
     <div className={clsx('card-hover overflow-hidden transition-all duration-300', expanded && 'border-[#1A8FD6]/20')}>
@@ -123,11 +128,19 @@ function ActionCard({ action }: { action: TopAction }) {
 }
 
 export default function ActionsPage() {
-  const actions = generateTopActions()
+  const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const apiData = useApi(() => api.actions(orgId), [orgId])
+
+  const actions: TopAction[] = isDemo ? generateTopActions() : (apiData.data?.actions ?? [])
+
+  if (!isDemo && apiData.loading) return <LoadingPage />
+  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 
   const totalImpact = actions.reduce((s, a) => s + a.impactCents, 0)
 
   return (
+    <DataPageSkeleton title="Top Actions" layout="grid">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div className="flex items-center justify-between">
@@ -173,5 +186,6 @@ export default function ActionsPage() {
         </div>
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

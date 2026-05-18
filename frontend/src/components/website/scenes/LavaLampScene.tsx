@@ -1,61 +1,87 @@
-import React, { useRef, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { MeshDistortMaterial } from '@react-three/drei'
+import { Float, MeshDistortMaterial } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
-interface SceneProps {
-  primaryColor: string
-  accentColor: string
-}
+interface SceneProps { primaryColor: string; accentColor: string }
 
-interface Blob {
-  x: number; y: number; z: number
-  scale: number; phase: number; speed: number
-}
-
-function LavaBlobs({ accentColor }: { accentColor: string }) {
-  const groupRef = useRef<THREE.Group>(null)
-  const blobs = useMemo<Blob[]>(() =>
-    Array.from({ length: 5 }, (_, i) => ({
-      x: (Math.random() - 0.5) * 3,
-      y: (i - 2) * 1.5,
-      z: (Math.random() - 0.5) * 2,
-      scale: 0.5 + Math.random() * 0.5,
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.3 + Math.random() * 0.4,
-    }))
-  , [])
-
+function LavaBlob({ position, scale, color, speed, distort, emissiveIntensity }: {
+  position: [number, number, number]; scale: number; color: string
+  speed: number; distort: number; emissiveIntensity: number
+}) {
+  const ref = useRef<THREE.Mesh>(null)
   useFrame(({ clock }) => {
-    if (!groupRef.current) return
+    if (!ref.current) return
     const t = clock.getElapsedTime()
-    groupRef.current.children.forEach((child, i) => {
-      const b = blobs[i]
-      child.position.y = b.y + Math.sin(t * b.speed + b.phase) * 1.5
-      child.position.x = b.x + Math.cos(t * b.speed * 0.7 + b.phase) * 0.3
-    })
+    ref.current.rotation.x = t * speed * 0.1
+    ref.current.rotation.y = t * speed * 0.15
+    ref.current.position.y = position[1] + Math.sin(t * speed * 0.4) * 1.2
+    ref.current.position.x = position[0] + Math.cos(t * speed * 0.3) * 0.3
   })
+  return (
+    <Float speed={speed * 0.5} rotationIntensity={0.1} floatIntensity={0.2}>
+      <mesh ref={ref} position={position} scale={scale}>
+        <sphereGeometry args={[1, 96, 96]} />
+        <MeshDistortMaterial
+          color={color} emissive={color} emissiveIntensity={emissiveIntensity}
+          metalness={0.3} roughness={0.4} distort={distort} speed={speed * 3}
+        />
+      </mesh>
+    </Float>
+  )
+}
+
+function HeatGlow({ position, color, scale }: {
+  position: [number, number, number]; color: string; scale: number
+}) {
+  return (
+    <mesh position={position} scale={scale}>
+      <sphereGeometry args={[1, 16, 16]} />
+      <meshBasicMaterial color={color} transparent opacity={0.03} toneMapped={false} blending={THREE.AdditiveBlending} />
+    </mesh>
+  )
+}
+
+function LavaContent({ primaryColor, accentColor }: SceneProps) {
+  const blobs = useMemo(() => [
+    { pos: [0, 0, 0] as [number, number, number], scale: 1.1, color: accentColor, speed: 0.5, distort: 0.45, emissive: 0.6 },
+    { pos: [-1.5, -2, -1] as [number, number, number], scale: 0.7, color: primaryColor, speed: 0.7, distort: 0.5, emissive: 0.5 },
+    { pos: [1.8, 1.5, -1.5] as [number, number, number], scale: 0.5, color: accentColor, speed: 0.9, distort: 0.55, emissive: 0.7 },
+    { pos: [-0.8, 2, 0.5] as [number, number, number], scale: 0.4, color: primaryColor, speed: 1.1, distort: 0.4, emissive: 0.5 },
+    { pos: [2, -1.5, -0.5] as [number, number, number], scale: 0.35, color: accentColor, speed: 0.8, distort: 0.5, emissive: 0.6 },
+    { pos: [-2.5, 0.5, -2] as [number, number, number], scale: 0.3, color: primaryColor, speed: 1.0, distort: 0.45, emissive: 0.4 },
+  ], [primaryColor, accentColor])
 
   return (
-    <group ref={groupRef}>
+    <>
+      <color attach="background" args={['#080204']} />
+      <fog attach="fog" args={['#080204', 3, 12]} />
+      <ambientLight intensity={0.05} />
+      <pointLight position={[3, 4, 3]} intensity={2} color={accentColor} distance={12} />
+      <pointLight position={[-3, -3, 2]} intensity={1.5} color={primaryColor} distance={10} />
+      <spotLight position={[0, -5, 3]} intensity={1} angle={0.6} penumbra={1} color={accentColor} />
+      <HeatGlow position={[0, -1, -2]} color={accentColor} scale={5} />
+      <HeatGlow position={[0, 2, -3]} color={primaryColor} scale={4} />
       {blobs.map((b, i) => (
-        <mesh key={i} position={[b.x, b.y, b.z]} scale={b.scale}>
-          <sphereGeometry args={[1, 32, 32]} />
-          <MeshDistortMaterial color={accentColor} emissive={accentColor} emissiveIntensity={0.3} distort={0.3} speed={2} roughness={0.4} />
-        </mesh>
+        <LavaBlob key={i} position={b.pos} scale={b.scale} color={b.color}
+          speed={b.speed} distort={b.distort} emissiveIntensity={b.emissive} />
       ))}
-    </group>
+      <EffectComposer>
+        <Bloom luminanceThreshold={0.2} luminanceSmoothing={0.9} intensity={1.8} />
+      </EffectComposer>
+    </>
   )
 }
 
 export default function LavaLampScene({ primaryColor, accentColor }: SceneProps) {
   return (
-    <Canvas style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} camera={{ position: [0, 0, 6], fov: 55 }}>
-      <color attach="background" args={[primaryColor]} />
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[5, 5, 5]} intensity={0.8} />
-      <pointLight position={[0, 0, 3]} intensity={0.5} color={accentColor} />
-      <LavaBlobs accentColor={accentColor} />
+    <Canvas
+      style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
+      camera={{ position: [0, 0, 5.5], fov: 50 }} dpr={[1, 1.5]}
+      gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.6 }}
+    >
+      <LavaContent primaryColor={primaryColor} accentColor={accentColor} />
     </Canvas>
   )
 }

@@ -13,11 +13,13 @@ import RevenueChart from '@/components/RevenueChart'
 import InsightCard from '@/components/InsightCard'
 import ConnectionBadge from '@/components/ConnectionBadge'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { generateTopActions, generateAgents, generateRFMSegments } from '@/lib/agent-data'
 import { useOrgId, useTier, useIsDemo, tierLimits } from '@/hooks/useOrg'
 import { AnalyzingSection } from '@/components/AnalyzingDataState'
+import { useAuth } from '@/lib/auth'
 
 export default function OverviewPage() {
   const location = useLocation()
@@ -28,11 +30,14 @@ export default function OverviewPage() {
   const tier = useTier()
   const limits = tierLimits[tier]
   const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
 
-  const overview = useApi(() => api.overview(orgId), [orgId])
-  const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
-  const insights = useApi(() => api.insights(orgId, 5), [orgId])
-  const forecastData = useApi(() => api.forecasts(orgId), [orgId])
+  const skip = !isDemo && !posConnected
+  const overview = useApi(() => skip ? api.overview('') : api.overview(orgId), [orgId, skip])
+  const revenue = useApi(() => skip ? api.revenue('', 30) : api.revenue(orgId, 30), [orgId, skip])
+  const insights = useApi(() => skip ? api.insights('', 5) : api.insights(orgId, 5), [orgId, skip])
+  const forecastData = useApi(() => skip ? api.forecasts('') : api.forecasts(orgId), [orgId, skip])
 
   const topActions = isDemo ? generateTopActions() : []
   const agents = isDemo ? generateAgents() : []
@@ -45,12 +50,15 @@ export default function OverviewPage() {
       )
     : 0
 
+  if (skip) return <DataPageSkeleton title="Overview"><div /></DataPageSkeleton>
   if (overview.loading) return <LoadingPage />
   if (overview.error) return <ErrorState message={overview.error} onRetry={overview.refetch} />
+  if (!overview.data) return <LoadingPage />
 
-  const data = overview.data!
+  const data = overview.data
 
   return (
+    <DataPageSkeleton title="Overview">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -273,5 +281,6 @@ export default function OverviewPage() {
         )}
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

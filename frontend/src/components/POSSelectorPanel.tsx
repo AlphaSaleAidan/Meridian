@@ -235,6 +235,62 @@ export default function POSSelectorPanel({
 }
 
 function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?: (s: POSSystem) => void; isDemo: boolean }) {
+  const [apiKey, setApiKey] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [connecting, setConnecting] = useState(false)
+  const [testResult, setTestResult] = useState<{ valid: boolean; merchant?: string; error?: string } | null>(null)
+  const [connectError, setConnectError] = useState('')
+  const [connected, setConnected] = useState(false)
+  const orgId = useOrgId()
+  const apiBase = import.meta.env.VITE_API_URL || ''
+
+  async function handleTest() {
+    if (!apiKey.trim()) return
+    setTesting(true)
+    setTestResult(null)
+    setConnectError('')
+    try {
+      const res = await fetch(`${apiBase}/api/pos/test-connection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pos_system: system.key, credentials: { access_token: apiKey.trim() } }),
+      })
+      const data = await res.json()
+      setTestResult({ valid: !!data.valid, merchant: data.merchant_name, error: data.detail || data.error })
+    } catch {
+      setTestResult({ valid: false, error: 'Could not reach the server' })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  async function handleConnect() {
+    if (!apiKey.trim() || !orgId || orgId === 'demo') {
+      onConnect?.(system)
+      return
+    }
+    setConnecting(true)
+    setConnectError('')
+    try {
+      const res = await fetch(`${apiBase}/api/pos/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_id: orgId, pos_system: system.key, credentials: { access_token: apiKey.trim() } }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setConnectError(data.detail || 'Failed to connect')
+        return
+      }
+      setConnected(true)
+      onConnect?.(system)
+    } catch {
+      setConnectError('Could not reach the server')
+    } finally {
+      setConnecting(false)
+    }
+  }
+
   return (
     <>
       <div>
@@ -273,6 +329,61 @@ function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?:
         </ol>
       </div>
 
+      {/* API Key Input */}
+      {!isDemo && !connected && (
+        <div className="space-y-2">
+          <label className="text-[11px] font-medium text-[#A1A1A8]">API Access Token</label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => { setApiKey(e.target.value); setTestResult(null); setConnectError('') }}
+            placeholder={`Paste your ${system.name} access token...`}
+            className="w-full px-3 py-2.5 text-[12px] font-mono bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40"
+          />
+          {testResult && (
+            <div className={clsx(
+              'flex items-center gap-2 p-2 rounded-lg text-[11px]',
+              testResult.valid ? 'bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[#17C5B0]' : 'bg-red-500/10 border border-red-500/20 text-red-400'
+            )}>
+              {testResult.valid ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}
+              {testResult.valid ? `Connected! Merchant: ${testResult.merchant || 'Verified'}` : (testResult.error || 'Invalid credentials')}
+            </div>
+          )}
+          {connectError && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-400">
+              <AlertTriangle size={12} /> {connectError}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button
+              onClick={handleTest}
+              disabled={testing || !apiKey.trim()}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium border border-[#1F1F23] rounded-lg text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#A1A1A8]/30 disabled:opacity-40 transition-all"
+            >
+              {testing ? <><Wifi size={12} className="animate-pulse" /> Testing...</> : <><Wifi size={12} /> Test Connection</>}
+            </button>
+            <button
+              onClick={handleConnect}
+              disabled={connecting || !apiKey.trim()}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium text-white rounded-lg disabled:opacity-40 transition-all"
+              style={{ backgroundColor: system.brandColor }}
+            >
+              {connecting ? <><Wifi size={12} className="animate-pulse" /> Connecting...</> : <><Wifi size={12} /> Connect &amp; Encrypt</>}
+            </button>
+          </div>
+          <p className="text-[9px] text-[#A1A1A8]/40 text-center">
+            Your key is encrypted with AES-256-GCM before storage. Meridian never stores plaintext credentials.
+          </p>
+        </div>
+      )}
+
+      {connected && (
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20">
+          <CheckCircle2 size={14} className="text-[#17C5B0]" />
+          <span className="text-[12px] text-[#17C5B0] font-medium">POS connected! Data sync is starting...</span>
+        </div>
+      )}
+
       {/* Data Available */}
       <div className="flex flex-wrap gap-2">
         {Object.entries(system.dataAvailable).map(([key, val]) => {
@@ -288,14 +399,16 @@ function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?:
         })}
       </div>
 
-      <button
-        onClick={() => onConnect?.(system)}
-        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-white rounded-lg transition-all"
-        style={{ backgroundColor: system.brandColor }}
-      >
-        <Wifi size={14} />
-        {isDemo ? `Connect ${system.name} (Demo)` : `Connect ${system.name}`}
-      </button>
+      {isDemo && (
+        <button
+          onClick={() => onConnect?.(system)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-white rounded-lg transition-all"
+          style={{ backgroundColor: system.brandColor }}
+        >
+          <Wifi size={14} />
+          Connect {system.name} (Demo)
+        </button>
+      )}
     </>
   )
 }

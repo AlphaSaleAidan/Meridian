@@ -10,6 +10,11 @@ import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { api } from '@/lib/api'
+import { useApi } from '@/hooks/useApi'
+import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 type SortKey = 'totalSpent' | 'avgOrder' | 'visits' | 'lastVisit'
 
@@ -222,18 +227,26 @@ function ConnectCamerasButton({ status, cameraCount, onConnect }: {
 }
 
 export default function CustomersPage() {
-  const segments = generateRFMSegments()
-  const customers = generateCustomerRankings()
-  const cohorts = generateCohorts()
+  const orgId = useOrgId()
+  const isDemoMode = useIsDemo()
+  const apiData = useApi(() => api.customers(orgId), [orgId])
+
+  const segments: RFMSegment[] = isDemoMode ? generateRFMSegments() : (apiData.data?.segments ?? [])
+  const customers: CustomerProfile[] = isDemoMode ? generateCustomerRankings() : (apiData.data?.rankings ?? [])
+  const cohorts: CohortRow[] = isDemoMode ? generateCohorts() : (apiData.data?.cohorts ?? [])
+
   const [sortBy, setSortBy] = useState<SortKey>('totalSpent')
   const [search, setSearch] = useState('')
   const [showCameraWizard, setShowCameraWizard] = useState(false)
   const [cameraStatus] = useState<CameraStatus>('none')
 
+  if (!isDemoMode && apiData.loading) return <LoadingPage />
+  if (!isDemoMode && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+
   const totalCustomers = segments.reduce((s, seg) => s + seg.count, 0)
   const vipCount = segments.filter(s => s.name === 'Champions' || s.name === 'Loyal').reduce((s, seg) => s + seg.count, 0)
   const atRiskCount = segments.filter(s => s.name === 'At Risk' || s.name === 'Needs Attention').reduce((s, seg) => s + seg.count, 0)
-  const avgRetention = Math.round(segments.reduce((s, seg) => s + seg.retentionScore * seg.count, 0) / totalCustomers)
+  const avgRetention = totalCustomers ? Math.round(segments.reduce((s, seg) => s + seg.retentionScore * seg.count, 0) / totalCustomers) : 0
   const avgLtv = customers.length > 0
     ? Math.round(customers.reduce((s, c) => s + (c.ltvCents || 0), 0) / customers.length)
     : 0
@@ -256,6 +269,7 @@ export default function CustomersPage() {
   })
 
   return (
+    <DataPageSkeleton title="Customers" layout="table">
     <div className="space-y-6">
       {showCameraWizard && (
         <CameraSetupWizard
@@ -462,5 +476,6 @@ export default function CustomersPage() {
         </div>
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

@@ -49,11 +49,18 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     }
   }
 
+  const apiBase = (import.meta.env.VITE_API_URL || '') as string
+
   const testConnection = async () => {
     setTesting(true)
     setError('')
     try {
-      await new Promise(r => setTimeout(r, 2000))
+      const urlPattern = /^rtsp:\/\/.+/i
+      if (!urlPattern.test(config.rtsp_url)) {
+        setError('Enter a valid RTSP URL (e.g., rtsp://192.168.1.100:554/stream1)')
+        return
+      }
+      await new Promise(r => setTimeout(r, 1500))
       setConnectionTested(true)
     } catch {
       setError('Could not connect to camera. Check the RTSP URL and network.')
@@ -62,8 +69,30 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     }
   }
 
-  const handleSubmit = () => {
-    onComplete(config)
+  const handleSubmit = async () => {
+    setError('')
+    try {
+      const res = await fetch(`${apiBase}/api/vision/cameras`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: orgId,
+          name: config.name,
+          rtsp_url: config.rtsp_url,
+          compliance_mode: config.compliance_mode,
+          active_hours: config.active_hours,
+          zone_config: config.zone_config,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.detail || 'Failed to register camera')
+        return
+      }
+      onComplete(config)
+    } catch {
+      setError('Could not reach the server. Please try again.')
+    }
   }
 
   return (

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check, CreditCard } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check, CreditCard, Camera, Plus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
@@ -13,6 +13,7 @@ import POSSelectorPanel from '@/components/POSSelectorPanel'
 import POSLogo from '@/components/POSLogo'
 import { posSystemsByKey, type POSSystemKey } from '@/data/pos-systems'
 import { useOrgId } from '@/hooks/useOrg'
+import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -35,7 +36,7 @@ const statusColors: Record<string, string> = {
 function BusinessTuningPanel() {
   const profiles = generateBusinessProfiles()
   const [selected, setSelected] = useState<string>('coffee_shop')
-  const profile = profiles.find(p => p.type === selected)!
+  const profile = profiles.find(p => p.type === selected) || profiles[0]
 
   return (
     <div className="card overflow-hidden">
@@ -220,11 +221,14 @@ export default function SettingsPage() {
     : '/demo'
   const orgId = useOrgId()
   const conn = useApi(() => api.connection(orgId), [orgId])
+  const [showCameraWizard, setShowCameraWizard] = useState(false)
+  const cameras = useApi(() => api.cameras(orgId), [orgId])
 
   if (conn.loading) return <LoadingPage />
   if (conn.error) return <ErrorState message={conn.error} onRetry={conn.refetch} />
+  if (!conn.data) return <LoadingPage />
 
-  const connections = conn.data!.connections
+  const connections = conn.data.connections
 
   return (
     <div className="space-y-6">
@@ -238,18 +242,11 @@ export default function SettingsPage() {
       {/* POS Connections */}
       <ScrollReveal variant="fadeUp" delay={0.1}>
         <div className="card overflow-hidden">
-          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
             <h3 className="text-sm font-semibold text-[#F5F5F7]">POS Connections</h3>
-{connections.length === 0 && (
-            <a
-              href={basePath === '/demo' ? '#' : `${API_URL}/api/square/authorize?org_id=${orgId}`}
-              onClick={basePath === '/demo' ? (e: React.MouseEvent) => { e.preventDefault(); alert('Connect Square is disabled in demo mode. Sign up to connect your real POS!') } : undefined}
-              className="px-4 py-2.5 sm:py-2 text-xs font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#6B4FE0] transition-all shadow-[0_0_16px_rgba(124,92,255,0.25)] hover:shadow-[0_0_24px_rgba(124,92,255,0.35)] inline-flex items-center gap-2"
-            >
-              <ExternalLink size={14} />
-              Connect POS
-            </a>
-            )}
+            <p className="text-[11px] text-[#A1A1A8]/50 mt-0.5">
+              {connections.length > 0 ? 'Your connected POS systems' : 'Select your POS and enter your API key to connect'}
+            </p>
           </div>
 
           {connections.length > 0 ? (
@@ -320,6 +317,69 @@ export default function SettingsPage() {
           )}
         </div>
       </ScrollReveal>
+
+      {/* Camera Connections */}
+      <ScrollReveal variant="fadeUp" delay={0.12}>
+        <div className="card overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-[#F5F5F7]">Cameras</h3>
+              <p className="text-[11px] text-[#A1A1A8]/50 mt-0.5">
+                {cameras.data?.total ? `${cameras.data.total} camera${cameras.data.total > 1 ? 's' : ''} connected` : 'Connect cameras for foot traffic and customer intelligence'}
+              </p>
+            </div>
+            <button
+              onClick={() => setShowCameraWizard(true)}
+              className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium text-[#1A8FD6] border border-[#1A8FD6]/20 rounded-lg hover:bg-[#1A8FD6]/10 transition-colors"
+            >
+              <Plus size={12} /> Add Camera
+            </button>
+          </div>
+
+          {cameras.data?.cameras && cameras.data.cameras.length > 0 ? (
+            <div className="divide-y divide-[#1F1F23]/50">
+              {cameras.data.cameras.map((cam: any) => (
+                <div key={cam.id} className="px-4 sm:px-5 py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={clsx('p-2 rounded-lg', cam.status === 'online' ? 'bg-[#17C5B0]/10 text-[#17C5B0]' : 'bg-[#1F1F23] text-[#A1A1A8]/50')}>
+                        <Camera size={16} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-[#F5F5F7]">{cam.name}</p>
+                        <p className="text-[10px] text-[#A1A1A8]/50 font-mono">{cam.rtsp_url}</p>
+                      </div>
+                    </div>
+                    <span className={clsx('text-[10px] font-medium px-2 py-0.5 rounded-full border',
+                      cam.status === 'online' ? 'text-[#17C5B0] bg-[#17C5B0]/10 border-[#17C5B0]/20' : 'text-[#A1A1A8] bg-[#1F1F23] border-[#1F1F23]'
+                    )}>
+                      {cam.status || 'offline'}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex gap-4 text-[10px] text-[#A1A1A8]/50">
+                    <span>Mode: {(cam.compliance_mode || 'anonymous').replace('_', ' ')}</span>
+                    {cam.last_heartbeat && <span>Last seen: {formatRelative(cam.last_heartbeat)}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-6 text-center">
+              <Camera size={28} className="text-[#A1A1A8]/20 mx-auto mb-2" />
+              <p className="text-[12px] text-[#A1A1A8]/50">No cameras connected yet</p>
+              <p className="text-[10px] text-[#A1A1A8]/30 mt-1">Add a camera to enable foot traffic analytics and customer intelligence</p>
+            </div>
+          )}
+        </div>
+      </ScrollReveal>
+
+      {showCameraWizard && (
+        <CameraSetupWizard
+          orgId={orgId}
+          onComplete={() => { setShowCameraWizard(false); cameras.refetch() }}
+          onClose={() => setShowCameraWizard(false)}
+        />
+      )}
 
       {/* Business Type Tuning */}
       <ScrollReveal variant="fadeUp" delay={0.15}>

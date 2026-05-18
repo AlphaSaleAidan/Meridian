@@ -1,33 +1,45 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard, TrendingUp, Package, Layers, Lightbulb,
   LineChart, Bell, Settings, Menu, Bot, Target, Users,
   UserCheck, Clock, DollarSign, ChefHat, AlertTriangle, Box,
-  MapPin, Phone,
+  MapPin, Phone, Calendar, Globe, Monitor, Video,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import CustomerWalkthrough from './CustomerWalkthrough'
+import { RadarLoadingState } from './LoadingState'
 import { useAuth } from '@/lib/auth'
+import { useMobile } from '@/hooks/useMobile'
 
-const navItems = [
+interface NavItem {
+  path: string
+  icon: typeof LayoutDashboard
+  label: string
+  desktopOnly?: boolean
+}
+
+const navItems: NavItem[] = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
-  { path: 'agents', icon: Bot, label: 'Agents' },
-  { path: 'actions', icon: Target, label: 'Top Actions' },
   { path: 'revenue', icon: TrendingUp, label: 'Revenue' },
-  { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
+  { path: 'insights', icon: Lightbulb, label: 'Insights' },
+  { path: 'actions', icon: Target, label: 'Top Actions' },
+  { path: 'agents', icon: Bot, label: 'Agents' },
+  { path: 'camera-intelligence', icon: Video, label: 'Camera Intel' },
+  { path: 'customers', icon: Users, label: 'Customers' },
   { path: 'products', icon: Package, label: 'Products' },
   { path: 'margins', icon: DollarSign, label: 'Margins' },
-  { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix' },
-  { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
-  { path: 'customers', icon: Users, label: 'Customers' },
-  { path: 'staff', icon: UserCheck, label: 'Staff' },
+  { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
   { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },
+  { path: 'staff', icon: UserCheck, label: 'Staff' },
+  { path: 'schedule', icon: Calendar, label: 'Schedule' },
   { path: 'inventory', icon: Layers, label: 'Inventory' },
-  { path: 'space', icon: Box, label: '3D Space' },
+  { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
+  { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix', desktopOnly: true },
   { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
-  { path: 'insights', icon: Lightbulb, label: 'Insights' },
+  { path: 'my-website', icon: Globe, label: 'My Website' },
+  { path: 'space', icon: Box, label: '3D Space', desktopOnly: true },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },
 ]
@@ -36,8 +48,10 @@ export default function CanadaLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [showWalkthrough, setShowWalkthrough] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
   const basePath = '/canada/dashboard'
-  const { user } = useAuth()
+  const { user, org } = useAuth()
+  const { isMobile, isTablet } = useMobile()
 
   useEffect(() => {
     if (!user?.id) return
@@ -46,6 +60,20 @@ export default function CanadaLayout() {
       setShowWalkthrough(true)
     }
   }, [user?.id])
+
+  // Redirect mobile users away from desktop-only pages
+  useEffect(() => {
+    if (!isMobile) return
+    const currentPath = location.pathname.replace(basePath + '/', '')
+    const desktopOnlyItem = navItems.find(
+      i => i.desktopOnly && i.path === currentPath,
+    )
+    if (desktopOnlyItem) navigate(basePath, { replace: true })
+  }, [isMobile, location.pathname, navigate])
+
+  const visibleNavItems = isMobile
+    ? navItems.filter(i => !i.desktopOnly)
+    : navItems
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">
@@ -70,7 +98,7 @@ export default function CanadaLayout() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 no-scrollbar">
-          {navItems.map(item => {
+          {visibleNavItems.map(item => {
             const Icon = item.icon
             const to = item.path ? `${basePath}/${item.path}` : basePath
             return (
@@ -88,6 +116,9 @@ export default function CanadaLayout() {
               >
                 <Icon size={16} className="flex-shrink-0" />
                 <span className="truncate">{item.label}</span>
+                {item.desktopOnly && (
+                  <Monitor size={10} className="ml-auto text-[#A1A1A8]/40 flex-shrink-0" />
+                )}
               </NavLink>
             )
           })}
@@ -119,7 +150,7 @@ export default function CanadaLayout() {
           </div>
         </div>
 
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto">
           <Outlet />
         </div>
       </main>
@@ -127,6 +158,7 @@ export default function CanadaLayout() {
       {showWalkthrough && user?.id && (
         <CustomerWalkthrough
           userId={user.id}
+          posConnected={!!org?.pos_connected}
           onDismiss={() => setShowWalkthrough(false)}
         />
       )}

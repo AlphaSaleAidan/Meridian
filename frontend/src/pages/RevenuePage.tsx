@@ -10,7 +10,9 @@ import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import TransactionDrillDown from '@/components/TransactionDrillDown'
-import { useOrgId } from '@/hooks/useOrg'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
+import { useAuth } from '@/lib/auth'
 
 const periods = [
   { label: '7D', days: 7 },
@@ -31,12 +33,17 @@ export default function RevenuePage() {
   const [days, setDays] = useState(30)
   const [drillDate, setDrillDate] = useState<string | null>(null)
   const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const revenue = useApi(() => api.revenue(orgId, days), [orgId, days])
 
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Revenue"><div /></DataPageSkeleton>
   if (revenue.loading) return <LoadingPage />
   if (revenue.error) return <ErrorState message={revenue.error} onRetry={revenue.refetch} />
+  if (!revenue.data) return <LoadingPage />
 
-  const data = revenue.data!
+  const data = revenue.data
 
   const chartData = data.daily.map(d => ({
     rawDate: d.date,
@@ -49,10 +56,10 @@ export default function RevenuePage() {
     discounts: d.discount_cents / 100,
   }))
 
-  const totalRevenue = data.daily.reduce((s, d) => s + d.revenue_cents, 0)
-  const totalTxns = data.daily.reduce((s, d) => s + d.transactions, 0)
-  const totalRefunds = data.daily.reduce((s, d) => s + d.refund_cents, 0)
-  const totalTips = data.daily.reduce((s, d) => s + d.tip_cents, 0)
+  const totalRevenue = data.daily.reduce((s, d) => s + (d.revenue_cents || 0), 0)
+  const totalTxns = data.daily.reduce((s, d) => s + (d.transactions || 0), 0)
+  const totalRefunds = data.daily.reduce((s, d) => s + (d.refund_cents || 0), 0)
+  const totalTips = data.daily.reduce((s, d) => s + (d.tip_cents || 0), 0)
 
   const handleBarClick = (barData: any) => {
     if (barData?.activePayload?.[0]?.payload?.rawDate) {
@@ -61,6 +68,7 @@ export default function RevenuePage() {
   }
 
   return (
+    <DataPageSkeleton title="Revenue" layout="chart">
     <div className="space-y-6">
       {/* Transaction Drill-Down Modal */}
       {drillDate && (
@@ -213,5 +221,6 @@ export default function RevenuePage() {
         </ScrollReveal>
       )}
     </div>
+    </DataPageSkeleton>
   )
 }

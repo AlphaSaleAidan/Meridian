@@ -13,6 +13,7 @@ import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
 import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
 import CanadaLoginPage from '@/pages/customer/CanadaLoginPage'
+import CustomerPortalRedirect from '@/pages/customer/CustomerPortalRedirect'
 
 import OverviewPage from '@/pages/OverviewPage'
 import RevenuePage from '@/pages/RevenuePage'
@@ -36,6 +37,8 @@ import PhoneOrdersPage from '@/pages/PhoneOrdersPage'
 const SchedulePage = lazy(() => import('@/pages/SchedulePage'))
 const MyWebsitePage = lazy(() => import('@/pages/MyWebsitePage'))
 const MerchantSitePage = lazy(() => import('@/pages/MerchantSitePage'))
+const CameraAnalyticsDemoPage = lazy(() => import('@/pages/CameraAnalyticsDemoPage'))
+const CameraIntelligencePage = lazy(() => import('@/pages/CameraIntelligencePage'))
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazy(() => import('@/components/CanadaLayout'))
@@ -65,10 +68,11 @@ const CanadaPortalCreateCustomerPage = lazy(() => import('@/pages/canada/portal/
 const CanadaPortalOnboardingPage = lazy(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
 const CanadaCustomerOnboardingWizard = lazy(() => import('@/pages/canada/portal/CanadaCustomerOnboardingWizard'))
 const CanadaInvoicePage = lazy(() => import('@/pages/canada/CanadaInvoicePage'))
+const CanadaSetupPage = lazy(() => import('@/pages/canada/CanadaSetupPage'))
 
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
-  return <ProtectedRoute loginPath="/canada/login" allowSalesReps>{children}</ProtectedRoute>
+  return <ProtectedRoute loginPath="/canada/login">{children}</ProtectedRoute>
 }
 
 function LazyFallback() {
@@ -92,6 +96,7 @@ function CustomerDashboardRoutes() {
       <Route path="forecasts" element={<ForecastsPage />} />
       <Route path="agents" element={<AgentDashboardPage />} />
       <Route path="actions" element={<ActionsPage />} />
+      <Route path="camera-intelligence" element={<Suspense fallback={null}><CameraIntelligencePage /></Suspense>} />
       <Route path="customers" element={<CustomersPage />} />
       <Route path="staff" element={<StaffPage />} />
       <Route path="peak-hours" element={<PeakHoursPage />} />
@@ -119,12 +124,26 @@ function SalesRedirect() {
   )
 }
 
+function SubdomainRedirector() {
+  const location = useLocation()
+  const host = window.location.hostname
+
+  // canada.meridian.tips → prepend /canada to path
+  if (host === 'canada.meridian.tips' && !location.pathname.startsWith('/canada')) {
+    const target = `/canada${location.pathname}${location.search}${location.hash}`
+    return <Navigate to={target} replace />
+  }
+
+  return null
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
         <SalesAuthProvider>
           <Suspense fallback={<LazyFallback />}>
+            <SubdomainRedirector />
             <Routes>
               {/* ══════════════════════════════════════════════
                   PUBLIC PAGES — no auth required
@@ -154,6 +173,7 @@ export default function App() {
                   ══════════════════════════════════════════════ */}
               <Route path="/customer/login" element={<CustomerLoginPage />} />
               <Route path="/customer/signup" element={<CustomerSignupPage />} />
+              <Route path="/c/:token" element={<CustomerPortalRedirect />} />
 
               <Route path="/customer/admin" element={
                 <ProtectedRoute>
@@ -223,6 +243,11 @@ export default function App() {
                     <POSCoveragePage />
                   </Suspense>
                 } />
+                <Route path="camera-analytics" element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <CameraAnalyticsDemoPage />
+                  </Suspense>
+                } />
               </Route>
 
               {/* ══════════════════════════════════════════════
@@ -235,21 +260,28 @@ export default function App() {
               {/* Canada Demo — same dashboard with CAD currency */}
               <Route path="/canada/demo" element={<DemoLayout />}>
                 {CustomerDashboardRoutes()}
+                <Route path="camera-analytics" element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <CameraAnalyticsDemoPage />
+                  </Suspense>
+                } />
               </Route>
 
               {/* ══════════════════════════════════════════════
                   CANADA — customer auth + dashboard
                   ══════════════════════════════════════════════ */}
               <Route path="/canada/login" element={<CanadaLoginPage />} />
+              <Route path="/canada/setup" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <CanadaSetupPage />
+                </Suspense>
+              } />
               <Route path="/canada/invoice/:invoiceId" element={<Suspense fallback={<LazyFallback />}><CanadaInvoicePage /></Suspense>} />
               <Route path="/canada/dashboard" element={
                 <CanadaProtectedRoute>
-                  <DemoContextProvider>
-                    <BusinessTypeSelector />
-                    <Suspense fallback={<LazyFallback />}>
-                      <CanadaLayout />
-                    </Suspense>
-                  </DemoContextProvider>
+                  <Suspense fallback={<LazyFallback />}>
+                    <CanadaLayout />
+                  </Suspense>
                 </CanadaProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}

@@ -1,67 +1,83 @@
-import React, { useRef, useMemo } from 'react'
+import { useRef, useMemo } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
+import { Float, MeshTransmissionMaterial, Environment } from '@react-three/drei'
+import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 
-interface SceneProps {
-  primaryColor: string
-  accentColor: string
+interface SceneProps { primaryColor: string; accentColor: string }
+
+function CenterSphere({ color }: { color: string }) {
+  const ref = useRef<THREE.Mesh>(null)
+  useFrame(({ clock }) => {
+    if (!ref.current) return
+    ref.current.rotation.y = clock.getElapsedTime() * 0.08
+    ref.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.05) * 0.1
+  })
+  return (
+    <Float speed={0.4} rotationIntensity={0.05} floatIntensity={0.15}>
+      <mesh ref={ref} scale={1.8}>
+        <sphereGeometry args={[1, 128, 128]} />
+        <MeshTransmissionMaterial
+          backside thickness={0.6} chromaticAberration={0.06}
+          color={color} roughness={0.0} transmission={0.98} ior={2.0}
+          distortion={0.08} distortionScale={0.15} temporalDistortion={0.05}
+          anisotropy={0.5}
+        />
+      </mesh>
+    </Float>
+  )
 }
 
-const vertexShader = `
-  varying vec2 vUv;
-  void main() {
-    vUv = uv;
-    gl_Position = vec4(position.xy, 0.0, 1.0);
-  }
-`
+function SubtleDot({ position, color, scale, speed }: {
+  position: [number, number, number]; color: string; scale: number; speed: number
+}) {
+  return (
+    <Float speed={speed} floatIntensity={0.4}>
+      <mesh position={position} scale={scale}>
+        <sphereGeometry args={[1, 16, 16]} />
+        <meshBasicMaterial color={color} toneMapped={false} />
+      </mesh>
+    </Float>
+  )
+}
 
-const fragmentShader = `
-  uniform float uTime;
-  uniform vec3 uColor;
-
-  varying vec2 vUv;
-
-  float random(vec2 st, float seed) {
-    return fract(sin(dot(st, vec2(12.9898, 78.233)) * 43758.5453 + seed));
-  }
-
-  void main() {
-    float noise = random(vUv * 500.0, uTime) * 0.06;
-    vec3 col = uColor + vec3(noise - 0.03);
-    gl_FragColor = vec4(col, 1.0);
-  }
-`
-
-function NoiseQuad({ primaryColor }: { primaryColor: string }) {
-  const matRef = useRef<THREE.ShaderMaterial>(null)
-  const uniforms = useMemo(() => ({
-    uTime: { value: 0 },
-    uColor: { value: new THREE.Color(primaryColor) },
-  }), [primaryColor])
-
-  useFrame(({ clock }) => {
-    if (matRef.current) {
-      matRef.current.uniforms.uTime.value = clock.getElapsedTime()
-    }
-  })
+function MinimalContent({ primaryColor, accentColor }: SceneProps) {
+  const dots = useMemo(() => [
+    { pos: [3, 1.5, -4] as [number, number, number], color: accentColor, scale: 0.04, speed: 1.5 },
+    { pos: [-2.5, -1, -3] as [number, number, number], color: primaryColor, scale: 0.03, speed: 1.8 },
+    { pos: [1.5, -2, -5] as [number, number, number], color: accentColor, scale: 0.025, speed: 2.0 },
+    { pos: [-1, 2.5, -3.5] as [number, number, number], color: primaryColor, scale: 0.035, speed: 1.3 },
+    { pos: [2, 0.5, -6] as [number, number, number], color: accentColor, scale: 0.02, speed: 2.2 },
+  ], [primaryColor, accentColor])
 
   return (
-    <mesh>
-      <planeGeometry args={[2, 2]} />
-      <shaderMaterial
-        ref={matRef}
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={uniforms}
-      />
-    </mesh>
+    <>
+      <color attach="background" args={['#060608']} />
+      <fog attach="fog" args={['#060608', 5, 16]} />
+      <ambientLight intensity={0.08} />
+      <spotLight position={[4, 4, 4]} intensity={1.5} angle={0.3} penumbra={1} color={accentColor} />
+      <spotLight position={[-3, -2, 3]} intensity={1} angle={0.4} penumbra={1} color={primaryColor} />
+      <pointLight position={[0, 2, 3]} intensity={0.8} color="#ffffff" />
+      <Environment preset="apartment" />
+      <CenterSphere color={accentColor} />
+      {dots.map((d, i) => (
+        <SubtleDot key={i} position={d.pos} color={d.color} scale={d.scale} speed={d.speed} />
+      ))}
+      <EffectComposer>
+        <Bloom luminanceThreshold={0.4} luminanceSmoothing={0.95} intensity={0.6} />
+      </EffectComposer>
+    </>
   )
 }
 
 export default function MinimalNoiseScene({ primaryColor, accentColor }: SceneProps) {
   return (
-    <Canvas style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }} camera={{ position: [0, 0, 1], fov: 60 }}>
-      <NoiseQuad primaryColor={primaryColor} />
+    <Canvas
+      style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}
+      camera={{ position: [0, 0, 5], fov: 45 }} dpr={[1, 1.5]}
+      gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.2 }}
+    >
+      <MinimalContent primaryColor={primaryColor} accentColor={accentColor} />
     </Canvas>
   )
 }

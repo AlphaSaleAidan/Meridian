@@ -5,10 +5,15 @@ import {
   AlertTriangle, Target, Brain, ArrowRight,
   CheckCircle2, XCircle, Minus,
 } from 'lucide-react'
-import { generateAgents, generateAgentChains, generateCalibrationHistory, type AgentInfo } from '@/lib/agent-data'
+import { generateAgents, generateAgentChains, generateCalibrationHistory, type AgentInfo, type AgentChainLink, type CalibrationPoint } from '@/lib/agent-data'
 import { formatRelative } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { api } from '@/lib/api'
+import { useApi } from '@/hooks/useApi'
+import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const categoryColors: Record<string, string> = {
   analysis: 'text-[#1A8FD6] bg-[#1A8FD6]/10',
@@ -27,8 +32,9 @@ const statusColors: Record<string, { dot: string; text: string }> = {
 
 function AgentCard({ agent }: { agent: AgentInfo }) {
   const [expanded, setExpanded] = useState(false)
-  const sc = statusColors[agent.status]
-  const cc = categoryColors[agent.category]
+  const sc = statusColors[agent.status] || statusColors.idle
+  const cc = categoryColors[agent.category] || 'text-[#A1A1A8] bg-[#1F1F23]'
+  const [ccText, ccBg] = cc.split(' ')
 
   return (
     <div
@@ -39,8 +45,8 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
       onClick={() => setExpanded(!expanded)}
     >
       <div className="flex items-start gap-3">
-        <div className={clsx('p-2 rounded-lg flex-shrink-0', cc.split(' ')[1])}>
-          <Bot size={16} className={cc.split(' ')[0]} />
+        <div className={clsx('p-2 rounded-lg flex-shrink-0', ccBg)}>
+          <Bot size={16} className={ccText} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
@@ -94,19 +100,27 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
 }
 
 export default function AgentDashboardPage() {
-  const agents = generateAgents()
-  const chains = generateAgentChains()
-  const calibration = generateCalibrationHistory()
+  const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const apiData = useApi(() => api.agents(orgId), [orgId])
+
+  const agents: AgentInfo[] = isDemo ? generateAgents() : (apiData.data?.agents ?? [])
+  const chains: AgentChainLink[] = isDemo ? generateAgentChains() : (apiData.data?.chains ?? [])
+  const calibration: CalibrationPoint[] = isDemo ? generateCalibrationHistory() : (apiData.data?.calibration ?? [])
   const [filter, setFilter] = useState<string>('')
+
+  if (!isDemo && apiData.loading) return <LoadingPage />
+  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 
   const activeCount = agents.filter(a => a.status === 'active' || a.status === 'running').length
   const totalFindings = agents.reduce((s, a) => s + a.findings, 0)
-  const avgConfidence = Math.round(agents.reduce((s, a) => s + a.confidence, 0) / agents.length)
+  const avgConfidence = agents.length ? Math.round(agents.reduce((s, a) => s + a.confidence, 0) / agents.length) : 0
 
   const filtered = filter ? agents.filter(a => a.category === filter) : agents
   const categories = [...new Set(agents.map(a => a.category))]
 
   return (
+    <DataPageSkeleton title="AI Agents" layout="grid">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -301,5 +315,6 @@ export default function AgentDashboardPage() {
         </div>
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

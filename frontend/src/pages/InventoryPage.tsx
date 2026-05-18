@@ -10,7 +10,9 @@ import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import { formatNumber } from '@/lib/format'
-import { useOrgId } from '@/hooks/useOrg'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
+import { useAuth } from '@/lib/auth'
 
 type SortField = 'product_name' | 'current_stock' | 'days_until_reorder' | 'predicted_daily_usage' | 'trend_pct'
 type SortDir = 'asc' | 'desc'
@@ -59,6 +61,9 @@ function StockBar({ current, reorder, max }: { current: number; reorder: number;
 
 export default function InventoryPage() {
   const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const inventory = useApi(() => api.inventory(orgId), [orgId])
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -67,19 +72,21 @@ export default function InventoryPage() {
   const [showUpload, setShowUpload] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Inventory"><div /></DataPageSkeleton>
   if (inventory.loading) return <LoadingPage />
   if (inventory.error) return <ErrorState message={inventory.error} onRetry={inventory.refetch} />
+  if (!inventory.data) return <LoadingPage />
 
-  const data = inventory.data!
+  const data = inventory.data
 
   // Filter
   let items = [...data.items]
   if (search) {
     const q = search.toLowerCase()
     items = items.filter(i =>
-      i.product_name.toLowerCase().includes(q) ||
-      i.sku.toLowerCase().includes(q) ||
-      i.category.toLowerCase().includes(q)
+      (i.product_name || '').toLowerCase().includes(q) ||
+      (i.sku || '').toLowerCase().includes(q) ||
+      (i.category || '').toLowerCase().includes(q)
     )
   }
   if (filter === 'low_stock') items = items.filter(i => i.days_until_reorder !== null && i.days_until_reorder <= 2)
@@ -120,6 +127,7 @@ export default function InventoryPage() {
   }
 
   return (
+    <DataPageSkeleton title="Inventory" layout="table">
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
@@ -358,5 +366,6 @@ export default function InventoryPage() {
         </div>
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

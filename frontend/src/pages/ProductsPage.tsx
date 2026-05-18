@@ -8,7 +8,9 @@ import { api } from '@/lib/api'
 import { formatCents, formatCentsCompact, formatNumber, formatChartTick } from '@/lib/format'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
-import { useOrgId } from '@/hooks/useOrg'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
+import { useAuth } from '@/lib/auth'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -26,21 +28,26 @@ export default function ProductsPage() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('revenue')
   const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const products = useApi(() => api.products(orgId, days), [orgId, days])
 
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Products"><div /></DataPageSkeleton>
   if (products.loading) return <LoadingPage />
   if (products.error) return <ErrorState message={products.error} onRetry={products.refetch} />
+  if (!products.data) return <LoadingPage />
 
-  const data = products.data!
+  const data = products.data
   const totalRevenue = data.products.reduce((s, p) => s + p.total_revenue_cents, 0)
 
   let filtered = data.products.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase())
+    (p.name || '').toLowerCase().includes(search.toLowerCase())
   )
   filtered.sort((a, b) => {
-    if (sortBy === 'revenue') return b.total_revenue_cents - a.total_revenue_cents
-    if (sortBy === 'quantity') return b.total_quantity - a.total_quantity
-    return a.name.localeCompare(b.name)
+    if (sortBy === 'revenue') return (b.total_revenue_cents || 0) - (a.total_revenue_cents || 0)
+    if (sortBy === 'quantity') return (b.total_quantity || 0) - (a.total_quantity || 0)
+    return (a.name || '').localeCompare(b.name || '')
   })
 
   const chartData = filtered.slice(0, 8).map(p => ({
@@ -50,6 +57,7 @@ export default function ProductsPage() {
   }))
 
   return (
+    <DataPageSkeleton title="Products" layout="table">
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
@@ -223,5 +231,6 @@ export default function ProductsPage() {
         />
       )}
     </div>
+    </DataPageSkeleton>
   )
 }

@@ -173,7 +173,7 @@ export default function WeeklyCalendarGrid({
 
               const member = shift.staffMemberId ? staffMap.get(shift.staffMemberId) : null
               const color = member?.color || '#A1A1A8'
-              const colStart = shift.dayOfWeek + 2  // +2 because col 1 is the hour label
+              const day = shift.dayOfWeek
 
               const durationHrs = ((endMins - startMins) / 60).toFixed(1)
 
@@ -184,8 +184,8 @@ export default function WeeklyCalendarGrid({
                   style={{
                     top: `${topPct}%`,
                     height: `${Math.max(heightPct, 2)}%`,
-                    left: `calc(${((colStart - 2) / 7) * 100}% + 60px + ${((colStart - 2) * 0.5)}px + 2px)`,
-                    width: `calc(${100 / 7}% - 6px)`,
+                    left: `calc(60px + (100% - 60px) * ${day / 7} + 2px)`,
+                    width: `calc((100% - 60px) / 7 - 4px)`,
                   }}
                   onClick={(e) => {
                     e.stopPropagation()

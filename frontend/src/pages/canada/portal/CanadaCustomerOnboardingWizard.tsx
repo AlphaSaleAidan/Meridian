@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { CAD_RATE } from '@/lib/canada-proposal-plans'
 
@@ -100,6 +100,8 @@ export default function CanadaCustomerOnboardingWizard() {
   // Inventory
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
   const [csvUploaded, setCsvUploaded] = useState(false)
+  const [inventoryDocs, setInventoryDocs] = useState<{ file: File; preview: string | null; status: 'pending' | 'processing' | 'done' }[]>([])
+  const inventoryDocRef = useRef<HTMLInputElement>(null)
 
   // Staff
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([])
@@ -157,8 +159,23 @@ export default function CanadaCustomerOnboardingWizard() {
     if (account.password !== account.confirmPassword) { setError("Passwords don't match"); return }
     setSaving(true); setError(null)
     try {
-      const err = await signup(account.email, account.password, account.ownerName, account.businessName)
+      const meta: Record<string, string> = { country: 'CA' }
+      if (province) meta.province = province
+      const err = await signup(account.email, account.password, account.ownerName, account.businessName, meta)
       if (err && err !== '__confirm_email__') { setError(err); setSaving(false); return }
+
+      // Persist province as the primary business location
+      if (province && supabase && org?.org_id) {
+        try {
+          await supabase.from('business_locations').upsert({
+            business_id: org.org_id,
+            name: 'Primary',
+            state: province,
+            is_primary: true,
+          }, { onConflict: 'id' })
+        } catch {}
+      }
+
       setStep('pos')
     } catch (err: any) { setError(err.message || 'Signup failed') }
     finally { setSaving(false) }
@@ -169,8 +186,19 @@ export default function CanadaCustomerOnboardingWizard() {
     if (!posProvider) { setError('Please select your POS provider'); return }
     setSaving(true); setError(null)
     try {
-      const err = await connectPos(posProvider, posProvider)
-      if (err) { setError(err); setSaving(false); return }
+      const apiUrl = import.meta.env.VITE_API_URL || ''
+      const orgId = org?.org_id
+      if (orgId) {
+        const headers = await getAuthHeaders()
+        await fetch(`${apiUrl}/api/pos/select`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ org_id: orgId, pos_system: posProvider, connection_status: 'pending' }),
+        })
+      } else {
+        const err = await connectPos(posProvider, '')
+        if (err && err !== 'API key is required') { setError(err); setSaving(false); return }
+      }
       setStep('inventory')
     } catch (err: any) { setError(err.message || 'Connection failed') }
     finally { setSaving(false) }
@@ -212,20 +240,57 @@ export default function CanadaCustomerOnboardingWizard() {
     reader.readAsText(file)
   }
 
+  function handleInventoryDocUpload(e: ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files) return
+    const newDocs = Array.from(files).map(file => {
+      const isImage = file.type.startsWith('image/')
+      return {
+        file,
+        preview: isImage ? URL.createObjectURL(file) : null,
+        status: 'pending' as const,
+      }
+    })
+    setInventoryDocs(prev => [...prev, ...newDocs])
+    e.target.value = ''
+  }
+
+  function removeInventoryDoc(idx: number) {
+    setInventoryDocs(prev => { const next = [...prev]; next.splice(idx, 1); return next })
+  }
+
   async function handleInventoryNext() {
-    if (inventoryItems.length > 0 && supabase && org) {
-      if (!org.org_id) { setError('Account not fully created — go back and retry signup'); return }
-      setSaving(true)
-      try {
+    if (!supabase || !org || !org.org_id) {
+      if ((inventoryItems.length > 0 || inventoryDocs.length > 0) && !org?.org_id) {
+        setError('Account not fully created — go back and retry signup'); return
+      }
+      setStep('staff'); return
+    }
+    setSaving(true)
+    try {
+      if (inventoryItems.length > 0) {
         const rows = inventoryItems.filter(item => item.name.trim()).map(item => ({
           org_id: org.org_id, name: item.name, category: item.category || null,
           cost_per_unit: item.costPerUnit ? parseFloat(item.costPerUnit) : null,
           supplier: item.supplier || null, unit: item.unit || 'each',
         }))
         if (rows.length > 0) await supabase.from('products').upsert(rows, { onConflict: 'org_id,name' })
-      } catch (err: any) { setError(err.message || 'Failed to save inventory — please try again'); setSaving(false); return }
-      finally { setSaving(false) }
-    }
+      }
+      for (const doc of inventoryDocs) {
+        if (doc.status !== 'pending') continue
+        const ext = doc.file.name.split('.').pop() || 'bin'
+        const fileName = `${org.org_id}/inventory_doc_${Date.now()}.${ext}`
+        await supabase.storage.from('inventory-docs').upload(fileName, doc.file)
+        await supabase.from('inventory_document_uploads').insert({
+          org_id: org.org_id,
+          file_name: doc.file.name,
+          file_path: fileName,
+          file_type: doc.file.type,
+          status: 'pending_processing',
+        })
+      }
+    } catch (err: any) { setError(err.message || 'Failed to save inventory — please try again'); setSaving(false); return }
+    finally { setSaving(false) }
     setStep('staff')
   }
 
@@ -242,10 +307,10 @@ export default function CanadaCustomerOnboardingWizard() {
       setSaving(true)
       try {
         const rows = staffMembers.filter(m => m.name.trim()).map(m => ({
-          org_id: org.org_id, name: m.name, role: m.role || 'Staff',
-          hourly_rate: m.hourlyRate ? parseFloat(m.hourlyRate) : null,
+          business_id: org.org_id, email: `${m.name.trim().toLowerCase().replace(/\s+/g, '.')}@placeholder.local`,
+          full_name: m.name, role: m.role === 'Manager' ? 'manager' : 'staff',
         }))
-        if (rows.length > 0) await supabase.from('users').insert(rows)
+        if (rows.length > 0) await supabase.from('business_users').insert(rows)
       } catch (err: any) { setError(err.message || 'Failed to save staff — please try again'); setSaving(false); return }
       finally { setSaving(false) }
     }
@@ -269,7 +334,7 @@ export default function CanadaCustomerOnboardingWizard() {
       try {
         const fileName = `${org.org_id}/schedule_${Date.now()}.${scheduleImage.name.split('.').pop()}`
         await supabase.storage.from('schedules').upload(fileName, scheduleImage)
-        await supabase.from('scheduled_events').insert({
+        await supabase.from('schedule_uploads').insert({
           org_id: org.org_id, event_type: 'schedule_upload', title: 'Staff Schedule Upload',
           notes: `Uploaded: ${scheduleImage.name}. Pending OCR processing.`,
           file_path: fileName, status: 'pending_processing',
@@ -286,9 +351,10 @@ export default function CanadaCustomerOnboardingWizard() {
     setCheckoutLoading(true); setCheckoutError(null)
     const planLabel = (prefill.plan || 'Standard').replace(/^\w/, (c: string) => c.toUpperCase())
     try {
+      const authHeaders = await getAuthHeaders()
       const [upfrontRes, recurringRes] = await Promise.all([
         fetch(`${API_BASE}/api/billing/create-invoice`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: authHeaders,
           body: JSON.stringify({
             org_id: org?.org_id, amount_cents: monthlyPriceCAD * 100,
             customer_email: account.email,
@@ -297,7 +363,7 @@ export default function CanadaCustomerOnboardingWizard() {
           }),
         }),
         fetch(`${API_BASE}/api/billing/create-invoice`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: authHeaders,
           body: JSON.stringify({
             org_id: org?.org_id, amount_cents: monthlyPriceCAD * 100,
             customer_email: account.email,
@@ -309,7 +375,7 @@ export default function CanadaCustomerOnboardingWizard() {
       if (upfrontRes.ok && recurringRes.ok) {
         try {
           const provRes = await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: authHeaders,
             body: JSON.stringify({
               org_id: org?.org_id || prefill.token,
               email: account.email,
@@ -524,6 +590,46 @@ export default function CanadaCustomerOnboardingWizard() {
                 <Plus size={14} /> Add Item
               </button>
             </div>
+            <div className={`${cardCls} space-y-3`}>
+              <div className="flex items-center gap-2 mb-1">
+                <Package size={14} className={T.accentTxt} />
+                <h3 className={`text-[13px] font-semibold ${T.text}`}>Upload Inventory Documents</h3>
+              </div>
+              <p className={`text-[11px] ${T.muted}`}>
+                Upload invoices, supplier price lists, or inventory spreadsheets — our AI will extract product names, costs, and margins automatically.
+              </p>
+              <div onClick={() => inventoryDocRef.current?.click()}
+                className={`flex flex-col items-center justify-center py-8 cursor-pointer rounded-lg border-2 border-dashed ${T.cardBorder} hover:border-[#00d4aa]/30 transition-colors`}>
+                <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mb-2">
+                  <Upload size={20} className={T.accentTxt} />
+                </div>
+                <p className={`text-[12px] font-medium ${T.text}`}>Drop files or click to upload</p>
+                <p className={`text-[10px] ${T.muted} mt-1`}>PDF, Excel, images of invoices — any format</p>
+              </div>
+              <input ref={inventoryDocRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.heic" multiple onChange={handleInventoryDocUpload} className="sr-only" />
+              {inventoryDocs.length > 0 && (
+                <div className="space-y-2">
+                  {inventoryDocs.map((doc, idx) => (
+                    <div key={idx} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${T.cardBg} border ${T.cardBorder}`}>
+                      <Package size={14} className={T.accentTxt} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[11px] font-medium ${T.text} truncate`}>{doc.file.name}</p>
+                        <p className={`text-[9px] ${T.muted}`}>{(doc.file.size / 1024).toFixed(0)} KB</p>
+                      </div>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full ${doc.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' : doc.status === 'processing' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
+                        {doc.status === 'pending' ? 'Ready to process' : doc.status === 'processing' ? 'Processing...' : 'Done'}
+                      </span>
+                      <button onClick={() => removeInventoryDoc(idx)} className="p-1 text-[#6b7a74]/30 hover:text-red-400 transition-colors">
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <p className={`text-[10px] ${T.accentTxt} flex items-center gap-1`}>
+                    <Shield size={10} /> AI bot will process these after setup — extracting products, costs &amp; margins into structured tables
+                  </p>
+                </div>
+              )}
+            </div>
             <div className="flex justify-between">
               <button onClick={() => setStep('pos')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <div className="flex items-center gap-2">
@@ -615,7 +721,7 @@ export default function CanadaCustomerOnboardingWizard() {
                   <p className={`text-[11px] ${T.muted} mt-1`}>JPG, PNG, or PDF — we'll extract shift data</p>
                 </div>
               )}
-              <input ref={scheduleInputRef} type="file" accept="image/*,.pdf" capture="environment" onChange={handleScheduleUpload} className="hidden" />
+              <input ref={scheduleInputRef} type="file" accept="image/*,.pdf" onChange={handleScheduleUpload} className="sr-only" />
             </div>
             <div className="flex justify-between">
               <button onClick={() => setStep('staff')} className={btnBack}><ArrowLeft size={14} /> Back</button>

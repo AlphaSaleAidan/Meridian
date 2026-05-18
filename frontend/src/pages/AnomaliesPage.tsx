@@ -5,6 +5,11 @@ import { generateAnomalies, type Anomaly } from '@/lib/agent-data'
 import { formatRelative } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { api } from '@/lib/api'
+import { useApi } from '@/hooks/useApi'
+import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const severityConfig = {
   critical: { color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/15', icon: AlertTriangle, label: 'Critical' },
@@ -99,13 +104,21 @@ function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
 }
 
 export default function AnomaliesPage() {
-  const anomalies = generateAnomalies()
+  const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const apiData = useApi(() => api.anomalies(orgId), [orgId])
+
+  const anomalies: Anomaly[] = isDemo ? generateAnomalies() : (apiData.data?.anomalies ?? [])
+
+  if (!isDemo && apiData.loading) return <LoadingPage />
+  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 
   const unacked = anomalies.filter(a => !a.acknowledged).length
   const critical = anomalies.filter(a => a.severity === 'critical').length
   const warnings = anomalies.filter(a => a.severity === 'warning').length
 
   return (
+    <DataPageSkeleton title="Anomalies" layout="grid">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -183,5 +196,6 @@ export default function AnomaliesPage() {
         </div>
       </ScrollReveal>
     </div>
+    </DataPageSkeleton>
   )
 }

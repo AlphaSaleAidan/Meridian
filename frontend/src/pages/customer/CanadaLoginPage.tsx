@@ -8,9 +8,9 @@ import { MapPin } from 'lucide-react'
 export default function CanadaLoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { authenticated } = useAuth()
+  const { ready, authenticated, org, logout } = useAuth()
 
-  const from = (location.state as { from?: string })?.from || '/canada'
+  const from = (location.state as { from?: string })?.from || '/canada/dashboard'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -18,10 +18,22 @@ export default function CanadaLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForgot, setShowForgot] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
+  const [cleared, setCleared] = useState(false)
+  const [justLoggedIn, setJustLoggedIn] = useState(false)
 
   useEffect(() => {
-    if (authenticated) navigate(from, { replace: true })
-  }, [authenticated, from, navigate])
+    if (!ready) return
+    if (authenticated && !justLoggedIn && !cleared) {
+      logout().then(() => setCleared(true))
+      return
+    }
+    if (!justLoggedIn || !authenticated || !org) return
+    if (!org.onboarded) {
+      navigate('/canada/setup', { replace: true })
+      return
+    }
+    navigate(from, { replace: true })
+  }, [ready, authenticated, org, from, navigate, justLoggedIn, cleared, logout])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -29,8 +41,8 @@ export default function CanadaLoginPage() {
     setLoading(true)
 
     if (!supabase) {
+      setError('Authentication service unavailable')
       setLoading(false)
-      navigate(from, { replace: true })
       return
     }
 
@@ -39,7 +51,7 @@ export default function CanadaLoginPage() {
     if (authError) {
       setError(authError.message)
     } else {
-      navigate(from, { replace: true })
+      setJustLoggedIn(true)
     }
   }
 
@@ -54,6 +66,16 @@ export default function CanadaLoginPage() {
     setLoading(false)
     if (resetError) { setError(resetError.message); return }
     setSuccess('If that email exists, a reset link has been sent.')
+  }
+
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/15 border border-[#1A8FD6]/30 flex items-center justify-center animate-pulse">
+          <span className="text-[#1A8FD6] font-bold text-sm">M</span>
+        </div>
+      </div>
+    )
   }
 
   const inputClass = 'w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50 focus:ring-1 focus:ring-[#1A8FD6]/20 transition-colors'
@@ -75,10 +97,10 @@ export default function CanadaLoginPage() {
 
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
           <h2 className="text-lg font-bold text-[#F5F5F7] text-center mb-1">
-            {showForgot ? 'Reset password' : 'Sign in'}
+            {showForgot ? 'Reset password' : 'Sign in to your account'}
           </h2>
           <p className="text-xs text-[#A1A1A8] text-center mb-6">
-            {showForgot ? "We'll send a reset link to your email" : 'Access the Meridian Canada dashboard'}
+            {showForgot ? "We'll send a reset link to your email" : 'Enter the credentials provided by your Meridian rep'}
           </p>
 
           {error && (
@@ -104,6 +126,9 @@ export default function CanadaLoginPage() {
               <div className="flex items-center justify-between text-[11px]">
                 <button type="button" onClick={() => { setShowForgot(true); setError(null); setSuccess(null) }} className="text-[#1A8FD6] hover:text-[#17C5B0] transition-colors">
                   Forgot password?
+                </button>
+                <button type="button" onClick={() => navigate('/canada/onboard')} className="text-[#17C5B0] hover:text-[#1A8FD6] transition-colors">
+                  Create account
                 </button>
               </div>
             </form>

@@ -11,7 +11,10 @@ import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
 import { generateForecastPeriods } from '@/lib/agent-data'
+import { useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { TrendingUp, TrendingDown, Minus, Target, BarChart3 } from 'lucide-react'
+import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -24,15 +27,20 @@ const tooltipStyle = {
 
 export default function ForecastsPage() {
   const orgId = useOrgId()
+  const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const tier = useTier()
   const limits = tierLimits[tier]
   const forecasts = useApi(() => api.forecasts(orgId), [orgId])
   const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
 
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Forecasts"><div /></DataPageSkeleton>
   if (forecasts.loading) return <LoadingPage />
   if (forecasts.error) return <ErrorState message={forecasts.error} onRetry={forecasts.refetch} />
+  if (!forecasts.data) return <LoadingPage />
 
-  const raw = forecasts.data!
+  const raw = forecasts.data
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() + limits.forecastDays)
   const gatedForecasts = limits.forecastDays >= 999
@@ -65,6 +73,7 @@ export default function ForecastsPage() {
     .reduce((s, f) => s + f.predicted_cents, 0)
 
   return (
+    <DataPageSkeleton title="Forecasts" layout="chart">
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
@@ -107,7 +116,7 @@ export default function ForecastsPage() {
 
       {/* Scenario Analysis + Ensemble Model Info */}
       {(() => {
-        const periods = generateForecastPeriods()
+        const periods = isDemo ? generateForecastPeriods() : []
         return (
           <ScrollReveal variant="fadeUp" delay={0.05}>
             <div className="card p-4 sm:p-5">
@@ -273,5 +282,6 @@ export default function ForecastsPage() {
         />
       )}
     </div>
+    </DataPageSkeleton>
   )
 }

@@ -8,7 +8,7 @@ import {
   CreditCard, SendHorizontal, AlertCircle,
 } from 'lucide-react'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
-import { useIsDemo } from '@/hooks/useOrg'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { posSystems } from '@/data/pos-systems'
 import {
@@ -1022,6 +1022,7 @@ function PhoneSetupCard({ biz, onConnect }: { biz: PhoneBizConfig; onConnect: ()
 type Tab = 'overview' | 'calls' | 'settings'
 
 export default function PhoneOrdersPage() {
+  const orgId = useOrgId()
   const isDemo = useIsDemo()
   const { org } = useAuth()
   const [tab, setTab] = useState<Tab>('overview')

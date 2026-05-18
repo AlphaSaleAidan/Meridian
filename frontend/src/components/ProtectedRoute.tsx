@@ -19,18 +19,23 @@ export default function ProtectedRoute({ children, loginPath = '/customer/login'
     )
   }
 
-  if (!allowSalesReps) {
-    if (salesAuth.authenticated && !org) {
-      return <AccessDenied type="sales-rep" />
-    }
+  if (!authenticated) {
+    return <Navigate to={loginPath} state={{ from: location.pathname }} replace />
+  }
 
-    if (isSalesRep && !org) {
+  if (!allowSalesReps) {
+    if ((salesAuth.authenticated || isSalesRep) && !org) {
       return <AccessDenied type="sales-rep" />
     }
   }
 
-  if (!authenticated) {
+  if (!org) {
     return <Navigate to={loginPath} state={{ from: location.pathname }} replace />
+  }
+
+  const isCanada = location.pathname.startsWith('/canada/')
+  if (!org.onboarded && isCanada && !location.pathname.includes('/setup')) {
+    return <Navigate to="/canada/setup" replace />
   }
 
   return <>{children}</>

@@ -25,6 +25,7 @@ import {
   Phone,
   Globe,
   Calendar,
+  Video,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useAuth } from '@/lib/auth'
@@ -34,23 +35,24 @@ import ClineErrorBoundary from './ClineErrorBoundary'
 
 const navItems = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
-  { path: 'agents', icon: Bot, label: 'Agents' },
-  { path: 'actions', icon: Target, label: 'Top Actions' },
   { path: 'revenue', icon: TrendingUp, label: 'Revenue' },
-  { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
+  { path: 'insights', icon: Lightbulb, label: 'Insights' },
+  { path: 'actions', icon: Target, label: 'Top Actions' },
+  { path: 'agents', icon: Bot, label: 'Agents' },
+  { path: 'camera-intelligence', icon: Video, label: 'Camera Intel' },
+  { path: 'customers', icon: Users, label: 'Customers' },
   { path: 'products', icon: Package, label: 'Products' },
   { path: 'margins', icon: DollarSign, label: 'Margins' },
-  { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix' },
-  { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
-  { path: 'customers', icon: Users, label: 'Customers' },
-  { path: 'staff', icon: UserCheck, label: 'Staff' },
+  { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
   { path: 'peak-hours', icon: Clock, label: 'Peak Hours' },
-  { path: 'inventory', icon: Layers, label: 'Inventory' },
+  { path: 'staff', icon: UserCheck, label: 'Staff' },
   { path: 'schedule', icon: Calendar, label: 'Schedule' },
-  { path: 'space', icon: Box, label: '3D Space' },
+  { path: 'inventory', icon: Layers, label: 'Inventory' },
+  { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
+  { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix' },
   { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
   { path: 'my-website', icon: Globe, label: 'My Website' },
-  { path: 'insights', icon: Lightbulb, label: 'Insights' },
+  { path: 'space', icon: Box, label: '3D Space' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },
 ]

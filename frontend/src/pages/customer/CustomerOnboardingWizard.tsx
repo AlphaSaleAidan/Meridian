@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSelectorPanel from '@/components/POSSelectorPanel'
 import type { POSSystem } from '@/data/pos-systems'
 
@@ -324,7 +324,7 @@ export default function CustomerOnboardingWizard() {
       try {
         const fileName = `${org.org_id}/schedule_${Date.now()}.${scheduleImage.name.split('.').pop()}`
         await supabase.storage.from('schedules').upload(fileName, scheduleImage)
-        await supabase.from('scheduled_events').insert({
+        await supabase.from('schedule_uploads').insert({
           org_id: org.org_id,
           event_type: 'schedule_upload',
           title: 'Staff Schedule Upload',
@@ -346,11 +346,12 @@ export default function CustomerOnboardingWizard() {
     const planLabel = (prefill.plan || 'Standard').replace(/^\w/, (c: string) => c.toUpperCase())
 
     try {
+      const authHeaders = await getAuthHeaders()
       // Send both invoices in parallel: upfront fee + monthly recurring
       const [upfrontRes, recurringRes] = await Promise.all([
         fetch(`${API_BASE}/api/billing/create-invoice`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             org_id: org?.org_id,
             amount_cents: monthlyPrice * 100,
@@ -361,7 +362,7 @@ export default function CustomerOnboardingWizard() {
         }),
         fetch(`${API_BASE}/api/billing/create-invoice`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({
             org_id: org?.org_id,
             amount_cents: monthlyPrice * 100,
@@ -379,7 +380,7 @@ export default function CustomerOnboardingWizard() {
         // Provision customer: create business record, subscription, and send welcome email
         try {
           await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: authHeaders,
             body: JSON.stringify({
               org_id: org?.org_id || prefill.token,
               email: account.email,

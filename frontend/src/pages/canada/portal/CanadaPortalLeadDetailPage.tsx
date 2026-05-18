@@ -14,7 +14,7 @@ import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
 import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type InvoiceInput } from '@/lib/generate-invoice-pdf'
 import { generateSlaDocument, type SlaInput } from '@/lib/generate-sla-pdf'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { supabase } from '@/lib/supabase'
+import { supabase, getAuthHeaders } from '@/lib/supabase'
 
 const STAGE_TO_STEP: Record<string, number> = {
   proposal_shown: 1,
@@ -170,9 +170,10 @@ export default function CanadaPortalLeadDetailPage() {
 
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
+      const authHeaders = await getAuthHeaders()
       const res = await fetch(`${API_BASE}/api/onboarding/connect-pos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
           deal_id: deal?.id,
           provider,
@@ -193,7 +194,7 @@ export default function CanadaPortalLeadDetailPage() {
 
       const verifyRes = await fetch(`${API_BASE}/api/onboarding/verify-pos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ deal_id: deal?.id, provider }),
       }).catch(() => null)
 
@@ -242,9 +243,10 @@ export default function CanadaPortalLeadDetailPage() {
       if (!supabase) throw new Error('Database not connected')
 
       const API_BASE = import.meta.env.VITE_API_URL || ''
+      const authHeaders = await getAuthHeaders()
       const res = await fetch(`${API_BASE}/api/canada/create-customer`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
           email,
           password,

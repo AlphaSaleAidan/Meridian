@@ -8,13 +8,19 @@ interface Props {
 interface State {
   hasError: boolean
   error: Error | null
+  info: string
 }
 
 export default class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, error: null }
+  state: State = { hasError: false, error: null, info: '' }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
+    return { hasError: true, error, info: '' }
+  }
+
+  componentDidCatch(error: Error, errorInfo: { componentStack?: string }) {
+    this.setState({ info: errorInfo?.componentStack || '' })
+    console.error('[ErrorBoundary]', error, errorInfo?.componentStack)
   }
 
   render() {
@@ -36,6 +42,22 @@ export default class ErrorBoundary extends Component<Props, State> {
               <p className="text-[10px] font-mono text-red-400/60 break-all">
                 {this.state.error.message}
               </p>
+            )}
+            {this.state.info && (
+              <details className="mt-2">
+                <summary className="text-[9px] text-[#A1A1A8]/40 cursor-pointer">Stack trace</summary>
+                <pre className="text-[8px] font-mono text-[#A1A1A8]/30 mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all">
+                  {this.state.info}
+                </pre>
+              </details>
+            )}
+            {this.state.error?.stack && (
+              <details className="mt-1">
+                <summary className="text-[9px] text-[#A1A1A8]/40 cursor-pointer">Error stack</summary>
+                <pre className="text-[8px] font-mono text-[#A1A1A8]/30 mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all">
+                  {this.state.error.stack}
+                </pre>
+              </details>
             )}
             <button
               onClick={() => window.location.reload()}

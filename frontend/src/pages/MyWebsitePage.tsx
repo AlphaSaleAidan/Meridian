@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useOrgId } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
+import { getAuthHeaders } from '@/lib/supabase'
 import ScrollReveal from '@/components/ScrollReveal'
 import { WEBSITE_TEMPLATES, getTemplateById, type WebsiteTemplate } from '@/data/websiteTemplates'
 import SceneRenderer from '@/components/website/SceneRenderer'
@@ -190,7 +191,7 @@ export default function MyWebsitePage() {
 
   async function loadAnalytics() {
     try {
-      const res = await fetch(`${API_BASE}/api/website/analytics/${orgId}`)
+      const res = await fetch(`${API_BASE}/api/website/analytics/${orgId}`, { headers: await getAuthHeaders() })
       if (res.ok) setAnalytics(await res.json())
     } catch {
       setError('Failed to load analytics')
@@ -199,7 +200,7 @@ export default function MyWebsitePage() {
 
   async function loadOrders() {
     try {
-      const res = await fetch(`${API_BASE}/api/website/orders/${orgId}`)
+      const res = await fetch(`${API_BASE}/api/website/orders/${orgId}`, { headers: await getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         setOrders(data.orders || [])
@@ -216,7 +217,7 @@ export default function MyWebsitePage() {
     try {
       const res = await fetch(`${API_BASE}/api/website/scrape`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ url: scrapeUrl, merchant_id: orgId }),
       })
       const json = await res.json()
@@ -253,7 +254,7 @@ export default function MyWebsitePage() {
       await handleSave(false)
       const res = await fetch(`${API_BASE}/api/website/generate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ merchant_id: orgId }),
       })
       const json = await res.json()
@@ -279,7 +280,7 @@ export default function MyWebsitePage() {
       const body = { ...config, merchant_id: orgId }
       const res = await fetch(`${API_BASE}/api/website/save`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(body),
       })
       const data = await res.json()
@@ -303,7 +304,7 @@ export default function MyWebsitePage() {
       await handleSave(false)
       const res = await fetch(`${API_BASE}/api/website/publish`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ merchant_id: orgId }),
       })
       const data = await res.json()
@@ -325,7 +326,7 @@ export default function MyWebsitePage() {
     try {
       await fetch(`${API_BASE}/api/website/unpublish`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ merchant_id: orgId }),
       })
       setConfig(prev => ({ ...prev, published: false }))
@@ -344,13 +345,13 @@ export default function MyWebsitePage() {
   function addService() {
     setConfig(prev => ({
       ...prev,
-      services: [...prev.services, { name: '', description: '', price: '' }],
+      services: [...(prev.services || []), { name: '', description: '', price: '' }],
     }))
   }
 
   function updateService(i: number, field: string, value: string) {
     setConfig(prev => {
-      const services = [...prev.services]
+      const services = [...(prev.services || [])]
       services[i] = { ...services[i], [field]: value }
       return { ...prev, services }
     })
@@ -359,7 +360,7 @@ export default function MyWebsitePage() {
   function removeService(i: number) {
     setConfig(prev => ({
       ...prev,
-      services: prev.services.filter((_, idx) => idx !== i),
+      services: (prev.services || []).filter((_, idx) => idx !== i),
     }))
   }
 
@@ -508,7 +509,7 @@ export default function MyWebsitePage() {
                   <button onClick={addService} className="text-xs text-[#1A8FD6] hover:underline">+ Add item</button>
                 </div>
                 <div className="space-y-2">
-                  {config.services.map((svc, i) => (
+                  {(config.services || []).map((svc, i) => (
                     <div key={i} className="flex gap-2 items-start">
                       <input value={svc.name} placeholder="Service name"
                         onChange={e => updateService(i, 'name', e.target.value)}
@@ -708,7 +709,7 @@ export default function MyWebsitePage() {
             <div className="px-4 pb-4">
               <button onClick={async () => {
                 if (!confirm('Delete your website? This cannot be undone.')) return
-                await fetch(`${API_BASE}/api/website/${orgId}`, { method: 'DELETE' })
+                await fetch(`${API_BASE}/api/website/${orgId}`, { method: 'DELETE', headers: await getAuthHeaders() })
                 setHasWebsite(false); setConfig({ template_id: 'aurora', services: [], hours: {} }); setTab('setup')
               }}
                 className="px-4 py-2 rounded-lg border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10">
