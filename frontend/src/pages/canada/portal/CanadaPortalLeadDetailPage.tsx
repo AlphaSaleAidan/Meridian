@@ -705,13 +705,15 @@ export default function CanadaPortalLeadDetailPage() {
   const [files, setFiles] = useState(DEMO_FILES)
 
   useEffect(() => {
-    canadaLeadsService.getById(id!).then(found => {
+    if (!id) { setLoading(false); return }
+    canadaLeadsService.getById(id).then(found => {
       setDeal(found)
       if (found) {
         setMonthlyPrice(found.monthly_value || 500)
       }
-      setLoading(false)
-    })
+    }).catch(() => {
+      setDeal(null)
+    }).finally(() => setLoading(false))
   }, [id])
 
   if (loading) {

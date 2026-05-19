@@ -29,8 +29,9 @@ export default function CanadaPortalCommissionsPage() {
   useEffect(() => {
     canadaLeadsService.list(rep?.rep_id).then(deals => {
       setCommissions(deriveCommissionsFromLeads(deals))
-      setLoading(false)
-    })
+    }).catch(() => {
+      setCommissions([])
+    }).finally(() => setLoading(false))
   }, [rep?.rep_id])
 
   const filtered = commissions.filter(c => {

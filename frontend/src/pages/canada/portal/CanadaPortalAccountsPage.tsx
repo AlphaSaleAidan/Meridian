@@ -47,8 +47,9 @@ export default function CanadaPortalAccountsPage() {
   useEffect(() => {
     canadaLeadsService.list(rep?.rep_id).then(deals => {
       setClients(deriveClientsFromLeads(deals))
-      setLoading(false)
-    })
+    }).catch(() => {
+      setClients([])
+    }).finally(() => setLoading(false))
   }, [rep?.rep_id])
 
   async function checkBilling(clientId: string) {
