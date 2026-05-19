@@ -223,7 +223,7 @@ export default function CanadaPortalAccountsPage() {
                   {/* POS Badge */}
                   <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1a2420] border border-[#1a2420]">
                     <Wifi size={10} className="text-[#6b7a74]" />
-                    <span className="text-[10px] text-[#6b7a74] font-medium">{client.pos_provider || 'N/A'}</span>
+                    <span className="text-[10px] text-[#6b7a74] font-medium capitalize">{client.pos_provider || 'N/A'}</span>
                   </div>
 
                   {/* Revenue Badge */}

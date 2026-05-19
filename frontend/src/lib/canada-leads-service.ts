@@ -108,6 +108,7 @@ export const canadaLeadsService = {
 
   async delete(id: string): Promise<void> {
     if (!supabase) return
-    await supabase.from('canada_leads').delete().eq('id', id)
+    const { error } = await supabase.from('canada_leads').delete().eq('id', id)
+    if (error) throw new LeadsServiceError(error.message)
   },
 }

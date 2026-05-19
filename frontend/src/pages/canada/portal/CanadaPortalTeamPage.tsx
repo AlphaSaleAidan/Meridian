@@ -177,7 +177,7 @@ export default function CanadaPortalTeamPage() {
       // Fetch deals for real pipeline calculation
       let fetchedDeals: Deal[] = []
       try {
-        fetchedDeals = await canadaLeadsService.list()
+        fetchedDeals = await canadaLeadsService.list(rep?.rep_id)
         setDeals(fetchedDeals)
       } catch {
         // ignore

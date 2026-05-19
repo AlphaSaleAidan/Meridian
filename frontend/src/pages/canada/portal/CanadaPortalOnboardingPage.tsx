@@ -264,7 +264,7 @@ export default function CanadaPortalOnboardingPage() {
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Province</label>
                   <select value={profile.province} onChange={e => setProfile(p => ({ ...p, province: e.target.value }))} className={inputClass}>
-                    <option value="">Select province</option>
+                    <option value="" disabled>Choose your province...</option>
                     {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>

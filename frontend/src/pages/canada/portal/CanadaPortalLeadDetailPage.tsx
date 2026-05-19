@@ -561,7 +561,7 @@ export default function CanadaPortalLeadDetailPage() {
               rep_email: rep.email || '',
               signed_by: slaSignature,
               signed_date: new Date().toLocaleDateString('en-CA'),
-              provider_signatory: 'Aidan Pierce, Founder & CEO',
+              provider_signatory: `${rep.name || 'Meridian Sales'}, Account Representative`,
             },
           }),
         })
@@ -749,7 +749,7 @@ export default function CanadaPortalLeadDetailPage() {
       const file = input.files?.[0]
       if (!file) return
       const ext = file.name.split('.').pop()?.toUpperCase() || 'File'
-      setFiles(prev => [...prev, { id: String(Date.now()), name: file.name, description: `Uploaded ${ext} file`, tag: ext }])
+      setFiles(prev => [...prev, { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: file.name, description: `Uploaded ${ext} file`, tag: ext }])
     }
     input.click()
   }
@@ -1338,20 +1338,13 @@ export default function CanadaPortalLeadDetailPage() {
           <button
             onClick={async () => {
               try {
-                const order: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
-                const currentNorm = order.find(s => STAGE_TO_STEP[s] === currentStep) || deal.stage as DealStage
-                const idx = order.indexOf(currentNorm)
-                if (idx < 0) {
-                  const nextStage: DealStage = 'proposal_shown'
-                  await canadaLeadsService.updateStage(deal.id, nextStage)
-                  setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
-                  return
-                }
-                if (idx < order.length - 1) {
-                  const nextStage = order[idx + 1]
-                  await canadaLeadsService.updateStage(deal.id, nextStage)
-                  setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
-                }
+                const pipeline: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
+                const currentIdx = pipeline.findIndex(s => STAGE_TO_STEP[s] === currentStep)
+                const nextIdx = currentIdx < 0 ? 0 : currentIdx + 1
+                if (nextIdx >= pipeline.length) return
+                const nextStage = pipeline[nextIdx]
+                await canadaLeadsService.updateStage(deal.id, nextStage)
+                setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
               } catch (err) {
                 console.error('Stage advance failed:', err)
               }

@@ -142,7 +142,7 @@ export default function CanadaPortalCommissionsPage() {
             <h3 className="text-xs font-semibold text-white">Monthly Goal</h3>
           </div>
           {(() => {
-            const goal = 5000
+            const goal = totalEarned > 8000 ? 15000 : totalEarned > 3000 ? 8000 : 5000
             const progress = Math.min(100, Math.round((totalEarned / goal) * 100))
             const dealsNeeded = totalEarned >= goal ? 0 : Math.ceil((goal - totalEarned) / (totalEarned / Math.max(commissions.length, 1)))
             return (

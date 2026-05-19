@@ -98,16 +98,16 @@ export default function CanadaPortalSettingsPage() {
             <input type="text" value={name} onChange={e => setName(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Email</label>
-            <input type="email" defaultValue={rep?.email || ''} className={inputClass} readOnly />
+            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Email <span className="text-[#4a5550] font-normal">(locked)</span></label>
+            <input type="email" defaultValue={rep?.email || ''} className={`${inputClass} opacity-60 cursor-not-allowed`} readOnly title="Email cannot be changed. Contact your admin." />
           </div>
           <div>
             <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Phone</label>
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate</label>
-            <input type="text" value={rep ? `${rep.commission_rate}%` : ''} className={inputClass} readOnly />
+            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate <span className="text-[#4a5550] font-normal">(locked)</span></label>
+            <input type="text" value={rep ? `${rep.commission_rate}%` : ''} className={`${inputClass} opacity-60 cursor-not-allowed`} readOnly title="Commission rate is set by your admin." />
           </div>
         </div>
       </div>
