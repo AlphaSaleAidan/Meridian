@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2, WifiOff,
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { useToast } from '@/components/Toast'
+import { queueIfOffline, setupOfflineSync, getPendingCount } from '@/lib/offline-queue'
+import { requestNotificationPermission } from '@/lib/notifications'
 
 const STAGE_TO_STEP: Record<string, number> = {
   proposal_shown: 1,
@@ -99,12 +102,14 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
 
 export default function CanadaPortalLeadsPage() {
   const { rep } = useSalesAuth()
+  const { toast } = useToast()
   const [searchParams] = useSearchParams()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'leads' | 'active'>('leads')
   const [showNew, setShowNew] = useState(searchParams.get('new') === 'true')
+  const [pendingSync, setPendingSync] = useState(getPendingCount())
 
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
@@ -124,7 +129,20 @@ export default function CanadaPortalLeadsPage() {
     canadaLeadsService.list(rep?.rep_id)
       .then(d => { setDeals(d); setLoading(false) })
       .catch(err => { setListError(err?.message || 'Could not load leads.'); setLoading(false) })
+    const channel = canadaLeadsService.subscribe(rep?.rep_id, setDeals)
+    return () => { canadaLeadsService.unsubscribe(channel) }
   }, [rep?.rep_id])
+
+  useEffect(() => {
+    const cleanup = setupOfflineSync((count) => {
+      toast(`${count} queued lead${count > 1 ? 's' : ''} synced`, 'success')
+      setPendingSync(getPendingCount())
+      canadaLeadsService.list(rep?.rep_id).then(setDeals).catch(() => {})
+    })
+    return cleanup
+  }, [rep?.rep_id, toast])
+
+  useEffect(() => { requestNotificationPermission() }, [])
 
   const leads = deals.filter(d => d.stage !== 'customer_walkthrough' && d.stage !== 'closed_won' && d.stage !== 'pos_connected' && d.stage !== 'closed_lost')
   const activeDeals = deals.filter(d => d.stage === 'customer_walkthrough' || d.stage === 'closed_won' || d.stage === 'pos_connected')
@@ -151,12 +169,21 @@ export default function CanadaPortalLeadsPage() {
         created_at: new Date().toISOString().slice(0, 10),
         updated_at: new Date().toISOString().slice(0, 10),
       }
-      const saved = await canadaLeadsService.create(deal, rep?.rep_id)
-      setDeals(prev => [saved, ...prev])
+      const queued = queueIfOffline('create', { deal, repId: rep?.rep_id })
+      if (queued) {
+        setDeals(prev => [deal, ...prev])
+        setPendingSync(getPendingCount())
+        toast('Saved offline — will sync when back online', 'warning')
+      } else {
+        const saved = await canadaLeadsService.create(deal, rep?.rep_id)
+        setDeals(prev => [saved, ...prev])
+        toast('Lead added', 'success')
+      }
       setShowNew(false)
       setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '', pos_system: '' })
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Failed to add lead')
+      toast('Failed to save lead', 'error')
     } finally {
       setAdding(false)
     }
@@ -191,6 +218,16 @@ export default function CanadaPortalLeadsPage() {
           <Plus size={16} /> New Lead
         </button>
       </div>
+
+      {/* Offline sync banner */}
+      {pendingSync > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#f0b429]/10 border border-[#f0b429]/20">
+          <WifiOff size={14} className="text-[#f0b429]" />
+          <span className="text-xs text-[#f0b429] font-medium">
+            {pendingSync} lead{pendingSync > 1 ? 's' : ''} waiting to sync
+          </span>
+        </div>
+      )}
 
       {/* Tab Toggle */}
       <div className="flex gap-1 p-1 bg-[#0f1512] border border-[#1a2420] rounded-xl w-fit">

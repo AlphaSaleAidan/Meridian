@@ -26,7 +26,7 @@ class SendEmailRequest(BaseModel):
     extra: dict = {}
 
 
-@router.post("/send")
+@router.post("/send", dependencies=[Depends(require_admin)])
 async def send_email(req: SendEmailRequest):
     """Send an email using the specified template."""
     from ...email import send as email_send
@@ -163,29 +163,29 @@ async def email_stats(org_id: Optional[str] = Query(None)):
     from ...db import get_db
     db = get_db()
 
-    org_filter = f"AND org_id = '{org_id}'" if org_id else ""
+    filters = {}
+    if org_id:
+        import re
+        if not re.match(r'^[0-9a-f\-]{36}$', org_id):
+            raise HTTPException(400, "Invalid org_id format")
+        filters["org_id"] = f"eq.{org_id}"
 
-    result = await db.execute(f"""
-        SELECT
-            COUNT(*)::int AS total_sent,
-            COUNT(*) FILTER (WHERE postal_status = 'delivered')::int AS delivered,
-            COUNT(*) FILTER (WHERE postal_status = 'bounced')::int AS bounced,
-            COUNT(*) FILTER (WHERE opened_at IS NOT NULL)::int AS opened,
-            COUNT(*) FILTER (WHERE clicked_at IS NOT NULL)::int AS clicked,
-            COUNT(*) FILTER (WHERE status = 'error')::int AS errors
-        FROM email_send_log
-        WHERE 1=1 {org_filter}
-    """)
+    rows = await db.select("email_send_log", filters=filters)
 
-    row = result[0] if result else {}
-    total = row.get("total_sent", 0)
+    total = len(rows)
+    delivered = sum(1 for r in rows if r.get("postal_status") == "delivered")
+    bounced = sum(1 for r in rows if r.get("postal_status") == "bounced")
+    opened = sum(1 for r in rows if r.get("opened_at"))
+    clicked = sum(1 for r in rows if r.get("clicked_at"))
+    errors = sum(1 for r in rows if r.get("status") == "error")
+
     return {
         "total_sent": total,
-        "delivered": row.get("delivered", 0),
-        "bounced": row.get("bounced", 0),
-        "opened": row.get("opened", 0),
-        "clicked": row.get("clicked", 0),
-        "errors": row.get("errors", 0),
-        "open_rate": round(row.get("opened", 0) / total * 100, 1) if total else 0,
-        "click_rate": round(row.get("clicked", 0) / total * 100, 1) if total else 0,
+        "delivered": delivered,
+        "bounced": bounced,
+        "opened": opened,
+        "clicked": clicked,
+        "errors": errors,
+        "open_rate": round(opened / total * 100, 1) if total else 0,
+        "click_rate": round(clicked / total * 100, 1) if total else 0,
     }

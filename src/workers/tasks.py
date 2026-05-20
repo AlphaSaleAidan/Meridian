@@ -370,3 +370,89 @@ def compress_sessions(use_llm: bool = True, max_sessions: int = 3):
     result = rebuild_session_learnings(max_sessions=max_sessions, use_llm=use_llm)
     logger.info(f"Session compression complete: {result}")
     return result
+
+
+@shared_task(name="src.workers.tasks.run_cold_storage_archive")
+def run_cold_storage_archive():
+    """Nightly: compress and archive data older than retention window, then offload to R2."""
+    logger.info("Starting cold storage archival")
+
+    async def _archive():
+        from .cold_storage import run_nightly_archive
+        return await run_nightly_archive()
+
+    result = run_async(_archive())
+    logger.info(f"Cold storage archive complete: {result}")
+
+    if result.get("orgs_archived", 0) > 0:
+        offload_warm_to_r2.apply_async(countdown=60)
+
+    return result
+
+
+@shared_task(name="src.workers.tasks.offload_warm_to_r2")
+def offload_warm_to_r2():
+    """Upload all WARM archives older than 30 days to R2, then delete local copies."""
+    import shutil
+    from datetime import datetime, timedelta, timezone
+    from pathlib import Path
+    from .cold_storage import ARCHIVE_DIR
+
+    if not ARCHIVE_DIR.exists():
+        return {"status": "skipped", "reason": "No archives"}
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    uploaded = 0
+    cleaned = 0
+
+    for manifest_path in ARCHIVE_DIR.rglob("manifest.json"):
+        try:
+            import json
+            manifest = json.loads(manifest_path.read_text())
+            archived_at = manifest.get("archived_at", "")
+            if not archived_at or archived_at > cutoff.isoformat():
+                continue
+
+            org_id = manifest.get("org_id", "")
+            period = manifest.get("period", "")
+            if not org_id or not period:
+                continue
+
+            parts = period.split("-")
+            year, month = int(parts[0]), int(parts[1])
+
+            upload_archive_to_r2.apply_async(args=[org_id, year, month])
+            uploaded += 1
+        except Exception as e:
+            logger.warning("Offload check failed for %s: %s", manifest_path, e)
+
+    logger.info("Queued %d archives for R2 offload", uploaded)
+    return {"status": "complete", "queued_for_upload": uploaded}
+
+
+@shared_task(name="src.workers.tasks.archive_org_month")
+def archive_org_month_task(org_id: str, year: int, month: int):
+    """Archive a specific org's data for a given month."""
+    logger.info(f"Archiving {org_id} for {year}-{month:02d}")
+
+    async def _archive():
+        from .cold_storage import archive_org_month
+        return await archive_org_month(org_id, year, month)
+
+    result = run_async(_archive())
+    logger.info(f"Archive complete for {org_id}/{year}-{month:02d}: {result}")
+    return result
+
+
+@shared_task(name="src.workers.tasks.upload_archive_to_r2")
+def upload_archive_to_r2(org_id: str, year: int, month: int):
+    """Upload a local archive to R2 cold storage."""
+    logger.info(f"Uploading archive to R2: {org_id}/{year}-{month:02d}")
+
+    async def _upload():
+        from .cold_storage import upload_to_r2
+        return await upload_to_r2(org_id, year, month)
+
+    result = run_async(_upload())
+    logger.info(f"R2 upload complete: {result}")
+    return result

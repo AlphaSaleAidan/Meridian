@@ -10,9 +10,10 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr, field_validator
 
+from ..auth import require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.onboarding")
@@ -31,6 +32,16 @@ class CreateAccountRequest(BaseModel):
     plan: str = "free"
     square_payment_id: str | None = None
 
+    @field_validator("business_name")
+    @classmethod
+    def validate_business_name(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("business_name must be at least 2 characters")
+        if len(v) > 200:
+            raise ValueError("business_name too long")
+        return v
+
 
 class CreateAccountResponse(BaseModel):
     org_id: str
@@ -45,7 +56,48 @@ class SendWelcomeRequest(BaseModel):
     email: EmailStr
 
 
-@router.post("/create-account", response_model=CreateAccountResponse)
+@router.get("/checklist")
+async def get_checklist(
+    org_id: str,
+):
+    """Onboarding checklist: which steps are complete for this org."""
+    db = get_db()
+
+    org_rows = await db.select("organizations", filters={"id": f"eq.{org_id}"}, limit=1)
+    if not org_rows:
+        raise HTTPException(404, "Organization not found")
+
+    connections = await db.select(
+        "pos_connections",
+        filters={"org_id": f"eq.{org_id}"},
+        limit=1,
+    )
+    pos_connected = bool(connections and connections[0].get("status") == "connected")
+    has_sync = bool(connections and connections[0].get("last_sync_at"))
+
+    notifications = await db.select(
+        "notifications",
+        filters={"org_id": f"eq.{org_id}"},
+        limit=1,
+    )
+    welcome_sent = bool(notifications)
+
+    steps = [
+        {"key": "account_created", "label": "Account created", "complete": True},
+        {"key": "welcome_sent", "label": "Welcome email sent", "complete": welcome_sent},
+        {"key": "pos_connected", "label": "POS connected", "complete": pos_connected},
+        {"key": "first_sync", "label": "First data sync", "complete": has_sync},
+    ]
+
+    return {
+        "org_id": org_id,
+        "steps": steps,
+        "progress": sum(1 for s in steps if s["complete"]),
+        "total": len(steps),
+    }
+
+
+@router.post("/create-account", response_model=CreateAccountResponse, dependencies=[Depends(require_service_auth)])
 async def create_account(req: CreateAccountRequest):
     """
     Create a new organization and admin user.
@@ -196,6 +248,10 @@ class ProvisionCustomerRequest(BaseModel):
     monthly_price: int = 500
     rep_id: str | None = None
     rep_name: str | None = None
+    business_type: str | None = None
+    pos_provider: str | None = None
+    setup_fee: int = 0
+    first_month_free: bool = False
 
 
 class ProvisionCustomerResponse(BaseModel):
@@ -203,12 +259,15 @@ class ProvisionCustomerResponse(BaseModel):
     email: str
     temporary_password: str
     login_url: str
+    portal_url: str = ""
     invoices_sent: bool
     welcome_email_sent: bool
     invoice_sms_sent: bool = False
+    invoice_error: str | None = None
+    email_error: str | None = None
 
 
-@router.post("/provision-customer", response_model=ProvisionCustomerResponse)
+@router.post("/provision-customer", response_model=ProvisionCustomerResponse, dependencies=[Depends(require_service_auth)])
 async def provision_customer(req: ProvisionCustomerRequest):
     """
     Full customer provisioning — called by the sales rep after confirming a deal.
@@ -258,30 +317,60 @@ async def provision_customer(req: ProvisionCustomerRequest):
             auth_user_id = resp.json().get("id")
             logger.info(f"Created auth user {auth_user_id} for {req.email}")
         elif resp.status_code == 422 and "already been registered" in resp.text.lower():
-            logger.info(f"Auth user already exists for {req.email} — proceeding")
+            logger.info(f"Auth user already exists for {req.email} — updating password and fetching ID")
+            list_resp = await client.get(
+                f"{supabase_url}/auth/v1/admin/users",
+                headers={"Authorization": f"Bearer {service_key}", "apikey": service_key},
+                params={"page": 1, "per_page": 50},
+            )
+            if list_resp.status_code == 200:
+                for u in list_resp.json().get("users", []):
+                    if u.get("email", "").lower() == req.email.lower():
+                        auth_user_id = u["id"]
+                        break
+            if auth_user_id:
+                pw_resp = await client.put(
+                    f"{supabase_url}/auth/v1/admin/users/{auth_user_id}",
+                    headers={"Authorization": f"Bearer {service_key}", "apikey": service_key, "Content-Type": "application/json"},
+                    json={"password": temp_password, "user_metadata": {"full_name": req.owner_name, "business_name": req.business_name, "org_id": req.org_id, "role": "owner"}},
+                )
+                if pw_resp.status_code == 200:
+                    logger.info(f"Updated password and metadata for existing user {auth_user_id}")
+                else:
+                    logger.warning(f"Password update failed: {pw_resp.status_code}")
         else:
             logger.error(f"Auth user creation failed: {resp.status_code} {resp.text}")
             raise HTTPException(400, f"Could not create user account: {resp.json().get('msg', 'Unknown error')}")
 
     # 2. Create business record linking auth user to org
+    portal_token = secrets.token_urlsafe(16)
     if auth_user_id:
         try:
-            await db.upsert("businesses", {
+            biz_data = {
                 "id": req.org_id,
                 "owner_user_id": auth_user_id,
                 "name": req.business_name,
                 "owner_name": req.owner_name,
                 "email": req.email,
+                "phone": req.phone,
                 "plan_tier": req.plan,
+                "business_type": req.business_type or "restaurant",
+                "pos_provider": req.pos_provider,
                 "pos_connected": False,
-                "onboarded": True,
+                "onboarded": False,
+                "status": "active",
                 "created_at": now,
-            }, on_conflict="id")
+                "access_token": portal_token,
+                "token_status": "active",
+            }
+            await db.upsert("businesses", biz_data, on_conflict="id")
         except Exception as e:
-            logger.warning(f"Business upsert warning: {e}")
+            logger.error(f"Business record creation failed for {req.email}: {e}", exc_info=True)
+            raise HTTPException(500, "Account created but business profile failed to save. Please retry or contact support.")
 
     # 3. Send setup fee invoice (card stored on payment → auto-billing starts)
     invoices_sent = False
+    invoice_error = None
     setup_result = None
     try:
         from src.billing.billing_service import BillingService
@@ -289,9 +378,6 @@ async def provision_customer(req: ProvisionCustomerRequest):
 
         plan_label = req.plan.replace("_", " ").title()
 
-        # Single invoice for setup fee — store_card=True so card is saved
-        # when customer pays. Monthly auto-billing via Square Subscription
-        # is created by the webhook after this invoice is paid.
         setup_result = await billing.create_invoice(
             org_id=req.org_id,
             amount_cents=req.monthly_price * 100,
@@ -305,7 +391,6 @@ async def provision_customer(req: ProvisionCustomerRequest):
         if invoices_sent:
             logger.info(f"Sent setup invoice for {req.email}: {setup_result.invoice_id}")
 
-            # Get or create Square customer for subscription later
             customer_id = await billing._get_or_create_customer(
                 req.email, req.owner_name, req.business_name,
             )
@@ -330,10 +415,15 @@ async def provision_customer(req: ProvisionCustomerRequest):
                     "auto_renew": True,
                 },
             }, on_conflict="org_id")
+        else:
+            invoice_error = "Invoice creation returned unsuccessful"
+            logger.warning(f"Invoice not successful for {req.email}: {setup_result}")
     except ImportError:
+        invoice_error = "billing_service_unavailable"
         logger.warning("Billing service not available — skipping invoices")
     except Exception as e:
-        logger.warning(f"Invoice creation failed: {e}")
+        invoice_error = str(e)
+        logger.error(f"Invoice creation failed for {req.email}: {e}", exc_info=True)
 
     # 3b. Send invoice SMS to customer phone
     sms_sent = False
@@ -358,6 +448,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
 
     # 4. Send credentials email via Postal/Resend
     welcome_sent = False
+    email_error = None
     login_url = f"{_FRONTEND_URL}/canada/login"
     try:
         from ...email.send import send_customer_credentials
@@ -371,19 +462,22 @@ async def provision_customer(req: ProvisionCustomerRequest):
             org_id=req.org_id,
         )
         welcome_sent = email_result.get("status") == "sent"
+        if not welcome_sent:
+            email_error = email_result.get("error", "Email delivery unsuccessful")
 
         await db.insert("notifications", {
             "id": str(uuid4()),
             "org_id": req.org_id,
             "title": f"Welcome to Meridian — {req.business_name}",
-            "body": f"Credentials email sent to {req.email}",
+            "body": f"Credentials email {'sent to' if welcome_sent else 'FAILED for'} {req.email}",
             "priority": "high",
             "source_type": "event",
             "status": "active",
             "created_at": now,
         })
     except Exception as e:
-        logger.warning(f"Credentials email failed: {e}")
+        email_error = str(e)
+        logger.error(f"Credentials email failed for {req.email}: {e}", exc_info=True)
 
     # 5. Dispatch autonomous swarm: POS sync → analysis → insight generation
     try:
@@ -403,10 +497,47 @@ async def provision_customer(req: ProvisionCustomerRequest):
         email=req.email,
         temporary_password=temp_password,
         login_url=login_url,
+        portal_url=f"{_FRONTEND_URL}/c/{portal_token}",
         invoices_sent=invoices_sent,
         welcome_email_sent=welcome_sent,
         invoice_sms_sent=sms_sent,
+        invoice_error=invoice_error,
+        email_error=email_error,
     )
+
+
+class MarkOnboardedRequest(BaseModel):
+    org_id: str
+
+
+@router.post("/mark-onboarded")
+async def mark_onboarded(req: MarkOnboardedRequest):
+    """Mark a business as onboarded. Called after setup wizard completion."""
+    import httpx
+
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+
+    if not supabase_url or not service_key:
+        raise HTTPException(503, "Supabase not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.patch(
+            f"{supabase_url}/rest/v1/businesses?id=eq.{req.org_id}",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            },
+            json={"onboarded": True},
+        )
+        if resp.status_code not in (200, 204):
+            logger.warning(f"mark-onboarded failed for {req.org_id}: {resp.status_code} {resp.text}")
+            raise HTTPException(500, "Could not update onboarded status")
+
+    logger.info(f"Marked business {req.org_id} as onboarded")
+    return {"status": "ok", "org_id": req.org_id}
 
 
 class SendInvoiceSmsRequest(BaseModel):

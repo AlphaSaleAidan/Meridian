@@ -32,6 +32,10 @@ export default function CanadaPortalCommissionsPage() {
     }).catch(() => {
       setCommissions([])
     }).finally(() => setLoading(false))
+    const channel = canadaLeadsService.subscribe(rep?.rep_id, deals => {
+      setCommissions(deriveCommissionsFromLeads(deals))
+    })
+    return () => { canadaLeadsService.unsubscribe(channel) }
   }, [rep?.rep_id])
 
   const filtered = commissions.filter(c => {

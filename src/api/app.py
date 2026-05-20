@@ -71,6 +71,9 @@ from .routes.garry import router as garry_router
 from .routes.garry_patches import router as garry_patches_router
 from .routes.archives import router as archives_router
 from .routes.intelligence import router as intelligence_router
+from .routes.inventory_docs import router as inventory_docs_router
+from .routes.analytics import router as analytics_router
+from .routes.portal import router as portal_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -179,6 +182,7 @@ _allowed_origins = [
     "https://industrious-rabbit-343.convex.site",
     "https://meridian.tips",
     "https://www.meridian.tips",
+    "https://canada.meridian.tips",
 ]
 
 _extra_origin = os.environ.get("FRONTEND_ORIGIN")
@@ -225,6 +229,9 @@ app.include_router(garry_router)
 app.include_router(garry_patches_router)
 app.include_router(archives_router)
 app.include_router(intelligence_router)
+app.include_router(inventory_docs_router)
+app.include_router(analytics_router)
+app.include_router(portal_router)
 if _has_billing:
     app.include_router(billing_router)
 if _has_marketplace:

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Users,
@@ -86,32 +86,35 @@ export default function CanadaPortalDashboardPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
+  const applyDeals = useCallback((d: Deal[]) => {
+    setDeals(d)
+    const c = deriveClientsFromLeads(d)
+    const cm = deriveCommissionsFromLeads(d)
+    setClients(c)
+    setCommissions(cm)
+
+    const activePipeline = d.filter((deal: Deal) => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(deal.stage))
+    const closedWon = d.filter((deal: Deal) => deal.stage === 'customer_walkthrough' || deal.stage === 'closed_won' || deal.stage === 'pos_connected')
+    const allDeals = d.filter((deal: Deal) => deal.stage !== 'closed_lost')
+    const totalEarned = cm.reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
+    const totalPaid = cm.filter((cItem: Commission) => cItem.status === 'paid').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
+
+    setOverview({
+      total_deals: activePipeline.length,
+      pipeline_value: activePipeline.reduce((s: number, deal: Deal) => s + deal.monthly_value, 0),
+      closed_this_month: closedWon.length,
+      monthly_commission_earned: cm.filter((cItem: Commission) => cItem.status === 'earned').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0),
+      total_earned: totalEarned,
+      total_paid: totalPaid,
+      pending_payout: totalEarned - totalPaid,
+      active_clients: c.filter((cl: SalesClient) => cl.is_active).length,
+      conversion_rate: allDeals.length > 0 ? Math.round((closedWon.length / allDeals.length) * 100) : 0,
+    })
+  }, [])
+
   useEffect(() => {
     canadaLeadsService.list(rep?.rep_id).then(d => {
-      setDeals(d)
-
-      const c = deriveClientsFromLeads(d)
-      const cm = deriveCommissionsFromLeads(d)
-      setClients(c)
-      setCommissions(cm)
-
-      const activePipeline = d.filter((deal: Deal) => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(deal.stage))
-      const closedWon = d.filter((deal: Deal) => deal.stage === 'customer_walkthrough' || deal.stage === 'closed_won' || deal.stage === 'pos_connected')
-      const allDeals = d.filter((deal: Deal) => deal.stage !== 'closed_lost')
-      const totalEarned = cm.reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
-      const totalPaid = cm.filter((cItem: Commission) => cItem.status === 'paid').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
-
-      setOverview({
-        total_deals: activePipeline.length,
-        pipeline_value: activePipeline.reduce((s: number, deal: Deal) => s + deal.monthly_value, 0),
-        closed_this_month: closedWon.length,
-        monthly_commission_earned: cm.filter((cItem: Commission) => cItem.status === 'earned').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0),
-        total_earned: totalEarned,
-        total_paid: totalPaid,
-        pending_payout: totalEarned - totalPaid,
-        active_clients: c.filter((cl: SalesClient) => cl.is_active).length,
-        conversion_rate: allDeals.length > 0 ? Math.round((closedWon.length / allDeals.length) * 100) : 0,
-      })
+      applyDeals(d)
     }).catch((err) => {
       setLoadError(err?.message || 'Could not load data. Check your connection and refresh.')
       setOverview({
@@ -120,7 +123,9 @@ export default function CanadaPortalDashboardPage() {
         pending_payout: 0, active_clients: 0, conversion_rate: 0,
       })
     }).finally(() => setLoading(false))
-  }, [])
+    const channel = canadaLeadsService.subscribe(rep?.rep_id, applyDeals)
+    return () => { canadaLeadsService.unsubscribe(channel) }
+  }, [rep?.rep_id, applyDeals])
 
   if (loading || !overview) {
     return (

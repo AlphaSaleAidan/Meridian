@@ -122,8 +122,10 @@ class BillingService:
             )
 
             line_items = []
+            discount_uid = "first-month-free-discount"
 
             subscription_item = {
+                "uid": "subscription-line-item",
                 "name": f"Meridian Analytics - {plan.title()} Plan (Monthly)",
                 "quantity": "1",
                 "base_price_money": {
@@ -132,22 +134,26 @@ class BillingService:
                 },
                 "note": f"Monthly subscription for {business_name}",
             }
+            if first_month_free:
+                subscription_item["applied_discounts"] = [{"discount_uid": discount_uid}]
             line_items.append(subscription_item)
 
             if setup_fee_cents > 0:
                 line_items.append({
+                    "uid": "setup-fee-line-item",
                     "name": "One-Time Setup Fee",
                     "quantity": "1",
                     "base_price_money": {
                         "amount": setup_fee_cents,
                         "currency": "USD",
                     },
-                    "note": f"Setup & installation for {business_name}",
+                    "note": f"Setup & onboarding for {business_name}",
                 })
 
             discounts = []
             if first_month_free:
                 discounts.append({
+                    "uid": discount_uid,
                     "name": "First Month Free",
                     "type": "FIXED_AMOUNT",
                     "amount_money": {
@@ -157,32 +163,39 @@ class BillingService:
                     "scope": "LINE_ITEM",
                 })
 
+            metadata = {
+                "org_id": org_id,
+                "plan": plan,
+                "billing_type": "subscription_initial",
+                "setup_fee_cents": str(setup_fee_cents),
+                "first_month_free": str(first_month_free).lower(),
+            }
+            if rep_id:
+                metadata["rep_id"] = rep_id
+            if rep_name:
+                metadata["rep_name"] = rep_name
+
             order = {
                 "location_id": SQUARE_LOCATION_ID,
                 "line_items": line_items,
-                "metadata": {
-                    "org_id": org_id,
-                    "plan": plan,
-                    "billing_type": "subscription_initial",
-                    "setup_fee_cents": str(setup_fee_cents),
-                    "first_month_free": str(first_month_free).lower(),
-                    "rep_id": rep_id,
-                    "rep_name": rep_name,
-                },
+                "metadata": metadata,
             }
 
             if discounts:
                 order["discounts"] = discounts
 
+            checkout_options = {
+                "merchant_support_email": "support@meridian.tips",
+                "ask_for_shipping_address": False,
+                "accepted_payment_methods": {"apple_pay": True, "google_pay": True},
+            }
+            if return_url:
+                checkout_options["redirect_url"] = return_url
+
             payload = {
                 "idempotency_key": idempotency_key,
                 "order": order,
-                "checkout_options": {
-                    "redirect_url": return_url,
-                    "merchant_support_email": "support@meridian.tips",
-                    "ask_for_shipping_address": False,
-                    "accepted_payment_methods": {"apple_pay": True, "google_pay": True},
-                },
+                "checkout_options": checkout_options,
                 "pre_populated_data": {"buyer_email": customer_email},
             }
 
@@ -194,17 +207,21 @@ class BillingService:
                 checkout_url = link.get("long_url") or link.get("url", "")
                 order_id = link.get("order_id", "")
 
-                await self._record_subscription(
-                    org_id=org_id, plan=plan, amount_cents=amount_cents,
-                    customer_email=customer_email,
-                    square_customer_id=customer_id,
-                    square_order_id=order_id,
-                    status="pending_payment",
-                    setup_fee_cents=setup_fee_cents,
-                    first_month_free=first_month_free,
-                    rep_id=rep_id,
-                    rep_name=rep_name,
-                )
+                initial_status = "trialing" if first_month_free else "active"
+                try:
+                    await self._record_subscription(
+                        org_id=org_id, plan=plan, amount_cents=amount_cents,
+                        customer_email=customer_email,
+                        square_customer_id=customer_id,
+                        square_order_id=order_id,
+                        status=initial_status,
+                        setup_fee_cents=setup_fee_cents,
+                        first_month_free=first_month_free,
+                        rep_id=rep_id,
+                        rep_name=rep_name,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to record subscription for org {org_id}: {e}")
 
                 return CheckoutResult(
                     success=True, checkout_url=checkout_url,
@@ -238,6 +255,10 @@ class BillingService:
         try:
             idempotency_key = str(uuid4())
 
+            customer_id = await self._get_or_create_customer(
+                customer_email, customer_email.split("@")[0], ""
+            )
+
             order_resp = await self.http.post("/v2/orders", json={
                 "idempotency_key": str(uuid4()),
                 "order": {
@@ -257,10 +278,12 @@ class BillingService:
 
             due_date = (datetime.now(timezone.utc) + timedelta(days=due_days)).strftime("%Y-%m-%d")
 
+            recipient = {"customer_id": customer_id} if customer_id else {"email_address": customer_email}
+
             invoice_body = {
                 "location_id": SQUARE_LOCATION_ID,
                 "order_id": order_id,
-                "primary_recipient": {"email_address": customer_email},
+                "primary_recipient": recipient,
                 "payment_requests": [{
                     "request_type": "BALANCE",
                     "due_date": due_date,
@@ -292,15 +315,17 @@ class BillingService:
             invoice = inv_data.get("invoice", {})
 
             if invoice.get("id"):
-                await self.http.post(f"/v2/invoices/{invoice['id']}/publish", json={
+                pub_resp = await self.http.post(f"/v2/invoices/{invoice['id']}/publish", json={
                     "version": invoice.get("version", 0),
                     "idempotency_key": str(uuid4()),
                 })
+                pub_data = pub_resp.json()
+                published = pub_data.get("invoice", invoice)
 
                 return InvoiceResult(
                     success=True,
                     invoice_id=invoice["id"],
-                    invoice_url=invoice.get("public_url"),
+                    invoice_url=published.get("public_url") or invoice.get("public_url"),
                 )
             else:
                 errors = inv_data.get("errors", [])
@@ -382,12 +407,12 @@ class BillingService:
         try:
             now = datetime.now(timezone.utc)
 
-            result = self.db.table("subscriptions").select("*").eq(
-                "org_id", org_id
-            ).eq("status", "active").single().execute()
+            rows = await self.db.select("subscriptions", filters={
+                "org_id": f"eq.{org_id}", "status": "eq.active",
+            }, limit=1)
 
-            if result.data:
-                sub = result.data
+            if rows:
+                sub = rows[0]
                 meta = sub.get("metadata") or {}
                 square_sub_id = meta.get("square_subscription_id")
 
@@ -400,11 +425,11 @@ class BillingService:
                     else:
                         logger.warning(f"Square subscription cancel returned {resp.status_code}")
 
-            self.db.table("subscriptions").update({
+            await self.db.update("subscriptions", {
                 "status": "canceled",
                 "canceled_at": now.isoformat(),
                 "cancel_reason": reason,
-            }).eq("org_id", org_id).eq("status", "active").execute()
+            }, filters={"org_id": f"eq.{org_id}", "status": "eq.active"})
 
             logger.info(f"Cancelled subscription for org {org_id}: {reason}")
             return True
@@ -416,43 +441,61 @@ class BillingService:
 
     async def process_renewals(self):
         """
-        Fallback renewal for subscriptions NOT on Square auto-billing.
-        Runs daily via Celery beat. Only processes subscriptions that don't
-        have a square_subscription_id (those are handled by Square directly).
+        Renewal processor for subscriptions NOT on Square auto-billing.
+        Runs daily via Celery beat. Handles:
+        - Active subscriptions past their period end → create renewal invoice
+        - Trialing subscriptions past trial_ends_at → convert to first paid invoice
         """
         try:
             now = datetime.now(timezone.utc)
 
-            result = self.db.table("subscriptions").select(
-                "*, organizations(name, email, owner_name, phone)"
-            ).eq(
-                "status", "active"
-            ).lte(
-                "current_period_end", now.isoformat()
-            ).execute()
+            active_subs = await self.db.select("subscriptions", filters={
+                "status": "eq.active",
+                "current_period_end": f"lte.{now.isoformat()}",
+            })
 
-            if not result.data:
+            trialing_subs = await self.db.select("subscriptions", filters={
+                "status": "eq.trialing",
+                "current_period_end": f"lte.{now.isoformat()}",
+            })
+
+            subs = (active_subs or []) + (trialing_subs or [])
+
+            if not subs:
                 logger.info("No renewals due today")
                 return
 
-            for sub in result.data:
+            for sub in subs:
                 meta = sub.get("metadata") or {}
+                is_trial_conversion = sub.get("status") == "trialing"
 
-                # Skip if Square handles auto-billing for this subscription
                 if meta.get("square_subscription_id"):
                     new_end = now + timedelta(days=30)
-                    self.db.table("subscriptions").update({
+                    update_data = {
                         "current_period_start": now.isoformat(),
                         "current_period_end": new_end.isoformat(),
-                    }).eq("id", sub["id"]).execute()
+                    }
+                    if is_trial_conversion:
+                        update_data["status"] = "active"
+                    await self.db.update("subscriptions", update_data,
+                                         filters={"id": f"eq.{sub['id']}"})
+                    if is_trial_conversion:
+                        logger.info(f"Trial→active (Square auto-billing) for org {sub['org_id']}")
                     continue
 
                 org_id = sub["org_id"]
                 amount = sub["monthly_price_cents"]
-                org = sub.get("organizations", {})
-                email = org.get("email", "")
+                email = sub.get("contact_email") or sub.get("email", "")
+                owner_name = sub.get("owner_name", "")
+                business_name = sub.get("business_name", "")
+                phone = sub.get("phone")
+                tier_label = sub.get("tier", "Standard").replace("_", " ").title()
+                description = (
+                    f"Meridian Analytics - {tier_label} Plan (First Month)"
+                    if is_trial_conversion
+                    else f"Meridian Analytics - Monthly Renewal ({tier_label})"
+                )
 
-                # Try to set up auto-subscription if card is on file
                 customer_id = meta.get("square_customer_id")
                 if customer_id:
                     card_id = await self._get_card_on_file(customer_id)
@@ -461,73 +504,85 @@ class BillingService:
                             org_id=org_id,
                             amount_cents=amount,
                             customer_email=email,
-                            customer_name=org.get("owner_name", ""),
-                            business_name=org.get("name", ""),
+                            customer_name=owner_name,
+                            business_name=business_name,
                             plan=sub.get("tier", "starter"),
                         )
                         if sub_result.success:
-                            self.db.table("subscriptions").update({
+                            import json as json_mod
+                            await self.db.update("subscriptions", {
                                 "current_period_start": now.isoformat(),
                                 "current_period_end": (now + timedelta(days=30)).isoformat(),
-                                "metadata": {
+                                "metadata": json_mod.dumps({
                                     **meta,
                                     "square_subscription_id": sub_result.subscription_id,
                                     "auto_billing": True,
                                     "subscription_started_at": now.isoformat(),
-                                },
-                            }).eq("id", sub["id"]).execute()
+                                }),
+                            }, filters={"id": f"eq.{sub['id']}"})
                             logger.info(f"Upgraded org {org_id} to auto-subscription: {sub_result.subscription_id}")
                             continue
 
-                # Fallback: create a one-time invoice with card-on-file auto-pay
                 inv_result = await self.create_invoice(
                     org_id=org_id,
                     amount_cents=amount,
                     customer_email=email,
-                    description=f"Meridian Analytics - Monthly Renewal ({sub.get('tier', 'Standard')})",
+                    description=description,
                     store_card=True,
                 )
 
                 if inv_result.success:
+                    import json as json_mod
                     new_end = now + timedelta(days=30)
-                    self.db.table("subscriptions").update({
+                    renewal_meta = {
+                        **meta,
+                        "last_renewal": now.isoformat(),
+                        "renewal_invoice_id": inv_result.invoice_id,
+                        "renewal_invoice_url": inv_result.invoice_url,
+                    }
+                    if is_trial_conversion:
+                        renewal_meta["trial_converted_at"] = now.isoformat()
+                        renewal_meta["first_month_free"] = True
+
+                    await self.db.update("subscriptions", {
+                        "status": "active",
                         "current_period_start": now.isoformat(),
                         "current_period_end": new_end.isoformat(),
-                        "metadata": {
-                            **meta,
-                            "last_renewal": now.isoformat(),
-                            "renewal_invoice_id": inv_result.invoice_id,
-                            "renewal_invoice_url": inv_result.invoice_url,
-                        },
-                    }).eq("id", sub["id"]).execute()
+                        "metadata": json_mod.dumps(renewal_meta),
+                    }, filters={"id": f"eq.{sub['id']}"})
 
-                    logger.info(f"Fallback renewal for org {org_id}: invoice {inv_result.invoice_id}")
+                    action = "Trial→active" if is_trial_conversion else "Renewal"
+                    logger.info(f"{action} for org {org_id}: invoice {inv_result.invoice_id}")
 
-                    phone = org.get("phone")
                     if phone and inv_result.invoice_url:
                         try:
                             from src.sms.client import send_invoice_sms
-                            tier = sub.get("tier", "Standard").replace("_", " ").title()
+                            sms_label = (
+                                f"{tier_label} (First Invoice)"
+                                if is_trial_conversion
+                                else f"{tier_label} (Renewal)"
+                            )
                             await send_invoice_sms(
                                 phone=phone,
-                                owner_name=org.get("owner_name", "there"),
-                                business_name=org.get("name", "your business"),
+                                owner_name=owner_name or "there",
+                                business_name=business_name or "your business",
                                 invoice_url=inv_result.invoice_url,
-                                plan_label=f"{tier} (Renewal)",
+                                plan_label=sms_label,
                                 amount_display=f"${amount / 100:.0f}/mo",
                             )
                         except Exception as sms_err:
                             logger.warning(f"Renewal SMS failed for {org_id}: {sms_err}")
                 else:
+                    import json as json_mod
                     logger.error(f"Renewal failed for org {org_id}: {inv_result.error}")
-                    self.db.table("subscriptions").update({
+                    await self.db.update("subscriptions", {
                         "status": "past_due",
-                        "metadata": {
+                        "metadata": json_mod.dumps({
                             **meta,
                             "renewal_failed_at": now.isoformat(),
                             "renewal_error": inv_result.error,
-                        },
-                    }).eq("id", sub["id"]).execute()
+                        }),
+                    }, filters={"id": f"eq.{sub['id']}"})
 
         except Exception as e:
             logger.exception("Renewal processing failed")
@@ -628,7 +683,7 @@ class BillingService:
         customer_email: str,
         square_customer_id: Optional[str] = None,
         square_order_id: Optional[str] = None,
-        status: str = "pending_payment",
+        status: str = "active",
         setup_fee_cents: int = 0,
         first_month_free: bool = False,
         rep_id: str = "",
@@ -661,12 +716,13 @@ class BillingService:
             metadata["rep_id"] = rep_id
             metadata["rep_name"] = rep_name
 
-        self.db.table("subscriptions").upsert({
+        await self.db.upsert("subscriptions", {
             "org_id": org_id,
             "tier": plan,
             "status": status,
             "monthly_price_cents": amount_cents,
+            "contact_email": customer_email,
             "current_period_start": now.isoformat(),
             "current_period_end": (now + timedelta(days=30)).isoformat(),
             "metadata": metadata,
-        }, on_conflict="org_id").execute()
+        }, on_conflict="org_id")

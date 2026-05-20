@@ -89,9 +89,9 @@ export default function CanadaLoginPage() {
             <MeridianEmblem size={36} />
             <MeridianWordmark className="text-xl" />
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20">
-            <MapPin size={12} className="text-red-400" />
-            <span className="text-[11px] text-red-400 font-semibold uppercase tracking-wider">Canadian Portal</span>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#17C5B0]/10 border border-[#17C5B0]/20">
+            <MapPin size={12} className="text-[#17C5B0]" />
+            <span className="text-[11px] text-[#17C5B0] font-semibold uppercase tracking-wider">Canada</span>
           </div>
         </div>
 

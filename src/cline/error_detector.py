@@ -78,17 +78,22 @@ class ErrorDetector:
 
         try:
             cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-            query = self.db.table("agent_reasoning_chains").select(
-                "agent_name, error, business_id, created_at"
-            ).not_.is_("error", "null").gte("created_at", cutoff)
-
+            filters: dict[str, str] = {
+                "error": "not.is.null",
+                "created_at": f"gte.{cutoff}",
+            }
             if business_id:
-                query = query.eq("business_id", business_id)
+                filters["business_id"] = f"eq.{business_id}"
 
-            resp = await query.limit(50).execute()
+            rows = await self.db.select(
+                "agent_reasoning_chains",
+                columns="agent_name,error,business_id,created_at",
+                filters=filters,
+                limit=50,
+            )
 
             failure_counts: dict[str, int] = {}
-            for row in resp.data or []:
+            for row in rows:
                 key = f"{row['business_id']}:{row['agent_name']}"
                 failure_counts[key] = failure_counts.get(key, 0) + 1
 
@@ -116,17 +121,18 @@ class ErrorDetector:
             return errors
 
         try:
-            query = self.db.table("pos_connections").select(
-                "organization_id, provider, last_sync_at, status"
-            ).eq("status", "active")
-
+            filters: dict[str, str] = {"status": "eq.active"}
             if business_id:
-                query = query.eq("organization_id", business_id)
+                filters["organization_id"] = f"eq.{business_id}"
 
-            resp = await query.execute()
+            rows = await self.db.select(
+                "pos_connections",
+                columns="organization_id,provider,last_sync_at,status",
+                filters=filters,
+            )
             now = datetime.now(timezone.utc)
 
-            for conn in resp.data or []:
+            for conn in rows:
                 last_sync = conn.get("last_sync_at")
                 if not last_sync:
                     errors.append(DetectedError(
@@ -165,15 +171,17 @@ class ErrorDetector:
 
         try:
             cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-            query = self.db.table("cline_errors").select(
-                "agent_name, business_id, error_type"
-            ).gte("created_at", cutoff)
-
+            filters: dict[str, str] = {"created_at": f"gte.{cutoff}"}
             if business_id:
-                query = query.eq("business_id", business_id)
+                filters["business_id"] = f"eq.{business_id}"
 
-            resp = await query.limit(100).execute()
-            count = len(resp.data or [])
+            rows = await self.db.select(
+                "cline_errors",
+                columns="agent_name,business_id,error_type",
+                filters=filters,
+                limit=100,
+            )
+            count = len(rows)
 
             if count > 20:
                 errors.append(DetectedError(
@@ -203,16 +211,22 @@ class ErrorDetector:
             return errors
 
         try:
-            query = self.db.table("merchant_health").select(
-                "business_id, score, category, trend"
-            ).eq("category", "overall").eq("trend", "declining")
-
+            filters: dict[str, str] = {
+                "category": "eq.overall",
+                "trend": "eq.declining",
+            }
             if business_id:
-                query = query.eq("business_id", business_id)
+                filters["business_id"] = f"eq.{business_id}"
 
-            resp = await query.order("measured_at", desc=True).limit(20).execute()
+            rows = await self.db.select(
+                "merchant_health",
+                columns="business_id,score,category,trend",
+                filters=filters,
+                order="measured_at.desc",
+                limit=20,
+            )
 
-            for row in resp.data or []:
+            for row in rows:
                 if row["score"] < 40:
                     errors.append(DetectedError(
                         error_type="data_inconsistency",
@@ -262,14 +276,15 @@ class ErrorDetector:
 
         if self.db:
             try:
-                await self.db.table("cline_errors").insert({
+                import json as _json
+                await self.db.insert("cline_errors", {
                     "agent_name": "frontend",
                     "business_id": business_id,
                     "error_type": "data_error" if severity == 1 else "api_error",
                     "message": message[:500],
                     "stack_trace": stack[:2000],
-                    "context": {"url": url, "user_agent": user_agent},
-                }).execute()
+                    "context": _json.dumps({"url": url, "user_agent": user_agent}),
+                })
             except Exception as e:
                 logger.error("Failed to persist frontend error: %s", e)
 

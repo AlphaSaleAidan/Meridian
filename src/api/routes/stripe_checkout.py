@@ -213,11 +213,10 @@ async def create_checkout_session(req: CheckoutSessionRequest, request: Request)
             f"rep={req.rep_name or 'unknown'}"
         )
 
-        # Optionally record in DB
         try:
-            db = getattr(request.app.state, "db", None)
+            from ...db import _db_instance as db
             if db:
-                db.table("checkout_sessions").insert({
+                await db.insert("checkout_sessions", {
                     "id": str(uuid4()),
                     "stripe_session_id": session.id,
                     "org_id": req.org_id,
@@ -231,9 +230,8 @@ async def create_checkout_session(req: CheckoutSessionRequest, request: Request)
                     "status": "pending",
                     "checkout_url": session.url,
                     "created_at": datetime.utcnow().isoformat(),
-                }).execute()
+                })
         except Exception as e:
-            # Don't fail the checkout if DB recording fails
             logger.warning(f"Failed to record checkout session: {e}")
 
         return CheckoutSessionResponse(
@@ -285,7 +283,7 @@ async def stripe_webhook(request: Request):
     logger.info(f"Stripe webhook: {event_type}")
 
     try:
-        db = getattr(request.app.state, "db", None)
+        from ...db import _db_instance as db
 
         if event_type == "checkout.session.completed":
             session_id = data.get("id", "")
@@ -301,10 +299,10 @@ async def stripe_webhook(request: Request):
             )
 
             if db and org_id:
-                # Update org to active with plan
+                import json as json_mod
                 try:
-                    db.table("organizations").update({
-                        "metadata": {
+                    await db.update("organizations", {
+                        "metadata": json_mod.dumps({
                             "plan_tier": plan,
                             "stripe_session_id": session_id,
                             "stripe_customer_id": data.get("customer"),
@@ -312,35 +310,33 @@ async def stripe_webhook(request: Request):
                             "payment_status": "active",
                             "setup_fee_cents": setup_fee,
                             "activated_at": datetime.utcnow().isoformat(),
-                        },
-                    }).eq("id", org_id).execute()
+                        }),
+                    }, filters={"id": f"eq.{org_id}"})
                 except Exception as e:
                     logger.warning(f"Failed to update org {org_id}: {e}")
 
-                # Record commission for the rep
                 if rep_id and setup_fee > 0:
                     try:
-                        db.table("commissions").insert({
+                        await db.insert("commissions", {
                             "id": str(uuid4()),
                             "rep_id": rep_id,
                             "org_id": org_id,
                             "type": "setup_fee",
                             "amount_cents": setup_fee,
                             "status": "earned",
-                            "metadata": {
+                            "metadata": json_mod.dumps({
                                 "stripe_session_id": session_id,
                                 "note": "Setup fee — 100% to rep",
-                            },
-                        }).execute()
+                            }),
+                        })
                     except Exception as e:
                         logger.warning(f"Failed to record setup fee commission: {e}")
 
-                # Update checkout session status
                 try:
-                    db.table("checkout_sessions").update({
+                    await db.update("checkout_sessions", {
                         "status": "completed",
                         "completed_at": datetime.utcnow().isoformat(),
-                    }).eq("stripe_session_id", session_id).execute()
+                    }, filters={"stripe_session_id": f"eq.{session_id}"})
                 except Exception as e:
                     logger.error(f"Webhook processing error: {e}")
 
@@ -354,16 +350,13 @@ async def stripe_webhook(request: Request):
             logger.info(f"Subscription cancelled: {subscription_id}")
 
             if db:
-                # Find and deactivate the org
                 try:
-                    sessions = db.table("checkout_sessions").select("org_id").eq(
-                        "stripe_subscription_id", subscription_id
-                    ).execute()
-                    for s in (sessions.data or []):
+                    sessions = await db.select("checkout_sessions", "org_id", filters={"stripe_subscription_id": f"eq.{subscription_id}"})
+                    for s in (sessions or []):
                         if s.get("org_id"):
-                            db.table("organizations").update({
-                                "metadata": {"payment_status": "cancelled"},
-                            }).eq("id", s["org_id"]).execute()
+                            await db.update("organizations", {
+                                "metadata": '{"payment_status": "cancelled"}',
+                            }, filters={"id": f"eq.{s['org_id']}"})
                 except Exception as e:
                     logger.error(f"Webhook processing error: {e}")
 

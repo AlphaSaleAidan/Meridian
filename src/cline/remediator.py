@@ -141,9 +141,11 @@ class Remediator:
         logger.info("Retrying sync for business %s", biz_id)
         if self.db:
             try:
-                await self.db.table("pos_connections").update(
-                    {"status": "syncing"}
-                ).eq("organization_id", biz_id).execute()
+                await self.db.update(
+                    "pos_connections",
+                    {"status": "syncing"},
+                    filters={"organization_id": f"eq.{biz_id}"},
+                )
             except Exception:
                 pass
         return "Sync retry triggered"
@@ -218,7 +220,11 @@ class Remediator:
         ))
         if self.db and table and record_id and fix:
             try:
-                await self.db.table(table).update(fix).eq("id", record_id).execute()
+                await self.db.update(
+                    table,
+                    fix,
+                    filters={"id": f"eq.{record_id}"},
+                )
             except Exception as e:
                 logger.error("Data fix failed: %s", e)
                 raise
@@ -265,14 +271,15 @@ class Remediator:
         logger.critical("INCIDENT CREATED: %s — %s", diagnosis.id, diagnosis.root_cause)
         if self.db:
             try:
-                await self.db.table("cline_errors").insert({
+                import json as _json
+                await self.db.insert("cline_errors", {
                     "chain_id": diagnosis.id,
                     "agent_name": "cline_incident",
                     "business_id": "",
                     "error_type": "api_error",
                     "message": f"INCIDENT: {diagnosis.root_cause}",
-                    "context": {"level": 4, "action_plan": diagnosis.action_plan},
-                }).execute()
+                    "context": _json.dumps({"level": 4, "action_plan": diagnosis.action_plan}),
+                })
             except Exception as e:
                 logger.error("Failed to persist incident: %s", e)
         return {

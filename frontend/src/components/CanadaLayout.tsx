@@ -8,6 +8,7 @@ import {
   MapPin, Phone, Calendar, Globe, Monitor, Video,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
+import MobileNavBar from './MobileNavBar'
 import CustomerWalkthrough from './CustomerWalkthrough'
 import { RadarLoadingState } from './LoadingState'
 import { useAuth } from '@/lib/auth'
@@ -39,7 +40,7 @@ const navItems: NavItem[] = [
   { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix', desktopOnly: true },
   { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
   { path: 'my-website', icon: Globe, label: 'My Website' },
-  { path: 'space', icon: Box, label: '3D Space', desktopOnly: true },
+  { path: 'space', icon: Box, label: '3D Space' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },
 ]
@@ -145,15 +146,17 @@ export default function CanadaLayout() {
           <MeridianEmblem size={24} animate={false} />
           <MeridianWordmark height={11} />
           <div className="flex items-center gap-1 ml-1">
-            <MapPin size={8} className="text-red-400" />
-            <span className="text-[8px] text-red-400 font-medium uppercase tracking-wider">CA</span>
+            <MapPin size={8} className="text-[#17C5B0]" />
+            <span className="text-[8px] text-[#17C5B0] font-medium uppercase tracking-wider">CA</span>
           </div>
         </div>
 
-        <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto mobile-nav-spacer">
           <Outlet />
         </div>
       </main>
+
+      {(isMobile || isTablet) && <MobileNavBar basePath={basePath} />}
 
       {showWalkthrough && user?.id && (
         <CustomerWalkthrough

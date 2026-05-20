@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Deal, DealStage } from './canada-sales-demo-data'
 
 function normalizeRate(v: number): number {
@@ -90,10 +91,11 @@ export const canadaLeadsService = {
   async updateStage(id: string, stage: DealStage): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    await supabase
+    const { error } = await supabase
       .from('canada_leads')
       .update({ stage, updated_at: now })
       .eq('id', id)
+    if (error) throw new LeadsServiceError(error.message)
   },
 
   async update(id: string, updates: Partial<Deal>): Promise<void> {
@@ -110,5 +112,29 @@ export const canadaLeadsService = {
     if (!supabase) return
     const { error } = await supabase.from('canada_leads').delete().eq('id', id)
     if (error) throw new LeadsServiceError(error.message)
+  },
+
+  subscribe(
+    repId: string | undefined,
+    onChanged: (deals: Deal[]) => void,
+  ): RealtimeChannel | null {
+    if (!supabase) return null
+    const channel = supabase
+      .channel('canada_leads_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'canada_leads' },
+        () => {
+          canadaLeadsService.list(repId).then(onChanged).catch(() => {})
+        },
+      )
+      .subscribe()
+    return channel
+  },
+
+  unsubscribe(channel: RealtimeChannel | null): void {
+    if (channel && supabase) {
+      supabase.removeChannel(channel)
+    }
   },
 }

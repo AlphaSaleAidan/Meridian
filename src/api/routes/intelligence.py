@@ -24,11 +24,9 @@ router = APIRouter(prefix="/api/intelligence", tags=["intelligence"])
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
 )
-
-
 def _validate_org_id(org_id: str) -> str:
-    if not _UUID_RE.match(org_id):
-        raise HTTPException(422, "org_id must be a valid UUID")
+    if not _UUID_RE.match(org_id) and not org_id.startswith('biz_'):
+        raise HTTPException(422, "org_id must be a valid UUID or business ID")
     return org_id
 
 

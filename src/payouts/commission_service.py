@@ -57,16 +57,14 @@ class CommissionService:
         Process an inbound payment and calculate commission for the assigned rep.
         """
         try:
-            result = self.db.rpc("calculate_commission", {
+            commission_id = await self.db.rpc("calculate_commission", {
                 "p_org_id": org_id,
                 "p_gross_amount": float(gross_amount),
                 "p_source_type": source_type,
                 "p_source_reference": source_reference,
                 "p_period_start": period_start,
                 "p_period_end": period_end,
-            }).execute()
-
-            commission_id = result.data if result.data else None
+            })
 
             if not commission_id:
                 logger.info(f"No rep assigned for org {org_id}, skipping commission")
@@ -76,11 +74,14 @@ class CommissionService:
                 )
 
             # Fetch the commission details
-            commission = self.db.table("commissions").select(
-                "*, sales_reps(name, email, commission_rate)"
-            ).eq("id", commission_id).single().execute()
+            rows = await self.db.select(
+                "commissions",
+                columns="*, sales_reps(name, email, commission_rate)",
+                filters={"id": f"eq.{commission_id}"},
+                limit=1,
+            )
 
-            data = commission.data
+            data = rows[0] if rows else None
             logger.info(
                 f"Commission recorded: ${data['commission_amount']} for rep "
                 f"{data['sales_reps']['name']} on ${gross_amount} from org {org_id}"
@@ -102,16 +103,26 @@ class CommissionService:
 
     async def get_rep_earnings(self, rep_id: str) -> dict:
         """Get earnings summary for a rep."""
-        rep = self.db.table("sales_reps").select(
-            "id, name, email, commission_rate, total_earned, total_paid"
-        ).eq("id", rep_id).single().execute().data
+        reps = await self.db.select(
+            "sales_reps",
+            columns="id, name, email, commission_rate, total_earned, total_paid",
+            filters={"id": f"eq.{rep_id}"},
+            limit=1,
+        )
+        rep = reps[0] if reps else None
 
-        pending = self.db.table("commissions").select(
-            "commission_amount"
-        ).eq("rep_id", rep_id).eq("status", "earned").is_("payout_id", "null").execute()
+        pending = await self.db.select(
+            "commissions",
+            columns="commission_amount",
+            filters={
+                "rep_id": f"eq.{rep_id}",
+                "status": "eq.earned",
+                "payout_id": "is.null",
+            },
+        )
 
         pending_amount = sum(
-            Decimal(str(c["commission_amount"])) for c in (pending.data or [])
+            Decimal(str(c["commission_amount"])) for c in pending
         )
 
         return {
@@ -131,13 +142,13 @@ class CommissionService:
         Record a manual payout to a rep. Marks all unpaid commissions as paid.
         Returns payout ID or None if nothing to pay.
         """
-        result = self.db.rpc("record_manual_payout", {
+        payout_id = await self.db.rpc("record_manual_payout", {
             "p_rep_id": rep_id,
             "p_method": method,
             "p_notes": notes,
-        }).execute()
-        
-        payout_id = result.data if result.data else None
+        })
+
+        payout_id = payout_id if payout_id else None
         if payout_id:
             logger.info(f"Manual payout recorded for rep {rep_id}: {payout_id}")
         return payout_id

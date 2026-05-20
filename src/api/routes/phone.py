@@ -1,7 +1,7 @@
 """
 Twilio Voice webhook routes for Meridian AI Phone Agent.
-Twilio handles telephony, STT, and TTS. SambaNova (primary) + Anthropic (fallback) provide the brain.
-No GPU, no local models, no Pipecat — just Twilio + SambaNova/Claude.
+Twilio handles telephony, STT, and TTS. SambaNova (primary) + local Qwen (fallback) provide the brain.
+No external AI APIs required — Qwen 2.5 7B runs locally on port 8002.
 
 Webhook URL to configure in Twilio Console:
     Voice: https://api.meridian.tips/twilio/voice
@@ -30,9 +30,8 @@ SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY", "")
 SAMBANOVA_BASE_URL = "https://api.sambanova.ai/v1"
 SAMBANOVA_MODEL = os.getenv("SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct")
 
-# Fallback: Anthropic Claude
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+# Fallback: Local Qwen 2.5 7B (same server as Garry)
+QWEN_URL = os.getenv("GARRY_LLM_URL", "http://localhost:8002")
 
 _sessions: dict[str, dict[str, Any]] = {}
 SESSION_TTL = 600
@@ -205,40 +204,38 @@ async def _ask_sambanova(messages: list[dict]) -> dict | None:
         return None
 
 
-async def _ask_anthropic(messages: list[dict]) -> dict:
-    """Call Anthropic Claude. Always returns a dict (fallback response on failure)."""
-    if not ANTHROPIC_API_KEY:
-        return {"content": [{"type": "text", "text": "Our ordering system is starting up. Please call back in a moment!"}]}
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": ANTHROPIC_MODEL,
-                "max_tokens": 300,
-                "system": SYSTEM_PROMPT,
-                "tools": TOOLS,
-                "messages": messages,
-            },
-        )
-        if resp.status_code != 200:
-            logger.error("Anthropic API %d: %s", resp.status_code, resp.text[:300])
-            return {"content": [{"type": "text", "text": "One moment please."}]}
-        return resp.json()
+async def _ask_qwen(messages: list[dict]) -> dict:
+    """Call local Qwen 2.5 7B as fallback. Returns Anthropic-style content blocks."""
+    openai_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{QWEN_URL}/v1/chat/completions",
+                json={
+                    "messages": openai_messages,
+                    "max_tokens": 300,
+                    "temperature": 0.5,
+                },
+            )
+            if resp.status_code != 200:
+                logger.error("Qwen API %d: %s", resp.status_code, resp.text[:200])
+                return {"content": [{"type": "text", "text": "One moment please."}]}
+            data = resp.json()
+            text = data["choices"][0]["message"].get("content", "")
+            return {"content": [{"type": "text", "text": text}]}
+    except Exception as exc:
+        logger.warning("Qwen fallback error: %s", exc)
+        return {"content": [{"type": "text", "text": "One moment please."}]}
 
 
 async def _ask_ai(messages: list[dict]) -> dict:
-    """SambaNova primary, Anthropic fallback."""
+    """SambaNova primary, local Qwen fallback."""
     result = await _ask_sambanova(messages)
     if result is not None:
         logger.info("AI response via SambaNova")
         return result
-    logger.warning("SambaNova unavailable, falling back to Anthropic")
-    return await _ask_anthropic(messages)
+    logger.warning("SambaNova unavailable, falling back to local Qwen")
+    return await _ask_qwen(messages)
 
 
 def _parse(result: dict) -> tuple[str, dict | None]:
@@ -352,13 +349,13 @@ async def twilio_status(request: Request):
 @router.get("/health")
 async def twilio_health():
     samba_ok = bool(SAMBANOVA_API_KEY)
-    anthropic_ok = bool(ANTHROPIC_API_KEY)
+    qwen_ok = True
     return {
         "status": "ok",
         "mode": "twilio",
-        "primary_llm": "sambanova" if samba_ok else "none",
-        "fallback_llm": "anthropic" if anthropic_ok else "none",
+        "primary_llm": "sambanova" if samba_ok else "qwen-local",
+        "fallback_llm": "qwen-local",
         "sambanova_configured": samba_ok,
-        "anthropic_configured": anthropic_ok,
+        "qwen_url": QWEN_URL,
         "active_sessions": len(_sessions),
     }

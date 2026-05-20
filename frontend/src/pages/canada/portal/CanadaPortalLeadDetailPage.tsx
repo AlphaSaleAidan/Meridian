@@ -15,6 +15,8 @@ import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type Inv
 import { generateSlaDocument, type SlaInput } from '@/lib/generate-sla-pdf'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
+import { useToast } from '@/components/Toast'
+import { notifyStageChange } from '@/lib/notifications'
 
 const STAGE_TO_STEP: Record<string, number> = {
   proposal_shown: 1,
@@ -88,6 +90,7 @@ export default function CanadaPortalLeadDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { rep } = useSalesAuth()
+  const { toast } = useToast()
   const [deal, setDeal] = useState<Deal | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
@@ -714,6 +717,18 @@ export default function CanadaPortalLeadDetailPage() {
     }).catch(() => {
       setDeal(null)
     }).finally(() => setLoading(false))
+    const channel = canadaLeadsService.subscribe(undefined, deals => {
+      const updated = deals.find(d => d.id === id)
+      if (updated) {
+        if (deal && updated.stage !== deal.stage) {
+          notifyStageChange(updated.business_name, updated.stage)
+          toast(`${updated.business_name} moved to ${updated.stage.replace(/_/g, ' ')}`, 'info')
+        }
+        setDeal(updated)
+        setMonthlyPrice(updated.monthly_value || 500)
+      }
+    })
+    return () => { canadaLeadsService.unsubscribe(channel) }
   }, [id])
 
   if (loading) {

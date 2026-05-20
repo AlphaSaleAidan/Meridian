@@ -2,118 +2,103 @@
 Payout API Routes — Commission tracking and manual payout management.
 
 Routes:
+    GET  /api/payouts/summary                    - Aggregate payout summary
     GET  /api/payouts/reps                       - List all reps with earnings
-    GET  /api/payouts/reps/{rep_id}/earnings      - Rep earnings summary  
     GET  /api/payouts/reps/{rep_id}/commissions   - Rep commission history
-    POST /api/payouts/reps/{rep_id}/record-payout - Record a manual payout
     GET  /api/payouts/balances                    - All rep balances (what's owed)
     GET  /api/payouts/history                     - Payout history
 """
 
 import logging
-from typing import Optional
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..auth import require_service_auth
 
 logger = logging.getLogger("meridian.api.payouts")
 router = APIRouter(prefix="/api/payouts", tags=["payouts"])
 
 
-class RecordPayoutRequest(BaseModel):
-    method: str = "manual"  # venmo, zelle, bank_transfer, cash, etc.
-    notes: Optional[str] = None
+def _get_db():
+    from ...db import _db_instance
+    if _db_instance is None:
+        raise HTTPException(503, "Database not initialized")
+    return _db_instance
 
 
-def create_payout_routes(db_client):
-    """Factory to create routes with injected DB client."""
-    
-    from ...payouts.commission_service import CommissionService
-    from ...payouts.payout_service import PayoutTracker
+@router.get("/summary", dependencies=[Depends(require_service_auth)])
+async def payout_summary():
+    """Aggregate payout summary across all reps."""
+    db = _get_db()
+    reps = await db.select("sales_reps")
 
-    commission_svc = CommissionService(db_client)
-    payout_tracker = PayoutTracker(db_client)
+    total_earned = sum(float(r.get("total_earned", 0) or 0) for r in reps)
+    total_paid = sum(float(r.get("total_paid", 0) or 0) for r in reps)
+    active_reps = sum(1 for r in reps if r.get("is_active"))
 
-    @router.get("/reps")
-    async def list_reps():
-        """List all sales reps with their earnings."""
-        result = db_client.table("sales_reps").select(
-            "id, name, email, phone, commission_rate, recruiter, "
-            "is_active, total_earned, total_paid, created_at"
-        ).order("created_at", desc=True).execute()
-        return {"reps": result.data or []}
+    return {
+        "total_reps": len(reps),
+        "active_reps": active_reps,
+        "total_earned_cents": int(total_earned * 100),
+        "total_paid_cents": int(total_paid * 100),
+        "total_pending_cents": int((total_earned - total_paid) * 100),
+    }
 
-    @router.get("/reps/{rep_id}/earnings")
-    async def rep_earnings(rep_id: str):
-        """Get earnings summary for a specific rep."""
-        try:
-            earnings = await commission_svc.get_rep_earnings(rep_id)
-            return {
-                "rep": earnings["rep"],
-                "total_earned": float(earnings["total_earned"]),
-                "total_paid": float(earnings["total_paid"]),
-                "pending_payout": float(earnings["pending_payout"]),
-            }
-        except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e))
 
-    @router.get("/reps/{rep_id}/commissions")
-    async def rep_commissions(rep_id: str, limit: int = 50, offset: int = 0):
-        """Get commission history for a rep."""
-        result = db_client.table("commissions").select(
-            "*, organizations(name)"
-        ).eq("rep_id", rep_id).order(
-            "created_at", desc=True
-        ).range(offset, offset + limit - 1).execute()
-        return {"commissions": result.data or []}
+@router.get("/reps", dependencies=[Depends(require_service_auth)])
+async def list_reps():
+    """List all sales reps with their earnings."""
+    db = _get_db()
+    reps = await db.select("sales_reps", order="created_at.desc")
+    return {"reps": reps}
 
-    @router.post("/reps/{rep_id}/record-payout")
-    async def record_payout(rep_id: str, req: RecordPayoutRequest):
-        """Record a manual payout to a rep (marks all pending commissions as paid)."""
-        payout_id = await commission_svc.record_payout(
-            rep_id=rep_id,
-            method=req.method,
-            notes=req.notes,
+
+@router.get("/reps/{rep_id}/commissions")
+async def rep_commissions(rep_id: str, limit: int = 50):
+    """Get commission history for a rep."""
+    db = _get_db()
+    try:
+        commissions = await db.select(
+            "commissions",
+            filters={"rep_id": f"eq.{rep_id}"},
+            order="created_at.desc",
+            limit=limit,
         )
-        if not payout_id:
-            raise HTTPException(status_code=400, detail="No pending commissions to pay out")
-        
-        # Fetch payout details
-        payout = db_client.table("payouts").select("*").eq(
-            "id", payout_id
-        ).single().execute()
+    except Exception:
+        commissions = []
+    return {"commissions": commissions}
 
-        if payout.data is None:
-            raise HTTPException(status_code=404, detail="Payout not found")
 
-        return {
-            "payout_id": payout_id,
-            "amount": float(payout.data["amount"]),
-            "commission_count": payout.data["commission_count"],
-            "method": payout.data["method"],
-        }
+@router.get("/balances", dependencies=[Depends(require_service_auth)])
+async def all_balances():
+    """Get what's owed to each rep."""
+    db = _get_db()
+    reps = await db.select("sales_reps", filters={"is_active": "eq.true"})
 
-    @router.get("/balances")
-    async def all_balances():
-        """Get what's owed to each rep."""
-        balances = await payout_tracker.get_all_balances()
-        return {
-            "balances": [
-                {
-                    "rep_id": b.rep_id,
-                    "rep_name": b.rep_name,
-                    "total_earned": float(b.total_earned),
-                    "total_paid": float(b.total_paid),
-                    "balance_owed": float(b.balance_owed),
-                    "pending_commissions": b.pending_commissions,
-                }
-                for b in balances
-            ]
-        }
+    balances = []
+    for r in reps:
+        earned = float(r.get("total_earned", 0) or 0)
+        paid = float(r.get("total_paid", 0) or 0)
+        balances.append({
+            "rep_id": r.get("id"),
+            "rep_name": r.get("name"),
+            "total_earned": earned,
+            "total_paid": paid,
+            "balance_owed": round(earned - paid, 2),
+        })
 
-    @router.get("/history")
-    async def payout_history(limit: int = 50):
-        """Get payout history across all reps."""
-        history = await payout_tracker.get_payout_history(limit=limit)
-        return {"payouts": history}
+    return {"balances": balances}
 
-    return router
+
+@router.get("/history", dependencies=[Depends(require_service_auth)])
+async def payout_history(limit: int = 50):
+    """Get payout history across all reps."""
+    db = _get_db()
+    try:
+        payouts = await db.select(
+            "payouts",
+            order="created_at.desc",
+            limit=limit,
+        )
+    except Exception:
+        payouts = []
+    return {"payouts": payouts}

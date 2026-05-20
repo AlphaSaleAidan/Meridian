@@ -224,9 +224,53 @@
   outline: none !important;
 }
 
+/* ─── Mobile optimizations ─────────────────────── */
+
 /* Prevent iOS zoom on input focus */
 @media (max-width: 640px) {
   input, select, textarea {
     font-size: 16px !important;
+  }
+}
+
+/* Safe area insets for notched phones */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-left { padding-left: env(safe-area-inset-left); }
+.safe-right { padding-right: env(safe-area-inset-right); }
+
+/* Bottom nav spacer — prevents content from hiding behind the tab bar */
+@media (max-width: 1023px) {
+  .mobile-nav-spacer {
+    padding-bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Touch-friendly targets on mobile */
+@media (max-width: 1023px) {
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* PWA standalone mode — hide browser chrome artifacts */
+@media (display-mode: standalone) {
+  .pwa-hide { display: none; }
+}
+
+/* Pull-to-refresh prevention in standalone */
+@media (display-mode: standalone) {
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* Haptic-style active state for tappable elements on mobile */
+@media (max-width: 1023px) {
+  .tap-active:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+    transition: transform 0.05s, opacity 0.05s;
   }
 }

@@ -1,13 +1,19 @@
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react'
 import { clsx } from 'clsx'
 import {
   Video, Upload, X, CheckCircle2, AlertCircle,
   Smartphone, ArrowRight, Loader2, RotateCcw,
-  Camera, Monitor, ChevronLeft,
+  Camera, Monitor, ChevronLeft, Scan, Layers,
+  Eye, Zap,
 } from 'lucide-react'
 import { spacesService, type ProcessingJob } from '@/lib/spaces-service'
+import { getDeviceCapabilities, isMobile, type DeviceCapabilities } from '@/lib/device-capabilities'
 
-type WizardStep = 'instructions' | 'upload' | 'processing' | 'complete'
+const LiveCapture = lazy(() => import('./LiveCapture'))
+const WebXRScan = lazy(() => import('./WebXRScan'))
+
+type WizardStep = 'detect' | 'choose' | 'instructions' | 'capture' | 'upload' | 'processing' | 'complete'
+type ScanMode = 'live-camera' | 'ar-scan' | 'video-upload'
 
 interface ScanWizardProps {
   orgId: string
@@ -15,7 +21,7 @@ interface ScanWizardProps {
   onCancel: () => void
 }
 
-const TIPS = [
+const VIDEO_TIPS = [
   { icon: Smartphone, text: 'Walk slowly through the entire store' },
   { icon: Camera, text: 'Keep the camera at chest height, pointed straight ahead' },
   { icon: RotateCcw, text: 'Overlap areas — scan aisles in a snake pattern' },
@@ -23,7 +29,8 @@ const TIPS = [
 ]
 
 export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardProps) {
-  const [step, setStep] = useState<WizardStep>('instructions')
+  const [step, setStep] = useState<WizardStep>('detect')
+  const [scanMode, setScanMode] = useState<ScanMode>('live-camera')
   const [scanName, setScanName] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -31,6 +38,8 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
   const [job, setJob] = useState<ProcessingJob | null>(null)
   const [spaceId, setSpaceId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [capabilities, setCapabilities] = useState<DeviceCapabilities | null>(null)
+  const [capturedFrames, setCapturedFrames] = useState<Blob[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -38,6 +47,31 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
     }
+  }, [])
+
+  // Detect device capabilities on mount
+  useEffect(() => {
+    async function detect() {
+      const caps = await getDeviceCapabilities()
+      setCapabilities(caps)
+
+      if (!isMobile()) {
+        // Desktop — go straight to video upload
+        setScanMode('video-upload')
+        setStep('instructions')
+        return
+      }
+
+      if (caps.hasLiDAR && caps.webXRSupported) {
+        setScanMode('ar-scan')
+      } else if (caps.rearCameraSupported) {
+        setScanMode('live-camera')
+      } else {
+        setScanMode('video-upload')
+      }
+      setStep('choose')
+    }
+    detect()
   }, [])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -60,7 +94,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
     }
   }, [])
 
-  async function handleUpload() {
+  async function handleVideoUpload() {
     if (!file || !scanName.trim()) return
     setUploading(true)
     setError(null)
@@ -69,29 +103,88 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
       const result = await spacesService.uploadVideo(orgId, scanName.trim(), file)
       setSpaceId(result.spaceId)
       setStep('processing')
-
-      pollRef.current = setInterval(async () => {
-        const status = await spacesService.getJobStatus(result.jobId)
-        if (status) {
-          setJob(status)
-          if (status.status === 'complete') {
-            if (pollRef.current) clearInterval(pollRef.current)
-            setStep('complete')
-          } else if (status.status === 'failed') {
-            if (pollRef.current) clearInterval(pollRef.current)
-            setError(status.error_message || 'Processing failed')
-          }
-        }
-      }, 1000)
+      startPolling(result.jobId)
     } catch {
       setError('Upload failed. Please try again.')
       setUploading(false)
     }
   }
 
+  async function handleFramesUpload(frames: Blob[], metadata: any) {
+    if (frames.length === 0) return
+    setStep('processing')
+    setUploading(true)
+    setError(null)
+
+    const name = scanName.trim() || `Scan ${new Date().toLocaleDateString()}`
+
+    try {
+      const result = await spacesService.uploadFrames(orgId, name, frames, metadata)
+      setSpaceId(result.spaceId)
+      startPolling(result.jobId)
+    } catch {
+      setError('Frame upload failed. Please try again.')
+      setStep('choose')
+      setUploading(false)
+    }
+  }
+
+  function startPolling(jobId: string) {
+    pollRef.current = setInterval(async () => {
+      const status = await spacesService.getJobStatus(jobId)
+      if (status) {
+        setJob(status)
+        if (status.status === 'complete') {
+          if (pollRef.current) clearInterval(pollRef.current)
+          setStep('complete')
+        } else if (status.status === 'failed') {
+          if (pollRef.current) clearInterval(pollRef.current)
+          setError(status.error_message || 'Processing failed')
+        }
+      }
+    }, 1000)
+  }
+
+  function handleLiveCaptureComplete(frames: Blob[], metadata: any) {
+    setCapturedFrames(frames)
+    handleFramesUpload(frames, metadata)
+  }
+
+  function handleXRCaptureComplete(frames: Blob[], metadata: any) {
+    setCapturedFrames(frames)
+    handleFramesUpload(frames, metadata)
+  }
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  // Live camera or AR scan — render fullscreen
+  if (step === 'capture') {
+    return (
+      <Suspense fallback={
+        <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+          <Loader2 size={24} className="text-[#1A8FD6] animate-spin" />
+        </div>
+      }>
+        {scanMode === 'ar-scan' ? (
+          <WebXRScan
+            onFramesCaptured={handleXRCaptureComplete}
+            onCancel={onCancel}
+            onFallbackToStandard={() => { setScanMode('live-camera'); }}
+            deviceModel={capabilities?.deviceModel ?? null}
+          />
+        ) : (
+          <LiveCapture
+            onFramesCaptured={handleLiveCaptureComplete}
+            onCancel={onCancel}
+            tier={capabilities?.tier ?? 'standard'}
+            deviceModel={capabilities?.deviceModel ?? null}
+          />
+        )}
+      </Suspense>
+    )
   }
 
   return (
@@ -100,9 +193,9 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
           <div className="flex items-center gap-3">
-            {step !== 'instructions' && step !== 'complete' && (
+            {(step === 'upload' || step === 'instructions') && (
               <button
-                onClick={() => setStep(step === 'upload' ? 'instructions' : 'upload')}
+                onClick={() => setStep(isMobile() ? 'choose' : 'instructions')}
                 className="p-1 rounded-lg text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
               >
                 <ChevronLeft size={16} />
@@ -110,15 +203,19 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
             )}
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">
-                {step === 'instructions' ? 'Scan Your Store' :
+                {step === 'detect' ? 'Detecting Device...' :
+                 step === 'choose' ? 'Choose Scan Mode' :
+                 step === 'instructions' ? 'Scan Your Store' :
                  step === 'upload' ? 'Upload Video' :
                  step === 'processing' ? 'Processing Scan' :
                  'Scan Complete'}
               </h3>
               <p className="text-[10px] text-[#A1A1A8] mt-0.5">
-                {step === 'instructions' ? 'Video-based 3D mapping — no special hardware needed' :
+                {step === 'detect' ? 'Checking camera capabilities...' :
+                 step === 'choose' ? 'We detected your device — pick the best mode' :
+                 step === 'instructions' ? 'Video-based 3D mapping — no special hardware needed' :
                  step === 'upload' ? 'Upload a walkthrough video of your store' :
-                 step === 'processing' ? 'LingBot-Map is building your 3D model' :
+                 step === 'processing' ? 'Building your 3D model' :
                  'Your 3D space is ready to explore'}
               </p>
             </div>
@@ -132,7 +229,114 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
         </div>
 
         <div className="p-5">
-          {/* Step 1: Instructions */}
+          {/* Detecting */}
+          {step === 'detect' && (
+            <div className="py-8 text-center">
+              <Loader2 size={24} className="text-[#1A8FD6] animate-spin mx-auto mb-3" />
+              <p className="text-xs text-[#A1A1A8]">Checking your device capabilities...</p>
+            </div>
+          )}
+
+          {/* Choose scan mode */}
+          {step === 'choose' && capabilities && (
+            <div className="space-y-4">
+              {/* Device badge */}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#111113] border border-[#1F1F23]">
+                <Smartphone size={14} className="text-[#A1A1A8]" />
+                <span className="text-xs text-[#A1A1A8]">
+                  {capabilities.deviceModel || 'Mobile device'}
+                </span>
+                {capabilities.hasLiDAR && (
+                  <span className="ml-auto px-2 py-0.5 rounded-full bg-[#7C5CFF]/10 text-[#7C5CFF] text-[9px] font-semibold">
+                    LiDAR
+                  </span>
+                )}
+              </div>
+
+              {/* AR Scan option — only show for LiDAR devices */}
+              {capabilities.hasLiDAR && (
+                <button
+                  onClick={() => { setScanMode('ar-scan'); setStep('capture') }}
+                  className="w-full text-left p-4 rounded-xl border-2 border-[#7C5CFF]/30 bg-[#7C5CFF]/5 hover:border-[#7C5CFF]/50 transition-all group"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#7C5CFF]/10 flex items-center justify-center flex-shrink-0">
+                      <Scan size={20} className="text-[#7C5CFF]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-[#F5F5F7]">AR Scan</p>
+                        <span className="px-1.5 py-0.5 rounded bg-[#7C5CFF]/20 text-[#7C5CFF] text-[9px] font-bold">RECOMMENDED</span>
+                      </div>
+                      <p className="text-xs text-[#A1A1A8] mt-0.5">
+                        Real-time 3D scanning using your LiDAR sensor. Walk through your store and watch the model build live.
+                      </p>
+                      <div className="flex items-center gap-3 mt-2 text-[10px] text-[#A1A1A8]/60">
+                        <span className="flex items-center gap-1"><Layers size={10} /> Depth data</span>
+                        <span className="flex items-center gap-1"><Eye size={10} /> AR overlay</span>
+                        <span className="flex items-center gap-1"><Zap size={10} /> Best quality</span>
+                      </div>
+                    </div>
+                    <ArrowRight size={16} className="text-[#7C5CFF] mt-1 opacity-50 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </button>
+              )}
+
+              {/* Live Camera option */}
+              <button
+                onClick={() => { setScanMode('live-camera'); setStep('capture') }}
+                className={clsx(
+                  'w-full text-left p-4 rounded-xl border-2 transition-all group',
+                  capabilities.hasLiDAR
+                    ? 'border-[#1F1F23] hover:border-[#2A2A30]'
+                    : 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5 hover:border-[#1A8FD6]/50'
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0">
+                    <Camera size={20} className="text-[#1A8FD6]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-[#F5F5F7]">Live Camera</p>
+                      {!capabilities.hasLiDAR && (
+                        <span className="px-1.5 py-0.5 rounded bg-[#1A8FD6]/20 text-[#1A8FD6] text-[9px] font-bold">RECOMMENDED</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#A1A1A8] mt-0.5">
+                      Open your camera and walk through the store. We capture frames automatically — works on any phone.
+                    </p>
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-[#A1A1A8]/60">
+                      <span className="flex items-center gap-1"><Camera size={10} /> Any camera</span>
+                      <span className="flex items-center gap-1"><Smartphone size={10} /> No app needed</span>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-[#1A8FD6] mt-1 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+
+              {/* Video upload fallback */}
+              <button
+                onClick={() => { setScanMode('video-upload'); setStep('instructions') }}
+                className="w-full text-left p-4 rounded-xl border-2 border-[#1F1F23] hover:border-[#2A2A30] transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#A1A1A8]/10 flex items-center justify-center flex-shrink-0">
+                    <Upload size={20} className="text-[#A1A1A8]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#F5F5F7]">Upload Video</p>
+                    <p className="text-xs text-[#A1A1A8] mt-0.5">
+                      Already have a walkthrough video? Upload it directly.
+                    </p>
+                  </div>
+                  <ArrowRight size={16} className="text-[#A1A1A8] mt-1 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+            </div>
+          )}
+
+          {/* Instructions (video upload path) */}
           {step === 'instructions' && (
             <div className="space-y-5">
               <div className="rounded-xl bg-[#1A8FD6]/5 border border-[#1A8FD6]/15 p-4">
@@ -143,7 +347,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                   <div>
                     <p className="text-sm font-medium text-[#F5F5F7]">How it works</p>
                     <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-                      Record a walkthrough video of your store using any phone camera. Our AI (LingBot-Map)
+                      Record a walkthrough video of your store using any phone camera. Our AI
                       reconstructs a full 3D model from standard RGB video — no LiDAR or special sensors needed.
                     </p>
                   </div>
@@ -152,7 +356,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
 
               <div className="space-y-2.5">
                 <p className="text-xs font-semibold text-[#A1A1A8] uppercase tracking-wider">Tips for best results</p>
-                {TIPS.map(({ icon: Icon, text }) => (
+                {VIDEO_TIPS.map(({ icon: Icon, text }) => (
                   <div key={text} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#111113] border border-[#1F1F23]">
                     <Icon size={14} className="text-[#17C5B0] flex-shrink-0" />
                     <p className="text-xs text-[#A1A1A8]">{text}</p>
@@ -175,7 +379,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
             </div>
           )}
 
-          {/* Step 2: Upload */}
+          {/* Upload */}
           {step === 'upload' && (
             <div className="space-y-4">
               <div>
@@ -249,7 +453,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
               )}
 
               <button
-                onClick={handleUpload}
+                onClick={handleVideoUpload}
                 disabled={!file || !scanName.trim() || uploading}
                 className={clsx(
                   'w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-medium transition-all',
@@ -259,21 +463,15 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                 )}
               >
                 {uploading ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    Uploading...
-                  </>
+                  <><Loader2 size={14} className="animate-spin" /> Uploading...</>
                 ) : (
-                  <>
-                    <Upload size={14} />
-                    Start Processing
-                  </>
+                  <><Upload size={14} /> Start Processing</>
                 )}
               </button>
             </div>
           )}
 
-          {/* Step 3: Processing */}
+          {/* Processing */}
           {step === 'processing' && (
             <div className="space-y-5 py-4">
               <div className="text-center">
@@ -282,7 +480,9 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                 </div>
                 <p className="text-sm font-semibold text-[#F5F5F7]">Building 3D Model</p>
                 <p className="text-xs text-[#A1A1A8] mt-1">
-                  LingBot-Map is reconstructing your store in 3D
+                  {scanMode === 'ar-scan'
+                    ? 'Processing LiDAR-enhanced scan with depth data'
+                    : 'Reconstructing your store from captured frames'}
                 </p>
               </div>
 
@@ -316,7 +516,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
             </div>
           )}
 
-          {/* Step 4: Complete */}
+          {/* Complete */}
           {step === 'complete' && (
             <div className="space-y-5 py-4">
               <div className="text-center">

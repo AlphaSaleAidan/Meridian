@@ -3,6 +3,7 @@ import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Wifi, C
 import { deriveClientsFromLeads, type SalesClient } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { useToast } from '@/components/Toast'
 
 function formatCurrency(value: number): string {
   return 'CA$' + value.toLocaleString('en-CA')
@@ -34,6 +35,7 @@ type BillingStatus = 'unchecked' | 'checking' | 'active' | 'pending' | 'past_due
 
 export default function CanadaPortalAccountsPage() {
   const { rep } = useSalesAuth()
+  const { toast } = useToast()
   const [clients, setClients] = useState<SalesClient[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -50,6 +52,10 @@ export default function CanadaPortalAccountsPage() {
     }).catch(() => {
       setClients([])
     }).finally(() => setLoading(false))
+    const channel = canadaLeadsService.subscribe(rep?.rep_id, deals => {
+      setClients(deriveClientsFromLeads(deals))
+    })
+    return () => { canadaLeadsService.unsubscribe(channel) }
   }, [rep?.rep_id])
 
   async function checkBilling(clientId: string) {
@@ -83,9 +89,12 @@ export default function CanadaPortalAccountsPage() {
           rep_email: rep?.email || '',
         }),
       })
-      if (res.ok) setNotifiedIds(prev => new Set(prev).add(client.id))
+      if (res.ok) {
+        setNotifiedIds(prev => new Set(prev).add(client.id))
+        toast('Payment reminder sent', 'success')
+      }
     } catch {
-      window.alert('Failed to send notification. Please try again.')
+      toast('Failed to send notification', 'error')
     }
     setNotifyingId(null)
   }
@@ -104,7 +113,7 @@ export default function CanadaPortalAccountsPage() {
         }),
       })
     } catch {
-      window.alert('Failed to send card update request. Please try again.')
+      toast('Failed to send card update request', 'error')
     }
     setCardUpdateId(null)
   }

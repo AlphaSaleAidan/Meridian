@@ -9,12 +9,16 @@ Endpoints:
   GET  /api/billing/status/:org_id   → Get subscription status
 """
 
+import hashlib
+import hmac
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
+from ..auth import require_admin, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.billing.routes")
@@ -190,7 +194,7 @@ async def create_invoice(req: InvoiceRequest):
         raise HTTPException(status_code=500, detail="Invoice creation failed")
 
 
-@router.post("/cancel")
+@router.post("/cancel", dependencies=[Depends(require_service_auth)])
 async def cancel_subscription(req: CancelRequest):
     """Cancel a subscription. Stops future auto-renewals."""
     try:
@@ -221,10 +225,17 @@ async def get_billing_status(org_id: str):
     try:
         db = get_db()
 
-        result = db.table("subscriptions").select("*").eq("org_id", org_id).single().execute()
+        try:
+            rows = await db.select(
+                "subscriptions",
+                filters={"org_id": f"eq.{org_id}"},
+                limit=1,
+            )
+        except Exception:
+            return {"status": "none", "tier": None}
 
-        if result.data:
-            sub = result.data
+        if rows:
+            sub = rows[0]
             metadata = sub.get("metadata") or {}
             return {
                 "status": sub.get("status"),
@@ -261,12 +272,13 @@ async def update_payment_method(req: UpdatePaymentMethodRequest):
 
         db = get_db()
 
-        result = db.table("subscriptions").select("*").eq("org_id", req.org_id).single().execute()
+        rows = await db.select("subscriptions", filters={"org_id": f"eq.{req.org_id}"}, limit=1)
         amount_cents = 25000
         plan = "standard"
-        if result.data:
-            amount_cents = result.data.get("monthly_price_cents", 25000)
-            plan = result.data.get("tier", "standard")
+        sub_data = rows[0] if rows else {}
+        if sub_data:
+            amount_cents = sub_data.get("monthly_price_cents", 25000)
+            plan = sub_data.get("tier", "standard")
 
         service = BillingService(db)
         inv_result = await service.create_invoice(
@@ -279,15 +291,15 @@ async def update_payment_method(req: UpdatePaymentMethodRequest):
         )
 
         if inv_result.success:
-            meta = (result.data or {}).get("metadata", {})
-            db.table("subscriptions").update({
-                "metadata": {
-                    **meta,
-                    "update_invoice_id": inv_result.invoice_id,
-                    "update_invoice_url": inv_result.invoice_url,
-                    "update_requested_at": datetime.now(timezone.utc).isoformat(),
-                },
-            }).eq("org_id", req.org_id).execute()
+            meta = sub_data.get("metadata") or {}
+            import json as json_mod
+            updated_meta = {
+                **meta,
+                "update_invoice_id": inv_result.invoice_id,
+                "update_invoice_url": inv_result.invoice_url,
+                "update_requested_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.update("subscriptions", {"metadata": json_mod.dumps(updated_meta)}, filters={"org_id": f"eq.{req.org_id}"})
 
             return {
                 "ok": True,
@@ -315,11 +327,12 @@ async def notify_payment_failed(req: PaymentNotifyRequest):
     """
     try:
         db = get_db()
-        sub = db.table("subscriptions").select("*").eq("org_id", req.org_id).single().execute()
+        rows = await db.select("subscriptions", filters={"org_id": f"eq.{req.org_id}"}, limit=1)
+        sub_data = rows[0] if rows else {}
 
-        meta = (sub.data or {}).get("metadata", {}) if sub.data else {}
+        meta = sub_data.get("metadata") or {} if sub_data else {}
         update_url = meta.get("update_invoice_url") or meta.get("renewal_invoice_url")
-        amount_cents = (sub.data or {}).get("monthly_price_cents", 25000) if sub.data else 25000
+        amount_cents = sub_data.get("monthly_price_cents", 25000) if sub_data else 25000
 
         if not update_url:
             try:
@@ -363,7 +376,7 @@ async def notify_payment_failed(req: PaymentNotifyRequest):
         raise HTTPException(500, "Could not send payment notification")
 
 
-@router.post("/process-renewals")
+@router.post("/process-renewals", dependencies=[Depends(require_admin)])
 async def process_renewals():
     """
     Manually trigger subscription renewal processing.
@@ -392,12 +405,19 @@ async def get_invoice_url(org_id: str):
     """
     try:
         db = get_db()
-        result = db.table("subscriptions").select("metadata").eq("org_id", org_id).single().execute()
-
-        if not result.data:
+        try:
+            rows = await db.select(
+                "subscriptions",
+                filters={"org_id": f"eq.{org_id}"},
+                limit=1,
+            )
+        except Exception:
             raise HTTPException(404, "No subscription found")
 
-        meta = result.data.get("metadata") or {}
+        if not rows:
+            raise HTTPException(404, "No subscription found")
+
+        meta = rows[0].get("metadata") or {}
 
         renewal_url = meta.get("renewal_invoice_url")
         setup_url = meta.get("setup_invoice_url")
@@ -420,7 +440,7 @@ async def get_invoice_url(org_id: str):
         raise HTTPException(500, "Could not retrieve invoice URL")
 
 
-@router.post("/check-trials")
+@router.post("/check-trials", dependencies=[Depends(require_admin)])
 async def check_expiring_trials():
     """
     Check for trials expiring within the next 3 days and send reminder emails.
@@ -434,22 +454,26 @@ async def check_expiring_trials():
             target = now + timedelta(days=days_out)
             target_date = target.strftime("%Y-%m-%d")
 
-            result = db.table("subscriptions").select(
-                "*, organizations(name, email, contact_email, owner_name)"
-            ).eq("status", "trialing").gte(
-                "current_period_end", f"{target_date}T00:00:00Z"
-            ).lte(
-                "current_period_end", f"{target_date}T23:59:59Z"
-            ).execute()
+            try:
+                rows = await db.select(
+                    "subscriptions",
+                    filters={
+                        "status": "eq.trialing",
+                        "current_period_end": f"gte.{target_date}T00:00:00Z",
+                    },
+                )
+                rows = [r for r in rows if r.get("current_period_end", "") <= f"{target_date}T23:59:59Z"]
+            except Exception as e:
+                logger.warning(f"Trial check query failed: {e}")
+                rows = []
 
-            for sub in (result.data or []):
-                org = sub.get("organizations") or {}
-                email = org.get("email") or org.get("contact_email")
+            for sub in rows:
+                email = sub.get("contact_email") or sub.get("email")
                 if not email:
                     continue
                 try:
                     from ...email.send import send_trial_expiring
-                    name = (org.get("owner_name") or org.get("name") or "").split()[0] or "there"
+                    name = (sub.get("owner_name") or sub.get("name") or "").split()[0] or "there"
                     await send_trial_expiring(
                         to=email,
                         first_name=name,
@@ -477,28 +501,47 @@ async def handle_billing_webhook(request: Request):
     - invoice.payment_made → Record renewal payment
     """
     try:
-        body = await request.json()
+        raw_body = await request.body()
+        sig_key = os.environ.get("SQUARE_WEBHOOK_SIGNATURE_KEY", "")
+        if sig_key:
+            signature = request.headers.get("x-square-hmacsha256-signature", "")
+            notification_url = str(request.url)
+            combined = notification_url.encode("utf-8") + raw_body
+            expected = hmac.new(
+                key=sig_key.encode("utf-8"),
+                msg=combined,
+                digestmod=hashlib.sha256,
+            ).digest()
+            import base64
+            expected_b64 = base64.b64encode(expected).decode("utf-8")
+            if not hmac.compare_digest(expected_b64, signature):
+                logger.warning("Billing webhook signature mismatch")
+                return {"status": "rejected", "reason": "invalid signature"}
+
+        import json as json_mod
+        body = json_mod.loads(raw_body)
         event_type = body.get("type", "")
         data = body.get("data", {}).get("object", {})
 
         logger.info(f"Billing webhook: {event_type}")
 
         db = get_db()
+        import json as json_mod
 
         if event_type in ("payment.completed", "payment.updated"):
             payment = data.get("payment", {})
 
-            # For payment.updated, only process if status is COMPLETED
             if event_type == "payment.updated" and payment.get("status") != "COMPLETED":
                 return {"status": "ignored", "reason": "payment not completed yet"}
 
             order_id = payment.get("order_id", "")
 
             if order_id:
-                subs = db.table("subscriptions").select(
-                    "*, organizations(name, email, contact_email, owner_name)"
-                ).execute()
-                for sub in (subs.data or []):
+                try:
+                    subs = await db.select("subscriptions")
+                except Exception:
+                    subs = []
+                for sub in subs:
                     meta = sub.get("metadata") or {}
                     if meta.get("square_order_id") == order_id:
                         updated_meta = {
@@ -510,41 +553,42 @@ async def handle_billing_webhook(request: Request):
                         if meta.get("first_month_free"):
                             updated_meta["trial_status"] = "active"
 
-                        db.table("subscriptions").update({
-                            "status": "active",
-                            "metadata": updated_meta,
-                        }).eq("id", sub["id"]).execute()
+                        try:
+                            await db.update("subscriptions", {
+                                "status": "active",
+                                "metadata": json_mod.dumps(updated_meta),
+                            }, filters={"id": f"eq.{sub['id']}"})
+                        except Exception as e:
+                            logger.warning(f"Failed to activate subscription: {e}")
 
-                        # Record setup fee commission if applicable
                         setup_fee = meta.get("setup_fee_cents", 0)
                         rep_id = meta.get("setup_fee_rep_id") or meta.get("rep_id")
                         if setup_fee and rep_id:
                             try:
-                                db.table("commissions").insert({
+                                await db.insert("commissions", {
                                     "rep_id": rep_id,
                                     "org_id": sub["org_id"],
                                     "type": "setup_fee",
                                     "amount_cents": setup_fee,
-                                    "commission_rate": 1.0,  # 100% to rep
+                                    "commission_rate": 1.0,
                                     "commission_cents": setup_fee,
                                     "status": "earned",
                                     "notes": f"Setup fee for {sub.get('tier', 'standard')} plan",
-                                }).execute()
+                                })
                                 logger.info(f"Recorded setup fee commission: ${setup_fee/100:.2f} for rep {rep_id}")
                             except Exception as e:
                                 logger.warning(f"Failed to record setup fee commission: {e}")
 
                         logger.info(f"Activated subscription for order {order_id}")
 
-                        org = sub.get("organizations") or {}
-                        recipient = org.get("email") or org.get("contact_email")
+                        recipient = sub.get("contact_email") or sub.get("email")
                         if recipient:
                             try:
                                 from ...email.send import send_payment_receipt
                                 amount_cents = payment.get("amount_money", {}).get("amount", sub.get("monthly_price_cents", 0))
                                 await send_payment_receipt(
                                     to=recipient,
-                                    business_name=org.get("name", "Your Business"),
+                                    business_name=sub.get("business_name", "Your Business"),
                                     plan_name=sub.get("tier", "Standard").title(),
                                     amount=f"${amount_cents / 100:.2f}",
                                     period="Monthly",
@@ -560,10 +604,11 @@ async def handle_billing_webhook(request: Request):
             invoice_id = invoice.get("id", "")
 
             if invoice_id:
-                subs = db.table("subscriptions").select(
-                    "*, organizations(name, email, contact_email, owner_name)"
-                ).execute()
-                for sub in (subs.data or []):
+                try:
+                    subs = await db.select("subscriptions")
+                except Exception:
+                    subs = []
+                for sub in subs:
                     meta = sub.get("metadata") or {}
                     matched = (
                         meta.get("setup_invoice_id") == invoice_id
@@ -573,20 +618,20 @@ async def handle_billing_webhook(request: Request):
                         continue
 
                     now = datetime.now(timezone.utc)
-                    org = sub.get("organizations") or {}
 
-                    # Activate if pending/past_due
                     if sub.get("status") in ("pending_payment", "past_due"):
-                        db.table("subscriptions").update({
-                            "status": "active",
-                            "metadata": {
-                                **meta,
-                                "payment_completed_at": now.isoformat(),
-                            },
-                        }).eq("id", sub["id"]).execute()
-                        logger.info(f"Activated subscription from invoice {invoice_id}")
+                        try:
+                            await db.update("subscriptions", {
+                                "status": "active",
+                                "metadata": json_mod.dumps({
+                                    **meta,
+                                    "payment_completed_at": now.isoformat(),
+                                }),
+                            }, filters={"id": f"eq.{sub['id']}"})
+                            logger.info(f"Activated subscription from invoice {invoice_id}")
+                        except Exception as e:
+                            logger.warning(f"Failed to activate subscription: {e}")
 
-                    # Create Square auto-subscription if awaiting
                     if meta.get("awaiting_auto_subscription") and not meta.get("square_subscription_id"):
                         try:
                             from src.billing.billing_service import BillingService
@@ -596,23 +641,23 @@ async def handle_billing_webhook(request: Request):
                             sub_result = await billing.create_auto_subscription(
                                 org_id=sub["org_id"],
                                 amount_cents=amount,
-                                customer_email=org.get("email") or org.get("contact_email", ""),
-                                customer_name=org.get("owner_name", ""),
-                                business_name=org.get("name", ""),
+                                customer_email=sub.get("contact_email") or sub.get("email", ""),
+                                customer_name=sub.get("owner_name", ""),
+                                business_name=sub.get("business_name", ""),
                                 plan=sub.get("tier", "starter"),
                             )
 
                             if sub_result.success:
-                                db.table("subscriptions").update({
-                                    "metadata": {
+                                await db.update("subscriptions", {
+                                    "metadata": json_mod.dumps({
                                         **meta,
                                         "square_subscription_id": sub_result.subscription_id,
                                         "auto_billing": True,
                                         "awaiting_auto_subscription": False,
                                         "subscription_start_date": sub_result.start_date,
                                         "payment_completed_at": now.isoformat(),
-                                    },
-                                }).eq("id", sub["id"]).execute()
+                                    }),
+                                }, filters={"id": f"eq.{sub['id']}"})
                                 logger.info(
                                     f"Auto-subscription created for org {sub['org_id']}: "
                                     f"{sub_result.subscription_id}, starts {sub_result.start_date}"

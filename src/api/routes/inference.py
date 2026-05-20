@@ -1,10 +1,11 @@
 """Inference API — local LLM, smart routing, vector search, and system stats."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+from ..auth import require_service_auth
 
-router = APIRouter(prefix="/api/inference", tags=["inference"])
+router = APIRouter(prefix="/api/inference", tags=["inference"], dependencies=[Depends(require_service_auth)])
 
 
 class InferenceRequest(BaseModel):

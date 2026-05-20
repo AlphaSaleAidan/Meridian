@@ -7,11 +7,12 @@ POST /api/training/trigger      → Force a training cycle
 POST /api/training/signal       → Submit engagement signal from dashboard
 """
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from ..auth import require_admin
 
 logger = logging.getLogger("meridian.api.training")
-router = APIRouter(prefix="/api/training", tags=["training"])
+router = APIRouter(prefix="/api/training", tags=["training"], dependencies=[Depends(require_admin)])
 
 
 class EngagementSignal(BaseModel):

@@ -279,11 +279,15 @@ class ClineAgent:
         if not self.db:
             return {"overall_score": 85, "trend": "stable"}
         try:
-            resp = await self.db.table("merchant_health").select("*").eq(
-                "business_id", org_id
-            ).order("measured_at", desc=True).limit(1).execute()
-            if resp.data:
-                row = resp.data[0]
+            rows = await self.db.select(
+                "merchant_health",
+                columns="*",
+                filters={"business_id": f"eq.{org_id}"},
+                order="measured_at.desc",
+                limit=1,
+            )
+            if rows:
+                row = rows[0]
                 return {"overall_score": row["score"], "trend": row.get("trend", "stable")}
         except Exception as e:
             logger.warning("Failed to fetch merchant health: %s", e)
@@ -294,10 +298,14 @@ class ClineAgent:
         if not self.db:
             return []
         try:
-            resp = await self.db.table("cline_errors").select("*").eq(
-                "business_id", org_id
-            ).order("created_at", desc=True).limit(10).execute()
-            return resp.data or []
+            rows = await self.db.select(
+                "cline_errors",
+                columns="*",
+                filters={"business_id": f"eq.{org_id}"},
+                order="created_at.desc",
+                limit=10,
+            )
+            return rows
         except Exception as e:
             logger.warning("Failed to fetch cline errors: %s", e)
             return []
@@ -305,58 +313,64 @@ class ClineAgent:
     async def _persist_diagnosis(self, diagnosis: ClineDiagnosis, error_ctx: dict):
         """Store diagnosis and reasoning chain in DB."""
         try:
+            import json as _json
             chain = diagnosis.reasoning_chain
-            await self.db.table("agent_reasoning_chains").insert({
+            await self.db.insert("agent_reasoning_chains", {
                 "id": diagnosis.id,
                 "business_id": error_ctx.get("business_id", ""),
                 "agent_name": "cline_it",
                 "domain": "system_health",
                 "trigger": "error_detected",
-                "phases": [s.content for s in chain.steps] if chain else [],
+                "phases": _json.dumps([s.content for s in chain.steps] if chain else []),
                 "final_confidence": diagnosis.confidence,
                 "confidence_level": chain.confidence_level if chain else "LOW",
                 "verdict": chain.verdict if chain else "monitoring",
                 "impact_cents": 0,
-                "caveats": chain.caveats if chain else [],
+                "caveats": _json.dumps(chain.caveats if chain else []),
                 "total_duration_ms": chain.total_duration_ms if chain else 0,
                 "started_at": chain.started_at.isoformat() if chain and chain.started_at else None,
                 "completed_at": chain.completed_at.isoformat() if chain and chain.completed_at else None,
-            }).execute()
+            })
         except Exception as e:
             logger.error("Failed to persist diagnosis: %s", e)
 
     async def _persist_remediation(self, diagnosis: ClineDiagnosis, result: RemediationResult):
         """Store remediation result in DB."""
         try:
-            await self.db.table("cline_messages").insert({
+            import json as _json
+            await self.db.insert("cline_messages", {
                 "conversation_id": diagnosis.id,
                 "role": "system",
                 "phase": "reflect",
                 "content": result.message,
-                "data": result.to_dict(),
-            }).execute()
+                "data": _json.dumps(result.to_dict()),
+            })
         except Exception as e:
             logger.error("Failed to persist remediation result: %s", e)
 
     async def _persist_chat_message(self, conv_id: str, org_id: str, content: str, role: str):
         """Store a chat message in cline_conversations/cline_messages."""
         try:
-            existing = await self.db.table("cline_conversations").select("id").eq(
-                "id", conv_id
-            ).limit(1).execute()
-            if not existing.data:
-                await self.db.table("cline_conversations").insert({
+            import json as _json
+            existing = await self.db.select(
+                "cline_conversations",
+                columns="id",
+                filters={"id": f"eq.{conv_id}"},
+                limit=1,
+            )
+            if not existing:
+                await self.db.insert("cline_conversations", {
                     "id": conv_id,
                     "business_id": org_id,
                     "agent_name": "cline_chat",
                     "status": "active",
-                    "context": {},
-                }).execute()
+                    "context": _json.dumps({}),
+                })
 
-            await self.db.table("cline_messages").insert({
+            await self.db.insert("cline_messages", {
                 "conversation_id": conv_id,
                 "role": role,
                 "content": content,
-            }).execute()
+            })
         except Exception as e:
             logger.error("Failed to persist chat message: %s", e)

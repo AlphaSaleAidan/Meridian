@@ -38,17 +38,22 @@ class PayoutTracker:
 
     async def get_all_balances(self) -> list[PayoutSummary]:
         """Get payout balances for all active reps."""
-        reps = self.db.table("sales_reps").select(
-            "id, name, total_earned, total_paid"
-        ).eq("is_active", True).execute()
+        reps = await self.db.select(
+            "sales_reps",
+            columns="id, name, total_earned, total_paid",
+            filters={"is_active": "eq.true"},
+        )
 
         summaries = []
-        for rep in (reps.data or []):
-            pending = self.db.table("commissions").select(
-                "id", count="exact"
-            ).eq("rep_id", rep["id"]).eq("status", "earned").is_(
-                "payout_id", "null"
-            ).execute()
+        for rep in reps:
+            pending_count = await self.db.count(
+                "commissions",
+                filters={
+                    "rep_id": f"eq.{rep['id']}",
+                    "status": "eq.earned",
+                    "payout_id": "is.null",
+                },
+            )
 
             summaries.append(PayoutSummary(
                 rep_id=rep["id"],
@@ -56,19 +61,21 @@ class PayoutTracker:
                 total_earned=Decimal(str(rep["total_earned"])),
                 total_paid=Decimal(str(rep["total_paid"])),
                 balance_owed=Decimal(str(rep["total_earned"])) - Decimal(str(rep["total_paid"])),
-                pending_commissions=pending.count or 0,
+                pending_commissions=pending_count,
             ))
 
         return summaries
 
     async def get_payout_history(self, rep_id: Optional[str] = None, limit: int = 50) -> list:
         """Get payout history, optionally filtered by rep."""
-        query = self.db.table("payouts").select(
-            "*, sales_reps(name, email)"
-        ).order("created_at", desc=True).limit(limit)
-
+        filters = {}
         if rep_id:
-            query = query.eq("rep_id", rep_id)
+            filters["rep_id"] = f"eq.{rep_id}"
 
-        result = query.execute()
-        return result.data or []
+        return await self.db.select(
+            "payouts",
+            columns="*, sales_reps(name, email)",
+            filters=filters,
+            order="created_at.desc",
+            limit=limit,
+        )

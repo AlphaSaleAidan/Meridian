@@ -16,8 +16,9 @@ Routes:
 """
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 
@@ -28,12 +29,17 @@ logger = logging.getLogger("meridian.api.dashboard")
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
+_UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+def _validate_org_id(org_id: str = Query(..., description="Organization ID")) -> str:
+    if not _UUID_RE.match(org_id) and not org_id.startswith('biz_'):
+        raise HTTPException(422, "org_id must be a valid UUID or business ID")
+    return org_id
+
+
+OrgId = Annotated[str, Depends(_validate_org_id)]
+
 
 def _get_db():
-    """
-    Dependency: returns the global SupabaseREST instance.
-    Injected at app startup via `router.dependencies`.
-    """
     from ...db import _db_instance
     if _db_instance is None:
         raise HTTPException(503, "Database not initialized")
@@ -44,7 +50,7 @@ def _get_db():
 
 @router.get("/overview")
 async def get_overview(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId = None,
     db=Depends(_get_db),
 ):
     """
@@ -109,7 +115,7 @@ async def get_overview(
 
 @router.get("/revenue")
 async def get_revenue(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
     days: int = Query(30, ge=7, le=365),
     db=Depends(_get_db),
 ):
@@ -162,7 +168,7 @@ async def get_revenue(
 
 @router.get("/revenue/hourly")
 async def get_hourly_revenue(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
     days: int = Query(30, ge=7, le=90),
     db=Depends(_get_db),
 ):
@@ -197,7 +203,7 @@ async def get_hourly_revenue(
 
 @router.get("/products")
 async def get_products(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
     days: int = Query(30, ge=7, le=365),
     db=Depends(_get_db),
 ):
@@ -264,7 +270,7 @@ async def get_products(
 
 @router.get("/insights")
 async def get_insights(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None, description="Filter by action_status"),
     db=Depends(_get_db),
@@ -315,7 +321,7 @@ async def get_insights(
 async def update_insight_action(
     insight_id: str,
     action_status: str = Query(..., description="New status: viewed, accepted, dismissed, completed"),
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId = None,
     db=Depends(_get_db),
 ):
     """Update an insight's action status."""
@@ -339,7 +345,7 @@ async def update_insight_action(
 
 @router.get("/insights/cooldown")
 async def get_insights_cooldown(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId = None,
     db=Depends(_get_db),
 ):
     """Check if insight generation is still cooling down (2hr window)."""
@@ -381,7 +387,7 @@ async def get_insights_cooldown(
 
 @router.get("/forecasts")
 async def get_forecasts(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
     forecast_type: Optional[str] = Query(None, description="daily_revenue, weekly_revenue, product_demand"),
     db=Depends(_get_db),
 ):
@@ -429,7 +435,7 @@ async def get_forecasts(
 
 @router.get("/notifications")
 async def get_notifications(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
     limit: int = Query(20, ge=1, le=100),
     unread_only: bool = Query(False),
     db=Depends(_get_db),
@@ -470,7 +476,7 @@ async def get_notifications(
 
 @router.get("/connection")
 async def get_connection(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId = None,
     db=Depends(_get_db),
 ):
     """POS connection status and sync info."""
@@ -503,7 +509,7 @@ async def get_connection(
 
 @router.get("/weekly-report")
 async def get_weekly_report(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId = None,
     db=Depends(_get_db),
 ):
     """Latest weekly report."""
@@ -533,7 +539,7 @@ async def get_weekly_report(
 
 @router.get("/transactions/day")
 async def get_day_transactions(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
     date: str = Query(..., description="Date in YYYY-MM-DD format"),
     db=Depends(_get_db),
 ):
@@ -629,11 +635,14 @@ async def get_day_transactions(
 
 @router.get("/inventory")
 async def get_inventory(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId = None,
     db=Depends(_get_db),
 ):
     """Current inventory levels with reorder predictions."""
-    inventory = await db.get_inventory_current(org_id)
+    try:
+        inventory = await db.get_inventory_current(org_id)
+    except Exception:
+        return {"items": [], "total": 0, "alerts": {"low_stock": 0, "overstocked": 0, "trending_up": 0}}
 
     items = []
     low_stock = 0
@@ -684,6 +693,60 @@ async def get_inventory(
 
 
 
+# ─── Trends ──────────────────────────────────────────────
+
+@router.get("/trends")
+async def get_trends(
+    org_id: OrgId,
+    days: int = Query(30, ge=7, le=90),
+    db=Depends(_get_db),
+):
+    """Revenue trends: week-over-week and day-over-day changes."""
+    cache_key = dashboard_cache.make_key("trends", org_id, days=days)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    daily = await db.get_daily_revenue(org_id, days=days)
+
+    now = datetime.now(timezone.utc)
+    mid = (now - timedelta(days=days // 2)).isoformat()
+
+    recent = [r for r in daily if r.get("day_bucket", "") >= mid]
+    earlier = [r for r in daily if r.get("day_bucket", "") < mid]
+
+    recent_rev = sum(r.get("total_revenue_cents", 0) or 0 for r in recent)
+    earlier_rev = sum(r.get("total_revenue_cents", 0) or 0 for r in earlier)
+    recent_txns = sum(r.get("transaction_count", 0) or 0 for r in recent)
+    earlier_txns = sum(r.get("transaction_count", 0) or 0 for r in earlier)
+
+    rev_change = round((recent_rev - earlier_rev) / earlier_rev * 100, 1) if earlier_rev else 0
+    txn_change = round((recent_txns - earlier_txns) / earlier_txns * 100, 1) if earlier_txns else 0
+
+    daily_trends = []
+    for i, day in enumerate(daily):
+        prev_rev = daily[i - 1].get("total_revenue_cents", 0) or 0 if i > 0 else 0
+        curr_rev = day.get("total_revenue_cents", 0) or 0
+        change = round((curr_rev - prev_rev) / prev_rev * 100, 1) if prev_rev else 0
+        daily_trends.append({
+            "date": day.get("day_bucket"),
+            "revenue_cents": curr_rev,
+            "transactions": day.get("transaction_count", 0) or 0,
+            "change_pct": change,
+        })
+
+    result = {
+        "period_days": days,
+        "revenue_change_pct": rev_change,
+        "transaction_change_pct": txn_change,
+        "recent_revenue_cents": recent_rev,
+        "earlier_revenue_cents": earlier_rev,
+        "daily": daily_trends,
+    }
+    dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
+
+
 # ─── Cache Management ───────────────────────────────────
 
 @router.post("/burn-rate/send", dependencies=[Depends(require_admin)])
@@ -697,7 +760,7 @@ async def trigger_burn_rate_sms():
 
 @router.post("/cache/flush", dependencies=[Depends(require_admin)])
 async def flush_cache(
-    org_id: str = Query(..., description="Organization ID"),
+    org_id: OrgId,
 ):
     """Flush dashboard cache for an organization."""
     dashboard_cache.invalidate_org(org_id)

@@ -4,13 +4,15 @@ Canada-specific Routes — Careers applications and Canada portal endpoints.
   POST /api/canada/careers/apply    → Submit a Canadian sales application
   POST /api/canada/create-customer  → Create Supabase Auth user for a Canada customer
 """
+import asyncio
 import logging
 import os
 import uuid
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr, field_validator
 
+from ..auth import require_admin, require_service_auth
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
@@ -21,11 +23,36 @@ router = APIRouter(prefix="/api/canada", tags=["canada"])
 CANADA_ORG_ID = "168b6df2-e9af-4b00-8fec-51e51149ff19"
 
 
+def _sanitize_text(v: str) -> str:
+    """Strip HTML tags and dangerous characters from user input."""
+    import re
+    v = re.sub(r'<[^>]+>', '', v)
+    v = v.replace('&', '&amp;').replace('"', '&quot;').replace("'", '&#x27;')
+    return v.strip()
+
+
 class RepSignupRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
     phone: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = _sanitize_text(v)
+        if len(v) < 2:
+            raise ValueError("name must be at least 2 characters")
+        if len(v) > 100:
+            raise ValueError("name too long")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("password must be at least 8 characters")
+        return v
 
 
 class CreateCustomerRequest(BaseModel):
@@ -38,6 +65,18 @@ class CreateCustomerRequest(BaseModel):
     deal_id: str | None = None
     monthly_price: int = 0
     portal: str = "canada"
+
+    @field_validator("business_name", "contact_name")
+    @classmethod
+    def sanitize_names(cls, v: str) -> str:
+        return _sanitize_text(v)
+
+    @field_validator("password")
+    @classmethod
+    def validate_customer_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("password must be at least 8 characters")
+        return v
 
 
 @router.post("/rep-signup")
@@ -114,7 +153,7 @@ async def rep_signup(req: RepSignupRequest):
 
 
 @router.post("/create-customer")
-async def create_customer(req: CreateCustomerRequest):
+async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_service_auth)):
     import httpx
 
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -176,7 +215,7 @@ class RepActionRequest(BaseModel):
 async def approve_rep(req: RepActionRequest):
     """Admin approves a pending rep — sets is_active=true, creates auth user if needed, sends credentials email."""
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized")
+        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     import secrets
@@ -268,7 +307,7 @@ async def approve_rep(req: RepActionRequest):
 async def reject_rep(req: RepActionRequest):
     """Admin rejects a pending rep — deletes the sales_reps row."""
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized")
+        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -302,7 +341,7 @@ class RepUpdateRequest(BaseModel):
 async def update_rep(req: RepUpdateRequest):
     """Admin updates a rep's name or commission rate."""
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized")
+        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -334,6 +373,61 @@ async def update_rep(req: RepUpdateRequest):
             raise HTTPException(500, "Could not update rep")
 
     return {"ok": True, "rep_id": req.rep_id}
+
+
+@router.get("/leads")
+async def get_leads():
+    """Return all Canada deals/leads. Tries 'deals' table, falls back to 'data_sales'."""
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        return {"leads": []}
+
+    headers = {"Authorization": f"Bearer {service_key}", "apikey": service_key}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{supabase_url}/rest/v1/deals?order=created_at.desc&select=*",
+            headers=headers,
+        )
+        if resp.status_code == 200:
+            return {"leads": resp.json()}
+
+        resp = await client.get(
+            f"{supabase_url}/rest/v1/data_sales?order=created_at.desc&select=*",
+            headers=headers,
+        )
+        if resp.status_code == 200:
+            return {"leads": resp.json()}
+
+        return {"leads": []}
+
+
+@router.get("/stats")
+async def get_stats():
+    """Aggregate Canada sales stats: rep count, deal count, revenue pipeline."""
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        return {"total_reps": 0, "active_reps": 0, "total_leads": 0, "pipeline_cents": 0}
+
+    headers = {"Authorization": f"Bearer {service_key}", "apikey": service_key}
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        reps_resp = await client.get(
+            f"{supabase_url}/rest/v1/sales_reps?portal_context=in.(canada,all)&select=id,is_active,commission_rate",
+            headers=headers,
+        )
+
+    reps = reps_resp.json() if reps_resp.status_code == 200 else []
+    active_reps = sum(1 for r in reps if r.get("is_active"))
+
+    return {
+        "total_reps": len(reps),
+        "active_reps": active_reps,
+    }
 
 
 ADMIN_EMAILS = [

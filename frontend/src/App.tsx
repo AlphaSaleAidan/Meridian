@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/lib/auth'
 import { SalesAuthProvider } from '@/lib/sales-auth'
+import { ToastProvider } from '@/components/Toast'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
@@ -142,6 +143,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <SalesAuthProvider>
+          <ToastProvider>
           <Suspense fallback={<LazyFallback />}>
             <SubdomainRedirector />
             <Routes>
@@ -343,6 +345,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
+          </ToastProvider>
         </SalesAuthProvider>
       </AuthProvider>
       <Analytics />

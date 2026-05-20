@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from ..auth import rate_limit_scrape
+from ..auth import rate_limit_scrape, require_service_auth
 from pydantic import BaseModel
 
 from ...db import get_db
@@ -142,7 +142,7 @@ async def get_website_config(merchant_id: str = Query(...)):
 
 
 @router.post("/save")
-async def save_website_config(req: WebsiteConfigRequest):
+async def save_website_config(req: WebsiteConfigRequest, _auth=Depends(require_service_auth)):
     """
     Create or update a merchant_websites record.
     Auto-generates a slug from business_name if not provided.
@@ -188,7 +188,7 @@ async def save_website_config(req: WebsiteConfigRequest):
 
 
 @router.post("/scrape", dependencies=[Depends(rate_limit_scrape)])
-async def scrape_merchant_website(req: ScrapeRequest):
+async def scrape_merchant_website(req: ScrapeRequest, _auth=Depends(require_service_auth)):
     """
     Scrape a business website for structured info.
     Updates scrape_status on the merchant_websites record.
@@ -277,7 +277,7 @@ async def scrape_merchant_website(req: ScrapeRequest):
 
 
 @router.post("/generate")
-async def generate_website_copy(req: GenerateRequest):
+async def generate_website_copy(req: GenerateRequest, _auth=Depends(require_service_auth)):
     """
     Generate AI copy (headline, subheadline, about) from current website data.
     Reads merchant_websites row, calls local Qwen LLM, and updates the record.
@@ -322,7 +322,7 @@ async def generate_website_copy(req: GenerateRequest):
 
 
 @router.post("/publish")
-async def publish_website(req: PublishRequest):
+async def publish_website(req: PublishRequest, _auth=Depends(require_service_auth)):
     """
     Publish a merchant website. Validates that required fields are present.
     Sets published=true and published_at=now.
@@ -378,7 +378,7 @@ async def publish_website(req: PublishRequest):
 
 
 @router.post("/unpublish")
-async def unpublish_website(req: UnpublishRequest):
+async def unpublish_website(req: UnpublishRequest, _auth=Depends(require_service_auth)):
     """Unpublish a merchant website. Sets published=false."""
     db = get_db()
 
@@ -489,7 +489,7 @@ async def record_analytics_event(req: AnalyticsEventRequest):
 
 
 @router.get("/analytics/{merchant_id}")
-async def get_analytics_summary(merchant_id: str):
+async def get_analytics_summary(merchant_id: str, _auth=Depends(require_service_auth)):
     """
     Return an analytics summary for the merchant's website.
     Aggregates visitors today, this week, top referrers, device split, and UTM data.
@@ -652,6 +652,7 @@ async def create_website_order(req: CreateOrderRequest):
 @router.get("/orders/{merchant_id}")
 async def get_merchant_orders(
     merchant_id: str,
+    _auth=Depends(require_service_auth),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
@@ -672,7 +673,7 @@ async def get_merchant_orders(
 
 
 @router.delete("/{merchant_id}")
-async def soft_delete_website(merchant_id: str):
+async def soft_delete_website(merchant_id: str, _auth=Depends(require_service_auth)):
     """
     Soft-delete a merchant website.
     Sets published=false and subdomain_active=false.

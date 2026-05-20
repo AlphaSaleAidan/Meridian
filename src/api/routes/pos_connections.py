@@ -124,25 +124,65 @@ async def _test_square(credentials: dict) -> dict:
 
     try:
         import httpx
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Square-Version": "2024-01-18",
+        }
         async with httpx.AsyncClient(timeout=15.0) as http:
-            resp = await http.get(
-                "https://connect.squareup.com/v2/merchants/me",
-                headers={
-                    "Authorization": f"Bearer {access_token}",
-                    "Square-Version": "2024-01-18",
-                },
-            )
-        if resp.status_code != 200:
-            return {"success": False, "message": "Square rejected the credentials."}
-        data = resp.json()
-        merchant = data.get("merchant", {})
+            resp = await http.get("https://connect.squareup.com/v2/merchants/me", headers=headers)
+            if resp.status_code != 200:
+                return {"success": False, "message": "Square rejected the credentials."}
+            data = resp.json()
+            merchant = data.get("merchant", {})
+
+            detected_type = _detect_business_type_from_square(merchant)
+
+            loc_resp = await http.get("https://connect.squareup.com/v2/locations", headers=headers)
+            if loc_resp.status_code == 200:
+                locations = loc_resp.json().get("locations", [])
+                if locations:
+                    mcc = locations[0].get("mcc", "")
+                    if mcc:
+                        detected_type = _mcc_to_business_type(mcc) or detected_type
+
         return {
             "success": True,
             "message": "Connected to Square.",
-            "details": {"business_name": merchant.get("business_name")},
+            "details": {
+                "business_name": merchant.get("business_name"),
+                "detected_business_type": detected_type,
+            },
         }
     except Exception as e:
         return {"success": False, "message": f"Square test failed: {e}"}
+
+
+def _mcc_to_business_type(mcc: str) -> str | None:
+    """Map Square MCC (Merchant Category Code) to a Meridian business type."""
+    mcc_map = {
+        "5812": "restaurant", "5813": "restaurant", "5814": "fast_food",
+        "5811": "restaurant",
+        "5462": "coffee_shop", "5441": "coffee_shop",
+        "7531": "auto_shop", "7534": "auto_shop", "7538": "auto_shop", "7542": "auto_shop",
+        "5993": "smoke_shop", "5194": "smoke_shop",
+    }
+    return mcc_map.get(mcc)
+
+
+def _detect_business_type_from_square(merchant: dict) -> str:
+    """Heuristic: detect business type from Square merchant name/data."""
+    name = (merchant.get("business_name") or "").lower()
+    if any(w in name for w in ("coffee", "cafe", "café", "tea", "bakery", "espresso")):
+        return "coffee_shop"
+    if any(w in name for w in ("pizza", "burger", "taco", "sub", "wing", "chicken", "fries")):
+        return "fast_food"
+    if any(w in name for w in ("auto", "tire", "mechanic", "lube", "garage", "oil change")):
+        return "auto_shop"
+    if any(w in name for w in ("smoke", "vape", "tobacco", "cigar")):
+        return "smoke_shop"
+    if any(w in name for w in ("restaurant", "grill", "bistro", "diner", "bar", "kitchen", "eatery")):
+        return "restaurant"
+    return "restaurant"
 
 
 async def _test_clover(credentials: dict) -> dict:
@@ -217,10 +257,34 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             "updated_at": now,
         })
 
-    await db.update("organizations", {
+    org_update = {
         "pos_system": req.pos_system,
         "pos_connection_status": "connected",
-    }, filters={"id": f"eq.{req.org_id}"})
+    }
+
+    if req.pos_system == "square":
+        token = req.credentials.get("access_token", "")
+        if token:
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=10.0) as http:
+                    headers = {"Authorization": f"Bearer {token}", "Square-Version": "2024-01-18"}
+                    mr = await http.get("https://connect.squareup.com/v2/merchants/me", headers=headers)
+                    if mr.status_code == 200:
+                        merchant = mr.json().get("merchant", {})
+                        bt = _detect_business_type_from_square(merchant)
+                        lr = await http.get("https://connect.squareup.com/v2/locations", headers=headers)
+                        if lr.status_code == 200:
+                            locs = lr.json().get("locations", [])
+                            if locs:
+                                mcc_bt = _mcc_to_business_type(locs[0].get("mcc", ""))
+                                if mcc_bt:
+                                    bt = mcc_bt
+                        org_update["vertical"] = bt
+            except Exception as e:
+                logger.warning(f"Square business type detection failed: {e}")
+
+    await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
 
     if req.pos_system == "toast":
         background_tasks.add_task(
@@ -559,7 +623,8 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
         since = connection.get("last_sync_at")
 
         if pos_system == "square":
-            token = decrypt_token(connection.get("access_token_encrypted", ""))
+            creds = connection.get("credentials_encrypted") or {}
+            token = decrypt_token(creds.get("access_token", "") or connection.get("access_token_enc", ""))
             from ...square.client import SquareClient
             async with SquareClient(access_token=token) as client:
                 from ...square.sync_engine import SyncEngine
@@ -567,8 +632,9 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
                 result = await engine.run_incremental_sync(since=since)
 
         elif pos_system == "clover":
-            token = decrypt_token(connection.get("access_token_encrypted", ""))
-            merchant_id = connection.get("merchant_id", "")
+            creds = connection.get("credentials_encrypted") or {}
+            token = decrypt_token(creds.get("access_token", "") or connection.get("access_token_enc", ""))
+            merchant_id = connection.get("external_merchant_id", "") or connection.get("merchant_id", "")
             from ...clover.client import CloverClient
             client = CloverClient(access_token=token, merchant_id=merchant_id)
             from ...clover.sync_engine import CloverSyncEngine

@@ -17,6 +17,9 @@ if (sentryDsn) {
   }).catch(() => {})
 }
 
+import { initServiceWorker } from '@/lib/notifications'
+initServiceWorker()
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

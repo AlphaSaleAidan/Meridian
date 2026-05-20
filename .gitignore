@@ -14,6 +14,8 @@ services/mike/
 .vercel
 data/models/
 data/vectors.db
+data/spaces/
+data/scraped/
 celerybeat-schedule
 supabase/.temp/
 .claude-flow/sessions/
@@ -21,3 +23,4 @@ supabase/.temp/
 frontend/.claude-flow/sessions/
 frontend/.claude-flow/data/
 services/postal/.claude/
+.claude/settings.json

@@ -19,11 +19,15 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/pos/connect": (10, 3600),
     "/api/pos/test-connection": (20, 3600),
     "/api/garry/chat": (30, 60),
+    "/api/portal/resolve": (20, 60),
 }
 
 DEFAULT_LIMIT = (200, 60)
 
 _buckets: dict[str, list[float]] = defaultdict(list)
+_last_cleanup = 0.0
+_CLEANUP_INTERVAL = 300.0
+_MAX_BUCKETS = 10000
 
 
 def _get_limit(path: str) -> tuple[int, int]:
@@ -36,13 +40,24 @@ def _get_limit(path: str) -> tuple[int, int]:
 class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
-        ip = request.client.host if request.client else "unknown"
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        forwarded = request.headers.get("x-forwarded-for")
+        ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
         path = request.url.path
         max_requests, window_seconds = _get_limit(path)
 
         key = f"{ip}:{path}"
         now = time.monotonic()
         cutoff = now - window_seconds
+
+        global _last_cleanup
+        if now - _last_cleanup > _CLEANUP_INTERVAL or len(_buckets) > _MAX_BUCKETS:
+            stale = [k for k, v in _buckets.items() if not v or v[-1] < cutoff]
+            for k in stale:
+                del _buckets[k]
+            _last_cleanup = now
 
         hits = _buckets[key]
         hits[:] = [t for t in hits if t > cutoff]

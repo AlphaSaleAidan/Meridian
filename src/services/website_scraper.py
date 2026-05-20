@@ -19,6 +19,10 @@ logger = logging.getLogger("meridian.services.website_scraper")
 
 async def scrape_website(url: str) -> dict:
     """Scrape a business website for structured info."""
+    from ..api.auth import is_private_url
+    if is_private_url(url):
+        return {"error": "URL targets a private or internal network — blocked"}
+
     try:
         async with httpx.AsyncClient(
             timeout=15,

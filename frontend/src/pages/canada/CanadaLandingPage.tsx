@@ -90,8 +90,11 @@ export default function CanadaLandingPage() {
             </MagneticButton>
           </div>
 
-          {/* Mobile: CTA + hamburger */}
+          {/* Mobile: Sign In + CTA + hamburger */}
           <div className="flex md:hidden items-center gap-2">
+            <button onClick={() => navigate('/canada/login')} className="px-3 py-1.5 text-[12px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-md hover:text-[#F5F5F7] transition-colors">
+              Sign In
+            </button>
             <button onClick={() => navigate('/canada/onboard')} className="px-3 py-1.5 text-[12px] font-medium text-[#F5F5F7] bg-[#1A8FD6] rounded-md">
               Get Started
             </button>
@@ -104,20 +107,32 @@ export default function CanadaLandingPage() {
         {/* Mobile dropdown menu */}
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-[#1F1F23]/60 bg-[#0A0A0B]/95 backdrop-blur-xl px-4 py-3 space-y-1">
-            {[
-              { label: 'Live Demo', path: '/canada/demo' },
-              { label: 'Customer Login', path: '/canada/login' },
-              { label: 'Careers', path: '/canada/careers' },
-              { label: 'Sales Portal', path: '/canada/portal/login' },
-            ].map(link => (
+            <button
+              onClick={() => { navigate('/canada/login'); setMobileMenuOpen(false) }}
+              className="block w-full text-left px-4 py-3 text-[15px] font-medium text-[#1A8FD6] hover:bg-[#1A8FD6]/10 rounded-lg transition-colors min-h-[48px] flex items-center"
+            >
+              Customer Login
+            </button>
+            <button
+              onClick={() => { navigate('/canada/demo'); setMobileMenuOpen(false) }}
+              className="block w-full text-left px-4 py-3 text-[15px] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#111113] rounded-lg transition-colors min-h-[48px] flex items-center"
+            >
+              Live Demo
+            </button>
+            <button
+              onClick={() => { navigate('/canada/careers'); setMobileMenuOpen(false) }}
+              className="block w-full text-left px-4 py-3 text-[15px] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#111113] rounded-lg transition-colors min-h-[48px] flex items-center"
+            >
+              Careers
+            </button>
+            <div className="border-t border-[#1F1F23]/60 pt-2 mt-2">
               <button
-                key={link.path}
-                onClick={() => { navigate(link.path); setMobileMenuOpen(false) }}
-                className="block w-full text-left px-3 py-2.5 text-[14px] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#111113] rounded-lg transition-colors"
+                onClick={() => { navigate('/canada/portal/login'); setMobileMenuOpen(false) }}
+                className="block w-full text-left px-4 py-3 text-[13px] text-[#A1A1A8]/50 hover:text-[#A1A1A8] rounded-lg transition-colors min-h-[48px] flex items-center"
               >
-                {link.label}
+                Sales Rep Portal
               </button>
-            ))}
+            </div>
           </div>
         )}
       </header>

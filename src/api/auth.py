@@ -26,20 +26,45 @@ async def require_admin(key: str = Depends(_admin_key_header)):
         raise HTTPException(403, "Invalid admin key")
 
 
+async def _verify_supabase_token(token: str) -> dict | None:
+    """Verify a Supabase JWT by calling the auth API. Returns user dict or None."""
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    )
+    if not supabase_url or not service_key:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"{supabase_url}/auth/v1/user",
+                headers={"Authorization": f"Bearer {token}", "apikey": service_key},
+            )
+            if resp.status_code == 200:
+                return resp.json()
+    except Exception:
+        pass
+    return None
+
+
 async def require_service_auth(
     admin_key: str = Depends(_admin_key_header),
     auth_header: str = Depends(_auth_header),
 ):
-    """Require either X-Admin-Key or Authorization Bearer token.
-    Used for internal/service endpoints that shouldn't be fully public."""
+    """Accept X-Admin-Key, MERIDIAN_SERVICE_TOKEN, or a valid Supabase session token."""
     admin_expected = os.environ.get("MERIDIAN_ADMIN_KEY", "")
     service_token = os.environ.get("MERIDIAN_SERVICE_TOKEN", "")
 
     if admin_key and admin_expected and admin_key == admin_expected:
         return
-    if auth_header and service_token:
+    if auth_header:
         token = auth_header.removeprefix("Bearer ").strip()
-        if token == service_token:
+        if service_token and token == service_token:
+            return
+        user = await _verify_supabase_token(token)
+        if user:
             return
     raise HTTPException(403, "Authentication required")
 

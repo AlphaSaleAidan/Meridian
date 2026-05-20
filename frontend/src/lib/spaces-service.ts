@@ -175,6 +175,73 @@ export const spacesService = {
     }
   },
 
+  async uploadFrames(
+    orgId: string,
+    scanName: string,
+    frames: Blob[],
+    metadata: Record<string, any>,
+  ): Promise<{ jobId: string; spaceId: string }> {
+    if (API_BASE) {
+      const formData = new FormData()
+      formData.append('merchant_id', orgId)
+      formData.append('scan_name', scanName)
+      formData.append('metadata', JSON.stringify(metadata))
+      frames.forEach((frame, i) => {
+        formData.append('frames', frame, `frame_${i.toString().padStart(4, '0')}.jpg`)
+      })
+      const res = await fetch(`${API_BASE}/api/spaces/process-frames`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (res.ok) return res.json()
+    }
+
+    // Local simulation fallback
+    const spaceId = crypto.randomUUID()
+    const jobId = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    const space: Space = {
+      id: spaceId,
+      org_id: orgId,
+      name: scanName,
+      scan_type: metadata.tier === 'lidar' ? 'lidar-ar' : 'live-capture',
+      status: 'processing',
+      pointcloud_url: null,
+      thumbnail_url: null,
+      frame_count: frames.length,
+      scan_duration_seconds: metadata.durationSeconds ?? null,
+      model_used: null,
+      zones_configured: false,
+      heatmap_enabled: false,
+      created_at: now,
+      completed_at: null,
+      error_message: null,
+    }
+
+    const job: ProcessingJob = {
+      id: jobId,
+      space_id: spaceId,
+      status: 'processing',
+      progress_pct: 0,
+      frame_count: frames.length,
+      error_message: null,
+      created_at: now,
+    }
+
+    const spaces = loadLocalSpaces()
+    spaces.unshift(space)
+    saveLocalSpaces(spaces)
+
+    const jobs = loadLocalJobs()
+    jobs.unshift(job)
+    saveLocalJobs(jobs)
+
+    simulateProcessing(jobId, spaceId)
+
+    return { jobId, spaceId }
+  },
+
   async deleteSpace(spaceId: string): Promise<void> {
     if (supabase) {
       await supabase.from('spaces').delete().eq('id', spaceId)

@@ -28,7 +28,9 @@ import {
   Video,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
+import MobileNavBar from './MobileNavBar'
 import { useAuth } from '@/lib/auth'
+import { useMobile } from '@/hooks/useMobile'
 import OnboardingWizard from '@/pages/OnboardingWizard'
 import ClineChatWidget from './ClineChatWidget'
 import ClineErrorBoundary from './ClineErrorBoundary'
@@ -92,6 +94,7 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { org, logout } = useAuth()
+  const { isDesktop } = useMobile()
   const basePath = location.pathname.startsWith('/app') ? '/app'
     : location.pathname.startsWith('/canada/demo') ? '/canada/demo'
     : location.pathname.startsWith('/canada/dashboard') ? '/canada/dashboard'
@@ -248,7 +251,7 @@ export default function Layout() {
             <OnboardingWizard />
           ) : (
             <ClineErrorBoundary orgId={org?.org_id}>
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 mobile-nav-spacer">
                 <Outlet />
               </div>
             </ClineErrorBoundary>
@@ -258,6 +261,8 @@ export default function Layout() {
         {/* Cline IT assistant */}
         <ClineChatWidget />
       </div>
+
+      {!isDesktop && <MobileNavBar basePath={basePath} />}
     </div>
   )
 }

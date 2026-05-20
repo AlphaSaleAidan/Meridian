@@ -48,6 +48,10 @@ celery_app.conf.update(
         "src.workers.tasks.rebuild_file_digest": {"queue": "analysis"},
         "src.workers.tasks.rebuild_diff_summaries": {"queue": "analysis"},
         "src.workers.tasks.compress_sessions": {"queue": "analysis"},
+        "src.workers.tasks.run_cold_storage_archive": {"queue": "analysis"},
+        "src.workers.tasks.archive_org_month": {"queue": "analysis"},
+        "src.workers.tasks.upload_archive_to_r2": {"queue": "analysis"},
+        "src.workers.tasks.offload_warm_to_r2": {"queue": "analysis"},
     },
     beat_schedule={
         "nightly-analysis": {
@@ -88,6 +92,11 @@ celery_app.conf.update(
         "session-compression": {
             "task": "src.workers.tasks.compress_sessions",
             "schedule": 43200.0,  # 12 hours — compress completed Claude sessions
+            "options": {"queue": "analysis"},
+        },
+        "cold-storage-archive": {
+            "task": "src.workers.tasks.run_cold_storage_archive",
+            "schedule": 86400.0,  # 24 hours — runs after nightly analysis
             "options": {"queue": "analysis"},
         },
     },
