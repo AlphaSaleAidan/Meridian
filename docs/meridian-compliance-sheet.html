@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meridian Intelligence — Compliance & Privacy Posture</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+:root {
+  --bg: #0a0e17;
+  --bg-card: #111827;
+  --bg-card-alt: #0d1220;
+  --green: #00dc82;
+  --green-dim: rgba(0,220,130,0.12);
+  --green-glow: rgba(0,220,130,0.25);
+  --red: #ff5252;
+  --red-dim: rgba(255,82,82,0.12);
+  --blue: #4f8cff;
+  --blue-dim: rgba(79,140,255,0.12);
+  --purple: #a78bfa;
+  --purple-dim: rgba(167,139,250,0.12);
+  --orange: #fb923c;
+  --orange-dim: rgba(251,146,60,0.12);
+  --yellow: #fbbf24;
+  --yellow-dim: rgba(251,191,36,0.12);
+  --text: #e5e7eb;
+  --text-dim: #6b7280;
+  --text-bright: #f9fafb;
+  --border: rgba(255,255,255,0.06);
+  --border-bright: rgba(255,255,255,0.1);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 48px 32px;
+}
+
+/* ── HEADER ── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 48px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--border);
+}
+.logo { font-weight: 800; font-size: 24px; color: var(--green); letter-spacing: -0.5px; }
+.logo span { color: var(--text-bright); font-weight: 400; }
+.header-meta { text-align: right; }
+.header-meta p { font-size: 12px; color: var(--text-dim); line-height: 1.8; }
+.header-meta .date { color: var(--text); font-weight: 500; }
+.badge-conf {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 20px; font-size: 11px; font-weight: 600;
+  background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,220,130,0.2);
+  letter-spacing: 0.3px; text-transform: uppercase;
+}
+.badge-conf::before { content:''; width:6px; height:6px; border-radius:50%; background: var(--green); }
+
+/* ── TITLE BLOCK ── */
+.title-block { margin-bottom: 40px; }
+.title-block h1 {
+  font-size: 32px; font-weight: 800; color: var(--text-bright);
+  letter-spacing: -1px; line-height: 1.2; margin-bottom: 10px;
+}
+.title-block p { font-size: 15px; color: var(--text-dim); line-height: 1.6; max-width: 700px; }
+
+/* ── HIGHLIGHT STRIP ── */
+.highlights {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 40px;
+}
+.hl-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.hl-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.hl-card.green::before { background: var(--green); }
+.hl-card.blue::before { background: var(--blue); }
+.hl-card.purple::before { background: var(--purple); }
+.hl-card.orange::before { background: var(--orange); }
+.hl-num { font-size: 28px; font-weight: 800; letter-spacing: -1px; margin-bottom: 2px; }
+.hl-card.green .hl-num { color: var(--green); }
+.hl-card.blue .hl-num { color: var(--blue); }
+.hl-card.purple .hl-num { color: var(--purple); }
+.hl-card.orange .hl-num { color: var(--orange); }
+.hl-label { font-size: 11px; color: var(--text-dim); letter-spacing: 0.3px; text-transform: uppercase; font-weight: 600; }
+
+/* ── SECTION ── */
+.section { margin-bottom: 36px; }
+.section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 1px; color: var(--text-dim); margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::before {
+  content: '';
+  width: 3px; height: 14px; border-radius: 2px; background: var(--green);
+}
+
+/* ── TABLE ── */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 13px;
+}
+thead th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  background: var(--bg-card-alt);
+  border-bottom: 1px solid var(--border);
+}
+tbody td {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  line-height: 1.5;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+.status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.2px;
+}
+.status.green { background: var(--green-dim); color: var(--green); }
+.status.yellow { background: var(--yellow-dim); color: var(--yellow); }
+.status.blue { background: var(--blue-dim); color: var(--blue); }
+.status.red { background: var(--red-dim); color: var(--red); }
+.status.purple { background: var(--purple-dim); color: var(--purple); }
+.status::before { content:''; width:5px; height:5px; border-radius:50%; background: currentColor; }
+
+/* ── TWO COL ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ── CARD ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+}
+.card h3 {
+  font-size: 14px; font-weight: 700; color: var(--text-bright);
+  margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+}
+.card ul { list-style: none; }
+.card li {
+  font-size: 12.5px; color: var(--text);
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 8px; line-height: 1.5;
+}
+.card li:last-child { border-bottom: none; }
+.card li::before {
+  content: '';
+  margin-top: 6px;
+  min-width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.card li.gap::before { background: var(--yellow); }
+
+/* ── TIMELINE ── */
+.timeline { display: flex; gap: 0; margin-top: 8px; }
+.tl-step {
+  flex: 1;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  position: relative;
+  text-align: center;
+}
+.tl-step:first-child { border-radius: 12px 0 0 12px; }
+.tl-step:last-child { border-radius: 0 12px 12px 0; }
+.tl-step:not(:last-child)::after {
+  content: '';
+  position: absolute; right: -1px; top: 50%; transform: translateY(-50%);
+  width: 0; height: 0;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  border-left: 8px solid var(--border);
+  z-index: 2;
+}
+.tl-time { font-size: 10px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.tl-label { font-size: 12px; font-weight: 600; color: var(--text-bright); margin-top: 4px; }
+.tl-sub { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.tl-step.active { border-color: var(--green); background: rgba(0,220,130,0.04); }
+.tl-step.active .tl-time { color: var(--green); }
+
+/* ── FLOW DIAGRAM ── */
+.flow {
+  display: flex; align-items: center; gap: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px 16px;
+  overflow-x: auto;
+}
+.flow-node {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: center;
+  min-width: 100px;
+}
+.flow-node.green-bg { background: var(--green-dim); color: var(--green); border: 1px solid rgba(0,220,130,0.2); }
+.flow-node.blue-bg { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(79,140,255,0.2); }
+.flow-node.purple-bg { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(167,139,250,0.2); }
+.flow-node.orange-bg { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(251,146,60,0.2); }
+.flow-node.red-bg { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,82,82,0.2); }
+.flow-arrow { font-size: 16px; color: var(--text-dim); margin: 0 8px; flex-shrink: 0; }
+.flow-node small { display: block; font-size: 9px; font-weight: 400; opacity: 0.7; margin-top: 2px; }
+
+/* ── FOOTER ── */
+.footer {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.footer p { font-size: 11px; color: var(--text-dim); }
+.footer .logo-sm { font-weight: 700; font-size: 13px; color: var(--green); }
+
+/* ── PRINT ── */
+@media print {
+  body { background: #fff; color: #111; }
+  .page { padding: 24px; }
+  .hl-card, .card, table, .flow, .tl-step { border-color: #ddd; background: #fafafa; }
+  .hl-num, .status, .section-title::before { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  thead th { background: #f3f4f6; }
+}
+
+@media (max-width: 768px) {
+  .highlights { grid-template-columns: repeat(2, 1fr); }
+  .two-col { grid-template-columns: 1fr; }
+  .header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .header-meta { text-align: left; }
+  .timeline { flex-direction: column; }
+  .tl-step { border-radius: 8px !important; }
+  .tl-step::after { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="logo">Meridian<span> Intelligence Platform</span></div>
+    </div>
+    <div class="header-meta">
+      <span class="badge-conf">Confidential</span>
+      <p class="date" style="margin-top:8px;">May 2026</p>
+      <p>Compliance & Privacy Posture</p>
+      <p>Version 1.0</p>
+    </div>
+  </div>
+
+  <!-- TITLE -->
+  <div class="title-block">
+    <h1>Privacy, Security & Compliance</h1>
+    <p>Meridian is an AI-powered POS analytics platform serving US and Canadian businesses. This document summarizes our compliance infrastructure, regulatory posture, and SOC 2 readiness for investor due diligence.</p>
+  </div>
+
+  <!-- HIGHLIGHTS -->
+  <div class="highlights">
+    <div class="hl-card green">
+      <div class="hl-num">85+</div>
+      <div class="hl-label">Database Tables with RLS</div>
+    </div>
+    <div class="hl-card blue">
+      <div class="hl-num">6</div>
+      <div class="hl-label">Compliance Tables Live</div>
+    </div>
+    <div class="hl-card purple">
+      <div class="hl-num">9</div>
+      <div class="hl-label">Compliance API Endpoints</div>
+    </div>
+    <div class="hl-card orange">
+      <div class="hl-num">0</div>
+      <div class="hl-label">Biometric Data Collected</div>
+    </div>
+  </div>
+
+  <!-- REGULATORY FRAMEWORK -->
+  <div class="section">
+    <div class="section-title">Regulatory Framework</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Regulation</th>
+          <th>Jurisdiction</th>
+          <th>Status</th>
+          <th>Penalty Exposure</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>PIPEDA</strong></td>
+          <td>Federal Canada</td>
+          <td><span class="status green">Compliant</span></td>
+          <td>Up to $100K per violation (OPC)</td>
+        </tr>
+        <tr>
+          <td><strong>Quebec Law 25</strong></td>
+          <td>Quebec, Canada</td>
+          <td><span class="status green">Compliant</span></td>
+          <td>Up to $25M CAD or 4% global turnover</td>
+        </tr>
+        <tr>
+          <td><strong>CASL</strong></td>
+          <td>Federal Canada</td>
+          <td><span class="status green">Enforced</span></td>
+          <td>Up to $10M per violation (CRTC)</td>
+        </tr>
+        <tr>
+          <td><strong>PCI DSS</strong></td>
+          <td>Global</td>
+          <td><span class="status green">Delegated</span></td>
+          <td>Handled by Square (PCI Level 1)</td>
+        </tr>
+        <tr>
+          <td><strong>SOC 2 Type I</strong></td>
+          <td>Industry Standard</td>
+          <td><span class="status yellow">In Progress</span></td>
+          <td>Target: Q4 2026</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- DATA FLOW -->
+  <div class="section">
+    <div class="section-title">Data Architecture</div>
+    <div class="flow">
+      <div class="flow-node green-bg">Merchant POS<small>Square / Clover / Toast</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node blue-bg">Meridian API<small>FastAPI (TLS 1.3)</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node purple-bg">Supabase DB<small>AES-256 at rest</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node orange-bg">Local AI<small>On-prem (no data leaves)</small></div>
+    </div>
+    <div style="margin-top:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Data Category</th>
+            <th>Sensitivity</th>
+            <th>Retention</th>
+            <th>Encryption</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Merchant Profiles</td>
+            <td>Standard</td>
+            <td>Subscription + 7 years</td>
+            <td>AES-256 at rest, TLS in transit</td>
+          </tr>
+          <tr>
+            <td>Transaction Analytics</td>
+            <td>Standard</td>
+            <td>3 years</td>
+            <td>AES-256 at rest, TLS in transit</td>
+          </tr>
+          <tr>
+            <td>Camera Analytics</td>
+            <td>Standard</td>
+            <td>30 days raw / 1 year aggregated</td>
+            <td>Anonymous counts only, no PII</td>
+          </tr>
+          <tr>
+            <td>Payment Data</td>
+            <td>N/A</td>
+            <td>N/A</td>
+            <td>Never touches Meridian (Square PCI L1)</td>
+          </tr>
+          <tr>
+            <td>Authentication</td>
+            <td>Sensitive</td>
+            <td>Duration of account</td>
+            <td>bcrypt hashing + Supabase Auth</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- CAMERA & CASL -->
+  <div class="section">
+    <div class="two-col">
+      <div class="card">
+        <h3><span style="color:var(--green);">&#9673;</span> Camera Analytics — Zero Biometrics</h3>
+        <ul>
+          <li>Anonymous foot traffic counting via bounding boxes</li>
+          <li>Heatmaps and dwell time from aggregate data only</li>
+          <li>No facial recognition, no individual tracking</li>
+          <li>No images or video stored — only numerical metrics</li>
+          <li>Merchant must accept Camera Consent before activation</li>
+          <li>Merchant must post visible signage (Law 25 requirement)</li>
+          <li>Fully outside scope of CAI biometric enforcement</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span style="color:var(--blue);">&#9673;</span> CASL Email Enforcement</h3>
+        <ul>
+          <li>Programmatic consent check on every commercial email</li>
+          <li>Express consent recorded with SHA-256 evidence trail</li>
+          <li>Implied consent expires after 2 years automatically</li>
+          <li>Unsubscribe processed immediately (CASL: 10 business days)</li>
+          <li>9 commercial + 11 transactional email types classified</li>
+          <li>Consent records retained 3 years for CASL audit</li>
+          <li class="gap">Working unsubscribe link in all commercial emails</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- BREACH RESPONSE -->
+  <div class="section">
+    <div class="section-title">Breach Response Timeline</div>
+    <div class="flow">
+      <div class="flow-node red-bg">T+0<small>Discovered</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node orange-bg">T+1h<small>Contained</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node orange-bg">T+4h<small>RROSH Assessment</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node purple-bg">T+24h<small>Draft Notifications</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node red-bg">T+72h<small>Quebec CAI Deadline</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node blue-bg">T+ASAP<small>OPC + Individuals</small></div>
+    </div>
+    <p style="font-size:11px; color:var(--text-dim); margin-top:10px;">All incidents logged in <code style="color:var(--green);">breach_log</code> table with 24-month minimum retention (PIPEDA requirement). Privacy Officer receives immediate alert on any incident.</p>
+  </div>
+
+  <!-- SUB-PROCESSORS -->
+  <div class="section">
+    <div class="section-title">Sub-Processor Registry</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Vendor</th>
+          <th>Purpose</th>
+          <th>Location</th>
+          <th>SOC 2</th>
+          <th>DPA</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Supabase</strong></td><td>Database & Auth</td><td>US (AWS)</td><td><span class="status green">Type II</span></td><td><span class="status green">Yes</span></td></tr>
+        <tr><td><strong>Railway</strong></td><td>Frontend Hosting</td><td>US</td><td><span class="status green">Type II</span></td><td><span class="status green">Yes</span></td></tr>
+        <tr><td><strong>Square</strong></td><td>Payment Processing</td><td>US</td><td><span class="status green">PCI L1</span></td><td><span class="status green">Yes</span></td></tr>
+        <tr><td><strong>Cloudflare</strong></td><td>CDN & DDoS</td><td>US</td><td><span class="status green">Type II</span></td><td><span class="status green">Yes</span></td></tr>
+        <tr><td><strong>Anthropic</strong></td><td>AI Insights</td><td>US</td><td><span class="status green">Type II</span></td><td><span class="status green">Yes</span></td></tr>
+        <tr><td><strong>Twilio/Telnyx</strong></td><td>SMS Alerts</td><td>US</td><td><span class="status green">Type II</span></td><td><span class="status green">Yes</span></td></tr>
+        <tr><td><strong>Resend</strong></td><td>Transactional Email</td><td>US</td><td><span class="status yellow">Pending</span></td><td><span class="status green">Yes</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECURITY CONTROLS -->
+  <div class="section">
+    <div class="section-title">Technical Security Controls</div>
+    <div class="two-col">
+      <div class="card">
+        <h3><span style="color:var(--purple);">&#9673;</span> Access & Encryption</h3>
+        <ul>
+          <li>Row-Level Security on all 85+ Supabase tables</li>
+          <li>Role-based access: admin, sales_rep, customer, owner</li>
+          <li>Portal context isolation (US / Canada data separation)</li>
+          <li>TLS 1.3 on all endpoints and database connections</li>
+          <li>AES-256 encryption at rest (Supabase managed)</li>
+          <li>Fernet (AES-128-CBC) for POS credentials and tokens</li>
+          <li>bcrypt password hashing with per-user salt</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span style="color:var(--orange);">&#9673;</span> Application Security</h3>
+        <ul>
+          <li>Pydantic input validation on all API endpoints</li>
+          <li>HTML sanitization on all user-submitted text</li>
+          <li>CORS locked to 7 known Meridian domains</li>
+          <li>Rate limiting middleware on all routes</li>
+          <li>Security headers: HSTS, CSP, X-Frame-Options</li>
+          <li>JWT-based auth (no cookie CSRF vector)</li>
+          <li>Local LLM inference: no merchant data leaves server</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOC 2 ROADMAP -->
+  <div class="section">
+    <div class="section-title">SOC 2 Readiness Roadmap</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Control Area</th>
+          <th>Status</th>
+          <th>Implemented</th>
+          <th>Remaining Gap</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CC6 — Logical Access</td>
+          <td><span class="status green">Implemented</span></td>
+          <td>RLS, RBAC, portal scoping, JWT auth</td>
+          <td>MFA enforcement for admins</td>
+        </tr>
+        <tr>
+          <td>CC6.6 — Encryption</td>
+          <td><span class="status green">Implemented</span></td>
+          <td>TLS 1.3, AES-256, Fernet secrets</td>
+          <td>None</td>
+        </tr>
+        <tr>
+          <td>CC7 — Monitoring</td>
+          <td><span class="status yellow">Partial</span></td>
+          <td>PM2 health checks, security logging</td>
+          <td>Formal SLA tracking, uptime dashboard</td>
+        </tr>
+        <tr>
+          <td>CC7.1 — Vuln Detection</td>
+          <td><span class="status yellow">Partial</span></td>
+          <td>Security linting, npm audit</td>
+          <td>Annual penetration test ($3K-$8K)</td>
+        </tr>
+        <tr>
+          <td>CC8 — Change Mgmt</td>
+          <td><span class="status yellow">Partial</span></td>
+          <td>Git VCS, pre-commit hooks, CI/CD</td>
+          <td>Formal PR approval policy</td>
+        </tr>
+        <tr>
+          <td>CC9 — Vendor Risk</td>
+          <td><span class="status yellow">Partial</span></td>
+          <td>Sub-processor registry documented</td>
+          <td>Collect vendor SOC 2 reports</td>
+        </tr>
+        <tr>
+          <td>P1 — Privacy Notice</td>
+          <td><span class="status green">Implemented</span></td>
+          <td>PIPEDA + Law 25 privacy policy</td>
+          <td>None</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="margin-top:20px;">
+      <div class="section-title">SOC 2 Timeline</div>
+      <div class="timeline">
+        <div class="tl-step active">
+          <div class="tl-time">Now</div>
+          <div class="tl-label">Controls Built</div>
+          <div class="tl-sub">RLS, encryption, compliance DB</div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-time">Q3 2026</div>
+          <div class="tl-label">Close Gaps</div>
+          <div class="tl-sub">MFA, pen test, PR policy</div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-time">Q4 2026</div>
+          <div class="tl-label">Type I Audit</div>
+          <div class="tl-sub">$10K-$20K engagement</div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-time">Q1 2027</div>
+          <div class="tl-label">Type I Report</div>
+          <div class="tl-sub">Opens enterprise doors</div>
+        </div>
+        <div class="tl-step">
+          <div class="tl-time">Q3 2027</div>
+          <div class="tl-label">Type II Report</div>
+          <div class="tl-sub">Full audit certification</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PRIVACY RIGHTS -->
+  <div class="section">
+    <div class="section-title">Individual Privacy Rights System</div>
+    <div class="flow">
+      <div class="flow-node blue-bg">Request Received<small>via API or email</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node purple-bg">Auto-Logged<small>30-day deadline set</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node orange-bg">Officer Notified<small>Immediate alert</small></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-node green-bg">Fulfilled<small>Data export/deletion</small></div>
+    </div>
+    <p style="font-size:11px; color:var(--text-dim); margin-top:10px;">Supports: access, correction, deletion, portability, objection, and consent withdrawal. Automated 5-day deadline warnings. Overdue requests trigger critical compliance alerts.</p>
+  </div>
+
+  <!-- COMPLIANCE DB -->
+  <div class="section">
+    <div class="section-title">Compliance Database</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Table</th>
+          <th>Purpose</th>
+          <th>RLS</th>
+          <th>Key Feature</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><code>compliance_documents</code></td><td>Versioned legal documents</td><td><span class="status green">Yes</span></td><td>Content-hash integrity verification</td></tr>
+        <tr><td><code>compliance_acceptances</code></td><td>User acceptance audit trail</td><td><span class="status green">Yes</span></td><td>SHA-256 cryptographic proof per acceptance</td></tr>
+        <tr><td><code>casl_consent_records</code></td><td>CASL email consent</td><td><span class="status green">Yes</span></td><td>Full evidence trail with checkbox text</td></tr>
+        <tr><td><code>privacy_requests</code></td><td>Individual rights requests</td><td><span class="status green">Yes</span></td><td>Auto-calculated 30-day deadline</td></tr>
+        <tr><td><code>breach_log</code></td><td>Incident tracking</td><td><span class="status green">Yes</span></td><td>RROSH assessment + notification tracking</td></tr>
+        <tr><td><code>data_inventory</code></td><td>PIPEDA data catalog</td><td><span class="status green">Yes</span></td><td>Retention periods + sub-processor mapping</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- KEY TAKEAWAY -->
+  <div class="section">
+    <div style="background: linear-gradient(135deg, rgba(0,220,130,0.08), rgba(79,140,255,0.06)); border: 1px solid rgba(0,220,130,0.15); border-radius: 14px; padding: 28px;">
+      <h3 style="font-size:16px; font-weight:800; color:var(--text-bright); margin-bottom:12px;">Key Takeaway for Investors</h3>
+      <p style="font-size:13px; color:var(--text); line-height:1.7;">
+        Compliance is not bolted on after the fact — it is embedded in Meridian's database schema, API layer, and frontend consent flows. Every commercial email is gated by CASL consent checks. Every privacy request is tracked to a 30-day deadline. Every document acceptance creates a cryptographic proof record. The camera analytics system was designed from day one to collect zero biometric data, placing Meridian entirely outside the scope of Quebec's CAI biometric enforcement actions. With SOC 2 Type I targeted for Q4 2026, Meridian is positioned to enter enterprise sales with a credible security certification on the near-term horizon.
+      </p>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div>
+      <div class="logo-sm">Meridian</div>
+      <p>Alpha Sale Pro / Meridian Intelligence</p>
+    </div>
+    <div style="text-align:right;">
+      <p>Privacy Officer: Aidan Pierce</p>
+      <p>privacy@meridian.tips</p>
+      <p style="margin-top:4px; opacity:0.5;">Confidential — Investor Use Only</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
