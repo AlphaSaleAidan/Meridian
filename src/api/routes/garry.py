@@ -161,7 +161,8 @@ async def garry_chat(request: Request, req: GarryChatRequest):
                 except (json.JSONDecodeError, AttributeError) as parse_err:
                     logger.error("Tool parse error: %s — raw: %s", parse_err, match.group(1)[:200] if match else "no match")
                     accumulated += "\n[Failed to parse tool call — retrying without tools]"
-                    yield f"data: {json.dumps({'content': '\\n[Retrying...]'})}\n\n"
+                    _msg = json.dumps({"content": "\n[Retrying...]"})
+                    yield f"data: {_msg}\n\n"
                     yield "data: [DONE]\n\n"
                     break
 
@@ -179,7 +180,8 @@ async def garry_chat(request: Request, req: GarryChatRequest):
 
             else:
                 accumulated += "\n\n_[Reached tool use limit]_"
-                yield f"data: {json.dumps({'content': '\\n\\n_[Reached tool use limit]_'})}\n\n"
+                _msg = json.dumps({"content": "\n\n_[Reached tool use limit]_"})
+                yield f"data: {_msg}\n\n"
                 yield "data: [DONE]\n\n"
 
         except httpx.ConnectError:
