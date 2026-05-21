@@ -22,7 +22,7 @@ export interface SalesAuthState {
   authenticated: boolean
   rep: SalesRepProfile | null
   login: (email: string, password: string) => Promise<string | null>
-  signup: (name: string, email: string, password: string, phone?: string) => Promise<string | null>
+  signup: (name: string, email: string, password: string, phone?: string, portal?: 'us' | 'canada') => Promise<string | null>
   resetPassword: (email: string) => Promise<string | null>
   logout: () => void
 }
@@ -207,7 +207,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     return null
   }, [])
 
-  const signup = useCallback(async (name: string, email: string, password: string, phone?: string): Promise<string | null> => {
+  const signup = useCallback(async (name: string, email: string, password: string, phone?: string, portal: 'us' | 'canada' = 'canada'): Promise<string | null> => {
     if (!supabase) {
       const demoRep: SalesRepProfile = {
         rep_id: 'rep_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
@@ -229,7 +229,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
 
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
-      const resp = await fetch(`${apiBase}/api/canada/rep-signup`, {
+      const resp = await fetch(`${apiBase}/api/${portal}/rep-signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password, phone: phone || null }),

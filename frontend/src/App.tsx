@@ -71,6 +71,24 @@ const CanadaCustomerOnboardingWizard = lazy(() => import('@/pages/canada/portal/
 const CanadaInvoicePage = lazy(() => import('@/pages/canada/CanadaInvoicePage'))
 const CanadaSetupPage = lazy(() => import('@/pages/canada/CanadaSetupPage'))
 
+const UnsubscribePage = lazy(() => import('@/components/compliance/UnsubscribePage'))
+
+const USSalesLayout = lazy(() => import('@/pages/us/portal/USSalesLayout'))
+const USPortalLoginPage = lazy(() => import('@/pages/us/portal/USPortalLoginPage'))
+const USPortalSignupPage = lazy(() => import('@/pages/us/portal/USPortalSignupPage'))
+const USSalesProtectedRoute = lazy(() => import('@/pages/us/portal/USSalesProtectedRoute'))
+const USPortalDashboardPage = lazy(() => import('@/pages/us/portal/USPortalDashboardPage'))
+const USPortalLeadsPage = lazy(() => import('@/pages/us/portal/USPortalLeadsPage'))
+const USPortalLeadDetailPage = lazy(() => import('@/pages/us/portal/USPortalLeadDetailPage'))
+const USPortalAccountsPage = lazy(() => import('@/pages/us/portal/USPortalAccountsPage'))
+const USPortalTeamPage = lazy(() => import('@/pages/us/portal/USPortalTeamPage'))
+const USPortalTrainingPage = lazy(() => import('@/pages/us/portal/USPortalTrainingPage'))
+const USPortalCommissionsPage = lazy(() => import('@/pages/us/portal/USPortalCommissionsPage'))
+const USPortalSettingsPage = lazy(() => import('@/pages/us/portal/USPortalSettingsPage'))
+const USPortalCreateCustomerPage = lazy(() => import('@/pages/us/portal/USPortalCreateCustomerPage'))
+const USPortalOnboardingPage = lazy(() => import('@/pages/us/portal/USPortalOnboardingPage'))
+const USCustomerOnboardingWizard = lazy(() => import('@/pages/us/portal/USCustomerOnboardingWizard'))
+
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute loginPath="/canada/login">{children}</ProtectedRoute>
@@ -111,17 +129,6 @@ function CustomerDashboardRoutes() {
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>
-  )
-}
-
-function SalesRedirect() {
-  const loc = useLocation()
-  const path = loc.pathname.replace(/^\/sales\/?/, '') + loc.search + loc.hash
-  const url = `https://meridian-sales-f7df5b93.viktor.space/${path}`
-  return (
-    <div className="w-full h-screen bg-[#0A0A0B]">
-      <iframe src={url} className="w-full h-full border-0" title="Meridian Sales" allow="clipboard-write" />
-    </div>
   )
 }
 
@@ -326,9 +333,43 @@ export default function App() {
               </Route>
 
               {/* ══════════════════════════════════════════════
-                  SALES CRM — redirect to Viktor Space
+                  US — sales portal (native React CRM)
                   ══════════════════════════════════════════════ */}
-              <Route path="/sales/*" element={<SalesRedirect />} />
+              <Route path="/us/onboard" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <USCustomerOnboardingWizard />
+                </Suspense>
+              } />
+              <Route path="/us/portal/login" element={<Suspense fallback={<LazyFallback />}><USPortalLoginPage /></Suspense>} />
+              <Route path="/us/portal/signup" element={<Suspense fallback={<LazyFallback />}><USPortalSignupPage /></Suspense>} />
+              <Route path="/us/portal/onboarding" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <USSalesProtectedRoute>
+                    <USPortalOnboardingPage />
+                  </USSalesProtectedRoute>
+                </Suspense>
+              } />
+              <Route path="/us/portal" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <USSalesProtectedRoute>
+                    <USSalesLayout />
+                  </USSalesProtectedRoute>
+                </Suspense>
+              }>
+                <Route index element={<Navigate to="/us/portal/dashboard" replace />} />
+                <Route path="dashboard" element={<Suspense fallback={null}><USPortalDashboardPage /></Suspense>} />
+                <Route path="leads" element={<Suspense fallback={null}><USPortalLeadsPage /></Suspense>} />
+                <Route path="leads/:id" element={<Suspense fallback={null}><USPortalLeadDetailPage /></Suspense>} />
+                <Route path="new-customer" element={<Suspense fallback={null}><USPortalCreateCustomerPage /></Suspense>} />
+                <Route path="accounts" element={<Suspense fallback={null}><USPortalAccountsPage /></Suspense>} />
+                <Route path="commissions" element={<Suspense fallback={null}><USPortalCommissionsPage /></Suspense>} />
+                <Route path="training" element={<Suspense fallback={null}><USPortalTrainingPage /></Suspense>} />
+                <Route path="team" element={<Suspense fallback={null}><USPortalTeamPage /></Suspense>} />
+                <Route path="settings" element={<Suspense fallback={null}><USPortalSettingsPage /></Suspense>} />
+              </Route>
+
+              {/* Legacy /sales/* redirect to new US portal */}
+              <Route path="/sales/*" element={<Navigate to="/us/portal" replace />} />
 
               {/* ══════════════════════════════════════════════
                   LEGACY REDIRECTS
@@ -340,6 +381,9 @@ export default function App() {
               <Route path="/login" element={<Navigate to="/customer/login" replace />} />
               <Route path="/signup" element={<Navigate to="/customer/signup" replace />} />
               <Route path="/onboarding" element={<Navigate to="/customer/signup" replace />} />
+
+              {/* Unsubscribe -- public, no auth */}
+              <Route path="/unsubscribe" element={<Suspense fallback={<LazyFallback />}><UnsubscribePage /></Suspense>} />
 
               {/* Catch-all → landing page */}
               <Route path="*" element={<Navigate to="/" replace />} />

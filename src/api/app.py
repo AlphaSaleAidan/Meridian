@@ -58,6 +58,8 @@ from .routes.cline import router as cline_router
 from .routes.pos import router as pos_router
 from .routes.spaces import router as spaces_router
 from .routes.canada import router as canada_router
+from .routes.us import router as us_router
+from .routes.compliance import router as compliance_router
 from .routes.careers import router as careers_router
 from .routes.training import router as training_router
 from .routes.email import router as email_api_router
@@ -216,6 +218,8 @@ app.include_router(cline_router)
 app.include_router(pos_router)
 app.include_router(spaces_router)
 app.include_router(canada_router)
+app.include_router(us_router)
+app.include_router(compliance_router)
 app.include_router(careers_router)
 app.include_router(training_router)
 app.include_router(email_api_router)

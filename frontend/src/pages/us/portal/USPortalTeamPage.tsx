@@ -3,7 +3,7 @@ import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, U
 import { clsx } from 'clsx'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
-import { canadaLeadsService } from '@/lib/canada-leads-service'
+import { usLeadsService } from '@/lib/us-leads-service'
 
 interface TeamMember {
   id: string
@@ -52,8 +52,8 @@ function normalizeRate(v: number): number {
 const AVATAR_COLORS = ['#00d4aa', '#7c3aed', '#f59e0b', '#1a8fd6']
 const AVG_LIFETIME_MONTHS = 18
 
-function formatCad(amount: number): string {
-  return 'CA$' + Math.round(amount).toLocaleString('en-CA')
+function formatUsd(amount: number): string {
+  return '$' + Math.round(amount).toLocaleString('en-US')
 }
 
 function getInitials(name: string): string {
@@ -114,7 +114,7 @@ function computeTeamStats(team: TeamMember[], deals: Deal[]) {
   return enriched
 }
 
-export default function CanadaPortalTeamPage() {
+export default function USPortalTeamPage() {
   const { rep } = useSalesAuth()
   const admin = isAdmin(rep?.email)
   const [search, setSearch] = useState('')
@@ -135,7 +135,7 @@ export default function CanadaPortalTeamPage() {
 
       // Fetch team + applicants from backend API (bypasses RLS)
       try {
-        const resp = await fetch(`${apiBase}/api/canada/team`)
+        const resp = await fetch(`${apiBase}/api/us/team`)
         if (resp.ok) {
           const { reps, applicants: apps } = await resp.json()
           if (reps && reps.length > 0) {
@@ -156,7 +156,7 @@ export default function CanadaPortalTeamPage() {
                 is_active: true,
                 joined: (r.created_at as string || '').slice(0, 10),
                 role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
-                location: 'Canada',
+                location: 'US',
               }
             }))
           }
@@ -178,7 +178,7 @@ export default function CanadaPortalTeamPage() {
       // Fetch deals for real pipeline calculation
       let fetchedDeals: Deal[] = []
       try {
-        fetchedDeals = await canadaLeadsService.list(rep?.rep_id)
+        fetchedDeals = await usLeadsService.list(rep?.rep_id)
         setDeals(fetchedDeals)
       } catch {
         // ignore
@@ -223,7 +223,7 @@ export default function CanadaPortalTeamPage() {
   async function handleApproveApplicant(applicant: Applicant) {
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
-      const resp = await fetch(`${apiBase}/api/canada/rep-approve`, {
+      const resp = await fetch(`${apiBase}/api/us/rep-approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rep_id: applicant.id, admin_email: rep?.email }),
@@ -241,7 +241,7 @@ export default function CanadaPortalTeamPage() {
     setTeam(prev => [...prev, {
       id: applicant.id, name: applicant.name, email: applicant.email, phone: applicant.phone,
       commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0,
-      total_paid: 0, is_active: true, joined: applicant.applied_at, role: 'active', location: 'Canada',
+      total_paid: 0, is_active: true, joined: applicant.applied_at, role: 'active', location: 'US',
     }])
   }
 
@@ -250,7 +250,7 @@ export default function CanadaPortalTeamPage() {
     setRemoving(true)
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
-      const resp = await fetch(`${apiBase}/api/canada/rep-remove`, {
+      const resp = await fetch(`${apiBase}/api/us/rep-remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rep_id: member.id, admin_email: rep?.email }),
@@ -275,7 +275,7 @@ export default function CanadaPortalTeamPage() {
     if (!confirm(`Reject ${applicant.name}? This will permanently remove their application.`)) return
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
-      const resp = await fetch(`${apiBase}/api/canada/rep-reject`, {
+      const resp = await fetch(`${apiBase}/api/us/rep-reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rep_id: applicant.id, admin_email: rep?.email }),
@@ -332,7 +332,7 @@ export default function CanadaPortalTeamPage() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Pipeline</p>
               <p className="text-lg font-bold text-white">{openDeals.length} deals</p>
-              <p className="text-[10px] text-[#4a5550]">{formatCad(pipelineMrr)}/mo MRR</p>
+              <p className="text-[10px] text-[#4a5550]">{formatUsd(pipelineMrr)}/mo MRR</p>
             </div>
           </div>
         </div>
@@ -343,8 +343,8 @@ export default function CanadaPortalTeamPage() {
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Commissions</p>
-              <p className="text-lg font-bold text-white">{formatCad(totalCommission)}</p>
-              <p className="text-[10px] text-[#4a5550]">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
+              <p className="text-lg font-bold text-white">{formatUsd(totalCommission)}</p>
+              <p className="text-[10px] text-[#4a5550]">{formatUsd(totalPaid)} paid · {formatUsd(monthlyCommissionOwed)}/mo rate</p>
             </div>
           </div>
         </div>
@@ -356,7 +356,7 @@ export default function CanadaPortalTeamPage() {
             <div>
               <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Balance Owed</p>
               <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-[#f59e0b]' : 'text-white')}>
-                {formatCad(balanceOwed)}
+                {formatUsd(balanceOwed)}
               </p>
               <p className="text-[10px] text-[#4a5550]">{wonDeals.length} signed deals</p>
             </div>
@@ -447,11 +447,11 @@ export default function CanadaPortalTeamPage() {
                         <>
                           <div>
                             <p className="text-[10px] text-[#4a5550]">MRR</p>
-                            <p className="text-xs font-bold text-[#00d4aa]">{formatCad(member.total_mrr)}</p>
+                            <p className="text-xs font-bold text-[#00d4aa]">{formatUsd(member.total_mrr)}</p>
                           </div>
                           <div>
                             <p className="text-[10px] text-[#4a5550]">Comm/mo</p>
-                            <p className="text-xs font-bold text-[#7c3aed]">{formatCad(monthlyComm)}</p>
+                            <p className="text-xs font-bold text-[#7c3aed]">{formatUsd(monthlyComm)}</p>
                           </div>
                         </>
                       )}
@@ -494,7 +494,7 @@ export default function CanadaPortalTeamPage() {
               <p className="text-xs text-[#a1a1a8] mt-1.5 leading-relaxed">Top performing rep by <span className="text-white font-medium">December 31, 2026</span> wins an Apple Vision Pro. Ranked by total MRR signed.</p>
               <div className="mt-3 flex items-center gap-4 text-[10px] text-[#6b7a74]">
                 <span className="flex items-center gap-1"><Clock size={10} /> Ends: Dec 31, 2026</span>
-                <span className="flex items-center gap-1"><Award size={10} /> CA$5,499 value</span>
+                <span className="flex items-center gap-1"><Award size={10} /> $5,499 value</span>
                 <span className="flex items-center gap-1"><Trophy size={10} /> Top MRR wins</span>
               </div>
             </div>
@@ -535,12 +535,12 @@ export default function CanadaPortalTeamPage() {
                         </div>
                         <div>
                           <p className="text-[10px] text-[#4a5550]">MRR</p>
-                          <p className="text-sm font-bold text-[#00d4aa]">{formatCad(member.total_mrr)}</p>
+                          <p className="text-sm font-bold text-[#00d4aa]">{formatUsd(member.total_mrr)}</p>
                         </div>
                         {admin && (
                           <div>
                             <p className="text-[10px] text-[#4a5550]">Comm/mo</p>
-                            <p className="text-sm font-bold text-[#7c3aed]">{formatCad(monthlyComm)}</p>
+                            <p className="text-sm font-bold text-[#7c3aed]">{formatUsd(monthlyComm)}</p>
                           </div>
                         )}
                         <div>
@@ -595,10 +595,10 @@ export default function CanadaPortalTeamPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{member.name}</p>
                         <p className="text-[10px] text-[#6b7a74]">
-                          {member.deals_won} signed · {member.commission_rate}% rate · {formatCad(member.total_mrr)} MRR · {formatCad(monthlyComm)}/mo comm
+                          {member.deals_won} signed · {member.commission_rate}% rate · {formatUsd(member.total_mrr)} MRR · {formatUsd(monthlyComm)}/mo comm
                         </p>
                         <p className="text-[10px] text-[#4a5550]">
-                          Lifetime est: {formatCad(member.total_earned)} ({AVG_LIFETIME_MONTHS}mo avg)
+                          Lifetime est: {formatUsd(member.total_earned)} ({AVG_LIFETIME_MONTHS}mo avg)
                         </p>
                       </div>
                       {owed <= 0 ? (
@@ -607,7 +607,7 @@ export default function CanadaPortalTeamPage() {
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20">
-                          {formatCad(owed)} owed
+                          {formatUsd(owed)} owed
                         </span>
                       )}
                     </div>
@@ -654,7 +654,7 @@ export default function CanadaPortalTeamPage() {
                         <DollarSign size={12} className="text-[#7c3aed]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-white">{formatCad(comm.commission_amount)}</p>
+                        <p className="text-xs font-semibold text-white">{formatUsd(comm.commission_amount)}</p>
                         <p className="text-[10px] text-[#6b7a74]">
                           {comm.client_name}{admin ? ` · ${comm.commission_rate}%` : ''}
                         </p>
@@ -677,7 +677,7 @@ export default function CanadaPortalTeamPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-white">Sales Rep Applications</h3>
-              <p className="text-xs text-[#6b7a74] mt-0.5">New reps who signed up at /canada/portal/signup appear here for approval.</p>
+              <p className="text-xs text-[#6b7a74] mt-0.5">New reps who signed up at /us/portal/signup appear here for approval.</p>
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0f1512] border border-[#1a2420] text-[10px] font-medium text-[#6b7a74]">
               <UserPlus size={12} /> {applicants.length} pending
@@ -768,7 +768,7 @@ export default function CanadaPortalTeamPage() {
                   const name = editName.trim() || editingMember.name
                   const apiBase = import.meta.env.VITE_API_URL || ''
                   try {
-                    const resp = await fetch(`${apiBase}/api/canada/rep-update`, {
+                    const resp = await fetch(`${apiBase}/api/us/rep-update`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ rep_id: editingMember.id, admin_email: rep?.email, name, commission_rate: rate / 100 }),

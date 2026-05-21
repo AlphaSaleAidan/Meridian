@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, ChevronRight, Shield, Clock } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowRight, ChevronRight, Shield, Clock, Menu, X } from 'lucide-react'
 
 import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
@@ -40,6 +41,7 @@ const logos = ['Square', 'Shopify', 'Toast', 'Clover', 'Lightspeed']
 
 export default function LandingPage() {
   const navigate = useNavigate()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -71,7 +73,9 @@ export default function LandingPage() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
           <MeridianLogo size={28} showWordmark showTagline={false} />
-          <div className="flex items-center gap-2">
+
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-2">
             <MagneticButton
               onClick={() => navigate('/demo')}
               className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200"
@@ -85,7 +89,7 @@ export default function LandingPage() {
               Careers
             </MagneticButton>
             <MagneticButton
-              onClick={() => navigate('/sales/login')}
+              onClick={() => navigate('/us/portal/login')}
               className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200"
             >
               Sales Portal
@@ -103,7 +107,64 @@ export default function LandingPage() {
               Get Started
             </MagneticButton>
           </div>
+
+          {/* Mobile nav controls */}
+          <div className="flex md:hidden items-center gap-2">
+            <button
+              onClick={() => navigate('/customer/login')}
+              className="px-3 py-1.5 text-[13px] font-medium text-[#F5F5F7] bg-[#1A8FD6] rounded-md hover:bg-[#1574B8] transition-colors"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-lg text-[#A1A1A8] hover:text-white hover:bg-[#1F1F23] transition-colors"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-[#1F1F23]/60 bg-[#0A0A0B]/95 backdrop-blur-[20px]">
+            <div className="max-w-content mx-auto px-6 py-3 flex flex-col gap-1">
+              <button
+                onClick={() => { navigate('/customer/login'); setMobileMenuOpen(false) }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-[14px] font-medium text-[#1A8FD6] hover:bg-[#1A8FD6]/10 transition-colors text-left min-h-[48px]"
+              >
+                Customer Login
+              </button>
+              <button
+                onClick={() => { navigate('/customer/signup'); setMobileMenuOpen(false) }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-[14px] font-medium text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors text-left min-h-[48px]"
+              >
+                Get Started Free
+              </button>
+              <button
+                onClick={() => { navigate('/demo'); setMobileMenuOpen(false) }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-[14px] font-medium text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors text-left min-h-[48px]"
+              >
+                Live Demo
+              </button>
+              <button
+                onClick={() => { navigate('/careers'); setMobileMenuOpen(false) }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-[14px] font-medium text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors text-left min-h-[48px]"
+              >
+                Careers
+              </button>
+              <div className="border-t border-[#1F1F23]/60 mt-1 pt-1">
+                <button
+                  onClick={() => { navigate('/us/portal/login'); setMobileMenuOpen(false) }}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-[13px] font-medium text-[#A1A1A8]/60 hover:text-[#A1A1A8] hover:bg-[#1F1F23] transition-colors text-left min-h-[48px] w-full"
+                >
+                  Sales Rep Portal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ─── HERO ─────────────────────────────────── */}
@@ -429,7 +490,7 @@ export default function LandingPage() {
       {/* ─── FOOTER ───────────────────────────────── */}
       <footer className="border-t border-[#1F1F23]/40 py-8">
         <div className="max-w-content mx-auto px-6">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
             <div className="flex items-center gap-3">
               <MeridianLogo size={20} showWordmark showTagline={false} />
               <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
@@ -437,12 +498,12 @@ export default function LandingPage() {
                 All systems operational
               </div>
             </div>
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-4 text-[12px] text-[#A1A1A8]/60">
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:gap-6">
+              <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[12px] text-[#A1A1A8]/60">
                 <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
                 <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
                 <a onClick={() => navigate('/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
-                <a onClick={() => navigate('/sales/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
+                <a onClick={() => navigate('/us/portal/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
                 <a onClick={() => navigate('/customer/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>
               </div>
               <p className="text-[11px] text-[#A1A1A8]/30">© 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>

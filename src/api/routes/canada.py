@@ -375,6 +375,34 @@ async def update_rep(req: RepUpdateRequest):
     return {"ok": True, "rep_id": req.rep_id}
 
 
+@router.post("/rep-remove")
+async def remove_rep(req: RepActionRequest):
+    """Admin removes an active rep from the team — deletes the sales_reps row."""
+    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
+        raise HTTPException(403, "Not authorized — admin email not recognized")
+
+    import httpx
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        raise HTTPException(503, "Supabase not configured")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.delete(
+            f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+            },
+        )
+        if resp.status_code not in (200, 204):
+            logger.error("Rep remove failed: %s %s", resp.status_code, resp.text)
+            raise HTTPException(500, "Could not remove rep")
+
+    logger.info("Rep removed: %s by %s", req.rep_id, req.admin_email)
+    return {"ok": True, "rep_id": req.rep_id}
+
+
 @router.get("/leads")
 async def get_leads():
     """Return all Canada deals/leads. Tries 'deals' table, falls back to 'data_sales'."""
