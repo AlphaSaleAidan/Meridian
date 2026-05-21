@@ -41,6 +41,39 @@ export interface ZoneDefinition {
 
 const SPACES_STORAGE_KEY = 'meridian_spaces'
 const JOBS_STORAGE_KEY = 'meridian_space_jobs'
+const FRAMES_STORAGE_KEY = 'meridian_space_frames'
+
+function loadStoredFrames(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(FRAMES_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+function saveStoredFrames(frames: Record<string, string[]>) {
+  try {
+    localStorage.setItem(FRAMES_STORAGE_KEY, JSON.stringify(frames))
+  } catch {
+    // localStorage full — silently skip
+  }
+}
+
+async function blobToDataUrl(blob: Blob, maxWidth = 320): Promise<string> {
+  const bitmap = await createImageBitmap(blob)
+  const scale = Math.min(1, maxWidth / bitmap.width)
+  const w = Math.round(bitmap.width * scale)
+  const h = Math.round(bitmap.height * scale)
+  const canvas = new OffscreenCanvas(w, h)
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(bitmap, 0, 0, w, h)
+  bitmap.close()
+  const outBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.6 })
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onloadend = () => resolve(reader.result as string)
+    reader.readAsDataURL(outBlob)
+  })
+}
 
 function loadLocalSpaces(): Space[] {
   try {
@@ -237,6 +270,15 @@ export const spacesService = {
     jobs.unshift(job)
     saveLocalJobs(jobs)
 
+    // Store evenly-spaced frame thumbnails for 3D rendering
+    const step = Math.max(1, Math.floor(frames.length / 8))
+    const selected = frames.filter((_, i) => i % step === 0).slice(0, 8)
+    Promise.all(selected.map(f => blobToDataUrl(f))).then(urls => {
+      const stored = loadStoredFrames()
+      stored[spaceId] = urls
+      saveStoredFrames(stored)
+    })
+
     simulateProcessing(jobId, spaceId)
 
     return { jobId, spaceId }
@@ -248,6 +290,13 @@ export const spacesService = {
     }
     const spaces = loadLocalSpaces().filter(s => s.id !== spaceId)
     saveLocalSpaces(spaces)
+    const stored = loadStoredFrames()
+    delete stored[spaceId]
+    saveStoredFrames(stored)
+  },
+
+  getStoredFrames(spaceId: string): string[] {
+    return loadStoredFrames()[spaceId] ?? []
   },
 }
 

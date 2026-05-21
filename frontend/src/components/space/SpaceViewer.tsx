@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Grid, Html } from '@react-three/drei'
 import * as THREE from 'three'
@@ -137,6 +137,77 @@ function HotZoneRing({ zone }: { zone: HotZone }) {
   )
 }
 
+function FramePanel({ url, position, rotation }: { url: string; position: [number, number, number]; rotation: [number, number, number] }) {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null)
+
+  useEffect(() => {
+    const loader = new THREE.TextureLoader()
+    loader.load(url, (tex) => {
+      tex.colorSpace = THREE.SRGBColorSpace
+      setTexture(tex)
+    })
+  }, [url])
+
+  if (!texture) return null
+
+  const img = texture.image as HTMLImageElement | undefined
+  const aspect = img ? img.width / img.height : 16 / 9
+  const height = 2.2
+  const width = height * aspect
+
+  return (
+    <mesh position={position} rotation={rotation}>
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial map={texture} side={THREE.DoubleSide} />
+    </mesh>
+  )
+}
+
+function FramePanels({ frameUrls }: { frameUrls: string[] }) {
+  const positions = useMemo(() => {
+    const panels: { pos: [number, number, number]; rot: [number, number, number] }[] = []
+    const count = frameUrls.length
+    if (count === 0) return panels
+
+    // Place frames around the perimeter of the space like mounted photos
+    const wallConfigs: { pos: [number, number, number]; rot: [number, number, number] }[] = [
+      // Back wall (z = -3.9)
+      { pos: [-3, 1.5, -3.9], rot: [0, 0, 0] },
+      { pos: [0, 1.5, -3.9], rot: [0, 0, 0] },
+      { pos: [3, 1.5, -3.9], rot: [0, 0, 0] },
+      // Left wall (x = -5.9)
+      { pos: [-5.9, 1.5, -1.5], rot: [0, Math.PI / 2, 0] },
+      { pos: [-5.9, 1.5, 1.5], rot: [0, Math.PI / 2, 0] },
+      // Right wall (x = 5.9)
+      { pos: [5.9, 1.5, -1.5], rot: [0, -Math.PI / 2, 0] },
+      { pos: [5.9, 1.5, 1.5], rot: [0, -Math.PI / 2, 0] },
+      // Front wall (z = 3.9)
+      { pos: [0, 1.5, 3.9], rot: [0, Math.PI, 0] },
+    ]
+
+    for (let i = 0; i < Math.min(count, wallConfigs.length); i++) {
+      panels.push(wallConfigs[i])
+    }
+    return panels
+  }, [frameUrls.length])
+
+  return (
+    <group>
+      {frameUrls.map((url, i) => {
+        if (i >= positions.length) return null
+        return (
+          <FramePanel
+            key={i}
+            url={url}
+            position={positions[i].pos}
+            rotation={positions[i].rot}
+          />
+        )
+      })}
+    </group>
+  )
+}
+
 function SweepLine() {
   const ref = useRef<THREE.Group>(null!)
 
@@ -164,14 +235,17 @@ interface SpaceViewerProps {
   showHotZones?: boolean
   showSweep?: boolean
   className?: string
+  frameUrls?: string[]
 }
 
 export default function SpaceViewer({
   showHotZones = true,
   showSweep = true,
   className = '',
+  frameUrls = [],
 }: SpaceViewerProps) {
   const { points, hotZones } = useMemo(() => generateDemoScan(), [])
+  const hasFrames = frameUrls.length > 0
 
   return (
     <div className={`relative rounded-xl overflow-hidden bg-[#0A0A0B] border border-[#1F1F23] isolate ${className}`}>
@@ -199,6 +273,7 @@ export default function SpaceViewer({
           position={[0, -0.01, 0]}
         />
         <PointCloud points={points} />
+        {hasFrames && <FramePanels frameUrls={frameUrls} />}
         {showHotZones && hotZones.map(z => <HotZoneRing key={z.id} zone={z} />)}
         {showSweep && <SweepLine />}
       </Canvas>
@@ -216,7 +291,9 @@ export default function SpaceViewer({
       {/* Scan info */}
       <div className="absolute top-3 right-3 px-3 py-2 rounded-lg bg-[#0A0A0B]/80 border border-[#1F1F23]">
         <p className="text-[10px] font-mono text-[#17C5B0]">{points.length.toLocaleString()} points</p>
-        <p className="text-[9px] text-[#A1A1A8]/40">{hotZones.length} zones detected</p>
+        <p className="text-[9px] text-[#A1A1A8]/40">
+          {hasFrames ? `${frameUrls.length} captured frames mapped` : `${hotZones.length} zones detected`}
+        </p>
       </div>
     </div>
   )

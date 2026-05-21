@@ -174,12 +174,17 @@ export default function SpaceTab() {
               <div className="card overflow-hidden group hover:border-[#2A2A30] transition-all">
                 {/* Thumbnail / preview */}
                 <div
-                  className="h-36 bg-[#111113] flex items-center justify-center cursor-pointer relative"
+                  className="h-36 bg-[#111113] flex items-center justify-center cursor-pointer relative overflow-hidden"
                   onClick={() => space.status === 'ready' && setSelectedSpace(space)}
                 >
                   {space.status === 'ready' ? (
                     <>
-                      <Box size={36} className="text-[#1A8FD6]/20" />
+                      {(() => {
+                        const thumb = spacesService.getStoredFrames(space.id)[0]
+                        return thumb
+                          ? <img src={thumb} alt={space.name} className="absolute inset-0 w-full h-full object-cover opacity-70" />
+                          : <Box size={36} className="text-[#1A8FD6]/20" />
+                      })()}
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A8FD6] text-white text-xs font-medium">
                           <Eye size={12} />
@@ -282,6 +287,12 @@ export default function SpaceTab() {
 function SpaceDetailView({ space, onBack }: { space: Space; onBack: () => void }) {
   const [viewMode, setViewMode] = useState<'3d' | 'heatmap' | 'zones'>('3d')
   const [showHotZones, setShowHotZones] = useState(true)
+  const [frameUrls, setFrameUrls] = useState<string[]>([])
+
+  useEffect(() => {
+    const urls = spacesService.getStoredFrames(space.id)
+    setFrameUrls(urls)
+  }, [space.id])
 
   return (
     <div className="space-y-6">
@@ -345,6 +356,7 @@ function SpaceDetailView({ space, onBack }: { space: Space; onBack: () => void }
             showHotZones={showHotZones}
             showSweep={viewMode === 'heatmap'}
             className="h-[400px] sm:h-[500px]"
+            frameUrls={frameUrls}
           />
         </Suspense>
       </ScrollReveal>
