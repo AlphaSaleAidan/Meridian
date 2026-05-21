@@ -7,12 +7,15 @@ SHA-256 hash proof for audit trail.
 import hashlib
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger("meridian.compliance.acceptance")
+
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 
 
 def _get_supabase() -> tuple[str, str]:
@@ -39,6 +42,9 @@ async def get_pending_acceptances(
     province: str = "",
 ) -> list[dict[str, Any]]:
     """Return documents the user has not yet accepted."""
+    if not _UUID_RE.match(user_id):
+        logger.error("Invalid user_id format: %s", user_id)
+        return []
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         logger.error("Supabase not configured")
@@ -99,6 +105,8 @@ async def record_acceptance(
     portal_context: str = "",
 ) -> dict[str, Any]:
     """Record acceptance with SHA-256 hash proof."""
+    if not _UUID_RE.match(user_id):
+        return {"ok": False, "error": "invalid_user_id_format"}
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         return {"ok": False, "error": "supabase_not_configured"}

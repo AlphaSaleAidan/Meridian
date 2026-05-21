@@ -6,12 +6,15 @@ Transactional messages (receipts, security alerts, etc.) are exempt.
 """
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Callable, Coroutine
 
 import httpx
 
 logger = logging.getLogger("meridian.compliance.casl")
+
+_SAFE_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
 COMMERCIAL_TYPES: set[str] = {
     "weekly_digest", "monthly_report", "feature_announcement",
@@ -44,12 +47,21 @@ def _headers(service_key: str) -> dict[str, str]:
     }
 
 
+def _validate_email(email: str) -> bool:
+    """Validate email format to prevent PostgREST filter injection."""
+    return bool(_SAFE_EMAIL_RE.match(email))
+
+
 async def check_casl_consent(email: str, email_type: str) -> dict[str, Any]:
     """Check whether we can send this email type under CASL."""
     if email_type in TRANSACTIONAL_TYPES:
         return {"can_send": True, "reason": "transactional_exempt", "consent_type": None}
     if email_type not in COMMERCIAL_TYPES:
         logger.warning("Unknown email type '%s' -- treating as commercial", email_type)
+
+    if not _validate_email(email):
+        logger.error("Invalid email format for CASL check: %s", email)
+        return {"can_send": False, "reason": "invalid_email_format", "consent_type": None}
 
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
@@ -58,8 +70,8 @@ async def check_casl_consent(email: str, email_type: str) -> dict[str, Any]:
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
-            f"{supabase_url}/rest/v1/casl_consent_records"
-            f"?email=eq.{email}&select=consent_status,consent_given_at",
+            f"{supabase_url}/rest/v1/casl_consent_records",
+            params={"email": f"eq.{email}", "select": "consent_status,consent_given_at"},
             headers=_headers(service_key),
         )
 
@@ -84,6 +96,8 @@ async def record_express_consent(
     method: str, form_url: str, ip_address: str, checkbox_text: str = "",
 ) -> dict[str, Any]:
     """Record express CASL consent with full evidence trail."""
+    if not _validate_email(email):
+        return {"ok": False, "error": "invalid_email_format"}
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         return {"ok": False, "error": "supabase_not_configured"}
@@ -113,6 +127,8 @@ async def record_express_consent(
 
 async def process_unsubscribe(email: str, method: str = "email_link") -> dict[str, Any]:
     """Immediately withdraw CASL consent -- CASL requires instant processing."""
+    if not _validate_email(email):
+        return {"ok": False, "error": "invalid_email_format"}
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         return {"ok": False, "error": "supabase_not_configured"}
@@ -120,7 +136,8 @@ async def process_unsubscribe(email: str, method: str = "email_link") -> dict[st
     now = datetime.now(timezone.utc).isoformat()
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.patch(
-            f"{supabase_url}/rest/v1/casl_consent_records?email=eq.{email}",
+            f"{supabase_url}/rest/v1/casl_consent_records",
+            params={"email": f"eq.{email}"},
             headers={**_headers(service_key), "Prefer": "return=representation"},
             json={"consent_status": "withdrawn", "unsubscribed_at": now,
                   "unsubscribe_method": method, "updated_at": now},

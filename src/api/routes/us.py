@@ -12,6 +12,7 @@ US Sales Portal Routes — rep management + customer onboarding for US market.
 """
 import logging
 import os
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,6 +21,14 @@ from pydantic import BaseModel, EmailStr, field_validator
 from ..auth import require_service_auth
 
 logger = logging.getLogger("meridian.api.us")
+
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def _validate_rep_id(rep_id: str) -> None:
+    """Validate rep_id is a proper UUID to prevent PostgREST filter injection."""
+    if not _UUID_RE.match(rep_id):
+        raise HTTPException(status_code=400, detail="Invalid rep_id format")
 
 router = APIRouter(prefix="/api/us", tags=["us"])
 
@@ -237,6 +246,7 @@ async def get_team():
 
 @router.post("/rep-approve")
 async def approve_rep(req: RepActionRequest):
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 
@@ -310,6 +320,7 @@ async def approve_rep(req: RepActionRequest):
 
 @router.post("/rep-reject")
 async def reject_rep(req: RepActionRequest):
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 
@@ -331,6 +342,7 @@ async def reject_rep(req: RepActionRequest):
 
 @router.post("/rep-update")
 async def update_rep(req: RepUpdateRequest):
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 
@@ -362,6 +374,7 @@ async def update_rep(req: RepUpdateRequest):
 @router.post("/rep-remove")
 async def remove_rep(req: RepActionRequest):
     """Admin removes an active rep from the team — deletes the sales_reps row."""
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 

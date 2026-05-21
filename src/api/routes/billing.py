@@ -16,6 +16,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 
 from ..auth import require_admin, require_service_auth
@@ -503,20 +504,22 @@ async def handle_billing_webhook(request: Request):
     try:
         raw_body = await request.body()
         sig_key = os.environ.get("SQUARE_WEBHOOK_SIGNATURE_KEY", "")
-        if sig_key:
-            signature = request.headers.get("x-square-hmacsha256-signature", "")
-            notification_url = str(request.url)
-            combined = notification_url.encode("utf-8") + raw_body
-            expected = hmac.new(
-                key=sig_key.encode("utf-8"),
-                msg=combined,
-                digestmod=hashlib.sha256,
-            ).digest()
-            import base64
-            expected_b64 = base64.b64encode(expected).decode("utf-8")
-            if not hmac.compare_digest(expected_b64, signature):
-                logger.warning("Billing webhook signature mismatch")
-                return {"status": "rejected", "reason": "invalid signature"}
+        if not sig_key:
+            logger.warning("SQUARE_WEBHOOK_SIGNATURE_KEY not configured — rejecting webhook")
+            return Response(status_code=503)
+        signature = request.headers.get("x-square-hmacsha256-signature", "")
+        notification_url = str(request.url)
+        combined = notification_url.encode("utf-8") + raw_body
+        expected = hmac.new(
+            key=sig_key.encode("utf-8"),
+            msg=combined,
+            digestmod=hashlib.sha256,
+        ).digest()
+        import base64
+        expected_b64 = base64.b64encode(expected).decode("utf-8")
+        if not hmac.compare_digest(expected_b64, signature):
+            logger.warning("Billing webhook signature mismatch")
+            return Response(status_code=403)
 
         import json as json_mod
         body = json_mod.loads(raw_body)

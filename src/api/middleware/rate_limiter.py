@@ -20,6 +20,12 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/pos/test-connection": (20, 3600),
     "/api/garry/chat": (30, 60),
     "/api/portal/resolve": (20, 60),
+    "/api/canada/rep-signup": (5, 3600),
+    "/api/us/rep-signup": (5, 3600),
+    "/api/billing/create-checkout": (10, 3600),
+    "/api/billing/create-invoice": (10, 3600),
+    "/api/compliance/breach": (5, 3600),
+    "/api/privacy/request": (10, 3600),
 }
 
 DEFAULT_LIMIT = (200, 60)

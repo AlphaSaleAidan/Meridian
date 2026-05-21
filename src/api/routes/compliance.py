@@ -14,6 +14,7 @@ Compliance API Routes -- PIPEDA/CASL/privacy endpoints.
 import hashlib
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -22,6 +23,14 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 logger = logging.getLogger("meridian.api.compliance")
+
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def _validate_user_id(user_id: str) -> None:
+    """Validate user_id is a proper UUID to prevent PostgREST filter injection."""
+    if not _UUID_RE.match(user_id):
+        raise HTTPException(status_code=400, detail="Invalid user_id format")
 
 router = APIRouter(tags=["compliance"])
 
@@ -99,6 +108,7 @@ class AdminQuery(BaseModel):
 @router.post("/api/compliance/accept")
 async def accept_document(req: AcceptanceRequest):
     """Record a user's acceptance of a compliance document."""
+    _validate_user_id(req.user_id)
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
@@ -142,6 +152,7 @@ async def accept_document(req: AcceptanceRequest):
 @router.get("/api/compliance/pending/{user_id}")
 async def get_pending_acceptances(user_id: str, user_type: str = "customer", has_camera: bool = False, province: str = ""):
     """Return list of documents this user has not yet accepted."""
+    _validate_user_id(user_id)
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
@@ -243,6 +254,7 @@ async def submit_privacy_request(req: PrivacyRequestSubmission):
 @router.get("/api/privacy/export/{user_id}")
 async def export_user_data(user_id: str, admin_email: str = ""):
     """Export all personal data for a user (admin only). PIPEDA portability."""
+    _validate_user_id(user_id)
     _require_admin(admin_email)
 
     supabase_url, service_key = _get_supabase()

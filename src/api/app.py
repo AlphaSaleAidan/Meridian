@@ -175,8 +175,6 @@ app = FastAPI(
 
 # ── CORS — locked to known Meridian domains ──
 _allowed_origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
     "https://app.meridianpos.ai",
     "https://meridian-dashboard.vercel.app",
     "https://meridian-dun-nu.vercel.app",
@@ -186,6 +184,12 @@ _allowed_origins = [
     "https://www.meridian.tips",
     "https://canada.meridian.tips",
 ]
+
+if not _is_production:
+    _allowed_origins.extend([
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ])
 
 _extra_origin = os.environ.get("FRONTEND_ORIGIN")
 if _extra_origin:

@@ -7,6 +7,7 @@ Canada-specific Routes — Careers applications and Canada portal endpoints.
 import asyncio
 import logging
 import os
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -16,6 +17,14 @@ from ..auth import require_admin, require_service_auth
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
+
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def _validate_rep_id(rep_id: str) -> None:
+    """Validate rep_id is a proper UUID to prevent PostgREST filter injection."""
+    if not _UUID_RE.match(rep_id):
+        raise HTTPException(status_code=400, detail="Invalid rep_id format")
 
 router = APIRouter(prefix="/api/canada", tags=["canada"])
 
@@ -214,6 +223,7 @@ class RepActionRequest(BaseModel):
 @router.post("/rep-approve")
 async def approve_rep(req: RepActionRequest):
     """Admin approves a pending rep — sets is_active=true, creates auth user if needed, sends credentials email."""
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 
@@ -306,6 +316,7 @@ async def approve_rep(req: RepActionRequest):
 @router.post("/rep-reject")
 async def reject_rep(req: RepActionRequest):
     """Admin rejects a pending rep — deletes the sales_reps row."""
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 
@@ -340,6 +351,7 @@ class RepUpdateRequest(BaseModel):
 @router.post("/rep-update")
 async def update_rep(req: RepUpdateRequest):
     """Admin updates a rep's name or commission rate."""
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 
@@ -378,6 +390,7 @@ async def update_rep(req: RepUpdateRequest):
 @router.post("/rep-remove")
 async def remove_rep(req: RepActionRequest):
     """Admin removes an active rep from the team — deletes the sales_reps row."""
+    _validate_rep_id(req.rep_id)
     if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
         raise HTTPException(403, "Not authorized — admin email not recognized")
 
