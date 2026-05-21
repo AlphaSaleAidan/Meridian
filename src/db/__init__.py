@@ -35,8 +35,11 @@ async def init_db() -> SupabaseREST | None:
         return None
 
     _db_instance = SupabaseREST(url=url, service_key=key)
-    health = await _db_instance.health_check()
-    logger.info(f"Database initialized: {health}")
+    try:
+        health = await _db_instance.health_check()
+        logger.info(f"Database initialized: {health}")
+    except Exception as e:
+        logger.warning(f"Database health check failed (will retry on first request): {e}")
     return _db_instance
 
 

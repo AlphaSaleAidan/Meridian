@@ -45,13 +45,17 @@ async def _check_and_sync():
     if not db:
         return
 
-    connections = await db.select(
-        "pos_connections",
-        filters={
-            "status": "eq.connected",
-            "historical_import_complete": "eq.true",
-        },
-    )
+    try:
+        connections = await db.select(
+            "pos_connections",
+            filters={
+                "status": "eq.connected",
+                "historical_import_complete": "eq.true",
+            },
+        )
+    except Exception as e:
+        logger.warning(f"Could not fetch connections (will retry next cycle): {e}")
+        return
 
     if not connections:
         return
