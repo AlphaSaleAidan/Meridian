@@ -1,9 +1,20 @@
-import { lazy, Suspense, useMemo, useState, useEffect } from 'react'
+import { Component, lazy, Suspense, useMemo, useState, useEffect, type ReactNode } from 'react'
 
 interface SceneRendererProps {
   sceneId: string
   primaryColor: string
   accentColor: string
+}
+
+class SceneErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children
+  }
 }
 
 /* ── Lazy-loaded scene components ─────────────────────────────── */
@@ -109,17 +120,14 @@ export default function SceneRenderer({ sceneId, primaryColor, accentColor }: Sc
     return <StaticBackground primaryColor={primaryColor} accentColor={accentColor} />
   }
 
+  const fallback = <StaticBackground primaryColor={primaryColor} accentColor={accentColor} />
+
   return (
-    <Suspense
-      fallback={
-        <div
-          className="absolute inset-0"
-          style={{ background: `radial-gradient(ellipse at 50% 30%, ${accentColor}15, ${primaryColor})` }}
-        />
-      }
-    >
-      <SceneComponent primaryColor={primaryColor} accentColor={accentColor} />
-    </Suspense>
+    <SceneErrorBoundary fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <SceneComponent primaryColor={primaryColor} accentColor={accentColor} />
+      </Suspense>
+    </SceneErrorBoundary>
   )
 }
 
