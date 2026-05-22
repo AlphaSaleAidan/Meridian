@@ -15,7 +15,7 @@ import os
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
 from ..auth import require_service_auth, require_jwt, require_admin_jwt
@@ -65,6 +65,15 @@ def _headers(service_key: str) -> dict:
         "apikey": service_key,
         "Content-Type": "application/json",
     }
+
+
+def _get_anon_key() -> str:
+    """Get the Supabase anon key from env (public key, safe to embed as fallback)."""
+    return (
+        os.environ.get("SUPABASE_ANON_KEY", "")
+        or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+        or os.environ.get("VITE_SUPABASE_ANON_KEY", "")
+    )
 
 
 # ── Request Models ──────────────────────────────────────────
@@ -222,16 +231,28 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
 
 
 @router.get("/team")
-async def get_team(user: dict = Depends(require_jwt)):
+async def get_team(request: Request, user: dict = Depends(require_jwt)):
+    """Return all US sales reps (enforces RLS via user JWT)."""
     import httpx
 
-    supabase_url, service_key = _supabase_creds()
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    anon_key = _get_anon_key()
+
+    # Extract the user's JWT from the Authorization header to enforce RLS
+    auth_header = request.headers.get("authorization", "")
+    user_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+
+    if not supabase_url or not user_token:
+        return {"reps": [], "applicants": []}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{supabase_url}/rest/v1/sales_reps?portal_context=in.(us,all)&order=created_at.asc"
             "&select=id,name,email,phone,commission_rate,is_active,created_at,portal_context",
-            headers=_headers(service_key),
+            headers={
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
+            },
         )
         if resp.status_code != 200:
             logger.error("US team fetch failed: %s", resp.text)
@@ -388,15 +409,26 @@ async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_admin_
 
 
 @router.get("/leads")
-async def get_leads(user: dict = Depends(require_jwt)):
+async def get_leads(request: Request, user: dict = Depends(require_jwt)):
+    """Return all US leads (enforces RLS via user JWT)."""
     import httpx
 
-    supabase_url, service_key = _supabase_creds()
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    anon_key = _get_anon_key()
+
+    # Extract the user's JWT from the Authorization header to enforce RLS
+    auth_header = request.headers.get("authorization", "")
+    user_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+
+    if not supabase_url or not user_token:
+        return {"leads": []}
+
+    headers = {"Authorization": f"Bearer {user_token}", "apikey": anon_key}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{supabase_url}/rest/v1/us_leads?order=created_at.desc&select=*",
-            headers=_headers(service_key),
+            headers=headers,
         )
         if resp.status_code == 200:
             return {"leads": resp.json()}
@@ -405,15 +437,26 @@ async def get_leads(user: dict = Depends(require_jwt)):
 
 
 @router.get("/stats")
-async def get_stats(user: dict = Depends(require_jwt)):
+async def get_stats(request: Request, user: dict = Depends(require_jwt)):
+    """Aggregate US sales stats (enforces RLS via user JWT)."""
     import httpx
 
-    supabase_url, service_key = _supabase_creds()
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    anon_key = _get_anon_key()
+
+    # Extract the user's JWT from the Authorization header to enforce RLS
+    auth_header = request.headers.get("authorization", "")
+    user_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+
+    if not supabase_url or not user_token:
+        return {"total_reps": 0, "active_reps": 0}
+
+    headers = {"Authorization": f"Bearer {user_token}", "apikey": anon_key}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         reps_resp = await client.get(
             f"{supabase_url}/rest/v1/sales_reps?portal_context=in.(us,all)&select=id,is_active",
-            headers=_headers(service_key),
+            headers=headers,
         )
 
     reps = reps_resp.json() if reps_resp.status_code == 200 else []

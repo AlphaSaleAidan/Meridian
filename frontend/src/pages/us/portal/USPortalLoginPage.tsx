@@ -118,7 +118,7 @@ export default function USPortalLoginPage() {
 
         <p className="text-center text-[11px] text-[#A1A1A8]/50 mt-5">
           Business owner?{' '}
-          <Link to="/customer/login" className="text-[#00d4aa] hover:text-[#00d4aa]/80 transition-colors font-medium">
+          <Link to="/customer/login" className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors font-medium">
             Sign in here
           </Link>
         </p>

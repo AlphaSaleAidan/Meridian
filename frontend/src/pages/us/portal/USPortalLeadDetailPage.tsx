@@ -58,16 +58,16 @@ function HorizontalStepper({ currentStep }: { currentStep: number }) {
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
                   step.num < currentStep
-                    ? 'bg-[#00d4aa] text-white'
+                    ? 'bg-[#17C5B0] text-white'
                     : step.num === currentStep
-                    ? 'border-2 border-[#00d4aa] text-[#00d4aa] bg-transparent'
-                    : 'bg-[#1a2420] text-[#6b7a74]'
+                    ? 'border-2 border-[#17C5B0] text-[#17C5B0] bg-transparent'
+                    : 'bg-[#1F1F23] text-[#A1A1A8]'
                 }`}
               >
                 {step.num < currentStep ? <Check size={18} /> : step.num}
               </div>
               <span className={`text-[10px] mt-1.5 whitespace-nowrap ${
-                step.num <= currentStep ? 'text-[#00d4aa]' : 'text-[#6b7a74]'
+                step.num <= currentStep ? 'text-[#17C5B0]' : 'text-[#A1A1A8]'
               }`}>
                 {step.label}
               </span>
@@ -76,7 +76,7 @@ function HorizontalStepper({ currentStep }: { currentStep: number }) {
             {/* Connector line */}
             {idx < STEPS.length - 1 && (
               <div className={`flex-1 h-0.5 mx-2 mt-[-18px] ${
-                step.num < currentStep ? 'bg-[#00d4aa]' : 'bg-[#1a2420]'
+                step.num < currentStep ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'
               }`} />
             )}
           </div>
@@ -734,8 +734,8 @@ export default function USPortalLeadDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">S</span>
+        <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
+          <span className="text-[#17C5B0] font-bold text-sm">S</span>
         </div>
       </div>
     )
@@ -744,10 +744,10 @@ export default function USPortalLeadDetailPage() {
   if (!deal) {
     return (
       <div className="space-y-4">
-        <Link to="/us/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-[#6b7a74] hover:text-white transition-colors">
+        <Link to="/us/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-[#A1A1A8] hover:text-white transition-colors">
           <ArrowLeft size={16} /> Leads
         </Link>
-        <div className="text-center py-16 text-[#6b7a74]">Lead not found.</div>
+        <div className="text-center py-16 text-[#A1A1A8]">Lead not found.</div>
       </div>
     )
   }
@@ -771,21 +771,21 @@ export default function USPortalLeadDetailPage() {
     input.click()
   }
 
-  const inputClass = 'w-full px-3 py-2.5 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
+  const inputClass = 'w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-white placeholder-[#A1A1A8] focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'
 
   return (
     <div className="space-y-6 max-w-3xl">
       {/* Back link */}
-      <Link to="/us/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-[#6b7a74] hover:text-white transition-colors">
+      <Link to="/us/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-[#A1A1A8] hover:text-white transition-colors">
         <ArrowLeft size={16} /> Leads
       </Link>
 
       {/* Header */}
       {editing ? (
-        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
+        <div className="bg-[#111113] border border-[#17C5B0]/30 rounded-xl p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#00d4aa]">Edit Lead</h2>
-            <button onClick={() => setEditing(false)} className="text-xs text-[#6b7a74] hover:text-white">Cancel</button>
+            <h2 className="text-sm font-semibold text-[#17C5B0]">Edit Lead</h2>
+            <button onClick={() => setEditing(false)} className="text-xs text-[#A1A1A8] hover:text-white">Cancel</button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input value={editForm.business_name} onChange={e => setEditForm(f => ({ ...f, business_name: e.target.value }))} className={inputClass} placeholder="Business Name" />
@@ -808,7 +808,7 @@ export default function USPortalLeadDetailPage() {
                 setEditSaving(false)
               }
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all"
           >
             {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Save Changes
@@ -818,7 +818,7 @@ export default function USPortalLeadDetailPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">{deal.business_name}</h1>
-            <p className="text-sm text-[#6b7a74] mt-1">
+            <p className="text-sm text-[#A1A1A8] mt-1">
               {deal.contact_name} &middot; <span className="text-[#f0b429] font-semibold">${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
             </p>
           </div>
@@ -833,7 +833,7 @@ export default function USPortalLeadDetailPage() {
               })
               setEditing(true)
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#6b7a74] border border-[#1a2420] rounded-lg hover:text-white hover:border-[#2a3430] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:text-white hover:border-[#2a3430] transition-colors"
           >
             <Pencil size={12} /> Edit
           </button>
@@ -841,17 +841,17 @@ export default function USPortalLeadDetailPage() {
       )}
 
       {/* Stepper */}
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4">
         <HorizontalStepper currentStep={currentStep} />
       </div>
 
       {/* Step 1 - Proposal (always visible) */}
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Proposal</h2>
 
         {/* Monthly Price Slider */}
         <div>
-          <label className="text-xs text-[#6b7a74] block mb-1.5">Monthly Price (USD)</label>
+          <label className="text-xs text-[#A1A1A8] block mb-1.5">Monthly Price (USD)</label>
           <div className="flex items-center gap-3">
             <input
               type="range"
@@ -860,7 +860,7 @@ export default function USPortalLeadDetailPage() {
               step={50}
               value={monthlyPrice}
               onChange={e => setMonthlyPrice(Number(e.target.value))}
-              className="flex-1 h-2 bg-[#1a2420] rounded-full appearance-none cursor-pointer accent-[#00d4aa]"
+              className="flex-1 h-2 bg-[#1F1F23] rounded-full appearance-none cursor-pointer accent-[#17C5B0]"
             />
             <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">${monthlyPrice.toLocaleString()}/mo</span>
           </div>
@@ -869,7 +869,7 @@ export default function USPortalLeadDetailPage() {
 
         {/* Setup Fee */}
         <div>
-          <label className="text-xs text-[#6b7a74] block mb-1.5">Setup Fee</label>
+          <label className="text-xs text-[#A1A1A8] block mb-1.5">Setup Fee</label>
           <input
             type="text"
             value={setupFee}
@@ -881,7 +881,7 @@ export default function USPortalLeadDetailPage() {
 
         {/* First month free */}
         <label className="flex items-center gap-3 cursor-pointer">
-          <div className={`w-9 h-5 rounded-full transition-colors relative ${firstMonthFree ? 'bg-[#00d4aa]' : 'bg-[#1a2420]'}`}
+          <div className={`w-9 h-5 rounded-full transition-colors relative ${firstMonthFree ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'}`}
             onClick={() => setFirstMonthFree(!firstMonthFree)}
           >
             <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${firstMonthFree ? 'translate-x-4' : 'translate-x-0.5'}`} />
@@ -893,7 +893,7 @@ export default function USPortalLeadDetailPage() {
         <button
           onClick={handleGenerateProposal}
           disabled={proposalGenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all"
         >
           {proposalGenerating ? (
             <><Loader2 size={16} className="animate-spin" /> Generating…</>
@@ -903,10 +903,10 @@ export default function USPortalLeadDetailPage() {
         </button>
 
         {proposalBlob && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <span className="text-xs text-[#00d4aa] font-medium">Proposal ready — 9 slides, PDF generated.</span>
-            <button onClick={handleDownloadProposal} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20">
+            <CheckCircle2 size={16} className="text-[#17C5B0]" />
+            <span className="text-xs text-[#17C5B0] font-medium">Proposal ready — 9 slides, PDF generated.</span>
+            <button onClick={handleDownloadProposal} className="ml-auto text-[#17C5B0] hover:text-white transition-colors">
               <Download size={14} />
             </button>
           </div>
@@ -916,7 +916,7 @@ export default function USPortalLeadDetailPage() {
           <button
             onClick={handleViewProposal}
             disabled={proposalGenerating}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all"
           >
             {proposalGenerating ? (
               <><Loader2 size={16} className="animate-spin" /> Generating…</>
@@ -927,12 +927,12 @@ export default function USPortalLeadDetailPage() {
           <button
             onClick={handleEmailProposal}
             disabled={proposalEmailing || proposalGenerating}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1F1F23] text-white text-sm font-medium rounded-lg hover:border-[#17C5B0]/30 disabled:opacity-50 transition-all"
           >
             {proposalEmailing ? (
               <><Loader2 size={16} className="animate-spin" /> Sending…</>
             ) : proposalSent ? (
-              <><CheckCircle2 size={16} className="text-[#00d4aa]" /> Sent!</>
+              <><CheckCircle2 size={16} className="text-[#17C5B0]" /> Sent!</>
             ) : (
               <><Mail size={16} /> Email Proposal</>
             )}
@@ -942,16 +942,16 @@ export default function USPortalLeadDetailPage() {
 
       {/* Step 2 - Invoice / Customer Checkout (visible at step 2+) */}
       {currentStep >= 2 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Invoice &amp; Checkout</h2>
-        <p className="text-xs text-[#6b7a74]">
+        <p className="text-xs text-[#A1A1A8]">
           Generate a custom invoice in USD with a QR code the customer can scan to view. Invoices recur monthly.
         </p>
 
         <button
           onClick={handleGenerateInvoice}
           disabled={invoiceGenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all"
         >
           {invoiceGenerating ? (
             <><Loader2 size={16} className="animate-spin" /> Generating Invoice…</>
@@ -962,31 +962,31 @@ export default function USPortalLeadDetailPage() {
 
         {invoiceBlob && (
           <>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-              <CheckCircle2 size={16} className="text-[#00d4aa]" />
-              <span className="text-xs text-[#00d4aa] font-medium">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20">
+              <CheckCircle2 size={16} className="text-[#17C5B0]" />
+              <span className="text-xs text-[#17C5B0] font-medium">
                 Invoice #{invoiceNumber} ready — includes QR code for online viewing.
               </span>
-              <button onClick={handleDownloadInvoice} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+              <button onClick={handleDownloadInvoice} className="ml-auto text-[#17C5B0] hover:text-white transition-colors">
                 <Download size={14} />
               </button>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={handleDownloadInvoice}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1F1F23] text-white text-sm font-medium rounded-lg hover:border-[#17C5B0]/30 transition-all"
               >
                 <Eye size={16} /> View Invoice
               </button>
               <button
                 onClick={handleEmailInvoice}
                 disabled={invoiceEmailing}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1F1F23] text-white text-sm font-medium rounded-lg hover:border-[#17C5B0]/30 disabled:opacity-50 transition-all"
               >
                 {invoiceEmailing ? (
                   <><Loader2 size={16} className="animate-spin" /> Sending…</>
                 ) : invoiceEmailed ? (
-                  <><CheckCircle2 size={16} className="text-[#00d4aa]" /> Invoice Sent!</>
+                  <><CheckCircle2 size={16} className="text-[#17C5B0]" /> Invoice Sent!</>
                 ) : (
                   <><Mail size={16} /> Email Invoice</>
                 )}
@@ -1002,16 +1002,16 @@ export default function USPortalLeadDetailPage() {
 
       {/* Payment Status & Card Management (visible at step 2+) */}
       {currentStep >= 2 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CreditCard size={16} className="text-[#00d4aa]" />
+            <CreditCard size={16} className="text-[#17C5B0]" />
             <h2 className="text-sm font-semibold text-white">Payment Status</h2>
           </div>
           <button
             onClick={checkPaymentStatus}
             disabled={paymentStatus === 'checking'}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium text-[#6b7a74] border border-[#1a2420] rounded-lg hover:text-[#00d4aa] hover:border-[#00d4aa]/30 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:text-[#17C5B0] hover:border-[#17C5B0]/30 disabled:opacity-50 transition-colors"
           >
             <RefreshCw size={10} className={paymentStatus === 'checking' ? 'animate-spin' : ''} />
             {paymentStatus === 'idle' ? 'Check Status' : 'Refresh'}
@@ -1019,21 +1019,21 @@ export default function USPortalLeadDetailPage() {
         </div>
 
         {paymentStatus === 'idle' && (
-          <p className="text-xs text-[#6b7a74]">Click "Check Status" to see if the customer has paid.</p>
+          <p className="text-xs text-[#A1A1A8]">Click "Check Status" to see if the customer has paid.</p>
         )}
 
         {paymentStatus === 'checking' && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1a2420]">
-            <Loader2 size={14} className="text-[#00d4aa] animate-spin" />
-            <span className="text-xs text-[#6b7a74]">Checking payment status...</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1F1F23]">
+            <Loader2 size={14} className="text-[#17C5B0] animate-spin" />
+            <span className="text-xs text-[#A1A1A8]">Checking payment status...</span>
           </div>
         )}
 
         {paymentStatus === 'active' && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20">
+            <CheckCircle2 size={16} className="text-[#17C5B0]" />
             <div>
-              <span className="text-xs text-[#00d4aa] font-medium">Payment confirmed — subscription active</span>
+              <span className="text-xs text-[#17C5B0] font-medium">Payment confirmed — subscription active</span>
               <p className="text-[10px] text-[#4a5550] mt-0.5">Card on file is being used for recurring billing.</p>
             </div>
           </div>
@@ -1082,7 +1082,7 @@ export default function USPortalLeadDetailPage() {
               <button
                 onClick={handleSendCardUpdateLink}
                 disabled={cardUpdateSending}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all"
               >
                 {cardUpdateSending ? (
                   <><Loader2 size={14} className="animate-spin" /> Creating Link...</>
@@ -1093,18 +1093,18 @@ export default function USPortalLeadDetailPage() {
             </div>
 
             {cardUpdateUrl && (
-              <div className="p-3 rounded-lg bg-[#0a0f0d] border border-[#1a2420] space-y-2">
-                <p className="text-[10px] text-[#6b7a74]">Payment update link (sent to customer):</p>
+              <div className="p-3 rounded-lg bg-[#0A0A0B] border border-[#1F1F23] space-y-2">
+                <p className="text-[10px] text-[#A1A1A8]">Payment update link (sent to customer):</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     readOnly
                     value={cardUpdateUrl}
-                    className="flex-1 px-2 py-1.5 bg-[#0f1512] border border-[#1a2420] rounded text-[11px] text-white font-mono truncate"
+                    className="flex-1 px-2 py-1.5 bg-[#111113] border border-[#1F1F23] rounded text-[11px] text-white font-mono truncate"
                   />
                   <button
                     onClick={() => { navigator.clipboard.writeText(cardUpdateUrl); }}
-                    className="px-3 py-1.5 text-[10px] text-[#00d4aa] border border-[#00d4aa]/30 rounded hover:bg-[#00d4aa]/10 transition-colors"
+                    className="px-3 py-1.5 text-[10px] text-[#17C5B0] border border-[#17C5B0]/30 rounded hover:bg-[#17C5B0]/10 transition-colors"
                   >
                     Copy
                   </button>
@@ -1115,8 +1115,8 @@ export default function USPortalLeadDetailPage() {
         )}
 
         {paymentStatus === 'unavailable' && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1a2420]">
-            <span className="text-xs text-[#6b7a74]">No billing record found yet — invoice may not have been created.</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1F1F23]">
+            <span className="text-xs text-[#A1A1A8]">No billing record found yet — invoice may not have been created.</span>
           </div>
         )}
       </div>
@@ -1124,19 +1124,19 @@ export default function USPortalLeadDetailPage() {
 
       {/* Step 2b - SLA Document (visible at step 2+) */}
       {currentStep >= 2 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <FileText size={16} className="text-[#00d4aa]" />
+          <FileText size={16} className="text-[#17C5B0]" />
           <h2 className="text-sm font-semibold text-white">Service Level Agreement</h2>
         </div>
-        <p className="text-xs text-[#6b7a74]">
+        <p className="text-xs text-[#A1A1A8]">
           Generate an SLA document for the client to sign. Includes data privacy compliance.
         </p>
 
         <button
           onClick={handleGenerateSla}
           disabled={slaGenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1a2420] border border-[#2a3830] text-white text-sm font-semibold rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1F1F23] border border-[#2a3830] text-white text-sm font-semibold rounded-lg hover:border-[#17C5B0]/30 disabled:opacity-50 transition-all"
         >
           {slaGenerating ? (
             <><Loader2 size={16} className="animate-spin" /> Generating SLA…</>
@@ -1147,12 +1147,12 @@ export default function USPortalLeadDetailPage() {
 
         {slaBlob && (
           <>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-              <CheckCircle2 size={16} className="text-[#00d4aa]" />
-              <span className="text-xs text-[#00d4aa] font-medium">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20">
+              <CheckCircle2 size={16} className="text-[#17C5B0]" />
+              <span className="text-xs text-[#17C5B0] font-medium">
                 SLA document ready{slaSigned ? ' — signed' : ''}.
               </span>
-              <button onClick={handleDownloadSla} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+              <button onClick={handleDownloadSla} className="ml-auto text-[#17C5B0] hover:text-white transition-colors">
                 <Download size={14} />
               </button>
             </div>
@@ -1160,14 +1160,14 @@ export default function USPortalLeadDetailPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleDownloadSla}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1F1F23] text-white text-sm font-medium rounded-lg hover:border-[#17C5B0]/30 transition-all"
               >
                 <Eye size={16} /> View SLA
               </button>
               {!slaSigned ? (
                 <button
                   onClick={() => setShowSlaSign(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
                 >
                   <Pencil size={16} /> Sign SLA
                 </button>
@@ -1175,12 +1175,12 @@ export default function USPortalLeadDetailPage() {
                 <button
                   onClick={handleEmailSla}
                   disabled={slaEmailing}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1F1F23] text-white text-sm font-medium rounded-lg hover:border-[#17C5B0]/30 disabled:opacity-50 transition-all"
                 >
                   {slaEmailing ? (
                     <><Loader2 size={16} className="animate-spin" /> Sending…</>
                   ) : slaEmailed ? (
-                    <><CheckCircle2 size={16} className="text-[#00d4aa]" /> SLA Sent!</>
+                    <><CheckCircle2 size={16} className="text-[#17C5B0]" /> SLA Sent!</>
                   ) : (
                     <><Mail size={16} /> Email Signed SLA</>
                   )}
@@ -1192,7 +1192,7 @@ export default function USPortalLeadDetailPage() {
               <div className="text-[10px] text-[#4a5550] space-y-0.5">
                 <p>Provider: Aidan Pierce, Founder & CEO — {new Date().toLocaleDateString('en-US')}</p>
                 <p>Client: {slaSignature} — {new Date().toLocaleDateString('en-US')}</p>
-                {slaEmailed && <p className="text-[#00d4aa]">Signed copy emailed to {deal?.contact_email}</p>}
+                {slaEmailed && <p className="text-[#17C5B0]">Signed copy emailed to {deal?.contact_email}</p>}
               </div>
             )}
           </>
@@ -1201,38 +1201,38 @@ export default function USPortalLeadDetailPage() {
         {/* Signature Modal */}
         {showSlaSign && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-lg bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+            <div className="w-full max-w-lg bg-[#111113] border border-[#1F1F23] rounded-xl p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-base font-semibold text-white">Sign Service Level Agreement</h3>
-                <button onClick={() => setShowSlaSign(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
-                  <X size={18} className="text-[#6b7a74]" />
+                <button onClick={() => setShowSlaSign(false)} className="p-1.5 rounded-lg hover:bg-[#1F1F23] transition-colors">
+                  <X size={18} className="text-[#A1A1A8]" />
                 </button>
               </div>
-              <p className="text-xs text-[#6b7a74] mb-4">
+              <p className="text-xs text-[#A1A1A8] mb-4">
                 By typing your full legal name below, you acknowledge that you have read and agree to the terms of the Service Level Agreement between Meridian AI Business Solutions and {deal?.business_name}. A signed copy will be emailed to both parties.
               </p>
               <div className="space-y-4">
                 {/* Provider signature — pre-filled */}
-                <div className="p-4 bg-[#0a0f0d] border border-[#1a2420] rounded-lg">
-                  <p className="text-[10px] text-[#6b7a74] mb-1">Provider — Meridian AI Business Solutions</p>
-                  <p className="text-lg font-serif italic text-[#00d4aa]">Aidan Pierce</p>
+                <div className="p-4 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg">
+                  <p className="text-[10px] text-[#A1A1A8] mb-1">Provider — Meridian AI Business Solutions</p>
+                  <p className="text-lg font-serif italic text-[#17C5B0]">Aidan Pierce</p>
                   <p className="text-[10px] text-[#4a5550] mt-1">Founder & CEO</p>
                 </div>
 
                 {/* Client signature */}
                 <div>
-                  <label className="text-xs text-[#6b7a74] mb-1.5 block">Client — {deal?.business_name}</label>
+                  <label className="text-xs text-[#A1A1A8] mb-1.5 block">Client — {deal?.business_name}</label>
                   <input
                     type="text"
                     value={slaSignature}
                     onChange={e => setSlaSignature(e.target.value)}
                     placeholder="Client signatory full legal name"
-                    className="w-full px-3 py-2.5 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors"
+                    className="w-full px-3 py-2.5 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-sm text-white placeholder-[#A1A1A8] focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors"
                   />
                 </div>
                 {slaSignature.trim() && (
-                  <div className="p-4 bg-[#0a0f0d] border border-[#1a2420] rounded-lg">
-                    <p className="text-[10px] text-[#6b7a74] mb-1">Client signature preview</p>
+                  <div className="p-4 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg">
+                    <p className="text-[10px] text-[#A1A1A8] mb-1">Client signature preview</p>
                     <p className="text-xl font-serif italic text-white">{slaSignature}</p>
                   </div>
                 )}
@@ -1241,11 +1241,11 @@ export default function USPortalLeadDetailPage() {
                   Date: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
                 <div className="flex justify-end gap-2 mt-4">
-                  <button onClick={() => setShowSlaSign(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
+                  <button onClick={() => setShowSlaSign(false)} className="px-4 py-2 text-sm text-[#A1A1A8] hover:text-white transition-colors">Cancel</button>
                   <button
                     onClick={handleSignSla}
                     disabled={!slaSignature.trim() || slaSigning}
-                    className="px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                    className="px-4 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all"
                   >
                     {slaSigning ? 'Signing…' : 'Sign & Send Copies'}
                   </button>
@@ -1259,7 +1259,7 @@ export default function USPortalLeadDetailPage() {
 
       {/* Step 3 - Connect POS (visible at step 3+) */}
       {currentStep >= 3 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Connect POS System</h2>
 
         <POSSystemPicker
@@ -1298,9 +1298,9 @@ export default function USPortalLeadDetailPage() {
         )}
 
         {posConnected && !posVerifying && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <span className="text-xs text-[#00d4aa] font-medium">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20">
+            <CheckCircle2 size={16} className="text-[#17C5B0]" />
+            <span className="text-xs text-[#17C5B0] font-medium">
               POS connected and verified — data is flowing. This deal is now active.
             </span>
           </div>
@@ -1309,36 +1309,36 @@ export default function USPortalLeadDetailPage() {
       )}
 
       {/* Project Files */}
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">Project Files</h2>
-          <button onClick={handleUpload} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#00d4aa] border border-[#00d4aa]/30 rounded-lg hover:bg-[#00d4aa]/10 transition-all">
+          <button onClick={handleUpload} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#17C5B0] border border-[#17C5B0]/30 rounded-lg hover:bg-[#17C5B0]/10 transition-all">
             <Upload size={14} /> Upload
           </button>
         </div>
 
         <div className="space-y-2">
           {files.map(file => (
-            <div key={file.id} className="flex items-center gap-3 p-3 bg-[#0a0f0d] border border-[#1a2420] rounded-lg hover:border-[#00d4aa]/20 transition-colors cursor-pointer group"
+            <div key={file.id} className="flex items-center gap-3 p-3 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg hover:border-[#17C5B0]/20 transition-colors cursor-pointer group"
               onClick={() => {
                 if (file.tag === 'Proposal' && proposalBlob) { const u = URL.createObjectURL(proposalBlob); window.open(u, '_blank') }
                 else if (file.tag === 'Contract' && slaBlob) { const u = URL.createObjectURL(slaBlob); window.open(u, '_blank') }
               }}
             >
-              <FileText size={16} className="text-[#6b7a74] flex-shrink-0 group-hover:text-[#00d4aa] transition-colors" />
+              <FileText size={16} className="text-[#A1A1A8] flex-shrink-0 group-hover:text-[#17C5B0] transition-colors" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate group-hover:text-[#00d4aa] transition-colors">{file.name}</p>
+                <p className="text-xs font-medium text-white truncate group-hover:text-[#17C5B0] transition-colors">{file.name}</p>
                 <p className="text-[11px] text-[#4a5550]">{file.description}</p>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-[#1a2420] text-[#6b7a74] font-medium flex-shrink-0">
+              <span className="text-[10px] px-2 py-0.5 rounded bg-[#1F1F23] text-[#A1A1A8] font-medium flex-shrink-0">
                 {file.tag}
               </span>
-              <ExternalLink size={14} className="text-[#4a5550] group-hover:text-[#00d4aa] transition-colors flex-shrink-0" />
+              <ExternalLink size={14} className="text-[#4a5550] group-hover:text-[#17C5B0] transition-colors flex-shrink-0" />
               <button
                 onClick={(e) => { e.stopPropagation(); removeFile(file.id) }}
                 className="p-1 rounded hover:bg-red-500/10 transition-colors flex-shrink-0"
               >
-                <Trash2 size={14} className="text-[#6b7a74] hover:text-red-400" />
+                <Trash2 size={14} className="text-[#A1A1A8] hover:text-red-400" />
               </button>
             </div>
           ))}
@@ -1350,7 +1350,7 @@ export default function USPortalLeadDetailPage() {
 
       {/* Stage Advancement */}
       {currentStep > 0 && currentStep < 4 && deal.stage !== 'closed_lost' && (
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-3">
           <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
           <button
             onClick={async () => {
@@ -1366,7 +1366,7 @@ export default function USPortalLeadDetailPage() {
                 console.error('Stage advance failed:', err)
               }
             }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#17C5B0]/30 text-[#17C5B0] text-sm font-medium rounded-lg hover:bg-[#17C5B0]/10 transition-all"
           >
             <ChevronRight size={16} /> Advance to Next Stage
           </button>
@@ -1375,24 +1375,24 @@ export default function USPortalLeadDetailPage() {
 
       {/* Create Customer Account Login (visible at step 3+) */}
       {currentStep >= 3 && (
-        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
+        <div className="bg-[#111113] border border-[#17C5B0]/30 rounded-xl p-5 space-y-3">
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <h2 className="text-sm font-semibold text-[#00d4aa]">Create Customer Account Login</h2>
+            <CheckCircle2 size={16} className="text-[#17C5B0]" />
+            <h2 className="text-sm font-semibold text-[#17C5B0]">Create Customer Account Login</h2>
           </div>
-          <p className="text-xs text-[#6b7a74]">
+          <p className="text-xs text-[#A1A1A8]">
             Generate a login for {deal.contact_name} to access the Meridian customer portal. They'll be guided through a walkthrough to verify their POS connection, set up cameras, and explore their dashboard.
           </p>
 
           {customerCredentials ? (
             <div className="space-y-3">
-              <div className="p-4 rounded-lg bg-[#0a0f0d] border border-[#1a2420] space-y-2">
+              <div className="p-4 rounded-lg bg-[#0A0A0B] border border-[#1F1F23] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#6b7a74]">Email</span>
+                  <span className="text-xs text-[#A1A1A8]">Email</span>
                   <span className="text-sm text-white font-mono">{customerCredentials.email}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#6b7a74]">Password</span>
+                  <span className="text-xs text-[#A1A1A8]">Password</span>
                   <span className="text-sm text-white font-mono">{customerCredentials.password}</span>
                 </div>
                 <p className="text-[10px] text-[#4a5550] mt-1">Share these credentials with the customer. They can change their password after first login.</p>
@@ -1400,7 +1400,7 @@ export default function USPortalLeadDetailPage() {
               <button
                 onClick={handleEmailCredentials}
                 disabled={credentialEmailing || credentialEmailed}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 disabled:opacity-50 transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#17C5B0]/30 text-[#17C5B0] text-sm font-medium rounded-lg hover:bg-[#17C5B0]/10 disabled:opacity-50 transition-all"
               >
                 {credentialEmailing ? (
                   <><Loader2 size={16} className="animate-spin" /> Sending...</>
@@ -1421,7 +1421,7 @@ export default function USPortalLeadDetailPage() {
               <button
                 onClick={handleCreateCustomerAccount}
                 disabled={customerCreating}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all"
               >
                 {customerCreating ? (
                   <><Loader2 size={16} className="animate-spin" /> Creating Account...</>
@@ -1436,12 +1436,12 @@ export default function USPortalLeadDetailPage() {
 
       {/* Customer Walkthrough status */}
       {deal.stage === 'customer_walkthrough' && (
-        <div className="bg-[#0f1512] border border-[#00d4aa]/20 rounded-xl p-5 space-y-2">
+        <div className="bg-[#111113] border border-[#17C5B0]/20 rounded-xl p-5 space-y-2">
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <h2 className="text-sm font-semibold text-[#00d4aa]">Active Deal — Customer Onboarding</h2>
+            <CheckCircle2 size={16} className="text-[#17C5B0]" />
+            <h2 className="text-sm font-semibold text-[#17C5B0]">Active Deal — Customer Onboarding</h2>
           </div>
-          <p className="text-xs text-[#6b7a74]">
+          <p className="text-xs text-[#A1A1A8]">
             This deal is active. The customer has been set up and is going through their onboarding walkthrough.
           </p>
         </div>

@@ -33,12 +33,12 @@ export default function USSalesPortalMobileNav() {
       {moreOpen && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm lg:hidden" onClick={() => setMoreOpen(false)}>
           <div
-            className="absolute bottom-0 left-0 right-0 bg-[#0a0f0d] border-t border-[#1a2420] rounded-t-2xl pb-[max(env(safe-area-inset-bottom),16px)]"
+            className="absolute bottom-0 left-0 right-0 bg-[#0A0A0B] border-t border-[#1F1F23] rounded-t-2xl pb-[max(env(safe-area-inset-bottom),16px)]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#1a2420]">
+            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#1F1F23]">
               <span className="text-sm font-semibold text-white">More</span>
-              <button onClick={() => setMoreOpen(false)} className="p-2 rounded-full bg-[#1a2420] text-[#6b7a74]">
+              <button onClick={() => setMoreOpen(false)} className="p-2 rounded-full bg-[#1F1F23] text-[#A1A1A8]">
                 <X size={16} />
               </button>
             </div>
@@ -51,7 +51,7 @@ export default function USSalesPortalMobileNav() {
                     to={item.path}
                     className={({ isActive }) => clsx(
                       'flex flex-col items-center gap-1.5 py-4 rounded-xl transition-colors min-h-[72px] justify-center',
-                      isActive ? 'bg-[#00d4aa]/10 text-[#00d4aa]' : 'text-[#6b7a74] active:bg-[#1a2420]',
+                      isActive ? 'bg-[#17C5B0]/10 text-[#17C5B0]' : 'text-[#A1A1A8] active:bg-[#1F1F23]',
                     )}
                   >
                     <Icon size={22} />
@@ -64,7 +64,7 @@ export default function USSalesPortalMobileNav() {
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0a0f0d]/95 backdrop-blur-lg border-t border-[#1a2420]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]">
         <div className="flex items-stretch justify-around px-2 pb-[max(env(safe-area-inset-bottom),4px)]">
           {PRIMARY_TABS.map(item => {
             const Icon = item.icon
@@ -74,7 +74,7 @@ export default function USSalesPortalMobileNav() {
                 to={item.path}
                 className={({ isActive }) => clsx(
                   'flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-[64px] min-h-[50px] transition-colors',
-                  isActive ? 'text-[#00d4aa]' : 'text-[#6b7a74]/60',
+                  isActive ? 'text-[#17C5B0]' : 'text-[#A1A1A8]/60',
                 )}
               >
                 <Icon size={20} strokeWidth={1.8} />
@@ -86,7 +86,7 @@ export default function USSalesPortalMobileNav() {
             onClick={() => setMoreOpen(true)}
             className={clsx(
               'flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-[64px] min-h-[50px] transition-colors',
-              isMoreActive ? 'text-[#00d4aa]' : 'text-[#6b7a74]/60',
+              isMoreActive ? 'text-[#17C5B0]' : 'text-[#A1A1A8]/60',
             )}
           >
             <MoreHorizontal size={20} strokeWidth={1.8} />

@@ -580,22 +580,22 @@ export default function USPortalTrainingPage() {
   let globalStep = 0
 
   return (
-    <div className="min-h-screen bg-[#0a0f0d] space-y-6 p-1">
+    <div className="min-h-screen bg-[#0A0A0B] space-y-6 p-1">
       <div>
         <h1 className="text-xl font-bold text-white">Training</h1>
-        <p className="text-sm text-[#6b7a74] mt-0.5">Level up your sales skills with guided modules.</p>
+        <p className="text-sm text-[#A1A1A8] mt-0.5">Level up your sales skills with guided modules.</p>
       </div>
 
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <BarChart3 size={16} className="text-[#00d4aa]" />
+            <BarChart3 size={16} className="text-[#17C5B0]" />
             <span className="text-sm font-semibold text-white">Your Progress</span>
           </div>
-          <span className="text-sm font-bold text-[#00d4aa]">{progressPct}%</span>
+          <span className="text-sm font-bold text-[#17C5B0]">{progressPct}%</span>
         </div>
-        <div className="w-full h-2 bg-[#1a2420] rounded-full overflow-hidden">
-          <div className="h-full bg-[#00d4aa] rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
+        <div className="w-full h-2 bg-[#1F1F23] rounded-full overflow-hidden">
+          <div className="h-full bg-[#17C5B0] rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }} />
         </div>
         <p className="text-[10px] text-[#4a5550] mt-2">{completedCount} of {totalLessons} lessons completed</p>
       </div>
@@ -606,7 +606,7 @@ export default function USPortalTrainingPage() {
           <div key={section.title} className="space-y-3">
             <div className="mb-2">
               <h2 className="text-[14px] font-semibold text-white">{section.title}</h2>
-              <p className="text-[11px] text-[#6b7a74] mt-0.5">{section.description}</p>
+              <p className="text-[11px] text-[#A1A1A8] mt-0.5">{section.description}</p>
             </div>
 
             {sectionModules.map(mod => {
@@ -617,24 +617,24 @@ export default function USPortalTrainingPage() {
               const Icon = mod.icon
 
               return (
-                <div key={mod.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl overflow-hidden">
+                <div key={mod.id} className="bg-[#111113] border border-[#1F1F23] rounded-xl overflow-hidden">
                   <button
                     onClick={() => setExpandedModuleId(isExpanded ? null : mod.id)}
-                    className="w-full px-4 sm:px-5 py-4 flex items-center gap-3 text-left hover:bg-[#0f1512]/80 transition-colors"
+                    className="w-full px-4 sm:px-5 py-4 flex items-center gap-3 text-left hover:bg-[#111113]/80 transition-colors"
                   >
-                    <div className="w-7 h-7 rounded-full bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-[11px] font-bold text-[#00d4aa]">{stepNum}</span>
+                    <div className="w-7 h-7 rounded-full bg-[#17C5B0]/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[11px] font-bold text-[#17C5B0]">{stepNum}</span>
                     </div>
-                    <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center flex-shrink-0">
-                      <Icon size={16} className="text-[#00d4aa]" />
+                    <div className="w-9 h-9 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 flex items-center justify-center flex-shrink-0">
+                      <Icon size={16} className="text-[#17C5B0]" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[12px] font-semibold text-white">{mod.title}</p>
-                      <p className="text-[10px] text-[#6b7a74] truncate mt-0.5">{mod.description}</p>
+                      <p className="text-[10px] text-[#A1A1A8] truncate mt-0.5">{mod.description}</p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="text-right">
-                        <p className="text-[10px] font-medium text-[#6b7a74]">{modCompleted}/{mod.lessons.length}</p>
+                        <p className="text-[10px] font-medium text-[#A1A1A8]">{modCompleted}/{mod.lessons.length}</p>
                         <p className="text-[9px] text-[#4a5550]">{mod.duration}</p>
                       </div>
                       <ChevronRight size={14} className={clsx('text-[#4a5550] transition-transform', isExpanded && 'rotate-90')} />
@@ -642,31 +642,31 @@ export default function USPortalTrainingPage() {
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-[#1a2420]">
+                    <div className="border-t border-[#1F1F23]">
                       {mod.lessons.map((lesson, i) => {
                         const isLessonOpen = expandedLessonId === lesson.id
                         const isComplete = completedLessons.has(lesson.id)
                         return (
-                          <div key={lesson.id} className={clsx(i < mod.lessons.length - 1 && 'border-b border-[#1a2420]/50')}>
+                          <div key={lesson.id} className={clsx(i < mod.lessons.length - 1 && 'border-b border-[#1F1F23]/50')}>
                             <button
                               onClick={() => setExpandedLessonId(isLessonOpen ? null : lesson.id)}
-                              className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-[#1a2420]/30 transition-colors"
+                              className="w-full px-5 py-3 flex items-center gap-3 text-left hover:bg-[#1F1F23]/30 transition-colors"
                             >
                               <button
                                 onClick={(e) => { e.stopPropagation(); toggleComplete(lesson.id) }}
                                 className="flex-shrink-0"
                               >
                                 {isComplete ? (
-                                  <CheckCircle2 size={16} className="text-[#00d4aa]" />
+                                  <CheckCircle2 size={16} className="text-[#17C5B0]" />
                                 ) : (
-                                  <div className="w-4 h-4 rounded-full border border-[#2a3a34] hover:border-[#00d4aa]/50 transition-colors" />
+                                  <div className="w-4 h-4 rounded-full border border-[#2a3a34] hover:border-[#17C5B0]/50 transition-colors" />
                                 )}
                               </button>
-                              <span className={clsx('text-[11px] font-medium flex-1', isComplete ? 'text-[#6b7a74]' : 'text-white')}>
+                              <span className={clsx('text-[11px] font-medium flex-1', isComplete ? 'text-[#A1A1A8]' : 'text-white')}>
                                 {lesson.title}
                               </span>
                               {isLessonOpen ? (
-                                <ChevronDown size={12} className="text-[#00d4aa] flex-shrink-0" />
+                                <ChevronDown size={12} className="text-[#17C5B0] flex-shrink-0" />
                               ) : (
                                 <ChevronRight size={12} className="text-[#4a5550] flex-shrink-0" />
                               )}
@@ -680,7 +680,7 @@ export default function USPortalTrainingPage() {
                                 {!isComplete && (
                                   <button
                                     onClick={() => toggleComplete(lesson.id)}
-                                    className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20 text-[#00d4aa] text-[11px] font-medium hover:bg-[#00d4aa]/20 transition-colors"
+                                    className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[#17C5B0] text-[11px] font-medium hover:bg-[#17C5B0]/20 transition-colors"
                                   >
                                     <CheckCircle2 size={12} /> Mark Complete
                                   </button>

@@ -50,7 +50,7 @@ function normalizeRate(v: number): number {
   return v <= 1 ? Math.round(v * 100) : v
 }
 
-const AVATAR_COLORS = ['#00d4aa', '#7c3aed', '#f59e0b', '#1a8fd6']
+const AVATAR_COLORS = ['#17C5B0', '#7c3aed', '#f59e0b', '#1a8fd6']
 const AVG_LIFETIME_MONTHS = 18
 
 function formatUsd(amount: number): string {
@@ -73,11 +73,11 @@ function getRoleBadge(role: string) {
     case 'admin':
       return { text: 'Admin', bg: 'bg-[#7c3aed]/10', textColor: 'text-[#7c3aed]', border: 'border-[#7c3aed]/20' }
     case 'active':
-      return { text: 'Active', bg: 'bg-[#00d4aa]/10', textColor: 'text-[#00d4aa]', border: 'border-[#00d4aa]/20' }
+      return { text: 'Active', bg: 'bg-[#17C5B0]/10', textColor: 'text-[#17C5B0]', border: 'border-[#17C5B0]/20' }
     case 'onboarding':
       return { text: 'Onboarding', bg: 'bg-[#f59e0b]/10', textColor: 'text-[#f59e0b]', border: 'border-[#f59e0b]/20' }
     default:
-      return { text: 'Inactive', bg: 'bg-[#6b7a74]/10', textColor: 'text-[#6b7a74]', border: 'border-[#6b7a74]/20' }
+      return { text: 'Inactive', bg: 'bg-[#A1A1A8]/10', textColor: 'text-[#A1A1A8]', border: 'border-[#A1A1A8]/20' }
   }
 }
 
@@ -300,8 +300,8 @@ export default function USPortalTeamPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">M</span>
+        <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
+          <span className="text-[#17C5B0] font-bold text-sm">M</span>
         </div>
       </div>
     )
@@ -312,54 +312,54 @@ export default function USPortalTeamPage() {
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-white">Team Management</h1>
-        <p className="text-sm text-[#6b7a74] mt-0.5">Manage your sales reps, commissions, and payouts.</p>
+        <p className="text-sm text-[#A1A1A8] mt-0.5">Manage your sales reps, commissions, and payouts.</p>
       </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-              <Users size={16} className="text-[#00d4aa]" />
+            <div className="w-9 h-9 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center">
+              <Users size={16} className="text-[#17C5B0]" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Reps</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#A1A1A8]">Total Reps</p>
               <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
               <p className="text-[10px] text-[#4a5550]">{totalActive} active{totalOnboarding > 0 ? ` / ${totalOnboarding} onboarding` : ''}</p>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
               <Target size={16} className="text-[#f59e0b]" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Pipeline</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#A1A1A8]">Pipeline</p>
               <p className="text-lg font-bold text-white">{openDeals.length} deals</p>
               <p className="text-[10px] text-[#4a5550]">{formatUsd(pipelineMrr)}/mo MRR</p>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#7c3aed]/10 flex items-center justify-center">
               <DollarSign size={16} className="text-[#7c3aed]" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Commissions</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#A1A1A8]">Total Commissions</p>
               <p className="text-lg font-bold text-white">{formatUsd(totalCommission)}</p>
               <p className="text-[10px] text-[#4a5550]">{formatUsd(totalPaid)} paid · {formatUsd(monthlyCommissionOwed)}/mo rate</p>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
               <CreditCard size={16} className="text-[#f59e0b]" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Balance Owed</p>
+              <p className="text-[10px] uppercase tracking-wider text-[#A1A1A8]">Balance Owed</p>
               <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-[#f59e0b]' : 'text-white')}>
                 {formatUsd(balanceOwed)}
               </p>
@@ -370,23 +370,23 @@ export default function USPortalTeamPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-[#0f1512] border border-[#1a2420] rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-[#111113] border border-[#1F1F23] rounded-xl p-1 w-fit">
         <button
           onClick={() => setActiveTab('reps')}
-          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
+          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-[#1F1F23] text-white' : 'text-[#A1A1A8] hover:text-white')}
         >
           Sales Reps
         </button>
         <button
           onClick={() => setActiveTab('leaderboard')}
-          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'text-[#6b7a74] hover:text-white')}
+          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'text-[#A1A1A8] hover:text-white')}
         >
           Leaderboard
         </button>
         {admin && (
           <button
             onClick={() => setActiveTab('payouts')}
-            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'payouts' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'payouts' ? 'bg-[#1F1F23] text-white' : 'text-[#A1A1A8] hover:text-white')}
           >
             Payouts
           </button>
@@ -394,11 +394,11 @@ export default function USPortalTeamPage() {
         {admin && (
           <button
             onClick={() => setActiveTab('applications')}
-            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors relative', activeTab === 'applications' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors relative', activeTab === 'applications' ? 'bg-[#1F1F23] text-white' : 'text-[#A1A1A8] hover:text-white')}
           >
             Applications
             {applicants.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#f59e0b] text-[#0a0f0d] text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#f59e0b] text-[#0A0A0B] text-[9px] font-bold flex items-center justify-center">
                 {applicants.length}
               </span>
             )}
@@ -410,10 +410,10 @@ export default function USPortalTeamPage() {
       {activeTab === 'reps' && (
         <>
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a74]/60" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#A1A1A8]/60" />
             <input
               type="text" value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 bg-[#0f1512] border border-[#1a2420] rounded-xl text-sm text-white placeholder-[#4a5550] focus:outline-none focus:border-[#00d4aa]/50"
+              className="w-full pl-9 pr-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-xl text-sm text-white placeholder-[#4a5550] focus:outline-none focus:border-[#17C5B0]/50"
               placeholder="Search team members..."
             />
           </div>
@@ -425,7 +425,7 @@ export default function USPortalTeamPage() {
               const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
 
               return (
-                <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                <div key={member.id} className="bg-[#111113] border border-[#1F1F23] rounded-xl px-5 py-4">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
                       <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
@@ -438,7 +438,7 @@ export default function USPortalTeamPage() {
                           {badge.text}
                         </span>
                       </div>
-                      {admin && <p className="text-xs text-[#6b7a74] mt-0.5">{member.email}</p>}
+                      {admin && <p className="text-xs text-[#A1A1A8] mt-0.5">{member.email}</p>}
                       <p className="text-[10px] text-[#4a5550]">{member.location}</p>
                     </div>
 
@@ -452,7 +452,7 @@ export default function USPortalTeamPage() {
                         <>
                           <div>
                             <p className="text-[10px] text-[#4a5550]">MRR</p>
-                            <p className="text-xs font-bold text-[#00d4aa]">{formatUsd(member.total_mrr)}</p>
+                            <p className="text-xs font-bold text-[#17C5B0]">{formatUsd(member.total_mrr)}</p>
                           </div>
                           <div>
                             <p className="text-[10px] text-[#4a5550]">Comm/mo</p>
@@ -471,7 +471,7 @@ export default function USPortalTeamPage() {
                     {admin && (
                       <button
                         onClick={() => { setEditingMember(member); setEditRate(String(member.commission_rate)); setEditName(member.name) }}
-                        className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] transition-colors"
                       >
                         <MoreVertical size={14} />
                       </button>
@@ -497,7 +497,7 @@ export default function USPortalTeamPage() {
                 <span className="px-2 py-0.5 rounded-full bg-[#7c3aed]/20 text-[#a855f7] text-[10px] font-bold border border-[#7c3aed]/30 animate-pulse">ACTIVE INCENTIVE</span>
               </div>
               <p className="text-xs text-[#a1a1a8] mt-1.5 leading-relaxed">Top performing rep by <span className="text-white font-medium">December 31, 2026</span> wins an Apple Vision Pro. Ranked by total MRR signed.</p>
-              <div className="mt-3 flex items-center gap-4 text-[10px] text-[#6b7a74]">
+              <div className="mt-3 flex items-center gap-4 text-[10px] text-[#A1A1A8]">
                 <span className="flex items-center gap-1"><Clock size={10} /> Ends: Dec 31, 2026</span>
                 <span className="flex items-center gap-1"><Award size={10} /> $5,499 value</span>
                 <span className="flex items-center gap-1"><Trophy size={10} /> Top MRR wins</span>
@@ -512,12 +512,12 @@ export default function USPortalTeamPage() {
               .map((member, idx) => {
                 const avatarColor = getAvatarColor(member.name)
                 const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
-                const rankIcon = idx === 0 ? <Crown size={16} className="text-[#f59e0b]" /> : idx === 1 ? <Medal size={16} className="text-[#c0c0c0]" /> : idx === 2 ? <Medal size={16} className="text-[#cd7f32]" /> : <span className="text-xs text-[#6b7a74] font-bold w-4 text-center">{idx + 1}</span>
+                const rankIcon = idx === 0 ? <Crown size={16} className="text-[#f59e0b]" /> : idx === 1 ? <Medal size={16} className="text-[#c0c0c0]" /> : idx === 2 ? <Medal size={16} className="text-[#cd7f32]" /> : <span className="text-xs text-[#A1A1A8] font-bold w-4 text-center">{idx + 1}</span>
 
                 return (
                   <div key={member.id} className={clsx(
-                    'bg-[#0f1512] border rounded-xl px-5 py-4 transition-all',
-                    idx === 0 ? 'border-[#f59e0b]/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]' : 'border-[#1a2420]'
+                    'bg-[#111113] border rounded-xl px-5 py-4 transition-all',
+                    idx === 0 ? 'border-[#f59e0b]/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]' : 'border-[#1F1F23]'
                   )}>
                     <div className="flex items-center gap-4">
                       <div className="w-8 flex items-center justify-center flex-shrink-0">
@@ -531,7 +531,7 @@ export default function USPortalTeamPage() {
                           <p className="text-sm font-semibold text-white">{member.name}</p>
                           {idx === 0 && <Trophy size={12} className="text-[#f59e0b]" />}
                         </div>
-                        <p className="text-[10px] text-[#6b7a74]">{member.location}</p>
+                        <p className="text-[10px] text-[#A1A1A8]">{member.location}</p>
                       </div>
                       <div className="flex items-center gap-6 text-center">
                         <div>
@@ -540,7 +540,7 @@ export default function USPortalTeamPage() {
                         </div>
                         <div>
                           <p className="text-[10px] text-[#4a5550]">MRR</p>
-                          <p className="text-sm font-bold text-[#00d4aa]">{formatUsd(member.total_mrr)}</p>
+                          <p className="text-sm font-bold text-[#17C5B0]">{formatUsd(member.total_mrr)}</p>
                         </div>
                         {admin && (
                           <div>
@@ -560,8 +560,8 @@ export default function USPortalTeamPage() {
           </div>
 
           {/* Leaderboard Rules */}
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
-            <h3 className="text-xs font-semibold text-[#6b7a74] uppercase tracking-wider mb-3">How Rankings Work</h3>
+          <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5">
+            <h3 className="text-xs font-semibold text-[#A1A1A8] uppercase tracking-wider mb-3">How Rankings Work</h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-[11px] text-[#4a5550]">
               <div>
                 <p className="text-white font-medium mb-1">Primary: Total MRR</p>
@@ -592,14 +592,14 @@ export default function USPortalTeamPage() {
                 const avatarColor = getAvatarColor(member.name)
 
                 return (
-                  <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                  <div key={member.id} className="bg-[#111113] border border-[#1F1F23] rounded-xl px-5 py-4">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
                         <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{member.name}</p>
-                        <p className="text-[10px] text-[#6b7a74]">
+                        <p className="text-[10px] text-[#A1A1A8]">
                           {member.deals_won} signed · {member.commission_rate}% rate · {formatUsd(member.total_mrr)} MRR · {formatUsd(monthlyComm)}/mo comm
                         </p>
                         <p className="text-[10px] text-[#4a5550]">
@@ -607,7 +607,7 @@ export default function USPortalTeamPage() {
                         </p>
                       </div>
                       {owed <= 0 ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#00d4aa]/10 text-[#00d4aa] border border-[#00d4aa]/20">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20">
                           Paid up &#10003;
                         </span>
                       ) : (
@@ -624,13 +624,13 @@ export default function USPortalTeamPage() {
 
           {/* Formulas Reference — admin only */}
           {admin && (
-            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-[#6b7a74] uppercase tracking-wider mb-3">Commission Formulas</h3>
+            <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5">
+              <h3 className="text-xs font-semibold text-[#A1A1A8] uppercase tracking-wider mb-3">Commission Formulas</h3>
               <div className="space-y-2 text-[11px] font-mono text-[#4a5550]">
                 <p><span className="text-[#7c3aed]">Monthly Comm</span> = Commission Rate % × MRR (CAD)</p>
                 <p><span className="text-[#7c3aed]">Lifetime Est</span> = Commission Rate % × MRR × {AVG_LIFETIME_MONTHS} months</p>
                 <p><span className="text-[#f59e0b]">Balance Owed</span> = Lifetime Est − Total Paid</p>
-                <p><span className="text-[#00d4aa]">Pipeline MRR</span> = Sum of open deal monthly values (CAD)</p>
+                <p><span className="text-[#17C5B0]">Pipeline MRR</span> = Sum of open deal monthly values (CAD)</p>
               </div>
             </div>
           )}
@@ -642,25 +642,25 @@ export default function USPortalTeamPage() {
                 const statusBadge = (() => {
                   switch (comm.status) {
                     case 'paid':
-                      return { text: 'paid', bg: 'bg-[#00d4aa]/10', textColor: 'text-[#00d4aa]', border: 'border-[#00d4aa]/20' }
+                      return { text: 'paid', bg: 'bg-[#17C5B0]/10', textColor: 'text-[#17C5B0]', border: 'border-[#17C5B0]/20' }
                     case 'earned':
                       return { text: 'earned', bg: 'bg-[#7c3aed]/10', textColor: 'text-[#7c3aed]', border: 'border-[#7c3aed]/20' }
                     case 'pending':
                       return { text: 'pending', bg: 'bg-[#f59e0b]/10', textColor: 'text-[#f59e0b]', border: 'border-[#f59e0b]/20' }
                     default:
-                      return { text: comm.status, bg: 'bg-[#6b7a74]/10', textColor: 'text-[#6b7a74]', border: 'border-[#6b7a74]/20' }
+                      return { text: comm.status, bg: 'bg-[#A1A1A8]/10', textColor: 'text-[#A1A1A8]', border: 'border-[#A1A1A8]/20' }
                   }
                 })()
 
                 return (
-                  <div key={comm.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-3">
+                  <div key={comm.id} className="bg-[#111113] border border-[#1F1F23] rounded-xl px-5 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-7 h-7 rounded-full bg-[#7c3aed]/10 flex items-center justify-center flex-shrink-0">
                         <DollarSign size={12} className="text-[#7c3aed]" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-white">{formatUsd(comm.commission_amount)}</p>
-                        <p className="text-[10px] text-[#6b7a74]">
+                        <p className="text-[10px] text-[#A1A1A8]">
                           {comm.client_name}{admin ? ` · ${comm.commission_rate}%` : ''}
                         </p>
                       </div>
@@ -682,19 +682,19 @@ export default function USPortalTeamPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-white">Sales Rep Applications</h3>
-              <p className="text-xs text-[#6b7a74] mt-0.5">New reps who signed up at /us/portal/signup appear here for approval.</p>
+              <p className="text-xs text-[#A1A1A8] mt-0.5">New reps who signed up at /us/portal/signup appear here for approval.</p>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0f1512] border border-[#1a2420] text-[10px] font-medium text-[#6b7a74]">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#111113] border border-[#1F1F23] text-[10px] font-medium text-[#A1A1A8]">
               <UserPlus size={12} /> {applicants.length} pending
             </div>
           </div>
 
           {applicants.length === 0 ? (
-            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-10 text-center">
-              <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                <UserPlus size={20} className="text-[#00d4aa]" />
+            <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-10 text-center">
+              <div className="w-12 h-12 rounded-full bg-[#17C5B0]/10 flex items-center justify-center mx-auto mb-3">
+                <UserPlus size={20} className="text-[#17C5B0]" />
               </div>
-              <p className="text-sm text-[#6b7a74]">No pending applications.</p>
+              <p className="text-sm text-[#A1A1A8]">No pending applications.</p>
               <p className="text-[11px] text-[#4a5550] mt-1">New reps who sign up will appear here for your review.</p>
             </div>
           ) : (
@@ -702,14 +702,14 @@ export default function USPortalTeamPage() {
               {applicants.map(applicant => {
                 const avatarColor = getAvatarColor(applicant.name)
                 return (
-                  <div key={applicant.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                  <div key={applicant.id} className="bg-[#111113] border border-[#1F1F23] rounded-xl px-5 py-4">
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
                         <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(applicant.name)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{applicant.name}</p>
-                        <p className="text-xs text-[#6b7a74]">{applicant.email}</p>
+                        <p className="text-xs text-[#A1A1A8]">{applicant.email}</p>
                         {applicant.phone && <p className="text-[10px] text-[#4a5550]">{applicant.phone}</p>}
                         <div className="flex items-center gap-1.5 mt-1 text-[10px] text-[#4a5550]">
                           <Clock size={10} /> Applied {applicant.applied_at}
@@ -718,7 +718,7 @@ export default function USPortalTeamPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleApproveApplicant(applicant)}
-                          className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-[#00d4aa] text-[#0a0f0d] rounded-lg hover:bg-[#00d4aa]/90 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-[#17C5B0] text-[#0A0A0B] rounded-lg hover:bg-[#17C5B0]/90 transition-colors"
                         >
                           <CheckCircle2 size={12} /> Approve
                         </button>
@@ -741,22 +741,22 @@ export default function USPortalTeamPage() {
       {/* Admin Payout Editor Modal */}
       {editingMember && admin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+          <div className="w-full max-w-sm bg-[#111113] border border-[#1F1F23] rounded-xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-semibold text-white">Edit Team Member</h3>
-              <button onClick={() => setEditingMember(null)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
-                <X size={18} className="text-[#6b7a74]" />
+              <button onClick={() => setEditingMember(null)} className="p-1.5 rounded-lg hover:bg-[#1F1F23] transition-colors">
+                <X size={18} className="text-[#A1A1A8]" />
               </button>
             </div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Display Name</label>
+            <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Display Name</label>
             <input
               type="text" value={editName} onChange={e => setEditName(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white focus:outline-none focus:border-[#00d4aa]/50 mb-4"
+              className="w-full px-3 py-2 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-sm text-white focus:outline-none focus:border-[#17C5B0]/50 mb-4"
             />
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate (%)</label>
+            <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Commission Rate (%)</label>
             <input
               type="number" min={0} max={100} value={editRate} onChange={e => setEditRate(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white focus:outline-none focus:border-[#00d4aa]/50"
+              className="w-full px-3 py-2 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-sm text-white focus:outline-none focus:border-[#17C5B0]/50"
             />
             <button
               onClick={() => editingMember && handleRemoveMember(editingMember)}
@@ -766,7 +766,7 @@ export default function USPortalTeamPage() {
               <Trash2 size={12} /> {removing ? 'Removing...' : 'Remove from Team'}
             </button>
             <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
+              <button onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-[#A1A1A8] hover:text-white transition-colors">Cancel</button>
               <button
                 onClick={async () => {
                   const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
@@ -791,7 +791,7 @@ export default function USPortalTeamPage() {
                   setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
                   setEditingMember(null)
                 }}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
               >
                 <Save size={14} /> Save
               </button>

@@ -89,8 +89,8 @@ export default function USPortalSignupPage() {
                 if (/[0-9]/.test(password)) strength++
                 if (/[^A-Za-z0-9]/.test(password)) strength++
                 const level = strength <= 1 ? 'Weak' : strength <= 2 ? 'Fair' : strength <= 3 ? 'Good' : 'Strong'
-                const color = strength <= 1 ? 'bg-red-500' : strength <= 2 ? 'bg-[#f59e0b]' : strength <= 3 ? 'bg-[#17C5B0]' : 'bg-[#00d4aa]'
-                const textColor = strength <= 1 ? 'text-red-400' : strength <= 2 ? 'text-[#f59e0b]' : strength <= 3 ? 'text-[#17C5B0]' : 'text-[#00d4aa]'
+                const color = strength <= 1 ? 'bg-red-500' : strength <= 2 ? 'bg-[#f59e0b]' : strength <= 3 ? 'bg-[#17C5B0]' : 'bg-[#17C5B0]'
+                const textColor = strength <= 1 ? 'text-red-400' : strength <= 2 ? 'text-[#f59e0b]' : strength <= 3 ? 'text-[#17C5B0]' : 'text-[#17C5B0]'
                 return (
                   <div className="mt-2">
                     <div className="flex gap-1">

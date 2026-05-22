@@ -43,20 +43,20 @@ function StepPill({ step }: { step: number }) {
   }
   if (step === 1) {
     return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border border-[#4a5550] text-[#6b7a74]">
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border border-[#4a5550] text-[#A1A1A8]">
         {STEP_LABELS[step]}
       </span>
     )
   }
   if (step <= 3) {
     return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#00d4aa]/15 text-[#00d4aa]">
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#17C5B0]/15 text-[#17C5B0]">
         {STEP_LABELS[step]}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#00d4aa]/20 text-[#00d4aa] font-semibold">
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#17C5B0]/20 text-[#17C5B0] font-semibold">
       {STEP_LABELS[step]}
     </span>
   )
@@ -88,11 +88,11 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
       {[1, 2, 3, 4].map(seg => {
         let cls = 'h-1 flex-1 rounded-full '
         if (seg < currentStep) {
-          cls += 'bg-[#00d4aa]'
+          cls += 'bg-[#17C5B0]'
         } else if (seg === currentStep) {
-          cls += 'bg-[#00d4aa] animate-pulse'
+          cls += 'bg-[#17C5B0] animate-pulse'
         } else {
-          cls += 'bg-[#1a2420]'
+          cls += 'bg-[#1F1F23]'
         }
         return <div key={seg} className={cls} />
       })}
@@ -189,13 +189,13 @@ export default function USPortalLeadsPage() {
     }
   }
 
-  const inputClass = 'w-full px-3 py-2 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
+  const inputClass = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-white placeholder-[#A1A1A8] focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">S</span>
+        <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
+          <span className="text-[#17C5B0] font-bold text-sm">S</span>
         </div>
       </div>
     )
@@ -207,13 +207,13 @@ export default function USPortalLeadsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-white">Leads</h1>
-          <p className="text-sm text-[#6b7a74] mt-0.5">
+          <p className="text-sm text-[#A1A1A8] mt-0.5">
             {leads.length} leads &middot; {activeDeals.length} active
           </p>
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 px-3.5 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+          className="flex items-center gap-2 px-3.5 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
         >
           <Plus size={16} /> New Lead
         </button>
@@ -230,11 +230,11 @@ export default function USPortalLeadsPage() {
       )}
 
       {/* Tab Toggle */}
-      <div className="flex gap-1 p-1 bg-[#0f1512] border border-[#1a2420] rounded-xl w-fit">
+      <div className="flex gap-1 p-1 bg-[#111113] border border-[#1F1F23] rounded-xl w-fit">
         <button
           onClick={() => setTab('leads')}
           className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-            tab === 'leads' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
+            tab === 'leads' ? 'bg-[#1F1F23] text-white' : 'text-[#A1A1A8] hover:text-white'
           }`}
         >
           Leads ({leads.length})
@@ -242,7 +242,7 @@ export default function USPortalLeadsPage() {
         <button
           onClick={() => setTab('active')}
           className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-            tab === 'active' ? 'bg-[#00d4aa]/20 text-[#00d4aa] border border-[#00d4aa]/30' : 'text-[#6b7a74] hover:text-white'
+            tab === 'active' ? 'bg-[#17C5B0]/20 text-[#17C5B0] border border-[#17C5B0]/30' : 'text-[#A1A1A8] hover:text-white'
           }`}
         >
           Active Deals ({activeDeals.length})
@@ -251,12 +251,12 @@ export default function USPortalLeadsPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7a74]" />
+        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#A1A1A8]" />
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full pl-11 pr-4 py-3 bg-[#0f1512] border border-[#1a2420] rounded-xl text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 transition-colors"
+          className="w-full pl-11 pr-4 py-3 bg-[#111113] border border-[#1F1F23] rounded-xl text-sm text-white placeholder-[#A1A1A8] focus:outline-none focus:border-[#17C5B0]/50 transition-colors"
           placeholder="Search leads..."
         />
       </div>
@@ -264,11 +264,11 @@ export default function USPortalLeadsPage() {
       {/* New Lead Modal */}
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+          <div className="w-full max-w-lg bg-[#111113] border border-[#1F1F23] rounded-xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-semibold text-white">Add New Lead</h3>
-              <button onClick={() => setShowNew(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
-                <X size={18} className="text-[#6b7a74]" />
+              <button onClick={() => setShowNew(false)} className="p-1.5 rounded-lg hover:bg-[#1F1F23] transition-colors">
+                <X size={18} className="text-[#A1A1A8]" />
               </button>
             </div>
             <form onSubmit={handleAddDeal} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -302,8 +302,8 @@ export default function USPortalLeadsPage() {
               <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
               {addError && <p className="sm:col-span-2 text-sm text-red-400">{addError}</p>}
               <div className="sm:col-span-2 flex justify-end gap-2 mt-2">
-                <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
-                <button type="submit" disabled={adding} className="px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all disabled:opacity-50">{adding ? 'Adding...' : 'Add Lead'}</button>
+                <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#A1A1A8] hover:text-white transition-colors">Cancel</button>
+                <button type="submit" disabled={adding} className="px-4 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all disabled:opacity-50">{adding ? 'Adding...' : 'Add Lead'}</button>
               </div>
             </form>
           </div>
@@ -320,15 +320,15 @@ export default function USPortalLeadsPage() {
             <Link
               key={deal.id}
               to={`/us/portal/leads/${deal.id}`}
-              className="block bg-[#0f1512] border border-[#1a2420] rounded-xl p-4 hover:border-[#00d4aa]/30 transition-all group"
+              className="block bg-[#111113] border border-[#1F1F23] rounded-xl p-4 hover:border-[#17C5B0]/30 transition-all group"
             >
               <div className="flex items-center gap-3">
                 {/* Icon */}
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#1a2420] flex items-center justify-center">
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#1F1F23] flex items-center justify-center">
                   {isConnected ? (
-                    <Wifi size={18} className="text-[#00d4aa]" />
+                    <Wifi size={18} className="text-[#17C5B0]" />
                   ) : (
-                    <Store size={18} className="text-[#6b7a74]" />
+                    <Store size={18} className="text-[#A1A1A8]" />
                   )}
                 </div>
 
@@ -337,7 +337,7 @@ export default function USPortalLeadsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-white truncate">{deal.business_name}</span>
                     {deal.vertical && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a2420] text-[#6b7a74] font-medium">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1F1F23] text-[#A1A1A8] font-medium">
                         {deal.vertical}
                       </span>
                     )}
@@ -346,7 +346,7 @@ export default function USPortalLeadsPage() {
                     </span>
                     {!isConnected && <StaleBadge days={daysSinceUpdate} />}
                   </div>
-                  <p className="text-xs text-[#6b7a74] mt-0.5 truncate">
+                  <p className="text-xs text-[#A1A1A8] mt-0.5 truncate">
                     {deal.contact_name}
                     {daysSinceUpdate >= 3 && !isConnected && (
                       <span className="text-[#f59e0b] ml-2">Follow up needed</span>
@@ -357,7 +357,7 @@ export default function USPortalLeadsPage() {
                 {/* Step pill + arrow */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <StepPill step={step} />
-                  <ChevronRight size={16} className="text-[#4a5550] group-hover:text-[#6b7a74] transition-colors" />
+                  <ChevronRight size={16} className="text-[#4a5550] group-hover:text-[#A1A1A8] transition-colors" />
                 </div>
               </div>
 
@@ -375,7 +375,7 @@ export default function USPortalLeadsPage() {
           </div>
         )}
         {!listError && displayed.length === 0 && (
-          <div className="text-center py-16 text-sm text-[#6b7a74]">
+          <div className="text-center py-16 text-sm text-[#A1A1A8]">
             No leads found. {search ? 'Try adjusting your search.' : 'Click "New Lead" to add one.'}
           </div>
         )}

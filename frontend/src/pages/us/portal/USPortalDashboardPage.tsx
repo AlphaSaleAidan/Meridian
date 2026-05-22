@@ -130,8 +130,8 @@ export default function USPortalDashboardPage() {
   if (loading || !overview) {
     return (
       <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">M</span>
+        <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
+          <span className="text-[#17C5B0] font-bold text-sm">M</span>
         </div>
       </div>
     )
@@ -163,7 +163,7 @@ export default function USPortalDashboardPage() {
         <h1 className="text-xl font-bold text-white">
           {getGreeting()}, {rep ? getFirstName(rep.name) : 'there'}.
         </h1>
-        <p className="text-sm text-[#6b7a74] mt-1">{getFormattedDate()}</p>
+        <p className="text-sm text-[#A1A1A8] mt-1">{getFormattedDate()}</p>
       </div>
 
       {/* ── Connection Error Banner ── */}
@@ -192,7 +192,7 @@ export default function USPortalDashboardPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">Application Pending Approval</h3>
-              <p className="text-xs text-[#6b7a74] mt-0.5">Your account is being reviewed by the team. You'll get full access once an admin approves your application.</p>
+              <p className="text-xs text-[#A1A1A8] mt-0.5">Your account is being reviewed by the team. You'll get full access once an admin approves your application.</p>
             </div>
           </div>
         </div>
@@ -200,33 +200,33 @@ export default function USPortalDashboardPage() {
 
       {/* ── First 30 Days Banner ── */}
       {showFirst30Banner && rep?.is_active && (
-        <div className="relative bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 overflow-hidden">
+        <div className="relative bg-[#111113] border border-[#17C5B0]/30 rounded-xl p-5 overflow-hidden">
           <button
             onClick={() => setBannerDismissed(true)}
-            className="absolute top-3 right-3 text-[#6b7a74] hover:text-white transition-colors"
+            className="absolute top-3 right-3 text-[#A1A1A8] hover:text-white transition-colors"
             aria-label="Dismiss"
           >
             <X size={16} />
           </button>
           <div className="flex items-center gap-2 mb-2">
-            <Rocket size={16} className="text-[#00d4aa]" />
-            <span className="text-xs font-semibold text-[#00d4aa] uppercase tracking-wider">Month 1 Goal</span>
+            <Rocket size={16} className="text-[#17C5B0]" />
+            <span className="text-xs font-semibold text-[#17C5B0] uppercase tracking-wider">Month 1 Goal</span>
           </div>
           <p className="text-sm text-white mb-3">
             Target: <span className="font-semibold text-[#f0b429]">$2,500</span> MRR
-            <span className="mx-2 text-[#6b7a74]">|</span>
+            <span className="mx-2 text-[#A1A1A8]">|</span>
             Your current MRR: <span className="font-semibold text-[#f0b429]">${mrr.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </p>
-          <div className="w-full h-2 rounded-full bg-[#1a2420] overflow-hidden">
+          <div className="w-full h-2 rounded-full bg-[#1F1F23] overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-700 ease-out"
               style={{
                 width: `${mrrProgress}%`,
-                background: 'linear-gradient(90deg, #00d4aa, #17C5B0)',
+                background: 'linear-gradient(90deg, #17C5B0, #17C5B0)',
               }}
             />
           </div>
-          <p className="text-[11px] text-[#6b7a74] mt-2">
+          <p className="text-[11px] text-[#A1A1A8] mt-2">
             {mrrProgress >= 100
               ? 'Goal reached! Outstanding work.'
               : `${Math.round(mrrProgress)}% of your Month 1 target`}
@@ -240,10 +240,10 @@ export default function USPortalDashboardPage() {
           label="Active Accounts"
           value={String(activeClients.length)}
           subtitle="POS connected & billing"
-          icon={<Users size={18} className="text-[#00d4aa]" />}
-          iconBg="bg-[#00d4aa]/15"
+          icon={<Users size={18} className="text-[#17C5B0]" />}
+          iconBg="bg-[#17C5B0]/15"
           bars={[40, 60, 35, 80, 55, 70]}
-          barColor="#00d4aa"
+          barColor="#17C5B0"
         />
         <StatCard
           label="MRR"
@@ -259,10 +259,10 @@ export default function USPortalDashboardPage() {
           label="In Pipeline"
           value={String(pipelineDeals.length)}
           subtitle={`$${Math.round(pipelineValue).toLocaleString('en-US')}/mo potential`}
-          icon={<TrendingUp size={18} className="text-[#00d4aa]" />}
-          iconBg="bg-[#00d4aa]/15"
+          icon={<TrendingUp size={18} className="text-[#17C5B0]" />}
+          iconBg="bg-[#17C5B0]/15"
           bars={[55, 40, 70, 60, 85, 50]}
-          barColor="#00d4aa"
+          barColor="#17C5B0"
         />
         <StatCard
           label="Commissions"
@@ -278,17 +278,17 @@ export default function USPortalDashboardPage() {
 
       {/* ── Empty State (zero leads) ── */}
       {hasZeroLeads ? (
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl py-16 px-6 text-center">
-          <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center">
-            <Rocket size={28} className="text-[#00d4aa]" />
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-xl py-16 px-6 text-center">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-[#17C5B0]/10 border border-[#17C5B0]/20 flex items-center justify-center">
+            <Rocket size={28} className="text-[#17C5B0]" />
           </div>
           <h2 className="text-lg font-bold text-white mb-2">Your first deal is waiting.</h2>
-          <p className="text-sm text-[#6b7a74] max-w-md mx-auto mb-6">
+          <p className="text-sm text-[#A1A1A8] max-w-md mx-auto mb-6">
             Start building your pipeline by creating your first lead. Track every stage from appointment through onboarding.
           </p>
           <button
             onClick={() => navigate('/us/portal/leads?new=true')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold hover:bg-[#00d4aa]/90 transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold hover:bg-[#17C5B0]/90 transition-colors"
           >
             <Plus size={16} />
             Create Your First Lead
@@ -297,12 +297,12 @@ export default function USPortalDashboardPage() {
       ) : (
         <>
           {/* ── Pipeline Kanban (compact) ── */}
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
-            <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
+          <div className="bg-[#111113] border border-[#1F1F23] rounded-xl">
+            <div className="px-5 py-4 border-b border-[#1F1F23] flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white">Deal Pipeline</h2>
               <Link
                 to="/us/portal/leads"
-                className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
+                className="text-xs text-[#17C5B0] hover:text-[#17C5B0]/80 flex items-center gap-1 transition-colors"
               >
                 View all <ArrowRight size={12} />
               </Link>
@@ -321,7 +321,7 @@ export default function USPortalDashboardPage() {
                           className="w-2 h-2 rounded-full flex-shrink-0"
                           style={{ backgroundColor: cfg.color }}
                         />
-                        <span className="text-xs font-medium text-[#6b7a74] truncate">
+                        <span className="text-xs font-medium text-[#A1A1A8] truncate">
                           {cfg.label}
                         </span>
                         <span
@@ -333,7 +333,7 @@ export default function USPortalDashboardPage() {
                       </div>
                       <div className="space-y-2 flex-1">
                         {visibleDeals.length === 0 ? (
-                          <div className="rounded-lg border border-dashed border-[#1a2420] bg-[#0a0f0d] px-3 py-4 text-center">
+                          <div className="rounded-lg border border-dashed border-[#1F1F23] bg-[#0A0A0B] px-3 py-4 text-center">
                             <p className="text-[11px] text-[#4a5550]">No deals</p>
                           </div>
                         ) : (
@@ -342,12 +342,12 @@ export default function USPortalDashboardPage() {
                               <Link
                                 key={deal.id}
                                 to={`/us/portal/leads/${deal.id}`}
-                                className="block rounded-lg border border-[#1a2420] bg-[#0a0f0d] px-3 py-2.5 hover:border-[#2a3430] transition-colors"
+                                className="block rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2.5 hover:border-[#2a3430] transition-colors"
                               >
                                 <p className="text-xs font-medium text-white truncate">
                                   {deal.business_name}
                                 </p>
-                                <p className="text-[11px] text-[#6b7a74] truncate mt-0.5">
+                                <p className="text-[11px] text-[#A1A1A8] truncate mt-0.5">
                                   {deal.contact_name}
                                 </p>
                                 <p
@@ -361,9 +361,9 @@ export default function USPortalDashboardPage() {
                             {remaining > 0 && (
                               <Link
                                 to="/us/portal/leads"
-                                className="block rounded-lg border border-dashed border-[#1a2420] bg-[#0a0f0d] px-3 py-2.5 text-center hover:border-[#2a3430] transition-colors"
+                                className="block rounded-lg border border-dashed border-[#1F1F23] bg-[#0A0A0B] px-3 py-2.5 text-center hover:border-[#2a3430] transition-colors"
                               >
-                                <p className="text-[11px] text-[#00d4aa]">+{remaining} more</p>
+                                <p className="text-[11px] text-[#17C5B0]">+{remaining} more</p>
                               </Link>
                             )}
                           </>
@@ -378,29 +378,29 @@ export default function USPortalDashboardPage() {
 
           {/* ── Active Accounts ── */}
           {activeClients.length > 0 && (
-            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
-              <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
+            <div className="bg-[#111113] border border-[#1F1F23] rounded-xl">
+              <div className="px-5 py-4 border-b border-[#1F1F23] flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-white">Active Accounts</h2>
                 <Link
                   to="/us/portal/accounts"
-                  className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
+                  className="text-xs text-[#17C5B0] hover:text-[#17C5B0]/80 flex items-center gap-1 transition-colors"
                 >
                   View all <ArrowRight size={12} />
                 </Link>
               </div>
-              <div className="divide-y divide-[#1a2420]">
+              <div className="divide-y divide-[#1F1F23]">
                 {activeClients.map(client => (
                   <Link
                     key={client.id}
                     to="/us/portal/accounts"
-                    className="px-5 py-3 flex items-center gap-3 hover:bg-[#0a0f0d]/50 transition-colors block"
+                    className="px-5 py-3 flex items-center gap-3 hover:bg-[#0A0A0B]/50 transition-colors block"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0">
-                      <Users size={14} className="text-[#00d4aa]" />
+                    <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center flex-shrink-0">
+                      <Users size={14} className="text-[#17C5B0]" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white truncate">{client.business_name}</p>
-                      <p className="text-[11px] text-[#6b7a74]">
+                      <p className="text-[11px] text-[#A1A1A8]">
                         {client.pos_provider ? client.pos_provider.charAt(0).toUpperCase() + client.pos_provider.slice(1) : 'No POS'}
                         <span className="mx-1.5 text-[#2a3430]">|</span>
                         {formatUsdMo(client.monthly_revenue)}
@@ -413,17 +413,17 @@ export default function USPortalDashboardPage() {
           )}
 
           {/* ── Recent Activity Feed ── */}
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
-            <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
+          <div className="bg-[#111113] border border-[#1F1F23] rounded-xl">
+            <div className="px-5 py-4 border-b border-[#1F1F23] flex items-center justify-between">
               <h2 className="text-sm font-semibold text-white">Recent Activity</h2>
               <Link
                 to="/us/portal/leads"
-                className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
+                className="text-xs text-[#17C5B0] hover:text-[#17C5B0]/80 flex items-center gap-1 transition-colors"
               >
                 View all <ArrowRight size={12} />
               </Link>
             </div>
-            <div className="divide-y divide-[#1a2420]">
+            <div className="divide-y divide-[#1F1F23]">
               {recentActivity.length === 0 ? (
                 <div className="px-5 py-6 text-center text-sm text-[#4a5550]">
                   No recent activity.
@@ -437,7 +437,7 @@ export default function USPortalDashboardPage() {
                     <Link
                       key={deal.id}
                       to={`/us/portal/leads/${deal.id}`}
-                      className="px-5 py-3 flex items-center gap-3 hover:bg-[#0a0f0d]/50 transition-colors block"
+                      className="px-5 py-3 flex items-center gap-3 hover:bg-[#0A0A0B]/50 transition-colors block"
                     >
                       <div
                         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -450,7 +450,7 @@ export default function USPortalDashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-white truncate">{deal.business_name}</p>
-                        <p className="text-[11px] text-[#6b7a74]">
+                        <p className="text-[11px] text-[#A1A1A8]">
                           <span style={{ color: cfg.color }}>{cfg.label}</span>
                           <span className="mx-1.5 text-[#2a3430]">|</span>
                           {formatUsdMo(deal.monthly_value)}
@@ -517,9 +517,9 @@ function StatCard({
   barColor: string
 }) {
   return (
-    <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 flex flex-col justify-between">
+    <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 flex flex-col justify-between">
       <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-medium text-[#6b7a74]">{label}</p>
+        <p className="text-xs font-medium text-[#A1A1A8]">{label}</p>
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
           {icon}
         </div>
@@ -562,9 +562,9 @@ function QuickAction({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2.5 bg-[#0f1512] border border-[#1a2420] rounded-xl px-4 py-3.5 text-sm font-medium text-white hover:border-[#00d4aa]/40 hover:text-[#00d4aa] transition-colors w-full"
+      className="flex items-center gap-2.5 bg-[#111113] border border-[#1F1F23] rounded-xl px-4 py-3.5 text-sm font-medium text-white hover:border-[#17C5B0]/40 hover:text-[#17C5B0] transition-colors w-full"
     >
-      <span className="text-[#6b7a74] group-hover:text-[#00d4aa]">{icon}</span>
+      <span className="text-[#A1A1A8] group-hover:text-[#17C5B0]">{icon}</span>
       {label}
     </button>
   )
