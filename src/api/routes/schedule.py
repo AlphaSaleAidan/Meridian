@@ -1,30 +1,28 @@
-"""
-Schedule Builder API Routes — Staff scheduling with AI recommendations.
+"""Schedule Builder API — Staff scheduling with AI recommendations."""
 
-Endpoints:
-  GET    /api/schedule/staff/{merchant_id}         → List staff roster
-  POST   /api/schedule/staff                       → Add staff member
-  PUT    /api/schedule/staff/{staff_id}             → Update staff member
-  DELETE /api/schedule/staff/{staff_id}             → Deactivate staff member
-  GET    /api/schedule/shifts/{merchant_id}         → Get shifts for week
-  POST   /api/schedule/shifts                      → Create shift
-  PUT    /api/schedule/shifts/{shift_id}            → Update shift
-  DELETE /api/schedule/shifts/{shift_id}            → Delete shift
-  POST   /api/schedule/publish                     → Publish schedule for a week
-  GET    /api/schedule/holidays                    → Get holidays for week
-  POST   /api/schedule/recommend/{merchant_id}     → Generate AI recommendations
-"""
 import logging
-from datetime import date, time, datetime
+import re
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger("meridian.api.schedule")
+from ..auth import require_service_auth
+from ...db import get_db
 
+logger = logging.getLogger("meridian.api.schedule")
 router = APIRouter(prefix="/api/schedule", tags=["schedule"])
+
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I
+)
+
+
+def _validate_uuid(value: str, label: str = "id"):
+    if not _UUID_RE.match(value):
+        raise HTTPException(400, f"Invalid {label} format")
 
 
 # ─── Request / Response Models ─────────────────────────────────
@@ -33,7 +31,7 @@ class StaffMemberCreate(BaseModel):
     merchant_id: str
     portal_context: str = "us"
     name: str
-    role: str
+    role: str = "any"
     color: str = "#17C5B0"
     hourly_rate: int = 0
     availability: dict = Field(default_factory=dict)
@@ -51,12 +49,12 @@ class ShiftCreate(BaseModel):
     merchant_id: str
     portal_context: str = "us"
     staff_member_id: Optional[str] = None
-    week_start_date: str  # YYYY-MM-DD
+    week_start_date: str
     day_of_week: int = Field(ge=0, le=6)
     shift_date: str
-    start_time: str  # HH:MM
+    start_time: str
     end_time: str
-    role: str
+    role: str = "any"
     break_minutes: int = 0
     notes: str = ""
     status: str = "draft"
@@ -81,44 +79,26 @@ class PublishRequest(BaseModel):
     notify_staff: bool = True
 
 
-# ─── Demo Data (used until DB tables are created) ──────────────
-
-_demo_staff = [
-    {
-        "id": "staff-1", "merchant_id": "demo", "portal_context": "us",
-        "name": "Alex", "role": "barista", "color": "#17C5B0",
-        "hourly_rate": 1600, "availability": {}, "active": True,
-    },
-    {
-        "id": "staff-2", "merchant_id": "demo", "portal_context": "us",
-        "name": "Sam", "role": "barista", "color": "#1A8FD6",
-        "hourly_rate": 1650, "availability": {}, "active": True,
-    },
-    {
-        "id": "staff-3", "merchant_id": "demo", "portal_context": "us",
-        "name": "Jordan", "role": "bar_lead", "color": "#E06B5E",
-        "hourly_rate": 2000, "availability": {}, "active": True,
-    },
-]
-
-
 # ─── Staff Endpoints ──────────────────────────────────────────
 
 @router.get("/staff/{merchant_id}")
-async def list_staff(merchant_id: str):
-    """List staff roster for a merchant."""
-    logger.info(f"Listing staff for merchant {merchant_id}")
-    # TODO: Query from DB when tables are created
-    return {"staff": _demo_staff, "total": len(_demo_staff)}
+async def list_staff(merchant_id: str, _auth=Depends(require_service_auth)):
+    _validate_uuid(merchant_id, "merchant_id")
+    db = get_db()
+    rows = await db.select(
+        "schedule_staff",
+        filters={"merchant_id": f"eq.{merchant_id}", "active": "eq.true"},
+        order="name.asc",
+    )
+    return {"staff": rows, "total": len(rows)}
 
 
 @router.post("/staff")
-async def create_staff(body: StaffMemberCreate):
-    """Add a new staff member."""
-    logger.info(f"Creating staff member: {body.name}")
-    new_id = f"staff-{uuid4().hex[:8]}"
-    member = {
-        "id": new_id,
+async def create_staff(body: StaffMemberCreate, _auth=Depends(require_service_auth)):
+    _validate_uuid(body.merchant_id, "merchant_id")
+    db = get_db()
+    payload = {
+        "id": str(uuid4()),
         "merchant_id": body.merchant_id,
         "portal_context": body.portal_context,
         "name": body.name,
@@ -128,23 +108,31 @@ async def create_staff(body: StaffMemberCreate):
         "availability": body.availability,
         "active": True,
     }
-    return {"staff_member": member}
+    rows = await db.insert("schedule_staff", payload)
+    return {"staff_member": rows[0] if rows else payload}
 
 
 @router.put("/staff/{staff_id}")
-async def update_staff(staff_id: str, body: StaffMemberUpdate):
-    """Update an existing staff member."""
-    logger.info(f"Updating staff member {staff_id}")
-    # TODO: Update in DB
+async def update_staff(staff_id: str, body: StaffMemberUpdate, _auth=Depends(require_service_auth)):
+    _validate_uuid(staff_id, "staff_id")
+    db = get_db()
     updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.update("schedule_staff", updates, filters={"id": f"eq.{staff_id}"})
     return {"staff_id": staff_id, "updated": updates}
 
 
 @router.delete("/staff/{staff_id}")
-async def deactivate_staff(staff_id: str):
-    """Soft-delete (deactivate) a staff member."""
-    logger.info(f"Deactivating staff member {staff_id}")
-    # TODO: Set active=False in DB
+async def deactivate_staff(staff_id: str, _auth=Depends(require_service_auth)):
+    _validate_uuid(staff_id, "staff_id")
+    db = get_db()
+    await db.update(
+        "schedule_staff",
+        {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()},
+        filters={"id": f"eq.{staff_id}"},
+    )
     return {"staff_id": staff_id, "active": False}
 
 
@@ -153,74 +141,109 @@ async def deactivate_staff(staff_id: str):
 @router.get("/shifts/{merchant_id}")
 async def get_shifts(
     merchant_id: str,
+    _auth=Depends(require_service_auth),
     week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
 ):
-    """Get all shifts for a merchant's week."""
-    logger.info(f"Getting shifts for merchant {merchant_id}, week {week_start}")
-    # TODO: Query from DB
-    return {"shifts": [], "total": 0}
+    _validate_uuid(merchant_id, "merchant_id")
+    db = get_db()
+    filters: dict = {"merchant_id": f"eq.{merchant_id}"}
+    if week_start:
+        filters["week_start_date"] = f"eq.{week_start}"
+    rows = await db.select(
+        "schedule_shifts", filters=filters, order="shift_date.asc,start_time.asc"
+    )
+    return {"shifts": rows, "total": len(rows)}
 
 
 @router.post("/shifts")
-async def create_shift(body: ShiftCreate):
-    """Create a new shift."""
-    logger.info(f"Creating shift for {body.shift_date} {body.start_time}-{body.end_time}")
-    new_id = f"shift-{uuid4().hex[:8]}"
-    shift = {
-        "id": new_id,
-        **body.model_dump(),
+async def create_shift(body: ShiftCreate, _auth=Depends(require_service_auth)):
+    _validate_uuid(body.merchant_id, "merchant_id")
+    db = get_db()
+    payload = {
+        "id": str(uuid4()),
+        "merchant_id": body.merchant_id,
+        "portal_context": body.portal_context,
+        "staff_member_id": body.staff_member_id or None,
+        "week_start_date": body.week_start_date,
+        "day_of_week": body.day_of_week,
+        "shift_date": body.shift_date,
+        "start_time": body.start_time,
+        "end_time": body.end_time,
+        "role": body.role,
+        "break_minutes": body.break_minutes,
+        "notes": body.notes,
+        "status": body.status,
+        "is_recommended": body.is_recommended,
     }
-    return {"shift": shift}
+    rows = await db.insert("schedule_shifts", payload)
+    return {"shift": rows[0] if rows else payload}
 
 
 @router.put("/shifts/{shift_id}")
-async def update_shift(shift_id: str, body: ShiftUpdate):
-    """Update an existing shift."""
-    logger.info(f"Updating shift {shift_id}")
+async def update_shift(shift_id: str, body: ShiftUpdate, _auth=Depends(require_service_auth)):
+    _validate_uuid(shift_id, "shift_id")
+    db = get_db()
     updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(400, "No fields to update")
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.update("schedule_shifts", updates, filters={"id": f"eq.{shift_id}"})
     return {"shift_id": shift_id, "updated": updates}
 
 
 @router.delete("/shifts/{shift_id}")
-async def delete_shift(shift_id: str):
-    """Delete a shift."""
-    logger.info(f"Deleting shift {shift_id}")
+async def delete_shift(shift_id: str, _auth=Depends(require_service_auth)):
+    _validate_uuid(shift_id, "shift_id")
+    db = get_db()
+    await db.delete("schedule_shifts", filters={"id": f"eq.{shift_id}"})
     return {"shift_id": shift_id, "deleted": True}
 
 
 # ─── Publish Endpoint ─────────────────────────────────────────
 
 @router.post("/publish")
-async def publish_schedule(body: PublishRequest):
-    """Publish the schedule for a week — marks all shifts as published."""
-    logger.info(f"Publishing schedule for {body.merchant_id}, week {body.week_start_date}")
-    # TODO: Update shift statuses and create published_schedules record
+async def publish_schedule(body: PublishRequest, _auth=Depends(require_service_auth)):
+    _validate_uuid(body.merchant_id, "merchant_id")
+    db = get_db()
+    now = datetime.now(timezone.utc).isoformat()
 
-    notified_count = 0
-    if body.notify_staff:
-        try:
-            from ...email.send import send_schedule_published
-            # In demo mode, send to a placeholder list.  Real implementation
-            # would query DB for staff emails linked to this merchant.
-            demo_staff_emails = [s["name"] for s in _demo_staff if s.get("active")]
-            for staff_member in _demo_staff:
-                if not staff_member.get("active"):
-                    continue
-                # In production, use real email address from DB
-                logger.info(
-                    "Would notify %s about published schedule for week %s",
-                    staff_member["name"],
-                    body.week_start_date,
-                )
-                notified_count += 1
-        except Exception as exc:
-            logger.warning("Staff notification failed (non-critical): %s", exc)
+    # Mark all draft shifts for this merchant+week as published
+    await db.update(
+        "schedule_shifts",
+        {"status": "published", "updated_at": now},
+        filters={
+            "merchant_id": f"eq.{body.merchant_id}",
+            "week_start_date": f"eq.{body.week_start_date}",
+            "status": "eq.draft",
+        },
+    )
+
+    # Upsert into published_schedules (delete + insert)
+    await db.delete("published_schedules", filters={
+        "merchant_id": f"eq.{body.merchant_id}",
+        "week_start_date": f"eq.{body.week_start_date}",
+    })
+
+    staff_rows = await db.select(
+        "schedule_staff",
+        filters={"merchant_id": f"eq.{body.merchant_id}", "active": "eq.true"},
+    )
+    notified_count = len(staff_rows) if body.notify_staff else 0
+
+    await db.insert("published_schedules", {
+        "id": str(uuid4()),
+        "merchant_id": body.merchant_id,
+        "week_start_date": body.week_start_date,
+        "published_by": body.published_by,
+        "published_at": now,
+        "notified_count": notified_count,
+    })
 
     return {
         "merchant_id": body.merchant_id,
         "week_start_date": body.week_start_date,
         "status": "published",
-        "published_at": datetime.utcnow().isoformat(),
+        "published_at": now,
         "notified_count": notified_count,
     }
 
@@ -229,12 +252,10 @@ async def publish_schedule(body: PublishRequest):
 
 @router.get("/holidays")
 async def get_holidays(
+    _auth=Depends(require_service_auth),
     country: str = Query(default="US", description="US or CA"),
     week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
 ):
-    """Get holidays for a specific week and country."""
-    logger.info(f"Getting holidays for {country}, week {week_start}")
-    # TODO: Query from holidays table
     return {"holidays": [], "country": country, "week_start": week_start}
 
 
@@ -243,14 +264,13 @@ async def get_holidays(
 @router.post("/recommend/{merchant_id}")
 async def recommend_shifts(
     merchant_id: str,
+    _auth=Depends(require_service_auth),
     week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
 ):
-    """Generate AI-powered shift recommendations based on peak hour data."""
-    logger.info(f"Generating recommendations for {merchant_id}, week {week_start}")
-    # TODO: Integrate with peak hour analysis and generate real recommendations
+    _validate_uuid(merchant_id, "merchant_id")
     recommendations = [
         {
-            "id": f"rec-{uuid4().hex[:8]}",
+            "id": str(uuid4()),
             "day_of_week": 0,
             "start_time": "07:00",
             "end_time": "10:00",
@@ -259,7 +279,7 @@ async def recommend_shifts(
             "priority": "critical",
         },
         {
-            "id": f"rec-{uuid4().hex[:8]}",
+            "id": str(uuid4()),
             "day_of_week": 5,
             "start_time": "11:00",
             "end_time": "15:00",

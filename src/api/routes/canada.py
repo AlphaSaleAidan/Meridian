@@ -10,7 +10,7 @@ import os
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
 from ..auth import require_admin, require_service_auth, require_jwt, require_admin_jwt
@@ -409,15 +409,20 @@ async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_admin_
 
 
 @router.get("/leads")
-async def get_leads(user: dict = Depends(require_jwt)):
+async def get_leads(request: Request, user: dict = Depends(require_jwt)):
     """Return all Canada deals/leads. Tries 'deals' table, falls back to 'data_sales'."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
-    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
-    if not supabase_url or not service_key:
+    anon_key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+
+    # Extract the user's JWT from the Authorization header to enforce RLS
+    auth_header = request.headers.get("authorization", "")
+    user_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+
+    if not supabase_url or not user_token:
         return {"leads": []}
 
-    headers = {"Authorization": f"Bearer {service_key}", "apikey": service_key}
+    headers = {"Authorization": f"Bearer {user_token}", "apikey": anon_key}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
@@ -438,15 +443,20 @@ async def get_leads(user: dict = Depends(require_jwt)):
 
 
 @router.get("/stats")
-async def get_stats(user: dict = Depends(require_jwt)):
+async def get_stats(request: Request, user: dict = Depends(require_jwt)):
     """Aggregate Canada sales stats: rep count, deal count, revenue pipeline."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
-    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
-    if not supabase_url or not service_key:
+    anon_key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+
+    # Extract the user's JWT from the Authorization header to enforce RLS
+    auth_header = request.headers.get("authorization", "")
+    user_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+
+    if not supabase_url or not user_token:
         return {"total_reps": 0, "active_reps": 0, "total_leads": 0, "pipeline_cents": 0}
 
-    headers = {"Authorization": f"Bearer {service_key}", "apikey": service_key}
+    headers = {"Authorization": f"Bearer {user_token}", "apikey": anon_key}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         reps_resp = await client.get(
@@ -473,20 +483,25 @@ ADMIN_EMAILS = [
 
 
 @router.get("/team")
-async def get_team(user: dict = Depends(require_jwt)):
-    """Return all Canada sales reps (bypasses RLS via service key)."""
+async def get_team(request: Request, user: dict = Depends(require_jwt)):
+    """Return all Canada sales reps (enforces RLS via user JWT)."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
-    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
-    if not supabase_url or not service_key:
+    anon_key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+
+    # Extract the user's JWT from the Authorization header to enforce RLS
+    auth_header = request.headers.get("authorization", "")
+    user_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+
+    if not supabase_url or not user_token:
         return {"reps": [], "applicants": []}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{supabase_url}/rest/v1/sales_reps?portal_context=in.(canada,all)&order=created_at.asc&select=id,name,email,phone,commission_rate,is_active,created_at,portal_context",
             headers={
-                "Authorization": f"Bearer {service_key}",
-                "apikey": service_key,
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
             },
         )
         if resp.status_code != 200:

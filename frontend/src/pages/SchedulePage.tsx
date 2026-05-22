@@ -14,6 +14,7 @@ import ScrollReveal from '@/components/ScrollReveal'
 import AnalyzingDataState from '@/components/AnalyzingDataState'
 import { useIsDemo } from '@/hooks/useOrg'
 import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
+import MobileAgendaView from '@/components/schedule/MobileAgendaView'
 import StaffRosterPanel from '@/components/schedule/StaffRosterPanel'
 import WeekSummaryPanel from '@/components/schedule/WeekSummaryPanel'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
@@ -271,16 +272,30 @@ export default function SchedulePage() {
 
           {/* Center: Calendar grid */}
           <div className="flex-1 min-w-0">
-            <WeeklyCalendarGrid
-              shifts={allShifts}
-              staff={staff}
-              peakHours={peakHours}
-              holidays={holidays}
-              onShiftClick={handleShiftClick}
-              onSlotClick={handleSlotClick}
-              weekStartDate={weekStartDate}
-              businessType={businessType}
-            />
+            {/* Desktop: full grid */}
+            <div className="hidden lg:block">
+              <WeeklyCalendarGrid
+                shifts={allShifts}
+                staff={staff}
+                peakHours={peakHours}
+                holidays={holidays}
+                onShiftClick={handleShiftClick}
+                onSlotClick={handleSlotClick}
+                weekStartDate={weekStartDate}
+                businessType={businessType}
+              />
+            </div>
+            {/* Mobile: agenda view */}
+            <div className="lg:hidden">
+              <MobileAgendaView
+                shifts={allShifts}
+                staff={staff}
+                holidays={holidays}
+                onShiftClick={handleShiftClick}
+                onSlotClick={handleSlotClick}
+                weekStartDate={weekStartDate}
+              />
+            </div>
           </div>
 
           {/* Right: Summary panel */}
