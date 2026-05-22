@@ -72,6 +72,7 @@ export default function MobileNavBar({ basePath }: MobileNavBarProps) {
               <button
                 onClick={() => setMoreOpen(false)}
                 className="p-2 rounded-full bg-[#1F1F23] text-[#A1A1A8]"
+                aria-label="Close menu"
               >
                 <X size={16} />
               </button>
@@ -133,6 +134,7 @@ export default function MobileNavBar({ basePath }: MobileNavBarProps) {
           })}
           <button
             onClick={() => setMoreOpen(true)}
+            aria-label="More features"
             className={clsx(
               'flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-[64px] min-h-[50px] transition-colors',
               isMoreActive ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60',

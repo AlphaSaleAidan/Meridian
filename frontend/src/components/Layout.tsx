@@ -35,6 +35,7 @@ import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import OnboardingWizard from '@/pages/OnboardingWizard'
 import ClineChatWidget from './ClineChatWidget'
 import ClineErrorBoundary from './ClineErrorBoundary'
+import CommandPalette from './CommandPalette'
 
 const navGroups = [
   {
@@ -211,6 +212,10 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[200] focus:px-4 focus:py-2 focus:bg-[#1A8FD6] focus:text-white focus:rounded-lg focus:text-sm focus:font-medium">
+        Skip to content
+      </a>
+
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-[230px] flex-shrink-0 bg-[#0A0A0B] border-r border-[#1F1F23] flex-col">
         {sidebarContent}
@@ -255,7 +260,7 @@ export default function Layout() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        <main id="main-content" className="flex-1 overflow-y-auto">
           {needsOnboarding ? (
             <OnboardingWizard />
           ) : (
@@ -272,6 +277,7 @@ export default function Layout() {
       </div>
 
       {!isDesktop && <MobileNavBar basePath={basePath} />}
+      <CommandPalette basePath={basePath} />
     </div>
   )
 }

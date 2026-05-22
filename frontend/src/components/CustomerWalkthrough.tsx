@@ -21,7 +21,7 @@ const WALKTHROUGH_STEPS: WalkthroughStep[] = [
   { key: 'insights', label: 'Data Insights', icon: Clock, description: 'We\'re processing your data to generate insights.' },
   { key: 'cameras', label: 'Camera Setup', icon: Camera, description: 'Connect your cameras for real-time intelligence.' },
   { key: '3dspace', label: '3D Space', icon: Box, description: 'Set up your 3D digital space.' },
-  { key: 'phone', label: 'Phone Orders', icon: Smartphone, description: 'AI phone ordering (coming soon).' },
+  { key: 'phone', label: 'Phone Orders', icon: Smartphone, description: 'AI-powered phone ordering for your business.' },
 ]
 
 const INSIGHT_MESSAGES = [

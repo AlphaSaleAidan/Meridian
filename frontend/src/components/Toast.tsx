@@ -49,7 +49,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
     )}>
       <Icon size={16} className="flex-shrink-0" />
       <p className="text-sm font-medium flex-1">{toast.message}</p>
-      <button onClick={() => onDismiss(toast.id)} className="p-0.5 opacity-60 hover:opacity-100 transition-opacity">
+      <button onClick={() => onDismiss(toast.id)} className="p-0.5 opacity-60 hover:opacity-100 transition-opacity" aria-label="Dismiss notification">
         <X size={14} />
       </button>
     </div>
@@ -71,7 +71,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none" aria-live="polite" role="status">
         {toasts.map(t => (
           <div key={t.id} className="pointer-events-auto">
             <ToastItem toast={t} onDismiss={dismiss} />

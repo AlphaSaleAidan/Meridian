@@ -104,6 +104,16 @@ function LazyFallback() {
   )
 }
 
+function InlineFallback() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="w-6 h-6 rounded-md bg-[#1A8FD6]/15 border border-[#1A8FD6]/30 flex items-center justify-center animate-pulse">
+        <span className="text-[#1A8FD6] font-bold text-[10px]">M</span>
+      </div>
+    </div>
+  )
+}
+
 function CustomerDashboardRoutes() {
   return (
     <>
@@ -115,17 +125,17 @@ function CustomerDashboardRoutes() {
       <Route path="forecasts" element={<ForecastsPage />} />
       <Route path="agents" element={<AgentDashboardPage />} />
       <Route path="actions" element={<ActionsPage />} />
-      <Route path="camera-intelligence" element={<Suspense fallback={null}><CameraIntelligencePage /></Suspense>} />
+      <Route path="camera-intelligence" element={<Suspense fallback={<InlineFallback />}><CameraIntelligencePage /></Suspense>} />
       <Route path="customers" element={<CustomersPage />} />
       <Route path="staff" element={<StaffPage />} />
       <Route path="peak-hours" element={<PeakHoursPage />} />
       <Route path="margins" element={<MarginsPage />} />
       <Route path="menu-matrix" element={<MenuEngineeringPage />} />
       <Route path="anomalies" element={<AnomaliesPage />} />
-      <Route path="schedule" element={<Suspense fallback={null}><SchedulePage /></Suspense>} />
+      <Route path="schedule" element={<Suspense fallback={<InlineFallback />}><SchedulePage /></Suspense>} />
       <Route path="space" element={<SpaceTab />} />
       <Route path="phone-orders" element={<PhoneOrdersPage />} />
-      <Route path="my-website" element={<Suspense fallback={null}><MyWebsitePage /></Suspense>} />
+      <Route path="my-website" element={<Suspense fallback={<InlineFallback />}><MyWebsitePage /></Suspense>} />
       <Route path="notifications" element={<NotificationsPage />} />
       <Route path="settings" element={<SettingsPage />} />
     </>
@@ -321,15 +331,15 @@ export default function App() {
                 </CanadaSalesProtectedRoute>
               }>
                 <Route index element={<Navigate to="/canada/portal/dashboard" replace />} />
-                <Route path="dashboard" element={<Suspense fallback={null}><CanadaPortalDashboardPage /></Suspense>} />
-                <Route path="leads" element={<Suspense fallback={null}><CanadaPortalLeadsPage /></Suspense>} />
-                <Route path="leads/:id" element={<Suspense fallback={null}><CanadaPortalLeadDetailPage /></Suspense>} />
-                <Route path="new-customer" element={<Suspense fallback={null}><CanadaPortalCreateCustomerPage /></Suspense>} />
-                <Route path="accounts" element={<Suspense fallback={null}><CanadaPortalAccountsPage /></Suspense>} />
-                <Route path="commissions" element={<Suspense fallback={null}><CanadaPortalCommissionsPage /></Suspense>} />
-                <Route path="training" element={<Suspense fallback={null}><CanadaPortalTrainingPage /></Suspense>} />
-                <Route path="team" element={<Suspense fallback={null}><CanadaPortalTeamPage /></Suspense>} />
-                <Route path="settings" element={<Suspense fallback={null}><CanadaPortalSettingsPage /></Suspense>} />
+                <Route path="dashboard" element={<Suspense fallback={<InlineFallback />}><CanadaPortalDashboardPage /></Suspense>} />
+                <Route path="leads" element={<Suspense fallback={<InlineFallback />}><CanadaPortalLeadsPage /></Suspense>} />
+                <Route path="leads/:id" element={<Suspense fallback={<InlineFallback />}><CanadaPortalLeadDetailPage /></Suspense>} />
+                <Route path="new-customer" element={<Suspense fallback={<InlineFallback />}><CanadaPortalCreateCustomerPage /></Suspense>} />
+                <Route path="accounts" element={<Suspense fallback={<InlineFallback />}><CanadaPortalAccountsPage /></Suspense>} />
+                <Route path="commissions" element={<Suspense fallback={<InlineFallback />}><CanadaPortalCommissionsPage /></Suspense>} />
+                <Route path="training" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTrainingPage /></Suspense>} />
+                <Route path="team" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTeamPage /></Suspense>} />
+                <Route path="settings" element={<Suspense fallback={<InlineFallback />}><CanadaPortalSettingsPage /></Suspense>} />
               </Route>
 
               {/* ══════════════════════════════════════════════
@@ -357,15 +367,15 @@ export default function App() {
                 </Suspense>
               }>
                 <Route index element={<Navigate to="/us/portal/dashboard" replace />} />
-                <Route path="dashboard" element={<Suspense fallback={null}><USPortalDashboardPage /></Suspense>} />
-                <Route path="leads" element={<Suspense fallback={null}><USPortalLeadsPage /></Suspense>} />
-                <Route path="leads/:id" element={<Suspense fallback={null}><USPortalLeadDetailPage /></Suspense>} />
-                <Route path="new-customer" element={<Suspense fallback={null}><USPortalCreateCustomerPage /></Suspense>} />
-                <Route path="accounts" element={<Suspense fallback={null}><USPortalAccountsPage /></Suspense>} />
-                <Route path="commissions" element={<Suspense fallback={null}><USPortalCommissionsPage /></Suspense>} />
-                <Route path="training" element={<Suspense fallback={null}><USPortalTrainingPage /></Suspense>} />
-                <Route path="team" element={<Suspense fallback={null}><USPortalTeamPage /></Suspense>} />
-                <Route path="settings" element={<Suspense fallback={null}><USPortalSettingsPage /></Suspense>} />
+                <Route path="dashboard" element={<Suspense fallback={<InlineFallback />}><USPortalDashboardPage /></Suspense>} />
+                <Route path="leads" element={<Suspense fallback={<InlineFallback />}><USPortalLeadsPage /></Suspense>} />
+                <Route path="leads/:id" element={<Suspense fallback={<InlineFallback />}><USPortalLeadDetailPage /></Suspense>} />
+                <Route path="new-customer" element={<Suspense fallback={<InlineFallback />}><USPortalCreateCustomerPage /></Suspense>} />
+                <Route path="accounts" element={<Suspense fallback={<InlineFallback />}><USPortalAccountsPage /></Suspense>} />
+                <Route path="commissions" element={<Suspense fallback={<InlineFallback />}><USPortalCommissionsPage /></Suspense>} />
+                <Route path="training" element={<Suspense fallback={<InlineFallback />}><USPortalTrainingPage /></Suspense>} />
+                <Route path="team" element={<Suspense fallback={<InlineFallback />}><USPortalTeamPage /></Suspense>} />
+                <Route path="settings" element={<Suspense fallback={<InlineFallback />}><USPortalSettingsPage /></Suspense>} />
               </Route>
 
               {/* Legacy /sales/* redirect to new US portal */}

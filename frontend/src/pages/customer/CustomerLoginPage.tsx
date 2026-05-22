@@ -70,12 +70,12 @@ export default function CustomerLoginPage() {
           {!showForgot ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@business.com" />
+                <label htmlFor="login-email" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
+                <input id="login-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@business.com" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
-                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
+                <label htmlFor="login-password" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
+                <input id="login-password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Signing in...' : 'Sign In'}
@@ -89,8 +89,8 @@ export default function CustomerLoginPage() {
           ) : (
             <form onSubmit={handleForgot} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@business.com" />
+                <label htmlFor="forgot-email" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
+                <input id="forgot-email" type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@business.com" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Sending...' : 'Send Reset Link'}
@@ -114,7 +114,7 @@ export default function CustomerLoginPage() {
         </div>
 
         <p className="text-center text-[10px] text-[#A1A1A8]/30 mt-6 font-mono">
-          Meridian POS Intelligence v0.2.0
+          Meridian
         </p>
       </div>
     </div>

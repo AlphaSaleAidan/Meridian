@@ -103,6 +103,10 @@ export default function NotificationsPage() {
                 <div
                   key={n.id}
                   onClick={() => !isRead && handleAcknowledge(n.id)}
+                  role={!isRead ? 'button' : undefined}
+                  aria-label={!isRead ? `Mark as read: ${n.title}` : undefined}
+                  tabIndex={!isRead ? 0 : undefined}
+                  onKeyDown={!isRead ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleAcknowledge(n.id) } } : undefined}
                   className={clsx(
                     'card-hover p-4 transition-all duration-200',
                     !isRead && 'border-l-2 border-l-[#1A8FD6] bg-[#1A8FD6]/[0.02] cursor-pointer',

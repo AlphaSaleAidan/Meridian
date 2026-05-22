@@ -126,6 +126,51 @@ export default function CustomerOnboardingWizard() {
     'Preparing your dashboard...',
   ]
 
+  // ── Progress Persistence ──
+  const PROGRESS_KEY = 'meridian_onboard_progress'
+
+  function saveProgress(nextStep: Step) {
+    try {
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify({
+        step: nextStep,
+        account: { businessName: account.businessName, ownerName: account.ownerName, email: account.email, phone: account.phone },
+        posProvider,
+        posFields,
+        inventoryItems,
+        staffMembers,
+      }))
+    } catch { /* quota exceeded or private browsing — ignore */ }
+  }
+
+  function clearProgress() {
+    try { localStorage.removeItem(PROGRESS_KEY) } catch { /* ignore */ }
+  }
+
+  // Restore saved progress on mount (skip if fresh signup link with token)
+  useEffect(() => {
+    if (prefill.token) return
+    try {
+      const raw = localStorage.getItem(PROGRESS_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw)
+      if (saved.step) setStep(saved.step)
+      if (saved.account) {
+        setAccount(prev => ({
+          ...prev,
+          businessName: saved.account.businessName || prev.businessName,
+          ownerName: saved.account.ownerName || prev.ownerName,
+          email: saved.account.email || prev.email,
+          phone: saved.account.phone || prev.phone,
+        }))
+      }
+      if (saved.posProvider) setPosProvider(saved.posProvider)
+      if (saved.posFields) setPosFields(saved.posFields)
+      if (saved.inventoryItems) setInventoryItems(saved.inventoryItems)
+      if (saved.staffMembers) setStaffMembers(saved.staffMembers)
+    } catch { /* corrupt data — ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Check for Square checkout callback
   useEffect(() => {
     const checkoutStatus = searchParams.get('checkout')
@@ -163,6 +208,7 @@ export default function CustomerOnboardingWizard() {
         setSaving(false)
         return
       }
+      saveProgress('pos')
       setStep('pos')
     } catch (err: any) {
       setError(err.message || 'Signup failed')
@@ -188,6 +234,7 @@ export default function CustomerOnboardingWizard() {
       const apiKey = Object.values(posFields).join('::')
       const err = await connectPos(posProvider, apiKey)
       if (err) { setError(err); setSaving(false); return }
+      saveProgress('inventory')
       setStep('inventory')
     } catch (err: any) {
       setError(err.message || 'Connection failed')
@@ -271,6 +318,7 @@ export default function CustomerOnboardingWizard() {
       } catch (err) { console.warn('Inventory save warning:', err) }
       finally { setSaving(false) }
     }
+    saveProgress('staff')
     setStep('staff')
   }
 
@@ -305,6 +353,7 @@ export default function CustomerOnboardingWizard() {
       } catch (err) { console.warn('Staff save warning:', err) }
       finally { setSaving(false) }
     }
+    saveProgress('schedule')
     setStep('schedule')
   }
 
@@ -335,6 +384,7 @@ export default function CustomerOnboardingWizard() {
       } catch (err) { console.warn('Schedule upload warning:', err) }
       finally { setSaving(false) }
     }
+    saveProgress('checkout')
     setStep('checkout')
   }
 
@@ -425,6 +475,7 @@ export default function CustomerOnboardingWizard() {
       current++
       if (current >= processingSteps.length) {
         clearInterval(interval)
+        clearProgress()
         setStep('done')
       } else {
         setProcessingStep(current)
@@ -617,7 +668,7 @@ export default function CustomerOnboardingWizard() {
                 <ArrowLeft size={14} /> Back
               </button>
               <div className="flex items-center gap-2">
-                <button onClick={() => setStep('staff')} className="text-[12px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Skip for now</button>
+                <button onClick={() => { saveProgress('staff'); setStep('staff') }} className="text-[12px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Skip for now</button>
                 <button onClick={handleInventoryNext} disabled={saving}
                   className="flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#1574B8] disabled:opacity-50 transition-colors">
                   {saving ? <Loader2 size={14} className="animate-spin" /> : null} Next: Staff <ArrowRight size={14} />
@@ -677,7 +728,7 @@ export default function CustomerOnboardingWizard() {
                 <ArrowLeft size={14} /> Back
               </button>
               <div className="flex items-center gap-2">
-                <button onClick={() => setStep('schedule')} className="text-[12px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Skip for now</button>
+                <button onClick={() => { saveProgress('schedule'); setStep('schedule') }} className="text-[12px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Skip for now</button>
                 <button onClick={handleStaffNext} disabled={saving}
                   className="flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#1574B8] disabled:opacity-50 transition-colors">
                   Next: Schedule <ArrowRight size={14} />
@@ -727,7 +778,7 @@ export default function CustomerOnboardingWizard() {
                 <ArrowLeft size={14} /> Back
               </button>
               <div className="flex items-center gap-2">
-                <button onClick={() => setStep('checkout')} className="text-[12px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Skip for now</button>
+                <button onClick={() => { saveProgress('checkout'); setStep('checkout') }} className="text-[12px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Skip for now</button>
                 <button onClick={handleScheduleNext} disabled={saving}
                   className="flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#1574B8] disabled:opacity-50 transition-colors">
                   {saving ? <Loader2 size={14} className="animate-spin" /> : null} Next: Payment <ArrowRight size={14} />
