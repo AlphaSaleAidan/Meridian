@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Video, Plus, Wifi, WifiOff, Activity, Users, Clock, TrendingUp, Eye, MapPin, ArrowUpRight } from 'lucide-react'
+import { Video, Plus, Wifi, WifiOff, Activity, Users, Clock, TrendingUp, Eye, MapPin, ArrowUpRight, X, CheckCircle2, Copy, Check } from 'lucide-react'
 import { useIsDemo } from '@/hooks/useOrg'
 import { getActiveBusinessType, isCanadaPath } from '@/lib/demo-context'
 import ScrollReveal from '@/components/ScrollReveal'
@@ -75,9 +75,36 @@ function generateTrafficTimeline(): TrafficBucket[] {
 
 export default function CameraIntelligencePage() {
   const isDemo = useIsDemo()
-  const [cameras] = useState<CameraDevice[]>(generateDemoCameras)
+  const [cameras, setCameras] = useState<CameraDevice[]>(generateDemoCameras)
   const [traffic] = useState<TrafficBucket[]>(generateTrafficTimeline)
   const [selectedCamera, setSelectedCamera] = useState<string | null>(null)
+
+  // Add Camera wizard
+  const [showAddCamera, setShowAddCamera] = useState(false)
+  const [addStep, setAddStep] = useState(0)
+  const [newCam, setNewCam] = useState({ name: '', location: '', rtspUrl: '' })
+  const [copied, setCopied] = useState(false)
+
+  function handleAddCamera() {
+    const cam: CameraDevice = {
+      id: `cam-${Date.now()}`,
+      name: newCam.name || `Camera ${cameras.length + 1}`,
+      location: newCam.location,
+      status: 'setup',
+      rtspUrl: newCam.rtspUrl,
+      lastHeartbeat: 'Never',
+      zones: [],
+      metrics: { entriesTotal: 0, exitsTotal: 0, avgOccupancy: 0, avgDwellSec: 0, peakHour: '--', conversionRate: 0 },
+    }
+    setCameras(prev => [...prev, cam])
+    setShowAddCamera(false)
+    setAddStep(0)
+    setNewCam({ name: '', location: '', rtspUrl: '' })
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
 
   const onlineCameras = cameras.filter(c => c.status === 'online')
   const totalEntries = onlineCameras.reduce((s, c) => s + c.metrics.entriesTotal, 0)
@@ -102,13 +129,15 @@ export default function CameraIntelligencePage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <a
-              href={isCanadaPath() ? '/canada/demo/camera-analytics' : '/demo/camera-analytics'}
-              className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-lg border border-[#7c3aed]/30 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 transition-colors"
-            >
-              <Eye size={13} /> Live Camera Demo <ArrowUpRight size={11} />
-            </a>
-            <button className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-lg bg-[#17C5B0] text-[#0A0A0B] hover:bg-[#14b3a0] transition-colors">
+            {isDemo && (
+              <a
+                href={isCanadaPath() ? '/canada/demo/camera-analytics' : '/demo/camera-analytics'}
+                className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-lg border border-[#7c3aed]/30 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 transition-colors"
+              >
+                <Eye size={13} /> Live Camera Demo <ArrowUpRight size={11} />
+              </a>
+            )}
+            <button onClick={() => setShowAddCamera(true)} className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-lg bg-[#17C5B0] text-[#0A0A0B] hover:bg-[#14b3a0] transition-colors">
               <Plus size={13} /> Add Camera
             </button>
           </div>
@@ -234,14 +263,139 @@ export default function CameraIntelligencePage() {
               )}
 
               {cam.status === 'setup' && (
-                <div className="pt-2 border-t border-[#1F1F23]">
-                  <p className="text-[11px] text-[#A1A1A8]">Camera registered — awaiting edge agent connection</p>
+                <div className="pt-3 border-t border-[#1F1F23] space-y-2">
+                  <p className="text-[11px] font-medium text-[#F5F5F7]">Setup Instructions</p>
+                  <ol className="text-[10px] text-[#A1A1A8] space-y-1 list-decimal list-inside">
+                    <li>Ensure your camera is connected to the same network</li>
+                    <li>Open your camera's admin panel and enable RTSP streaming</li>
+                    <li>Copy the RTSP URL (usually <span className="font-mono text-[#1A8FD6]">rtsp://IP:554/stream1</span>)</li>
+                    <li>Meridian's edge agent will auto-detect and connect</li>
+                  </ol>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] font-mono text-[#A1A1A8]/60 truncate flex-1">{cam.rtspUrl}</span>
+                    <button onClick={(e) => { e.stopPropagation(); copyToClipboard(cam.rtspUrl) }}
+                      className="text-[9px] text-[#1A8FD6] hover:text-[#17C5B0] transition-colors flex items-center gap-1">
+                      {copied ? <><Check size={9} /> Copied</> : <><Copy size={9} /> Copy URL</>}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           ))}
         </div>
       </div>
+
+      {/* Add Camera Wizard */}
+      {showAddCamera && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowAddCamera(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-md bg-[#111113] border border-[#1F1F23] rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
+              <h3 className="text-sm font-bold text-[#F5F5F7]">Add Camera</h3>
+              <button onClick={() => { setShowAddCamera(false); setAddStep(0) }} className="text-[#A1A1A8] hover:text-white transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Steps indicator */}
+            <div className="flex items-center gap-1 px-5 pt-4">
+              {['Location', 'Connection', 'Confirm'].map((label, i) => (
+                <div key={label} className="flex-1 flex flex-col items-center gap-1">
+                  <div className={`w-full h-1 rounded-full transition-colors ${i <= addStep ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'}`} />
+                  <span className={`text-[9px] font-medium ${i <= addStep ? 'text-[#17C5B0]' : 'text-[#A1A1A8]/30'}`}>{label}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              {addStep === 0 && (
+                <>
+                  <div>
+                    <label className="text-xs text-[#A1A1A8] block mb-1">Camera Name</label>
+                    <input value={newCam.name} onChange={e => setNewCam(p => ({ ...p, name: e.target.value }))}
+                      placeholder={`Camera ${cameras.length + 1}`}
+                      className="w-full px-3 py-2.5 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#A1A1A8] block mb-1">Location</label>
+                    <input value={newCam.location} onChange={e => setNewCam(p => ({ ...p, location: e.target.value }))}
+                      placeholder="e.g. Front Entrance, Kitchen, Parking Lot"
+                      className="w-full px-3 py-2.5 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50" />
+                  </div>
+                </>
+              )}
+
+              {addStep === 1 && (
+                <>
+                  <div>
+                    <label className="text-xs text-[#A1A1A8] block mb-1">RTSP Stream URL</label>
+                    <input value={newCam.rtspUrl} onChange={e => setNewCam(p => ({ ...p, rtspUrl: e.target.value }))}
+                      placeholder="rtsp://192.168.1.100:554/stream1"
+                      className="w-full px-3 py-2.5 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50 font-mono" />
+                  </div>
+                  <div className="bg-[#0A0A0B] rounded-lg p-3 space-y-2 border border-[#1F1F23]">
+                    <p className="text-[11px] font-medium text-[#F5F5F7]">Where to find your RTSP URL</p>
+                    <ol className="text-[10px] text-[#A1A1A8] space-y-1 list-decimal list-inside">
+                      <li>Open your camera's web admin panel (usually at its IP address)</li>
+                      <li>Go to <span className="text-[#F5F5F7]">Network</span> → <span className="text-[#F5F5F7]">RTSP Settings</span></li>
+                      <li>Enable RTSP and copy the stream URL</li>
+                      <li>Common format: <span className="font-mono text-[#1A8FD6]">rtsp://IP:554/stream1</span></li>
+                    </ol>
+                    <p className="text-[9px] text-[#A1A1A8]/50">Works with Hikvision, Dahua, Reolink, Amcrest, Axis, and most IP cameras.</p>
+                  </div>
+                </>
+              )}
+
+              {addStep === 2 && (
+                <>
+                  <div className="text-center py-2">
+                    <div className="w-12 h-12 rounded-full bg-[#17C5B0]/10 border border-[#17C5B0]/30 flex items-center justify-center mx-auto mb-3">
+                      <Video size={20} className="text-[#17C5B0]" />
+                    </div>
+                    <p className="text-sm font-medium text-[#F5F5F7]">Ready to Connect</p>
+                  </div>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between py-2 border-b border-[#1F1F23]">
+                      <span className="text-[#A1A1A8]">Name</span>
+                      <span className="text-[#F5F5F7] font-medium">{newCam.name || `Camera ${cameras.length + 1}`}</span>
+                    </div>
+                    <div className="flex justify-between py-2 border-b border-[#1F1F23]">
+                      <span className="text-[#A1A1A8]">Location</span>
+                      <span className="text-[#F5F5F7]">{newCam.location || '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-2">
+                      <span className="text-[#A1A1A8]">Stream</span>
+                      <span className="text-[#F5F5F7] font-mono text-[11px]">{newCam.rtspUrl || '—'}</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-[#A1A1A8] text-center">
+                    Meridian's edge agent will begin monitoring automatically once the camera is reachable.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-between px-5 py-4 border-t border-[#1F1F23]">
+              <button onClick={() => addStep > 0 ? setAddStep(addStep - 1) : setShowAddCamera(false)}
+                className="px-4 py-2 text-sm text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">
+                {addStep === 0 ? 'Cancel' : 'Back'}
+              </button>
+              {addStep < 2 ? (
+                <button onClick={() => setAddStep(addStep + 1)}
+                  disabled={addStep === 0 && !newCam.location.trim()}
+                  className="px-4 py-2 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 disabled:opacity-40 transition-colors">
+                  Next
+                </button>
+              ) : (
+                <button onClick={handleAddCamera}
+                  className="px-4 py-2 bg-[#17C5B0] text-white text-sm font-medium rounded-lg hover:bg-[#17C5B0]/90 transition-colors flex items-center gap-1.5">
+                  <CheckCircle2 size={14} /> Add Camera
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

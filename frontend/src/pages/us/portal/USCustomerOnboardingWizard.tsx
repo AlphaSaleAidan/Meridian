@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ChangeEvent } from 'react'
+import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Loader2, Upload, Plus, Trash2,
@@ -121,18 +121,37 @@ export default function USCustomerOnboardingWizard() {
   const monthlyPrice = prefill.price ? parseInt(prefill.price) : 250
   const monthlyPriceUSD = monthlyPrice
 
-  // Processing
-  const [processingStep, setProcessingStep] = useState(0)
-  const processingSteps = [
-    'Activating your subscription...',
-    'Connecting to POS system...',
-    'Importing transaction history...',
-    'Analyzing inventory costs...',
-    'Building staff profiles...',
-    'Processing schedule data...',
-    'Generating initial insights...',
-    'Preparing your dashboard...',
+  // Processing — 20-minute AI analysis timer (persists across page reloads)
+  // Hard data (revenue, products, staff, schedules) is available immediately from POS.
+  // The timer covers AI-generated analysis: insights, anomalies, forecasts, patterns.
+  const PROCESSING_KEY = 'meridian_us_processing_start'
+  const PROCESSING_DONE_KEY = 'meridian_us_processing_done'
+  const TOTAL_DURATION = 20 * 60 // 1200 seconds
+
+  const processingPhases = [
+    { label: 'Connecting to POS system...', endsAt: 20, ai: false },
+    { label: 'Syncing revenue & transaction data...', endsAt: 40, ai: false },
+    { label: 'Loading products & menu items...', endsAt: 55, ai: false },
+    { label: 'Importing staff & schedule records...', endsAt: 70, ai: false },
+    { label: 'Analyzing revenue trends & seasonality...', endsAt: 190, ai: true },
+    { label: 'Detecting sales anomalies & outliers...', endsAt: 310, ai: true },
+    { label: 'Calculating profit margins per item...', endsAt: 430, ai: true },
+    { label: 'Building menu engineering matrix...', endsAt: 550, ai: true },
+    { label: 'Identifying peak hour patterns...', endsAt: 670, ai: true },
+    { label: 'Modeling customer segments...', endsAt: 790, ai: true },
+    { label: 'Generating staffing recommendations...', endsAt: 890, ai: true },
+    { label: 'Forecasting next 30-day revenue...', endsAt: 1000, ai: true },
+    { label: 'Ranking top actions for your business...', endsAt: 1100, ai: true },
+    { label: 'Compiling AI insights report...', endsAt: 1170, ai: true },
+    { label: 'Finalizing your dashboard...', endsAt: TOTAL_DURATION, ai: true },
   ]
+
+  const [processingElapsed, setProcessingElapsed] = useState(0)
+
+  const currentPhaseIdx = processingPhases.findIndex(p => processingElapsed < p.endsAt)
+  const processingPct = Math.min(100, Math.round((processingElapsed / TOTAL_DURATION) * 100))
+  const remainingSec = Math.max(0, TOTAL_DURATION - processingElapsed)
+  const remainingMin = Math.ceil(remainingSec / 60)
 
   // Square checkout callback — clear param after handling to prevent re-trigger
   useEffect(() => {
@@ -413,15 +432,71 @@ export default function USCustomerOnboardingWizard() {
     } finally { setCheckoutLoading(false) }
   }
 
-  // ── Processing ──
+  // ── Processing timer (time-based, persists across reloads) ──
+  const processingInterval = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const tickProcessing = useCallback(() => {
+    try {
+      const startStr = localStorage.getItem(PROCESSING_KEY)
+      if (!startStr) return
+      const elapsed = Math.floor((Date.now() - Number(startStr)) / 1000)
+      if (elapsed >= TOTAL_DURATION) {
+        if (processingInterval.current) clearInterval(processingInterval.current)
+        processingInterval.current = null
+        localStorage.removeItem(PROCESSING_KEY)
+        localStorage.setItem(PROCESSING_DONE_KEY, '1')
+        setProcessingElapsed(TOTAL_DURATION)
+        setStep('done')
+      } else {
+        setProcessingElapsed(elapsed)
+      }
+    } catch { /* private browsing */ }
+  }, [TOTAL_DURATION])
+
+  // Resume processing on mount if timer is active, or skip to done if already completed
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(PROCESSING_DONE_KEY)) {
+        setStep('done')
+        return
+      }
+      const startStr = localStorage.getItem(PROCESSING_KEY)
+      if (startStr && step !== 'done') {
+        const elapsed = Math.floor((Date.now() - Number(startStr)) / 1000)
+        if (elapsed >= TOTAL_DURATION) {
+          localStorage.removeItem(PROCESSING_KEY)
+          localStorage.setItem(PROCESSING_DONE_KEY, '1')
+          setStep('done')
+        } else {
+          setStep('processing')
+          setProcessingElapsed(elapsed)
+          processingInterval.current = setInterval(tickProcessing, 1000)
+        }
+      }
+    } catch { /* ignore */ }
+    return () => {
+      if (processingInterval.current) clearInterval(processingInterval.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function startProcessing() {
-    setStep('processing'); setProcessingStep(0)
-    let current = 0
-    const interval = setInterval(() => {
-      current++
-      if (current >= processingSteps.length) { clearInterval(interval); setStep('done') }
-      else setProcessingStep(current)
-    }, 1200)
+    try {
+      // Already completed — skip straight to done
+      if (localStorage.getItem(PROCESSING_DONE_KEY)) {
+        setStep('done')
+        return
+      }
+      // Timer already running — resume instead of restarting
+      const existing = localStorage.getItem(PROCESSING_KEY)
+      if (!existing) {
+        localStorage.setItem(PROCESSING_KEY, String(Date.now()))
+      }
+    } catch { /* ignore */ }
+    setStep('processing')
+    setProcessingElapsed(0)
+    tickProcessing()
+    processingInterval.current = setInterval(tickProcessing, 1000)
   }
 
   const currentStepIdx = STEPS.findIndex(s => s.key === step)
@@ -849,20 +924,53 @@ export default function USCustomerOnboardingWizard() {
 
         {/* ═══ Processing ═══ */}
         {step === 'processing' && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-16 h-16 rounded-full bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center mb-6 animate-pulse">
-              <Loader2 size={28} className="text-[#17C5B0] animate-spin" />
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-16 h-16 rounded-full bg-[#1A8FD6]/15 border border-[#1A8FD6]/30 flex items-center justify-center mb-5 animate-pulse">
+              <Loader2 size={28} className="text-[#1A8FD6] animate-spin" />
             </div>
-            <h2 className={`text-lg font-bold ${T.text} mb-2`}>Setting Up Your Dashboard</h2>
-            <div className="space-y-2 w-full max-w-xs">
-              {processingSteps.map((label, i) => (
-                <div key={label} className={`flex items-center gap-2 text-[12px] transition-all duration-300 ${
-                  i < processingStep ? 'text-[#17C5B0]' : i === processingStep ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]/20'
-                }`}>
-                  {i < processingStep ? <CheckCircle2 size={12} /> : i === processingStep ? <Loader2 size={12} className="animate-spin" /> : <div className="w-3 h-3" />}
-                  {label}
-                </div>
-              ))}
+            <h2 className={`text-lg font-bold ${T.text} mb-1`}>Analyzing Your Business Data</h2>
+            <p className={`text-xs ${T.muted} mb-6 text-center max-w-sm`}>
+              Your revenue, products, and staff data are already loaded. Our AI is now generating custom insights for your business.
+            </p>
+
+            {/* Progress bar */}
+            <div className="w-full max-w-sm mb-2">
+              <div className="h-2 rounded-full bg-[#1F1F23] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] transition-all duration-1000 ease-linear"
+                  style={{ width: `${processingPct}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between w-full max-w-sm mb-6">
+              <span className="text-[11px] font-mono text-[#1A8FD6]">{processingPct}%</span>
+              <span className={`text-[11px] ${T.muted}/60`}>
+                ~{remainingMin} min remaining
+              </span>
+            </div>
+
+            {/* Phase list */}
+            <div className="space-y-1.5 w-full max-w-sm">
+              {processingPhases.map((phase, i) => {
+                const done = currentPhaseIdx === -1 || i < currentPhaseIdx
+                const active = i === currentPhaseIdx
+                return (
+                  <div key={phase.label} className={`flex items-center gap-2.5 text-[12px] transition-all duration-300 ${
+                    done ? 'text-[#17C5B0]' : active ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]/20'
+                  }`}>
+                    {done ? <CheckCircle2 size={13} className="flex-shrink-0" /> : active ? <Loader2 size={13} className="animate-spin flex-shrink-0" /> : <div className="w-[13px] h-[13px] flex-shrink-0" />}
+                    <span>{phase.label}</span>
+                    {phase.ai && active && <span className="ml-auto text-[9px] font-mono text-[#1A8FD6]/50">AI</span>}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Safe-to-leave notice */}
+            <div className="mt-8 px-4 py-3 rounded-xl bg-[#1F1F23]/60 border border-[#1F1F23] w-full max-w-sm">
+              <p className={`text-[11px] ${T.muted} text-center`}>
+                You can close this page and come back anytime — your progress is saved automatically.
+              </p>
             </div>
           </div>
         )}

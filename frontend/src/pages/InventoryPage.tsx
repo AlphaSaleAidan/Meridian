@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import {
   Package, AlertTriangle, TrendingUp, TrendingDown, Minus,
-  Upload, Search, ArrowUpDown, Box, Layers,
+  Upload, Search, ArrowUpDown, Box, Layers, CheckCircle2,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
@@ -121,9 +121,12 @@ export default function InventoryPage() {
     { key: 'trending_up', label: 'Trending Up', count: data.alerts.trending_up },
   ]
 
-  const handleUpload = () => {
+  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
     setShowUpload(true)
-    setTimeout(() => setShowUpload(false), 3000)
+    setTimeout(() => setShowUpload(false), 5000)
+    if (fileRef.current) fileRef.current.value = ''
   }
 
   return (
@@ -152,7 +155,8 @@ export default function InventoryPage() {
 
       {showUpload && (
         <div className="card p-3 border-[#17C5B0]/20 bg-[#17C5B0]/[0.03] flex items-center gap-2 animate-fade-in">
-          <span className="text-xs text-[#17C5B0]">✓ Stock levels uploaded successfully. AI will recalculate predictions.</span>
+          <CheckCircle2 size={14} className="text-[#17C5B0] flex-shrink-0" />
+          <span className="text-xs text-[#17C5B0]">Stock levels uploaded. AI will recalculate reorder predictions within a few minutes.</span>
         </div>
       )}
 

@@ -117,6 +117,7 @@ export default function CustomerOnboardingWizard() {
   // Hard data (revenue, products, staff, schedules) is available immediately from POS.
   // The timer covers AI-generated analysis: insights, anomalies, forecasts, patterns.
   const PROCESSING_KEY = 'meridian_processing_start'
+  const PROCESSING_DONE_KEY = 'meridian_processing_done'
   const TOTAL_DURATION = 20 * 60 // 1200 seconds
 
   const processingPhases = [
@@ -496,6 +497,7 @@ export default function CustomerOnboardingWizard() {
         if (processingInterval.current) clearInterval(processingInterval.current)
         processingInterval.current = null
         localStorage.removeItem(PROCESSING_KEY)
+        localStorage.setItem(PROCESSING_DONE_KEY, '1')
         clearProgress()
         setProcessingElapsed(TOTAL_DURATION)
         setStep('done')
@@ -505,14 +507,20 @@ export default function CustomerOnboardingWizard() {
     } catch { /* private browsing */ }
   }, [TOTAL_DURATION])
 
-  // Resume processing on mount if timer is active
+  // Resume processing on mount if timer is active, or skip to done if already completed
   useEffect(() => {
     try {
+      if (localStorage.getItem(PROCESSING_DONE_KEY)) {
+        clearProgress()
+        setStep('done')
+        return
+      }
       const startStr = localStorage.getItem(PROCESSING_KEY)
       if (startStr && step !== 'done') {
         const elapsed = Math.floor((Date.now() - Number(startStr)) / 1000)
         if (elapsed >= TOTAL_DURATION) {
           localStorage.removeItem(PROCESSING_KEY)
+          localStorage.setItem(PROCESSING_DONE_KEY, '1')
           clearProgress()
           setStep('done')
         } else {
@@ -529,9 +537,22 @@ export default function CustomerOnboardingWizard() {
   }, [])
 
   function startProcessing() {
-    try { localStorage.setItem(PROCESSING_KEY, String(Date.now())) } catch { /* ignore */ }
+    try {
+      // Already completed — skip straight to done
+      if (localStorage.getItem(PROCESSING_DONE_KEY)) {
+        clearProgress()
+        setStep('done')
+        return
+      }
+      // Timer already running — resume instead of restarting
+      const existing = localStorage.getItem(PROCESSING_KEY)
+      if (!existing) {
+        localStorage.setItem(PROCESSING_KEY, String(Date.now()))
+      }
+    } catch { /* ignore */ }
     setStep('processing')
     setProcessingElapsed(0)
+    tickProcessing()
     processingInterval.current = setInterval(tickProcessing, 1000)
   }
 
