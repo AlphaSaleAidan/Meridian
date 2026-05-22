@@ -98,6 +98,11 @@ const SquareIntegrationPage = lazy(() => import('@/pages/seo/SquareIntegrationPa
 const ToastIntegrationPage = lazy(() => import('@/pages/seo/ToastIntegrationPage'))
 const CloverIntegrationPage = lazy(() => import('@/pages/seo/CloverIntegrationPage'))
 const CityIndustryPage = lazy(() => import('@/pages/seo/CityIndustryPage'))
+const WhatIsPosAnalyticsPage = lazy(() => import('@/pages/seo/WhatIsPosAnalyticsPage'))
+const VsSpreadsheetsPage = lazy(() => import('@/pages/seo/VsSpreadsheetsPage'))
+const BlogIndexPage = lazy(() => import('@/pages/blog/BlogIndexPage'))
+const RestaurantProfitabilityArticle = lazy(() => import('@/pages/blog/RestaurantProfitabilityArticle'))
+const FootTrafficAnalyticsArticle = lazy(() => import('@/pages/blog/FootTrafficAnalyticsArticle'))
 
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -195,6 +200,15 @@ export default function App() {
 
               {/* SEO — Programmatic city x industry pages (160+) */}
               <Route path="/analytics/:industry/:citySlug" element={<CityIndustryPage />} />
+
+              {/* SEO — Comparison & educational pages */}
+              <Route path="/what-is-pos-analytics" element={<WhatIsPosAnalyticsPage />} />
+              <Route path="/vs/spreadsheets" element={<VsSpreadsheetsPage />} />
+
+              {/* Blog */}
+              <Route path="/blog" element={<BlogIndexPage />} />
+              <Route path="/blog/how-to-know-if-restaurant-is-profitable" element={<RestaurantProfitabilityArticle />} />
+              <Route path="/blog/restaurant-foot-traffic-analytics-guide" element={<FootTrafficAnalyticsArticle />} />
 
               {/* PUBLIC MERCHANT WEBSITES — no auth */}
               <Route path="/sites/:slug" element={

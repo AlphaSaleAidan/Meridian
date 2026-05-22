@@ -54,7 +54,45 @@ https://meridian.tips
 - Homepage: https://meridian.tips
 - Demo: https://meridian.tips/demo
 - Canada: https://meridian.tips/canada
-- Careers: https://meridian.tips/careers
+- Blog: https://meridian.tips/blog
+
+## Industry Pages
+
+- Restaurant Analytics: https://meridian.tips/for/restaurants
+- Coffee Shop Analytics: https://meridian.tips/for/coffee-shops
+- Auto Shop Analytics: https://meridian.tips/for/auto-shops
+- Fast Food Analytics: https://meridian.tips/for/fast-food
+- Smoke Shop Analytics: https://meridian.tips/for/smoke-shops
+
+## POS Integration Pages
+
+- Square POS Analytics: https://meridian.tips/integrations/square
+- Toast POS Analytics: https://meridian.tips/integrations/toast
+- Clover POS Analytics: https://meridian.tips/integrations/clover
+
+## Educational Content
+
+- What Is POS Analytics: https://meridian.tips/what-is-pos-analytics
+- POS Analytics vs Spreadsheets: https://meridian.tips/vs/spreadsheets
+- Restaurant Profitability Guide: https://meridian.tips/blog/how-to-know-if-restaurant-is-profitable
+- Foot Traffic Analytics Guide: https://meridian.tips/blog/restaurant-foot-traffic-analytics-guide
+
+## Frequently Asked Questions
+
+Q: What is POS analytics?
+A: POS analytics transforms point-of-sale transaction data into actionable business intelligence — revenue forecasting, anomaly detection, customer segmentation, and staff optimization, all calculated automatically from existing POS data.
+
+Q: What POS systems does Meridian support?
+A: Meridian supports 80+ POS systems including Square, Toast, Clover, Lightspeed, Shopify POS, Moneris (Canada), and TouchBistro. Most connect in under 5 minutes via OAuth.
+
+Q: How much does POS analytics cost?
+A: Meridian starts at $250 USD/month ($339 CAD) with a free first month. No contracts or setup fees.
+
+Q: Does Meridian work for Canadian businesses?
+A: Yes. Meridian has Canadian POS support (Moneris, Alice POS), CAD pricing, and full PIPEDA and Quebec Law 25 compliance.
+
+Q: How do I know if my restaurant is profitable?
+A: Track food cost percentage (28-35%), labor cost percentage (25-35%), prime cost (under 65%), revenue per labor hour, average ticket size, and void rate. POS analytics calculates these automatically from transaction data.
 
 ## Contact
 

@@ -89,6 +89,12 @@ export default function LandingPage() {
               Live Demo
             </MagneticButton>
             <MagneticButton
+              onClick={() => navigate('/blog')}
+              className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200"
+            >
+              Blog
+            </MagneticButton>
+            <MagneticButton
               onClick={() => navigate('/careers')}
               className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200"
             >
@@ -153,6 +159,12 @@ export default function LandingPage() {
                 className="flex items-center gap-3 px-4 py-3 rounded-lg text-[14px] font-medium text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors text-left min-h-[48px]"
               >
                 Live Demo
+              </button>
+              <button
+                onClick={() => { navigate('/blog'); setMobileMenuOpen(false) }}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-[14px] font-medium text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors text-left min-h-[48px]"
+              >
+                Blog
               </button>
               <button
                 onClick={() => { navigate('/careers'); setMobileMenuOpen(false) }}
