@@ -1,21 +1,18 @@
-import { useRef, type ReactNode, type MouseEvent } from 'react'
+import { useRef, type ReactNode, type MouseEvent, type HTMLAttributes } from 'react'
 
-interface Props {
+interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'onMouseMove' | 'onMouseLeave' | 'style'> {
   children: ReactNode
   className?: string
   maxTilt?: number
   glowColor?: string
 }
 
-/**
- * Dashboard card with 3D tilt on mouse hover.
- * Adds a subtle glow and perspective transform.
- */
 export default function DashboardTiltCard({
   children,
   className = '',
   maxTilt = 4,
   glowColor = 'rgba(124, 92, 255, 0.06)',
+  ...rest
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -45,6 +42,7 @@ export default function DashboardTiltCard({
       className={className}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
+      {...rest}
       style={{
         transition: 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease',
         transformStyle: 'preserve-3d',

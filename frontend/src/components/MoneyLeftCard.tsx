@@ -51,6 +51,7 @@ export default function MoneyLeftCard({ score }: Props) {
     <DashboardTiltCard
       className="card p-6 glow-violet border-[#7C5CFF]/10"
       glowColor="rgba(124, 92, 255, 0.08)"
+      data-walkthrough="money-left-score"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">

@@ -21,7 +21,7 @@ function HeatmapGrid({ cells }: { cells: PeakHourCell[] }) {
   const maxIntensity = Math.max(...cells.map(c => c.intensity))
 
   return (
-    <div className="card p-4 sm:p-5">
+    <div className="card p-4 sm:p-5" data-walkthrough="peak-heatmap">
       <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Weekly Transaction Heatmap</h3>
       <div className="overflow-x-auto">
         <div className="min-w-[700px]">

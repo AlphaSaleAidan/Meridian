@@ -17,14 +17,14 @@ const severityConfig = {
   info:     { color: 'text-[#1A8FD6]', bg: 'bg-[#1A8FD6]/10', border: 'border-[#1A8FD6]/15', icon: Info, label: 'Info' },
 }
 
-function AnomalyCard({ anomaly }: { anomaly: Anomaly }) {
+function AnomalyCard({ anomaly, isFirst }: { anomaly: Anomaly; isFirst?: boolean }) {
   const [acked, setAcked] = useState(anomaly.acknowledged)
   const cfg = severityConfig[anomaly.severity]
   const Icon = cfg.icon
   const isNegative = anomaly.deviationPct < 0
 
   return (
-    <DashboardTiltCard className={clsx('card p-4', !acked && cfg.border, acked && 'opacity-60')}>
+    <DashboardTiltCard className={clsx('card p-4', !acked && cfg.border, acked && 'opacity-60')} {...(isFirst ? { 'data-walkthrough': 'top-anomaly' } : {})}>
       <div className="flex items-start gap-3">
         <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5', cfg.bg)}>
           <Icon size={16} className={cfg.color} />
@@ -192,7 +192,7 @@ export default function AnomaliesPage() {
               const sev = { critical: 0, warning: 1, info: 2 }
               return sev[a.severity] - sev[b.severity]
             })
-            .map(a => <AnomalyCard key={a.id} anomaly={a} />)}
+            .map((a, i) => <AnomalyCard key={a.id} anomaly={a} isFirst={i === 0} />)}
         </div>
       </ScrollReveal>
     </div>

@@ -33,14 +33,15 @@ const typeConfig: Record<string, { icon: typeof Lightbulb; color: string; bg: st
 interface Props {
   insight: Insight
   compact?: boolean
+  'data-walkthrough'?: string
 }
 
-export default function InsightCard({ insight, compact = false }: Props) {
+export default function InsightCard({ insight, compact = false, ...rest }: Props) {
   const config = typeConfig[insight.type] || typeConfig.general
   const Icon = config.icon
 
   return (
-    <div className="card-hover p-4 group">
+    <div className="card-hover p-4 group" {...rest}>
       <div className="flex items-start gap-3">
         <div className={clsx(
           'p-2 rounded-lg flex-shrink-0 transition-all duration-300 group-hover:scale-110',

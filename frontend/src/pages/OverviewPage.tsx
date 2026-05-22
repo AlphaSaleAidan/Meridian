@@ -280,6 +280,28 @@ export default function OverviewPage() {
           />
         )}
       </ScrollReveal>
+
+      {isDemo && (
+        <ScrollReveal variant="fadeUp" delay={0.2}>
+          <div
+            className="card p-6 border-[#17C5B0]/20 bg-gradient-to-r from-[#17C5B0]/5 to-transparent"
+            data-walkthrough="connect-pos-cta"
+          >
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-[#F5F5F7]">See Your Real Numbers</h3>
+                <p className="text-sm text-[#A1A1A8] mt-1">
+                  Connect your POS and get your actual data in this dashboard — takes about 4 minutes.
+                  First month free, no credit card required.
+                </p>
+              </div>
+              <button className="flex-shrink-0 px-6 py-3 rounded-xl bg-[#17C5B0] text-black font-bold text-sm hover:bg-[#17C5B0]/90 transition-colors whitespace-nowrap">
+                Connect Your POS
+              </button>
+            </div>
+          </div>
+        </ScrollReveal>
+      )}
     </div>
     </DataPageSkeleton>
   )

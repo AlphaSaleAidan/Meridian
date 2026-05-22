@@ -172,7 +172,7 @@ export default function ForecastsPage() {
       {/* Chart: Historical + Forecast */}
       {chartData.length > 0 && (
         <ScrollReveal variant="fadeUp" delay={0.1}>
-          <div className="card p-4 sm:p-5">
+          <div className="card p-4 sm:p-5" data-walkthrough="revenue-forecast-chart">
             <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Revenue: Actual vs Forecast</h3>
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>

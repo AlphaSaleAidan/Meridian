@@ -89,7 +89,7 @@ function CustomerValueTiers({ segments }: { segments: RFMSegment[] }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-      {tiers.map(tier => {
+      {tiers.map((tier, tierIdx) => {
         const matchedSegs = segments.filter(s => tier.segments.includes(s.name))
         const count = matchedSegs.reduce((s, seg) => s + seg.count, 0)
         const totalSpend = matchedSegs.reduce((s, seg) => s + seg.avgSpendCents * seg.count, 0)
@@ -98,7 +98,8 @@ function CustomerValueTiers({ segments }: { segments: RFMSegment[] }) {
           : 0
         const Icon = tier.icon
         return (
-          <DashboardTiltCard key={tier.label} className="card p-4">
+          <DashboardTiltCard key={tier.label} className="card p-4" {...(tierIdx === 2 ? { 'data-walkthrough': 'at-risk-segment' } : {})}>
+
             <div className="flex items-center gap-2 mb-3">
               <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${tier.color}15` }}>
                 <Icon size={14} style={{ color: tier.color }} />

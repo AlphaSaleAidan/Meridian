@@ -101,8 +101,8 @@ export default function InsightsPage() {
       {filtered.length > 0 ? (
         <ScrollReveal variant="fadeUp" delay={0.1}>
           <div className="space-y-2">
-            {filtered.map(insight => (
-              <InsightCard key={insight.id} insight={insight} />
+            {filtered.map((insight, i) => (
+              <InsightCard key={insight.id} insight={insight} {...(i === 0 ? { 'data-walkthrough': 'first-insight' } : {})} />
             ))}
           </div>
           {isLimited && (
