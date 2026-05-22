@@ -13,6 +13,7 @@ import CustomerWalkthrough from './CustomerWalkthrough'
 import { RadarLoadingState } from './LoadingState'
 import { useAuth } from '@/lib/auth'
 import { useMobile } from '@/hooks/useMobile'
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 
 interface NavItem {
   path: string
@@ -53,6 +54,7 @@ export default function CanadaLayout() {
   const basePath = '/canada/dashboard'
   const { user, org } = useAuth()
   const { isMobile, isTablet } = useMobile()
+  const { unreadCount } = useUnreadNotifications()
 
   useEffect(() => {
     if (!user?.id) return
@@ -115,7 +117,14 @@ export default function CanadaLayout() {
                 )}
                 onClick={() => setSidebarOpen(false)}
               >
-                <Icon size={16} className="flex-shrink-0" />
+                <span className="relative flex-shrink-0">
+                  <Icon size={16} />
+                  {item.path === 'notifications' && unreadCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </span>
                 <span className="truncate">{item.label}</span>
                 {item.desktopOnly && (
                   <Monitor size={10} className="ml-auto text-[#A1A1A8]/40 flex-shrink-0" />

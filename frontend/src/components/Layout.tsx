@@ -31,6 +31,7 @@ import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import MobileNavBar from './MobileNavBar'
 import { useAuth } from '@/lib/auth'
 import { useMobile } from '@/hooks/useMobile'
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import OnboardingWizard from '@/pages/OnboardingWizard'
 import ClineChatWidget from './ClineChatWidget'
 import ClineErrorBoundary from './ClineErrorBoundary'
@@ -95,6 +96,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const { org, logout } = useAuth()
   const { isDesktop } = useMobile()
+  const { unreadCount } = useUnreadNotifications()
   const basePath = location.pathname.startsWith('/app') ? '/app'
     : location.pathname.startsWith('/canada/demo') ? '/canada/demo'
     : location.pathname.startsWith('/canada/dashboard') ? '/canada/dashboard'
@@ -165,7 +167,14 @@ export default function Layout() {
                       )
                     }
                   >
-                    <Icon size={18} className="transition-transform duration-200 group-hover:scale-110" />
+                    <span className="relative">
+                      <Icon size={18} className="transition-transform duration-200 group-hover:scale-110" />
+                      {path === 'notifications' && unreadCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </span>
                     {label}
                   </NavLink>
                 )

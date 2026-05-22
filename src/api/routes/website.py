@@ -66,6 +66,11 @@ class WebsiteConfigRequest(BaseModel):
     ordering_enabled: bool | None = None
     ordering_fee_pct: float | None = None
     stripe_connect_id: str | None = None
+    meta_title: str | None = None
+    meta_description: str | None = None
+    og_image_url: str | None = None
+    custom_domain: str | None = None
+    google_analytics_id: str | None = None
 
 
 class ScrapeRequest(BaseModel):
@@ -457,6 +462,11 @@ async def get_public_website(slug: str):
         "social_links": site.get("social_links"),
         "slug": site.get("slug"),
         "ordering_enabled": site.get("ordering_enabled"),
+        "meta_title": site.get("meta_title"),
+        "meta_description": site.get("meta_description"),
+        "og_image_url": site.get("og_image_url"),
+        "custom_domain": site.get("custom_domain"),
+        "google_analytics_id": site.get("google_analytics_id"),
     }
 
 

@@ -7,6 +7,7 @@ import {
   Globe, Bell, Settings, Video, Box, ChefHat,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 
 interface TabItem {
   path: string
@@ -48,6 +49,7 @@ interface MobileNavBarProps {
 export default function MobileNavBar({ basePath }: MobileNavBarProps) {
   const [moreOpen, setMoreOpen] = useState(false)
   const location = useLocation()
+  const { unreadCount } = useUnreadNotifications()
 
   useEffect(() => {
     setMoreOpen(false)
@@ -89,7 +91,14 @@ export default function MobileNavBar({ basePath }: MobileNavBarProps) {
                         : 'text-[#A1A1A8] active:bg-[#1F1F23]',
                     )}
                   >
-                    <Icon size={20} />
+                    <span className="relative">
+                      <Icon size={20} />
+                      {item.path === 'notifications' && unreadCount > 0 && (
+                        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[10px] font-medium leading-tight text-center">{item.label}</span>
                   </NavLink>
                 )

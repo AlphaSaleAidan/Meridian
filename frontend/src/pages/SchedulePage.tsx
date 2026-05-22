@@ -13,6 +13,7 @@ import { getActiveBusinessType, isCanadaPath } from '@/lib/demo-context'
 import ScrollReveal from '@/components/ScrollReveal'
 import AnalyzingDataState from '@/components/AnalyzingDataState'
 import { useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
 import MobileAgendaView from '@/components/schedule/MobileAgendaView'
 import StaffRosterPanel from '@/components/schedule/StaffRosterPanel'
@@ -52,6 +53,7 @@ function addDays(date: Date, days: number): Date {
 
 export default function SchedulePage() {
   const isDemo = useIsDemo()
+  const { org } = useAuth()
   const businessType = getActiveBusinessType()
   const portalContext = isCanadaPath() ? 'ca' : 'us'
   const country = portalContext === 'ca' ? 'CA' : 'US'
@@ -190,7 +192,7 @@ export default function SchedulePage() {
 
   const handleDownloadPdf = useCallback(async () => {
     const { generateSchedulePdf } = await import('@/lib/generate-schedule-pdf')
-    const blob = await generateSchedulePdf({ shifts, staff, weekStartDate })
+    const blob = await generateSchedulePdf({ shifts, staff, weekStartDate, businessName: org?.business_name })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

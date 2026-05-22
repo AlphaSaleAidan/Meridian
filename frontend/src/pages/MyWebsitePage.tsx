@@ -3,7 +3,7 @@ import { clsx } from 'clsx'
 import {
   Globe, Palette, BarChart3, ShoppingBag, ExternalLink, Copy, Check,
   Loader2, ArrowRight, Trash2, Eye, EyeOff, RefreshCw, Star,
-  Phone, Mail, MapPin, Clock, ChevronRight, Sparkles, Link2, X,
+  Phone, Mail, MapPin, Clock, ChevronRight, Sparkles, Link2, X, Search,
 } from 'lucide-react'
 import { useOrgId } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
@@ -39,6 +39,11 @@ interface WebsiteConfig {
   social_links?: Record<string, string>
   google_rating?: number
   google_review_count?: number
+  meta_title?: string
+  meta_description?: string
+  og_image_url?: string
+  custom_domain?: string
+  google_analytics_id?: string
 }
 
 interface AnalyticsSummary {
@@ -559,6 +564,50 @@ export default function MyWebsitePage() {
                   <textarea rows={3} value={config.about_text || ''} placeholder="Tell your story..."
                     onChange={e => setConfig(p => ({ ...p, about_text: e.target.value }))}
                     className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#2A2A30] text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50 resize-none" />
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+
+          {/* SEO & Sharing */}
+          <ScrollReveal variant="fadeUp" delay={0.11}>
+            <div className="card p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-[#F5F5F7] flex items-center gap-2">
+                <Search size={16} className="text-[#1A8FD6]" /> SEO &amp; Sharing
+              </h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-[#A1A1A8] mb-1 block">Meta Title</label>
+                  <input value={config.meta_title || ''} placeholder="Page title for search engines"
+                    onChange={e => setConfig(p => ({ ...p, meta_title: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#2A2A30] text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#A1A1A8] mb-1 flex items-center justify-between">
+                    <span>Meta Description</span>
+                    <span className="text-[10px] text-[#A1A1A8]/50 font-mono">{(config.meta_description || '').length}/160</span>
+                  </label>
+                  <textarea rows={2} value={config.meta_description || ''} placeholder="Description shown in Google results"
+                    maxLength={160}
+                    onChange={e => setConfig(p => ({ ...p, meta_description: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#2A2A30] text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50 resize-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#A1A1A8] mb-1 flex items-center gap-1.5 block">
+                    <BarChart3 size={12} className="text-[#A1A1A8]/60" /> Google Analytics ID
+                  </label>
+                  <input value={config.google_analytics_id || ''} placeholder="G-XXXXXXXXXX"
+                    onChange={e => setConfig(p => ({ ...p, google_analytics_id: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#2A2A30] text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50" />
+                </div>
+                <div>
+                  <label className="text-xs text-[#A1A1A8] mb-1 flex items-center gap-1.5 block">
+                    <Globe size={12} className="text-[#A1A1A8]/60" /> Custom Domain
+                  </label>
+                  <input value={config.custom_domain || ''} placeholder="yourdomain.com"
+                    onChange={e => setConfig(p => ({ ...p, custom_domain: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#2A2A30] text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50" />
+                  <p className="text-[10px] text-[#A1A1A8]/50 mt-1">Point your CNAME to meridian.tips</p>
                 </div>
               </div>
             </div>
