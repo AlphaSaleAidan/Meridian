@@ -1,5 +1,6 @@
+import { useState, useCallback } from 'react'
 import { clsx } from 'clsx'
-import { Bell, AlertTriangle, Info, Zap, FileText } from 'lucide-react'
+import { Bell, AlertTriangle, Info, Zap, FileText, CheckCheck } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { formatRelative } from '@/lib/format'
@@ -8,6 +9,7 @@ import ScrollReveal from '@/components/ScrollReveal'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import DataPageSkeleton from '@/components/DataPageSkeleton'
 import { useAuth } from '@/lib/auth'
+import { useToast } from '@/components/Toast'
 
 const priorityConfig: Record<string, { color: string; dot: string }> = {
   urgent: { color: 'text-red-400', dot: 'bg-red-400' },
@@ -27,8 +29,31 @@ export default function NotificationsPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
   const { org } = useAuth()
+  const { toast } = useToast()
   const posConnected = !!org?.pos_connected
   const notifs = useApi(() => api.notifications(orgId, 50), [orgId])
+  const [acknowledging, setAcknowledging] = useState<string | null>(null)
+
+  const handleAcknowledge = useCallback(async (notifId: string) => {
+    if (!orgId) return
+    setAcknowledging(notifId)
+    try {
+      await api.acknowledgeNotification(orgId, notifId)
+      notifs.refetch()
+    } catch { /* ignore */ }
+    setAcknowledging(null)
+  }, [orgId, notifs])
+
+  const handleAcknowledgeAll = useCallback(async () => {
+    if (!orgId) return
+    setAcknowledging('all')
+    try {
+      await api.acknowledgeAllNotifications(orgId)
+      notifs.refetch()
+      toast('All notifications marked as read', 'success')
+    } catch { /* ignore */ }
+    setAcknowledging(null)
+  }, [orgId, notifs, toast])
 
   if (!isDemo && !posConnected) return <DataPageSkeleton title="Notifications"><div /></DataPageSkeleton>
   if (notifs.loading) return <LoadingPage />
@@ -43,11 +68,23 @@ export default function NotificationsPage() {
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
-        <div>
-          <h1 className="text-2xl font-bold text-[#F5F5F7]">Notifications</h1>
-          <p className="text-sm text-[#A1A1A8] mt-1">
-            <span className="font-mono">{data.total}</span> notifications • <span className="font-mono">{unread}</span> unread
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Notifications</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              <span className="font-mono">{data.total}</span> notifications • <span className="font-mono">{unread}</span> unread
+            </p>
+          </div>
+          {unread > 0 && (
+            <button
+              onClick={handleAcknowledgeAll}
+              disabled={acknowledging === 'all'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#17C5B0] bg-[#17C5B0]/10 border border-[#17C5B0]/20 hover:bg-[#17C5B0]/20 transition-colors disabled:opacity-50"
+            >
+              <CheckCheck size={14} />
+              Mark all read
+            </button>
+          )}
         </div>
       </ScrollReveal>
 
@@ -63,9 +100,11 @@ export default function NotificationsPage() {
               return (
                 <div
                   key={n.id}
+                  onClick={() => !isRead && handleAcknowledge(n.id)}
                   className={clsx(
                     'card-hover p-4 transition-all duration-200',
-                    !isRead && 'border-l-2 border-l-[#1A8FD6] bg-[#1A8FD6]/[0.02]'
+                    !isRead && 'border-l-2 border-l-[#1A8FD6] bg-[#1A8FD6]/[0.02] cursor-pointer',
+                    acknowledging === n.id && 'opacity-50',
                   )}
                 >
                   <div className="flex items-start gap-3">

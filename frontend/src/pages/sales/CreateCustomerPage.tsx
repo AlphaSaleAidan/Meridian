@@ -199,7 +199,7 @@ export default function CreateCustomerPage() {
           notes: form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
           rep_id: rep?.rep_id || null,
         })
-        if (dealErr) console.warn('Deal creation warning:', dealErr.message)
+        // deal creation is best-effort; error is non-blocking
       } else {
         const existing = JSON.parse(localStorage.getItem('meridian_pending_customers') || '[]')
         existing.push({

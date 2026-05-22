@@ -26,13 +26,11 @@ async function sendEmail(
       body: JSON.stringify({ template, to, first_name: firstName, portal, extra }),
     })
     if (!res.ok) {
-      console.warn('[Email] API error:', res.status)
       return false
     }
     const data: SendResult = await res.json()
     return data.status === 'sent'
   } catch {
-    console.error('[Email] Failed to send:', template)
     return false
   }
 }

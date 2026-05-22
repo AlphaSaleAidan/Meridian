@@ -11,8 +11,10 @@ Routes:
   GET /api/dashboard/products       → Product performance
   GET /api/dashboard/insights       → Active AI insights
   GET /api/dashboard/forecasts      → Revenue forecasts
-  GET /api/dashboard/notifications  → User notifications
-  GET /api/dashboard/connection     → POS connection status
+  GET  /api/dashboard/notifications            → User notifications
+  POST /api/dashboard/notifications/acknowledge     → Mark one notification read
+  POST /api/dashboard/notifications/acknowledge-all → Mark all notifications read
+  GET  /api/dashboard/connection                    → POS connection status
 """
 import asyncio
 import logging
@@ -470,6 +472,39 @@ async def get_notifications(
         ],
         "total": len(notifications),
     }
+
+
+@router.post("/notifications/acknowledge")
+async def acknowledge_notification(
+    org_id: OrgId,
+    notification_id: str = Query(..., description="Notification ID to acknowledge"),
+    db=Depends(_get_db),
+):
+    """Mark a single notification as read."""
+    if not _UUID_RE.match(notification_id):
+        raise HTTPException(400, "Invalid notification_id format")
+    now = datetime.now(timezone.utc).isoformat()
+    await db.update(
+        "notifications",
+        {"acknowledged_at": now},
+        filters={"id": f"eq.{notification_id}", "org_id": f"eq.{org_id}"},
+    )
+    return {"ok": True, "notification_id": notification_id}
+
+
+@router.post("/notifications/acknowledge-all")
+async def acknowledge_all_notifications(
+    org_id: OrgId,
+    db=Depends(_get_db),
+):
+    """Mark all unread notifications as read for an org."""
+    now = datetime.now(timezone.utc).isoformat()
+    await db.update(
+        "notifications",
+        {"acknowledged_at": now},
+        filters={"org_id": f"eq.{org_id}", "acknowledged_at": "is.null"},
+    )
+    return {"ok": True}
 
 
 # ─── Connection Status ───────────────────────────────────

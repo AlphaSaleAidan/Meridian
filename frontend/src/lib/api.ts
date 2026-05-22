@@ -303,6 +303,14 @@ export const api = {
     : !orgId ? delay(EMPTY.notifications)
     : apiFetch<{ notifications: Notification[]; total: number }>('/api/dashboard/notifications', { params: { org_id: orgId, limit } }),
 
+  acknowledgeNotification: (orgId: string, notificationId: string) =>
+    isDemo(orgId) ? delay({ ok: true })
+    : apiFetch<{ ok: boolean }>('/api/dashboard/notifications/acknowledge', { method: 'POST', params: { org_id: orgId, notification_id: notificationId } }),
+
+  acknowledgeAllNotifications: (orgId: string) =>
+    isDemo(orgId) ? delay({ ok: true })
+    : apiFetch<{ ok: boolean }>('/api/dashboard/notifications/acknowledge-all', { method: 'POST', params: { org_id: orgId } }),
+
   connection: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.connection())
     : !orgId ? delay(EMPTY.connection)

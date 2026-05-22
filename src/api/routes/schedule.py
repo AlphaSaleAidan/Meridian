@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from uuid import uuid4
 
@@ -248,7 +248,100 @@ async def publish_schedule(body: PublishRequest, _auth=Depends(require_service_a
     }
 
 
+# ─── Holiday Helpers ──────────────────────────────────────────
+
+
+def _nth_weekday(year: int, month: int, weekday: int, n: int) -> date:
+    """Return the n-th occurrence of *weekday* (0=Mon) in *month*."""
+    first = date(year, month, 1)
+    # Days until the first occurrence of the target weekday
+    offset = (weekday - first.weekday()) % 7
+    d = first + timedelta(days=offset + 7 * (n - 1))
+    return d
+
+
+def _last_weekday(year: int, month: int, weekday: int) -> date:
+    """Return the last occurrence of *weekday* (0=Mon) in *month*."""
+    if month == 12:
+        last_day = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        last_day = date(year, month + 1, 1) - timedelta(days=1)
+    offset = (last_day.weekday() - weekday) % 7
+    return last_day - timedelta(days=offset)
+
+
+def _easter(year: int) -> date:
+    """Compute Easter Sunday via the Anonymous Gregorian algorithm."""
+    a = year % 19
+    b, c = divmod(year, 100)
+    d, e = divmod(b, 4)
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i, k = divmod(c, 4)
+    l = (32 + 2 * e + 2 * i - h - k) % 7  # noqa: E741
+    m = (a + 11 * h + 22 * l) // 451
+    month, day = divmod(h + l - 7 * m + 114, 31)
+    return date(year, month, day + 1)
+
+
+def _compute_holidays(year: int, country: str) -> list[dict]:
+    """Return federal holidays as ``[{"date": "YYYY-MM-DD", "name": ...}]``."""
+    holidays: list[dict] = []
+
+    if country.upper() == "CA":
+        # Victoria Day: last Monday on or before May 24
+        may24 = date(year, 5, 24)
+        victoria_day = may24 - timedelta(days=(may24.weekday() - 0) % 7)
+
+        holidays = [
+            {"date": date(year, 1, 1).isoformat(), "name": "New Year's Day"},
+            {"date": (_easter(year) - timedelta(days=2)).isoformat(),
+             "name": "Good Friday"},
+            {"date": victoria_day.isoformat(), "name": "Victoria Day"},
+            {"date": date(year, 7, 1).isoformat(), "name": "Canada Day"},
+            {"date": _nth_weekday(year, 9, 0, 1).isoformat(),
+             "name": "Labour Day"},
+            {"date": date(year, 9, 30).isoformat(),
+             "name": "National Day for Truth and Reconciliation"},
+            {"date": _nth_weekday(year, 10, 0, 2).isoformat(),
+             "name": "Thanksgiving"},
+            {"date": date(year, 11, 11).isoformat(),
+             "name": "Remembrance Day"},
+            {"date": date(year, 12, 25).isoformat(), "name": "Christmas Day"},
+            {"date": date(year, 12, 26).isoformat(), "name": "Boxing Day"},
+        ]
+    else:
+        holidays = [
+            {"date": date(year, 1, 1).isoformat(),
+             "name": "New Year's Day"},
+            {"date": _nth_weekday(year, 1, 0, 3).isoformat(),
+             "name": "Martin Luther King Jr. Day"},
+            {"date": _nth_weekday(year, 2, 0, 3).isoformat(),
+             "name": "Presidents' Day"},
+            {"date": _last_weekday(year, 5, 0).isoformat(),
+             "name": "Memorial Day"},
+            {"date": date(year, 6, 19).isoformat(), "name": "Juneteenth"},
+            {"date": date(year, 7, 4).isoformat(),
+             "name": "Independence Day"},
+            {"date": _nth_weekday(year, 9, 0, 1).isoformat(),
+             "name": "Labor Day"},
+            {"date": _nth_weekday(year, 10, 0, 2).isoformat(),
+             "name": "Columbus Day"},
+            {"date": date(year, 11, 11).isoformat(),
+             "name": "Veterans Day"},
+            {"date": _nth_weekday(year, 11, 3, 4).isoformat(),
+             "name": "Thanksgiving"},
+            {"date": date(year, 12, 25).isoformat(),
+             "name": "Christmas Day"},
+        ]
+
+    holidays.sort(key=lambda h: h["date"])
+    return holidays
+
+
 # ─── Holidays Endpoint ────────────────────────────────────────
+
 
 @router.get("/holidays")
 async def get_holidays(
@@ -256,7 +349,26 @@ async def get_holidays(
     country: str = Query(default="US", description="US or CA"),
     week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
 ):
-    return {"holidays": [], "country": country, "week_start": week_start}
+    year = datetime.now(timezone.utc).year
+    if week_start:
+        try:
+            ws = date.fromisoformat(week_start)
+        except ValueError:
+            raise HTTPException(400, "Invalid week_start format, expected YYYY-MM-DD")
+        year = ws.year
+        we = ws + timedelta(days=6)
+        all_holidays = _compute_holidays(year, country)
+        # If the week spans a year boundary, also grab the next year
+        if we.year != year:
+            all_holidays += _compute_holidays(we.year, country)
+        filtered = [
+            h for h in all_holidays
+            if ws.isoformat() <= h["date"] <= we.isoformat()
+        ]
+        return {"holidays": filtered, "country": country, "week_start": week_start}
+
+    holidays = _compute_holidays(year, country)
+    return {"holidays": holidays, "country": country, "week_start": week_start}
 
 
 # ─── AI Recommendation Endpoint ───────────────────────────────

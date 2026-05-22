@@ -1088,7 +1088,7 @@ export default function PhoneOrdersPage() {
   }, [orgId, isDemo])
 
   const business: PhoneBizConfig = useMemo(() => {
-    if (phoneConfig?.exists) {
+    if (!isDemo && phoneConfig?.exists) {
       return {
         id: phoneConfig.merchant_id,
         name: phoneConfig.business_name || org?.business_name || 'My Business',
@@ -1108,10 +1108,25 @@ export default function PhoneOrdersPage() {
         })),
       }
     }
+    if (!isDemo) {
+      return {
+        id: orgId || '',
+        name: org?.business_name || 'My Business',
+        vertical: 'restaurant',
+        country: 'US',
+        currency: '$',
+        taxRate: 0.08,
+        phone: '',
+        greeting: '',
+        voice: 'af_bella',
+        orderTypes: ['pickup', 'delivery'] as any,
+        menu: [],
+      }
+    }
     return demoData.business
-  }, [phoneConfig, demoData.business, org?.business_name])
+  }, [phoneConfig, demoData.business, org?.business_name, isDemo, orgId])
 
-  const calls = realCalls !== null && realCalls.length > 0 ? realCalls : demoData.calls
+  const calls = isDemo ? demoData.calls : (realCalls ?? [])
 
   const handleWizardDone = useCallback(async () => {
     localStorage.setItem(setupKey, '1')

@@ -303,7 +303,9 @@ export default function USPortalLeadDetailPage() {
       })
       if (!res.ok) throw new Error('Email delivery failed')
       setCredentialEmailed(true)
+      toast('Login credentials emailed to ' + deal.contact_email, 'success')
     } catch {
+      toast('Credentials email failed — share them manually', 'error')
       setCustomerError('Failed to send email — you can share the credentials manually.')
     } finally {
       setCredentialEmailing(false)
@@ -492,8 +494,10 @@ export default function USPortalLeadDetailPage() {
       })
       if (!res.ok) throw new Error('Email delivery failed')
       setInvoiceEmailed(true)
+      toast('Invoice emailed to ' + deal.contact_email, 'success')
     } catch (err) {
       console.error('[Invoice] Email failed:', err)
+      toast('Invoice email failed — try again or share the PDF directly', 'error')
       setPosError('Invoice email failed to send. Try again or share the PDF directly.')
     } finally {
       setInvoiceEmailing(false)
@@ -602,8 +606,10 @@ export default function USPortalLeadDetailPage() {
       })
       if (!res.ok) throw new Error('Email delivery failed')
       setSlaEmailed(true)
+      toast('SLA emailed to ' + deal.contact_email, 'success')
     } catch (err) {
       console.error('[SLA] Email failed:', err)
+      toast('SLA email failed — try again or share the PDF', 'error')
       setPosError('SLA email failed to send. Try again or download and share the PDF.')
     } finally {
       setSlaEmailing(false)
@@ -692,12 +698,14 @@ export default function USPortalLeadDetailPage() {
       })
       if (!res.ok) throw new Error('Email delivery failed')
       setProposalSent(true)
+      toast('Proposal emailed to ' + deal.contact_email, 'success')
       if (deal.stage === 'appointment_set' || deal.stage === 'proposal_shown' || deal.stage === 'contacted' || deal.stage === 'demo_scheduled') {
         await usLeadsService.updateStage(deal.id, 'proposal_shown')
         setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
       }
     } catch (err) {
       console.error('[Proposal] Email failed:', err)
+      toast('Proposal email failed — try again or share the PDF', 'error')
       setPosError('Proposal email failed to send. Try again or download and share the PDF.')
     } finally {
       setProposalEmailing(false)
