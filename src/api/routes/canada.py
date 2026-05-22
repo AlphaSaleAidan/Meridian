@@ -32,6 +32,15 @@ router = APIRouter(prefix="/api/canada", tags=["canada"])
 CANADA_ORG_ID = "168b6df2-e9af-4b00-8fec-51e51149ff19"
 
 
+def _get_anon_key() -> str:
+    """Get the Supabase anon key from env (public key, safe to embed as fallback)."""
+    return (
+        os.environ.get("SUPABASE_ANON_KEY", "")
+        or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+        or os.environ.get("VITE_SUPABASE_ANON_KEY", "")
+    )
+
+
 def _sanitize_text(v: str) -> str:
     """Strip HTML tags and dangerous characters from user input."""
     import re
@@ -413,7 +422,7 @@ async def get_leads(request: Request, user: dict = Depends(require_jwt)):
     """Return all Canada deals/leads. Tries 'deals' table, falls back to 'data_sales'."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
-    anon_key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+    anon_key = _get_anon_key()
 
     # Extract the user's JWT from the Authorization header to enforce RLS
     auth_header = request.headers.get("authorization", "")
@@ -447,7 +456,7 @@ async def get_stats(request: Request, user: dict = Depends(require_jwt)):
     """Aggregate Canada sales stats: rep count, deal count, revenue pipeline."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
-    anon_key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+    anon_key = _get_anon_key()
 
     # Extract the user's JWT from the Authorization header to enforce RLS
     auth_header = request.headers.get("authorization", "")
@@ -487,7 +496,7 @@ async def get_team(request: Request, user: dict = Depends(require_jwt)):
     """Return all Canada sales reps (enforces RLS via user JWT)."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
-    anon_key = os.environ.get("SUPABASE_ANON_KEY", "") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
+    anon_key = _get_anon_key()
 
     # Extract the user's JWT from the Authorization header to enforce RLS
     auth_header = request.headers.get("authorization", "")
