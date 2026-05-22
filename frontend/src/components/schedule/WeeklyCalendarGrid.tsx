@@ -131,7 +131,7 @@ export default function WeeklyCalendarGrid({
 
           {/* Hour rows */}
           <div className="relative">
-            {hourRange.map((hour, hi) => {
+            {hourRange.map((hour) => {
               const isEvenHour = hour % 2 === 0
               return (
                 <div
