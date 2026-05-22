@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2, AlertCircle, Linkedin, UserCircle } from 'lucide-react'
+import SEO from '@/components/SEO'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import MagneticButton from '@/components/landing/MagneticButton'
@@ -129,6 +130,11 @@ export default function CanadaCareersPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
+      <SEO
+        title="Careers at Meridian Intelligence Canada"
+        description="Join the Meridian Canada sales team. Help restaurants and retail businesses unlock AI-powered POS analytics."
+        path="/canada/careers"
+      />
       <GrainOverlay />
 
       {/* NAV */}

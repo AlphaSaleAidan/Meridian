@@ -4,6 +4,7 @@ import { motion, useScroll, useTransform } from 'framer-motion'
 import { useState } from 'react'
 import { ArrowRight, ChevronRight, Shield, Clock, Menu, X } from 'lucide-react'
 
+import SEO from '@/components/SEO'
 import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import { TextRevealStagger } from '@/components/landing/TextReveal'
@@ -67,6 +68,11 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
+      <SEO
+        title="Meridian Intelligence — AI-Powered POS Analytics for Restaurants & Retail"
+        description="Connect your POS system and get instant AI-powered revenue insights, anomaly alerts, and forecasts. Works with Square, Toast, Clover, and 75+ systems. First month free."
+        path="/"
+      />
       <GrainOverlay />
 
       {/* ─── NAV ──────────────────────────────────── */}
@@ -207,9 +213,10 @@ export default function LandingPage() {
           <h1 className="text-[clamp(2.5rem,6vw,4.5rem)] font-bold text-[#F5F5F7] tracking-tight leading-[1.05] max-w-4xl mx-auto text-balance">
             <TextRevealStagger staggerDelay={0.06} baseDelay={0.15}>
               {[
-                <span key="1">See the revenue you're</span>,
+                <span key="1">AI-Powered POS Analytics</span>,
                 <span key="2">
-                  <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">leaving behind</em>
+                  that find your{' '}
+                  <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">hidden revenue</em>
                 </span>,
               ]}
             </TextRevealStagger>
@@ -315,9 +322,9 @@ export default function LandingPage() {
       {/* ─── LOGO BAR ─────────────────────────────── */}
       <section className="py-16 border-t border-[#1F1F23]/40">
         <ScrollReveal className="max-w-content mx-auto px-6">
-          <p className="text-center text-[11px] uppercase tracking-[0.2em] text-[#A1A1A8]/50 mb-8">
-            Works with your existing POS
-          </p>
+          <h2 className="text-center text-[11px] uppercase tracking-[0.2em] text-[#A1A1A8]/50 mb-8 font-normal">
+            Works with 80+ POS Systems
+          </h2>
           <div className="flex items-center justify-center gap-12 opacity-30">
             {logos.map(name => (
               <span key={name} className="text-[#A1A1A8] text-sm font-medium tracking-wide">
@@ -334,11 +341,11 @@ export default function LandingPage() {
           <ScrollReveal className="text-center mb-16 relative">
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 aurora-glow aurora-blue" style={{ width: 400, height: 400, opacity: 0.08 }} />
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight relative">
-              Your POS data,{' '}
-              <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">decoded</em>
+              37 AI Agents Working on Your{' '}
+              <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Business 24/7</em>
             </h2>
             <p className="mt-4 text-[#A1A1A8] max-w-md mx-auto text-[15px] leading-relaxed relative">
-              Meridian transforms raw transaction data into intelligence you can act on today.
+              Meridian transforms raw POS transaction data into intelligence you can act on today.
             </p>
           </ScrollReveal>
           <BentoGrid />
@@ -351,8 +358,8 @@ export default function LandingPage() {
         <div className="max-w-content mx-auto px-6 relative">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
-              From connected to{' '}
-              <em className="font-serif italic font-normal text-[#17C5B0]">profitable</em>
+              Connect Your POS in{' '}
+              <em className="font-serif italic font-normal text-[#17C5B0]">Minutes</em>
             </h2>
             <p className="mt-4 text-[#A1A1A8] text-[15px]">Three steps. Under sixty seconds.</p>
           </ScrollReveal>
@@ -399,8 +406,8 @@ export default function LandingPage() {
         <div className="max-w-content mx-auto px-6 relative">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
-              The numbers{' '}
-              <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">speak</em>
+              Real Results from POS{' '}
+              <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Analytics</em>
             </h2>
           </ScrollReveal>
 
@@ -433,8 +440,8 @@ export default function LandingPage() {
         <div className="max-w-content mx-auto px-6">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
-              Trusted by{' '}
-              <em className="font-serif italic font-normal text-[#17C5B0]">operators</em>
+              Trusted by Restaurant &amp; Retail{' '}
+              <em className="font-serif italic font-normal text-[#17C5B0]">Operators</em>
             </h2>
           </ScrollReveal>
 
@@ -453,6 +460,43 @@ export default function LandingPage() {
               </ScrollReveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ─── FAQ ──────────────────────────────────── */}
+      <section className="max-w-3xl mx-auto px-6 py-16">
+        <h2 className="text-2xl font-bold text-[#F5F5F7] mb-8">Frequently Asked Questions</h2>
+        <div className="space-y-6">
+          {[
+            {
+              q: 'What is Meridian Intelligence?',
+              a: 'Meridian Intelligence is an AI-powered analytics platform that connects to your POS system — including Square, Toast, Clover, and 77 others — and generates revenue insights, anomaly alerts, and customer segmentation reports using a 37-agent AI swarm. Merchants see plain-English insights within minutes of connecting.',
+            },
+            {
+              q: 'How much does Meridian cost?',
+              a: 'Meridian starts at $250 USD per month ($339 CAD) for the Standard plan, with a free first month and no long-term contracts. The Premium plan at $490 USD adds camera intelligence and customer segmentation. The Command plan at $980 USD includes multi-location support.',
+            },
+            {
+              q: 'Which POS systems does Meridian support?',
+              a: 'Meridian supports 80+ POS systems including Square, Toast, Clover, Lightspeed, Shopify POS, Moneris (Canada), and TouchBistro. Most merchants connect in under 5 minutes using OAuth — no API keys needed.',
+            },
+            {
+              q: 'Does Meridian work for Canadian businesses?',
+              a: 'Yes. Meridian has a dedicated Canadian portal with CAD pricing, Canadian POS integrations including Moneris and Alice POS, and full PIPEDA and Quebec Law 25 compliance. Visit meridian.tips/canada for details.',
+            },
+            {
+              q: 'How long does it take to set up Meridian?',
+              a: 'Most businesses connect in under 10 minutes. Connect your POS via OAuth, and Meridian immediately starts importing your transaction history. First AI insights appear within 24 hours for businesses with 30+ days of history.',
+            },
+          ].map(({ q, a }) => (
+            <details key={q} className="group">
+              <summary className="cursor-pointer text-sm font-semibold text-[#F5F5F7] flex items-center justify-between py-3 border-b border-[#1F1F23]">
+                {q}
+                <ChevronRight size={16} className="text-[#A1A1A8] transition-transform group-open:rotate-90" />
+              </summary>
+              <p className="text-sm text-[#A1A1A8] leading-relaxed pt-3 pb-4">{a}</p>
+            </details>
+          ))}
         </div>
       </section>
 

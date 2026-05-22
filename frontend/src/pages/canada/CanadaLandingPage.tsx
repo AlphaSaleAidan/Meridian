@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, ChevronRight, Shield, Clock, Menu, X } from 'lucide-react'
 
+import SEO from '@/components/SEO'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import { TextRevealStagger } from '@/components/landing/TextReveal'
@@ -58,6 +59,11 @@ export default function CanadaLandingPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
+      <SEO
+        title="Meridian Intelligence Canada — AI-Powered POS Analytics | CAD Pricing"
+        description="AI analytics for Canadian restaurants, cafes, and retail. Connect Square, Moneris, or Clover. PIPEDA and Quebec Law 25 compliant. Starting at CA$339/month."
+        path="/canada"
+      />
       <GrainOverlay />
 
       {/* NAV */}

@@ -5,11 +5,26 @@
     <link rel="icon" type="image/svg+xml" href="/meridian-icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1" />
     <meta name="theme-color" content="#0A0A0B" />
-    <meta name="description" content="Meridian — AI-Powered POS Intelligence for Independent Businesses" />
+    <meta name="description" content="Connect your POS system and get instant AI-powered revenue insights, anomaly alerts, and forecasts. Works with Square, Toast, Clover, and 75+ systems. First month free." />
     <!-- PWA / Mobile -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Meridian" />
+    <!-- SEO: Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Meridian Intelligence" />
+    <meta property="og:title" content="Meridian Intelligence — AI-Powered POS Analytics" />
+    <meta property="og:description" content="Connect Square, Toast, or Clover and get instant AI insights. Revenue forecasts, anomaly alerts, customer segmentation. First month free." />
+    <meta property="og:url" content="https://meridian.tips" />
+    <meta property="og:image" content="https://meridian.tips/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <!-- SEO: Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Meridian Intelligence — AI-Powered POS Analytics" />
+    <meta name="twitter:description" content="Connect Square, Toast, or Clover and get instant AI insights. Revenue forecasts, anomaly alerts, customer segmentation." />
+    <meta name="twitter:image" content="https://meridian.tips/og-image.png" />
+    <link rel="canonical" href="https://meridian.tips" />
     <link rel="apple-touch-icon" href="/meridian-icon-180.png" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -17,7 +32,97 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
     <link href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.min.css" rel="stylesheet" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <title>Meridian — POS Intelligence</title>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "name": "Meridian Intelligence",
+          "url": "https://meridian.tips",
+          "logo": "https://meridian.tips/meridian-icon.svg",
+          "description": "AI-powered POS analytics platform for restaurants, cafes, auto shops, and retail.",
+          "foundingDate": "2024",
+          "areaServed": ["US", "CA"],
+          "contactPoint": {
+            "@type": "ContactPoint",
+            "email": "hello@meridian.tips",
+            "contactType": "customer support"
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "Meridian Intelligence",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web",
+          "description": "AI-powered POS analytics with 37-agent swarm intelligence for revenue optimization, anomaly detection, and customer insights.",
+          "offers": {
+            "@type": "AggregateOffer",
+            "lowPrice": "250",
+            "highPrice": "980",
+            "priceCurrency": "USD",
+            "offerCount": "3"
+          },
+          "featureList": [
+            "POS Integration (80+ systems)",
+            "AI Revenue Insights",
+            "Anomaly Detection",
+            "Revenue Forecasting",
+            "Customer Segmentation",
+            "Staff Schedule Optimization",
+            "Camera Foot Traffic Analytics",
+            "Phone Order Agent"
+          ]
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "What is Meridian Intelligence?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Meridian Intelligence is an AI-powered analytics platform that connects to your POS system (Square, Toast, Clover, and 77 others) and generates revenue insights, anomaly alerts, and customer segmentation reports using a 37-agent AI swarm. Merchants see plain-English insights within minutes of connecting their POS."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How much does Meridian cost?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Meridian starts at $250 USD per month ($339 CAD) for the Standard plan, with a free first month and no long-term contracts. The Premium plan is $490 USD ($675 CAD) and adds camera intelligence and customer segmentation. The Command plan is $980 USD ($1,350 CAD) and includes multi-location support."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Which POS systems does Meridian support?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Meridian supports 80+ POS systems including Square, Toast, Clover, Lightspeed, Shopify POS, Moneris (Canada), and TouchBistro. Most restaurants connect in under 5 minutes using OAuth."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Does Meridian work for Canadian businesses?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Meridian has a dedicated Canadian portal with CAD pricing, Canadian POS systems including Moneris and Alice POS, and full PIPEDA and Quebec Law 25 compliance."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "How long does it take to set up Meridian?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Most businesses connect in under 10 minutes. Connect your POS via OAuth (no API keys needed for Square, Toast, and Clover), and Meridian immediately starts importing your transaction history. First insights appear within 24 hours."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+    <title>Meridian Intelligence — AI-Powered POS Analytics for Restaurants & Retail</title>
   </head>
   <body class="bg-[#0A0A0B] text-[#F5F5F7] antialiased">
     <div id="root"></div>

@@ -1,0 +1,62 @@
+# Meridian Intelligence — AI Context File
+# llms.txt — Version 1.0
+
+## What is Meridian Intelligence?
+
+Meridian Intelligence is an AI-powered POS (Point of Sale) analytics platform designed for small and medium-sized businesses in Canada and the United States. Meridian connects to a merchant's existing POS system and uses a 37-agent AI swarm to generate revenue insights, detect anomalies, forecast future performance, and optimize staffing.
+
+## What Meridian Does
+
+Meridian connects to POS systems including Square, Toast, Clover, and 75 others. Once connected, it automatically:
+
+- Analyzes transaction data to identify revenue trends and peak hours
+- Detects anomalies like void spikes, refund surges, and theft patterns
+- Forecasts 7-day, 30-day, and 90-day revenue using statistical models
+- Segments customers by RFM score and predicts churn risk
+- Generates weekly AI insights in plain English with action recommendations
+- Monitors employee card spending for policy violations
+- Tracks foot traffic via optional camera analytics (anonymous, no biometrics)
+
+## Industries Served
+
+1. Restaurants (full service, casual dining)
+2. Fast food and quick service restaurants (QSR)
+3. Coffee shops and cafes
+4. Automotive repair shops and tire centers
+5. Smoke shops and specialty retail
+
+## Geographic Coverage
+
+- United States (all 50 states)
+- Canada (all 10 provinces and 3 territories, with Quebec Law 25 compliance)
+
+## Pricing
+
+- Standard Plan: $250 USD / $339 CAD per month
+- Premium Plan: $490 USD / $675 CAD per month
+- Command Plan: $980 USD / $1,350 CAD per month
+- First month free. No contracts. Cancel anytime.
+
+## Key Differentiators
+
+- No manual data entry: connects directly to existing POS system
+- Plain English insights: no dashboard expertise required
+- Phone ordering: AI agent answers calls and routes orders to POS
+- Camera intelligence: anonymous foot traffic counting and heatmaps
+- Employee card monitoring: real-time alerts for policy violations
+
+## Website
+
+https://meridian.tips
+
+## Key Pages
+
+- Homepage: https://meridian.tips
+- Demo: https://meridian.tips/demo
+- Canada: https://meridian.tips/canada
+- Careers: https://meridian.tips/careers
+
+## Contact
+
+- General: hello@meridian.tips
+- Support: support@meridian.tips

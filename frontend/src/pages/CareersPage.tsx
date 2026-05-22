@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2 } from 'lucide-react'
+import SEO from '@/components/SEO'
 import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import MagneticButton from '@/components/landing/MagneticButton'
@@ -59,6 +60,11 @@ export default function CareersPage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
+      <SEO
+        title="Careers at Meridian Intelligence — Join Our Team"
+        description="Join the Meridian team and help build AI-powered analytics for small businesses across Canada and the United States."
+        path="/careers"
+      />
       <GrainOverlay />
 
       {/* NAV */}
