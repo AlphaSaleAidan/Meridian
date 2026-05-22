@@ -34,26 +34,28 @@ export default function NotificationsPage() {
   const notifs = useApi(() => api.notifications(orgId, 50), [orgId])
   const [acknowledging, setAcknowledging] = useState<string | null>(null)
 
+  const refetch = notifs.refetch
+
   const handleAcknowledge = useCallback(async (notifId: string) => {
     if (!orgId) return
     setAcknowledging(notifId)
     try {
       await api.acknowledgeNotification(orgId, notifId)
-      notifs.refetch()
+      refetch()
     } catch { /* ignore */ }
     setAcknowledging(null)
-  }, [orgId, notifs])
+  }, [orgId, refetch])
 
   const handleAcknowledgeAll = useCallback(async () => {
     if (!orgId) return
     setAcknowledging('all')
     try {
       await api.acknowledgeAllNotifications(orgId)
-      notifs.refetch()
+      refetch()
       toast('All notifications marked as read', 'success')
     } catch { /* ignore */ }
     setAcknowledging(null)
-  }, [orgId, notifs, toast])
+  }, [orgId, refetch, toast])
 
   if (!isDemo && !posConnected) return <DataPageSkeleton title="Notifications"><div /></DataPageSkeleton>
   if (notifs.loading) return <LoadingPage />
