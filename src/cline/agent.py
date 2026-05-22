@@ -144,57 +144,128 @@ class ClineAgent:
     ) -> str:
         """Natural language chat with a business owner about system health.
 
-        Fetches recent errors, health scores, and agent status to provide
-        context-aware responses.
+        Sends the user's question + real-time system context through DeepSeek
+        for intelligent, context-aware responses. Falls back to basic template
+        if LLM is unavailable.
         """
         health = await self._get_org_health(org_id) if org_id else {}
         recent_errors = await self._get_recent_errors(org_id) if org_id else []
-
-        error_summary = "No recent errors." if not recent_errors else (
-            f"{len(recent_errors)} recent issue(s): "
-            + "; ".join(e.get("message", "unknown")[:60] for e in recent_errors[:3])
-        )
+        history = await self._get_chat_history(conversation_id) if self.db else []
 
         health_score = health.get("overall_score", "unknown")
         health_trend = health.get("trend", "stable")
 
-        response_parts = []
+        error_lines = []
+        for e in recent_errors[:5]:
+            error_lines.append(
+                f"- [{e.get('error_type', 'unknown')}] {e.get('message', 'no details')}"
+                f" (severity: {e.get('severity', '?')}, status: {e.get('status', 'open')})"
+            )
+        error_block = "\n".join(error_lines) if error_lines else "None"
 
-        msg_lower = user_message.lower()
-        if any(w in msg_lower for w in ("status", "health", "how", "working")):
-            response_parts.append(
-                f"System health score: {health_score}/100 (trend: {health_trend}). "
-                f"{error_summary}"
-            )
-        elif any(w in msg_lower for w in ("error", "issue", "problem", "broken", "fail")):
-            if recent_errors:
-                top = recent_errors[0]
-                response_parts.append(
-                    f"Most recent issue ({top.get('error_type', 'unknown')}): "
-                    f"{top.get('message', 'No details')}. "
-                    f"Status: {top.get('status', 'investigating')}."
-                )
-            else:
-                response_parts.append("No active errors detected. All systems operational.")
-        elif any(w in msg_lower for w in ("fix", "resolve", "remediate")):
-            response_parts.append(
-                "I can attempt auto-remediation for Level 1-2 issues (retries, cache clears, "
-                "config resets). Level 3-4 issues are escalated to the engineering team. "
-                "Would you like me to check for fixable issues?"
-            )
-        else:
-            response_parts.append(
-                f"I'm Cline, your IT health assistant. System score: {health_score}/100. "
-                f"{error_summary} Ask me about errors, health status, or request a fix."
-            )
+        system_prompt = (
+            "You are Cline, the IT health assistant for Meridian Intelligence — "
+            "an AI-powered POS analytics platform for restaurants, cafes, auto shops, "
+            "and retail. You help business owners and the engineering team understand "
+            "system health, diagnose issues, and take action.\n\n"
+            "CURRENT SYSTEM STATE:\n"
+            f"- Health score: {health_score}/100\n"
+            f"- Trend: {health_trend}\n"
+            f"- Active errors:\n{error_block}\n\n"
+            "RULES:\n"
+            "- Be concise and direct (2-4 sentences typical)\n"
+            "- Use specific numbers and error details when available\n"
+            "- If asked to fix something, explain what you can auto-remediate "
+            "(Level 1-2: retries, cache clears, config resets) vs what needs "
+            "escalation (Level 3-4: integration failures, security, data loss)\n"
+            "- If you don't know something, say so — don't guess\n"
+            "- Refer to yourself as Cline, not 'I' or 'the system'\n"
+        )
+
+        messages: list[dict] = [{"role": "system", "content": system_prompt}]
+        for msg in history[-10:]:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": user_message})
+
+        response = await self._call_chat_llm(messages)
 
         if self.db and org_id:
             await self._persist_chat_message(conversation_id, org_id, user_message, "user")
-            response = " ".join(response_parts)
             await self._persist_chat_message(conversation_id, org_id, response, "agent")
-            return response
 
-        return " ".join(response_parts)
+        return response
+
+    async def _call_chat_llm(self, messages: list[dict]) -> str:
+        """Route chat through DeepSeek → OpenAI fallback → template fallback."""
+        import os
+        try:
+            import httpx
+            api_key = os.environ.get("DEEPSEEK_API_KEY", "")
+            if api_key:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        "https://api.deepseek.com/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "deepseek-chat",
+                            "messages": messages,
+                            "max_tokens": 500,
+                            "temperature": 0.4,
+                        },
+                    )
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]["content"]
+                logger.warning("DeepSeek chat returned %d", resp.status_code)
+        except Exception as e:
+            logger.warning("DeepSeek chat failed: %s", e)
+
+        try:
+            import httpx
+            openai_key = os.environ.get("OPENAI_API_KEY", "")
+            if openai_key:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {openai_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "gpt-4o-mini",
+                            "messages": messages,
+                            "max_tokens": 500,
+                            "temperature": 0.4,
+                        },
+                    )
+                if resp.status_code == 200:
+                    return resp.json()["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.warning("OpenAI chat fallback failed: %s", e)
+
+        return (
+            "Cline is currently unable to reach the AI backend. "
+            "Basic status: check the health dashboard for real-time metrics."
+        )
+
+    async def _get_chat_history(self, conversation_id: str) -> list[dict]:
+        """Fetch recent messages for multi-turn context."""
+        if not self.db:
+            return []
+        try:
+            rows = await self.db.select(
+                "cline_messages",
+                columns="role, content",
+                filters={"conversation_id": f"eq.{conversation_id}"},
+                order="created_at.asc",
+                limit=20,
+            )
+            return rows
+        except Exception as e:
+            logger.warning("Failed to fetch chat history: %s", e)
+            return []
 
     def _build_diagnostic_context(self, error_ctx: dict, user_msg: str) -> dict:
         """Transform error context into the format expected by KarpathyReasoning."""

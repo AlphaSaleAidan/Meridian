@@ -1,17 +1,166 @@
-# Cline Rules — Meridian
+# Cline Rules — Meridian Intelligence
 
-## Before touching any file
-1. Read CONTEXT.md in the repo root
+## What This Project Is
+
+Meridian Intelligence is an AI-powered POS analytics platform for restaurants, cafes, auto shops, and retail in US and Canada. Merchants connect their POS (Square, Toast, Clover, 80+ systems) and get AI-generated revenue insights, anomaly alerts, forecasts, and customer segmentation.
+
+Website: https://meridian.tips (deployed on Railway, NOT Vercel, NOT Next.js)
+
+## Before Touching Any File
+
+1. Read the file first before editing
 2. Run `cat frontend/package.json` to check existing dependencies
 3. Never assume Next.js, Vercel, or CDN fonts
+4. After any frontend edit: `cd frontend && npx tsc --noEmit`
+5. After any backend edit: `cd src && python3 -m py_compile api/routes/<file>.py`
 
-## Code changes
-- After any frontend edit: `cd frontend && npx tsc --noEmit`
-- After any backend edit: `cd src && python -m py_compile api/routes/<file>.py`
-- Never install a package that's already in package.json under a different name
+## Tech Stack
 
-## Stack rules
-- Vite + React, not Next.js
-- Railway, not Vercel
-- Supabase, not raw PostgreSQL drivers
-- Geist fonts from npm, not Google Fonts CDN
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS (path: `/frontend/`)
+- **Backend**: FastAPI Python 3.11 on Railway (path: `/src/api/`)
+- **Database**: Supabase PostgreSQL with RLS on all tables
+- **Auth**: Supabase JWT
+- **Email**: Resend API
+- **Payments**: Stripe
+- **Router**: react-router-dom v6 (all routes in `frontend/src/App.tsx`)
+- **State**: React hooks + localStorage (no Redux, no Zustand)
+- **Fonts**: Geist from npm, Inter + JetBrains Mono from Google Fonts
+
+## Color Palette (MUST follow exactly)
+
+### Standard Meridian (US):
+- Background: #0A0A0B
+- Cards: #111113
+- Borders: #1F1F23
+- Text primary: #F5F5F7
+- Text muted: #A1A1A8
+- Text body (articles): #D1D1D6
+- Teal accent: #17C5B0
+- Blue accent: #1A8FD6
+
+### Canada Portal (DO NOT CHANGE):
+- Green accent: #00d4aa
+- Background: #0f1512
+- Cards: #1a2420
+- Muted: #6b7a74
+
+## File Structure
+
+```
+frontend/src/
+  components/       # Shared (Layout, MobileNavBar, SEO, Toast, etc.)
+  pages/            # All route pages
+    seo/            # SEO landing pages (industry, integration, comparison)
+    blog/           # Blog articles
+    canada/portal/  # Canada sales rep portal (green theme)
+    us/portal/      # US sales rep portal (blue theme)
+    customer/       # Customer auth (login, signup, onboarding)
+    admin/          # Admin pages
+  hooks/            # useApi (with retry), custom hooks
+  lib/              # auth.ts, demo-context.tsx, utilities
+  data/             # Static data (seo-cities.ts)
+frontend/public/
+  robots.txt        # AI crawler permissions
+  llms.txt          # AI context for LLM crawlers
+  sitemap.xml       # 180 URLs
+  sw.js             # Service worker (PWA)
+src/api/routes/     # FastAPI route files (Python)
+```
+
+## Auth Patterns
+
+- Customer endpoints: `Depends(require_jwt)` — validates user JWT from Supabase
+- Internal/admin endpoints: `Depends(require_service_auth)` — service role key
+- NEVER use service role key for customer-facing endpoints
+- Frontend auth: `useAuth()` from `@/lib/auth`
+
+## localStorage Keys
+
+- `meridian_processing_*` — AI processing state timers
+- `meridian_nav_favorites` — Mobile nav tab customization
+- `meridian_notif_prefs` — Notification preferences
+- `meridian_us_rep_welcomed` / `meridian_ca_rep_welcomed` — Rep onboarding dismissed
+
+## SEO Component (required on all public pages)
+
+```tsx
+import SEO from '@/components/SEO'
+<SEO
+  title="Page Title — Meridian Intelligence"
+  description="Meta description here"
+  path="/page-path"
+  jsonLd={[{ "@type": "FAQPage", mainEntity: [...] }]}
+/>
+```
+
+## API Hook
+
+```tsx
+import { useApi } from '@/hooks/useApi'
+const { get, post } = useApi()  // includes retry with exponential backoff
+```
+
+## Money Rules
+
+- Store in cents (integer), never floats
+- US display: $250, $490, $980
+- Canada display: CA$339, CA$675, CA$1,350
+
+## Pricing
+
+| Plan | USD | CAD |
+|------|-----|-----|
+| Standard | $250/mo | CA$339/mo |
+| Premium | $490/mo | CA$675/mo |
+| Command | $980/mo | CA$1,350/mo |
+
+First month free. No contracts.
+
+## Hard Rules
+
+1. Max 500 lines per file — split if larger
+2. NEVER commit .env, credentials, or API keys
+3. All Supabase tables need RLS policies
+4. Use org_id guards on all data endpoints
+5. Build must pass: `cd frontend && npm run build`
+6. NEVER create files in the repository root
+7. NEVER install packages already in package.json under different names
+8. No unnecessary abstractions or over-engineering
+9. No comments unless the WHY is non-obvious
+10. Railway for deployment, NOT Vercel
+
+## Common Questions
+
+**Where is the router?**
+`frontend/src/App.tsx` — all routes defined there with lazy imports
+
+**Where are API routes?**
+`src/api/routes/` — FastAPI Python files
+
+**How to add a new page?**
+Create component in `frontend/src/pages/`, add lazy import + `<Route>` in App.tsx
+
+**How does auth work?**
+Frontend: `useAuth()` hook from `@/lib/auth.ts`
+Backend: `Depends(require_jwt)` in FastAPI route decorators
+
+**What's demo mode?**
+`/demo` route uses `DemoLayout` + `DemoContextProvider` — fake data, no auth
+
+**How does Canada differ from US?**
+Green palette (#00d4aa), CAD pricing, PIPEDA/Law 25 compliance, Moneris POS, routes under `/canada/`
+
+**What POS systems are supported?**
+80+ including Square, Toast, Clover, Lightspeed, Shopify POS, Moneris (Canada), TouchBistro
+
+**What are the AI agents?**
+37-agent swarm: revenue forecasting, anomaly detection, customer segmentation (RFM), staff scheduling, menu engineering, foot traffic analytics
+
+**What is the 20-minute timer?**
+After a new customer connects their POS, AI processing takes ~20 minutes. A timer in localStorage tracks this and shows progress UI. It should NOT restart on page reload.
+
+**Where are SEO pages?**
+Industry: `pages/seo/RestaurantsPage.tsx`, etc.
+Integration: `pages/seo/SquareIntegrationPage.tsx`, etc.
+City x Industry: `pages/seo/CityIndustryPage.tsx` (template) + `data/seo-cities.ts` (data)
+Blog: `pages/blog/BlogIndexPage.tsx`, individual articles in same folder
