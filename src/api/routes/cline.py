@@ -45,6 +45,7 @@ class ErrorReportResponse(BaseModel):
     severity: int
     auto_remediation: bool
     message: str
+    patch: Optional[dict] = None
 
 
 # ── Helper: get DB + ClineAgent ──────────────────────────
@@ -106,6 +107,7 @@ async def report_error(req: ErrorReport):
 
     auto_remediate = detected.severity <= 1
     message = "Error logged"
+    patch_result = None
 
     if auto_remediate:
         try:
@@ -118,11 +120,28 @@ async def report_error(req: ErrorReport):
             message = "Error logged — auto-remediation failed"
             auto_remediate = False
 
+    if req.stack_trace:
+        try:
+            from ...cline.patch_generator import generate_patch
+            patch_result = await generate_patch(
+                error_type=detected.error_type,
+                error_message=req.message,
+                stack_trace=req.stack_trace,
+                business_id=req.org_id,
+            )
+            if patch_result:
+                review = patch_result.get("review", {})
+                rec = review.get("recommendation", "investigate")
+                message += f" | Patch {patch_result['patch_id']} proposed → Garry says: {rec}"
+        except Exception as e:
+            logger.error("Patch generation failed: %s", e)
+
     return ErrorReportResponse(
         error_id=str(uuid.uuid4()),
         severity=detected.severity,
         auto_remediation=auto_remediate,
         message=message,
+        patch=patch_result,
     )
 
 
