@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { supabase } from '@/lib/supabase'
+import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 
@@ -138,9 +138,10 @@ export default function CreateCustomerPage() {
         return_url: `${window.location.origin}/onboard?checkout=success`,
       }
 
+      const headers = await getAuthHeaders()
       const res = await fetch(`${API_URL}/api/billing/create-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(body),
       })
 

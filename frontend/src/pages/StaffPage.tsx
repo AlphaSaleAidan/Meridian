@@ -142,7 +142,7 @@ export default function StaffPage() {
               </div>
               <div>
                 <p className="stat-label">Top Performer</p>
-                <p className="text-sm font-bold text-amber-400 truncate">{topPerformer.name}</p>
+                <p className="text-sm font-bold text-amber-400 truncate">{topPerformer?.name ?? '—'}</p>
               </div>
             </div>
           </DashboardTiltCard>
@@ -165,13 +165,17 @@ export default function StaffPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">AI Coaching Insight</h3>
+              {topPerformer ? (
               <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
                 <span className="text-[#F5F5F7] font-medium">{topPerformer.name}</span> achieves a {topPerformer.upsellRate}% upsell rate —
                 <span className="text-[#17C5B0] font-medium"> {Math.round(topPerformer.upsellRate / avgUpsell * 100 - 100)}% above team average</span>.
                 Key differentiator: suggestive selling during morning rush when customers are time-constrained but open to add-ons.
-                Recommended: Pair with {staff[staff.length - 1].name} for mentoring shifts to transfer technique.
+                {staff.length > 1 && <> Recommended: Pair with {staff[staff.length - 1].name} for mentoring shifts to transfer technique.</>}
                 <span className="text-[#A1A1A8]/50"> (Confidence: 82%)</span>
               </p>
+              ) : (
+              <p className="text-xs text-[#A1A1A8]/50 mt-1">No staff data available yet.</p>
+              )}
             </div>
           </div>
         </div>

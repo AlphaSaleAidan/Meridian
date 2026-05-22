@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 
-from ..auth import require_admin, require_service_auth
+from ..auth import require_admin, require_jwt, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.billing.routes")
@@ -104,7 +104,7 @@ class PaymentNotifyRequest(BaseModel):
 # ── Route handlers ──
 
 @router.post("/create-checkout")
-async def create_checkout(req: CheckoutRequest):
+async def create_checkout(req: CheckoutRequest, _user: dict = Depends(require_jwt)):
     """
     Create a Square Checkout (Payment Link) for a new customer subscription.
     Called by the proposal wizard's payment step.
@@ -158,7 +158,7 @@ async def create_checkout(req: CheckoutRequest):
         raise HTTPException(status_code=500, detail="Checkout creation failed")
 
 
-@router.post("/create-invoice")
+@router.post("/create-invoice", dependencies=[Depends(require_service_auth)])
 async def create_invoice(req: InvoiceRequest):
     """
     Create a Square Invoice for custom amounts or manual billing.
@@ -221,7 +221,7 @@ async def cancel_subscription(req: CancelRequest):
 
 
 @router.get("/status/{org_id}")
-async def get_billing_status(org_id: str):
+async def get_billing_status(org_id: str, _user: dict = Depends(require_jwt)):
     """Get current subscription/billing status for an organization."""
     try:
         db = get_db()
@@ -261,7 +261,7 @@ async def get_billing_status(org_id: str):
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
 
 
-@router.post("/update-payment-method")
+@router.post("/update-payment-method", dependencies=[Depends(require_service_auth)])
 async def update_payment_method(req: UpdatePaymentMethodRequest):
     """
     Generate a new Square invoice so the customer can update their card on file.
@@ -320,7 +320,7 @@ async def update_payment_method(req: UpdatePaymentMethodRequest):
         raise HTTPException(500, "Could not create payment update link")
 
 
-@router.post("/notify-payment-failed")
+@router.post("/notify-payment-failed", dependencies=[Depends(require_service_auth)])
 async def notify_payment_failed(req: PaymentNotifyRequest):
     """
     Send a 'payment failed' email to the customer with a link to update their card.
@@ -399,7 +399,7 @@ async def process_renewals():
 
 
 @router.get("/invoice-url/{org_id}")
-async def get_invoice_url(org_id: str):
+async def get_invoice_url(org_id: str, _user: dict = Depends(require_jwt)):
     """
     Get the latest invoice URL for an org — used for in-platform pay buttons.
     Returns the most recent setup or recurring invoice link.

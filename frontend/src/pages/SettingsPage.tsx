@@ -13,6 +13,7 @@ import POSSelectorPanel from '@/components/POSSelectorPanel'
 import POSLogo from '@/components/POSLogo'
 import { posSystemsByKey, type POSSystemKey } from '@/data/pos-systems'
 import { useOrgId } from '@/hooks/useOrg'
+import { getAuthHeaders } from '@/lib/supabase'
 import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -193,14 +194,16 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
   useEffect(() => {
     if (!orgId) return
     setBillingError(null)
-    fetch(`${apiUrl}/api/billing/status/${orgId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => d && setBilling(d))
-      .catch(() => { setBillingError('Could not load billing info') })
-    fetch(`${apiUrl}/api/billing/invoice-url/${orgId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => d && setInvoiceUrl(d.invoice_url))
-      .catch(() => { setBillingError('Could not load billing info') })
+    getAuthHeaders().then(headers => {
+      fetch(`${apiUrl}/api/billing/status/${orgId}`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setBilling(d))
+        .catch(() => { setBillingError('Could not load billing info') })
+      fetch(`${apiUrl}/api/billing/invoice-url/${orgId}`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setInvoiceUrl(d.invoice_url))
+        .catch(() => { setBillingError('Could not load billing info') })
+    })
   }, [orgId, apiUrl])
 
   const statusLabel = billing?.status === 'active' ? 'Active' :

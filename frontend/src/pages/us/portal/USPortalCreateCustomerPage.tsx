@@ -561,9 +561,10 @@ export default function USPortalCreateCustomerPage() {
         return_url: `${window.location.origin}/us/onboard?checkout=success`,
       }
 
+      const checkoutHeaders = await getAuthHeaders()
       const res = await fetch(`${API_URL}/api/billing/create-checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: checkoutHeaders,
         body: JSON.stringify(body),
       })
 

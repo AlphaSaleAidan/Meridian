@@ -495,15 +495,6 @@ async def get_stats(request: Request, user: dict = Depends(require_jwt)):
     }
 
 
-ADMIN_EMAILS = [
-    "apierce@alphasale.co",
-    "aidanpierce72@gmail.com",
-    "aidanpierce@meridian.tips",
-    "cheungenochmgmt@gmail.com",
-    "aidanvietnguyen@gmail.com",
-]
-
-
 @router.get("/team")
 async def get_team(request: Request, user: dict = Depends(require_jwt)):
     """Return all Canada sales reps (enforces RLS via user JWT)."""

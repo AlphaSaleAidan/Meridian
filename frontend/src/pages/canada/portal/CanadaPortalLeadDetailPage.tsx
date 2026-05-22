@@ -317,7 +317,8 @@ export default function CanadaPortalLeadDetailPage() {
     setPaymentStatus('checking')
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
-      const res = await fetch(`${API_BASE}/api/billing/status/${deal.id}`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API_BASE}/api/billing/status/${deal.id}`, { headers })
       if (!res.ok) { setPaymentStatus('unavailable'); return }
       const data = await res.json()
       const status = data.status as string
@@ -337,9 +338,10 @@ export default function CanadaPortalLeadDetailPage() {
     setPaymentNotifying(true)
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
+      const headers = await getAuthHeaders()
       const res = await fetch(`${API_BASE}/api/billing/notify-payment-failed`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           org_id: deal.id,
           customer_email: deal.contact_email,
@@ -365,9 +367,10 @@ export default function CanadaPortalLeadDetailPage() {
     setCardUpdateSending(true)
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
+      const headers = await getAuthHeaders()
       const res = await fetch(`${API_BASE}/api/billing/update-payment-method`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           org_id: deal.id,
           customer_email: deal.contact_email,
@@ -404,9 +407,10 @@ export default function CanadaPortalLeadDetailPage() {
 
       const API_BASE = import.meta.env.VITE_API_URL || ''
       try {
+        const authHdrs = await getAuthHeaders()
         const checkoutRes = await fetch(`${API_BASE}/api/billing/create-checkout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHdrs,
           body: JSON.stringify({
             org_id: deal.id,
             plan: planName.toLowerCase(),

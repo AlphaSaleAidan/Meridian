@@ -4,6 +4,7 @@ import { deriveClientsFromLeads, type SalesClient } from '@/lib/canada-sales-dem
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { useToast } from '@/components/Toast'
+import { getAuthHeaders } from '@/lib/supabase'
 
 function formatCurrency(value: number): string {
   return 'CA$' + value.toLocaleString('en-CA')
@@ -61,7 +62,8 @@ export default function CanadaPortalAccountsPage() {
   async function checkBilling(clientId: string) {
     setBillingStatuses(prev => ({ ...prev, [clientId]: 'checking' }))
     try {
-      const res = await fetch(`${API_BASE}/api/billing/status/${clientId}`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API_BASE}/api/billing/status/${clientId}`, { headers })
       if (!res.ok) { setBillingStatuses(prev => ({ ...prev, [clientId]: 'none' })); return }
       const data = await res.json()
       const s = data.status as string
@@ -77,9 +79,10 @@ export default function CanadaPortalAccountsPage() {
   async function notifyClient(client: SalesClient) {
     setNotifyingId(client.id)
     try {
+      const headers = await getAuthHeaders()
       const res = await fetch(`${API_BASE}/api/billing/notify-payment-failed`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           org_id: client.id,
           customer_email: client.contact_email,
@@ -102,9 +105,10 @@ export default function CanadaPortalAccountsPage() {
   async function sendCardUpdate(client: SalesClient) {
     setCardUpdateId(client.id)
     try {
+      const headers = await getAuthHeaders()
       await fetch(`${API_BASE}/api/billing/update-payment-method`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           org_id: client.id,
           customer_email: client.contact_email,
