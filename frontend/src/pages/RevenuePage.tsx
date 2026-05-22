@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { Download } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { formatCents, formatCentsCompact, formatNumber, formatChartDate, formatChartTick } from '@/lib/format'
@@ -67,6 +68,27 @@ export default function RevenuePage() {
     }
   }
 
+  const exportCsv = useCallback(() => {
+    const esc = (v: string | number) => {
+      const s = String(v)
+      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const header = 'Date,Revenue,Transactions,Avg Ticket,Refunds,Tips,Discounts'
+    const rows = data.daily.map(d =>
+      [d.date, (d.revenue_cents / 100).toFixed(2), d.transactions, (d.avg_ticket_cents / 100).toFixed(2), (d.refund_cents / 100).toFixed(2), (d.tip_cents / 100).toFixed(2), (d.discount_cents / 100).toFixed(2)].map(esc).join(',')
+    )
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `meridian-revenue-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [data.daily])
+
   return (
     <DataPageSkeleton title="Revenue" layout="chart">
     <div className="space-y-6">
@@ -84,16 +106,24 @@ export default function RevenuePage() {
               <span className="font-mono">{formatCentsCompact(totalRevenue)}</span> total • <span className="font-mono">{formatNumber(totalTxns)}</span> transactions
             </p>
           </div>
-          <div className="period-toggle">
-            {periods.map(p => (
-              <button
-                key={p.days}
-                onClick={() => setDays(p.days)}
-                className={days === p.days ? 'period-btn-active' : 'period-btn-inactive'}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="period-toggle">
+              {periods.map(p => (
+                <button
+                  key={p.days}
+                  onClick={() => setDays(p.days)}
+                  className={days === p.days ? 'period-btn-active' : 'period-btn-inactive'}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={exportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#A1A1A8] bg-[#111113] border border-[#1F1F23] rounded-lg hover:border-[#1A8FD6]/40 hover:text-[#F5F5F7] transition-all"
+            >
+              <Download size={13} /> Export CSV
+            </button>
           </div>
         </div>
       </ScrollReveal>

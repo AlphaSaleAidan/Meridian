@@ -14,6 +14,7 @@ import {
   Rocket,
   Clock,
   AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import {
@@ -85,6 +86,9 @@ export default function USPortalDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
+    localStorage.getItem('meridian_us_rep_welcomed') === '1'
+  )
 
   const applyDeals = useCallback((d: Deal[]) => {
     setDeals(d)
@@ -165,6 +169,60 @@ export default function USPortalDashboardPage() {
         </h1>
         <p className="text-sm text-[#A1A1A8] mt-1">{getFormattedDate()}</p>
       </div>
+
+      {/* ── Welcome Walkthrough Banner ── */}
+      {!welcomeDismissed && (
+        <div
+          className="relative rounded-xl p-5 border-l-4 border-[#1A8FD6]"
+          style={{ background: 'linear-gradient(135deg, rgba(26,143,214,0.08) 0%, rgba(23,197,176,0.06) 100%)' }}
+        >
+          <button
+            onClick={() => { localStorage.setItem('meridian_us_rep_welcomed', '1'); setWelcomeDismissed(true) }}
+            className="absolute top-3 right-3 text-[#A1A1A8] hover:text-white transition-colors"
+            aria-label="Dismiss"
+          >
+            <X size={16} />
+          </button>
+          <h3 className="text-base font-bold text-white mb-4">Welcome to Meridian!</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-[#1A8FD6]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={14} className="text-[#1A8FD6]" />
+              </div>
+              <div>
+                <Link to="/us/portal/leads?new=true" className="text-sm font-semibold text-[#1A8FD6] hover:underline">
+                  1. Add your first lead
+                </Link>
+                <p className="text-xs text-[#A1A1A8] mt-0.5">Open the leads page and create a new lead to get started.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-[#1A8FD6]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={14} className="text-[#1A8FD6]" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#F5F5F7]">2. Send a proposal</p>
+                <p className="text-xs text-[#A1A1A8] mt-0.5">Open a lead and send a proposal to start the sales process.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-2.5">
+              <div className="w-6 h-6 rounded-full bg-[#1A8FD6]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={14} className="text-[#1A8FD6]" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#F5F5F7]">3. Connect a customer</p>
+                <p className="text-xs text-[#A1A1A8] mt-0.5">Walk your customer through POS setup to activate their dashboard.</p>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => { localStorage.setItem('meridian_us_rep_welcomed', '1'); setWelcomeDismissed(true) }}
+            className="mt-4 px-4 py-1.5 text-xs font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:text-white hover:border-[#A1A1A8] transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* ── Connection Error Banner ── */}
       {loadError && (

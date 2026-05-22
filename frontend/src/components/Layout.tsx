@@ -36,6 +36,7 @@ import OnboardingWizard from '@/pages/OnboardingWizard'
 import ClineChatWidget from './ClineChatWidget'
 import ClineErrorBoundary from './ClineErrorBoundary'
 import CommandPalette from './CommandPalette'
+import OfflineBanner from './OfflineBanner'
 
 const navGroups = [
   {
@@ -261,6 +262,7 @@ export default function Layout() {
 
         {/* Page content */}
         <main id="main-content" className="flex-1 overflow-y-auto">
+          <OfflineBanner />
           {needsOnboarding ? (
             <OnboardingWizard />
           ) : (

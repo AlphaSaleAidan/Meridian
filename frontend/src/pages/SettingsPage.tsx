@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check, CreditCard, Camera, Plus } from 'lucide-react'
+import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check, CreditCard, Camera, Plus, Bell } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
@@ -31,6 +31,76 @@ const statusColors: Record<string, string> = {
   error: 'text-red-400',
   pending: 'text-[#A1A1A8]',
   disconnected: 'text-[#A1A1A8]/50',
+}
+
+type NotifPrefs = Record<'deal_stage' | 'daily_revenue' | 'ai_anomaly' | 'low_stock' | 'new_customer', boolean>
+const NOTIF_DEFAULTS: NotifPrefs = { deal_stage: true, daily_revenue: true, ai_anomaly: true, low_stock: true, new_customer: true }
+const NOTIF_OPTIONS: { key: keyof NotifPrefs; label: string; desc: string }[] = [
+  { key: 'deal_stage', label: 'Deal stage changes', desc: 'When a lead moves between pipeline stages' },
+  { key: 'daily_revenue', label: 'Daily revenue summary', desc: 'Morning digest of yesterday\'s numbers' },
+  { key: 'ai_anomaly', label: 'AI anomaly alerts', desc: 'When unusual patterns are detected' },
+  { key: 'low_stock', label: 'Inventory low stock', desc: 'When items hit their reorder point' },
+  { key: 'new_customer', label: 'New customer signup', desc: 'When a customer connects via POS' },
+]
+const NOTIF_KEY = 'meridian_notif_prefs'
+
+function NotificationPreferencesPanel({ orgId }: { orgId: string }) {
+  const [prefs, setPrefs] = useState<NotifPrefs>(() => {
+    try {
+      const stored = localStorage.getItem(NOTIF_KEY)
+      return stored ? { ...NOTIF_DEFAULTS, ...JSON.parse(stored) } : NOTIF_DEFAULTS
+    } catch { return NOTIF_DEFAULTS }
+  })
+
+  useEffect(() => {
+    if (!orgId) return
+    fetch(`${API_URL}/api/settings/notifications?org_id=${orgId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && typeof data === 'object') {
+          const merged = { ...NOTIF_DEFAULTS, ...data }
+          setPrefs(merged)
+          localStorage.setItem(NOTIF_KEY, JSON.stringify(merged))
+        }
+      })
+      .catch(() => { /* endpoint may not exist yet — localStorage is fine */ })
+  }, [orgId])
+
+  const toggle = (key: keyof NotifPrefs) => {
+    const next = { ...prefs, [key]: !prefs[key] }
+    setPrefs(next)
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(next))
+    fetch(`${API_URL}/api/settings/notifications`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ org_id: orgId, ...next }),
+    }).catch(() => {})
+  }
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center gap-2">
+        <Bell size={14} className="text-[#7C5CFF]" />
+        <div>
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Notification Preferences</h3>
+          <p className="text-[10px] text-[#A1A1A8] mt-0.5">Choose which alerts and digests you receive</p>
+        </div>
+      </div>
+      <div className="divide-y divide-[#1F1F23]/50">
+        {NOTIF_OPTIONS.map(({ key, label, desc }) => (
+          <div key={key} className="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#F5F5F7]">{label}</p>
+              <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">{desc}</p>
+            </div>
+            <button type="button" role="switch" aria-checked={prefs[key]} onClick={() => toggle(key)}
+              className={clsx('relative inline-flex h-[24px] w-[44px] shrink-0 cursor-pointer rounded-full transition-colors duration-200', prefs[key] ? 'bg-[#1A8FD6]' : 'bg-[#1F1F23]')}>
+              <span className={clsx('pointer-events-none inline-block h-[20px] w-[20px] rounded-full bg-white shadow-sm transition-transform duration-200 mt-[2px]', prefs[key] ? 'translate-x-[22px]' : 'translate-x-[2px]')} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function BusinessTuningPanel() {
@@ -381,18 +451,23 @@ export default function SettingsPage() {
         />
       )}
 
+      {/* Notification Preferences */}
+      <ScrollReveal variant="fadeUp" delay={0.14}>
+        <NotificationPreferencesPanel orgId={orgId} />
+      </ScrollReveal>
+
       {/* Business Type Tuning */}
-      <ScrollReveal variant="fadeUp" delay={0.15}>
+      <ScrollReveal variant="fadeUp" delay={0.16}>
         <BusinessTuningPanel />
       </ScrollReveal>
 
       {/* Billing & Subscription */}
-      <ScrollReveal variant="fadeUp" delay={0.2}>
+      <ScrollReveal variant="fadeUp" delay={0.22}>
         <BillingCard orgId={orgId} apiUrl={API_URL} />
       </ScrollReveal>
 
       {/* API Info */}
-      <ScrollReveal variant="fadeUp" delay={0.25}>
+      <ScrollReveal variant="fadeUp" delay={0.28}>
         <div className="card p-4 sm:p-5">
           <h3 className="text-sm font-semibold text-[#F5F5F7] mb-3">API Configuration</h3>
           <div className="space-y-2 text-xs">

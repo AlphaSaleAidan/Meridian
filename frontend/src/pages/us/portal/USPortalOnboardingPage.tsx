@@ -7,6 +7,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import { onboardingEmails } from '@/lib/email-service'
 import { MeridianEmblem } from '@/components/MeridianLogo'
+import EmailPreviewModal from '@/components/EmailPreviewModal'
 import { supabase } from '@/lib/supabase'
 
 const STEPS = [
@@ -51,6 +52,7 @@ export default function USPortalOnboardingPage() {
   })
 
   const [checkedItems, setCheckedItems] = useState(new Set(['password']))
+  const [showEmailPreview, setShowEmailPreview] = useState(false)
 
   const stepIdx = STEPS.findIndex(s => s.id === step)
 
@@ -103,9 +105,13 @@ export default function USPortalOnboardingPage() {
   }
 
   function handleFinish() {
+    setShowEmailPreview(true)
+  }
+
+  async function handleConfirmSend() {
     localStorage.setItem('meridian_onboarding_complete', 'true')
     if (rep?.email) {
-      onboardingEmails.complete(rep.email, rep.name)
+      await onboardingEmails.complete(rep.email, rep.name)
     }
     navigate('/us/portal/dashboard')
   }
@@ -462,6 +468,16 @@ export default function USPortalOnboardingPage() {
           Step {stepIdx + 1} of {STEPS.length}
         </p>
       </div>
+
+      {showEmailPreview && (
+        <EmailPreviewModal
+          template="onboarding_complete"
+          firstName={rep?.name?.split(' ')[0] || 'there'}
+          portal="us"
+          onClose={() => setShowEmailPreview(false)}
+          onSend={handleConfirmSend}
+        />
+      )}
     </div>
   )
 }

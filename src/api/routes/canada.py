@@ -13,7 +13,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_admin, require_service_auth, require_jwt, require_admin_jwt
+from ..auth import require_admin, require_jwt, require_admin_jwt
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
@@ -171,10 +171,23 @@ async def rep_signup(req: RepSignupRequest):
 
 
 @router.post("/create-customer")
-async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_service_auth)):
+async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(require_jwt)):
+    """Create a Supabase Auth user for a Canada customer.
+
+    Auth: requires a valid user JWT (rep must be logged in).
+    Note: the internal Supabase call still uses the service role key because
+    /auth/v1/admin/users is an admin-only API that cannot be called with a
+    user JWT.  The security improvement is that callers must now present a
+    verified Supabase session instead of a static service token.
+    """
     import httpx
 
+    user_id = claims.get("id", "")
+    logger.info("create-customer called by user %s (%s)", user_id, claims.get("email", ""))
+
     supabase_url = os.environ.get("SUPABASE_URL", "")
+    # Service role key is still required here: the Supabase admin user-creation
+    # API (/auth/v1/admin/users) rejects non-service-role tokens.
     service_key = (
         os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
         or os.environ.get("SUPABASE_SERVICE_KEY", "")

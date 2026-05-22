@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   Package, AlertTriangle, TrendingUp, TrendingDown, Minus,
-  Upload, Search, ArrowUpDown, Box, Layers, CheckCircle2,
+  Upload, Search, ArrowUpDown, Box, Layers, CheckCircle2, Download,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
@@ -129,6 +129,27 @@ export default function InventoryPage() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
+  const exportCsv = useCallback(() => {
+    const esc = (v: string | number) => {
+      const s = String(v)
+      return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const header = 'Product Name,SKU,Category,Current Stock,Reorder Point,Daily Usage,Trend,Trend %'
+    const rows = items.map(i =>
+      [i.product_name, i.sku, i.category, i.current_stock, i.reorder_point, i.predicted_daily_usage, i.trend, i.trend_pct].map(esc).join(',')
+    )
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `meridian-inventory-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }, [items])
+
   return (
     <DataPageSkeleton title="Inventory" layout="table">
     <div className="space-y-6">
@@ -143,6 +164,12 @@ export default function InventoryPage() {
           </div>
           <div className="flex items-center gap-2">
             <input type="file" ref={fileRef} className="hidden" accept=".csv,.xlsx" onChange={handleUpload} />
+            <button
+              onClick={exportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#A1A1A8] bg-[#111113] border border-[#1F1F23] rounded-lg hover:border-[#1A8FD6]/40 hover:text-[#F5F5F7] transition-all"
+            >
+              <Download size={13} /> Export CSV
+            </button>
             <button
               onClick={() => fileRef.current?.click()}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#A1A1A8] bg-[#111113] border border-[#1F1F23] rounded-lg hover:border-[#1A8FD6]/40 hover:text-[#F5F5F7] transition-all"

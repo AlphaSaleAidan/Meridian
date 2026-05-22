@@ -1,8 +1,16 @@
-import { useState, useEffect, type ReactNode } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Wifi } from 'lucide-react'
 import { MeridianEmblem } from './MeridianLogo'
 import { useAuth } from '@/lib/auth'
+
+const PROCESSING_DURATION = 1200 // 20 minutes in seconds
+
+const PROCESSING_KEYS = [
+  { start: 'meridian_processing_start', done: 'meridian_processing_done' },
+  { start: 'meridian_us_processing_start', done: 'meridian_us_processing_done' },
+  { start: 'meridian_ca_processing_start', done: 'meridian_ca_processing_done' },
+] as const
 
 const TIPS = [
   'Revenue data updates every 15 minutes once your POS is connected.',
@@ -46,6 +54,78 @@ function ConnectCTA() {
       >
         <Wifi size={14} /> Connect Your POS
       </Link>
+    </div>
+  )
+}
+
+function useProcessingState() {
+  const getState = useCallback(() => {
+    for (const { start, done } of PROCESSING_KEYS) {
+      const startStr = localStorage.getItem(start)
+      const doneStr = localStorage.getItem(done)
+      if (startStr && doneStr !== '1') {
+        const startTime = parseInt(startStr, 10)
+        if (!isNaN(startTime)) {
+          const elapsed = Math.floor((Date.now() - startTime) / 1000)
+          return { active: true, elapsed, startKey: start, doneKey: done }
+        }
+      }
+    }
+    return { active: false, elapsed: 0, startKey: '', doneKey: '' }
+  }, [])
+
+  const [state, setState] = useState(getState)
+
+  useEffect(() => {
+    if (!state.active) return
+    const id = setInterval(() => {
+      const next = getState()
+      if (!next.active) {
+        clearInterval(id)
+        setState(next)
+        return
+      }
+      if (next.elapsed >= PROCESSING_DURATION) {
+        localStorage.removeItem(next.startKey)
+        localStorage.setItem(next.doneKey, '1')
+        clearInterval(id)
+        window.location.reload()
+        return
+      }
+      setState(next)
+    }, 1000)
+    return () => clearInterval(id)
+  }, [state.active, getState])
+
+  return state
+}
+
+function ProcessingCTA({ elapsed }: { elapsed: number }) {
+  const clamped = Math.min(elapsed, PROCESSING_DURATION)
+  const pct = Math.round((clamped / PROCESSING_DURATION) * 100)
+  const remainingSec = Math.max(PROCESSING_DURATION - clamped, 0)
+  const remainingMin = Math.ceil(remainingSec / 60)
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-6">
+      <MeridianEmblem size={48} animate />
+      <h2 className="text-lg font-semibold text-[#F5F5F7]">
+        Your AI insights are being generated...
+      </h2>
+      <div className="w-full max-w-xs">
+        <div className="h-2 rounded-full bg-[#1F1F23] overflow-hidden">
+          <div
+            className="h-full rounded-full bg-[#1A8FD6] transition-all duration-1000 ease-linear"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <p className="text-[11px] text-[#A1A1A8] text-center mt-1.5">
+          {pct}% complete &middot; ~{remainingMin} min remaining
+        </p>
+      </div>
+      <p className="text-xs text-[#A1A1A8]/70 text-center max-w-sm leading-relaxed">
+        Your revenue, products, and staff data are already loaded. Check back when analysis is complete.
+      </p>
     </div>
   )
 }
@@ -240,16 +320,27 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
   const { org } = useAuth()
   const location = useLocation()
   const isDemo = location.pathname.startsWith('/demo') || location.pathname.startsWith('/canada/demo')
+  const processing = useProcessingState()
 
-  if (isDemo || org?.pos_connected) return <>{children}</>
+  // Demo mode always shows real content
+  if (isDemo) return <>{children}</>
 
+  // POS connected and analysis finished — show real content
+  if (org?.pos_connected && !processing.active) return <>{children}</>
+
+  // Either POS not connected, or POS connected but still processing
+  const isProcessing = org?.pos_connected && processing.active
   const config = PAGE_CONFIGS[title] || PAGE_CONFIGS['Revenue']
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-[#F5F5F7]">{title}</h1>
-        <p className="text-sm text-[#A1A1A8] mt-1">Connect your POS to populate this view with live data</p>
+        <p className="text-sm text-[#A1A1A8] mt-1">
+          {isProcessing
+            ? 'Your data is being analyzed by our AI agents'
+            : 'Connect your POS to populate this view with live data'}
+        </p>
       </div>
 
       <div className={`grid gap-3 ${config.stats.length === 5 ? 'grid-cols-2 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'}`}>
@@ -266,7 +357,7 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
         </div>
       ))}
 
-      <ConnectCTA />
+      {isProcessing ? <ProcessingCTA elapsed={processing.elapsed} /> : <ConnectCTA />}
     </div>
   )
 }
