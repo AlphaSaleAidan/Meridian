@@ -220,17 +220,29 @@ export default function SchedulePage() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
+      {/* Header with week navigation */}
       <ScrollReveal variant="fadeUp">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#1A8FD6]/10 flex items-center justify-center">
-            <Calendar size={20} className="text-[#1A8FD6]" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#1A8FD6]/10 flex items-center justify-center">
+              <Calendar size={20} className="text-[#1A8FD6]" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-[#F5F5F7]">Schedule</h1>
+              <p className="text-sm text-[#A1A1A8] mt-0.5">
+                AI-powered staff scheduling
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">Schedule</h1>
-            <p className="text-sm text-[#A1A1A8] mt-0.5">
-              AI-powered staff scheduling with peak hour optimization
-            </p>
+          <div className="flex items-center gap-2">
+            <button onClick={handlePublish} disabled={shifts.filter(s => !s.isRecommended).length === 0 || isPublished}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${isPublished ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20' : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-30'}`}>
+              <Send size={13} />{isPublished ? 'Published' : 'Publish'}
+            </button>
+            <button onClick={handleDownloadPdf}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
+              PDF
+            </button>
           </div>
         </div>
       </ScrollReveal>
@@ -246,8 +258,8 @@ export default function SchedulePage() {
       {/* 3-column layout */}
       <ScrollReveal variant="fadeUp" delay={0.05}>
         <div className="flex flex-col lg:flex-row gap-4">
-          {/* Left: Staff roster — hidden on mobile, shown as row below on small */}
-          <div className="hidden lg:block w-[260px] flex-shrink-0">
+          {/* Left: Staff roster */}
+          <div className="hidden lg:block w-[240px] flex-shrink-0">
             <StaffRosterPanel
               staff={staff}
               onAddStaff={() => setShowAddStaff(true)}
@@ -272,7 +284,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Right: Summary panel */}
-          <div className="w-full lg:w-[260px] flex-shrink-0">
+          <div className="w-full lg:w-[240px] flex-shrink-0">
             <WeekSummaryPanel
               shifts={shifts}
               staff={staff}

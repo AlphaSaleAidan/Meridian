@@ -23,10 +23,10 @@ function timeToMinutes(time: string): number {
 }
 
 function formatHourLabel(hour: number): string {
-  if (hour === 0) return '12a'
-  if (hour < 12) return `${hour}a`
-  if (hour === 12) return '12p'
-  return `${hour - 12}p`
+  if (hour === 0) return '12 AM'
+  if (hour < 12) return `${hour} AM`
+  if (hour === 12) return '12 PM'
+  return `${hour - 12} PM`
 }
 
 function addDays(date: Date, days: number): Date {
@@ -93,28 +93,34 @@ export default function WeeklyCalendarGrid({
     return map
   }, [holidays])
 
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${pad2(today.getMonth() + 1)}-${pad2(today.getDate())}`
+  const nowHour = today.getHours()
+  const nowMinute = today.getMinutes()
+
   return (
-    <div className="card overflow-hidden">
+    <div className="card overflow-hidden border-[#1F1F23] rounded-xl">
       <div className="overflow-x-auto">
         <div className="min-w-[700px]">
           {/* Day headers */}
-          <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-[#1F1F23]">
-            <div className="p-2 text-[10px] text-[#A1A1A8]/40 font-mono" />
+          <div className="grid grid-cols-[56px_repeat(7,1fr)] bg-[#111113] border-b border-[#1F1F23]">
+            <div className="p-2" />
             {DAY_NAMES.map((day, di) => {
               const date = addDays(weekStartDate, di)
               const dateStr = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
               const holiday = holidayByDate.get(dateStr)
               const isWeekend = di >= 5
+              const isToday = dateStr === todayStr
 
               return (
                 <div
                   key={day}
-                  className={`p-2 text-center border-l border-[#1F1F23] ${isWeekend ? 'bg-[#1F1F23]/30' : ''}`}
+                  className={`px-2 py-3 text-center border-l border-[#1F1F23] ${isWeekend ? 'bg-[#0A0A0B]/60' : ''} ${isToday ? 'bg-[#1A8FD6]/[0.04]' : ''}`}
                 >
-                  <div className="text-[11px] font-semibold text-[#F5F5F7]">{day}</div>
-                  <div className="text-[10px] text-[#A1A1A8]/50 font-mono">{formatDateShort(date)}</div>
+                  <div className={`text-[11px] font-bold uppercase tracking-wide ${isToday ? 'text-[#1A8FD6]' : 'text-[#F5F5F7]/80'}`}>{day}</div>
+                  <div className={`text-[11px] mt-0.5 ${isToday ? 'text-[#1A8FD6]/80 font-semibold' : 'text-[#A1A1A8]/50'}`}>{formatDateShort(date)}</div>
                   {holiday && (
-                    <div className="mt-1 px-1.5 py-0.5 rounded text-[8px] font-medium bg-amber-500/10 text-amber-400 truncate">
+                    <div className="mt-1.5 px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/10 text-amber-400 truncate">
                       {holiday.name}
                     </div>
                   )}
@@ -125,39 +131,83 @@ export default function WeeklyCalendarGrid({
 
           {/* Hour rows */}
           <div className="relative">
-            {hourRange.map((hour) => (
-              <div
-                key={hour}
-                className="grid grid-cols-[60px_repeat(7,1fr)] border-b border-[#1F1F23]/50"
-                style={{ height: rowHeightPx }}
-              >
-                {/* Hour label */}
-                <div className="flex items-start justify-end pr-2 pt-1">
-                  <span className="text-[10px] text-[#A1A1A8]/40 font-mono">
-                    {formatHourLabel(hour)}
-                  </span>
+            {hourRange.map((hour, hi) => {
+              const isEvenHour = hour % 2 === 0
+              return (
+                <div
+                  key={hour}
+                  className={`grid grid-cols-[56px_repeat(7,1fr)] border-b ${isEvenHour ? 'border-[#1F1F23]/70' : 'border-[#1F1F23]/30'}`}
+                  style={{ height: rowHeightPx }}
+                >
+                  {/* Hour label */}
+                  <div className="flex items-start justify-end pr-2 pt-1">
+                    <span className={`text-[10px] font-mono ${isEvenHour ? 'text-[#A1A1A8]/60 font-medium' : 'text-[#A1A1A8]/30'}`}>
+                      {formatHourLabel(hour)}
+                    </span>
+                  </div>
+
+                  {/* Day cells */}
+                  {DAY_NAMES.map((_, di) => {
+                    const date = addDays(weekStartDate, di)
+                    const dateStr = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+                    const isToday = dateStr === todayStr
+                    const isWeekend = di >= 5
+                    const intensity = peakLookup.get(`${di}-${hour}`) || 0
+
+                    let bgColor = 'transparent'
+                    if (intensity > 0.75) bgColor = 'rgba(23, 197, 176, 0.06)'
+                    else if (intensity > 0.5) bgColor = 'rgba(23, 197, 176, 0.04)'
+                    else if (intensity > 0.25) bgColor = 'rgba(26, 143, 214, 0.03)'
+
+                    if (isWeekend && bgColor === 'transparent') bgColor = 'rgba(10,10,11,0.3)'
+
+                    return (
+                      <div
+                        key={di}
+                        className={`border-l border-[#1F1F23]/40 cursor-pointer hover:bg-[#1A8FD6]/[0.06] transition-colors relative ${isToday ? 'bg-[#1A8FD6]/[0.02]' : ''}`}
+                        style={{ backgroundColor: isToday && bgColor === 'transparent' ? undefined : bgColor }}
+                        onClick={() => onSlotClick(di, hour)}
+                      />
+                    )
+                  })}
                 </div>
+              )
+            })}
 
-                {/* Day cells */}
-                {DAY_NAMES.map((_, di) => {
-                  const intensity = peakLookup.get(`${di}-${hour}`) || 0
+            {/* Current time indicator */}
+            {(() => {
+              const todayIndex = (() => {
+                for (let di = 0; di < 7; di++) {
+                  const date = addDays(weekStartDate, di)
+                  const dateStr = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+                  if (dateStr === todayStr) return di
+                }
+                return -1
+              })()
+              if (todayIndex < 0) return null
+              if (nowHour < hours.open || nowHour >= hours.close) return null
 
-                  let bgColor = 'transparent'
-                  if (intensity > 0.75) bgColor = 'rgba(23, 197, 176, 0.06)'
-                  else if (intensity > 0.5) bgColor = 'rgba(23, 197, 176, 0.04)'
-                  else if (intensity > 0.25) bgColor = 'rgba(26, 143, 214, 0.03)'
+              const gridStartMins = hours.open * 60
+              const totalMins = totalHours * 60
+              const currentMins = nowHour * 60 + nowMinute
+              const topPct = ((currentMins - gridStartMins) / totalMins) * 100
 
-                  return (
-                    <div
-                      key={di}
-                      className="border-l border-[#1F1F23]/50 cursor-pointer hover:bg-[#1F1F23]/20 transition-colors relative"
-                      style={{ backgroundColor: bgColor }}
-                      onClick={() => onSlotClick(di, hour)}
-                    />
-                  )
-                })}
-              </div>
-            ))}
+              return (
+                <div
+                  className="absolute pointer-events-none z-30"
+                  style={{
+                    top: `${topPct}%`,
+                    left: `calc(56px + (100% - 56px) * ${todayIndex} / 7)`,
+                    width: `calc((100% - 56px) / 7)`,
+                  }}
+                >
+                  <div className="relative">
+                    <div className="absolute -left-[4px] -top-[4px] w-2 h-2 rounded-full bg-[#EF4444]" />
+                    <div className="h-[2px] bg-[#EF4444]/80 w-full" />
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Shift blocks overlay — stacked horizontally when overlapping */}
             {(() => {
@@ -188,25 +238,22 @@ export default function WeeklyCalendarGrid({
                 const idx = group.indexOf(shift)
                 const count = group.length
 
-                const colWidth = `(100% - 60px) / 7`
-                const slotWidth = count > 1 ? `(${colWidth} - 4px) / ${count}` : `${colWidth} - 4px`
-                const slotOffset = count > 1 ? `calc(${colWidth}) * ${day} / 7 + (${colWidth} - 4px) / ${count} * ${idx}` : ''
                 const leftCalc = count > 1
-                  ? `calc(60px + (100% - 60px) * ${day} / 7 + 2px + (100% - 60px) / 7 * ${idx} / ${count})`
-                  : `calc(60px + (100% - 60px) * ${day / 7} + 2px)`
+                  ? `calc(56px + (100% - 56px) * ${day} / 7 + 3px + (100% - 56px) / 7 * ${idx} / ${count})`
+                  : `calc(56px + (100% - 56px) * ${day / 7} + 3px)`
                 const widthCalc = count > 1
-                  ? `calc((100% - 60px) / 7 / ${count} - 2px)`
-                  : `calc((100% - 60px) / 7 - 4px)`
+                  ? `calc((100% - 56px) / 7 / ${count} - 3px)`
+                  : `calc((100% - 56px) / 7 - 6px)`
 
                 const durationHrs = ((endMins - startMins) / 60).toFixed(1)
 
                 return (
                   <div
                     key={shift.id}
-                    className="absolute cursor-pointer transition-all hover:scale-[1.02] hover:z-20 z-10"
+                    className="absolute cursor-pointer transition-all hover:brightness-110 hover:z-20 z-10 group/shift"
                     style={{
                       top: `${topPct}%`,
-                      height: `${Math.max(heightPct, 2)}%`,
+                      height: `${Math.max(heightPct, 2.5)}%`,
                       left: leftCalc,
                       width: widthCalc,
                     }}
@@ -216,10 +263,10 @@ export default function WeeklyCalendarGrid({
                     }}
                   >
                     <div
-                      className={`h-full rounded-md px-1.5 py-1 overflow-hidden ${shift.isRecommended ? 'border border-dashed' : 'border'}`}
+                      className={`h-full rounded-md px-2 py-1 overflow-hidden shadow-sm group-hover/shift:shadow-md transition-shadow ${shift.isRecommended ? 'border border-dashed' : 'border'}`}
                       style={{
-                        backgroundColor: `${color}15`,
-                        borderColor: `${color}40`,
+                        backgroundColor: `${color}18`,
+                        borderColor: `${color}50`,
                       }}
                     >
                       <div className="flex items-center gap-1">
@@ -227,15 +274,20 @@ export default function WeeklyCalendarGrid({
                           <Sparkles size={10} className="text-amber-400 flex-shrink-0" />
                         )}
                         <span
-                          className="text-[10px] font-semibold truncate"
+                          className="text-[11px] font-semibold truncate leading-tight"
                           style={{ color }}
                         >
                           {member?.name || 'Unassigned'}
                         </span>
                       </div>
-                      {heightPct > 6 && (
-                        <div className="text-[9px] text-[#A1A1A8]/60 font-mono mt-0.5">
+                      {heightPct > 5 && (
+                        <div className="text-[9px] text-[#A1A1A8]/70 font-mono mt-0.5 leading-tight">
                           {shift.startTime}–{shift.endTime} ({durationHrs}h)
+                        </div>
+                      )}
+                      {heightPct > 10 && member?.role && (
+                        <div className="text-[8px] text-[#A1A1A8]/40 mt-0.5 capitalize truncate">
+                          {member.role.replace(/_/g, ' ')}
                         </div>
                       )}
                     </div>
