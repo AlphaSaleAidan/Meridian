@@ -83,7 +83,7 @@ export default function CameraIntelligencePage() {
   const [showAddCamera, setShowAddCamera] = useState(false)
   const [addStep, setAddStep] = useState(0)
   const [newCam, setNewCam] = useState({ name: '', location: '', rtspUrl: '' })
-  const [copied, setCopied] = useState(false)
+  const [copiedCamId, setCopiedCamId] = useState<string | null>(null)
 
   function handleAddCamera() {
     const cam: CameraDevice = {
@@ -102,8 +102,8 @@ export default function CameraIntelligencePage() {
     setNewCam({ name: '', location: '', rtspUrl: '' })
   }
 
-  function copyToClipboard(text: string) {
-    navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  function copyToClipboard(camId: string, text: string) {
+    navigator.clipboard.writeText(text).then(() => { setCopiedCamId(camId); setTimeout(() => setCopiedCamId(null), 2000) })
   }
 
   const onlineCameras = cameras.filter(c => c.status === 'online')
@@ -273,9 +273,9 @@ export default function CameraIntelligencePage() {
                   </ol>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-[9px] font-mono text-[#A1A1A8]/60 truncate flex-1">{cam.rtspUrl}</span>
-                    <button onClick={(e) => { e.stopPropagation(); copyToClipboard(cam.rtspUrl) }}
+                    <button onClick={(e) => { e.stopPropagation(); copyToClipboard(cam.id, cam.rtspUrl) }}
                       className="text-[9px] text-[#1A8FD6] hover:text-[#17C5B0] transition-colors flex items-center gap-1">
-                      {copied ? <><Check size={9} /> Copied</> : <><Copy size={9} /> Copy URL</>}
+                      {copiedCamId === cam.id ? <><Check size={9} /> Copied</> : <><Copy size={9} /> Copy URL</>}
                     </button>
                   </div>
                 </div>
@@ -287,7 +287,7 @@ export default function CameraIntelligencePage() {
 
       {/* Add Camera Wizard */}
       {showAddCamera && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowAddCamera(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => { setShowAddCamera(false); setAddStep(0); setNewCam({ name: '', location: '', rtspUrl: '' }) }}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div className="relative w-full max-w-md bg-[#111113] border border-[#1F1F23] rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
@@ -382,7 +382,7 @@ export default function CameraIntelligencePage() {
               </button>
               {addStep < 2 ? (
                 <button onClick={() => setAddStep(addStep + 1)}
-                  disabled={addStep === 0 && !newCam.location.trim()}
+                  disabled={(addStep === 0 && !newCam.location.trim()) || (addStep === 1 && !newCam.rtspUrl.trim())}
                   className="px-4 py-2 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 disabled:opacity-40 transition-colors">
                   Next
                 </button>

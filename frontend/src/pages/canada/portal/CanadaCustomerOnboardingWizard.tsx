@@ -489,8 +489,8 @@ export default function CanadaCustomerOnboardingWizard() {
         localStorage.setItem(PROCESSING_KEY, String(Date.now()))
       }
     } catch { /* ignore */ }
+    if (processingInterval.current) clearInterval(processingInterval.current)
     setStep('processing')
-    setProcessingElapsed(0)
     tickProcessing()
     processingInterval.current = setInterval(tickProcessing, 1000)
   }
