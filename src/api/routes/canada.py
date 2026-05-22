@@ -13,7 +13,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_admin, require_service_auth
+from ..auth import require_admin, require_service_auth, require_jwt, require_admin_jwt
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
@@ -221,11 +221,9 @@ class RepActionRequest(BaseModel):
 
 
 @router.post("/rep-approve")
-async def approve_rep(req: RepActionRequest):
+async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
     """Admin approves a pending rep — sets is_active=true, creates auth user if needed, sends credentials email."""
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     import secrets
@@ -314,11 +312,9 @@ async def approve_rep(req: RepActionRequest):
 
 
 @router.post("/rep-reject")
-async def reject_rep(req: RepActionRequest):
+async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
     """Admin rejects a pending rep — deletes the sales_reps row."""
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -349,11 +345,9 @@ class RepUpdateRequest(BaseModel):
 
 
 @router.post("/rep-update")
-async def update_rep(req: RepUpdateRequest):
+async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_jwt)):
     """Admin updates a rep's name or commission rate."""
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -388,11 +382,9 @@ async def update_rep(req: RepUpdateRequest):
 
 
 @router.post("/rep-remove")
-async def remove_rep(req: RepActionRequest):
+async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
     """Admin removes an active rep from the team — deletes the sales_reps row."""
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -417,7 +409,7 @@ async def remove_rep(req: RepActionRequest):
 
 
 @router.get("/leads")
-async def get_leads():
+async def get_leads(user: dict = Depends(require_jwt)):
     """Return all Canada deals/leads. Tries 'deals' table, falls back to 'data_sales'."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -446,7 +438,7 @@ async def get_leads():
 
 
 @router.get("/stats")
-async def get_stats():
+async def get_stats(user: dict = Depends(require_jwt)):
     """Aggregate Canada sales stats: rep count, deal count, revenue pipeline."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -481,7 +473,7 @@ ADMIN_EMAILS = [
 
 
 @router.get("/team")
-async def get_team():
+async def get_team(user: dict = Depends(require_jwt)):
     """Return all Canada sales reps (bypasses RLS via service key)."""
     import httpx
     supabase_url = os.environ.get("SUPABASE_URL", "")

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 
@@ -133,9 +134,10 @@ export default function CanadaPortalTeamPage() {
     async function fetchData() {
       const apiBase = import.meta.env.VITE_API_URL || ''
 
-      // Fetch team + applicants from backend API (bypasses RLS)
+      // Fetch team + applicants from backend API (requires JWT)
       try {
-        const resp = await fetch(`${apiBase}/api/canada/team`)
+        const headers = await getAuthHeaders()
+        const resp = await fetch(`${apiBase}/api/canada/team`, { headers })
         if (resp.ok) {
           const { reps, applicants: apps } = await resp.json()
           if (reps && reps.length > 0) {
@@ -223,9 +225,10 @@ export default function CanadaPortalTeamPage() {
   async function handleApproveApplicant(applicant: Applicant) {
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
+      const headers = await getAuthHeaders()
       const resp = await fetch(`${apiBase}/api/canada/rep-approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ rep_id: applicant.id, admin_email: rep?.email }),
       })
       if (!resp.ok) {
@@ -250,9 +253,10 @@ export default function CanadaPortalTeamPage() {
     setRemoving(true)
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
+      const headers = await getAuthHeaders()
       const resp = await fetch(`${apiBase}/api/canada/rep-remove`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ rep_id: member.id, admin_email: rep?.email }),
       })
       if (!resp.ok) {
@@ -275,9 +279,10 @@ export default function CanadaPortalTeamPage() {
     if (!confirm(`Reject ${applicant.name}? This will permanently remove their application.`)) return
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
+      const headers = await getAuthHeaders()
       const resp = await fetch(`${apiBase}/api/canada/rep-reject`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ rep_id: applicant.id, admin_email: rep?.email }),
       })
       if (!resp.ok) {
@@ -768,9 +773,10 @@ export default function CanadaPortalTeamPage() {
                   const name = editName.trim() || editingMember.name
                   const apiBase = import.meta.env.VITE_API_URL || ''
                   try {
+                    const headers = await getAuthHeaders()
                     const resp = await fetch(`${apiBase}/api/canada/rep-update`, {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers,
                       body: JSON.stringify({ rep_id: editingMember.id, admin_email: rep?.email, name, commission_rate: rate / 100 }),
                     })
                     if (!resp.ok) {

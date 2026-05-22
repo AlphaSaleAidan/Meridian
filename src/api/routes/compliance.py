@@ -19,8 +19,10 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
+
+from ..auth import require_admin_jwt
 
 logger = logging.getLogger("meridian.api.compliance")
 
@@ -252,10 +254,9 @@ async def submit_privacy_request(req: PrivacyRequestSubmission):
 
 
 @router.get("/api/privacy/export/{user_id}")
-async def export_user_data(user_id: str, admin_email: str = ""):
+async def export_user_data(user_id: str, admin: dict = Depends(require_admin_jwt)):
     """Export all personal data for a user (admin only). PIPEDA portability."""
     _validate_user_id(user_id)
-    _require_admin(admin_email)
 
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
@@ -284,9 +285,8 @@ async def export_user_data(user_id: str, admin_email: str = ""):
 # ---------- CASL Status ----------
 
 @router.get("/api/compliance/casl/status")
-async def casl_status(admin_email: str = ""):
+async def casl_status(admin: dict = Depends(require_admin_jwt)):
     """CASL consent statistics (admin only)."""
-    _require_admin(admin_email)
 
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
@@ -313,9 +313,8 @@ async def casl_status(admin_email: str = ""):
 # ---------- Compliance Dashboard ----------
 
 @router.get("/api/compliance/dashboard")
-async def compliance_dashboard(admin_email: str = ""):
+async def compliance_dashboard(admin: dict = Depends(require_admin_jwt)):
     """Full compliance dashboard data (admin only)."""
-    _require_admin(admin_email)
 
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
@@ -370,9 +369,8 @@ async def compliance_dashboard(admin_email: str = ""):
 # ---------- Breach Log ----------
 
 @router.post("/api/compliance/breach")
-async def log_breach(req: BreachReport):
+async def log_breach(req: BreachReport, admin: dict = Depends(require_admin_jwt)):
     """Log a new breach incident (admin only)."""
-    _require_admin(req.admin_email)
 
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
@@ -411,9 +409,8 @@ async def log_breach(req: BreachReport):
 
 
 @router.get("/api/compliance/breach")
-async def list_breaches(admin_email: str = ""):
+async def list_breaches(admin: dict = Depends(require_admin_jwt)):
     """List all breach records (admin only)."""
-    _require_admin(admin_email)
 
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:

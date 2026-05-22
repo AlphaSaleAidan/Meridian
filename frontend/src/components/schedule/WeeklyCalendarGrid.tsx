@@ -159,66 +159,90 @@ export default function WeeklyCalendarGrid({
               </div>
             ))}
 
-            {/* Shift blocks overlay */}
-            {shifts.map((shift) => {
-              const startMins = timeToMinutes(shift.startTime)
-              const endMins = timeToMinutes(shift.endTime)
-              const gridStartMins = hours.open * 60
-              const totalMins = totalHours * 60
+            {/* Shift blocks overlay — stacked horizontally when overlapping */}
+            {(() => {
+              const grouped = new Map<string, typeof shifts>()
+              shifts.forEach(s => {
+                const key = `${s.dayOfWeek}-${s.startTime}`
+                if (!grouped.has(key)) grouped.set(key, [])
+                grouped.get(key)!.push(s)
+              })
 
-              const topPct = ((startMins - gridStartMins) / totalMins) * 100
-              const heightPct = ((endMins - startMins) / totalMins) * 100
+              return shifts.map((shift) => {
+                const startMins = timeToMinutes(shift.startTime)
+                const endMins = timeToMinutes(shift.endTime)
+                const gridStartMins = hours.open * 60
+                const totalMins = totalHours * 60
 
-              if (topPct < 0 || topPct >= 100) return null
+                const topPct = ((startMins - gridStartMins) / totalMins) * 100
+                const heightPct = ((endMins - startMins) / totalMins) * 100
 
-              const member = shift.staffMemberId ? staffMap.get(shift.staffMemberId) : null
-              const color = member?.color || '#A1A1A8'
-              const day = shift.dayOfWeek
+                if (topPct < 0 || topPct >= 100) return null
 
-              const durationHrs = ((endMins - startMins) / 60).toFixed(1)
+                const member = shift.staffMemberId ? staffMap.get(shift.staffMemberId) : null
+                const color = member?.color || '#A1A1A8'
+                const day = shift.dayOfWeek
 
-              return (
-                <div
-                  key={shift.id}
-                  className="absolute cursor-pointer transition-all hover:scale-[1.02] hover:z-20 z-10"
-                  style={{
-                    top: `${topPct}%`,
-                    height: `${Math.max(heightPct, 2)}%`,
-                    left: `calc(60px + (100% - 60px) * ${day / 7} + 2px)`,
-                    width: `calc((100% - 60px) / 7 - 4px)`,
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onShiftClick(shift)
-                  }}
-                >
+                const groupKey = `${day}-${shift.startTime}`
+                const group = grouped.get(groupKey) || [shift]
+                const idx = group.indexOf(shift)
+                const count = group.length
+
+                const colWidth = `(100% - 60px) / 7`
+                const slotWidth = count > 1 ? `(${colWidth} - 4px) / ${count}` : `${colWidth} - 4px`
+                const slotOffset = count > 1 ? `calc(${colWidth}) * ${day} / 7 + (${colWidth} - 4px) / ${count} * ${idx}` : ''
+                const leftCalc = count > 1
+                  ? `calc(60px + (100% - 60px) * ${day} / 7 + 2px + (100% - 60px) / 7 * ${idx} / ${count})`
+                  : `calc(60px + (100% - 60px) * ${day / 7} + 2px)`
+                const widthCalc = count > 1
+                  ? `calc((100% - 60px) / 7 / ${count} - 2px)`
+                  : `calc((100% - 60px) / 7 - 4px)`
+
+                const durationHrs = ((endMins - startMins) / 60).toFixed(1)
+
+                return (
                   <div
-                    className={`h-full rounded-md px-1.5 py-1 overflow-hidden ${shift.isRecommended ? 'border border-dashed' : 'border'}`}
+                    key={shift.id}
+                    className="absolute cursor-pointer transition-all hover:scale-[1.02] hover:z-20 z-10"
                     style={{
-                      backgroundColor: `${color}15`,
-                      borderColor: `${color}40`,
+                      top: `${topPct}%`,
+                      height: `${Math.max(heightPct, 2)}%`,
+                      left: leftCalc,
+                      width: widthCalc,
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onShiftClick(shift)
                     }}
                   >
-                    <div className="flex items-center gap-1">
-                      {shift.isRecommended && (
-                        <Sparkles size={10} className="text-amber-400 flex-shrink-0" />
-                      )}
-                      <span
-                        className="text-[10px] font-semibold truncate"
-                        style={{ color }}
-                      >
-                        {member?.name || 'Unassigned'}
-                      </span>
-                    </div>
-                    {heightPct > 6 && (
-                      <div className="text-[9px] text-[#A1A1A8]/60 font-mono mt-0.5">
-                        {shift.startTime}–{shift.endTime} ({durationHrs}h)
+                    <div
+                      className={`h-full rounded-md px-1.5 py-1 overflow-hidden ${shift.isRecommended ? 'border border-dashed' : 'border'}`}
+                      style={{
+                        backgroundColor: `${color}15`,
+                        borderColor: `${color}40`,
+                      }}
+                    >
+                      <div className="flex items-center gap-1">
+                        {shift.isRecommended && (
+                          <Sparkles size={10} className="text-amber-400 flex-shrink-0" />
+                        )}
+                        <span
+                          className="text-[10px] font-semibold truncate"
+                          style={{ color }}
+                        >
+                          {member?.name || 'Unassigned'}
+                        </span>
                       </div>
-                    )}
+                      {heightPct > 6 && (
+                        <div className="text-[9px] text-[#A1A1A8]/60 font-mono mt-0.5">
+                          {shift.startTime}–{shift.endTime} ({durationHrs}h)
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })
+            })()}
           </div>
         </div>
       </div>

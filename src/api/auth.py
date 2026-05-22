@@ -2,9 +2,11 @@
 Auth dependencies for Meridian API.
 
 - require_admin: X-Admin-Key header check (admin-only ops)
+- require_jwt: Supabase JWT verification (returns user dict)
+- require_admin_jwt: JWT + admin email check
 - require_service_auth: Authorization Bearer token OR X-Admin-Key (service/internal endpoints)
-- require_org_access: validates org_id access (placeholder for JWT — currently checks org exists)
 """
+import logging
 import os
 import time
 from collections import defaultdict
@@ -14,8 +16,18 @@ from threading import Lock
 from fastapi import Depends, HTTPException, Request
 from fastapi.security import APIKeyHeader
 
+logger = logging.getLogger("meridian.auth")
+
 _admin_key_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
 _auth_header = APIKeyHeader(name="Authorization", auto_error=False)
+
+ADMIN_EMAILS = [
+    "apierce@alphasale.co",
+    "aidanpierce72@gmail.com",
+    "aidanpierce@meridian.tips",
+    "cheungenochmgmt@gmail.com",
+    "aidanvietnguyen@gmail.com",
+]
 
 
 async def require_admin(key: str = Depends(_admin_key_header)):
@@ -47,6 +59,28 @@ async def _verify_supabase_token(token: str) -> dict | None:
     except Exception:
         pass
     return None
+
+
+async def require_jwt(auth_header: str = Depends(_auth_header)) -> dict:
+    """Verify Supabase JWT and return user dict. Use as Depends(require_jwt)."""
+    if not auth_header:
+        raise HTTPException(401, "Authorization header required")
+    token = auth_header.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(401, "Bearer token required")
+    user = await _verify_supabase_token(token)
+    if not user:
+        raise HTTPException(401, "Invalid or expired token")
+    return user
+
+
+async def require_admin_jwt(user: dict = Depends(require_jwt)) -> dict:
+    """Verify JWT user is in the admin list. Use as Depends(require_admin_jwt)."""
+    email = (user.get("email") or "").lower()
+    if email not in [e.lower() for e in ADMIN_EMAILS]:
+        logger.warning("Admin access denied for %s", email)
+        raise HTTPException(403, "Admin access required")
+    return user
 
 
 async def require_service_auth(

@@ -18,7 +18,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_service_auth
+from ..auth import require_service_auth, require_jwt, require_admin_jwt
 
 logger = logging.getLogger("meridian.api.us")
 
@@ -222,7 +222,7 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
 
 
 @router.get("/team")
-async def get_team():
+async def get_team(user: dict = Depends(require_jwt)):
     import httpx
 
     supabase_url, service_key = _supabase_creds()
@@ -245,10 +245,8 @@ async def get_team():
 
 
 @router.post("/rep-approve")
-async def approve_rep(req: RepActionRequest):
+async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
     import secrets
@@ -319,10 +317,8 @@ async def approve_rep(req: RepActionRequest):
 
 
 @router.post("/rep-reject")
-async def reject_rep(req: RepActionRequest):
+async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
 
@@ -341,10 +337,8 @@ async def reject_rep(req: RepActionRequest):
 
 
 @router.post("/rep-update")
-async def update_rep(req: RepUpdateRequest):
+async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_jwt)):
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
 
@@ -372,11 +366,9 @@ async def update_rep(req: RepUpdateRequest):
 
 
 @router.post("/rep-remove")
-async def remove_rep(req: RepActionRequest):
+async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
     """Admin removes an active rep from the team — deletes the sales_reps row."""
     _validate_rep_id(req.rep_id)
-    if req.admin_email.lower() not in [e.lower() for e in ADMIN_EMAILS]:
-        raise HTTPException(403, "Not authorized — admin email not recognized")
 
     import httpx
 
@@ -396,7 +388,7 @@ async def remove_rep(req: RepActionRequest):
 
 
 @router.get("/leads")
-async def get_leads():
+async def get_leads(user: dict = Depends(require_jwt)):
     import httpx
 
     supabase_url, service_key = _supabase_creds()
@@ -413,7 +405,7 @@ async def get_leads():
 
 
 @router.get("/stats")
-async def get_stats():
+async def get_stats(user: dict = Depends(require_jwt)):
     import httpx
 
     supabase_url, service_key = _supabase_creds()
