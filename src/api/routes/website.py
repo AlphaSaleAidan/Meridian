@@ -119,7 +119,7 @@ class CreateOrderRequest(BaseModel):
 
 
 @router.get("/config")
-async def get_website_config(merchant_id: str = Query(...)):
+async def get_website_config(merchant_id: str = Query(...), _auth=Depends(require_service_auth)):
     """
     Return the merchant's website configuration.
     If no record exists, returns {exists: false}.

@@ -19,6 +19,7 @@ from fastapi.responses import Response
 
 from ...services.pos_connectors.order_dispatcher import create_pos_order
 from ...services.pos_connectors.base import OrderResult
+from ...db import get_db
 
 logger = logging.getLogger("meridian.phone")
 
@@ -249,13 +250,54 @@ def _parse(result: dict) -> tuple[str, dict | None]:
     return " ".join(texts).strip(), tool
 
 
+async def _log_call_start(call_sid: str, caller_phone: str, merchant_id: str = ""):
+    """Log a new call to phone_call_logs."""
+    try:
+        db = get_db()
+        await db.insert("phone_call_logs", {
+            "merchant_id": merchant_id or "demo",
+            "call_sid": call_sid,
+            "caller_phone": caller_phone,
+            "status": "in_progress",
+            "transcript": [],
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
+    except Exception as e:
+        logger.warning("Failed to log call start: %s", e)
+
+
+async def _log_call_end(call_sid: str, status: str, order_data: dict | None = None):
+    """Update call log on completion."""
+    try:
+        db = get_db()
+        session = _sessions.get(call_sid, {})
+        transcript = session.get("messages", [])
+        duration = int(time.time() - session.get("ts", time.time()))
+        payload: dict = {
+            "status": status,
+            "duration_seconds": duration,
+            "transcript": transcript,
+        }
+        if order_data:
+            payload["order_data"] = order_data
+        await db.update(
+            "phone_call_logs",
+            payload,
+            filters={"call_sid": f"eq.{call_sid}"},
+        )
+    except Exception as e:
+        logger.warning("Failed to log call end: %s", e)
+
+
 @router.post("/voice")
 async def twilio_voice(request: Request):
     """Initial call webhook — greet the caller."""
     form = await request.form()
     call_sid = form.get("CallSid", "unknown")
+    caller_phone = form.get("From", "")
     _cleanup()
-    _sessions[call_sid] = {"messages": [], "ts": time.time()}
+    _sessions[call_sid] = {"messages": [], "ts": time.time(), "caller_phone": caller_phone}
+    await _log_call_start(call_sid, caller_phone)
     greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     return Response(content=_gather(greeting), media_type=TWIML)
 
@@ -283,6 +325,7 @@ async def twilio_gather(request: Request):
     if tool:
         if tool["name"] == "end_call":
             farewell = tool["input"].get("farewell", "Thank you for calling Meridian! Have a great day!")
+            await _log_call_end(call_sid, "no_order")
             del _sessions[call_sid]
             return Response(content=_hangup(farewell), media_type=TWIML)
 
@@ -295,6 +338,7 @@ async def twilio_gather(request: Request):
 
             confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
+            await _log_call_end(call_sid, "order_placed", tool["input"])
             del _sessions[call_sid]
             return Response(content=_hangup(confirmation), media_type=TWIML)
 
@@ -342,6 +386,8 @@ async def twilio_status(request: Request):
     call_sid = form.get("CallSid", "")
     status = form.get("CallStatus", "")
     if status in ("completed", "failed", "busy", "no-answer", "canceled"):
+        if call_sid in _sessions:
+            await _log_call_end(call_sid, status)
         _sessions.pop(call_sid, None)
     return Response(content="", status_code=204)
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { clsx } from 'clsx'
 import {
   Phone, PhoneCall, PhoneOff, PhoneIncoming, Settings, Mic, Volume2,
@@ -15,6 +15,7 @@ import {
   getPhoneDemoData, getPhoneStats, VOICE_OPTIONS,
   type PhoneCallEntry, type PhoneBizConfig, type CallStatus, type PaymentStatus,
 } from '@/lib/phone-orders-demo-data'
+import { phoneService, type PhoneConfig } from '@/lib/phone-service'
 
 const STATUS_CFG: Record<CallStatus, { label: string; color: string; bg: string; icon: typeof Phone }> = {
   order_placed: { label: 'Order Placed', color: 'text-[#17C5B0]', bg: 'bg-[#17C5B0]/10', icon: CheckCircle2 },
@@ -106,7 +107,7 @@ function VoicePlayButton({ voiceId, isSelected }: { voiceId: string; isSelected:
   )
 }
 
-function SetupWizard({ biz, onDone, connectedPos }: { biz: PhoneBizConfig; onDone: () => void; connectedPos: string | null }) {
+function SetupWizard({ biz, onDone, connectedPos, orgId }: { biz: PhoneBizConfig; onDone: () => void; connectedPos: string | null; orgId: string }) {
   const [step, setStep] = useState(0)
   const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
   const hasDirectApi = connectedPos ? DIRECT_API_SYSTEMS.has(connectedPos) : false
@@ -357,7 +358,20 @@ function SetupWizard({ biz, onDone, connectedPos }: { biz: PhoneBizConfig; onDon
             Next <ArrowRight size={14} />
           </button>
         ) : (
-          <button onClick={onDone}
+          <button onClick={async () => {
+              if (orgId) {
+                await phoneService.saveConfig({
+                  merchant_id: orgId,
+                  business_name: cfg.businessName,
+                  phone_number: cfg.phone,
+                  greeting: cfg.greeting,
+                  voice: cfg.voice,
+                  order_types: cfg.orderTypes,
+                  active: true,
+                })
+              }
+              onDone()
+            }}
             className="flex items-center gap-1.5 px-4 py-2 bg-[#17C5B0] text-white text-sm font-medium rounded-lg hover:bg-[#17C5B0]/90 transition-colors">
             <Zap size={14} /> Activate Agent
           </button>
@@ -692,9 +706,11 @@ function CallLogTab({ calls, biz, onViewCall }: { calls: PhoneCallEntry[]; biz: 
   )
 }
 
-function SettingsTab({ biz, onReconfigure, connectedPos, onConnect }: { biz: PhoneBizConfig; onReconfigure: () => void; connectedPos: string | null; onConnect: () => void }) {
+function SettingsTab({ biz, onReconfigure, connectedPos, onConnect, orgId }: { biz: PhoneBizConfig; onReconfigure: () => void; connectedPos: string | null; onConnect: () => void; orgId: string }) {
   const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
   const hasDirectApi = connectedPos ? DIRECT_API_SYSTEMS.has(connectedPos) : false
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [cfg, setCfg] = useState({
     active: true,
     greeting: biz.greeting,
@@ -703,6 +719,22 @@ function SettingsTab({ biz, onReconfigure, connectedPos, onConnect }: { biz: Pho
     orderTypes: [...biz.orderTypes] as string[],
     smsCheckout: true,
   })
+
+  async function handleSave() {
+    if (!orgId) return
+    setSaving(true)
+    await phoneService.saveConfig({
+      merchant_id: orgId,
+      business_name: cfg.businessName,
+      greeting: cfg.greeting,
+      voice: cfg.voice,
+      order_types: cfg.orderTypes,
+      active: cfg.active,
+    })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   return (
     <div className="space-y-4">
@@ -901,6 +933,11 @@ function SettingsTab({ biz, onReconfigure, connectedPos, onConnect }: { biz: Pho
         </div>
       </div>
 
+      <button onClick={handleSave} disabled={saving}
+        className="w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+        {saving ? 'Saving...' : saved ? <><CheckCircle2 size={14} /> Saved</> : 'Save Changes'}
+      </button>
+
       <button onClick={onReconfigure}
         className="w-full py-2 border border-[#1F1F23] rounded-lg text-xs text-[#A1A1A8] hover:border-[#1A8FD6]/30 hover:text-[#1A8FD6] transition-colors">
         Re-run Setup Wizard
@@ -1030,23 +1067,65 @@ export default function PhoneOrdersPage() {
   const [selectedCall, setSelectedCall] = useState<PhoneCallEntry | null>(null)
   const [showWizard, setShowWizard] = useState(false)
   const [showConnect, setShowConnect] = useState(false)
+  const [realCalls, setRealCalls] = useState<PhoneCallEntry[] | null>(null)
+  const [phoneConfig, setPhoneConfig] = useState<PhoneConfig | null>(null)
 
   const connectedPos = org?.pos_provider || null
   const setupKey = 'meridian_phone_setup'
   const [setupDone, setSetupDone] = useState(() => isDemo || localStorage.getItem(setupKey) === '1')
 
-  const { business, calls } = useMemo(() => getPhoneDemoData('midtown-kitchen'), [])
+  const demoData = useMemo(() => getPhoneDemoData('midtown-kitchen'), [])
 
-  function handleWizardDone() {
+  useEffect(() => {
+    if (!orgId || isDemo) return
+    phoneService.getConfig(orgId).then(cfg => {
+      setPhoneConfig(cfg)
+      if (cfg.exists && cfg.active) {
+        setSetupDone(true)
+      }
+    })
+    phoneService.getCalls(orgId).then(c => setRealCalls(c))
+  }, [orgId, isDemo])
+
+  const business: PhoneBizConfig = useMemo(() => {
+    if (phoneConfig?.exists) {
+      return {
+        id: phoneConfig.merchant_id,
+        name: phoneConfig.business_name || org?.business_name || 'My Business',
+        vertical: phoneConfig.business_type || 'restaurant',
+        country: 'US',
+        currency: '$',
+        taxRate: 0.08,
+        phone: phoneConfig.phone_number || '',
+        greeting: phoneConfig.greeting || '',
+        voice: phoneConfig.voice || 'af_bella',
+        orderTypes: (phoneConfig.order_types || ['pickup', 'delivery']) as any,
+        menu: (phoneConfig.menu_items || []).map((m: any, i: number) => ({
+          id: m.id || `item-${i}`,
+          name: m.name || '',
+          price: m.price || 0,
+          category: m.category || 'General',
+        })),
+      }
+    }
+    return demoData.business
+  }, [phoneConfig, demoData.business, org?.business_name])
+
+  const calls = realCalls !== null && realCalls.length > 0 ? realCalls : demoData.calls
+
+  const handleWizardDone = useCallback(async () => {
     localStorage.setItem(setupKey, '1')
     setSetupDone(true)
     setShowWizard(false)
-  }
+    if (orgId && !isDemo) {
+      phoneService.getConfig(orgId).then(setPhoneConfig)
+    }
+  }, [orgId, isDemo])
 
   if (!setupDone || showWizard) {
     return (
       <div className="space-y-6">
-        <SetupWizard biz={business} onDone={handleWizardDone} connectedPos={connectedPos} />
+        <SetupWizard biz={business} onDone={handleWizardDone} connectedPos={connectedPos} orgId={orgId} />
       </div>
     )
   }
@@ -1085,7 +1164,7 @@ export default function PhoneOrdersPage() {
 
       {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
-      {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} />}
+      {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} orgId={orgId} />}
 
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}
       {showConnect && <ConnectPhoneModal biz={business} onClose={() => setShowConnect(false)} />}

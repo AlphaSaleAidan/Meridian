@@ -166,7 +166,7 @@ export default function MyWebsitePage() {
 
   const loadConfig = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/website/config?merchant_id=${orgId}`)
+      const res = await fetch(`${API_BASE}/api/website/config?merchant_id=${orgId}`, { headers: await getAuthHeaders() })
       if (res.ok) {
         const data = await res.json()
         if (data && data.id) {
