@@ -473,14 +473,14 @@ export default function FootTrafficAnalyticsArticle() {
                 </p>
               </Link>
               <Link
-                to="/blog/square-pos-analytics-what-it-tells-you"
+                to="/what-is-pos-analytics"
                 className="bg-[#111113] border border-[#1F1F23] rounded-xl p-6 hover:border-[#17C5B0]/40 transition-colors group"
               >
                 <h3 className="font-semibold text-[#F5F5F7] group-hover:text-[#17C5B0] transition-colors mb-2">
-                  Square POS Analytics: What It Actually Tells You
+                  What Is POS Analytics? The Complete Guide
                 </h3>
                 <p className="text-sm text-[#A1A1A8]">
-                  Square's built-in reports are a start. Here is what they miss and how to get the full picture of your restaurant's performance.
+                  Everything you need to know about POS analytics — what it measures, who needs it, and how it turns raw transaction data into revenue insights.
                 </p>
               </Link>
             </div>

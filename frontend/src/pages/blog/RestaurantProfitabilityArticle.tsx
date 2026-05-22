@@ -468,12 +468,12 @@ export default function RestaurantProfitabilityArticle() {
                 </p>
               </Link>
               <Link
-                to="/blog/square-pos-analytics-what-it-tells-you"
+                to="/what-is-pos-analytics"
                 className="block bg-[#111113] border border-[#1F1F23] rounded-xl p-5 hover:border-[#17C5B0]/40 transition-colors group"
               >
-                <p className="text-xs text-[#A1A1A8] uppercase tracking-wider mb-2">POS Deep Dive</p>
+                <p className="text-xs text-[#A1A1A8] uppercase tracking-wider mb-2">Educational</p>
                 <p className="text-[#F5F5F7] font-semibold group-hover:text-[#17C5B0] transition-colors">
-                  Square POS Analytics: What It Actually Tells You (and What It Misses)
+                  What Is POS Analytics? The Complete Guide for 2026
                 </p>
               </Link>
             </div>
