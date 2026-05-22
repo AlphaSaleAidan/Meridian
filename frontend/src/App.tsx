@@ -89,6 +89,16 @@ const USPortalCreateCustomerPage = lazy(() => import('@/pages/us/portal/USPortal
 const USPortalOnboardingPage = lazy(() => import('@/pages/us/portal/USPortalOnboardingPage'))
 const USCustomerOnboardingWizard = lazy(() => import('@/pages/us/portal/USCustomerOnboardingWizard'))
 
+const RestaurantsPage = lazy(() => import('@/pages/seo/RestaurantsPage'))
+const CoffeeShopsPage = lazy(() => import('@/pages/seo/CoffeeShopsPage'))
+const AutoShopsPage = lazy(() => import('@/pages/seo/AutoShopsPage'))
+const FastFoodPage = lazy(() => import('@/pages/seo/FastFoodPage'))
+const SmokeShopsPage = lazy(() => import('@/pages/seo/SmokeShopsPage'))
+const SquareIntegrationPage = lazy(() => import('@/pages/seo/SquareIntegrationPage'))
+const ToastIntegrationPage = lazy(() => import('@/pages/seo/ToastIntegrationPage'))
+const CloverIntegrationPage = lazy(() => import('@/pages/seo/CloverIntegrationPage'))
+const CityIndustryPage = lazy(() => import('@/pages/seo/CityIndustryPage'))
+
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
   return <ProtectedRoute loginPath="/canada/login">{children}</ProtectedRoute>
@@ -170,6 +180,21 @@ export default function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/careers" element={<CareersPage />} />
+
+              {/* SEO — Industry landing pages */}
+              <Route path="/for/restaurants" element={<RestaurantsPage />} />
+              <Route path="/for/coffee-shops" element={<CoffeeShopsPage />} />
+              <Route path="/for/auto-shops" element={<AutoShopsPage />} />
+              <Route path="/for/fast-food" element={<FastFoodPage />} />
+              <Route path="/for/smoke-shops" element={<SmokeShopsPage />} />
+
+              {/* SEO — POS integration pages */}
+              <Route path="/integrations/square" element={<SquareIntegrationPage />} />
+              <Route path="/integrations/toast" element={<ToastIntegrationPage />} />
+              <Route path="/integrations/clover" element={<CloverIntegrationPage />} />
+
+              {/* SEO — Programmatic city x industry pages (160+) */}
+              <Route path="/analytics/:industry/:citySlug" element={<CityIndustryPage />} />
 
               {/* PUBLIC MERCHANT WEBSITES — no auth */}
               <Route path="/sites/:slug" element={
