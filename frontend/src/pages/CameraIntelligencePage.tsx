@@ -145,7 +145,7 @@ export default function CameraIntelligencePage() {
       </ScrollReveal>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-walkthrough="camera-stats">
         {[
           { label: 'Total Entries', value: totalEntries.toLocaleString(), icon: Users, color: '#17C5B0' },
           { label: 'Total Exits', value: totalExits.toLocaleString(), icon: TrendingUp, color: '#1A8FD6' },

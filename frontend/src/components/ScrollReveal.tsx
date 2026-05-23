@@ -56,10 +56,12 @@ export function StaggerContainer({
   children,
   className = '',
   staggerDelay = 0.06,
+  ...rest
 }: {
   children: ReactNode
   className?: string
   staggerDelay?: number
+  [key: string]: unknown
 }) {
   return (
     <motion.div
@@ -70,6 +72,7 @@ export function StaggerContainer({
         hidden: {},
         visible: { transition: { staggerChildren: staggerDelay } },
       }}
+      {...rest}
       className={className}
     >
       {children}

@@ -480,7 +480,7 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-walkthrough="phone-stats">
         {[
           { label: 'Total Calls', value: stats.totalCalls, icon: PhoneCall, color: 'text-[#1A8FD6]', bg: 'bg-[#1A8FD6]/10' },
           { label: 'Orders Placed', value: stats.orders, icon: CheckCircle2, color: 'text-[#17C5B0]', bg: 'bg-[#17C5B0]/10' },

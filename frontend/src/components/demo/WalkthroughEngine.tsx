@@ -4,14 +4,12 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useDemoContext, type BusinessType } from '@/lib/demo-context'
 import {
   WALKTHROUGH_STEPS,
-  getWalkthroughContent,
-  getStepName,
+  getTourContent,
   type PortalContext,
-  type CoachingContent,
-  type WalkthroughStep,
+  type TourContent,
 } from './walkthrough-content'
 
-const LS_DISMISSED = 'meridian_walkthrough_dismissed'
+const LS_KEY = 'meridian_tour_dismissed'
 
 interface SpotlightRect {
   top: number
@@ -20,13 +18,21 @@ interface SpotlightRect {
   height: number
 }
 
-function SpotlightOverlay({ rect }: { rect: SpotlightRect | null }) {
+function SpotlightOverlay({ rect, transitioning }: { rect: SpotlightRect | null; transitioning: boolean }) {
   if (!rect) return null
-
-  const maskId = 'walkthrough-spotlight-mask'
+  const maskId = 'tour-spotlight-mask'
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9998, pointerEvents: 'none' }}>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9998,
+        pointerEvents: 'none',
+        opacity: transitioning ? 0 : 1,
+        transition: 'opacity 0.2s ease',
+      }}
+    >
       <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
         <defs>
           <mask id={maskId}>
@@ -38,12 +44,14 @@ function SpotlightOverlay({ rect }: { rect: SpotlightRect | null }) {
               height={rect.height}
               rx={12}
               fill="black"
-            />
+            >
+              <animate attributeName="x" to={rect.left} dur="0.01s" fill="freeze" />
+            </rect>
           </mask>
         </defs>
         <rect
           x="0" y="0" width="100%" height="100%"
-          fill="rgba(0, 0, 0, 0.72)"
+          fill="rgba(0, 0, 0, 0.65)"
           mask={`url(#${maskId})`}
         />
         <rect
@@ -55,11 +63,11 @@ function SpotlightOverlay({ rect }: { rect: SpotlightRect | null }) {
           fill="none"
           stroke="#17C5B0"
           strokeWidth="2"
-          opacity="0.7"
+          opacity="0.6"
         >
           <animate
             attributeName="opacity"
-            values="0.7;0.3;0.7"
+            values="0.6;0.25;0.6"
             dur="2s"
             repeatCount="indefinite"
           />
@@ -70,25 +78,25 @@ function SpotlightOverlay({ rect }: { rect: SpotlightRect | null }) {
   )
 }
 
-function CoachingCard({
-  step,
+function TourCard({
   content,
-  stepName,
   currentIndex,
   totalSteps,
   onNext,
   onPrev,
   onSkip,
+  visible,
 }: {
-  step: WalkthroughStep
-  content: CoachingContent
-  stepName: string
+  content: TourContent
   currentIndex: number
   totalSteps: number
   onNext: () => void
   onPrev: () => void
   onSkip: () => void
+  visible: boolean
 }) {
+  const isLast = currentIndex === totalSteps - 1
+
   return createPortal(
     <div
       style={{
@@ -96,219 +104,133 @@ function CoachingCard({
         bottom: 24,
         right: 24,
         zIndex: 9999,
-        width: 380,
-        maxHeight: '72vh',
+        width: 420,
+        maxHeight: '75vh',
         overflowY: 'auto',
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(8px)',
+        transition: 'opacity 0.25s ease, transform 0.25s ease',
+        pointerEvents: visible ? 'auto' : 'none',
       }}
     >
       <div
         style={{
-          background: '#0d1117',
-          border: '1px solid rgba(23, 197, 176, 0.4)',
-          borderRadius: 12,
-          boxShadow: '0 0 40px rgba(23, 197, 176, 0.12), 0 20px 60px rgba(0,0,0,0.5)',
-          padding: 20,
+          background: '#111113',
+          border: '1px solid #2a2a30',
+          borderRadius: 14,
+          boxShadow: '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(23,197,176,0.08)',
+          padding: '24px 24px 20px',
           fontFamily: 'Inter, system-ui, sans-serif',
         }}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                background: '#17C5B0',
-                color: '#000',
-                borderRadius: 20,
-                padding: '2px 10px',
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: '0.05em',
-              }}
-            >
-              STEP {currentIndex + 1} OF {totalSteps}
-            </span>
-            <span style={{ color: '#f0f6fc', fontSize: 13, fontWeight: 600 }}>
-              {stepName}
-            </span>
+        {/* Step dots */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {Array.from({ length: totalSteps }).map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  width: i === currentIndex ? 18 : 6,
+                  height: 6,
+                  borderRadius: 3,
+                  background: i === currentIndex ? '#17C5B0' : i < currentIndex ? 'rgba(23,197,176,0.35)' : '#2a2a30',
+                  transition: 'all 0.3s ease',
+                }}
+              />
+            ))}
           </div>
           <button
             onClick={onSkip}
             style={{
               background: 'none',
               border: 'none',
-              color: '#8b949e',
+              color: '#6b7280',
               cursor: 'pointer',
-              fontSize: 12,
-              padding: '4px 8px',
+              fontSize: 11,
+              padding: '2px 6px',
             }}
           >
-            Skip tour
+            Skip
           </button>
         </div>
 
-        {/* Progress bar */}
-        <div style={{ height: 2, background: '#21262d', borderRadius: 1, marginBottom: 16 }}>
-          <div
-            style={{
-              height: '100%',
-              width: `${((currentIndex + 1) / totalSteps) * 100}%`,
-              background: '#17C5B0',
-              borderRadius: 1,
-              transition: 'width 0.3s ease',
-            }}
-          />
-        </div>
-
-        {/* Say This */}
-        <div
+        {/* Title */}
+        <h3
           style={{
-            background: 'rgba(23, 197, 176, 0.05)',
-            border: '1px solid rgba(23, 197, 176, 0.15)',
-            borderRadius: 8,
-            padding: '12px 14px',
-            marginBottom: 12,
+            color: '#F5F5F7',
+            fontSize: 18,
+            fontWeight: 700,
+            lineHeight: 1.3,
+            margin: '0 0 8px',
           }}
         >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: '#17C5B0',
-              letterSpacing: '0.08em',
-              marginBottom: 6,
-            }}
-          >
-            SAY THIS
-          </div>
-          <p
-            style={{
-              color: '#f0f6fc',
-              fontSize: 13,
-              lineHeight: '1.6',
-              margin: 0,
-              whiteSpace: 'pre-line',
-            }}
-          >
-            {content.sayThis}
-          </p>
-        </div>
+          {content.title}
+        </h3>
 
-        {/* Likely response */}
-        <details style={{ marginBottom: 12 }}>
-          <summary
-            style={{
-              color: '#8b949e',
-              fontSize: 12,
-              cursor: 'pointer',
-              userSelect: 'none',
-              padding: '4px 0',
-            }}
-          >
-            If they ask: &ldquo;{content.likelyResponse}&rdquo;
-          </summary>
-          <div
-            style={{
-              background: 'rgba(240, 180, 41, 0.05)',
-              border: '1px solid rgba(240, 180, 41, 0.15)',
-              borderRadius: 6,
-              padding: '10px 12px',
-              marginTop: 8,
-            }}
-          >
-            <p style={{ color: '#d4b86a', fontSize: 12, lineHeight: '1.5', margin: 0 }}>
-              {content.likelyAnswer}
-            </p>
-          </div>
-        </details>
-
-        {/* Why it works */}
-        <details style={{ marginBottom: 12 }}>
-          <summary
-            style={{
-              color: '#8b949e',
-              fontSize: 12,
-              cursor: 'pointer',
-              userSelect: 'none',
-              padding: '4px 0',
-            }}
-          >
-            Why this works
-          </summary>
-          <div
-            style={{
-              background: 'rgba(124, 92, 255, 0.05)',
-              border: '1px solid rgba(124, 92, 255, 0.12)',
-              borderRadius: 6,
-              padding: '10px 12px',
-              marginTop: 8,
-            }}
-          >
-            <p style={{ color: '#a78bfa', fontSize: 12, lineHeight: '1.5', margin: 0 }}>
-              {content.whyItWorks}
-            </p>
-          </div>
-        </details>
-
-        {/* What to do */}
-        <div
+        {/* Description */}
+        <p
           style={{
-            background: 'rgba(63, 185, 80, 0.05)',
-            border: '1px solid rgba(63, 185, 80, 0.1)',
-            borderRadius: 6,
-            padding: '10px 12px',
-            marginBottom: 16,
+            color: '#A1A1A8',
+            fontSize: 14,
+            lineHeight: 1.7,
+            margin: '0 0 12px',
           }}
         >
+          {content.description}
+        </p>
+
+        {/* Tip */}
+        {content.tip && (
           <div
             style={{
-              fontSize: 10,
-              fontWeight: 700,
-              color: '#3fb950',
-              letterSpacing: '0.08em',
-              marginBottom: 4,
+              background: 'rgba(23, 197, 176, 0.06)',
+              border: '1px solid rgba(23, 197, 176, 0.12)',
+              borderRadius: 8,
+              padding: '10px 12px',
+              marginBottom: 16,
             }}
           >
-            WHAT TO DO
+            <p style={{ color: '#4FE3C1', fontSize: 13, lineHeight: 1.6, margin: 0 }}>
+              {content.tip}
+            </p>
           </div>
-          <p style={{ color: '#8b949e', fontSize: 12, lineHeight: '1.5', margin: 0 }}>
-            {content.whatToDo}
-          </p>
-        </div>
+        )}
 
         {/* Navigation */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: content.tip ? 0 : 4 }}>
           {currentIndex > 0 && (
             <button
               onClick={onPrev}
               style={{
                 flex: 1,
-                padding: 10,
+                padding: '12px 0',
                 background: 'none',
-                border: '1px solid #21262d',
-                borderRadius: 6,
-                color: '#8b949e',
+                border: '1px solid #2a2a30',
+                borderRadius: 10,
+                color: '#A1A1A8',
                 cursor: 'pointer',
-                fontSize: 13,
+                fontSize: 14,
+                fontWeight: 500,
               }}
             >
-              &larr; Back
+              Back
             </button>
           )}
           <button
             onClick={onNext}
             style={{
               flex: 2,
-              padding: 10,
-              background: currentIndex === totalSteps - 1 ? '#3fb950' : '#17C5B0',
+              padding: '12px 0',
+              background: '#17C5B0',
               border: 'none',
-              borderRadius: 6,
+              borderRadius: 10,
               color: '#000',
               cursor: 'pointer',
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: 700,
             }}
           >
-            {currentIndex === totalSteps - 1 ? 'Done' : 'Next →'}
+            {isLast ? 'Get Started' : 'Next'}
           </button>
         </div>
       </div>
@@ -328,14 +250,15 @@ export default function WalkthroughEngine() {
   const [active, setActive] = useState(false)
   const [step, setStep] = useState(0)
   const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null)
+  const [transitioning, setTransitioning] = useState(false)
+  const [cardVisible, setCardVisible] = useState(false)
   const recalcRef = useRef<number>(0)
   const prevBusinessType = useRef<BusinessType | null>(businessType)
 
   const currentStep = WALKTHROUGH_STEPS[step]
   const bt = businessType || 'restaurant'
-  const content = getWalkthroughContent(currentStep.id, bt, portalContext)
+  const content = getTourContent(currentStep.id, bt, portalContext)
 
-  // Reset walkthrough when business type changes
   useEffect(() => {
     if (prevBusinessType.current !== businessType && active) {
       setStep(0)
@@ -349,6 +272,8 @@ export default function WalkthroughEngine() {
     if (!el) el = document.querySelector(s.fallbackSelector)
     if (!el) {
       setSpotlightRect(null)
+      setTransitioning(false)
+      setCardVisible(true)
       return
     }
     const bounds = el.getBoundingClientRect()
@@ -360,24 +285,39 @@ export default function WalkthroughEngine() {
       height: bounds.height + pad * 2,
     })
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setTransitioning(false)
+    requestAnimationFrame(() => setCardVisible(true))
   }, [step])
 
-  // Navigate to the correct tab and then spotlight
   useEffect(() => {
     if (!active) return
     const s = WALKTHROUGH_STEPS[step]
     const targetPath = s.tabPath ? `${basePath}/${s.tabPath}` : basePath
+    const needsNav = location.pathname !== targetPath
 
-    if (location.pathname !== targetPath) {
+    setCardVisible(false)
+    setTransitioning(true)
+
+    if (needsNav) {
       navigate(targetPath)
     }
 
-    // Wait for the page to render, then calculate spotlight
-    recalcRef.current = window.setTimeout(calculateSpotlight, 400)
+    // Retry finding the element a few times for lazy-loaded pages
+    let attempts = 0
+    const tryFind = () => {
+      const el = document.querySelector(s.elementSelector) || document.querySelector(s.fallbackSelector)
+      if (el || attempts >= 6) {
+        calculateSpotlight()
+      } else {
+        attempts++
+        recalcRef.current = window.setTimeout(tryFind, 120)
+      }
+    }
+
+    recalcRef.current = window.setTimeout(tryFind, needsNav ? 150 : 50)
     return () => clearTimeout(recalcRef.current)
   }, [active, step, basePath, navigate, location.pathname, calculateSpotlight])
 
-  // Recalc on resize
   useEffect(() => {
     if (!active) return
     const handler = () => calculateSpotlight()
@@ -385,7 +325,6 @@ export default function WalkthroughEngine() {
     return () => window.removeEventListener('resize', handler)
   }, [active, calculateSpotlight])
 
-  // Keyboard nav
   useEffect(() => {
     if (!active) return
     const handler = (e: KeyboardEvent) => {
@@ -413,7 +352,7 @@ export default function WalkthroughEngine() {
       setStep(s => s + 1)
     } else {
       handleSkip()
-      localStorage.setItem(LS_DISMISSED, 'completed')
+      localStorage.setItem(LS_KEY, 'completed')
     }
   }
 
@@ -424,58 +363,48 @@ export default function WalkthroughEngine() {
   function handleSkip() {
     setActive(false)
     setSpotlightRect(null)
-    localStorage.setItem(LS_DISMISSED, 'true')
+    setCardVisible(false)
+    setTransitioning(false)
+    localStorage.setItem(LS_KEY, 'true')
   }
 
   return (
     <>
-      {/* Trigger button — always visible in demo */}
       {createPortal(
-        <div
-          style={{
-            position: 'fixed',
-            top: 16,
-            right: isCanada ? 16 : 16,
-            zIndex: 9997,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginTop: 36,
-          }}
-        >
+        <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 9997 }}>
           {active ? (
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                background: '#0d1117',
-                border: '1px solid rgba(23, 197, 176, 0.4)',
+                background: '#111113',
+                border: '1px solid #2a2a30',
                 borderRadius: 8,
-                padding: '8px 12px',
+                padding: '7px 12px',
               }}
             >
               <div
                 style={{
-                  width: 8,
-                  height: 8,
+                  width: 7,
+                  height: 7,
                   borderRadius: '50%',
                   background: '#17C5B0',
-                  animation: 'walkthrough-pulse 1.5s ease-in-out infinite',
+                  animation: 'tour-pulse 1.5s ease-in-out infinite',
                 }}
               />
-              <span style={{ color: '#f0f6fc', fontSize: 12, fontWeight: 600 }}>
-                Step {step + 1}/{WALKTHROUGH_STEPS.length}
+              <span style={{ color: '#A1A1A8', fontSize: 12, fontWeight: 500 }}>
+                {step + 1} / {WALKTHROUGH_STEPS.length}
               </span>
               <button
                 onClick={handleSkip}
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#8b949e',
+                  color: '#6b7280',
                   cursor: 'pointer',
                   fontSize: 14,
-                  padding: '0 4px',
+                  padding: '0 2px',
                   lineHeight: 1,
                 }}
               >
@@ -486,47 +415,44 @@ export default function WalkthroughEngine() {
             <button
               onClick={handleStart}
               style={{
-                background: '#17C5B0',
-                border: 'none',
+                background: '#111113',
+                border: '1px solid rgba(23, 197, 176, 0.3)',
                 borderRadius: 8,
-                padding: '8px 16px',
-                color: '#000',
+                padding: '8px 14px',
+                color: '#17C5B0',
                 fontSize: 13,
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                boxShadow: '0 4px 20px rgba(23, 197, 176, 0.3)',
+                transition: 'border-color 0.2s',
               }}
             >
-              &#9654; Start Walkthrough
+              Take a Tour
             </button>
           )}
         </div>,
         document.body,
       )}
 
-      {/* Spotlight + coaching card when active */}
       {active && (
         <>
-          <SpotlightOverlay rect={spotlightRect} />
-          <CoachingCard
-            step={currentStep}
+          <SpotlightOverlay rect={spotlightRect} transitioning={transitioning} />
+          <TourCard
             content={content}
-            stepName={getStepName(currentStep.id, bt)}
             currentIndex={step}
             totalSteps={WALKTHROUGH_STEPS.length}
             onNext={handleNext}
             onPrev={handlePrev}
             onSkip={handleSkip}
+            visible={cardVisible}
           />
         </>
       )}
 
-      {/* Pulse animation keyframes */}
       <style>{`
-        @keyframes walkthrough-pulse {
+        @keyframes tour-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
         }

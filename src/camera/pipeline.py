@@ -8,7 +8,10 @@ import supervision as sv
 
 from .detector import MeridianDetector
 from .line_counter import EntryExitCounter
+from .people_counter import MeridianPeopleCounter
 from .rtsp_handler import RTSPStreamHandler
+from .supabase_writer import CameraDataWriter
+from .zone_loader import load_zones_for_camera, load_entry_lines
 
 logger = logging.getLogger("meridian.camera.pipeline")
 
@@ -46,6 +49,22 @@ class CameraPipeline:
                 })
 
         self._counter = EntryExitCounter(line_configs)
+
+        # People counter + writer per camera (zone counting, dwell, density)
+        self._people_counters: dict[str, MeridianPeopleCounter] = {}
+        self._writers: dict[str, CameraDataWriter] = {}
+        for cfg in camera_configs:
+            cam_id = cfg["camera_id"]
+            org_id = cfg.get("org_id", merchant_id)
+            biz = cfg.get("business_type", "restaurant")
+            zones = load_zones_for_camera(cfg, 1280, 720, biz)
+            entry_lines = load_entry_lines(cfg, 1280, 720)
+            self._people_counters[cam_id] = MeridianPeopleCounter(
+                model_path=model_size,
+                zones=zones,
+                entry_lines=entry_lines,
+            )
+            self._writers[cam_id] = CameraDataWriter(org_id=org_id, camera_id=cam_id)
 
     def start(self) -> None:
         for cam_id, stream in self._streams.items():
@@ -90,6 +109,25 @@ class CameraPipeline:
                     frame_h=frame_h,
                 )
                 all_counts.append(counts)
+
+            # People counter: zone counts, dwell, density
+            pc = self._people_counters.get(cam_id)
+            writer = self._writers.get(cam_id)
+            if pc and writer:
+                cr = pc.process_frame(frame)
+                writer.accumulate(cr.zone_counts, cr.total_count)
+                if cr.entries_this_frame or cr.exits_this_frame:
+                    writer.write_entry_exit(cr.entries_this_frame, cr.exits_this_frame)
+                completions = pc.flush_dwell(cr.tracked_ids)
+                writer.write_dwell_records(completions, pc.zone_configs)
+                if cr.density in ("high", "critical"):
+                    checkout_zones = [
+                        zid for zid, cfg in pc.zone_configs.items()
+                        if cfg.get("type") in ("checkout", "queue")
+                    ]
+                    q_count = sum(cr.zone_counts.get(z, 0) for z in checkout_zones)
+                    if q_count > 0:
+                        writer.write_queue_metrics(float(q_count), q_count * 30.0)
 
         return {
             "merchant_id": self._merchant_id,

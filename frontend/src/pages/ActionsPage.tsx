@@ -157,7 +157,7 @@ export default function ActionsPage() {
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="space-y-3">
+      <StaggerContainer className="space-y-3" data-walkthrough="top-actions-list">
         {actions.map(action => (
           <StaggerItem key={action.rank}>
             <ActionCard action={action} />

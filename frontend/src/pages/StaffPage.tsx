@@ -94,7 +94,7 @@ export default function StaffPage() {
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-walkthrough="staff-stats">
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">

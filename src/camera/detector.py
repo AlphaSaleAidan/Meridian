@@ -3,11 +3,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import warnings
+
 import numpy as np
 
 try:
     import supervision as sv
     from ultralytics import YOLO
+    warnings.filterwarnings("ignore", message=".*ByteTrack.*deprecated.*")
 except ImportError:
     sv = None
     YOLO = None

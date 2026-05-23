@@ -2,9 +2,10 @@
 # Heavy packages (torch-dependent) are commented out to avoid OOM on Railway.
 
 # Vision — Camera Detection (lazy import in src/camera/detector.py)
-# ultralytics>=8.0.0    # pulls torch ~2GB
-# supervision>=0.25.0
-# opencv-python-headless>=4.8.0
+ultralytics>=8.4.0
+supervision>=0.28.0
+opencv-python-headless>=4.8.0
+lapx>=0.9.0
 
 # Prompt Optimization (lazy import in src/ai/dspy_optimizer.py)
 # dspy>=2.5.0           # pulls torch

@@ -164,7 +164,7 @@ export default function MarginsPage() {
 
       {/* Margin Formulas Reference */}
       <ScrollReveal variant="fadeUp" delay={0.05}>
-        <DashboardTiltCard className="card p-4 sm:p-5">
+        <DashboardTiltCard className="card p-4 sm:p-5" data-walkthrough="margin-calculator">
           <div className="flex items-center gap-2 mb-3">
             <Calculator size={16} className="text-[#7C5CFF]" />
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Active Margin Formulas</h3>
