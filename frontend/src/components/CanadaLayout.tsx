@@ -100,7 +100,7 @@ export default function CanadaLayout() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 no-scrollbar">
+        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 no-scrollbar" data-walkthrough="sidebar-nav">
           {visibleNavItems.map(item => {
             const Icon = item.icon
             const to = item.path ? `${basePath}/${item.path}` : basePath

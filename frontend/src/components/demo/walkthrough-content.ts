@@ -12,6 +12,7 @@ export type StepId =
   | 'forecast'
   | 'customers'
   | 'connect'
+  | 'checkout'
 
 export interface WalkthroughStep {
   id: StepId
@@ -31,23 +32,23 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
   {
     id: 'overview',
     tabPath: '',
-    elementSelector: '[data-walkthrough="money-left-score"]',
-    fallbackSelector: '.glow-violet',
-    spotlightPadding: 24,
+    elementSelector: '[data-walkthrough="overview-stats"]',
+    fallbackSelector: '.card',
+    spotlightPadding: 16,
   },
   {
     id: 'actions',
     tabPath: 'actions',
     elementSelector: '[data-walkthrough="top-actions-list"]',
-    fallbackSelector: '.card-hover',
+    fallbackSelector: '.card',
     spotlightPadding: 16,
   },
   {
     id: 'margins',
     tabPath: 'margins',
-    elementSelector: '[data-walkthrough="margin-calculator"]',
-    fallbackSelector: '.card',
-    spotlightPadding: 16,
+    elementSelector: '[data-walkthrough="margin-stats"]',
+    fallbackSelector: '[data-walkthrough="margin-calculator"]',
+    spotlightPadding: 12,
   },
   {
     id: 'staff',
@@ -74,7 +75,7 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     id: 'anomaly',
     tabPath: 'anomalies',
     elementSelector: '[data-walkthrough="top-anomaly"]',
-    fallbackSelector: '.card-hover',
+    fallbackSelector: '.card',
     spotlightPadding: 16,
   },
   {
@@ -86,10 +87,10 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
   },
   {
     id: 'customers',
-    tabPath: 'customers',
-    elementSelector: '[data-walkthrough="at-risk-segment"]',
-    fallbackSelector: '.card p',
-    spotlightPadding: 16,
+    tabPath: '',
+    elementSelector: '[data-walkthrough="sidebar-nav"]',
+    fallbackSelector: '[data-walkthrough="connect-pos-cta"]',
+    spotlightPadding: 8,
   },
   {
     id: 'connect',
@@ -97,6 +98,13 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     elementSelector: '[data-walkthrough="connect-pos-cta"]',
     fallbackSelector: '.glow-violet',
     spotlightPadding: 24,
+  },
+  {
+    id: 'checkout',
+    tabPath: '',
+    elementSelector: '[data-walkthrough="connect-pos-cta"]',
+    fallbackSelector: '.glow-violet',
+    spotlightPadding: 0,
   },
 ]
 
@@ -140,12 +148,16 @@ function restaurant(id: StepId): TourContent {
       description: 'Predict next week\'s and next month\'s revenue based on your history and seasonality. Plan prep, ordering, and staffing ahead of time instead of guessing.',
     }
     case 'customers': return {
-      title: 'Customer segments',
-      description: 'Customers grouped by visit frequency and spend. The "Needs Action" segment shows regulars whose visits are dropping — the ones worth a targeted outreach.',
+      title: 'And there\'s a lot more',
+      description: 'Customer segmentation, inventory tracking, marketing tools, and new features shipping every month. Check the Features tab for the full list — we\'re always adding more.',
     }
     case 'connect': return {
       title: 'Ready to see your real data?',
       description: 'Connect your POS and everything you just saw fills in with your actual numbers. Takes about 4 minutes. First month free, no credit card.',
+    }
+    case 'checkout': return {
+      title: 'Let\'s get you set up',
+      description: 'Answer a couple of quick questions so we can tailor your onboarding. Takes 30 seconds.',
     }
   }
 }
@@ -189,12 +201,16 @@ function fastFood(id: StepId): TourContent {
       description: 'Predicted transaction counts and revenue for the week ahead. Dial in food prep quantities to reduce waste without running out during peak.',
     }
     case 'customers': return {
-      title: 'Repeat customer patterns',
-      description: 'See how your customers break down by visit frequency. The "Needs Action" group are regulars who slowed down — a targeted offer can bring them back.',
+      title: 'And there\'s a lot more',
+      description: 'Customer segmentation, inventory tracking, marketing tools, and new features shipping every month. Check the Features tab for the full list — we\'re always adding more.',
     }
     case 'connect': return {
       title: 'See this with your numbers',
       description: 'Connect your POS and all of this fills in with your real sales data. About 4 minutes to set up. First month free.',
+    }
+    case 'checkout': return {
+      title: 'Let\'s get you set up',
+      description: 'Answer a couple of quick questions so we can tailor your onboarding. Takes 30 seconds.',
     }
   }
 }
@@ -238,12 +254,16 @@ function coffeeShop(id: StepId): TourContent {
       description: 'Daily predictions to help you dial in milk orders, pastry pars, and cold brew batches. Stop dumping product or running out mid-shift.',
     }
     case 'customers': return {
-      title: 'Regulars and churn',
-      description: 'Regulars are everything. This shows who\'s coming in daily, who\'s slowing down, and who\'s drifted away. Each lost daily regular is $1,200-1,800/year.',
+      title: 'And there\'s a lot more',
+      description: 'Customer segmentation, inventory tracking, marketing tools, and new features shipping every month. Check the Features tab for the full list — we\'re always adding more.',
     }
     case 'connect': return {
       title: 'Get your real data in here',
       description: 'Connect your POS — Square, Toast, Clover — and this entire dashboard fills with your numbers. About 4 minutes. Free first month.',
+    }
+    case 'checkout': return {
+      title: 'Let\'s get you set up',
+      description: 'Answer a couple of quick questions so we can tailor your onboarding. Takes 30 seconds.',
     }
   }
 }
@@ -287,12 +307,16 @@ function autoShop(id: StepId): TourContent {
       description: 'Forecast slow weeks so you can run promos, and busy weeks so you can schedule enough techs. Based on your historical patterns and seasonal trends.',
     }
     case 'customers': return {
-      title: 'Customer retention',
-      description: 'See which customers are due for service, who\'s overdue, and who you\'ve lost. The "Needs Action" segment shows customers worth reaching out to now.',
+      title: 'And there\'s a lot more',
+      description: 'Customer segmentation, inventory tracking, marketing tools, and new features shipping every month. Check the Features tab for the full list — we\'re always adding more.',
     }
     case 'connect': return {
       title: 'See your shop\'s real data',
       description: 'Connect your POS or shop management system and this dashboard fills with your actual numbers. About 4 minutes. First month free.',
+    }
+    case 'checkout': return {
+      title: 'Let\'s get you set up',
+      description: 'Answer a couple of quick questions so we can tailor your onboarding. Takes 30 seconds.',
     }
   }
 }
@@ -335,12 +359,16 @@ function smokeShop(id: StepId): TourContent {
       description: 'Revenue and volume forecasts help you time reorders and avoid tying up cash in slow-moving stock. Especially useful for seasonal products.',
     }
     case 'customers': return {
-      title: 'Loyalty and visit patterns',
-      description: 'See how your customer base breaks down by visit frequency. The "Needs Action" group are regulars who slowed down — a targeted text or loyalty offer can bring them back.',
+      title: 'And there\'s a lot more',
+      description: 'Customer segmentation, inventory tracking, marketing tools, and new features shipping every month. Check the Features tab for the full list — we\'re always adding more.',
     }
     case 'connect': return {
       title: 'Put your real numbers here',
       description: 'Connect your POS and see all of this with your actual sales data. Takes about 4 minutes. First month free, no credit card.',
+    }
+    case 'checkout': return {
+      title: 'Let\'s get you set up',
+      description: 'Answer a couple of quick questions so we can tailor your onboarding. Takes 30 seconds.',
     }
   }
 }

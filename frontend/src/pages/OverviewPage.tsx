@@ -76,7 +76,7 @@ export default function OverviewPage() {
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-walkthrough="overview-stats">
         <StaggerItem>
           <StatCard
             label="Total Revenue"

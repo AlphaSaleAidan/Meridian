@@ -158,12 +158,21 @@ export default function ActionsPage() {
       </ScrollReveal>
 
       <StaggerContainer className="space-y-3" data-walkthrough="top-actions-list">
-        {actions.map(action => (
+        {actions.slice(0, 3).map(action => (
           <StaggerItem key={action.rank}>
             <ActionCard action={action} />
           </StaggerItem>
         ))}
       </StaggerContainer>
+      {actions.length > 3 && (
+        <StaggerContainer className="space-y-3">
+          {actions.slice(3).map(action => (
+            <StaggerItem key={action.rank}>
+              <ActionCard action={action} />
+            </StaggerItem>
+          ))}
+        </StaggerContainer>
+      )}
 
       <ScrollReveal variant="fadeUp" delay={0.15}>
         <div className="card p-4 border-[#1A8FD6]/10">
