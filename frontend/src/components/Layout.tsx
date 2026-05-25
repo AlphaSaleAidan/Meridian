@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard,
@@ -146,7 +147,7 @@ export default function Layout() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-3 px-3 overflow-y-auto">
+      <nav className="flex-1 py-3 px-3 overflow-y-auto" data-walkthrough="sidebar-nav">
         {navGroups.map((group, gi) => (
           <div key={gi} className={gi > 0 ? 'mt-3' : ''}>
             {group.label && (
@@ -267,9 +268,18 @@ export default function Layout() {
             <OnboardingWizard />
           ) : (
             <ClineErrorBoundary orgId={org?.org_id}>
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 mobile-nav-spacer">
-                <Outlet />
-              </div>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={location.pathname}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 mobile-nav-spacer"
+                >
+                  <Outlet />
+                </motion.div>
+              </AnimatePresence>
             </ClineErrorBoundary>
           )}
         </main>

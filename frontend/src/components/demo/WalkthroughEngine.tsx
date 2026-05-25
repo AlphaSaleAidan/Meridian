@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useDemoContext, type BusinessType } from '@/lib/demo-context'
@@ -10,6 +10,8 @@ import {
 } from './walkthrough-content'
 
 const LS_KEY = 'meridian_tour_dismissed'
+const CONTACT_PHONE = '+18337725377'
+const AUTO_ADVANCE_MS = 16000
 
 interface SpotlightRect {
   top: number
@@ -18,61 +20,364 @@ interface SpotlightRect {
   height: number
 }
 
-function SpotlightOverlay({ rect, transitioning }: { rect: SpotlightRect | null; transitioning: boolean }) {
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t
+}
+
+function lerpRect(a: SpotlightRect, b: SpotlightRect, t: number): SpotlightRect {
+  return {
+    top: lerp(a.top, b.top, t),
+    left: lerp(a.left, b.left, t),
+    width: lerp(a.width, b.width, t),
+    height: lerp(a.height, b.height, t),
+  }
+}
+
+function SpotlightOverlay({ rect, entering }: { rect: SpotlightRect | null; entering: boolean }) {
+  const animRef = useRef<SpotlightRect | null>(null)
+  const rafRef = useRef(0)
+  const ringRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!rect) {
+      animRef.current = null
+      return
+    }
+    if (!animRef.current) {
+      animRef.current = rect
+      updateRing(rect)
+      return
+    }
+
+    const start = { ...animRef.current }
+    const startTime = performance.now()
+    const duration = 400
+
+    function tick(now: number) {
+      const elapsed = now - startTime
+      const raw = Math.min(elapsed / duration, 1)
+      const t = 1 - Math.pow(1 - raw, 3)
+      const current = lerpRect(start, rect!, t)
+      updateRing(current)
+      if (raw < 1) {
+        rafRef.current = requestAnimationFrame(tick)
+      } else {
+        animRef.current = rect
+      }
+    }
+
+    cancelAnimationFrame(rafRef.current)
+    rafRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [rect])
+
+  function updateRing(r: SpotlightRect) {
+    const el = ringRef.current
+    if (!el) return
+    el.style.top = `${r.top - 4}px`
+    el.style.left = `${r.left - 4}px`
+    el.style.width = `${r.width + 8}px`
+    el.style.height = `${r.height + 8}px`
+  }
+
   if (!rect) return null
-  const maskId = 'tour-spotlight-mask'
 
   return createPortal(
     <div
+      ref={ringRef}
       style={{
         position: 'fixed',
-        inset: 0,
+        top: rect.top - 4,
+        left: rect.left - 4,
+        width: rect.width + 8,
+        height: rect.height + 8,
         zIndex: 9998,
         pointerEvents: 'none',
-        opacity: transitioning ? 0 : 1,
-        transition: 'opacity 0.2s ease',
+        borderRadius: 14,
+        border: '2px solid rgba(23, 197, 176, 0.5)',
+        boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.55), 0 0 20px rgba(23, 197, 176, 0.15)',
+        opacity: entering ? 0 : 1,
+        transition: 'opacity 0.35s ease',
+        animation: 'tour-ring-pulse 2s ease-in-out infinite',
       }}
-    >
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-        <defs>
-          <mask id={maskId}>
-            <rect x="0" y="0" width="100%" height="100%" fill="white" />
-            <rect
-              x={rect.left}
-              y={rect.top}
-              width={rect.width}
-              height={rect.height}
-              rx={12}
-              fill="black"
-            >
-              <animate attributeName="x" to={rect.left} dur="0.01s" fill="freeze" />
-            </rect>
-          </mask>
-        </defs>
-        <rect
-          x="0" y="0" width="100%" height="100%"
-          fill="rgba(0, 0, 0, 0.65)"
-          mask={`url(#${maskId})`}
-        />
-        <rect
-          x={rect.left - 2}
-          y={rect.top - 2}
-          width={rect.width + 4}
-          height={rect.height + 4}
-          rx={14}
-          fill="none"
-          stroke="#17C5B0"
-          strokeWidth="2"
-          opacity="0.6"
-        >
-          <animate
-            attributeName="opacity"
-            values="0.6;0.25;0.6"
-            dur="2s"
-            repeatCount="indefinite"
-          />
-        </rect>
-      </svg>
+    />,
+    document.body,
+  )
+}
+
+function CheckoutScreen({
+  onClose,
+  isCanada,
+}: {
+  onClose: () => void
+  isCanada: boolean
+}) {
+  const [answers, setAnswers] = useState({ locations: '', pos: '', revenue: '' })
+  const [submitted, setSubmitted] = useState(false)
+  const navigate = useNavigate()
+
+  const posOptions = ['Square', 'Toast', 'Clover', 'Lightspeed', 'Shopify POS', ...(isCanada ? ['Moneris', 'TouchBistro'] : []), 'Other']
+  const revenueOptions = ['Under $30K/mo', '$30K–$80K/mo', '$80K–$200K/mo', '$200K+/mo']
+  const locationOptions = ['1 location', '2–3 locations', '4–10 locations', '10+ locations']
+
+  function handleSubmit() {
+    setSubmitted(true)
+  }
+
+  function handleGetStarted() {
+    onClose()
+    navigate(isCanada ? '/canada/portal/signup' : '/customer/signup')
+  }
+
+  return createPortal(
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 10000,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'rgba(0,0,0,0.75)',
+      backdropFilter: 'blur(8px)',
+      animation: 'tour-fade-in 0.3s ease',
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: 520,
+        margin: '0 16px',
+        background: 'linear-gradient(180deg, #131315 0%, #0f0f11 100%)',
+        border: '1px solid #2a2a30',
+        borderRadius: 20,
+        boxShadow: '0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(23,197,176,0.08)',
+        padding: '32px 28px',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+      }}>
+        {!submitted ? (
+          <>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{
+                width: 48, height: 48, margin: '0 auto 16px',
+                borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'linear-gradient(135deg, rgba(23,197,176,0.15), rgba(26,143,214,0.15))',
+                border: '1px solid rgba(23,197,176,0.2)',
+              }}>
+                <span style={{ fontSize: 22 }}>&#10024;</span>
+              </div>
+              <h2 style={{ color: '#F5F5F7', fontSize: 22, fontWeight: 700, margin: '0 0 6px' }}>
+                Almost there
+              </h2>
+              <p style={{ color: '#A1A1A8', fontSize: 14, margin: 0 }}>
+                Help us personalize your setup — takes 15 seconds
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={{ color: '#A1A1A8', fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 6 }}>
+                  Which POS system do you use?
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {posOptions.map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setAnswers(a => ({ ...a, pos: opt }))}
+                      style={{
+                        padding: '7px 12px',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        border: answers.pos === opt ? '1px solid #17C5B0' : '1px solid #2a2a30',
+                        background: answers.pos === opt ? 'rgba(23,197,176,0.08)' : '#111113',
+                        color: answers.pos === opt ? '#17C5B0' : '#A1A1A8',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ color: '#A1A1A8', fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 6 }}>
+                  Monthly revenue range?
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {revenueOptions.map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setAnswers(a => ({ ...a, revenue: opt }))}
+                      style={{
+                        padding: '7px 12px',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        border: answers.revenue === opt ? '1px solid #17C5B0' : '1px solid #2a2a30',
+                        background: answers.revenue === opt ? 'rgba(23,197,176,0.08)' : '#111113',
+                        color: answers.revenue === opt ? '#17C5B0' : '#A1A1A8',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ color: '#A1A1A8', fontSize: 12, fontWeight: 500, display: 'block', marginBottom: 6 }}>
+                  How many locations?
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {locationOptions.map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setAnswers(a => ({ ...a, locations: opt }))}
+                      style={{
+                        padding: '7px 12px',
+                        borderRadius: 8,
+                        fontSize: 12,
+                        fontWeight: 500,
+                        border: answers.locations === opt ? '1px solid #17C5B0' : '1px solid #2a2a30',
+                        background: answers.locations === opt ? 'rgba(23,197,176,0.08)' : '#111113',
+                        color: answers.locations === opt ? '#17C5B0' : '#A1A1A8',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
+              <button
+                onClick={handleSubmit}
+                className="tour-glow-btn"
+                style={{
+                  flex: 2,
+                  padding: '14px 0',
+                  background: 'linear-gradient(135deg, #17C5B0 0%, #1A8FD6 100%)',
+                  border: 'none',
+                  borderRadius: 12,
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                <span style={{ position: 'relative', zIndex: 1 }}>Continue</span>
+              </button>
+              <button
+                onClick={onClose}
+                style={{
+                  flex: 1,
+                  padding: '14px 0',
+                  background: 'none',
+                  border: '1px solid #2a2a30',
+                  borderRadius: 12,
+                  color: '#A1A1A8',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Maybe later
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{
+                width: 56, height: 56, margin: '0 auto 16px',
+                borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'linear-gradient(135deg, rgba(23,197,176,0.2), rgba(26,143,214,0.2))',
+                border: '1px solid rgba(23,197,176,0.3)',
+                animation: 'tour-pulse 2s ease-in-out infinite',
+              }}>
+                <span style={{ fontSize: 26 }}>&#10003;</span>
+              </div>
+              <h2 style={{ color: '#F5F5F7', fontSize: 22, fontWeight: 700, margin: '0 0 8px' }}>
+                You're a great fit
+              </h2>
+              <p style={{ color: '#A1A1A8', fontSize: 14, margin: 0, lineHeight: 1.6 }}>
+                Based on your answers, Meridian can start generating insights for you within 24 hours of connecting your POS.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                onClick={handleGetStarted}
+                className="tour-glow-btn"
+                style={{
+                  width: '100%',
+                  padding: '16px 0',
+                  background: 'linear-gradient(135deg, #17C5B0 0%, #1A8FD6 100%)',
+                  border: 'none',
+                  borderRadius: 12,
+                  color: '#fff',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                <span style={{ position: 'relative', zIndex: 1 }}>Start Free Month →</span>
+              </button>
+
+              <a
+                href={`tel:${CONTACT_PHONE}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  width: '100%',
+                  padding: '14px 0',
+                  background: 'rgba(23,197,176,0.04)',
+                  border: '1px solid rgba(23,197,176,0.15)',
+                  borderRadius: 12,
+                  color: '#17C5B0',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+                Talk to a rep — call now
+              </a>
+
+              <button
+                onClick={onClose}
+                style={{
+                  width: '100%',
+                  padding: '12px 0',
+                  background: 'none',
+                  border: 'none',
+                  color: '#6b7280',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                I'll explore more first
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>,
     document.body,
   )
@@ -86,6 +391,9 @@ function TourCard({
   onPrev,
   onSkip,
   visible,
+  direction,
+  autoPlaying,
+  onToggleAuto,
 }: {
   content: TourContent
   currentIndex: number
@@ -94,8 +402,12 @@ function TourCard({
   onPrev: () => void
   onSkip: () => void
   visible: boolean
+  direction: 'next' | 'prev'
+  autoPlaying: boolean
+  onToggleAuto: () => void
 }) {
   const isLast = currentIndex === totalSteps - 1
+  const slideX = direction === 'next' ? 12 : -12
 
   return createPortal(
     <div
@@ -108,50 +420,100 @@ function TourCard({
         maxHeight: '75vh',
         overflowY: 'auto',
         opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0)' : 'translateY(8px)',
-        transition: 'opacity 0.25s ease, transform 0.25s ease',
         pointerEvents: visible ? 'auto' : 'none',
+        transform: visible ? 'translateY(0) translateX(0)' : `translateY(4px) translateX(${slideX}px)`,
+        transition: 'opacity 0.3s cubic-bezier(0.16,1,0.3,1), transform 0.3s cubic-bezier(0.16,1,0.3,1)',
       }}
     >
       <div
         style={{
-          background: '#111113',
+          background: 'linear-gradient(180deg, #131315 0%, #111113 100%)',
           border: '1px solid #2a2a30',
-          borderRadius: 14,
-          boxShadow: '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(23,197,176,0.08)',
+          borderRadius: 16,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(23,197,176,0.06), inset 0 1px 0 rgba(255,255,255,0.03)',
           padding: '24px 24px 20px',
           fontFamily: 'Inter, system-ui, sans-serif',
         }}
       >
-        {/* Step dots */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ display: 'flex', gap: 5 }}>
+        {/* Step progress bar */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div style={{ display: 'flex', gap: 4, flex: 1, marginRight: 12 }}>
             {Array.from({ length: totalSteps }).map((_, i) => (
               <div
                 key={i}
                 style={{
-                  width: i === currentIndex ? 18 : 6,
-                  height: 6,
-                  borderRadius: 3,
-                  background: i === currentIndex ? '#17C5B0' : i < currentIndex ? 'rgba(23,197,176,0.35)' : '#2a2a30',
-                  transition: 'all 0.3s ease',
+                  flex: i === currentIndex ? 2.5 : 1,
+                  height: 3,
+                  borderRadius: 2,
+                  background: i === currentIndex
+                    ? '#17C5B0'
+                    : i < currentIndex
+                      ? 'rgba(23,197,176,0.4)'
+                      : '#2a2a30',
+                  transition: 'all 0.4s cubic-bezier(0.16,1,0.3,1)',
+                  position: 'relative',
+                  overflow: 'hidden',
                 }}
-              />
+              >
+                {i === currentIndex && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                    animation: 'tour-shimmer 2s ease-in-out infinite',
+                  }} />
+                )}
+              </div>
             ))}
           </div>
-          <button
-            onClick={onSkip}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#6b7280',
-              cursor: 'pointer',
-              fontSize: 11,
-              padding: '2px 6px',
-            }}
-          >
-            Skip
-          </button>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <button
+              onClick={onToggleAuto}
+              title={autoPlaying ? 'Pause auto-play' : 'Auto-play tour'}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: autoPlaying ? '#17C5B0' : '#6b7280',
+                cursor: 'pointer',
+                fontSize: 14,
+                padding: '2px 4px',
+                transition: 'color 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              {autoPlaying ? '⏸' : '▶'}
+            </button>
+            <button
+              onClick={onSkip}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#6b7280',
+                cursor: 'pointer',
+                fontSize: 11,
+                padding: '2px 6px',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#A1A1A8')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#6b7280')}
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+
+        {/* Step counter */}
+        <div style={{
+          fontSize: 10,
+          fontWeight: 600,
+          color: '#17C5B0',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          marginBottom: 8,
+          opacity: 0.7,
+        }}>
+          Step {currentIndex + 1} of {totalSteps}
         </div>
 
         {/* Title */}
@@ -183,16 +545,30 @@ function TourCard({
         {content.tip && (
           <div
             style={{
-              background: 'rgba(23, 197, 176, 0.06)',
-              border: '1px solid rgba(23, 197, 176, 0.12)',
-              borderRadius: 8,
+              background: 'rgba(23, 197, 176, 0.05)',
+              border: '1px solid rgba(23, 197, 176, 0.1)',
+              borderRadius: 10,
               padding: '10px 12px',
               marginBottom: 16,
             }}
           >
             <p style={{ color: '#4FE3C1', fontSize: 13, lineHeight: 1.6, margin: 0 }}>
+              <span style={{ marginRight: 6, opacity: 0.6 }}>&#9672;</span>
               {content.tip}
             </p>
+          </div>
+        )}
+
+        {/* Auto-play progress bar */}
+        {autoPlaying && (
+          <div style={{
+            height: 2, borderRadius: 1, background: '#2a2a30',
+            marginBottom: 12, overflow: 'hidden',
+          }}>
+            <div style={{
+              height: '100%', background: '#17C5B0', borderRadius: 1,
+              animation: `tour-auto-progress ${AUTO_ADVANCE_MS}ms linear forwards`,
+            }} />
           </div>
         )}
 
@@ -211,7 +587,10 @@ function TourCard({
                 cursor: 'pointer',
                 fontSize: 14,
                 fontWeight: 500,
+                transition: 'all 0.15s',
               }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = '#3a3a40'; e.currentTarget.style.color = '#F5F5F7' }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = '#2a2a30'; e.currentTarget.style.color = '#A1A1A8' }}
             >
               Back
             </button>
@@ -221,16 +600,20 @@ function TourCard({
             style={{
               flex: 2,
               padding: '12px 0',
-              background: '#17C5B0',
+              background: 'linear-gradient(135deg, #17C5B0 0%, #14a899 100%)',
               border: 'none',
               borderRadius: 10,
               color: '#000',
               cursor: 'pointer',
               fontSize: 14,
               fontWeight: 700,
+              transition: 'all 0.15s',
+              boxShadow: '0 2px 12px rgba(23,197,176,0.2)',
             }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(23,197,176,0.3)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(23,197,176,0.2)' }}
           >
-            {isLast ? 'Get Started' : 'Next'}
+            {isLast ? 'See My Results →' : 'Next →'}
           </button>
         </div>
       </div>
@@ -246,37 +629,123 @@ export default function WalkthroughEngine() {
   const isCanada = location.pathname.startsWith('/canada')
   const portalContext: PortalContext = isCanada ? 'canada' : 'us'
   const basePath = isCanada ? '/canada/demo' : '/demo'
+  const isOverview = location.pathname === basePath || location.pathname === basePath + '/'
 
   const [active, setActive] = useState(false)
   const [step, setStep] = useState(0)
   const [spotlightRect, setSpotlightRect] = useState<SpotlightRect | null>(null)
-  const [transitioning, setTransitioning] = useState(false)
+  const [entering, setEntering] = useState(false)
   const [cardVisible, setCardVisible] = useState(false)
+  const [direction, setDirection] = useState<'next' | 'prev'>('next')
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024)
+  const [autoPlaying, setAutoPlaying] = useState(false)
+  const [showCheckout, setShowCheckout] = useState(false)
+  const bannerContainerRef = useRef<HTMLDivElement | null>(null)
   const recalcRef = useRef<number>(0)
+  const autoTimerRef = useRef<number>(0)
   const prevBusinessType = useRef<BusinessType | null>(businessType)
+  const navPendingForStep = useRef<number>(-1)
 
-  const currentStep = WALKTHROUGH_STEPS[step]
+  const tourSteps = useMemo(() => WALKTHROUGH_STEPS.filter(s => s.id !== 'checkout'), [])
+  const currentStep = tourSteps[step] ?? tourSteps[0]
   const bt = businessType || 'restaurant'
   const content = getTourContent(currentStep.id, bt, portalContext)
 
   useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 1024)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    const main = document.querySelector('main')
+    if (!main) return
+    const div = document.createElement('div')
+    div.id = 'tour-banner-root'
+    main.prepend(div)
+    bannerContainerRef.current = div
+    return () => { div.remove(); bannerContainerRef.current = null }
+  }, [])
+
+  useEffect(() => {
     if (prevBusinessType.current !== businessType && active) {
       setStep(0)
+      setDirection('next')
     }
     prevBusinessType.current = businessType
   }, [businessType, active])
 
-  const calculateSpotlight = useCallback(() => {
-    const s = WALKTHROUGH_STEPS[step]
-    let el = document.querySelector(s.elementSelector)
-    if (!el) el = document.querySelector(s.fallbackSelector)
+  // Auto-play timer
+  useEffect(() => {
+    if (!autoPlaying || !active || showCheckout) return
+    autoTimerRef.current = window.setTimeout(() => {
+      if (step < tourSteps.length - 1) {
+        setDirection('next')
+        setStep(s => s + 1)
+      } else {
+        setAutoPlaying(false)
+        setShowCheckout(true)
+      }
+    }, AUTO_ADVANCE_MS)
+    return () => clearTimeout(autoTimerRef.current)
+  }, [autoPlaying, active, step, showCheckout, tourSteps.length])
+
+  const calculateSpotlight = useCallback((retryCount = 0) => {
+    const s = tourSteps[step]
+    if (!s) return
+
+    const findEl = () =>
+      document.querySelector(s.elementSelector) || document.querySelector(s.fallbackSelector)
+
+    const el = findEl()
     if (!el) {
+      if (retryCount < 4) {
+        setTimeout(() => calculateSpotlight(retryCount + 1), 150)
+        return
+      }
       setSpotlightRect(null)
-      setTransitioning(false)
+      setEntering(false)
       setCardVisible(true)
       return
     }
+
     const bounds = el.getBoundingClientRect()
+
+    // Element exists but has zero dimensions (animation hasn't started or stale ref)
+    if (bounds.width < 10 || bounds.height < 10) {
+      if (retryCount < 6) {
+        setTimeout(() => calculateSpotlight(retryCount + 1), 120)
+        return
+      }
+    }
+
+    const main = document.querySelector('main')
+    if (main) {
+      const mainRect = main.getBoundingClientRect()
+      const elCenter = bounds.top + bounds.height / 2
+      const mainCenter = mainRect.top + mainRect.height / 2
+      const scrollDelta = elCenter - mainCenter
+      const needsScroll = Math.abs(scrollDelta) > mainRect.height * 0.35
+      if (needsScroll) {
+        main.scrollTo({ top: main.scrollTop + scrollDelta, behavior: 'smooth' })
+        setTimeout(() => {
+          const freshEl = findEl()
+          if (!freshEl) return
+          const fresh = freshEl.getBoundingClientRect()
+          const pad = s.spotlightPadding
+          setSpotlightRect({
+            top: fresh.top - pad,
+            left: fresh.left - pad,
+            width: fresh.width + pad * 2,
+            height: fresh.height + pad * 2,
+          })
+          setEntering(false)
+          requestAnimationFrame(() => setCardVisible(true))
+        }, 300)
+        return
+      }
+    }
+
     const pad = s.spotlightPadding
     setSpotlightRect({
       top: bounds.top - pad,
@@ -284,39 +753,37 @@ export default function WalkthroughEngine() {
       width: bounds.width + pad * 2,
       height: bounds.height + pad * 2,
     })
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    setTransitioning(false)
+    setEntering(false)
     requestAnimationFrame(() => setCardVisible(true))
-  }, [step])
+  }, [step, tourSteps])
 
   useEffect(() => {
-    if (!active) return
-    const s = WALKTHROUGH_STEPS[step]
+    if (!active || showCheckout) return
+    const s = tourSteps[step]
+    if (!s) return
     const targetPath = s.tabPath ? `${basePath}/${s.tabPath}` : basePath
-    const needsNav = location.pathname !== targetPath
+    const atTarget = location.pathname === targetPath
 
-    setCardVisible(false)
-    setTransitioning(true)
-
-    if (needsNav) {
+    if (!atTarget) {
+      // Need to navigate — mark this step as pending so the re-fire uses the right delay
+      navPendingForStep.current = step
+      setEntering(true)
+      setSpotlightRect(null)
+      setCardVisible(true)
+      const main = document.querySelector('main')
+      if (main) main.scrollTop = 0
       navigate(targetPath)
+      return
     }
 
-    // Retry finding the element a few times for lazy-loaded pages
-    let attempts = 0
-    const tryFind = () => {
-      const el = document.querySelector(s.elementSelector) || document.querySelector(s.fallbackSelector)
-      if (el || attempts >= 6) {
-        calculateSpotlight()
-      } else {
-        attempts++
-        recalcRef.current = window.setTimeout(tryFind, 120)
-      }
-    }
+    // We're at the target path. Determine delay based on whether we just navigated.
+    const justNavigated = navPendingForStep.current === step
+    navPendingForStep.current = -1
+    const delay = justNavigated ? 500 : 80
 
-    recalcRef.current = window.setTimeout(tryFind, needsNav ? 150 : 50)
+    recalcRef.current = window.setTimeout(calculateSpotlight, delay)
     return () => clearTimeout(recalcRef.current)
-  }, [active, step, basePath, navigate, location.pathname, calculateSpotlight])
+  }, [active, step, basePath, navigate, location.pathname, calculateSpotlight, showCheckout, tourSteps])
 
   useEffect(() => {
     if (!active) return
@@ -328,6 +795,10 @@ export default function WalkthroughEngine() {
   useEffect(() => {
     if (!active) return
     const handler = (e: KeyboardEvent) => {
+      if (showCheckout) {
+        if (e.key === 'Escape') handleSkip()
+        return
+      }
       if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault()
         handleNext()
@@ -340,121 +811,302 @@ export default function WalkthroughEngine() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  })
+  }, [active, step, showCheckout])
 
-  function handleStart() {
+  function handleStart(auto = false) {
     setStep(0)
+    setDirection('next')
     setActive(true)
+    setAutoPlaying(auto)
+    setShowCheckout(false)
   }
 
   function handleNext() {
-    if (step < WALKTHROUGH_STEPS.length - 1) {
+    clearTimeout(autoTimerRef.current)
+    if (step < tourSteps.length - 1) {
+      setDirection('next')
       setStep(s => s + 1)
     } else {
-      handleSkip()
-      localStorage.setItem(LS_KEY, 'completed')
+      setShowCheckout(true)
+      setSpotlightRect(null)
+      setCardVisible(false)
     }
   }
 
   function handlePrev() {
-    if (step > 0) setStep(s => s - 1)
+    clearTimeout(autoTimerRef.current)
+    if (step > 0) {
+      setDirection('prev')
+      setStep(s => s - 1)
+    }
   }
 
   function handleSkip() {
     setActive(false)
     setSpotlightRect(null)
     setCardVisible(false)
-    setTransitioning(false)
+    setEntering(false)
+    setAutoPlaying(false)
+    setShowCheckout(false)
     localStorage.setItem(LS_KEY, 'true')
+  }
+
+  function handleToggleAuto() {
+    setAutoPlaying(p => !p)
   }
 
   return (
     <>
-      {createPortal(
-        <div style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 9997 }}>
-          {active ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                background: '#111113',
-                border: '1px solid #2a2a30',
-                borderRadius: 8,
-                padding: '7px 12px',
-              }}
-            >
-              <div
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: '#17C5B0',
-                  animation: 'tour-pulse 1.5s ease-in-out infinite',
-                }}
-              />
-              <span style={{ color: '#A1A1A8', fontSize: 12, fontWeight: 500 }}>
-                {step + 1} / {WALKTHROUGH_STEPS.length}
+      {/* Tour banner — only on overview page, prepended into main content */}
+      {isOverview && !active && bannerContainerRef.current && createPortal(
+        <div className="tour-banner">
+          <button onClick={() => handleStart(true)} className="tour-glow-btn-wrapper">
+            <span className="tour-glow-btn-bg" />
+            <span className="tour-glow-btn-content">
+              <span className="tour-glow-sparkle">
+                <span className="tour-glow-sparkle-ping" />
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="tour-glow-sparkle-icon">
+                  <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
+                </svg>
               </span>
-              <button
-                onClick={handleSkip}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#6b7280',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  padding: '0 2px',
-                  lineHeight: 1,
-                }}
-              >
-                &times;
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleStart}
-              style={{
-                background: '#111113',
-                border: '1px solid rgba(23, 197, 176, 0.3)',
-                borderRadius: 8,
-                padding: '8px 14px',
-                color: '#17C5B0',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                transition: 'border-color 0.2s',
-              }}
-            >
-              Take a Tour
-            </button>
+              <span className="tour-glow-text">Take a Tour</span>
+              <span className="tour-glow-hint">Interactive walkthrough of all features</span>
+            </span>
+          </button>
+        </div>,
+        bannerContainerRef.current,
+      )}
+
+      {/* Floating step counter — only when tour is active */}
+      {active && !showCheckout && createPortal(
+        <div style={{
+          position: 'fixed',
+          bottom: isMobile ? 80 : 24,
+          left: 24,
+          zIndex: 9997,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          background: '#111113',
+          border: '1px solid #2a2a30',
+          borderRadius: 10,
+          padding: '8px 14px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+        }}>
+          <div style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: '#17C5B0',
+            boxShadow: '0 0 6px rgba(23,197,176,0.5)',
+            animation: 'tour-pulse 1.5s ease-in-out infinite',
+          }} />
+          <span style={{ color: '#A1A1A8', fontSize: 12, fontWeight: 500 }}>
+            {step + 1} / {tourSteps.length}
+          </span>
+          {autoPlaying && (
+            <span style={{ color: '#17C5B0', fontSize: 10, fontWeight: 600, letterSpacing: '0.05em' }}>AUTO</span>
           )}
+          <button
+            onClick={handleSkip}
+            style={{
+              background: 'none', border: 'none', color: '#6b7280',
+              cursor: 'pointer', fontSize: 14, padding: '0 2px',
+              lineHeight: 1, transition: 'color 0.15s',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#F5F5F7')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#6b7280')}
+          >
+            &times;
+          </button>
         </div>,
         document.body,
       )}
 
-      {active && (
+      {/* Active tour overlay + card */}
+      {active && !showCheckout && (
         <>
-          <SpotlightOverlay rect={spotlightRect} transitioning={transitioning} />
+          <SpotlightOverlay rect={spotlightRect} entering={entering} />
           <TourCard
             content={content}
             currentIndex={step}
-            totalSteps={WALKTHROUGH_STEPS.length}
+            totalSteps={tourSteps.length}
             onNext={handleNext}
             onPrev={handlePrev}
             onSkip={handleSkip}
             visible={cardVisible}
+            direction={direction}
+            autoPlaying={autoPlaying}
+            onToggleAuto={handleToggleAuto}
           />
         </>
       )}
 
+      {/* Checkout screen */}
+      {showCheckout && (
+        <CheckoutScreen onClose={handleSkip} isCanada={isCanada} />
+      )}
+
       <style>{`
+        @keyframes tour-ring-pulse {
+          0%, 100% { border-color: rgba(23, 197, 176, 0.5); }
+          50% { border-color: rgba(23, 197, 176, 0.2); }
+        }
         @keyframes tour-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
+        }
+        @keyframes tour-shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        @keyframes tour-lava-drift {
+          0%   { background-position: 0% 50%; }
+          50%  { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        @keyframes tour-glow-breathe {
+          0%, 100% { opacity: 0.4; }
+          40% { opacity: 0.7; }
+          70% { opacity: 0.5; }
+        }
+        @keyframes tour-sparkle-ping {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0; }
+        }
+        @keyframes tour-auto-progress {
+          0% { width: 0%; }
+          100% { width: 100%; }
+        }
+        @keyframes tour-fade-in {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+
+        .tour-banner {
+          display: flex;
+          justify-content: center;
+          padding: 12px 16px 0;
+          max-width: 896px;
+          margin: 0 auto;
+        }
+
+        .tour-glow-btn-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          width: 100%;
+          max-width: 480px;
+          padding: 14px 22px;
+          border: none;
+          border-radius: 14px;
+          cursor: pointer;
+          background: transparent;
+          overflow: hidden;
+        }
+
+        .tour-glow-btn-bg {
+          position: absolute;
+          inset: 0;
+          border-radius: 14px;
+          background: linear-gradient(135deg, rgba(23,197,176,0.10) 0%, rgba(26,143,214,0.08) 50%, rgba(23,197,176,0.10) 100%);
+          border: 1px solid rgba(23,197,176,0.18);
+          transition: all 0.6s ease;
+        }
+        .tour-glow-btn-bg::before {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          border-radius: 15px;
+          background: linear-gradient(
+            270deg,
+            rgba(23,197,176,0.0) 0%,
+            rgba(23,197,176,0.18) 20%,
+            rgba(26,143,214,0.14) 40%,
+            rgba(23,197,176,0.0) 55%,
+            rgba(26,143,214,0.12) 75%,
+            rgba(23,197,176,0.16) 90%,
+            rgba(23,197,176,0.0) 100%
+          );
+          background-size: 300% 100%;
+          animation: tour-lava-drift 8s ease-in-out infinite;
+          z-index: -1;
+        }
+        .tour-glow-btn-bg::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border-radius: 14px;
+          box-shadow: 0 0 15px rgba(23,197,176,0.08), inset 0 0 12px rgba(23,197,176,0.02);
+          animation: tour-glow-breathe 6s ease-in-out infinite;
+        }
+
+        .tour-glow-btn-wrapper:hover .tour-glow-btn-bg {
+          border-color: rgba(23,197,176,0.35);
+          background: linear-gradient(135deg, rgba(23,197,176,0.15) 0%, rgba(26,143,214,0.12) 50%, rgba(23,197,176,0.15) 100%);
+        }
+        .tour-glow-btn-wrapper:hover .tour-glow-btn-bg::after {
+          box-shadow: 0 0 25px rgba(23,197,176,0.18), 0 0 50px rgba(23,197,176,0.06), inset 0 0 20px rgba(23,197,176,0.04);
+        }
+
+        .tour-glow-btn-content {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          width: 100%;
+          z-index: 1;
+        }
+
+        .tour-glow-sparkle {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          flex-shrink: 0;
+        }
+        .tour-glow-sparkle-ping {
+          position: absolute;
+          inset: -2px;
+          border-radius: 50%;
+          background: rgba(23,197,176,0.15);
+          animation: tour-sparkle-ping 4s ease-in-out infinite;
+        }
+        .tour-glow-sparkle-icon {
+          position: relative;
+          color: #17C5B0;
+          filter: drop-shadow(0 0 4px rgba(23,197,176,0.4));
+        }
+
+        .tour-glow-text {
+          color: #F5F5F7;
+          font-size: 15px;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+        }
+        .tour-glow-hint {
+          color: #6b7280;
+          font-weight: 400;
+          font-size: 12px;
+          margin-left: auto;
+        }
+
+        @media (max-width: 480px) {
+          .tour-glow-hint { display: none; }
+          .tour-glow-btn-wrapper { max-width: 100%; }
+        }
+
+        .tour-glow-btn {
+          position: relative;
+          overflow: hidden;
+        }
+        .tour-glow-btn::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+          transform: translateX(-100%);
+          animation: tour-shimmer 3s ease-in-out infinite;
         }
       `}</style>
     </>
