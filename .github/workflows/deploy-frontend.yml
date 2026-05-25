@@ -1,0 +1,23 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rebuild frontend on production server
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: root
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          script: |
+            cd /root/Meridian
+            git pull origin main
+            cd frontend
+            npm run build
