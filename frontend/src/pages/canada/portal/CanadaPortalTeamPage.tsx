@@ -311,63 +311,103 @@ export default function CanadaPortalTeamPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-white">Team Management</h1>
-        <p className="text-sm text-[#6b7a74] mt-0.5">Manage your sales reps, commissions, and payouts.</p>
+        <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+        <p className="text-sm text-[#6b7a74] mt-0.5">{admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-              <Users size={16} className="text-[#00d4aa]" />
+      {admin ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
+                <Users size={16} className="text-[#00d4aa]" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Reps</p>
+                <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
+                <p className="text-[10px] text-[#4a5550]">{totalActive} active{totalOnboarding > 0 ? ` / ${totalOnboarding} onboarding` : ''}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Reps</p>
-              <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
-              <p className="text-[10px] text-[#4a5550]">{totalActive} active{totalOnboarding > 0 ? ` / ${totalOnboarding} onboarding` : ''}</p>
+          </div>
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
+                <Target size={16} className="text-[#f59e0b]" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Pipeline</p>
+                <p className="text-lg font-bold text-white">{openDeals.length} deals</p>
+                <p className="text-[10px] text-[#4a5550]">{formatCad(pipelineMrr)}/mo MRR</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#7c3aed]/10 flex items-center justify-center">
+                <DollarSign size={16} className="text-[#7c3aed]" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Commissions</p>
+                <p className="text-lg font-bold text-white">{formatCad(totalCommission)}</p>
+                <p className="text-[10px] text-[#4a5550]">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
+                <CreditCard size={16} className="text-[#f59e0b]" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Balance Owed</p>
+                <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-[#f59e0b]' : 'text-white')}>
+                  {formatCad(balanceOwed)}
+                </p>
+                <p className="text-[10px] text-[#4a5550]">{wonDeals.length} signed deals</p>
+              </div>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
-              <Target size={16} className="text-[#f59e0b]" />
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
+                <Users size={16} className="text-[#00d4aa]" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Team Size</p>
+                <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Pipeline</p>
-              <p className="text-lg font-bold text-white">{openDeals.length} deals</p>
-              <p className="text-[10px] text-[#4a5550]">{formatCad(pipelineMrr)}/mo MRR</p>
+          </div>
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
+                <Trophy size={16} className="text-[#f59e0b]" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Your Rank</p>
+                <p className="text-lg font-bold text-white">
+                  #{[...enrichedTeam].sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won).findIndex(m => m.email === rep?.email) + 1 || '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
+                <Target size={16} className="text-[#00d4aa]" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Your Deals</p>
+                <p className="text-lg font-bold text-white">{enrichedTeam.find(m => m.email === rep?.email)?.deals_won || 0} won</p>
+              </div>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#7c3aed]/10 flex items-center justify-center">
-              <DollarSign size={16} className="text-[#7c3aed]" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Commissions</p>
-              <p className="text-lg font-bold text-white">{formatCad(totalCommission)}</p>
-              <p className="text-[10px] text-[#4a5550]">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
-              <CreditCard size={16} className="text-[#f59e0b]" />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Balance Owed</p>
-              <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-[#f59e0b]' : 'text-white')}>
-                {formatCad(balanceOwed)}
-              </p>
-              <p className="text-[10px] text-[#4a5550]">{wonDeals.length} signed deals</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 bg-[#0f1512] border border-[#1a2420] rounded-xl p-1 w-fit">
