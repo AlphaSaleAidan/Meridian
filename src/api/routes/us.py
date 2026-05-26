@@ -318,7 +318,7 @@ async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin
             logger.warning("Auth user creation failed for %s: %s", rep_email, auth_resp.status_code)
 
     email_sent = False
-    if auth_created and rep_email:
+    if rep_email:
         try:
             from ...email.send import send_rep_credentials
             login_url = "https://meridian.tips/us/portal/login"
@@ -326,12 +326,12 @@ async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin
                 to=rep_email,
                 rep_name=rep_name,
                 email=rep_email,
-                password=temp_password,
+                password=temp_password if auth_created else None,
                 login_url=login_url,
             )
             email_sent = result.get("status") == "sent" or result.get("id") is not None
         except Exception as e:
-            logger.error("Failed to send US credentials email to %s: %s", rep_email, e)
+            logger.error("Failed to send US approval email to %s: %s", rep_email, e)
 
     logger.info("US rep approved: %s (%s) by %s", rep_name, rep_email, req.admin_email)
     return {"ok": True, "rep_id": req.rep_id, "email_sent": email_sent}

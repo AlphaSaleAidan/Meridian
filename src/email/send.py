@@ -313,7 +313,7 @@ async def send_rep_credentials(
     to: str,
     rep_name: str,
     email: str,
-    password: str,
+    password: str | None,
     login_url: str,
 ) -> dict:
     html = rep_credentials.render(
