@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Camera, Eye, EyeOff, Play, Square, RefreshCw, Activity, User, Hand, Smile, Box } from 'lucide-react'
+import { Camera, Eye, EyeOff, Play, Square, RefreshCw, Activity, User, Hand, Smile, Box, Monitor } from 'lucide-react'
 import { useWebcam } from '@/hooks/useWebcam'
 import { useMediaPipeTracking } from '@/hooks/useMediaPipeTracking'
 import { classifyGesture, computeEngagement, type GestureResult } from '@/lib/gesture-classifier'
@@ -20,6 +20,136 @@ const MODE_ICONS: Record<TrackingMode, typeof User> = {
   objects: Box,
 }
 
+// --- Simulation data for demo mode ---
+const SIM_GESTURES: { gesture: string; confidence: number; description: string }[] = [
+  { gesture: 'browsing', confidence: 0.82, description: 'Leaning forward with hands extended — inspecting products' },
+  { gesture: 'reaching', confidence: 0.75, description: 'Arms raised above shoulders — examining high shelves or signage' },
+  { gesture: 'pointing', confidence: 0.68, description: 'Arm extended toward object — directing attention' },
+  { gesture: 'walking', confidence: 0.71, description: 'In motion — traversing the space' },
+  { gesture: 'waiting', confidence: 0.85, description: 'Standing still, arms at sides — idle or in queue' },
+  { gesture: 'carrying', confidence: 0.63, description: 'Hands below hips with weight — holding items' },
+  { gesture: 'browsing', confidence: 0.77, description: 'Leaning forward with hands extended — inspecting products' },
+]
+
+const SIM_SCENARIOS = [
+  { people: 2, hands: 3, faces: 2, engagement: 0.78 },
+  { people: 3, hands: 4, faces: 3, engagement: 0.65 },
+  { people: 1, hands: 2, faces: 1, engagement: 0.92 },
+  { people: 2, hands: 2, faces: 2, engagement: 0.55 },
+  { people: 3, hands: 5, faces: 3, engagement: 0.71 },
+  { people: 1, hands: 1, faces: 1, engagement: 0.88 },
+  { people: 2, hands: 4, faces: 2, engagement: 0.62 },
+]
+
+function generateSimPerson(t: number, idx: number, canvasW: number, canvasH: number) {
+  const cx = canvasW * (0.2 + idx * 0.3 + Math.sin(t * 0.4 + idx * 2) * 0.08)
+  const cy = canvasH * (0.3 + Math.sin(t * 0.3 + idx) * 0.05)
+  const scale = canvasH * 0.35
+
+  const headY = cy - scale * 0.4
+  const shoulderY = cy - scale * 0.2
+  const hipY = cy + scale * 0.1
+  const kneeY = cy + scale * 0.3
+  const ankleY = cy + scale * 0.45
+  const shoulderW = scale * 0.18
+  const hipW = scale * 0.12
+  const elbowOffset = Math.sin(t * 1.2 + idx * 3) * scale * 0.12
+  const wristOffset = Math.sin(t * 0.8 + idx * 2) * scale * 0.15
+
+  return {
+    head: { x: cx, y: headY },
+    neck: { x: cx, y: cy - scale * 0.3 },
+    lShoulder: { x: cx - shoulderW, y: shoulderY },
+    rShoulder: { x: cx + shoulderW, y: shoulderY },
+    lElbow: { x: cx - shoulderW - scale * 0.1, y: shoulderY + scale * 0.15 + elbowOffset },
+    rElbow: { x: cx + shoulderW + scale * 0.1, y: shoulderY + scale * 0.15 - elbowOffset },
+    lWrist: { x: cx - shoulderW - scale * 0.15, y: shoulderY + scale * 0.3 + wristOffset },
+    rWrist: { x: cx + shoulderW + scale * 0.15, y: shoulderY + scale * 0.3 - wristOffset },
+    lHip: { x: cx - hipW, y: hipY },
+    rHip: { x: cx + hipW, y: hipY },
+    lKnee: { x: cx - hipW - Math.sin(t * 0.6 + idx) * scale * 0.03, y: kneeY },
+    rKnee: { x: cx + hipW + Math.sin(t * 0.6 + idx + 1) * scale * 0.03, y: kneeY },
+    lAnkle: { x: cx - hipW - Math.sin(t * 0.6 + idx) * scale * 0.05, y: ankleY },
+    rAnkle: { x: cx + hipW + Math.sin(t * 0.6 + idx + 1) * scale * 0.05, y: ankleY },
+  }
+}
+
+function drawSimPerson(ctx: CanvasRenderingContext2D, p: ReturnType<typeof generateSimPerson>, color: string) {
+  const joints = Object.values(p)
+  const connections: [keyof typeof p, keyof typeof p][] = [
+    ['head', 'neck'], ['neck', 'lShoulder'], ['neck', 'rShoulder'],
+    ['lShoulder', 'lElbow'], ['lElbow', 'lWrist'], ['rShoulder', 'rElbow'], ['rElbow', 'rWrist'],
+    ['lShoulder', 'lHip'], ['rShoulder', 'rHip'], ['lHip', 'rHip'],
+    ['lHip', 'lKnee'], ['lKnee', 'lAnkle'], ['rHip', 'rKnee'], ['rKnee', 'rAnkle'],
+  ]
+
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  for (const [a, b] of connections) {
+    ctx.beginPath()
+    ctx.moveTo(p[a].x, p[a].y)
+    ctx.lineTo(p[b].x, p[b].y)
+    ctx.stroke()
+  }
+
+  ctx.fillStyle = color
+  for (const j of joints) {
+    ctx.beginPath()
+    ctx.arc(j.x, j.y, 4, 0, Math.PI * 2)
+    ctx.fill()
+  }
+
+  // Head circle
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.arc(p.head.x, p.head.y, 12, 0, Math.PI * 2)
+  ctx.stroke()
+}
+
+function drawSimHands(ctx: CanvasRenderingContext2D, wrist: { x: number; y: number }, t: number, color: string) {
+  const fingers = 5
+  for (let f = 0; f < fingers; f++) {
+    const angle = -Math.PI / 2 + (f - 2) * 0.3 + Math.sin(t * 2 + f) * 0.1
+    const len = 18 + Math.sin(t * 1.5 + f * 0.8) * 4
+    const tipX = wrist.x + Math.cos(angle) * len
+    const tipY = wrist.y + Math.sin(angle) * len
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(wrist.x, wrist.y)
+    ctx.lineTo(tipX, tipY)
+    ctx.stroke()
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.arc(tipX, tipY, 2, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
+function drawSimFace(ctx: CanvasRenderingContext2D, head: { x: number; y: number }, t: number, color: string) {
+  ctx.fillStyle = `${color}30`
+  const points = 40
+  for (let i = 0; i < points; i++) {
+    const angle = (i / points) * Math.PI * 2
+    const r = 10 + Math.sin(angle * 3 + t) * 2
+    const px = head.x + Math.cos(angle) * r
+    const py = head.y + Math.sin(angle) * r
+    ctx.beginPath()
+    ctx.arc(px, py, 1.5, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
+function drawSimObjectBox(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, label: string, score: number, color: string) {
+  ctx.strokeStyle = color
+  ctx.lineWidth = 2
+  ctx.strokeRect(x, y, w, h)
+  ctx.font = '12px Inter, sans-serif'
+  ctx.fillStyle = color
+  ctx.fillText(`${label} ${Math.round(score * 100)}%`, x + 4, y - 6)
+}
+
 export default function CameraAnalyticsDemoPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const heatmapRef = useRef<Float32Array>(new Float32Array(16 * 12))
@@ -34,6 +164,11 @@ export default function CameraAnalyticsDemoPage() {
   const [handCount, setHandCount] = useState(0)
   const [faceCount, setFaceCount] = useState(0)
 
+  // Simulation state
+  const [simMode, setSimMode] = useState(false)
+  const simAnimRef = useRef<number>(0)
+  const simStartRef = useRef(0)
+
   const toggleMode = (mode: TrackingMode) => {
     setModes(m => ({ ...m, [mode]: !m[mode] }))
   }
@@ -43,11 +178,140 @@ export default function CameraAnalyticsDemoPage() {
     if (!isReady) await initialize()
   }
 
+  const startSimulation = useCallback(() => {
+    setSimMode(true)
+    simStartRef.current = performance.now() / 1000
+
+    const animate = () => {
+      const canvas = canvasRef.current
+      if (!canvas) { simAnimRef.current = requestAnimationFrame(animate); return }
+
+      const W = 960
+      const H = 540
+      canvas.width = W
+      canvas.height = H
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      const t = performance.now() / 1000 - simStartRef.current
+      const scenarioIdx = Math.floor(t / 4) % SIM_SCENARIOS.length
+      const gestureIdx = Math.floor(t / 3.5) % SIM_GESTURES.length
+      const scenario = SIM_SCENARIOS[scenarioIdx]
+      const g = SIM_GESTURES[gestureIdx]
+
+      // Background — dark store scene
+      ctx.fillStyle = '#0f1512'
+      ctx.fillRect(0, 0, W, H)
+
+      // Grid floor lines
+      ctx.strokeStyle = '#1a242020'
+      ctx.lineWidth = 1
+      for (let y = H * 0.5; y < H; y += 30) {
+        ctx.beginPath()
+        ctx.moveTo(0, y)
+        ctx.lineTo(W, y)
+        ctx.stroke()
+      }
+      for (let x = 0; x < W; x += 60) {
+        ctx.beginPath()
+        ctx.moveTo(x, H * 0.5)
+        ctx.lineTo(x + (x - W / 2) * 0.3, H)
+        ctx.stroke()
+      }
+
+      // Shelf outlines
+      ctx.strokeStyle = '#1a2420'
+      ctx.lineWidth = 1
+      ctx.strokeRect(30, 60, 120, 200)
+      ctx.strokeRect(W - 150, 60, 120, 200)
+      ctx.strokeRect(W / 2 - 80, 40, 160, 30)
+      ctx.font = '10px Inter, sans-serif'
+      ctx.fillStyle = '#2a3430'
+      ctx.textAlign = 'center'
+      ctx.fillText('SHELF A', 90, 55)
+      ctx.fillText('SHELF B', W - 90, 55)
+      ctx.fillText('CHECKOUT', W / 2, 37)
+      ctx.textAlign = 'start'
+
+      // Simulated people
+      const people: ReturnType<typeof generateSimPerson>[] = []
+      for (let i = 0; i < scenario.people; i++) {
+        const p = generateSimPerson(t, i, W, H)
+        people.push(p)
+
+        if (modes.pose) drawSimPerson(ctx, p, MODE_COLORS.pose)
+        if (modes.hands) {
+          drawSimHands(ctx, p.lWrist, t + i, MODE_COLORS.hands)
+          drawSimHands(ctx, p.rWrist, t + i + 1, MODE_COLORS.hands)
+        }
+        if (modes.face) drawSimFace(ctx, p.head, t + i, MODE_COLORS.face)
+
+        // Gesture label
+        if (modes.pose && i === 0) {
+          ctx.font = 'bold 13px Inter, sans-serif'
+          ctx.fillStyle = MODE_COLORS.pose
+          ctx.textAlign = 'center'
+          ctx.fillText(`${g.gesture} (${Math.round(g.confidence * 100)}%)`, p.head.x, p.head.y - 22)
+          ctx.textAlign = 'start'
+        }
+
+        // Heatmap accumulation
+        const gx = Math.min(Math.floor((p.head.x / W) * 16), 15)
+        const gy = Math.min(Math.floor((p.head.y / H) * 12), 11)
+        if (gx >= 0 && gy >= 0) heatmapRef.current[gy * 16 + gx] += 0.05
+      }
+
+      // Object detection boxes
+      if (modes.objects && people.length > 0) {
+        drawSimObjectBox(ctx, 40, 80, 100, 180, 'shelf', 0.89, MODE_COLORS.objects)
+        if (people.length > 1) {
+          const p1 = people[1]
+          drawSimObjectBox(ctx, p1.head.x - 20, p1.head.y - 30, 40, 80, 'person', 0.94, MODE_COLORS.objects)
+        }
+      }
+
+      // Zone labels
+      ctx.font = '9px Inter, sans-serif'
+      ctx.fillStyle = '#00d4aa40'
+      ctx.fillText('Zone A — Entrance', 20, H - 15)
+      ctx.fillText('Zone B — Aisle', W / 2 - 30, H - 15)
+      ctx.fillText('Zone C — Register', W - 120, H - 15)
+
+      // Timestamp overlay
+      ctx.font = '10px monospace'
+      ctx.fillStyle = '#6b7a7480'
+      const now = new Date()
+      ctx.fillText(`REC ${now.toLocaleTimeString()} • SIM`, W - 160, 18)
+
+      // Update metrics
+      const jitter = (v: number, range: number) => Math.max(0, v + (Math.sin(t * 1.7) * range))
+      setPersonCount(scenario.people)
+      setHandCount(scenario.hands)
+      setFaceCount(scenario.faces)
+      setEngagement(jitter(scenario.engagement, 0.08))
+      setGesture(g)
+
+      simAnimRef.current = requestAnimationFrame(animate)
+    }
+
+    simAnimRef.current = requestAnimationFrame(animate)
+  }, [modes])
+
+  const stopSimulation = useCallback(() => {
+    setSimMode(false)
+    if (simAnimRef.current) cancelAnimationFrame(simAnimRef.current)
+    setPersonCount(0)
+    setHandCount(0)
+    setFaceCount(0)
+    setEngagement(0)
+    setGesture({ gesture: 'unknown', confidence: 0, description: '' })
+  }, [])
+
   useEffect(() => {
     if (isActive && isReady) startTracking()
   }, [isActive, isReady, startTracking])
 
-  // Process results and draw overlay
+  // Process live results and draw overlay
   useEffect(() => {
     if (!poseResults && !handResults && !faceResults && !objectResults) return
 
@@ -62,7 +326,6 @@ export default function CameraAnalyticsDemoPage() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // Draw pose landmarks + skeleton
     if (poseResults?.landmarks?.length) {
       setPersonCount(poseResults.landmarks.length)
 
@@ -72,7 +335,6 @@ export default function CameraAnalyticsDemoPage() {
         setEngagement(computeEngagement(landmarks))
 
         if (modes.pose) {
-          // Draw connections
           const connections = [
             [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
             [11, 23], [12, 24], [23, 24], [23, 25], [25, 27],
@@ -94,7 +356,6 @@ export default function CameraAnalyticsDemoPage() {
             }
           }
 
-          // Draw landmarks
           for (const lm of landmarks) {
             if ((lm.visibility || 0) > 0.5) {
               ctx.fillStyle = MODE_COLORS.pose
@@ -104,7 +365,6 @@ export default function CameraAnalyticsDemoPage() {
             }
           }
 
-          // Gesture label above head
           const nose = landmarks[0]
           if (nose && g.gesture !== 'unknown') {
             ctx.font = 'bold 16px Inter, sans-serif'
@@ -114,7 +374,6 @@ export default function CameraAnalyticsDemoPage() {
           }
         }
 
-        // Update heatmap (divide frame into 16x12 grid)
         for (const lm of landmarks) {
           if ((lm.visibility || 0) > 0.5) {
             const gx = Math.min(Math.floor(lm.x * 16), 15)
@@ -129,7 +388,6 @@ export default function CameraAnalyticsDemoPage() {
       setPersonCount(0)
     }
 
-    // Draw hand landmarks
     if (handResults?.landmarks?.length && modes.hands) {
       setHandCount(handResults.landmarks.length)
       for (const landmarks of handResults.landmarks) {
@@ -163,7 +421,6 @@ export default function CameraAnalyticsDemoPage() {
       setHandCount(handResults?.landmarks?.length || 0)
     }
 
-    // Draw face mesh
     if (faceResults?.faceLandmarks?.length && modes.face) {
       setFaceCount(faceResults.faceLandmarks.length)
       for (const landmarks of faceResults.faceLandmarks) {
@@ -181,7 +438,6 @@ export default function CameraAnalyticsDemoPage() {
       setFaceCount(faceResults?.faceLandmarks?.length || 0)
     }
 
-    // Draw object bounding boxes
     if (objectResults?.detections?.length && modes.objects) {
       for (const det of objectResults.detections) {
         const bb = det.boundingBox
@@ -228,7 +484,15 @@ export default function CameraAnalyticsDemoPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // Cleanup simulation on unmount
+  useEffect(() => {
+    return () => { if (simAnimRef.current) cancelAnimationFrame(simAnimRef.current) }
+  }, [])
+
   const error = camError || modelError
+  const isRunning = isActive || simMode
+  const simFps = simMode ? 30 + Math.floor(Math.sin(Date.now() / 1000) * 5) : 0
+  const displayFps = simMode ? simFps : fps
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-white p-4 lg:p-6">
@@ -245,12 +509,17 @@ export default function CameraAnalyticsDemoPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {fps > 0 && (
+            {displayFps > 0 && (
               <div className="px-3 py-1.5 rounded-lg bg-[#0f1512] border border-[#1a2420] text-[12px] font-mono">
-                <Activity size={12} className="inline mr-1.5 text-[#00d4aa]" />{fps} FPS
+                <Activity size={12} className="inline mr-1.5 text-[#00d4aa]" />{displayFps} FPS
               </div>
             )}
-            {devices.length > 1 && (
+            {simMode && (
+              <div className="px-3 py-1.5 rounded-lg bg-[#7c3aed]/10 border border-[#7c3aed]/30 text-[12px] font-mono text-[#7c3aed]">
+                <Monitor size={12} className="inline mr-1.5" />SIMULATION
+              </div>
+            )}
+            {devices.length > 1 && !simMode && (
               <select
                 value={activeDeviceId}
                 onChange={e => switchCamera(e.target.value)}
@@ -271,7 +540,7 @@ export default function CameraAnalyticsDemoPage() {
           <div className="relative rounded-xl overflow-hidden border border-[#1a2420] bg-[#0f1512] aspect-video">
             <video
               ref={videoRef}
-              className="absolute inset-0 w-full h-full object-cover"
+              className={`absolute inset-0 w-full h-full object-cover ${simMode ? 'hidden' : ''}`}
               playsInline
               muted
             />
@@ -280,36 +549,44 @@ export default function CameraAnalyticsDemoPage() {
               className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             />
 
-            {!isActive && (
+            {!isRunning && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#0A0A0B]/80">
                 <Camera size={48} className="text-[#6b7a74]" />
                 <p className="text-[13px] text-[#6b7a74] text-center max-w-xs">
-                  {modelsLoading ? 'Loading AI models...' : camLoading ? 'Starting camera...' : 'Click Start to begin camera analytics'}
+                  {modelsLoading ? 'Loading AI models...' : camLoading ? 'Starting camera...' : 'Start the demo to see real-time tracking'}
                 </p>
-                <button
-                  onClick={handleStart}
-                  disabled={camLoading || modelsLoading}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-[#00d4aa] text-[#0A0A0B] text-[13px] font-semibold hover:bg-[#00c49e] disabled:opacity-50 transition-colors"
-                >
-                  {camLoading || modelsLoading ? (
-                    <><RefreshCw size={14} className="animate-spin" /> Loading...</>
-                  ) : (
-                    <><Play size={14} /> Start Camera</>
-                  )}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={startSimulation}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-[#00d4aa] text-[#0A0A0B] text-[13px] font-semibold hover:bg-[#00c49e] transition-colors"
+                  >
+                    <Play size={14} /> Watch Demo
+                  </button>
+                  <button
+                    onClick={handleStart}
+                    disabled={camLoading || modelsLoading}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#0f1512] border border-[#1a2420] text-[13px] font-medium text-[#9ca8a3] hover:border-[#2a3430] hover:text-white disabled:opacity-50 transition-colors"
+                  >
+                    {camLoading || modelsLoading ? (
+                      <><RefreshCw size={14} className="animate-spin" /> Loading...</>
+                    ) : (
+                      <><Camera size={14} /> Use My Camera</>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
-            {isActive && (
+            {isRunning && (
               <button
-                onClick={() => { stopTracking(); stop() }}
+                onClick={() => { if (simMode) stopSimulation(); else { stopTracking(); stop() } }}
                 className="absolute top-3 right-3 p-2 rounded-lg bg-[#0A0A0B]/60 border border-[#1a2420] hover:bg-red-500/20 transition-colors"
               >
                 <Square size={14} className="text-red-400" />
               </button>
             )}
 
-            {error && (
+            {error && !simMode && (
               <div className="absolute bottom-3 left-3 right-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-[12px] text-red-400">
                 {error}
               </div>
