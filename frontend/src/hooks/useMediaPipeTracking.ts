@@ -38,6 +38,7 @@ export function useMediaPipeTracking(videoRef: React.RefObject<HTMLVideoElement 
   const objectDetectorRef = useRef<any>(null)
   const animFrameRef = useRef<number>(0)
   const lastTimeRef = useRef<number>(0)
+  const lastDetectTimeRef = useRef<number>(-1)
   const fpsCounterRef = useRef<number[]>([])
   const runningRef = useRef(false)
   const configRef = useRef(config)
@@ -125,28 +126,31 @@ export function useMediaPipeTracking(videoRef: React.RefObject<HTMLVideoElement 
       fpsCounterRef.current = fpsCounterRef.current.filter(t => now - t < 1000)
       const fps = fpsCounterRef.current.length
 
-      const timestamp = video.currentTime * 1000
+      // Use performance.now() — video.currentTime can stall on webcam streams,
+      // causing MediaPipe to reject non-increasing timestamps.
+      const timestamp = now
+      if (timestamp <= lastDetectTimeRef.current) {
+        animFrameRef.current = requestAnimationFrame(detect)
+        return
+      }
+      lastDetectTimeRef.current = timestamp
 
       let poseResults = null
       let handResults = null
       let faceResults = null
       let objectResults = null
 
-      try {
-        if (configRef.current.pose && poseLandmarkerRef.current) {
-          poseResults = poseLandmarkerRef.current.detectForVideo(video, timestamp)
-        }
-        if (configRef.current.hands && handLandmarkerRef.current) {
-          handResults = handLandmarkerRef.current.detectForVideo(video, timestamp)
-        }
-        if (configRef.current.face && faceLandmarkerRef.current) {
-          faceResults = faceLandmarkerRef.current.detectForVideo(video, timestamp)
-        }
-        if (configRef.current.objects && objectDetectorRef.current) {
-          objectResults = objectDetectorRef.current.detectForVideo(video, timestamp)
-        }
-      } catch {
-        // Skip frame on detection error
+      if (configRef.current.pose && poseLandmarkerRef.current) {
+        try { poseResults = poseLandmarkerRef.current.detectForVideo(video, timestamp) } catch { /* skip frame */ }
+      }
+      if (configRef.current.hands && handLandmarkerRef.current) {
+        try { handResults = handLandmarkerRef.current.detectForVideo(video, timestamp) } catch { /* skip frame */ }
+      }
+      if (configRef.current.face && faceLandmarkerRef.current) {
+        try { faceResults = faceLandmarkerRef.current.detectForVideo(video, timestamp) } catch { /* skip frame */ }
+      }
+      if (configRef.current.objects && objectDetectorRef.current) {
+        try { objectResults = objectDetectorRef.current.detectForVideo(video, timestamp) } catch { /* skip frame */ }
       }
 
       lastTimeRef.current = now
