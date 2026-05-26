@@ -124,7 +124,7 @@ export default function CanadaPortalTeamPage() {
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>('reps')
+  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(admin ? 'reps' : 'leaderboard')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
@@ -371,12 +371,14 @@ export default function CanadaPortalTeamPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 bg-[#0f1512] border border-[#1a2420] rounded-xl p-1 w-fit">
-        <button
-          onClick={() => setActiveTab('reps')}
-          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
-        >
-          Sales Reps
-        </button>
+        {admin && (
+          <button
+            onClick={() => setActiveTab('reps')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
+          >
+            Sales Reps
+          </button>
+        )}
         <button
           onClick={() => setActiveTab('leaderboard')}
           className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'text-[#6b7a74] hover:text-white')}

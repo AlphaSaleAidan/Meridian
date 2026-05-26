@@ -13,6 +13,7 @@ import {
   LogOut,
   Plus,
   Settings,
+  Trophy,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import SalesPortalMobileNav from './SalesPortalMobileNav'
@@ -20,14 +21,19 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import { useMobile } from '@/hooks/useMobile'
 import ClineAIChatWidget from '@/components/ClineAIChatWidget'
 
-const salesNavItems = [
+const salesNavBase = [
   { heading: 'Sales' },
   { path: '/canada/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/canada/portal/leads', icon: Target, label: 'Leads' },
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/canada/portal/commissions', icon: Wallet, label: 'Commissions' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
-  { path: '/canada/portal/team', icon: Users, label: 'Team' },
+] as const
+
+const teamNavAdmin = { path: '/canada/portal/team', icon: Users, label: 'Team' } as const
+const teamNavRep = { path: '/canada/portal/team', icon: Trophy, label: 'Leaderboard' } as const
+
+const salesNavTail = [
   { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
 ] as const
 
@@ -95,6 +101,7 @@ export default function CanadaSalesLayout() {
   }, [])
 
   const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
+  const salesNavItems = [...salesNavBase, isAdmin ? teamNavAdmin : teamNavRep, ...salesNavTail]
   const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 
   const sidebarContent = (

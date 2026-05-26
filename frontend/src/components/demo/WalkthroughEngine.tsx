@@ -108,9 +108,11 @@ function SpotlightOverlay({ rect, entering }: { rect: SpotlightRect | null; ente
 function CheckoutScreen({
   onClose,
   isCanada,
+  isMobile,
 }: {
   onClose: () => void
   isCanada: boolean
+  isMobile: boolean
 }) {
   const [answers, setAnswers] = useState({ locations: '', pos: '', revenue: '' })
   const [submitted, setSubmitted] = useState(false)
@@ -135,7 +137,7 @@ function CheckoutScreen({
       inset: 0,
       zIndex: 10000,
       display: 'flex',
-      alignItems: 'center',
+      alignItems: isMobile ? 'flex-end' : 'center',
       justifyContent: 'center',
       background: 'rgba(0,0,0,0.75)',
       backdropFilter: 'blur(8px)',
@@ -143,15 +145,17 @@ function CheckoutScreen({
     }}>
       <div style={{
         width: '100%',
-        maxWidth: 520,
-        margin: '0 16px',
+        maxWidth: isMobile ? '100%' : 520,
+        margin: isMobile ? 0 : '0 16px',
         background: 'linear-gradient(180deg, #131315 0%, #0f0f11 100%)',
-        border: '1px solid #2a2a30',
-        borderRadius: 20,
-        boxShadow: '0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(23,197,176,0.08)',
-        padding: '32px 28px',
-        maxHeight: '90vh',
+        border: isMobile ? 'none' : '1px solid #2a2a30',
+        borderTop: '1px solid #2a2a30',
+        borderRadius: isMobile ? '16px 16px 0 0' : 20,
+        boxShadow: isMobile ? '0 -10px 40px rgba(0,0,0,0.8)' : '0 40px 100px rgba(0,0,0,0.8), 0 0 0 1px rgba(23,197,176,0.08)',
+        padding: isMobile ? '24px 16px 32px' : '32px 28px',
+        maxHeight: isMobile ? '85vh' : '90vh',
         overflowY: 'auto',
+        alignSelf: isMobile ? 'flex-end' : 'center',
       }}>
         {!submitted ? (
           <>
@@ -394,6 +398,7 @@ function TourCard({
   direction,
   autoPlaying,
   onToggleAuto,
+  isMobile,
 }: {
   content: TourContent
   currentIndex: number
@@ -405,6 +410,7 @@ function TourCard({
   direction: 'next' | 'prev'
   autoPlaying: boolean
   onToggleAuto: () => void
+  isMobile: boolean
 }) {
   const isLast = currentIndex === totalSteps - 1
   const slideX = direction === 'next' ? 12 : -12
@@ -413,25 +419,29 @@ function TourCard({
     <div
       style={{
         position: 'fixed',
-        bottom: 24,
-        right: 24,
+        bottom: isMobile ? 0 : 24,
+        right: isMobile ? 0 : 24,
+        left: isMobile ? 0 : 'auto',
         zIndex: 9999,
-        width: 420,
-        maxHeight: '75vh',
+        width: isMobile ? '100%' : 420,
+        maxHeight: isMobile ? '55vh' : '75vh',
         overflowY: 'auto',
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? 'auto' : 'none',
-        transform: visible ? 'translateY(0) translateX(0)' : `translateY(4px) translateX(${slideX}px)`,
+        transform: visible ? 'translateY(0) translateX(0)' : `translateY(${isMobile ? 20 : 4}px) translateX(${isMobile ? 0 : slideX}px)`,
         transition: 'opacity 0.3s cubic-bezier(0.16,1,0.3,1), transform 0.3s cubic-bezier(0.16,1,0.3,1)',
       }}
     >
       <div
         style={{
           background: 'linear-gradient(180deg, #131315 0%, #111113 100%)',
-          border: '1px solid #2a2a30',
-          borderRadius: 16,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(23,197,176,0.06), inset 0 1px 0 rgba(255,255,255,0.03)',
-          padding: '24px 24px 20px',
+          border: isMobile ? 'none' : '1px solid #2a2a30',
+          borderTop: '1px solid #2a2a30',
+          borderRadius: isMobile ? '16px 16px 0 0' : 16,
+          boxShadow: isMobile
+            ? '0 -10px 40px rgba(0,0,0,0.8)'
+            : '0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(23,197,176,0.06), inset 0 1px 0 rgba(255,255,255,0.03)',
+          padding: isMobile ? '20px 16px 28px' : '24px 24px 20px',
           fontFamily: 'Inter, system-ui, sans-serif',
         }}
       >
@@ -641,6 +651,7 @@ export default function WalkthroughEngine() {
   const [autoPlaying, setAutoPlaying] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
   const bannerContainerRef = useRef<HTMLDivElement | null>(null)
+  const [bannerMounted, setBannerMounted] = useState(false)
   const recalcRef = useRef<number>(0)
   const autoTimerRef = useRef<number>(0)
   const prevBusinessType = useRef<BusinessType | null>(businessType)
@@ -658,13 +669,29 @@ export default function WalkthroughEngine() {
   }, [])
 
   useEffect(() => {
-    const main = document.querySelector('main')
-    if (!main) return
-    const div = document.createElement('div')
-    div.id = 'tour-banner-root'
-    main.prepend(div)
-    bannerContainerRef.current = div
-    return () => { div.remove(); bannerContainerRef.current = null }
+    let attempts = 0
+    const maxAttempts = 20
+
+    function tryMount() {
+      const main = document.querySelector('main')
+      if (!main) {
+        if (++attempts < maxAttempts) {
+          setTimeout(tryMount, 100)
+        }
+        return
+      }
+      const div = document.createElement('div')
+      div.id = 'tour-banner-root'
+      main.prepend(div)
+      bannerContainerRef.current = div
+      setBannerMounted(true)
+    }
+
+    tryMount()
+    return () => {
+      const el = bannerContainerRef.current
+      if (el) { el.remove(); bannerContainerRef.current = null }
+    }
   }, [])
 
   useEffect(() => {
@@ -858,7 +885,7 @@ export default function WalkthroughEngine() {
   return (
     <>
       {/* Tour banner — only on overview page, prepended into main content */}
-      {isOverview && !active && bannerContainerRef.current && createPortal(
+      {isOverview && !active && bannerMounted && bannerContainerRef.current && createPortal(
         <div className="tour-banner">
           <button onClick={() => handleStart(true)} className="tour-glow-btn-wrapper">
             <span className="tour-glow-btn-bg" />
@@ -881,8 +908,10 @@ export default function WalkthroughEngine() {
       {active && !showCheckout && createPortal(
         <div style={{
           position: 'fixed',
-          bottom: isMobile ? 80 : 24,
-          left: 24,
+          top: isMobile ? 16 : 'auto',
+          bottom: isMobile ? 'auto' : 24,
+          left: isMobile ? '50%' : 24,
+          transform: isMobile ? 'translateX(-50%)' : 'none',
           zIndex: 9997,
           display: 'flex',
           alignItems: 'center',
@@ -936,13 +965,14 @@ export default function WalkthroughEngine() {
             direction={direction}
             autoPlaying={autoPlaying}
             onToggleAuto={handleToggleAuto}
+            isMobile={isMobile}
           />
         </>
       )}
 
       {/* Checkout screen */}
       {showCheckout && (
-        <CheckoutScreen onClose={handleSkip} isCanada={isCanada} />
+        <CheckoutScreen onClose={handleSkip} isCanada={isCanada} isMobile={isMobile} />
       )}
 
       <style>{`

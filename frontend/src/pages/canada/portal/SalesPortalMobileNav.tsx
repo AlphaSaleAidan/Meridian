@@ -2,10 +2,19 @@ import { NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard, Target, Building2, Wallet, MoreHorizontal,
-  GraduationCap, Users, Settings, X,
+  GraduationCap, Users, Settings, X, Trophy,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useSalesAuth } from '@/lib/sales-auth'
+
+const ADMIN_EMAILS = [
+  'apierce@alphasale.co',
+  'aidanpierce72@gmail.com',
+  'aidanpierce@meridian.tips',
+  'cheungenochmgmt@gmail.com',
+  'aidanvietnguyen@gmail.com',
+]
 
 const PRIMARY_TABS = [
   { path: '/canada/portal/dashboard', icon: LayoutDashboard, label: 'Home' },
@@ -14,15 +23,20 @@ const PRIMARY_TABS = [
   { path: '/canada/portal/commissions', icon: Wallet, label: 'Money' },
 ]
 
-const MORE_ITEMS = [
-  { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
-  { path: '/canada/portal/team', icon: Users, label: 'Team' },
-  { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
-]
+function getMoreItems(isAdmin: boolean) {
+  return [
+    { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
+    { path: '/canada/portal/team', icon: isAdmin ? Users : Trophy, label: isAdmin ? 'Team' : 'Leaderboard' },
+    { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
+  ]
+}
 
 export default function SalesPortalMobileNav() {
   const [moreOpen, setMoreOpen] = useState(false)
   const location = useLocation()
+  const { rep } = useSalesAuth()
+  const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
+  const MORE_ITEMS = getMoreItems(!!isAdmin)
 
   useEffect(() => { setMoreOpen(false) }, [location.pathname])
 
