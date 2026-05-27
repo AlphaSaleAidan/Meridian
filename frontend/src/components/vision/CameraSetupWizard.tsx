@@ -104,7 +104,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
             <Camera size={16} className="text-[#1A8FD6]" />
             <h2 className="text-sm font-semibold text-[#F5F5F7]">Connect Camera</h2>
           </div>
-          <button onClick={onClose} className="text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">
+          <button aria-label="Close setup" onClick={onClose} className="text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">
             <X size={16} />
           </button>
         </div>

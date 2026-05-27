@@ -208,7 +208,7 @@ export default function LiveCapture({ onFramesCaptured, onCancel, tier, deviceMo
 
         {/* Top bar */}
         <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-4 pt-[max(env(safe-area-inset-top),12px)] pb-2 bg-gradient-to-b from-black/70 to-transparent">
-          <button onClick={onCancel} className="p-2 rounded-full bg-black/40 text-white">
+          <button aria-label="Cancel capture" onClick={onCancel} className="p-2 rounded-full bg-black/40 text-white">
             <X size={20} />
           </button>
           <div className="flex items-center gap-2">

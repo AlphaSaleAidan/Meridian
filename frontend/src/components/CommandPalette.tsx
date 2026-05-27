@@ -118,6 +118,7 @@ export default function CommandPalette({ basePath }: CommandPaletteProps) {
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
+            aria-label="Search commands"
             placeholder="Search pages..."
             className="flex-1 bg-transparent text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none"
           />

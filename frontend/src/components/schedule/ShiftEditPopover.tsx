@@ -66,7 +66,7 @@ export default function ShiftEditPopover({ shift, staff, onClose, onSave, onDele
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-[#1F1F23]">
           <h3 className="text-sm font-semibold text-[#F5F5F7]">Edit Shift</h3>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8]">
+          <button aria-label="Close shift editor" onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8]">
             <X size={16} />
           </button>
         </div>

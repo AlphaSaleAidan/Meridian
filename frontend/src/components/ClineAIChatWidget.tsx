@@ -82,7 +82,7 @@ export default function ClineAIChatWidget() {
                 <p className="text-[10px] text-[#6b7a74]">Sales assistant</p>
               </div>
             </div>
-            <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors">
+            <button aria-label="Close AI assistant" onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors">
               <X size={16} />
             </button>
           </div>

@@ -316,7 +316,7 @@ export default function WebXRScan({ onFramesCaptured, onCancel, onFallbackToStan
       {/* HUD overlay */}
       <div className="absolute top-0 left-0 right-0 z-10 px-4 pt-[max(env(safe-area-inset-top),12px)] pb-2 pointer-events-auto">
         <div className="flex items-center justify-between">
-          <button onClick={onCancel} className="p-2 rounded-full bg-black/40 text-white">
+          <button aria-label="Cancel scan" onClick={onCancel} className="p-2 rounded-full bg-black/40 text-white">
             <X size={20} />
           </button>
           <div className="flex items-center gap-2">

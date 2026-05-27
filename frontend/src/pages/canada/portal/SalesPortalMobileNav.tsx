@@ -52,7 +52,7 @@ export default function SalesPortalMobileNav() {
           >
             <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#1a2420]">
               <span className="text-sm font-semibold text-white">More</span>
-              <button onClick={() => setMoreOpen(false)} className="p-2 rounded-full bg-[#1a2420] text-[#6b7a74]">
+              <button aria-label="Close menu" onClick={() => setMoreOpen(false)} className="p-2 rounded-full bg-[#1a2420] text-[#6b7a74]">
                 <X size={16} />
               </button>
             </div>

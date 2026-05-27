@@ -137,7 +137,7 @@ export default function CustomerWalkthrough({ userId, posConnected = false, onDi
               <h2 className="text-lg font-bold text-white">Welcome to Meridian</h2>
               <p className="text-xs text-[#6b7a74] mt-0.5">Let's get everything set up for your business.</p>
             </div>
-            <button onClick={handleComplete} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
+            <button aria-label="Close walkthrough" onClick={handleComplete} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
               <X size={18} className="text-[#6b7a74]" />
             </button>
           </div>

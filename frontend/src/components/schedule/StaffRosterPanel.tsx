@@ -73,7 +73,7 @@ function StaffCard({ member, onUpdateRate }: { member: ScheduleStaffMember; onUp
               autoFocus
               className="w-12 px-1 py-0.5 rounded bg-[#1F1F23] border border-[#1A8FD6]/40 text-[10px] text-[#F5F5F7] font-mono text-right focus:outline-none"
             />
-            <button onClick={commitRate} className="p-0.5 text-[#17C5B0] hover:text-[#17C5B0]/80">
+            <button aria-label="Confirm rate" onClick={commitRate} className="p-0.5 text-[#17C5B0] hover:text-[#17C5B0]/80">
               <Check size={10} />
             </button>
           </div>

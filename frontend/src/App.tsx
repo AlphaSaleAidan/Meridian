@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/lib/auth'
@@ -11,35 +11,34 @@ import DemoLayout from '@/components/DemoLayout'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 
-import CustomerLoginPage from '@/pages/customer/CustomerLoginPage'
-import CustomerSignupPage from '@/pages/customer/CustomerSignupPage'
-import CanadaLoginPage from '@/pages/customer/CanadaLoginPage'
-import CustomerPortalRedirect from '@/pages/customer/CustomerPortalRedirect'
+const CustomerLoginPage = lazy(() => import('@/pages/customer/CustomerLoginPage'))
+const CustomerSignupPage = lazy(() => import('@/pages/customer/CustomerSignupPage'))
+const CanadaLoginPage = lazy(() => import('@/pages/customer/CanadaLoginPage'))
+const CustomerPortalRedirect = lazy(() => import('@/pages/customer/CustomerPortalRedirect'))
 
-import OverviewPage from '@/pages/OverviewPage'
-import RevenuePage from '@/pages/RevenuePage'
-import ProductsPage from '@/pages/ProductsPage'
-import InsightsPage from '@/pages/InsightsPage'
-import ForecastsPage from '@/pages/ForecastsPage'
-import NotificationsPage from '@/pages/NotificationsPage'
-import SettingsPage from '@/pages/SettingsPage'
-import InventoryPage from '@/pages/InventoryPage'
-import AgentDashboardPage from '@/pages/AgentDashboardPage'
-import ActionsPage from '@/pages/ActionsPage'
-import CustomersPage from '@/pages/CustomersPage'
-import StaffPage from '@/pages/StaffPage'
-import PeakHoursPage from '@/pages/PeakHoursPage'
-import MarginsPage from '@/pages/MarginsPage'
-import MenuEngineeringPage from '@/pages/MenuEngineeringPage'
-import AnomaliesPage from '@/pages/AnomaliesPage'
-import SpaceTab from '@/pages/SpaceTab'
-import PhoneOrdersPage from '@/pages/PhoneOrdersPage'
+const OverviewPage = lazy(() => import('@/pages/OverviewPage'))
+const RevenuePage = lazy(() => import('@/pages/RevenuePage'))
+const ProductsPage = lazy(() => import('@/pages/ProductsPage'))
+const InsightsPage = lazy(() => import('@/pages/InsightsPage'))
+const ForecastsPage = lazy(() => import('@/pages/ForecastsPage'))
+const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
+const InventoryPage = lazy(() => import('@/pages/InventoryPage'))
+const AgentDashboardPage = lazy(() => import('@/pages/AgentDashboardPage'))
+const ActionsPage = lazy(() => import('@/pages/ActionsPage'))
+const CustomersPage = lazy(() => import('@/pages/CustomersPage'))
+const StaffPage = lazy(() => import('@/pages/StaffPage'))
+const PeakHoursPage = lazy(() => import('@/pages/PeakHoursPage'))
+const MarginsPage = lazy(() => import('@/pages/MarginsPage'))
+const MenuEngineeringPage = lazy(() => import('@/pages/MenuEngineeringPage'))
+const AnomaliesPage = lazy(() => import('@/pages/AnomaliesPage'))
+const SpaceTab = lazy(() => import('@/pages/SpaceTab'))
+const PhoneOrdersPage = lazy(() => import('@/pages/PhoneOrdersPage'))
 
 const SchedulePage = lazy(() => import('@/pages/SchedulePage'))
 const MyWebsitePage = lazy(() => import('@/pages/MyWebsitePage'))
 const MerchantSitePage = lazy(() => import('@/pages/MerchantSitePage'))
 const CameraAnalyticsDemoPage = lazy(() => import('@/pages/CameraAnalyticsDemoPage'))
-const CameraIntelligencePage = lazy(() => import('@/pages/CameraIntelligencePage'))
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazy(() => import('@/components/CanadaLayout'))
@@ -100,9 +99,26 @@ const CloverIntegrationPage = lazy(() => import('@/pages/seo/CloverIntegrationPa
 const CityIndustryPage = lazy(() => import('@/pages/seo/CityIndustryPage'))
 const WhatIsPosAnalyticsPage = lazy(() => import('@/pages/seo/WhatIsPosAnalyticsPage'))
 const VsSpreadsheetsPage = lazy(() => import('@/pages/seo/VsSpreadsheetsPage'))
+const VsToastAnalyticsPage = lazy(() => import('@/pages/seo/VsToastAnalyticsPage'))
+const VsSquareAnalyticsPage = lazy(() => import('@/pages/seo/VsSquareAnalyticsPage'))
+const VsCloverAnalyticsPage = lazy(() => import('@/pages/seo/VsCloverAnalyticsPage'))
+const VsRestaurant365Page = lazy(() => import('@/pages/seo/VsRestaurant365Page'))
+const VsMarketManPage = lazy(() => import('@/pages/seo/VsMarketManPage'))
+const VsDorPage = lazy(() => import('@/pages/seo/VsDorPage'))
+const VsPlacerAiPage = lazy(() => import('@/pages/seo/VsPlacerAiPage'))
+const VsFootTrafficCountersPage = lazy(() => import('@/pages/seo/VsFootTrafficCountersPage'))
+const CameraIntelligencePage = lazy(() => import('@/pages/seo/CameraIntelligencePage'))
+const FAQHubPage = lazy(() => import('@/pages/seo/FAQHubPage'))
+const BestAnalyticsSoftwarePage = lazy(() => import('@/pages/seo/BestAnalyticsSoftwarePage'))
+const FoodCostCalculatorPage = lazy(() => import('@/pages/seo/FoodCostCalculatorPage'))
+const PrimeCostCalculatorPage = lazy(() => import('./pages/seo/PrimeCostCalculatorPage'))
+const MenuPricingCalculatorPage = lazy(() => import('./pages/seo/MenuPricingCalculatorPage'))
+const PhoneAgentPage = lazy(() => import('./pages/seo/PhoneAgentPage'))
 const BlogIndexPage = lazy(() => import('@/pages/blog/BlogIndexPage'))
 const RestaurantProfitabilityArticle = lazy(() => import('@/pages/blog/RestaurantProfitabilityArticle'))
 const FootTrafficAnalyticsArticle = lazy(() => import('@/pages/blog/FootTrafficAnalyticsArticle'))
+const GuidesIndexPage = lazy(() => import('@/pages/guides/GuidesIndexPage'))
+const GuidePage = lazy(() => import('@/pages/guides/GuidePage'))
 
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -132,27 +148,26 @@ function InlineFallback() {
 function CustomerDashboardRoutes() {
   return (
     <>
-      <Route index element={<OverviewPage />} />
-      <Route path="revenue" element={<RevenuePage />} />
-      <Route path="products" element={<ProductsPage />} />
-      <Route path="inventory" element={<InventoryPage />} />
-      <Route path="insights" element={<InsightsPage />} />
-      <Route path="forecasts" element={<ForecastsPage />} />
-      <Route path="agents" element={<AgentDashboardPage />} />
-      <Route path="actions" element={<ActionsPage />} />
-      <Route path="camera-intelligence" element={<Suspense fallback={<InlineFallback />}><CameraIntelligencePage /></Suspense>} />
-      <Route path="customers" element={<CustomersPage />} />
-      <Route path="staff" element={<StaffPage />} />
-      <Route path="peak-hours" element={<PeakHoursPage />} />
-      <Route path="margins" element={<MarginsPage />} />
-      <Route path="menu-matrix" element={<MenuEngineeringPage />} />
-      <Route path="anomalies" element={<AnomaliesPage />} />
+      <Route index element={<Suspense fallback={<InlineFallback />}><OverviewPage /></Suspense>} />
+      <Route path="revenue" element={<Suspense fallback={<InlineFallback />}><RevenuePage /></Suspense>} />
+      <Route path="products" element={<Suspense fallback={<InlineFallback />}><ProductsPage /></Suspense>} />
+      <Route path="inventory" element={<Suspense fallback={<InlineFallback />}><InventoryPage /></Suspense>} />
+      <Route path="insights" element={<Suspense fallback={<InlineFallback />}><InsightsPage /></Suspense>} />
+      <Route path="forecasts" element={<Suspense fallback={<InlineFallback />}><ForecastsPage /></Suspense>} />
+      <Route path="agents" element={<Suspense fallback={<InlineFallback />}><AgentDashboardPage /></Suspense>} />
+      <Route path="actions" element={<Suspense fallback={<InlineFallback />}><ActionsPage /></Suspense>} />
+      <Route path="customers" element={<Suspense fallback={<InlineFallback />}><CustomersPage /></Suspense>} />
+      <Route path="staff" element={<Suspense fallback={<InlineFallback />}><StaffPage /></Suspense>} />
+      <Route path="peak-hours" element={<Suspense fallback={<InlineFallback />}><PeakHoursPage /></Suspense>} />
+      <Route path="margins" element={<Suspense fallback={<InlineFallback />}><MarginsPage /></Suspense>} />
+      <Route path="menu-matrix" element={<Suspense fallback={<InlineFallback />}><MenuEngineeringPage /></Suspense>} />
+      <Route path="anomalies" element={<Suspense fallback={<InlineFallback />}><AnomaliesPage /></Suspense>} />
       <Route path="schedule" element={<Suspense fallback={<InlineFallback />}><SchedulePage /></Suspense>} />
-      <Route path="space" element={<SpaceTab />} />
-      <Route path="phone-orders" element={<PhoneOrdersPage />} />
+      <Route path="space" element={<Suspense fallback={<InlineFallback />}><SpaceTab /></Suspense>} />
+      <Route path="phone-orders" element={<Suspense fallback={<InlineFallback />}><PhoneOrdersPage /></Suspense>} />
       <Route path="my-website" element={<Suspense fallback={<InlineFallback />}><MyWebsitePage /></Suspense>} />
-      <Route path="notifications" element={<NotificationsPage />} />
-      <Route path="settings" element={<SettingsPage />} />
+      <Route path="notifications" element={<Suspense fallback={<InlineFallback />}><NotificationsPage /></Suspense>} />
+      <Route path="settings" element={<Suspense fallback={<InlineFallback />}><SettingsPage /></Suspense>} />
     </>
   )
 }
@@ -170,7 +185,43 @@ function SubdomainRedirector() {
   return null
 }
 
+function useLenis() {
+  useEffect(() => {
+    let lenis: any = null
+    let rafId: number | null = null
+    let observer: MutationObserver | null = null
+
+    observer = new MutationObserver(() => {
+      const wrapper = document.querySelector('main')
+      if (!wrapper || lenis) return
+      observer?.disconnect()
+      import('lenis').then((mod) => {
+        const Lenis = mod.default
+        lenis = new Lenis({
+          lerp: 0.08,
+          smoothWheel: true,
+          wrapper: wrapper as HTMLElement,
+          content: wrapper.firstElementChild as HTMLElement,
+        })
+        const raf = (time: number) => {
+          lenis.raf(time)
+          rafId = requestAnimationFrame(raf)
+        }
+        rafId = requestAnimationFrame(raf)
+      })
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    return () => {
+      observer?.disconnect()
+      if (rafId !== null) cancelAnimationFrame(rafId)
+      lenis?.destroy()
+    }
+  }, [])
+}
+
 export default function App() {
+  useLenis()
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -204,6 +255,25 @@ export default function App() {
               {/* SEO — Comparison & educational pages */}
               <Route path="/what-is-pos-analytics" element={<WhatIsPosAnalyticsPage />} />
               <Route path="/vs/spreadsheets" element={<VsSpreadsheetsPage />} />
+              <Route path="/vs/toast-analytics" element={<VsToastAnalyticsPage />} />
+              <Route path="/vs/square-analytics" element={<VsSquareAnalyticsPage />} />
+              <Route path="/vs/clover-analytics" element={<VsCloverAnalyticsPage />} />
+              <Route path="/vs/restaurant365" element={<VsRestaurant365Page />} />
+              <Route path="/vs/marketman" element={<VsMarketManPage />} />
+              <Route path="/vs/dor" element={<VsDorPage />} />
+              <Route path="/vs/placer-ai" element={<VsPlacerAiPage />} />
+              <Route path="/vs/foot-traffic-counters" element={<VsFootTrafficCountersPage />} />
+              <Route path="/features/camera-intelligence" element={<CameraIntelligencePage />} />
+              <Route path="/best-restaurant-analytics-software" element={<BestAnalyticsSoftwarePage />} />
+              <Route path="/faq" element={<FAQHubPage />} />
+              <Route path="/tools/food-cost-calculator" element={<FoodCostCalculatorPage />} />
+              <Route path="/tools/prime-cost-calculator" element={<Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><PrimeCostCalculatorPage /></Suspense>} />
+              <Route path="/tools/menu-pricing-calculator" element={<Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><MenuPricingCalculatorPage /></Suspense>} />
+              <Route path="/features/phone-agent" element={<Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><PhoneAgentPage /></Suspense>} />
+
+              {/* Guides — intent-based SEO content */}
+              <Route path="/guides" element={<GuidesIndexPage />} />
+              <Route path="/guides/:slug" element={<GuidePage />} />
 
               {/* Blog */}
               <Route path="/blog" element={<BlogIndexPage />} />
@@ -229,9 +299,9 @@ export default function App() {
               {/* ══════════════════════════════════════════════
                   CUSTOMER AUTH — business owners
                   ══════════════════════════════════════════════ */}
-              <Route path="/customer/login" element={<CustomerLoginPage />} />
-              <Route path="/customer/signup" element={<CustomerSignupPage />} />
-              <Route path="/c/:token" element={<CustomerPortalRedirect />} />
+              <Route path="/customer/login" element={<Suspense fallback={<LazyFallback />}><CustomerLoginPage /></Suspense>} />
+              <Route path="/customer/signup" element={<Suspense fallback={<LazyFallback />}><CustomerSignupPage /></Suspense>} />
+              <Route path="/c/:token" element={<Suspense fallback={<LazyFallback />}><CustomerPortalRedirect /></Suspense>} />
 
               <Route path="/customer/admin" element={
                 <ProtectedRoute>
@@ -328,7 +398,7 @@ export default function App() {
               {/* ══════════════════════════════════════════════
                   CANADA — customer auth + dashboard
                   ══════════════════════════════════════════════ */}
-              <Route path="/canada/login" element={<CanadaLoginPage />} />
+              <Route path="/canada/login" element={<Suspense fallback={<LazyFallback />}><CanadaLoginPage /></Suspense>} />
               <Route path="/canada/setup" element={
                 <Suspense fallback={<LazyFallback />}>
                   <CanadaSetupPage />

@@ -107,7 +107,7 @@ export default function EmailPreviewModal({ template, firstName, portal, onClose
               Template: <span style={{ color: '#1A8FD6' }}>{template}</span>
             </p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-white/5 transition-colors" style={{ color: '#A1A1A8' }}>
+          <button aria-label="Close email preview" onClick={onClose} className="p-1 rounded-md hover:bg-white/5 transition-colors" style={{ color: '#A1A1A8' }}>
             <X size={18} />
           </button>
         </div>

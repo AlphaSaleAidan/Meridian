@@ -68,7 +68,7 @@ export default function AddStaffModal({ open, onClose, onSave, businessType, exi
           <h2 className="text-sm font-semibold text-[#F5F5F7]">
             {existing ? 'Edit Staff Member' : 'Add Staff Member'}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8]">
+          <button aria-label="Close" onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8]">
             <X size={16} />
           </button>
         </div>
