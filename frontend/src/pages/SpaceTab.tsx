@@ -2,13 +2,15 @@ import { useState, useEffect, Suspense, lazy } from 'react'
 import { clsx } from 'clsx'
 import {
   Layers, MapPin, Zap, Plus, Video, Trash2,
-  Eye, Clock, Box, MoreVertical,
+  Eye, Clock, Box, MoreVertical, Wrench,
 } from 'lucide-react'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId } from '@/hooks/useOrg'
 import { spacesService, type Space } from '@/lib/spaces-service'
 import ScanWizard from '@/components/space/ScanWizard'
+
+const UNDER_CONSTRUCTION = true
 
 const SpaceViewer = lazy(() => import('@/components/space/SpaceViewer'))
 
@@ -55,6 +57,33 @@ export default function SpaceTab() {
         space={selectedSpace}
         onBack={() => setSelectedSpace(null)}
       />
+    )
+  }
+
+  if (UNDER_CONSTRUCTION) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-[#F5F5F7]">3D Spaces</h1>
+          <p className="text-sm text-[#A1A1A8] mt-1">Video-based store mapping powered by LingBot-Map</p>
+        </div>
+        <div className="card p-8 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-[#1A8FD6]/10 flex items-center justify-center mx-auto mb-4">
+            <Wrench size={24} className="text-[#1A8FD6]" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#F5F5F7]">Under Construction</h2>
+          <p className="text-sm text-[#A1A1A8] mt-2 max-w-md mx-auto leading-relaxed">
+            We're building something special. 3D Space scanning will let you map your store layout,
+            track zone traffic, and optimize your floor plan — all from your phone camera.
+          </p>
+          <div className="flex items-center justify-center gap-4 mt-6 text-[10px] text-[#A1A1A8]/50">
+            <span className="flex items-center gap-1"><Box size={10} /> LiDAR + Camera Scanning</span>
+            <span className="flex items-center gap-1"><Layers size={10} /> Zone Heatmaps</span>
+            <span className="flex items-center gap-1"><Eye size={10} /> 3D Walkthrough</span>
+          </div>
+          <p className="text-[10px] text-[#A1A1A8]/30 mt-4">Coming soon</p>
+        </div>
+      </div>
     )
   }
 

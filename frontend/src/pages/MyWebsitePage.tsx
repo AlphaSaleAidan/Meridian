@@ -4,7 +4,10 @@ import {
   Globe, Palette, BarChart3, ShoppingBag, ExternalLink, Copy, Check,
   Loader2, ArrowRight, Trash2, Eye, EyeOff, RefreshCw, Star,
   Phone, Mail, MapPin, Clock, ChevronRight, Sparkles, Link2, X, Search,
+  Wrench,
 } from 'lucide-react'
+
+const UNDER_CONSTRUCTION = true
 import { useOrgId } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { getAuthHeaders } from '@/lib/supabase'
@@ -383,6 +386,33 @@ export default function MyWebsitePage() {
     { key: 'analytics', label: 'Analytics', icon: BarChart3, show: hasWebsite && !!config.published },
     { key: 'orders', label: 'Orders', icon: ShoppingBag, show: hasWebsite && !!config.ordering_enabled },
   ]
+
+  if (UNDER_CONSTRUCTION) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-[#F5F5F7]">My Website</h1>
+          <p className="text-sm text-[#A1A1A8] mt-1">Build your professional 3D website in minutes</p>
+        </div>
+        <div className="card p-8 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-[#1A8FD6]/10 flex items-center justify-center mx-auto mb-4">
+            <Wrench size={24} className="text-[#1A8FD6]" />
+          </div>
+          <h2 className="text-lg font-semibold text-[#F5F5F7]">Under Construction</h2>
+          <p className="text-sm text-[#A1A1A8] mt-2 max-w-md mx-auto leading-relaxed">
+            We're polishing the website builder. Soon you'll be able to generate a beautiful
+            3D website from your business info, complete with online ordering and analytics.
+          </p>
+          <div className="flex items-center justify-center gap-4 mt-6 text-[10px] text-[#A1A1A8]/50">
+            <span className="flex items-center gap-1"><Globe size={10} /> 3D Templates</span>
+            <span className="flex items-center gap-1"><ShoppingBag size={10} /> Online Ordering</span>
+            <span className="flex items-center gap-1"><BarChart3 size={10} /> Built-in Analytics</span>
+          </div>
+          <p className="text-[10px] text-[#A1A1A8]/30 mt-4">Coming soon</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

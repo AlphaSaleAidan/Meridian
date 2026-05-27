@@ -1,11 +1,11 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { clsx } from 'clsx'
 import {
   Phone, PhoneCall, PhoneOff, PhoneIncoming, Settings, Mic, Volume2,
   CheckCircle2, TrendingUp, MessageSquare, X, Search, ChevronRight,
   ArrowRight, ArrowLeft, Store, ListOrdered, Route, Zap,
-  Clock, DollarSign, Link2, Copy, Info, Play, Square,
-  CreditCard, SendHorizontal, AlertCircle,
+  Clock, DollarSign, Link2, Copy, Info, Play, Square, Pause,
+  CreditCard, SendHorizontal, AlertCircle, PhoneForwarded,
 } from 'lucide-react'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
@@ -52,6 +52,430 @@ function timeAgo(iso: string): string {
 
 function fmtMoney(n: number, cur: string): string {
   return `${cur}${n.toFixed(2)}`
+}
+
+/* ---------- inline CSS for waveform + pulse animations ---------- */
+const ANIM_STYLE_ID = 'phone-orders-anims'
+function ensureAnimStyles() {
+  if (typeof document === 'undefined') return
+  if (document.getElementById(ANIM_STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = ANIM_STYLE_ID
+  style.textContent = `
+    @keyframes waveBar {
+      0%, 100% { height: 4px; }
+      50% { height: 16px; }
+    }
+    .wave-bar { animation: waveBar 1.2s ease-in-out infinite; }
+    .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.6s; }
+    .wave-bar:nth-child(6) { animation-delay: 0.75s; }
+    .wave-bar:nth-child(7) { animation-delay: 0.9s; }
+    .wave-bar:nth-child(8) { animation-delay: 1.05s; }
+    @keyframes livePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(23,197,176,0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(23,197,176,0); }
+    }
+    .live-pulse-ring { animation: livePulse 2s ease-in-out infinite; }
+    @keyframes testCallRing {
+      0%, 100% { transform: rotate(0deg); }
+      10% { transform: rotate(15deg); }
+      20% { transform: rotate(-15deg); }
+      30% { transform: rotate(10deg); }
+      40% { transform: rotate(-10deg); }
+      50% { transform: rotate(0deg); }
+    }
+    .test-call-ring { animation: testCallRing 1.5s ease-in-out infinite; }
+  `
+  document.head.appendChild(style)
+}
+
+/* ---------- Live Calls Banner ---------- */
+function LiveCallsBanner() {
+  const [activeCalls, setActiveCalls] = useState(() => Math.random() < 0.5 ? 1 : 0)
+
+  useEffect(() => {
+    ensureAnimStyles()
+    const interval = setInterval(() => {
+      setActiveCalls(Math.random() < 0.4 ? 1 : 0)
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return (
+    <div className={clsx(
+      'flex items-center gap-2.5 px-4 py-2.5 rounded-lg border transition-colors',
+      activeCalls > 0
+        ? 'bg-[#17C5B0]/5 border-[#17C5B0]/20'
+        : 'bg-[#111113] border-[#1F1F23]'
+    )}>
+      <div className="relative flex items-center justify-center">
+        <span className={clsx(
+          'w-2.5 h-2.5 rounded-full',
+          activeCalls > 0 ? 'bg-[#17C5B0] live-pulse-ring' : 'bg-[#A1A1A8]/40'
+        )} />
+      </div>
+      <span className={clsx(
+        'text-xs font-medium',
+        activeCalls > 0 ? 'text-[#17C5B0]' : 'text-[#A1A1A8]'
+      )}>
+        {activeCalls > 0
+          ? `${activeCalls} active call`
+          : 'No active calls'}
+      </span>
+      {activeCalls > 0 && (
+        <PhoneCall size={12} className="text-[#17C5B0] animate-pulse ml-auto" />
+      )}
+    </div>
+  )
+}
+
+/* ---------- Revenue Sparkline (7-day SVG) ---------- */
+function RevenueSparkline({ calls, currency }: { calls: PhoneCallEntry[]; currency: string }) {
+  const points = useMemo(() => {
+    const now = new Date()
+    const buckets: number[] = []
+    for (let d = 6; d >= 0; d--) {
+      const dayStart = new Date(now)
+      dayStart.setDate(dayStart.getDate() - d)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setDate(dayEnd.getDate() + 1)
+      const dayRev = calls
+        .filter(c => c.status === 'order_placed' && new Date(c.createdAt) >= dayStart && new Date(c.createdAt) < dayEnd)
+        .reduce((s, c) => s + c.total, 0)
+      buckets.push(Math.round(dayRev * 100) / 100)
+    }
+    return buckets
+  }, [calls])
+
+  const max = Math.max(...points, 1)
+  const w = 120
+  const h = 32
+  const pad = 2
+  const coords = points.map((v, i) => {
+    const x = pad + (i / 6) * (w - pad * 2)
+    const y = h - pad - (v / max) * (h - pad * 2)
+    return `${x},${y}`
+  })
+  const polyline = coords.join(' ')
+  const total7d = points.reduce((a, b) => a + b, 0)
+
+  return (
+    <div className="flex items-center gap-3">
+      <svg width={w} height={h} className="flex-shrink-0">
+        <polyline
+          points={polyline}
+          fill="none"
+          stroke="#17C5B0"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {points.map((v, i) => {
+          const x = pad + (i / 6) * (w - pad * 2)
+          const y = h - pad - (v / max) * (h - pad * 2)
+          return <circle key={i} cx={x} cy={y} r="2" fill="#17C5B0" opacity={i === 6 ? 1 : 0.5} />
+        })}
+      </svg>
+      <div>
+        <p className="text-[10px] text-[#A1A1A8]">7-day trend</p>
+        <p className="text-xs font-mono font-medium text-[#17C5B0]">{currency}{total7d.toFixed(2)}</p>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Conversion Funnel ---------- */
+function ConversionFunnel({ calls }: { calls: PhoneCallEntry[] }) {
+  const data = useMemo(() => {
+    const total = calls.length
+    const orders = calls.filter(c => c.status === 'order_placed').length
+    const paid = calls.filter(c => c.paymentStatus === 'paid').length
+    return { total, orders, paid }
+  }, [calls])
+
+  if (data.total === 0) return null
+
+  const orderPct = Math.round((data.orders / data.total) * 100)
+  const paidPct = data.orders > 0 ? Math.round((data.paid / data.orders) * 100) : 0
+  const maxWidth = 100
+
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <TrendingUp size={14} className="text-[#7C5CFF]" />
+        <h3 className="text-sm font-semibold text-[#F5F5F7]">Conversion Funnel</h3>
+      </div>
+      <div className="space-y-2.5">
+        {/* Total Calls */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-[#A1A1A8]">Total Calls</span>
+            <span className="text-[10px] font-mono text-[#F5F5F7]">{data.total}</span>
+          </div>
+          <div className="h-3 rounded-full bg-[#1F1F23] overflow-hidden">
+            <div className="h-full rounded-full bg-[#1A8FD6]" style={{ width: `${maxWidth}%` }} />
+          </div>
+        </div>
+        {/* Arrow + percentage */}
+        <div className="flex items-center justify-center gap-1 text-[9px] text-[#A1A1A8]">
+          <ArrowRight size={10} className="text-[#A1A1A8]/50" />
+          <span>{orderPct}% converted</span>
+        </div>
+        {/* Orders Placed */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-[#A1A1A8]">Orders Placed</span>
+            <span className="text-[10px] font-mono text-[#F5F5F7]">{data.orders}</span>
+          </div>
+          <div className="h-3 rounded-full bg-[#1F1F23] overflow-hidden">
+            <div className="h-full rounded-full bg-[#17C5B0]" style={{ width: `${Math.max(orderPct, 2)}%` }} />
+          </div>
+        </div>
+        {/* Arrow + percentage */}
+        <div className="flex items-center justify-center gap-1 text-[9px] text-[#A1A1A8]">
+          <ArrowRight size={10} className="text-[#A1A1A8]/50" />
+          <span>{paidPct}% paid</span>
+        </div>
+        {/* Paid */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-[#A1A1A8]">Paid</span>
+            <span className="text-[10px] font-mono text-[#F5F5F7]">{data.paid}</span>
+          </div>
+          <div className="h-3 rounded-full bg-[#1F1F23] overflow-hidden">
+            <div className="h-full rounded-full bg-amber-400" style={{ width: `${Math.max((data.paid / Math.max(data.total, 1)) * 100, 2)}%` }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Recording Playback (waveform + SpeechSynthesis) ---------- */
+function RecordingPlayback({ transcript, voiceId }: { transcript: { speaker: string; text: string; time: string }[]; voiceId?: string }) {
+  const [playing, setPlaying] = useState(false)
+
+  useEffect(() => { ensureAnimStyles() }, [])
+
+  function handleToggle() {
+    if (playing) {
+      window.speechSynthesis.cancel()
+      setPlaying(false)
+      return
+    }
+    const agentLine = transcript.find(l => l.speaker === 'agent')
+    if (!agentLine) return
+    const utter = new SpeechSynthesisUtterance(agentLine.text)
+    utter.rate = 0.95
+    utter.pitch = 1.05
+    const voices = window.speechSynthesis.getVoices()
+    const sample = voiceId ? VOICE_SAMPLES[voiceId] : undefined
+    if (sample) {
+      utter.pitch = sample.pitch
+      utter.rate = sample.rate
+    }
+    const isFemale = voiceId?.startsWith('af_')
+    const preferred = voices.find(v =>
+      isFemale
+        ? /samantha|karen|victoria|zira|female/i.test(v.name)
+        : /daniel|alex|david|male|mark/i.test(v.name)
+    )
+    if (preferred) utter.voice = preferred
+    utter.onend = () => setPlaying(false)
+    utter.onerror = () => setPlaying(false)
+    setPlaying(true)
+    window.speechSynthesis.speak(utter)
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 bg-[#111113] border-t border-[#1F1F23]">
+      <button
+        onClick={handleToggle}
+        className={clsx(
+          'w-8 h-8 rounded-full flex items-center justify-center transition-all flex-shrink-0',
+          playing ? 'bg-[#17C5B0] text-white' : 'bg-[#1A8FD6]/15 text-[#1A8FD6] hover:bg-[#1A8FD6]/25'
+        )}
+      >
+        {playing ? <Pause size={12} /> : <Play size={12} fill="currentColor" />}
+      </button>
+      <div className="flex items-end gap-[3px] h-5 flex-1">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div
+            key={i}
+            className={clsx(
+              'w-[3px] rounded-full transition-all',
+              playing ? 'wave-bar bg-[#17C5B0]' : 'bg-[#1F1F23]'
+            )}
+            style={{ height: playing ? undefined : `${4 + Math.random() * 12}px` }}
+          />
+        ))}
+      </div>
+      <span className="text-[10px] text-[#A1A1A8] flex-shrink-0">
+        {playing ? 'Playing...' : 'Play Recording'}
+      </span>
+    </div>
+  )
+}
+
+/* ---------- Test Call Modal ---------- */
+function TestCallModal({ biz, onClose }: { biz: PhoneBizConfig; onClose: () => void }) {
+  const [elapsed, setElapsed] = useState(0)
+  const [phase, setPhase] = useState<'ringing' | 'active' | 'ended'>('ringing')
+  const [visibleLines, setVisibleLines] = useState<{ speaker: string; text: string }[]>([])
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const speechRef = useRef(false)
+
+  const testTranscript = useMemo(() => [
+    { speaker: 'agent', text: biz.greeting },
+    { speaker: 'caller', text: "Hi, I'd like to place an order for pickup." },
+    { speaker: 'agent', text: 'Of course! What would you like?' },
+    { speaker: 'caller', text: `I'll have the ${biz.menu[0]?.name || 'special'}, please.` },
+    { speaker: 'agent', text: `Got it! ${biz.menu[0]?.name || 'That item'} coming right up. Anything else?` },
+    { speaker: 'caller', text: "That's everything." },
+    { speaker: 'agent', text: `Your order will be ready in about 15 minutes. Thank you for calling ${biz.name}!` },
+  ], [biz])
+
+  useEffect(() => {
+    ensureAnimStyles()
+    // auto-answer after 2 seconds
+    const answerTimeout = setTimeout(() => {
+      setPhase('active')
+    }, 2000)
+    return () => clearTimeout(answerTimeout)
+  }, [])
+
+  useEffect(() => {
+    if (phase !== 'active') return
+    timerRef.current = setInterval(() => setElapsed(e => e + 1), 1000)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [phase])
+
+  // Reveal transcript lines one at a time
+  useEffect(() => {
+    if (phase !== 'active') return
+    let lineIdx = 0
+    const revealInterval = setInterval(() => {
+      if (lineIdx >= testTranscript.length) {
+        clearInterval(revealInterval)
+        return
+      }
+      const line = testTranscript[lineIdx]
+      setVisibleLines(prev => [...prev, line])
+
+      // Speak agent lines
+      if (line.speaker === 'agent' && !speechRef.current) {
+        const utter = new SpeechSynthesisUtterance(line.text)
+        utter.rate = 0.95
+        utter.pitch = 1.05
+        const sample = VOICE_SAMPLES[biz.voice]
+        if (sample) { utter.pitch = sample.pitch; utter.rate = sample.rate }
+        const voices = window.speechSynthesis.getVoices()
+        const isFemale = biz.voice.startsWith('af_')
+        const preferred = voices.find(v =>
+          isFemale
+            ? /samantha|karen|victoria|zira|female/i.test(v.name)
+            : /daniel|alex|david|male|mark/i.test(v.name)
+        )
+        if (preferred) utter.voice = preferred
+        window.speechSynthesis.speak(utter)
+      }
+
+      lineIdx++
+    }, 3000)
+
+    return () => {
+      clearInterval(revealInterval)
+      window.speechSynthesis.cancel()
+    }
+  }, [phase, testTranscript, biz.voice])
+
+  function handleHangUp() {
+    window.speechSynthesis.cancel()
+    if (timerRef.current) clearInterval(timerRef.current)
+    setPhase('ended')
+    setTimeout(onClose, 600)
+  }
+
+  const fmtElapsed = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={handleHangUp}>
+      <div className="w-full max-w-sm bg-[#0A0A0B] border border-[#1F1F23] rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-4 text-center border-b border-[#1F1F23]">
+          {phase === 'ringing' && (
+            <>
+              <div className="w-14 h-14 mx-auto rounded-full bg-[#17C5B0]/10 flex items-center justify-center mb-3 live-pulse-ring">
+                <PhoneForwarded size={24} className="text-[#17C5B0] test-call-ring" />
+              </div>
+              <p className="text-sm font-semibold text-[#F5F5F7]">Incoming Test Call</p>
+              <p className="text-[10px] text-[#A1A1A8] font-mono mt-1">{biz.phone}</p>
+              <p className="text-xs text-[#17C5B0] mt-2 animate-pulse">Ringing...</p>
+            </>
+          )}
+          {phase === 'active' && (
+            <>
+              <div className="w-14 h-14 mx-auto rounded-full bg-[#17C5B0]/10 flex items-center justify-center mb-3">
+                <PhoneCall size={24} className="text-[#17C5B0]" />
+              </div>
+              <p className="text-sm font-semibold text-[#F5F5F7]">Test Call Active</p>
+              <p className="text-lg font-mono font-bold text-[#17C5B0] mt-1">{fmtElapsed}</p>
+            </>
+          )}
+          {phase === 'ended' && (
+            <>
+              <div className="w-14 h-14 mx-auto rounded-full bg-[#A1A1A8]/10 flex items-center justify-center mb-3">
+                <PhoneOff size={24} className="text-[#A1A1A8]" />
+              </div>
+              <p className="text-sm font-semibold text-[#A1A1A8]">Call Ended</p>
+              <p className="text-[10px] font-mono text-[#A1A1A8] mt-1">{fmtElapsed}</p>
+            </>
+          )}
+        </div>
+
+        {/* Transcript area */}
+        {phase === 'active' && visibleLines.length > 0 && (
+          <div className="px-4 py-3 max-h-52 overflow-y-auto space-y-2">
+            {visibleLines.map((line, i) => (
+              <div key={i} className={clsx('flex', line.speaker === 'agent' ? 'justify-start' : 'justify-end')}>
+                <div className={clsx(
+                  'max-w-[85%] px-3 py-1.5 rounded-xl text-xs',
+                  line.speaker === 'agent' ? 'bg-[#1F1F23] text-[#F5F5F7]' : 'bg-[#1A8FD6]/15 text-[#F5F5F7]'
+                )}>
+                  {line.text}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Waveform */}
+        {phase === 'active' && (
+          <div className="flex items-end justify-center gap-[3px] h-6 px-4 pb-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="w-[3px] rounded-full bg-[#17C5B0] wave-bar" />
+            ))}
+          </div>
+        )}
+
+        {/* Hang Up */}
+        {phase !== 'ended' && (
+          <div className="px-5 py-4 border-t border-[#1F1F23] flex justify-center">
+            <button
+              onClick={handleHangUp}
+              className="flex items-center gap-2 px-6 py-2.5 bg-red-500/90 text-white text-xs font-medium rounded-full hover:bg-red-500 transition-colors"
+            >
+              <PhoneOff size={14} /> Hang Up
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
@@ -109,6 +533,7 @@ function VoicePlayButton({ voiceId, isSelected }: { voiceId: string; isSelected:
 
 function SetupWizard({ biz, onDone, connectedPos, orgId }: { biz: PhoneBizConfig; onDone: () => void; connectedPos: string | null; orgId: string }) {
   const [step, setStep] = useState(0)
+  const [showTestCall, setShowTestCall] = useState(false)
   const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
   const hasDirectApi = connectedPos ? DIRECT_API_SYSTEMS.has(connectedPos) : false
   const hasMenuSync = posInfo?.dataAvailable?.menuItems ?? false
@@ -343,9 +768,17 @@ function SetupWizard({ biz, onDone, connectedPos, orgId }: { biz: PhoneBizConfig
                 </p>
               </div>
             </div>
+            <button
+              onClick={() => setShowTestCall(true)}
+              className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 border border-[#1A8FD6]/30 bg-[#1A8FD6]/5 text-[#1A8FD6] text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/10 transition-colors"
+            >
+              <Phone size={12} /> Test Call
+            </button>
           </>
         )}
       </div>
+
+      {showTestCall && <TestCallModal biz={biz} onClose={() => setShowTestCall(false)} />}
 
       <div className="flex justify-between">
         <button onClick={() => step > 0 && setStep(step - 1)} disabled={step === 0}
@@ -396,6 +829,7 @@ function TranscriptModal({ call, biz, onClose }: { call: PhoneCallEntry; biz: Ph
             <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] transition-colors"><X size={16} className="text-[#A1A1A8]" /></button>
           </div>
         </div>
+        <RecordingPlayback transcript={call.transcript} voiceId={biz.voice} />
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {call.transcript.map((line, i) => (
             <div key={i} className={clsx('flex', line.speaker === 'agent' ? 'justify-start' : 'justify-end')}>
@@ -470,6 +904,8 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
 
   return (
     <div className="space-y-5">
+      <LiveCallsBanner />
+
       <div className="flex items-center gap-2">
         {(['today', '7d', '30d', '90d'] as const).map(p => (
           <button key={p} onClick={() => setPeriod(p)}
@@ -495,6 +931,11 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
               <div>
                 <p className="stat-label">{card.label}</p>
                 <p className={clsx('text-lg font-bold font-mono', card.label === 'Revenue' ? 'text-amber-400' : 'text-[#F5F5F7]')}>{card.value}</p>
+                {card.label === 'Revenue' && (
+                  <div className="mt-1.5">
+                    <RevenueSparkline calls={calls} currency={biz.currency} />
+                  </div>
+                )}
               </div>
             </div>
           </DashboardTiltCard>
@@ -526,6 +967,8 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
           </div>
         </div>
       )}
+
+      <ConversionFunnel calls={calls} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="card p-4 border-[#1A8FD6]/10">
@@ -1140,6 +1583,22 @@ export default function PhoneOrdersPage() {
   if (!setupDone || showWizard) {
     return (
       <div className="space-y-6">
+        {!showWizard && (
+          <div className="card p-5 border-[#17C5B0]/10">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 flex items-center justify-center flex-shrink-0">
+                <Phone size={20} className="text-[#17C5B0]" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-[#F5F5F7]">Welcome to Phone Orders</h2>
+                <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+                  Set up your AI phone agent in under 2 minutes. It answers calls, takes orders,
+                  and sends them straight to your POS — no extra hardware needed.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <SetupWizard biz={business} onDone={handleWizardDone} connectedPos={connectedPos} orgId={orgId} />
       </div>
     )
