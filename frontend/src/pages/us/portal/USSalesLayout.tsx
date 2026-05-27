@@ -13,6 +13,7 @@ import {
   LogOut,
   Plus,
   Settings,
+  CreditCard,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import USSalesPortalMobileNav from './USSalesPortalMobileNav'
@@ -28,6 +29,7 @@ const salesNavItems = [
   { path: '/us/portal/commissions', icon: Wallet, label: 'Commissions' },
   { path: '/us/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/us/portal/team', icon: Users, label: 'Team' },
+  { path: '/us/portal/badge', icon: CreditCard, label: 'My Badge' },
   { path: '/us/portal/settings', icon: Settings, label: 'Settings' },
 ] as const
 

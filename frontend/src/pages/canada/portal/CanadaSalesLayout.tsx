@@ -14,6 +14,7 @@ import {
   Plus,
   Settings,
   Trophy,
+  CreditCard,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import SalesPortalMobileNav from './SalesPortalMobileNav'
@@ -34,6 +35,7 @@ const teamNavAdmin = { path: '/canada/portal/team', icon: Users, label: 'Team' }
 const teamNavRep = { path: '/canada/portal/team', icon: Trophy, label: 'Leaderboard' } as const
 
 const salesNavTail = [
+  { path: '/canada/portal/badge', icon: CreditCard, label: 'My Badge' },
   { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
 ] as const
 

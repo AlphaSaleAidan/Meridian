@@ -62,10 +62,16 @@ function AccessDenied({ type }: { type: 'sales-rep' }) {
 
           <div className="space-y-2">
             <Link
-              to="/login"
+              to="/us/portal/dashboard"
               className="block w-full py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all text-center"
             >
               Go to Sales Portal
+            </Link>
+            <Link
+              to="/"
+              className="block w-full py-2.5 bg-[#1F1F23] text-white text-sm font-medium rounded-lg hover:bg-[#2A2A2E] transition-all text-center"
+            >
+              Back to Home
             </Link>
           </div>
         </div>

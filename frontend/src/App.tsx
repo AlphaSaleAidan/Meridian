@@ -87,6 +87,9 @@ const USPortalSettingsPage = lazy(() => import('@/pages/us/portal/USPortalSettin
 const USPortalCreateCustomerPage = lazy(() => import('@/pages/us/portal/USPortalCreateCustomerPage'))
 const USPortalOnboardingPage = lazy(() => import('@/pages/us/portal/USPortalOnboardingPage'))
 const USCustomerOnboardingWizard = lazy(() => import('@/pages/us/portal/USCustomerOnboardingWizard'))
+const USPortalBadgePage = lazy(() => import('@/pages/us/portal/USPortalBadgePage'))
+const RepPublicBadgePage = lazy(() => import('@/pages/RepPublicBadgePage'))
+const WalletCardPage = lazy(() => import('@/pages/WalletCardPage'))
 
 const RestaurantsPage = lazy(() => import('@/pages/seo/RestaurantsPage'))
 const CoffeeShopsPage = lazy(() => import('@/pages/seo/CoffeeShopsPage'))
@@ -449,6 +452,7 @@ export default function App() {
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTrainingPage /></Suspense>} />
                 <Route path="team" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTeamPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><CanadaPortalSettingsPage /></Suspense>} />
+                <Route path="badge" element={<Suspense fallback={<InlineFallback />}><USPortalBadgePage /></Suspense>} />
               </Route>
 
               {/* ══════════════════════════════════════════════
@@ -485,7 +489,12 @@ export default function App() {
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><USPortalTrainingPage /></Suspense>} />
                 <Route path="team" element={<Suspense fallback={<InlineFallback />}><USPortalTeamPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><USPortalSettingsPage /></Suspense>} />
+                <Route path="badge" element={<Suspense fallback={<InlineFallback />}><USPortalBadgePage /></Suspense>} />
               </Route>
+
+              {/* Public rep badge + wallet card pages */}
+              <Route path="/rep/:badgeId" element={<Suspense fallback={<LazyFallback />}><RepPublicBadgePage /></Suspense>} />
+              <Route path="/wallet/:badgeId" element={<Suspense fallback={<LazyFallback />}><WalletCardPage /></Suspense>} />
 
               {/* Legacy /sales/* redirect to new US portal */}
               <Route path="/sales/*" element={<Navigate to="/us/portal" replace />} />

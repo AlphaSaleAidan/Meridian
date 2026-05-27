@@ -45,7 +45,9 @@ export default function USSalesProtectedRoute({ children }: { children: React.Re
   }
 
   if (rep && rep.portal_context === 'canada') {
-    return <AccessDenied />
+    const adminEmails = ['apierce@alphasale.co','aidanpierce72@gmail.com','aidanpierce@meridian.tips','cheungenochmgmt@gmail.com','aidanvietnguyen@gmail.com']
+    const isAdmin = adminEmails.some(a => a.toLowerCase() === rep.email.toLowerCase())
+    if (!isAdmin) return <AccessDenied />
   }
 
   return <>{children}</>
@@ -75,10 +77,16 @@ function AccessDenied() {
 
           <div className="space-y-2">
             <Link
-              to="/customer/login"
+              to="/canada/portal/dashboard"
               className="block w-full py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all text-center"
             >
-              Go to Customer Dashboard
+              Go to Canada Portal
+            </Link>
+            <Link
+              to="/"
+              className="block w-full py-2.5 bg-[#1F1F23] text-white text-sm font-medium rounded-lg hover:bg-[#2A2A2E] transition-all text-center"
+            >
+              Back to Home
             </Link>
           </div>
         </div>
