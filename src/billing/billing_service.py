@@ -113,6 +113,7 @@ class BillingService:
         first_month_free: bool = False,
         rep_id: str = "",
         rep_name: str = "",
+        currency: str = "USD",
     ) -> CheckoutResult:
         """Create a Square Checkout (Payment Link) for a new customer subscription."""
         try:
@@ -130,7 +131,7 @@ class BillingService:
                 "quantity": "1",
                 "base_price_money": {
                     "amount": amount_cents,
-                    "currency": "USD",
+                    "currency": currency,
                 },
                 "note": f"Monthly subscription for {business_name}",
             }
@@ -145,7 +146,7 @@ class BillingService:
                     "quantity": "1",
                     "base_price_money": {
                         "amount": setup_fee_cents,
-                        "currency": "USD",
+                        "currency": currency,
                     },
                     "note": f"Setup & onboarding for {business_name}",
                 })
@@ -158,7 +159,7 @@ class BillingService:
                     "type": "FIXED_AMOUNT",
                     "amount_money": {
                         "amount": amount_cents,
-                        "currency": "USD",
+                        "currency": currency,
                     },
                     "scope": "LINE_ITEM",
                 })
@@ -219,6 +220,7 @@ class BillingService:
                         first_month_free=first_month_free,
                         rep_id=rep_id,
                         rep_name=rep_name,
+                        currency=currency,
                     )
                 except Exception as e:
                     logger.warning(f"Failed to record subscription for org {org_id}: {e}")
@@ -247,6 +249,7 @@ class BillingService:
         description: str = "Meridian Analytics Subscription",
         due_days: int = 3,
         store_card: bool = False,
+        currency: str = "USD",
     ) -> InvoiceResult:
         """
         Create a Square Invoice. When store_card=True, the customer's payment
@@ -266,7 +269,7 @@ class BillingService:
                     "line_items": [{
                         "name": description,
                         "quantity": "1",
-                        "base_price_money": {"amount": amount_cents, "currency": "USD"},
+                        "base_price_money": {"amount": amount_cents, "currency": currency},
                     }],
                 },
             })
@@ -345,6 +348,7 @@ class BillingService:
         customer_name: str,
         business_name: str,
         plan: str = "starter",
+        currency: str = "USD",
     ) -> SubscriptionResult:
         """
         Create a Square Subscription for automatic monthly billing.
@@ -364,7 +368,7 @@ class BillingService:
             if not card_id:
                 return SubscriptionResult(error="No card on file — customer must pay setup invoice first")
 
-            plan_variation_id = await self._get_or_create_subscription_plan(amount_cents, plan)
+            plan_variation_id = await self._get_or_create_subscription_plan(amount_cents, plan, currency)
             if not plan_variation_id:
                 return SubscriptionResult(error="Could not create subscription plan in Square catalog")
 
@@ -489,6 +493,7 @@ class BillingService:
                 owner_name = sub.get("owner_name", "")
                 business_name = sub.get("business_name", "")
                 phone = sub.get("phone")
+                sub_currency = meta.get("currency", "USD")
                 tier_label = sub.get("tier", "Standard").replace("_", " ").title()
                 description = (
                     f"Meridian Analytics - {tier_label} Plan (First Month)"
@@ -507,6 +512,7 @@ class BillingService:
                             customer_name=owner_name,
                             business_name=business_name,
                             plan=sub.get("tier", "starter"),
+                            currency=sub_currency,
                         )
                         if sub_result.success:
                             import json as json_mod
@@ -529,6 +535,7 @@ class BillingService:
                     customer_email=email,
                     description=description,
                     store_card=True,
+                    currency=sub_currency,
                 )
 
                 if inv_result.success:
@@ -630,7 +637,7 @@ class BillingService:
             return None
 
     async def _get_or_create_subscription_plan(
-        self, amount_cents: int, plan_name: str
+        self, amount_cents: int, plan_name: str, currency: str = "USD",
     ) -> Optional[str]:
         """Get or create a Square catalog subscription plan for the given amount."""
         display_name = f"Meridian {plan_name.replace('_', ' ').title()} - ${amount_cents / 100:.0f}/mo"
@@ -664,7 +671,7 @@ class BillingService:
                             "cadence": "MONTHLY",
                             "recurring_price_money": {
                                 "amount": amount_cents,
-                                "currency": "USD",
+                                "currency": currency,
                             },
                         }],
                     },
@@ -688,6 +695,7 @@ class BillingService:
         first_month_free: bool = False,
         rep_id: str = "",
         rep_name: str = "",
+        currency: str = "USD",
     ):
         """Record or update a subscription in the database."""
         now = datetime.now(timezone.utc)
@@ -700,6 +708,7 @@ class BillingService:
             "auto_renew": True,
             "renewal_period_months": 3,
             "created_via": "proposal_checkout",
+            "currency": currency,
         }
 
         # Track setup fee for commission

@@ -43,6 +43,7 @@ class CheckoutRequest(BaseModel):
     first_month_free: bool = False    # Apply 100% discount to first month
     rep_id: str = ""                  # Sales rep ID for commission tracking
     rep_name: str = ""                # Sales rep name
+    currency: str = "USD"             # "CAD" for Canada portal
 
     @field_validator("monthly_price_cents")
     @classmethod
@@ -135,6 +136,7 @@ async def create_checkout(req: CheckoutRequest, _user: dict = Depends(require_jw
             first_month_free=req.first_month_free,
             rep_id=req.rep_id,
             rep_name=req.rep_name,
+            currency=req.currency,
         )
 
         if result.success:
