@@ -17,6 +17,19 @@
   <url><loc>https://meridian.tips/integrations/clover</loc><changefreq>weekly</changefreq><priority>0.8</priority><lastmod>2026-05-22</lastmod></url>
   <url><loc>https://meridian.tips/what-is-pos-analytics</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-22</lastmod></url>
   <url><loc>https://meridian.tips/vs/spreadsheets</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-22</lastmod></url>
+  <url><loc>https://meridian.tips/faq</loc><changefreq>weekly</changefreq><priority>0.9</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/best-restaurant-analytics-software</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/tools/food-cost-calculator</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides</loc><changefreq>weekly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/reduce-restaurant-food-waste</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/restaurant-food-cost-guide</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/lower-restaurant-expenses</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/menu-pricing-strategy</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/why-restaurant-not-profitable</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/increase-average-ticket-size</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/forecast-restaurant-sales</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/pos-data-business-decisions</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/guides/restaurant-staffing-optimization</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
   <url><loc>https://meridian.tips/blog</loc><changefreq>weekly</changefreq><priority>0.7</priority><lastmod>2026-05-22</lastmod></url>
   <url><loc>https://meridian.tips/blog/how-to-know-if-restaurant-is-profitable</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-22</lastmod></url>
   <url><loc>https://meridian.tips/blog/restaurant-foot-traffic-analytics-guide</loc><changefreq>monthly</changefreq><priority>0.7</priority><lastmod>2026-05-22</lastmod></url>
@@ -180,4 +193,64 @@
   <url><loc>https://meridian.tips/analytics/fast-food/san-diego-ca</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-22</lastmod></url>
   <url><loc>https://meridian.tips/analytics/fast-food/salt-lake-city-ut</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-22</lastmod></url>
   <url><loc>https://meridian.tips/analytics/fast-food/raleigh-nc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-22</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/toronto-on</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/vancouver-bc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/montreal-qc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/new-york-ny</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/los-angeles-ca</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/chicago-il</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/miami-fl</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/las-vegas-nv</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/nashville-tn</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/austin-tx</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/denver-co</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bars/atlanta-ga</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/toronto-on</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/vancouver-bc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/montreal-qc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/new-york-ny</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/los-angeles-ca</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/chicago-il</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/seattle-wa</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/portland-or</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/denver-co</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/san-diego-ca</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/miami-fl</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/bakeries/atlanta-ga</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/toronto-on</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/vancouver-bc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/montreal-qc</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/new-york-ny</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/los-angeles-ca</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/chicago-il</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/houston-tx</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/phoenix-az</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/philadelphia-pa</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/dallas-tx</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/denver-co</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/analytics/pizza/miami-fl</loc><changefreq>monthly</changefreq><priority>0.6</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/toast-analytics</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/square-analytics</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/clover-analytics</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/restaurant365</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/marketman</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/dor</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/placer-ai</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/vs/foot-traffic-counters</loc><changefreq>monthly</changefreq><priority>0.8</priority><lastmod>2026-05-27</lastmod></url>
+  <url><loc>https://meridian.tips/features/camera-intelligence</loc><changefreq>monthly</changefreq><priority>0.9</priority><lastmod>2026-05-27</lastmod></url>
+  <url>
+    <loc>https://meridian.tips/tools/prime-cost-calculator</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://meridian.tips/tools/menu-pricing-calculator</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://meridian.tips/features/phone-agent</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
