@@ -9,6 +9,7 @@ export interface Space {
   scan_type: string
   status: 'uploaded' | 'processing' | 'ready' | 'failed'
   pointcloud_url: string | null
+  splat_url: string | null
   thumbnail_url: string | null
   frame_count: number | null
   scan_duration_seconds: number | null
@@ -42,6 +43,8 @@ export interface ZoneDefinition {
 const SPACES_STORAGE_KEY = 'meridian_spaces'
 const JOBS_STORAGE_KEY = 'meridian_space_jobs'
 const FRAMES_STORAGE_KEY = 'meridian_space_frames'
+
+const splatFileCache = new Map<string, File>()
 
 function loadStoredFrames(): Record<string, string[]> {
   try {
@@ -143,6 +146,7 @@ export const spacesService = {
       scan_type: 'lingbot',
       status: 'processing',
       pointcloud_url: null,
+      splat_url: null,
       thumbnail_url: null,
       frame_count: null,
       scan_duration_seconds: null,
@@ -241,6 +245,7 @@ export const spacesService = {
       scan_type: metadata.tier === 'lidar' ? 'lidar-ar' : 'live-capture',
       status: 'processing',
       pointcloud_url: null,
+      splat_url: null,
       thumbnail_url: null,
       frame_count: frames.length,
       scan_duration_seconds: metadata.durationSeconds ?? null,
@@ -284,7 +289,60 @@ export const spacesService = {
     return { jobId, spaceId }
   },
 
+  async uploadSplatFile(
+    orgId: string,
+    scanName: string,
+    file: File,
+  ): Promise<{ spaceId: string }> {
+    const spaceId = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    if (API_BASE) {
+      const formData = new FormData()
+      formData.append('splat', file)
+      formData.append('merchant_id', orgId)
+      formData.append('scan_name', scanName)
+      const res = await fetch(`${API_BASE}/api/spaces/upload-splat`, { method: 'POST', body: formData })
+      if (res.ok) {
+        const data = await res.json()
+        return { spaceId: data.spaceId }
+      }
+    }
+
+    splatFileCache.set(spaceId, file)
+
+    const space: Space = {
+      id: spaceId,
+      org_id: orgId,
+      name: scanName,
+      scan_type: 'gaussian-splat',
+      status: 'ready',
+      pointcloud_url: null,
+      splat_url: `local:${spaceId}`,
+      thumbnail_url: null,
+      frame_count: Math.floor(file.size / 32),
+      scan_duration_seconds: null,
+      model_used: 'gaussian-splat',
+      zones_configured: false,
+      heatmap_enabled: false,
+      created_at: now,
+      completed_at: now,
+      error_message: null,
+    }
+
+    const spaces = loadLocalSpaces()
+    spaces.unshift(space)
+    saveLocalSpaces(spaces)
+
+    return { spaceId }
+  },
+
+  getSplatFile(spaceId: string): File | undefined {
+    return splatFileCache.get(spaceId)
+  },
+
   async deleteSpace(spaceId: string): Promise<void> {
+    splatFileCache.delete(spaceId)
     if (supabase) {
       await supabase.from('spaces').delete().eq('id', spaceId)
     }

@@ -195,6 +195,86 @@ async def process_frames(
     }
 
 
+@router.post("/upload-splat")
+async def upload_splat(
+    splat: UploadFile = File(...),
+    merchant_id: str = Form(...),
+    scan_name: str = Form(""),
+):
+    """Upload a pre-processed .splat or .ply file for direct 3D viewing."""
+    from ...db import _db_instance as db
+
+    space_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    space_dir = Path("data/spaces") / space_id
+    space_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(splat.filename or "model.splat").suffix or ".splat"
+    model_path = space_dir / f"model{ext}"
+    content = await splat.read()
+    model_path.write_bytes(content)
+
+    splat_count = len(content) // 32 if ext == ".splat" else None
+
+    record = {
+        "id": space_id,
+        "org_id": merchant_id,
+        "name": scan_name or "Untitled Scan",
+        "scan_type": "gaussian-splat",
+        "file_format": ext.lstrip("."),
+        "file_size_bytes": len(content),
+        "frame_count": splat_count,
+        "splat_url": f"/api/spaces/{space_id}/model",
+        "status": "ready",
+        "model_used": "gaussian-splat",
+        "created_at": now,
+        "updated_at": now,
+        "completed_at": now,
+    }
+
+    if db:
+        try:
+            await db.insert("spaces", record)
+        except Exception as e:
+            logger.warning("Spaces insert failed: %s", e)
+
+    logger.info("Splat uploaded: space=%s size=%d ext=%s", space_id, len(content), ext)
+
+    return {
+        "spaceId": space_id,
+        "splatUrl": f"/api/spaces/{space_id}/model",
+        "splatCount": splat_count,
+        "status": "ready",
+    }
+
+
+@router.get("/{space_id}/model")
+async def get_space_model(space_id: str):
+    """Serve the .splat/.ply model file for a space."""
+    from fastapi.responses import FileResponse
+
+    space_dir = Path("data/spaces") / space_id
+    for ext in [".splat", ".ply", ".spz"]:
+        model_path = space_dir / f"model{ext}"
+        if model_path.exists():
+            media_type = {
+                ".splat": "application/octet-stream",
+                ".ply": "application/octet-stream",
+                ".spz": "application/octet-stream",
+            }.get(ext, "application/octet-stream")
+            return FileResponse(
+                model_path,
+                media_type=media_type,
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Cache-Control": "public, max-age=3600",
+                },
+            )
+
+    raise HTTPException(status_code=404, detail="Model file not found")
+
+
 @router.get("/jobs/{job_id}")
 async def get_job_status(job_id: str):
     """Get processing job status. Simulates progress for now."""

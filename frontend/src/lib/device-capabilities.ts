@@ -74,7 +74,8 @@ export async function getDeviceCapabilities(): Promise<DeviceCapabilities> {
   const deviceModel = detectiPhoneModel()
   const hasLiDAR = isLiDARDevice(deviceModel)
   const webXRSupported = await checkWebXR()
-  const rearCameraSupported = 'mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices
+  const isSecure = window.isSecureContext
+  const rearCameraSupported = isSecure && 'mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices
 
   return {
     tier: hasLiDAR ? 'lidar' : 'standard',

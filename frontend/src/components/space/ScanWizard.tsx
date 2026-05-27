@@ -4,7 +4,7 @@ import {
   Video, Upload, X, CheckCircle2, AlertCircle,
   Smartphone, ArrowRight, Loader2, RotateCcw,
   Camera, Monitor, ChevronLeft, Scan, Layers,
-  Eye, Zap,
+  Eye, Zap, Box,
 } from 'lucide-react'
 import { spacesService, type ProcessingJob } from '@/lib/spaces-service'
 import { getDeviceCapabilities, isMobile, type DeviceCapabilities } from '@/lib/device-capabilities'
@@ -12,8 +12,8 @@ import { getDeviceCapabilities, isMobile, type DeviceCapabilities } from '@/lib/
 const LiveCapture = lazy(() => import('./LiveCapture'))
 const WebXRScan = lazy(() => import('./WebXRScan'))
 
-type WizardStep = 'detect' | 'choose' | 'instructions' | 'capture' | 'upload' | 'processing' | 'complete'
-type ScanMode = 'live-camera' | 'ar-scan' | 'video-upload'
+type WizardStep = 'detect' | 'choose' | 'instructions' | 'capture' | 'upload' | 'upload-splat' | 'processing' | 'complete'
+type ScanMode = 'live-camera' | 'ar-scan' | 'video-upload' | 'splat-upload'
 
 interface ScanWizardProps {
   orgId: string
@@ -52,11 +52,15 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
   // Detect device capabilities on mount
   useEffect(() => {
     async function detect() {
-      const caps = await getDeviceCapabilities()
+      let caps: DeviceCapabilities
+      try {
+        caps = await getDeviceCapabilities()
+      } catch {
+        caps = { tier: 'standard', deviceModel: null, hasLiDAR: false, webXRSupported: false, rearCameraSupported: false, maxResolution: 'medium' }
+      }
       setCapabilities(caps)
 
       if (!isMobile()) {
-        // Desktop — go straight to video upload
         setScanMode('video-upload')
         setStep('instructions')
         return
@@ -67,7 +71,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
       } else if (caps.rearCameraSupported) {
         setScanMode('live-camera')
       } else {
-        setScanMode('video-upload')
+        setScanMode('splat-upload')
       }
       setStep('choose')
     }
@@ -106,6 +110,21 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
       startPolling(result.jobId)
     } catch {
       setError('Upload failed. Please try again.')
+      setUploading(false)
+    }
+  }
+
+  async function handleSplatUpload() {
+    if (!file || !scanName.trim()) return
+    setUploading(true)
+    setError(null)
+    try {
+      const result = await spacesService.uploadSplatFile(orgId, scanName.trim(), file)
+      setSpaceId(result.spaceId)
+      setStep('complete')
+    } catch {
+      setError('Upload failed. Please try again.')
+    } finally {
       setUploading(false)
     }
   }
@@ -193,7 +212,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
           <div className="flex items-center gap-3">
-            {(step === 'upload' || step === 'instructions') && (
+            {(step === 'upload' || step === 'instructions' || step === 'upload-splat') && (
               <button
                 onClick={() => setStep(isMobile() ? 'choose' : 'instructions')}
                 className="p-1 rounded-lg text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
@@ -207,6 +226,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                  step === 'choose' ? 'Choose Scan Mode' :
                  step === 'instructions' ? 'Scan Your Store' :
                  step === 'upload' ? 'Upload Video' :
+                 step === 'upload-splat' ? 'Upload 3D Scan' :
                  step === 'processing' ? 'Processing Scan' :
                  'Scan Complete'}
               </h3>
@@ -215,6 +235,7 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                  step === 'choose' ? 'We detected your device — pick the best mode' :
                  step === 'instructions' ? 'Video-based 3D mapping — no special hardware needed' :
                  step === 'upload' ? 'Upload a walkthrough video of your store' :
+                 step === 'upload-splat' ? 'Load a Gaussian Splat from any scanning app' :
                  step === 'processing' ? 'Building your 3D model' :
                  'Your 3D space is ready to explore'}
               </p>
@@ -253,8 +274,16 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                 )}
               </div>
 
-              {/* AR Scan option — only show for LiDAR devices */}
-              {capabilities.hasLiDAR && (
+              {!capabilities.rearCameraSupported && (
+                <div className="px-3 py-2 rounded-lg bg-amber-400/5 border border-amber-400/15">
+                  <p className="text-[10px] text-amber-400">
+                    Camera requires HTTPS. Use "Upload 3D Scan" to load a file from Scaniverse or another scanning app.
+                  </p>
+                </div>
+              )}
+
+              {/* AR Scan option — only show for LiDAR devices on HTTPS */}
+              {capabilities.hasLiDAR && capabilities.rearCameraSupported && (
                 <button
                   onClick={() => { setScanMode('ar-scan'); setStep('capture') }}
                   className="w-full text-left p-4 rounded-xl border-2 border-[#7C5CFF]/30 bg-[#7C5CFF]/5 hover:border-[#7C5CFF]/50 transition-all group"
@@ -282,38 +311,40 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                 </button>
               )}
 
-              {/* Live Camera option */}
-              <button
-                onClick={() => { setScanMode('live-camera'); setStep('capture') }}
-                className={clsx(
-                  'w-full text-left p-4 rounded-xl border-2 transition-all group',
-                  capabilities.hasLiDAR
-                    ? 'border-[#1F1F23] hover:border-[#2A2A30]'
-                    : 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5 hover:border-[#1A8FD6]/50'
-                )}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0">
-                    <Camera size={20} className="text-[#1A8FD6]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-[#F5F5F7]">Live Camera</p>
-                      {!capabilities.hasLiDAR && (
-                        <span className="px-1.5 py-0.5 rounded bg-[#1A8FD6]/20 text-[#1A8FD6] text-[9px] font-bold">RECOMMENDED</span>
-                      )}
+              {/* Live Camera option — only on HTTPS */}
+              {capabilities.rearCameraSupported && (
+                <button
+                  onClick={() => { setScanMode('live-camera'); setStep('capture') }}
+                  className={clsx(
+                    'w-full text-left p-4 rounded-xl border-2 transition-all group',
+                    capabilities.hasLiDAR
+                      ? 'border-[#1F1F23] hover:border-[#2A2A30]'
+                      : 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5 hover:border-[#1A8FD6]/50'
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0">
+                      <Camera size={20} className="text-[#1A8FD6]" />
                     </div>
-                    <p className="text-xs text-[#A1A1A8] mt-0.5">
-                      Open your camera and walk through the store. We capture frames automatically — works on any phone.
-                    </p>
-                    <div className="flex items-center gap-3 mt-2 text-[10px] text-[#A1A1A8]/60">
-                      <span className="flex items-center gap-1"><Camera size={10} /> Any camera</span>
-                      <span className="flex items-center gap-1"><Smartphone size={10} /> No app needed</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-[#F5F5F7]">Live Camera</p>
+                        {!capabilities.hasLiDAR && (
+                          <span className="px-1.5 py-0.5 rounded bg-[#1A8FD6]/20 text-[#1A8FD6] text-[9px] font-bold">RECOMMENDED</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#A1A1A8] mt-0.5">
+                        Open your camera and walk through the store. We capture frames automatically — works on any phone.
+                      </p>
+                      <div className="flex items-center gap-3 mt-2 text-[10px] text-[#A1A1A8]/60">
+                        <span className="flex items-center gap-1"><Camera size={10} /> Any camera</span>
+                        <span className="flex items-center gap-1"><Smartphone size={10} /> No app needed</span>
+                      </div>
                     </div>
+                    <ArrowRight size={16} className="text-[#1A8FD6] mt-1 opacity-50 group-hover:opacity-100 transition-opacity" />
                   </div>
-                  <ArrowRight size={16} className="text-[#1A8FD6] mt-1 opacity-50 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </button>
+                </button>
+              )}
 
               {/* Video upload fallback */}
               <button
@@ -331,6 +362,29 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                     </p>
                   </div>
                   <ArrowRight size={16} className="text-[#A1A1A8] mt-1 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+
+              {/* 3D file upload (Gaussian Splat) */}
+              <button
+                onClick={() => { setScanMode('splat-upload'); setStep('upload-splat') }}
+                className="w-full text-left p-4 rounded-xl border-2 border-[#17C5B0]/20 hover:border-[#17C5B0]/40 transition-all group"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 flex items-center justify-center flex-shrink-0">
+                    <Box size={20} className="text-[#17C5B0]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-[#F5F5F7]">Upload 3D Scan</p>
+                    <p className="text-xs text-[#A1A1A8] mt-0.5">
+                      Have a .splat or .ply file from Scaniverse, Polycam, or another scanning app? Load it directly.
+                    </p>
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-[#A1A1A8]/60">
+                      <span className="flex items-center gap-1"><Box size={10} /> Gaussian Splat</span>
+                      <span className="flex items-center gap-1"><Eye size={10} /> Instant preview</span>
+                    </div>
+                  </div>
+                  <ArrowRight size={16} className="text-[#17C5B0] mt-1 opacity-50 group-hover:opacity-100 transition-opacity" />
                 </div>
               </button>
             </div>
@@ -466,6 +520,110 @@ export default function ScanWizard({ orgId, onComplete, onCancel }: ScanWizardPr
                   <><Loader2 size={14} className="animate-spin" /> Uploading...</>
                 ) : (
                   <><Upload size={14} /> Start Processing</>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Upload .splat file */}
+          {step === 'upload-splat' && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-[#A1A1A8] block mb-1.5">Scan Name</label>
+                <input
+                  type="text"
+                  value={scanName}
+                  onChange={e => setScanName(e.target.value)}
+                  placeholder="e.g. Main Floor, Showroom"
+                  className="w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#4a4a52] focus:outline-none focus:border-[#17C5B0]/50"
+                />
+              </div>
+
+              <div
+                onDragOver={e => { e.preventDefault(); setDragActive(true) }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={e => {
+                  e.preventDefault(); setDragActive(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f && (f.name.endsWith('.splat') || f.name.endsWith('.ply'))) {
+                    setFile(f); setError(null)
+                  } else { setError('Please upload a .splat or .ply file') }
+                }}
+                onClick={() => fileInputRef.current?.click()}
+                className={clsx(
+                  'relative flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed cursor-pointer transition-all',
+                  dragActive ? 'border-[#17C5B0] bg-[#17C5B0]/5'
+                    : file ? 'border-[#17C5B0]/30 bg-[#17C5B0]/5'
+                    : 'border-[#1F1F23] bg-[#111113] hover:border-[#2A2A30]'
+                )}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".splat,.ply"
+                  onChange={e => {
+                    const f = e.target.files?.[0]
+                    if (f) { setFile(f); setError(null) }
+                  }}
+                  className="hidden"
+                />
+                {file ? (
+                  <>
+                    <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 flex items-center justify-center">
+                      <CheckCircle2 size={20} className="text-[#17C5B0]" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-[#F5F5F7]">{file.name}</p>
+                      <p className="text-[10px] text-[#A1A1A8] mt-0.5">
+                        {(file.size / (1024 * 1024)).toFixed(1)} MB
+                        {file.name.endsWith('.splat') && ` • ~${Math.floor(file.size / 32).toLocaleString()} splats`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); setFile(null) }}
+                      className="text-[10px] text-[#A1A1A8] hover:text-red-400 transition-colors"
+                    >
+                      Remove & choose another
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 flex items-center justify-center">
+                      <Box size={20} className="text-[#17C5B0]" />
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-[#F5F5F7]">
+                        Drop .splat file here or <span className="text-[#17C5B0] font-medium">browse</span>
+                      </p>
+                      <p className="text-[10px] text-[#A1A1A8] mt-0.5">
+                        .splat or .ply from Scaniverse, Polycam, or SuperSplat
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-400/5 border border-red-400/15">
+                  <AlertCircle size={14} className="text-red-400 flex-shrink-0" />
+                  <p className="text-xs text-red-400">{error}</p>
+                </div>
+              )}
+
+              <button
+                onClick={handleSplatUpload}
+                disabled={!file || !scanName.trim() || uploading}
+                className={clsx(
+                  'w-full flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg text-xs font-medium transition-all',
+                  file && scanName.trim() && !uploading
+                    ? 'bg-[#17C5B0] text-[#0A0A0B] hover:bg-[#17C5B0]/90'
+                    : 'bg-[#1F1F23] text-[#A1A1A8]/40 cursor-not-allowed'
+                )}
+              >
+                {uploading ? (
+                  <><Loader2 size={14} className="animate-spin" /> Loading...</>
+                ) : (
+                  <><Eye size={14} /> View 3D Space</>
                 )}
               </button>
             </div>
