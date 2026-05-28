@@ -149,16 +149,18 @@ async def _poll_fal_job(job_id: str, endpoint: str, fal_request_id: str):
     async with httpx.AsyncClient(timeout=30) as client:
         for i in range(180):
             await asyncio.sleep(3)
+            _video_jobs[job_id]["poll_count"] = i + 1
             try:
                 status_resp = await client.get(status_url, headers=headers)
                 if status_resp.status_code != 200:
-                    logger.warning(f"Job {job_id}: status poll returned {status_resp.status_code}")
+                    _video_jobs[job_id]["last_error"] = f"HTTP {status_resp.status_code}: {status_resp.text[:200]}"
+                    if i < 3:
+                        logger.warning(f"Job {job_id}: poll {i} returned {status_resp.status_code}: {status_resp.text[:200]}")
                     continue
 
                 status_data = status_resp.json()
                 status = status_data.get("status", "")
                 _video_jobs[job_id]["fal_status"] = status
-                _video_jobs[job_id]["poll_count"] = i + 1
 
                 if status in ("COMPLETED", "completed", "succeeded"):
                     result_resp = await client.get(result_url, headers=headers)
@@ -290,7 +292,35 @@ async def video_status(job_id: str):
     elif job["status"] == "failed":
         result["error"] = job.get("error", "Unknown error")
 
+    if job.get("last_error"):
+        result["last_poll_error"] = job["last_error"]
+
     return result
+
+
+@router.get("/video/debug/{job_id}")
+async def video_debug(job_id: str):
+    """Direct fal.ai status check for debugging."""
+    job = _video_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    endpoint = job.get("fal_endpoint", "")
+    fal_id = job.get("fal_request_id", "")
+    status_url = f"https://queue.fal.run/{endpoint}/requests/{fal_id}/status"
+    headers = _fal_headers()
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.get(status_url, headers=headers)
+        return {
+            "job_id": job_id,
+            "fal_request_id": fal_id,
+            "status_url": status_url,
+            "http_status": resp.status_code,
+            "response": resp.text[:500],
+            "poll_count": job.get("poll_count", 0),
+            "last_error": job.get("last_error"),
+        }
 
 
 # ── Image endpoint (sync — FLUX is fast) ─────────────────────────────────────
