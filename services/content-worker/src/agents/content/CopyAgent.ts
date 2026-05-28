@@ -16,45 +16,81 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? '' })
 
 // ── Platform-specific rules ─────────────────────────────────────────────────
 
+// ── Core marketing principles applied to every post ────────────────────────
+
+const MARKETING_PRINCIPLES = `MARKETING PRINCIPLES (apply to every post):
+
+HOOK FORMULA — first line must stop the scroll. Use one of:
+  • Data hook: Lead with a specific number from POS data ("23% of our revenue comes from one dish")
+  • Curiosity gap: Tease without revealing ("The drink our baristas won't stop making")
+  • Bold claim: Confident statement ("Best oil change in town — our data proves it")
+  • Social proof: Implied demand ("This sold out 3 weekends in a row")
+
+BODY STRUCTURE:
+  • Open with the hook, then deliver the payoff within 2 sentences
+  • Weave in ONE specific POS data point naturally (revenue %, order count, popularity rank)
+  • Keep it conversational — write like a passionate owner, not a marketing agency
+  • Use short paragraphs (1-2 sentences each) with line breaks between
+  • End with urgency or scarcity when genuine ("limited batch", "weekend only", "first 50")
+
+CALL TO ACTION:
+  • One CTA per post, specific and actionable
+  • Use "Visit", "Book", "Order", "Try" — never "Click here" or "Check it out"
+  • Include location or link-in-bio reference when relevant
+
+TONE RULES:
+  • Sound like a real person who loves their business, not a corporation
+  • Never use "we are excited to announce", "proud to share", or "don't miss out"
+  • No "Introducing our...", "We're thrilled...", or any filler corporate-speak
+  • Contractions always (we're, it's, you'll), never formal (we are, it is, you will)
+  • Reference the specific product/item by its menu name, not generic descriptions
+
+HASHTAG STRATEGY:
+  • Mix: 2-3 branded (#ShopName), 2-3 niche (#LocalEats, #CraftCoffee), 2-3 discovery (#FoodTok)
+  • Never use generic spam tags (#love, #instagood, #follow)
+  • Put hashtags AFTER the body, separated by a blank line`
+
 const PLATFORM_RULES: Record<string, string> = {
   instagram: `Instagram rules:
-- Max 2200 chars, but keep under 300 for feed posts
-- Use 5-15 relevant hashtags at the end
-- Start with a hook (question, bold statement, or emoji)
-- Include a clear CTA
-- Use line breaks for readability`,
+- Max 300 chars for feed (people don't expand)
+- Hook must work as a standalone caption visible in the grid
+- 8-12 relevant hashtags after a line break
+- Pair with a mouthwatering/eye-catching image description
+- Use line breaks every 1-2 sentences for mobile readability
+- End before the "...more" cutoff (~125 chars) with something compelling`,
 
   facebook: `Facebook rules:
-- 1-3 paragraphs, conversational tone
-- Include a question to drive engagement
-- Hashtags: 1-3 max
-- CTA that encourages comments/shares`,
+- 1-3 short paragraphs, conversational neighborhood-friend tone
+- Ask a genuine question that people will answer in comments
+- 1-3 hashtags max (Facebook penalizes hashtag-heavy posts)
+- Encourage shares by making it relatable ("Tag someone who needs this")
+- Link in CTA if applicable`,
 
   twitter: `Twitter/X rules:
-- Max 280 chars
-- Punchy and direct
-- 1-2 hashtags max
-- Thread-worthy content can be split`,
+- Max 280 chars total — every word must earn its place
+- One punchy idea, no filler
+- 1-2 hashtags woven into the sentence naturally
+- End with engagement prompt or link`,
 
   linkedin: `LinkedIn rules:
-- Professional but personable
-- Start with a hook line
-- Use line breaks and white space
-- 3-5 hashtags
-- 1300 chars max for best engagement`,
+- Professional but human — think "smart business owner sharing insights"
+- Open with a hook line, then line break for suspense
+- Use data points to establish authority
+- 3-5 industry-relevant hashtags
+- 1000 chars max for best engagement`,
 
   tiktok: `TikTok rules:
-- Short, punchy caption (150 chars ideal)
-- Trending hashtags
-- Conversational Gen-Z friendly tone
-- Hook in first line`,
+- 80-150 chars max — caption is secondary to the visual
+- Conversational, slightly cheeky tone
+- Use trending sounds/hashtag references when relevant
+- Hook = first 5 words that make someone stop scrolling`,
 
   google_my_business: `Google Business Profile rules:
-- 1500 chars max
-- Include business name naturally
-- Local keywords
-- Clear CTA with link
-- Professional tone`,
+- 750 chars ideal (Google truncates after ~1500)
+- Naturally include business name, city, and service keywords for local SEO
+- Always include a clear CTA with specific action (call, visit, book online)
+- Professional but warm — you're appearing in search results, not social feeds
+- Mention specific products/services by name for long-tail keyword matches`,
 }
 
 // ── Social Post Generation ──────────────────────────────────────────────────
@@ -82,25 +118,35 @@ export async function generateSocialPost(
   const voice = await loadBrandVoice(input.merchantId)
   const platformRules = PLATFORM_RULES[input.platform] ?? ''
 
-  const systemPrompt = `You are a social media copywriter for a local business. Write engaging content that matches the brand voice. Return valid JSON only.`
+  const systemPrompt = `You are a top-tier social media copywriter who specializes in local business marketing. You write scroll-stopping posts that feel authentic, data-driven, and make people want to visit. You never sound corporate or generic. Return valid JSON only.`
 
-  const userPrompt = `Write a ${input.platform} post for this business:
+  const userPrompt = `Write a ${input.platform} post for this local business.
 
-Brand voice: ${voice ? `Tone: ${voice.tone}. Personality: ${voice.personality.join(', ')}. Target audience: ${voice.targetAudience}.` : 'Professional and engaging.'}
-${voice ? `Do: ${voice.doList.join('; ')}` : ''}
-${voice ? `Don't: ${voice.dontList.join('; ')}` : ''}
-
-Topic: ${input.topic}
-${input.posDataReference ? `POS context: ${JSON.stringify(input.posDataReference)}` : ''}
+${MARKETING_PRINCIPLES}
 
 ${platformRules}
 
+BRAND VOICE:
+${voice ? `Tone: ${voice.tone}
+Personality: ${voice.personality.join(', ')}
+Target audience: ${voice.targetAudience}
+Always do: ${voice.doList.join('; ')}
+Never do: ${voice.dontList.join('; ')}
+On-brand phrases: ${voice.samplePhrases?.join('; ') ?? 'none provided'}` : 'Tone: Confident, approachable small business owner. Never corporate.'}
+
+TOPIC: ${input.topic}
+
+${input.posDataReference ? `POS DATA (use at least one data point naturally in the copy):
+${JSON.stringify(input.posDataReference, null, 2)}` : 'No POS data available — write based on the topic alone.'}
+
+Write the post now. The hook should stop someone mid-scroll. The body should make them want to visit or buy. The CTA should tell them exactly what to do next.
+
 Return JSON:
 {
-  "hook": "attention-grabbing opening line",
-  "body": "main post body",
-  "hashtags": ["relevant", "hashtags"],
-  "callToAction": "clear CTA"
+  "hook": "scroll-stopping opening line (this appears before the fold — make it count)",
+  "body": "main post body with line breaks between paragraphs",
+  "hashtags": ["branded", "niche", "discovery"],
+  "callToAction": "specific, actionable CTA"
 }`
 
   const response = await anthropic.messages.create({
@@ -152,31 +198,45 @@ export async function generateSEOArticle(
 ): Promise<SEOArticleOutput> {
   const voice = await loadBrandVoice(input.merchantId)
 
-  const prompt = `Write an SEO-optimized article for a local business blog.
+  const prompt = `Write an SEO article that ranks on Google AND gets cited by AI assistants (ChatGPT, Perplexity, Claude).
 
-Title: ${input.title}
-Target keyword: ${input.targetKeyword}
-Secondary keywords: ${(input.secondaryKeywords ?? []).join(', ')}
-Word count target: ${input.wordCount}
+ARTICLE BRIEF:
+- Title: ${input.title}
+- Target keyword: "${input.targetKeyword}"
+- Secondary keywords: ${(input.secondaryKeywords ?? []).join(', ') || 'none specified'}
+- Word count: ${input.wordCount} words
 
-Brand voice: ${voice ? `Tone: ${voice.tone}. Industry: ${voice.industryContext}. Local context: ${voice.localContext}.` : 'Professional, informative.'}
-${input.posDataReference ? `Business data context: ${JSON.stringify(input.posDataReference)}` : ''}
+BRAND CONTEXT:
+${voice ? `Tone: ${voice.tone}. Industry: ${voice.industryContext}. Local context: ${voice.localContext}.
+On-brand phrases: ${voice.samplePhrases?.join('; ') ?? 'none'}` : 'Professional, informative, locally-authoritative.'}
+${input.posDataReference ? `\nREAL BUSINESS DATA (weave into the article as proof points):\n${JSON.stringify(input.posDataReference, null, 2)}` : ''}
 
-Requirements:
-- Use target keyword in H1, first paragraph, and naturally throughout
-- Include secondary keywords where natural
-- Write in a helpful, authoritative tone
-- Include a meta description (150-160 chars)
-- Generate a URL slug
-- Use H2/H3 subheadings
-- Include a CTA at the end
+SEO PRINCIPLES:
+- Target keyword in H1, first 100 words, one H2, meta description, and naturally 3-5 more times
+- Secondary keywords in at least one H2/H3 each
+- Write in a helpful, authoritative tone — the article should be the BEST answer to the search query
+- Structure: intro → 3-5 H2 sections → conclusion with CTA
+- Use H2/H3 subheadings phrased as questions people actually search ("How much does X cost?")
+- Include specific numbers, prices, and data points — AI models cite articles with concrete facts
+- Mention the business name and city naturally (not stuffed) for local SEO
+- End with a clear CTA that drives visits or bookings
+
+AI CITATION OPTIMIZATION:
+- Write definitive statements AI can quote: "The best X in [city] is Y because..."
+- Include structured comparisons, lists, and FAQ-style Q&A sections
+- Answer the "People Also Ask" questions for the target keyword
+- Be specific enough that an AI assistant would reference this over a generic article
+
+META REQUIREMENTS:
+- Meta description: 150-160 chars, includes target keyword, compelling click-through
+- URL slug: short, keyword-rich, no filler words
 
 Return JSON:
 {
-  "title": "optimized article title",
-  "slug": "url-friendly-slug",
-  "metaDescription": "150-160 char meta description",
-  "body": "full article in markdown format",
+  "title": "SEO-optimized article title with target keyword",
+  "slug": "keyword-rich-url-slug",
+  "metaDescription": "150-160 char meta description with keyword and CTA",
+  "body": "full article in markdown (H2/H3 headings, paragraphs, lists)",
   "wordCount": actual_word_count
 }`
 

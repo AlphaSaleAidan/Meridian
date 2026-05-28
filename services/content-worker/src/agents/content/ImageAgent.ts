@@ -16,6 +16,7 @@ export interface AdImageInput {
   merchantId: string
   prompt: string
   platform: string
+  businessType?: string
   postId?: string
   logoOverlay?: boolean
 }
@@ -29,9 +30,10 @@ export interface AdImageOutput {
 export async function generateAdImage(
   input: AdImageInput
 ): Promise<AdImageOutput> {
-  // Generate via fal.ai FLUX.2 Pro
+  // Generate via fal.ai FLUX.2 Pro with style enhancement
   const { imageUrl: falUrl, seed } = await generateImage({
     prompt: input.prompt,
+    businessType: input.businessType,
     platform: input.platform,
   })
 

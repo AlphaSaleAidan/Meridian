@@ -276,22 +276,45 @@ async function planCalendar(params: {
         ? 7
         : 3
 
-  const systemPrompt = `You are a content strategist for local businesses. Plan a weekly content calendar. Return valid JSON only — an array of content slot objects.`
+  const systemPrompt = `You are a social media marketing strategist who creates content calendars for local businesses. You understand what makes posts go viral on each platform, how to leverage POS data for compelling ad copy, and how to generate image prompts that produce scroll-stopping product photography. Return valid JSON only — an array of content slot objects.`
 
   const userPrompt = `Plan a ${postsPerWeek}-post content calendar for this week (starting ${params.weekStart}):
 
-Business: ${params.businessName} (${params.businessType})
-Content tier: ${params.contentTier}
-${params.footTrafficPeak ? `Peak foot traffic: ${params.footTrafficPeak}` : ''}
-${params.posSnapshot ? `Top products: ${params.posSnapshot.topProducts.slice(0, 5).map((p) => p.name).join(', ')}. Avg ticket: $${(params.posSnapshot.avgTicket / 100).toFixed(2)}` : ''}
+BUSINESS: ${params.businessName} (${params.businessType})
+CONTENT TIER: ${params.contentTier}
+${params.footTrafficPeak ? `PEAK TRAFFIC: ${params.footTrafficPeak}` : ''}
+${params.posSnapshot ? `TOP SELLERS: ${params.posSnapshot.topProducts.slice(0, 5).map((p) => `${p.name} ($${(p.revenue / 100).toFixed(0)} revenue)`).join(', ')}
+AVG TICKET: $${(params.posSnapshot.avgTicket / 100).toFixed(2)}
+WEEKLY TRANSACTIONS: ${params.posSnapshot.transactionCount}` : ''}
 
-Rules:
-- Mix social posts, articles, and occasional video briefs
-- Starter tier: social only, Growth: social + 1 article, Command: social + 2 articles + 1 video
-- Post times should match peak traffic when possible
-- Each post needs a specific topic tied to products or seasonal trends
-- Include image generation prompts for visual posts
-- Distribute across platforms: instagram, facebook, twitter, google_my_business
+CONTENT MIX RULES:
+- Starter: ${postsPerWeek} social posts only
+- Growth: social posts + 1 SEO article
+- Command: social posts + 2 SEO articles + 1 video brief
+- Distribute across: instagram (primary), facebook, google_my_business. Add tiktok/linkedin for command tier.
+
+TOPIC STRATEGY — each post should use ONE of these angles:
+1. HERO PRODUCT: Spotlight a top seller with POS data ("Our #1 seller drives X% of revenue")
+2. BEHIND THE SCENES: Process, preparation, craftsmanship
+3. SOCIAL PROOF: Customer demand, sellout stories, wait times
+4. SEASONAL/TIMELY: Tie to day of week, weather, local events, holidays
+5. EDUCATIONAL: Tips, how-tos, insider knowledge that builds authority
+6. COMMUNITY: Local partnerships, neighborhood pride, team spotlights
+
+SCHEDULING STRATEGY:
+- Instagram: 11am-1pm or 7pm-9pm local time
+- Facebook: 9am-11am or 1pm-3pm
+- Google Business: Tuesday-Thursday mornings for maximum visibility
+- Post the hero product content on your highest-traffic day
+
+IMAGE PROMPT RULES (critical for ad quality):
+- Describe the SPECIFIC product/item by name and appearance
+- Include composition: "close-up", "overhead flat-lay", "45-degree angle", "macro detail"
+- Include lighting: "warm golden hour", "soft natural window light", "dramatic side lighting"
+- Include surface/background: "rustic wood table", "marble counter", "dark slate", "clean white"
+- Include sensory details: "steam rising", "melting cheese", "condensation on glass", "fresh herbs"
+- NEVER include text, logos, or watermarks in the image prompt
+- Example: "Close-up of a gourmet burger with aged cheddar melting over a half-pound patty, brioche bun with sesame seeds, fresh arugula, on a dark wood board, warm restaurant lighting, shallow depth of field"
 
 Return a JSON array:
 [
@@ -299,10 +322,10 @@ Return a JSON array:
     "day": "monday|tuesday|...|sunday",
     "time": "HH:MM",
     "postType": "social|article|video_brief|gmb_post",
-    "platform": "instagram|facebook|twitter|linkedin|tiktok|google_my_business",
-    "topic": "specific post topic",
-    "targetKeyword": "optional SEO keyword for articles",
-    "imagePrompt": "optional image generation prompt"
+    "platform": "instagram|facebook|tiktok|linkedin|google_my_business",
+    "topic": "specific post topic with the angle clearly stated",
+    "targetKeyword": "SEO keyword for articles (required for articles, optional for social)",
+    "imagePrompt": "detailed product photography prompt following the rules above"
   }
 ]`
 
