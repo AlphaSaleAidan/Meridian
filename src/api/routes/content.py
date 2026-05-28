@@ -151,7 +151,7 @@ async def _poll_fal_job(job_id: str, status_url: str, result_url: str):
             _video_jobs[job_id]["poll_count"] = i + 1
             try:
                 status_resp = await client.get(status_url, headers=headers)
-                if status_resp.status_code != 200:
+                if status_resp.status_code not in (200, 202):
                     _video_jobs[job_id]["last_error"] = f"HTTP {status_resp.status_code}: {status_resp.text[:200]}"
                     if i < 3:
                         logger.warning(f"Job {job_id}: poll {i} returned {status_resp.status_code}: {status_resp.text[:200]}")
@@ -351,14 +351,14 @@ async def _fal_submit_sync(endpoint: str, payload: dict) -> dict:
         if not request_id:
             return data
 
-        status_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}/status"
-        result_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}"
+        status_url = data.get("status_url") or f"https://queue.fal.run/{endpoint}/requests/{request_id}/status"
+        result_url = data.get("response_url") or f"https://queue.fal.run/{endpoint}/requests/{request_id}"
 
         import asyncio
         for _ in range(60):
             await asyncio.sleep(2)
             status_resp = await client.get(status_url, headers=headers)
-            if status_resp.status_code != 200:
+            if status_resp.status_code not in (200, 202):
                 continue
             status_data = status_resp.json()
             status = status_data.get("status", "")
