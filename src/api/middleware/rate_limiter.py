@@ -24,6 +24,9 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/us/rep-signup": (5, 3600),
     "/api/billing/create-checkout": (10, 3600),
     "/api/billing/create-invoice": (10, 3600),
+    "/api/content/video/generate": (5, 3600),
+    "/api/content/image/generate": (10, 3600),
+    "/api/content/calendar/generate": (3, 3600),
     "/api/compliance/breach": (5, 3600),
     "/api/privacy/request": (10, 3600),
 }
