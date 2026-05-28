@@ -78,7 +78,7 @@ async def _fal_submit(endpoint: str, payload: dict) -> dict:
     """Submit a job to fal.ai queue and poll until done."""
     headers = _fal_headers()
 
-    async with httpx.AsyncClient(timeout=300) as client:
+    async with httpx.AsyncClient(timeout=600) as client:
         submit_resp = await client.post(
             f"{FAL_BASE}/{endpoint}",
             headers=headers,
@@ -98,21 +98,23 @@ async def _fal_submit(endpoint: str, payload: dict) -> dict:
         status_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}/status"
         result_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}"
 
-        for _ in range(120):
-            await _async_sleep(2)
+        for _ in range(180):
+            await _async_sleep(3)
             status_resp = await client.get(status_url, headers=headers)
             if status_resp.status_code != 200:
                 continue
-            status = status_resp.json().get("status", "")
+            status_data = status_resp.json()
+            status = status_data.get("status", "")
             if status in ("COMPLETED", "completed", "succeeded"):
                 result_resp = await client.get(result_url, headers=headers)
                 if result_resp.status_code == 200:
                     return result_resp.json()
                 raise HTTPException(status_code=500, detail="Failed to fetch fal.ai result")
             if status in ("FAILED", "failed"):
-                raise HTTPException(status_code=500, detail="fal.ai generation failed")
+                err = status_data.get("error", "unknown error")
+                raise HTTPException(status_code=500, detail=f"fal.ai generation failed: {err}")
 
-        raise HTTPException(status_code=504, detail="fal.ai generation timed out")
+        raise HTTPException(status_code=504, detail="fal.ai generation timed out (9 min limit)")
 
 
 async def _async_sleep(seconds: float):
