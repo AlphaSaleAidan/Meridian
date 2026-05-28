@@ -27,6 +27,7 @@ import {
   Globe,
   Calendar,
   Video,
+  Sparkles,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import MobileNavBar from './MobileNavBar'
@@ -82,6 +83,7 @@ const navGroups = [
       { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
       { path: 'my-website', icon: Globe, label: 'My Website' },
       { path: 'space', icon: Box, label: '3D Space' },
+      { path: 'content', icon: Sparkles, label: 'Content' },
     ],
   },
   {

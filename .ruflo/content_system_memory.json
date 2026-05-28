@@ -1,0 +1,69 @@
+{
+  "existing_agents": [
+    { "file": "src/ai/engine.py", "class": "AIEngine", "methods": ["generate_insights", "forecast"] },
+    { "file": "src/ai/swarm_trainer.py", "class": "SwarmTrainer", "methods": ["train", "predict"] },
+    { "file": "src/ai/cross_reference_orchestrator.py", "class": "CrossReferenceOrchestrator", "methods": ["orchestrate"] },
+    { "file": "src/ai/llm_layer.py", "class": "LLMLayer", "methods": ["generate"] },
+    { "file": "src/services/camera_interpreter.py", "class": "CameraInterpreter", "methods": ["interpret"] },
+    { "file": "src/services/website_scraper.py", "functions": ["scrape_website"] },
+    { "file": "src/services/pos_sync_runner.py", "class": "POSSyncRunner", "methods": ["sync"] }
+  ],
+  "supabase_tables": [
+    "business_accounts", "deal_flow", "vision_intelligence", "cline_agent",
+    "pos_system_tracking", "canada_careers", "spaces", "career_applications",
+    "recruiters", "canada_leads", "phone_agent", "email_send_log",
+    "cross_reference_tables", "pos_credentials_encrypted", "training_video_fields",
+    "sales_reps", "inventory_document_uploads", "schedule_uploads",
+    "vision_cameras", "schedule_tables", "us_leads"
+  ],
+  "supabase_client_import": "import { supabase } from '@/lib/supabase'",
+  "api_routes": [
+    { "method": "GET", "path": "/api/dashboard/overview", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/revenue", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/products", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/insights", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/forecasts", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/notifications", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/connection", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/inventory", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/staff", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/margins", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/menu-engineering", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/anomalies", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/customers", "file": "src/api/*.py" },
+    { "method": "GET", "path": "/api/dashboard/agents", "file": "src/api/*.py" }
+  ],
+  "shared_types": ["Overview", "DailyRevenue", "ProductPerf", "Insight", "Forecast", "Notification", "InventoryItem"],
+  "pos_data_methods": [
+    { "source": "api.ts", "method": "api.products(orgId, days)", "returns": "ProductsData" },
+    { "source": "api.ts", "method": "api.revenue(orgId, days)", "returns": "RevenueData" },
+    { "source": "api.ts", "method": "api.hourlyRevenue(orgId)", "returns": "HourlyData" }
+  ],
+  "camera_data_methods": [
+    { "source": "api.ts", "method": "api.cameras(orgId)", "returns": "{ cameras: any[] }" },
+    { "source": "src/services/camera_interpreter.py", "class": "CameraInterpreter" }
+  ],
+  "nav_component_path": "frontend/src/components/Layout.tsx",
+  "dashboard_layout_path": "frontend/src/components/Layout.tsx",
+  "react_router_config": "frontend/src/App.tsx",
+  "portal_structure": {
+    "demo_gate": "isDemo(orgId) check in api.ts — orgId='demo' returns mock data, no API calls",
+    "canadian_gate": "isCanadaPath() from demo-context.tsx — checks window.location.pathname.startsWith('/canada')",
+    "currency_multiplier": "getCurrencyMultiplier() returns 1.38 for Canada, 1.0 for US"
+  },
+  "r2_upload_pattern": null,
+  "merchants_pk": "org_id (from business_accounts table)",
+  "merchants_table": "business_accounts",
+  "frontend_patterns": {
+    "icons": "lucide-react",
+    "styling": "Tailwind CSS, dark theme bg-[#0A0A0B], text-[#F5F5F7], accent-[#1A8FD6]",
+    "animations": "framer-motion AnimatePresence + motion.div",
+    "cards": "DashboardTiltCard wrapper + StatCard component",
+    "loading": "DataPageSkeleton component, InlineFallback, LazyFallback",
+    "navGroups_structure": "{ label: string|null, items: { path, icon: LucideIcon, label }[] }[]",
+    "route_pattern": "lazy(() => import()) with Suspense fallback",
+    "api_pattern": "api.ts apiFetch() with isDemo() check, useApi hook with retry"
+  },
+  "backend_type": "Python FastAPI — content worker will be separate Node.js service",
+  "phase_0_complete": true
+}

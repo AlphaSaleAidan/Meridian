@@ -39,6 +39,8 @@ const SchedulePage = lazy(() => import('@/pages/SchedulePage'))
 const MyWebsitePage = lazy(() => import('@/pages/MyWebsitePage'))
 const MerchantSitePage = lazy(() => import('@/pages/MerchantSitePage'))
 const CameraAnalyticsDemoPage = lazy(() => import('@/pages/CameraAnalyticsDemoPage'))
+const ContentDashboardPage = lazy(() => import('@/pages/ContentDashboardPage'))
+const ContentSettingsPage = lazy(() => import('@/pages/ContentSettingsPage'))
 
 const LandingPage = lazy(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazy(() => import('@/components/CanadaLayout'))
@@ -169,6 +171,8 @@ function CustomerDashboardRoutes() {
       <Route path="space" element={<Suspense fallback={<InlineFallback />}><SpaceTab /></Suspense>} />
       <Route path="phone-orders" element={<Suspense fallback={<InlineFallback />}><PhoneOrdersPage /></Suspense>} />
       <Route path="my-website" element={<Suspense fallback={<InlineFallback />}><MyWebsitePage /></Suspense>} />
+      <Route path="content" element={<Suspense fallback={<InlineFallback />}><ContentDashboardPage /></Suspense>} />
+      <Route path="content/settings" element={<Suspense fallback={<InlineFallback />}><ContentSettingsPage /></Suspense>} />
       <Route path="notifications" element={<Suspense fallback={<InlineFallback />}><NotificationsPage /></Suspense>} />
       <Route path="settings" element={<Suspense fallback={<InlineFallback />}><SettingsPage /></Suspense>} />
     </>
