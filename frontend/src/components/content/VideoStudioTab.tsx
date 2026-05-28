@@ -105,19 +105,39 @@ const DEMO_VIDEOS = [
 
 // ── Component ──────────────────────────────────────────────────────────────
 
+interface BrandData {
+  business_name: string
+  business_type: string
+  voice_profile?: {
+    tone?: string
+    emoji_usage?: string
+    top_products?: string[]
+    keywords?: string[]
+  }
+}
+
 interface Props {
   isDemo: boolean
   creditBalance: number
   merchantId: string
+  brand?: BrandData | null
+}
+
+interface DirectorNotes {
+  style_notes: string
+  model_recommendation: string
+  original_prompt: string
 }
 
 interface GeneratedResult {
   videoUrl: string
   model: string
   durationSeconds?: number
+  director?: DirectorNotes
+  enhanced_prompt?: string
 }
 
-export default function VideoStudioTab({ isDemo, creditBalance, merchantId }: Props) {
+export default function VideoStudioTab({ isDemo, creditBalance, merchantId, brand }: Props) {
   const [prompt, setPrompt] = useState('')
   const [selectedModel, setSelectedModel] = useState<VideoModel>('seedance-2-fast')
   const [selectedStyle, setSelectedStyle] = useState<VideoStyle>('product_spotlight')
@@ -149,12 +169,22 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId }: Pr
 
     try {
       const platform = selectedPlatforms[0]
+      const brandPayload = brand ? {
+        business_name: brand.business_name,
+        business_type: brand.business_type,
+        voice_profile: brand.voice_profile ?? {},
+      } : undefined
+
+      setGenStatus(brand ? 'Director enhancing prompt...' : 'Submitting to AI...')
+
       const res = await contentApi.generateVideo(merchantId, {
         prompt,
         platform,
         model: selectedModel,
         style: selectedStyle,
         durationSeconds: duration,
+        brand: brandPayload,
+        enhance: !!brand,
       })
 
       if (res.videoUrl) {
@@ -162,6 +192,7 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId }: Pr
           videoUrl: res.videoUrl,
           model: MODELS[selectedModel].name,
           durationSeconds: duration,
+          director: res.director,
         })
         setGenerating(false)
         return
@@ -171,19 +202,23 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId }: Pr
         throw new Error('No job ID returned')
       }
 
-      setGenStatus('Generating video...')
+      setGenStatus(res.director ? 'Director enhanced — generating video...' : 'Generating video...')
       const jobId = res.jobId
+      let directorInfo = res.director
       for (let i = 0; i < 180; i++) {
         await new Promise(r => setTimeout(r, 3000))
         const status = await contentApi.videoStatus(jobId)
         const elapsed = Math.round(status.elapsed ?? i * 3)
         setGenStatus(`Generating video... ${elapsed}s (${status.fal_status ?? 'processing'})`)
+        if (status.director && !directorInfo) directorInfo = status.director
 
         if (status.status === 'completed' && status.videoUrl) {
           setGeneratedResult({
             videoUrl: status.videoUrl,
             model: MODELS[selectedModel].name,
             durationSeconds: duration,
+            director: directorInfo,
+            enhanced_prompt: status.enhanced_prompt,
           })
           setGenerating(false)
           return
@@ -466,6 +501,23 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId }: Pr
                 )}
               </div>
             </div>
+
+            {/* Director Enhancement Notes */}
+            {generatedResult.director && (
+              <div className="rounded-lg bg-[#0A0A0B] border border-purple-500/20 p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-medium text-purple-400">
+                  <Wand2 size={10} />
+                  Director Enhanced
+                </div>
+                <p className="text-[11px] text-[#A1A1A8]">{generatedResult.director.style_notes}</p>
+                {generatedResult.enhanced_prompt && (
+                  <details className="text-[10px] text-[#A1A1A8]/60">
+                    <summary className="cursor-pointer hover:text-[#A1A1A8]">View enhanced prompt</summary>
+                    <p className="mt-1 pl-2 border-l border-purple-500/20">{generatedResult.enhanced_prompt}</p>
+                  </details>
+                )}
+              </div>
+            )}
 
             {/* Video Player */}
             <div className="rounded-lg overflow-hidden bg-[#0A0A0B] border border-[#1F1F23]">

@@ -86,11 +86,66 @@ export const contentApi = {
     model?: string
     style?: string
     durationSeconds?: number
+    brand?: { business_name: string; business_type: string; voice_profile?: Record<string, unknown> }
+    enhance?: boolean
   }) =>
-    apiFetch<{ ok: boolean; jobId?: string; videoUrl?: string; model?: string; status?: string }>('/api/content/video/generate', {
+    apiFetch<{
+      ok: boolean
+      jobId?: string
+      videoUrl?: string
+      model?: string
+      status?: string
+      director?: { style_notes: string; model_recommendation: string; original_prompt: string }
+    }>('/api/content/video/generate', {
       method: 'POST',
       body: { merchantId, ...params },
     }),
+
+  generateImage: (merchantId: string, params: {
+    prompt: string
+    platform?: string
+    width?: number
+    height?: number
+    style?: string
+    brand?: { business_name: string; business_type: string; voice_profile?: Record<string, unknown> }
+    enhance?: boolean
+  }) =>
+    apiFetch<{
+      ok: boolean
+      imageUrl?: string
+      seed?: number
+      director?: { style_notes: string; model_recommendation: string; original_prompt: string }
+    }>('/api/content/image/generate', {
+      method: 'POST',
+      body: { merchantId, ...params },
+    }),
+
+  directorPreview: (merchantId: string, params: {
+    prompt: string
+    platform?: string
+    style?: string
+    media_type?: string
+    durationSeconds?: number
+    brand: { business_name: string; business_type: string; voice_profile?: Record<string, unknown> }
+  }) =>
+    apiFetch<{
+      ok: boolean
+      enhanced_prompt: string
+      original_prompt: string
+      generation_config: Record<string, unknown>
+      style_notes: string
+      model_recommendation: string
+    }>('/api/content/director/preview', {
+      method: 'POST',
+      body: { merchantId, ...params },
+    }),
+
+  directorStyles: () =>
+    apiFetch<{
+      styles: Record<string, string>
+      platforms: Record<string, unknown>
+      business_types: Record<string, unknown>
+    }>('/api/content/director/styles'),
 
   videoStatus: (jobId: string) =>
     apiFetch<{
@@ -102,5 +157,7 @@ export const contentApi = {
       fal_status?: string
       elapsed?: number
       ok?: boolean
+      director?: { style_notes: string; model_recommendation: string; original_prompt: string }
+      enhanced_prompt?: string
     }>(`/api/content/video/status/${jobId}`),
 }

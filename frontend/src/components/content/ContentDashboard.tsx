@@ -191,7 +191,7 @@ export default function ContentDashboard() {
 
       {/* Video Studio Tab */}
       {activeTab === 'video' && (
-        <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} />
+        <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
       )}
 
       {/* Active jobs banner — never shown in demo */}

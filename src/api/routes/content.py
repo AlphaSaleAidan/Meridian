@@ -67,6 +67,12 @@ VIDEO_MODELS = {
 IMAGE_MODEL = "fal-ai/flux-2-pro"
 
 
+class BrandProfile(BaseModel):
+    business_name: str = ""
+    business_type: str = "retail"
+    voice_profile: Optional[dict] = None
+
+
 class VideoGenRequest(BaseModel):
     merchantId: str
     prompt: str
@@ -74,6 +80,8 @@ class VideoGenRequest(BaseModel):
     model: str = "seedance-2-fast"
     style: Optional[str] = None
     durationSeconds: int = 5
+    brand: Optional[BrandProfile] = None
+    enhance: bool = True
 
     @field_validator("prompt")
     @classmethod
@@ -99,6 +107,9 @@ class ImageGenRequest(BaseModel):
     platform: str = "instagram_feed"
     width: int = 1080
     height: int = 1080
+    style: Optional[str] = None
+    brand: Optional[BrandProfile] = None
+    enhance: bool = True
 
     @field_validator("prompt")
     @classmethod
@@ -208,9 +219,39 @@ async def generate_video(req: VideoGenRequest):
 
     logger.info(f"Video gen: merchant={req.merchantId} model={req.model} dur={req.durationSeconds}s")
 
+    final_prompt = req.prompt
+    director_notes = None
+
+    if req.enhance and req.brand:
+        try:
+            from ...ai.commercial_director import direct_video
+            brand_dict = {
+                "business_name": req.brand.business_name,
+                "business_type": req.brand.business_type,
+                "voice_profile": req.brand.voice_profile or {},
+                "merchant_id": req.merchantId,
+            }
+            result = await direct_video(
+                brand=brand_dict,
+                prompt=req.prompt,
+                platform=req.platform,
+                style=req.style,
+                model=req.model,
+                duration_seconds=req.durationSeconds,
+            )
+            final_prompt = result.enhanced_prompt
+            director_notes = {
+                "style_notes": result.style_notes,
+                "model_recommendation": result.model_recommendation,
+                "original_prompt": result.original_prompt,
+            }
+            logger.info(f"Director enhanced prompt: {len(req.prompt)} → {len(final_prompt)} chars")
+        except Exception as e:
+            logger.warning(f"Commercial Director failed, using raw prompt: {e}")
+
     headers = _fal_headers()
     payload = {
-        "prompt": req.prompt,
+        "prompt": final_prompt,
         "duration": req.durationSeconds,
         "aspect_ratio": _aspect_ratio(req.platform),
     }
@@ -241,12 +282,15 @@ async def generate_video(req: VideoGenRequest):
             or data.get("video_url")
             or (data.get("videos", [{}])[0].get("url") if data.get("videos") else None)
         )
-        return {
+        resp = {
             "ok": True,
             "videoUrl": video_url,
             "model": req.model,
             "durationSeconds": req.durationSeconds,
         }
+        if director_notes:
+            resp["director"] = director_notes
+        return resp
 
     # Build URLs from fal response or fall back to constructed ones
     status_url = fal_status_url or f"https://queue.fal.run/{endpoint}/requests/{fal_request_id}/status"
@@ -264,17 +308,22 @@ async def generate_video(req: VideoGenRequest):
         "fal_status": "IN_QUEUE",
         "submitted_at": time.time(),
         "poll_count": 0,
+        "enhanced_prompt": final_prompt if final_prompt != req.prompt else None,
+        "director_notes": director_notes,
     }
 
     import asyncio
     asyncio.create_task(_poll_fal_job(job_id, status_url, response_url))
 
-    return {
+    resp = {
         "ok": True,
         "jobId": job_id,
         "status": "processing",
         "model": req.model,
     }
+    if director_notes:
+        resp["director"] = director_notes
+    return resp
 
 
 @router.get("/video/status/{job_id}")
@@ -300,6 +349,10 @@ async def video_status(job_id: str):
 
     if job.get("last_error"):
         result["last_poll_error"] = job["last_error"]
+    if job.get("director_notes"):
+        result["director"] = job["director_notes"]
+    if job.get("enhanced_prompt"):
+        result["enhanced_prompt"] = job["enhanced_prompt"]
 
     return result
 
@@ -378,8 +431,37 @@ async def _fal_submit_sync(endpoint: str, payload: dict) -> dict:
 async def generate_image(req: ImageGenRequest):
     _check_daily_cap(req.merchantId, "image")
     logger.info(f"Image gen: merchant={req.merchantId} {req.width}x{req.height}")
+
+    final_prompt = req.prompt
+    director_notes = None
+
+    if req.enhance and req.brand:
+        try:
+            from ...ai.commercial_director import direct_image
+            brand_dict = {
+                "business_name": req.brand.business_name,
+                "business_type": req.brand.business_type,
+                "voice_profile": req.brand.voice_profile or {},
+                "merchant_id": req.merchantId,
+            }
+            result = await direct_image(
+                brand=brand_dict,
+                prompt=req.prompt,
+                platform=req.platform,
+                style=req.style,
+            )
+            final_prompt = result.enhanced_prompt
+            director_notes = {
+                "style_notes": result.style_notes,
+                "model_recommendation": result.model_recommendation,
+                "original_prompt": result.original_prompt,
+            }
+            logger.info(f"Director enhanced image prompt: {len(req.prompt)} → {len(final_prompt)} chars")
+        except Exception as e:
+            logger.warning(f"Commercial Director failed for image, using raw prompt: {e}")
+
     payload = {
-        "prompt": req.prompt,
+        "prompt": final_prompt,
         "image_size": {"width": req.width, "height": req.height},
         "safety_tolerance": "2",
     }
@@ -390,10 +472,86 @@ async def generate_image(req: ImageGenRequest):
     if not images:
         raise HTTPException(status_code=500, detail="fal.ai returned no images")
 
-    return {
+    resp = {
         "ok": True,
         "imageUrl": images[0].get("url"),
         "seed": result.get("seed", 0),
+    }
+    if director_notes:
+        resp["director"] = director_notes
+    return resp
+
+
+class DirectorPreviewRequest(BaseModel):
+    merchantId: str
+    prompt: str
+    platform: str = "instagram_reel"
+    style: Optional[str] = None
+    media_type: str = "video"
+    durationSeconds: int = 5
+    brand: Optional[BrandProfile] = None
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Prompt cannot be empty")
+        if len(v) > MAX_PROMPT_LENGTH:
+            raise ValueError(f"Prompt exceeds {MAX_PROMPT_LENGTH} characters")
+        return v
+
+
+@router.post("/director/preview")
+async def director_preview(req: DirectorPreviewRequest):
+    """Preview Director-enhanced prompt without generating media."""
+    if not req.brand:
+        raise HTTPException(status_code=400, detail="Brand profile required for Director preview")
+
+    try:
+        from ...ai.commercial_director import direct_video, direct_image, STYLE_PROFILES, PLATFORM_CONFIG
+        brand_dict = {
+            "business_name": req.brand.business_name,
+            "business_type": req.brand.business_type,
+            "voice_profile": req.brand.voice_profile or {},
+            "merchant_id": req.merchantId,
+        }
+        if req.media_type == "image":
+            result = await direct_image(
+                brand=brand_dict,
+                prompt=req.prompt,
+                platform=req.platform,
+                style=req.style,
+            )
+        else:
+            result = await direct_video(
+                brand=brand_dict,
+                prompt=req.prompt,
+                platform=req.platform,
+                style=req.style,
+                duration_seconds=req.durationSeconds,
+            )
+        return {
+            "ok": True,
+            "enhanced_prompt": result.enhanced_prompt,
+            "original_prompt": result.original_prompt,
+            "generation_config": result.generation_config,
+            "style_notes": result.style_notes,
+            "model_recommendation": result.model_recommendation,
+        }
+    except Exception as e:
+        logger.error(f"Director preview failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Director preview failed: {str(e)}")
+
+
+@router.get("/director/styles")
+async def director_styles():
+    """List available Director styles and platform configs."""
+    from ...ai.commercial_director import STYLE_PROFILES, PLATFORM_CONFIG, BUSINESS_VISUAL_LANGUAGE
+    return {
+        "styles": {k: v for k, v in STYLE_PROFILES.items()},
+        "platforms": PLATFORM_CONFIG,
+        "business_types": {k: v for k, v in BUSINESS_VISUAL_LANGUAGE.items()},
     }
 
 
