@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Star, HelpCircle, Truck, XCircle, ArrowUpRight } from 'lucide-react'
+import { Star, HelpCircle, Truck, XCircle, ArrowUpRight, LayoutGrid, DollarSign } from 'lucide-react'
 import { generateMenuEngineering, type MenuEngItem, type MenuQuadrant } from '@/lib/agent-data'
 import { formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
@@ -9,6 +10,9 @@ import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import DataPageSkeleton from '@/components/DataPageSkeleton'
+import MenuPriceBuilder from '@/components/menu/MenuPriceBuilder'
+
+type MenuTab = 'matrix' | 'priceBuilder'
 
 const quadrantConfig: Record<MenuQuadrant, { label: string; color: string; bg: string; border: string; icon: typeof Star; desc: string }> = {
   star:      { label: 'Stars',       color: 'text-[#17C5B0]', bg: 'bg-[#17C5B0]/10', border: 'border-[#17C5B0]/15', icon: Star,       desc: 'High profit + high popularity' },
@@ -58,6 +62,19 @@ export default function MenuEngineeringPage() {
   const isDemo = useIsDemo()
   const apiData = useApi(() => api.menuEngineering(orgId), [orgId])
 
+  const [activeTab, setActiveTab] = useState<MenuTab>('matrix')
+  const [visitedTabs, setVisitedTabs] = useState<Set<MenuTab>>(new Set(['matrix']))
+
+  const handleTabChange = (tab: MenuTab) => {
+    setActiveTab(tab)
+    setVisitedTabs(prev => {
+      if (prev.has(tab)) return prev
+      const next = new Set(prev)
+      next.add(tab)
+      return next
+    })
+  }
+
   const items: MenuEngItem[] = isDemo ? generateMenuEngineering() : (apiData.data?.items ?? [])
 
   if (!isDemo && apiData.loading) return <LoadingPage />
@@ -67,9 +84,6 @@ export default function MenuEngineeringPage() {
   const puzzles = items.filter(i => i.quadrant === 'puzzle')
   const plowhorses = items.filter(i => i.quadrant === 'plowhorse')
   const dogs = items.filter(i => i.quadrant === 'dog')
-
-  const avgPopularity = 100
-  const avgProfit = 100
 
   return (
     <DataPageSkeleton title="Menu Matrix" layout="table">
@@ -83,86 +97,122 @@ export default function MenuEngineeringPage() {
         </div>
       </ScrollReveal>
 
-      {/* Summary stats */}
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-[#1F1F23]">
         {([
-          { q: 'star' as const, items: stars },
-          { q: 'puzzle' as const, items: puzzles },
-          { q: 'plowhorse' as const, items: plowhorses },
-          { q: 'dog' as const, items: dogs },
-        ]).map(({ q, items: qItems }) => {
-          const cfg = quadrantConfig[q]
-          const rev = qItems.reduce((s, i) => s + i.revenueCents, 0)
+          { id: 'matrix' as const, label: 'Matrix', icon: LayoutGrid },
+          { id: 'priceBuilder' as const, label: 'Price Builder', icon: DollarSign },
+        ]).map(t => {
+          const Icon = t.icon
           return (
-            <StaggerItem key={q}>
-              <DashboardTiltCard className="card p-4">
-                <div className="flex items-center gap-2">
-                  <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center', cfg.bg)}>
-                    <cfg.icon size={16} className={cfg.color} />
-                  </div>
-                  <div>
-                    <p className="stat-label">{cfg.label}</p>
-                    <p className={clsx('text-lg font-bold font-mono', cfg.color)}>{qItems.length}</p>
-                  </div>
-                  <span className="ml-auto text-[10px] font-mono text-[#A1A1A8]/40">{formatCentsCompact(rev)}</span>
-                </div>
-              </DashboardTiltCard>
-            </StaggerItem>
+            <button
+              key={t.id}
+              onClick={() => handleTabChange(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === t.id
+                  ? 'border-[#1A8FD6] text-[#F5F5F7]'
+                  : 'border-transparent text-[#A1A1A8] hover:text-[#F5F5F7]'
+              }`}
+            >
+              <Icon size={13} />
+              {t.label}
+            </button>
           )
         })}
-      </StaggerContainer>
+      </div>
 
-      {/* Scatter plot (CSS-based) */}
-      <ScrollReveal variant="fadeUp" delay={0.1}>
-        <div className="card p-4 sm:p-5">
-          <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Profitability vs Popularity Matrix</h3>
-          <div className="relative w-full aspect-square max-w-[500px] mx-auto">
-            {/* Quadrant backgrounds */}
-            <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
-              <div className="bg-[#7C5CFF]/5 border-r border-b border-[#1F1F23] flex items-center justify-center">
-                <span className="text-[10px] text-[#7C5CFF]/30 font-medium">Puzzles</span>
-              </div>
-              <div className="bg-[#17C5B0]/5 border-b border-[#1F1F23] flex items-center justify-center">
-                <span className="text-[10px] text-[#17C5B0]/30 font-medium">Stars</span>
-              </div>
-              <div className="bg-[#A1A1A8]/5 border-r border-[#1F1F23] flex items-center justify-center">
-                <span className="text-[10px] text-[#A1A1A8]/20 font-medium">Dogs</span>
-              </div>
-              <div className="bg-[#1A8FD6]/5 flex items-center justify-center">
-                <span className="text-[10px] text-[#1A8FD6]/30 font-medium">Plowhorses</span>
-              </div>
-            </div>
-            {/* Axis labels */}
-            <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-[#A1A1A8]/40 font-mono">Popularity →</div>
-            <div className="absolute -left-5 top-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-[#A1A1A8]/40 font-mono">Profitability →</div>
-            {/* Data points */}
-            {items.map(item => {
-              const x = Math.min(95, Math.max(5, (item.popularityIndex / 200) * 100))
-              const y = Math.min(95, Math.max(5, 100 - (item.profitabilityIndex / 200) * 100))
-              const cfg = quadrantConfig[item.quadrant]
+      {/* Matrix tab */}
+      <div className={activeTab !== 'matrix' ? 'hidden' : undefined}>
+        <div className="space-y-6">
+          {/* Summary stats */}
+          <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {([
+              { q: 'star' as const, items: stars },
+              { q: 'puzzle' as const, items: puzzles },
+              { q: 'plowhorse' as const, items: plowhorses },
+              { q: 'dog' as const, items: dogs },
+            ]).map(({ q, items: qItems }) => {
+              const cfg = quadrantConfig[q]
+              const rev = qItems.reduce((s, i) => s + i.revenueCents, 0)
               return (
-                <div
-                  key={item.name}
-                  className="absolute w-3 h-3 rounded-full group cursor-default"
-                  style={{ left: `${x}%`, top: `${y}%`, backgroundColor: cfg.color.includes('17C5B0') ? '#17C5B0' : cfg.color.includes('7C5CFF') ? '#7C5CFF' : cfg.color.includes('1A8FD6') ? '#1A8FD6' : '#A1A1A8', transform: 'translate(-50%, -50%)' }}
-                >
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#0A0A0B] border border-[#1F1F23] rounded text-[10px] text-[#F5F5F7] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    {item.name} — {item.monthlySales}/mo, {item.marginPct}% margin
-                  </div>
-                </div>
+                <StaggerItem key={q}>
+                  <DashboardTiltCard className="card p-4">
+                    <div className="flex items-center gap-2">
+                      <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center', cfg.bg)}>
+                        <cfg.icon size={16} className={cfg.color} />
+                      </div>
+                      <div>
+                        <p className="stat-label">{cfg.label}</p>
+                        <p className={clsx('text-lg font-bold font-mono', cfg.color)}>{qItems.length}</p>
+                      </div>
+                      <span className="ml-auto text-[10px] font-mono text-[#A1A1A8]/40">{formatCentsCompact(rev)}</span>
+                    </div>
+                  </DashboardTiltCard>
+                </StaggerItem>
               )
             })}
+          </StaggerContainer>
+
+          {/* Scatter plot (CSS-based) */}
+          <ScrollReveal variant="fadeUp" delay={0.1}>
+            <div className="card p-4 sm:p-5">
+              <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Profitability vs Popularity Matrix</h3>
+              <div className="relative w-full aspect-square max-w-[500px] mx-auto">
+                {/* Quadrant backgrounds */}
+                <div className="absolute inset-0 grid grid-cols-2 grid-rows-2">
+                  <div className="bg-[#7C5CFF]/5 border-r border-b border-[#1F1F23] flex items-center justify-center">
+                    <span className="text-[10px] text-[#7C5CFF]/30 font-medium">Puzzles</span>
+                  </div>
+                  <div className="bg-[#17C5B0]/5 border-b border-[#1F1F23] flex items-center justify-center">
+                    <span className="text-[10px] text-[#17C5B0]/30 font-medium">Stars</span>
+                  </div>
+                  <div className="bg-[#A1A1A8]/5 border-r border-[#1F1F23] flex items-center justify-center">
+                    <span className="text-[10px] text-[#A1A1A8]/20 font-medium">Dogs</span>
+                  </div>
+                  <div className="bg-[#1A8FD6]/5 flex items-center justify-center">
+                    <span className="text-[10px] text-[#1A8FD6]/30 font-medium">Plowhorses</span>
+                  </div>
+                </div>
+                {/* Axis labels */}
+                <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-[#A1A1A8]/40 font-mono">Popularity &rarr;</div>
+                <div className="absolute -left-5 top-1/2 -translate-y-1/2 -rotate-90 text-[9px] text-[#A1A1A8]/40 font-mono">Profitability &rarr;</div>
+                {/* Data points */}
+                {items.map(item => {
+                  const x = Math.min(95, Math.max(5, (item.popularityIndex / 200) * 100))
+                  const y = Math.min(95, Math.max(5, 100 - (item.profitabilityIndex / 200) * 100))
+                  const cfg = quadrantConfig[item.quadrant]
+                  return (
+                    <div
+                      key={item.name}
+                      className="absolute w-3 h-3 rounded-full group cursor-default"
+                      style={{ left: `${x}%`, top: `${y}%`, backgroundColor: cfg.color.includes('17C5B0') ? '#17C5B0' : cfg.color.includes('7C5CFF') ? '#7C5CFF' : cfg.color.includes('1A8FD6') ? '#1A8FD6' : '#A1A1A8', transform: 'translate(-50%, -50%)' }}
+                    >
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#0A0A0B] border border-[#1F1F23] rounded text-[10px] text-[#F5F5F7] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        {item.name} &mdash; {item.monthlySales}/mo, {item.marginPct}% margin
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </ScrollReveal>
+
+          {/* Quadrant detail cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ScrollReveal variant="fadeUp" delay={0.15}><QuadrantCard quadrant="star" items={stars} /></ScrollReveal>
+            <ScrollReveal variant="fadeUp" delay={0.2}><QuadrantCard quadrant="puzzle" items={puzzles} /></ScrollReveal>
+            <ScrollReveal variant="fadeUp" delay={0.25}><QuadrantCard quadrant="plowhorse" items={plowhorses} /></ScrollReveal>
+            <ScrollReveal variant="fadeUp" delay={0.3}><QuadrantCard quadrant="dog" items={dogs} /></ScrollReveal>
           </div>
         </div>
-      </ScrollReveal>
-
-      {/* Quadrant detail cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ScrollReveal variant="fadeUp" delay={0.15}><QuadrantCard quadrant="star" items={stars} /></ScrollReveal>
-        <ScrollReveal variant="fadeUp" delay={0.2}><QuadrantCard quadrant="puzzle" items={puzzles} /></ScrollReveal>
-        <ScrollReveal variant="fadeUp" delay={0.25}><QuadrantCard quadrant="plowhorse" items={plowhorses} /></ScrollReveal>
-        <ScrollReveal variant="fadeUp" delay={0.3}><QuadrantCard quadrant="dog" items={dogs} /></ScrollReveal>
       </div>
+
+      {/* Price Builder tab */}
+      {visitedTabs.has('priceBuilder') && (
+        <div className={activeTab !== 'priceBuilder' ? 'hidden' : undefined}>
+          <MenuPriceBuilder />
+        </div>
+      )}
     </div>
     </DataPageSkeleton>
   )

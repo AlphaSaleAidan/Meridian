@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react'
-import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X } from 'lucide-react'
+import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy } from 'lucide-react'
 import {
-  generateScheduleStaff, generateScheduleShifts, generateRecommendedShifts,
+  generateScheduleStaff, generateScheduleShifts,
   generatePeakHourHeatmap, getHolidaysForWeek,
   type ScheduleShift, type ScheduleStaffMember,
 } from '@/lib/agent-data'
@@ -14,6 +14,8 @@ import { useAuth } from '@/lib/auth'
 import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
+import MobileDayView from '@/components/schedule/MobileDayView'
+import { ROLE_GROUPS } from '@/components/schedule/schedule-helpers'
 
 function getMonday(d: Date): Date {
   const dt = new Date(d), day = dt.getDay()
@@ -92,105 +94,11 @@ function buildOptimalSchedule(
   return shifts
 }
 
-const MOBILE_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-function MobileDayView({ shifts, staff, holidays, weekStartDate, onShiftClick, onSlotClick }: {
-  shifts: ScheduleShift[]
-  staff: ScheduleStaffMember[]
-  holidays: { date: string; name: string }[]
-  weekStartDate: Date
-  onShiftClick: (s: ScheduleShift) => void
-  onSlotClick: (day: number, hour: number) => void
-}) {
-  const [day, setDay] = useState(() => {
-    const now = new Date(), todayStr = formatDateISO(now)
-    for (let i = 0; i < 7; i++) {
-      if (formatDateISO(addDays(weekStartDate, i)) === todayStr) return i
-    }
-    return 0
-  })
-
-  const staffMap = useMemo(() => new Map(staff.map(s => [s.id, s])), [staff])
-  const todayStr = formatDateISO(new Date())
-  const selectedDate = addDays(weekStartDate, day)
-  const selectedDateStr = formatDateISO(selectedDate)
-  const isToday = selectedDateStr === todayStr
-  const holiday = holidays.find(h => h.date === selectedDateStr)
-
-  const dayShifts = useMemo(
-    () => shifts.filter(s => s.dayOfWeek === day && !s.isRecommended)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [shifts, day],
-  )
-
-  return (
-    <div className="lg:hidden space-y-3">
-      {/* Day tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1">
-        {MOBILE_DAYS.map((name, di) => {
-          const d = addDays(weekStartDate, di)
-          const isSel = di === day
-          const isTod = formatDateISO(d) === todayStr
-          const cnt = shifts.filter(s => s.dayOfWeek === di && !s.isRecommended).length
-          return (
-            <button key={di} onClick={() => setDay(di)}
-              className={`flex-1 min-w-[44px] flex flex-col items-center py-2 rounded-lg transition-all ${
-                isSel ? 'bg-[#17C5B0]/10 border border-[#17C5B0]/30' : 'border border-transparent hover:bg-[#1F1F23]'
-              }`}>
-              <span className={`text-[10px] font-bold uppercase ${isSel ? 'text-[#17C5B0]' : isTod ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60'}`}>{name}</span>
-              <span className={`text-[13px] font-semibold ${isSel ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]/40'}`}>{d.getDate()}</span>
-              {cnt > 0 && <div className={`mt-0.5 w-1.5 h-1.5 rounded-full ${isSel ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/25'}`} />}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Day header */}
-      <div className="flex items-center justify-between px-1">
-        <div>
-          <span className="text-sm font-semibold text-[#F5F5F7]">
-            {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-          </span>
-          {isToday && <span className="ml-2 text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 px-1.5 py-0.5 rounded">Today</span>}
-          {holiday && <span className="ml-2 text-[10px] font-medium text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">{holiday.name}</span>}
-        </div>
-        <span className="text-[11px] text-[#A1A1A8]/40 font-mono">{dayShifts.length} shifts</span>
-      </div>
-
-      {/* Shift cards */}
-      <div className="space-y-2">
-        {dayShifts.map(shift => {
-          const member = shift.staffMemberId ? staffMap.get(shift.staffMemberId) : null
-          const color = member?.color || '#A1A1A8'
-          return (
-            <button key={shift.id} onClick={() => onShiftClick(shift)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#111113] border border-[#1F1F23] hover:bg-[#1A1A1D] transition-colors text-left">
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-[#F5F5F7] truncate">{member?.name || 'Unassigned'}</div>
-                <div className="text-[11px] text-[#A1A1A8]/50 capitalize">{member?.role?.replace(/_/g, ' ') || shift.role}</div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <div className="text-[12px] font-mono text-[#F5F5F7]/80">{shift.startTime}–{shift.endTime}</div>
-              </div>
-            </button>
-          )
-        })}
-
-        {dayShifts.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-sm text-[#A1A1A8]/30">No shifts scheduled</p>
-          </div>
-        )}
-
-        <button onClick={() => onSlotClick(day, 9)}
-          className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border border-dashed border-[#1F1F23] text-xs text-[#A1A1A8]/50 hover:text-[#A1A1A8] hover:border-[#333] transition-colors">
-          <Plus size={14} /> Add shift
-        </button>
-      </div>
-    </div>
-  )
-}
+/** Role filter pills for 7shifts-style filtering */
+const FILTER_OPTIONS = [
+  { key: 'all', label: 'All Roles' },
+  ...ROLE_GROUPS.map(g => ({ key: g.key, label: g.label, color: g.color })),
+]
 
 export default function SchedulePage() {
   const isDemo = useIsDemo()
@@ -204,6 +112,7 @@ export default function SchedulePage() {
   const [isPublished, setIsPublished] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [roleFilter, setRoleFilter] = useState('all')
   const showDemoSchedule = isDemo || isCanadaPath()
 
   const [staff, setStaff] = useState<ScheduleStaffMember[]>(() =>
@@ -256,6 +165,25 @@ export default function SchedulePage() {
     if (showDemoSchedule) setShifts(generateScheduleShifts(next))
   }, [weekStartDate, showDemoSchedule])
 
+  const handleCopyPrevWeek = useCallback(() => {
+    const prevWeekStart = addWeeks(weekStartDate, -1)
+    const prevShifts = showDemoSchedule
+      ? generateScheduleShifts(prevWeekStart)
+      : shifts // fallback: just use current shifts
+    // Re-map shifts to this week
+    const copied = prevShifts
+      .filter(s => !s.isRecommended)
+      .map((s, i) => ({
+        ...s,
+        id: `shift-copy-${Date.now()}-${i}`,
+        shiftDate: formatDateISO(addDays(weekStartDate, s.dayOfWeek)),
+        status: 'draft' as const,
+      }))
+    setShifts(copied)
+    setIsPublished(false)
+    showToast(`Copied ${copied.length} shifts from previous week`)
+  }, [weekStartDate, showDemoSchedule, shifts, showToast])
+
   const handleAddStaff = useCallback((m: Omit<ScheduleStaffMember, 'id'>) => {
     setStaff(prev => [...prev, { ...m, id: `staff-${Date.now()}` }])
   }, [])
@@ -279,6 +207,22 @@ export default function SchedulePage() {
   const handleShiftDelete = useCallback((id: string) => {
     setShifts(prev => prev.filter(s => s.id !== id))
   }, [])
+
+  const handleSplitShift = useCallback((original: ScheduleShift, firstEnd: string, secondStart: string) => {
+    const first: ScheduleShift = {
+      ...original,
+      endTime: firstEnd,
+      breakMinutes: 0,
+    }
+    const second: ScheduleShift = {
+      ...original,
+      id: `shift-split-${Date.now()}`,
+      startTime: secondStart,
+      breakMinutes: 0,
+    }
+    setShifts(prev => prev.map(s => (s.id === original.id ? first : s)).concat(second))
+    showToast('Shift split into two parts')
+  }, [showToast])
 
   const handleShiftMove = useCallback((shiftId: string, newDay: number, newStartHour: number) => {
     setShifts(prev => prev.map(s => {
@@ -349,10 +293,15 @@ export default function SchedulePage() {
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
               <Plus size={13} />Staff
             </button>
+            <button onClick={handleCopyPrevWeek}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
+              title="Copy shifts from previous week">
+              <Copy size={13} />Copy Week
+            </button>
             <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#17C5B0]/20 hover:shadow-[#17C5B0]/30 hover:brightness-110 disabled:opacity-40">
               <Sparkles size={14} className={isGenerating ? 'animate-spin' : ''} />
-              {isGenerating ? 'Generating…' : 'Generate'}
+              {isGenerating ? 'Generating...' : 'Generate'}
             </button>
             <button onClick={handlePublish}
               disabled={realShifts.length === 0 || isPublished}
@@ -410,6 +359,30 @@ export default function SchedulePage() {
         </div>
       </ScrollReveal>
 
+      {/* Role filter bar */}
+      <ScrollReveal variant="fadeUp" delay={0.04}>
+        <div className="flex items-center gap-1.5 px-1 overflow-x-auto pb-1">
+          {FILTER_OPTIONS.map(opt => {
+            const isActive = roleFilter === opt.key
+            const color = 'color' in opt ? opt.color : undefined
+            return (
+              <button
+                key={opt.key}
+                onClick={() => setRoleFilter(opt.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${
+                  isActive
+                    ? 'bg-[#1A8FD6]/15 text-[#1A8FD6] border border-[#1A8FD6]/30'
+                    : 'text-[#A1A1A8]/60 border border-[#1F1F23] hover:text-[#A1A1A8] hover:bg-[#1F1F23]/50'
+                }`}
+              >
+                {color && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />}
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      </ScrollReveal>
+
       {/* Generating state */}
       {isGenerating && (
         <div className="flex items-center justify-center gap-3 py-8">
@@ -417,7 +390,7 @@ export default function SchedulePage() {
             <span className="absolute h-8 w-8 rounded-full bg-[#17C5B0]/20 animate-ping" />
             <Sparkles size={20} className="text-[#17C5B0] animate-pulse relative" />
           </span>
-          <span className="text-sm text-[#A1A1A8]">Analyzing peak hours and staff availability…</span>
+          <span className="text-sm text-[#A1A1A8]">Analyzing peak hours and staff availability...</span>
         </div>
       )}
 
@@ -430,6 +403,7 @@ export default function SchedulePage() {
               holidays={holidays} onShiftClick={handleShiftClick}
               onSlotClick={handleSlotClick} onShiftMove={handleShiftMove}
               weekStartDate={weekStartDate} businessType={businessType}
+              roleFilter={roleFilter}
             />
           </div>
         </ScrollReveal>
@@ -447,7 +421,7 @@ export default function SchedulePage() {
       <AddStaffModal open={showAddStaff} onClose={() => setShowAddStaff(false)}
         onSave={handleAddStaff} businessType={businessType} />
       <ShiftEditPopover shift={selectedShift} staff={staff} onClose={() => setSelectedShift(null)}
-        onSave={handleShiftSave} onDelete={handleShiftDelete} />
+        onSave={handleShiftSave} onDelete={handleShiftDelete} onSplitShift={handleSplitShift} />
     </div>
   )
 }

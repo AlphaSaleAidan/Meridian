@@ -9,6 +9,7 @@ export interface PhoneOrderItem {
   name: string
   qty: number
   price: number
+  mods?: string
 }
 
 export interface TranscriptLine {
@@ -53,6 +54,23 @@ export interface PhoneBizConfig {
   menu: PhoneMenuItem[]
 }
 
+export interface VoicePersonality {
+  formality: number
+  upsell: 'none' | 'gentle' | 'active'
+  humor: boolean
+  customGreeting: string
+  customHold: string
+  customClosing: string
+  brandKeywords: string[]
+}
+
+export interface VoiceSettings {
+  speed: number
+  pitch: number
+  warmth: number
+  language: 'en' | 'fr' | 'es'
+}
+
 export interface PhoneStats {
   totalCalls: number
   orders: number
@@ -65,32 +83,9 @@ export interface PhoneStats {
   paidRevenue: number
 }
 
-function h(s: string): number {
-  let v = 0
-  for (let i = 0; i < s.length; i++) v = ((v << 5) - v + s.charCodeAt(i)) | 0
-  return v
-}
+import { generateCalls } from './phone-transcript-builder'
 
-function rng(seed: number): [number, number] {
-  const n = (seed * 1664525 + 1013904223) | 0
-  return [(n >>> 0) / 4294967296, n]
-}
-
-function rngInt(seed: number, min: number, max: number): [number, number] {
-  const [r, n] = rng(seed)
-  return [Math.floor(min + r * (max - min + 1)), n]
-}
-
-function rngPick<T>(arr: T[], seed: number): [T, number] {
-  const [i, n] = rngInt(seed, 0, arr.length - 1)
-  return [arr[i], n]
-}
-
-const FN = ['Sarah','Mike','David','Lisa','James','Emma','Chris','Jessica','Ryan','Amy','Tom','Nicole','Alex','Maria','Kevin','Sophia','Brian','Rachel','Daniel','Olivia']
-const LN = ['Chen','Johnson','Smith','Park','Wang','Kim','Lee','Brown','Davis','Wilson','Garcia','Martinez','Anderson','Taylor','Thomas','Moore','Jackson','White','Harris','Clark']
-const US_AC = ['212','917','646','713','832','310','323','512','312','773']
-const CA_AC = ['514','438','416','647','613','604','778']
-
+/* ---- businesses ---- */
 const BUSINESSES: PhoneBizConfig[] = [
   {
     id: 'tony-pizza', name: "Tony's Pizza Palace", vertical: 'Pizza Shop', country: 'US',
@@ -279,165 +274,7 @@ export const MIDTOWN_KITCHEN: PhoneBizConfig = {
   ],
 }
 
-function fmtT(sec: number): string {
-  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
-}
-
-function buildTranscript(
-  biz: PhoneBizConfig, status: CallStatus, items: PhoneOrderItem[], name: string, ot: string,
-): TranscriptLine[] {
-  const lines: TranscriptLine[] = [{ speaker: 'agent', text: biz.greeting, time: '0:00' }]
-
-  if (status === 'order_placed') {
-    const otLabel = ot.replace('_', ' ')
-    lines.push({ speaker: 'caller', text: `Hi, I'd like to place an order for ${otLabel}.`, time: '0:03' })
-    lines.push({ speaker: 'agent', text: 'Of course! What would you like?', time: '0:05' })
-    let t = 8
-    for (const item of items) {
-      const desc = item.qty > 1 ? `${item.qty} of the ${item.name}` : `the ${item.name}`
-      lines.push({ speaker: 'caller', text: `I'll have ${desc}, please.`, time: fmtT(t) })
-      t += 5
-      lines.push({ speaker: 'agent', text: `Got it, ${item.name}. Anything else?`, time: fmtT(t) })
-      t += 4
-    }
-    lines.push({ speaker: 'caller', text: "That's everything.", time: fmtT(t) })
-    t += 3
-    const sub = Math.round(items.reduce((s, i) => s + i.price * i.qty, 0) * 100) / 100
-    const tot = Math.round((sub + sub * biz.taxRate) * 100) / 100
-    lines.push({ speaker: 'agent', text: `Your total comes to ${biz.currency}${tot.toFixed(2)} with tax. Name for the order?`, time: fmtT(t) })
-    t += 5
-    lines.push({ speaker: 'caller', text: name, time: fmtT(t) })
-    t += 2
-    const eta = ot === 'delivery' ? '35-45 minutes' : '15-20 minutes'
-    lines.push({ speaker: 'agent', text: `Perfect, ${name.split(' ')[0]}! Your order will be ready in about ${eta}.`, time: fmtT(t) })
-    t += 4
-    lines.push({ speaker: 'caller', text: 'Sounds great, thank you!', time: fmtT(t) })
-    lines.push({ speaker: 'agent', text: `Thank you for your order! Have a great day!`, time: fmtT(t + 2) })
-  } else if (status === 'no_order') {
-    lines.push({ speaker: 'caller', text: 'Hi, what are your hours today?', time: '0:03' })
-    lines.push({ speaker: 'agent', text: "We're open today from 11 AM to 10 PM. Would you like to place an order?", time: '0:06' })
-    lines.push({ speaker: 'caller', text: 'Not right now, just checking. Thanks!', time: '0:10' })
-    lines.push({ speaker: 'agent', text: 'No problem! Call back anytime.', time: '0:12' })
-  } else if (status === 'transferred') {
-    lines.push({ speaker: 'caller', text: 'Hi, I have a question about a catering order.', time: '0:03' })
-    lines.push({ speaker: 'agent', text: "For catering orders, let me connect you with our manager. One moment please.", time: '0:07' })
-    lines.push({ speaker: 'caller', text: 'Sure, thanks.', time: '0:10' })
-    lines.push({ speaker: 'agent', text: `Transferring you now. Thank you for calling ${biz.name}!`, time: '0:13' })
-  } else {
-    lines.push({ speaker: 'caller', text: "Hi, I'd like to place an order.", time: '0:03' })
-    lines.push({ speaker: 'agent', text: 'Absolutely! What can I get for you today?', time: '0:05' })
-  }
-
-  return lines
-}
-
-export function generateCalls(biz: PhoneBizConfig, days: number): PhoneCallEntry[] {
-  const calls: PhoneCallEntry[] = []
-  const now = new Date()
-  let seed = h(biz.id + 'calls')
-  const areaCodes = biz.country === 'CA' ? CA_AC : US_AC
-
-  for (let d = days - 1; d >= 0; d--) {
-    const date = new Date(now)
-    date.setDate(date.getDate() - d)
-    date.setHours(0, 0, 0, 0)
-    const dow = date.getDay()
-    const weekend = dow === 0 || dow === 6
-
-    const [count, s1] = rngInt(seed, weekend ? 3 : 1, weekend ? 7 : 5)
-    seed = s1
-
-    for (let c = 0; c < count; c++) {
-      const [statusR, s2] = rng(seed)
-      seed = s2
-      let status: CallStatus
-      if (d === 0 && c === count - 1) status = 'in_progress'
-      else if (statusR < 0.58) status = 'order_placed'
-      else if (statusR < 0.75) status = 'no_order'
-      else if (statusR < 0.90) status = 'transferred'
-      else status = 'no_order'
-
-      const [fn, s3] = rngPick(FN, seed); seed = s3
-      const [ln, s4] = rngPick(LN, seed); seed = s4
-      const [ac, s5] = rngPick(areaCodes, seed); seed = s5
-      const [pn, s6] = rngInt(seed, 1000000, 9999999); seed = s6
-
-      const [hourR, s7] = rng(seed); seed = s7
-      const hour = hourR < 0.45 ? 11 + Math.floor(hourR / 0.45 * 3) : 17 + Math.floor((hourR - 0.45) / 0.55 * 4)
-      const [minute, s8] = rngInt(seed, 0, 59); seed = s8
-      const callDate = new Date(date)
-      callDate.setHours(hour, minute, 0, 0)
-
-      let items: PhoneOrderItem[] = []
-      let subtotal = 0
-      if (status === 'order_placed') {
-        const [ic, s9] = rngInt(seed, 1, 4); seed = s9
-        const used = new Set<string>()
-        for (let i = 0; i < ic; i++) {
-          const [mi, s10] = rngPick(biz.menu, seed); seed = s10
-          if (used.has(mi.id)) continue
-          used.add(mi.id)
-          const [qty, s11] = rngInt(seed, 1, 2); seed = s11
-          items.push({ name: mi.name, qty, price: mi.price })
-          subtotal += mi.price * qty
-        }
-        if (items.length === 0) {
-          items = [{ name: biz.menu[0].name, qty: 1, price: biz.menu[0].price }]
-          subtotal = biz.menu[0].price
-        }
-      }
-
-      subtotal = Math.round(subtotal * 100) / 100
-      const tax = Math.round(subtotal * biz.taxRate * 100) / 100
-      const total = Math.round((subtotal + tax) * 100) / 100
-
-      const [durR, s12] = rng(seed); seed = s12
-      const durationSec = status === 'order_placed'
-        ? Math.floor(90 + durR * 150)
-        : status === 'transferred'
-          ? Math.floor(30 + durR * 60)
-          : status === 'in_progress'
-            ? Math.floor(10 + durR * 30)
-            : Math.floor(15 + durR * 45)
-
-      const [ot, s13] = rngPick(biz.orderTypes, seed); seed = s13
-      const callerName = status === 'no_order' && durR < 0.3 ? '' : `${fn} ${ln}`
-
-      let paymentStatus: PaymentStatus = 'none'
-      let smsSent = false
-      const paymentLink = status === 'order_placed' ? `https://pay.meridian.ai/checkout/${biz.id}-${d}-${c}` : ''
-      if (status === 'order_placed') {
-        smsSent = true
-        const [payR, s14] = rng(seed); seed = s14
-        if (d === 0 && c === count - 1) paymentStatus = 'pending'
-        else if (payR < 0.78) paymentStatus = 'paid'
-        else if (payR < 0.92) paymentStatus = 'pending'
-        else paymentStatus = 'expired'
-      }
-
-      calls.push({
-        id: `${biz.id}-${d}-${c}`,
-        phone: `+1 (${ac}) ${String(pn).slice(0, 3)}-${String(pn).slice(3)}`,
-        name: callerName,
-        status,
-        duration: fmtT(durationSec),
-        durationSec,
-        items,
-        subtotal,
-        tax,
-        total,
-        orderType: ot,
-        transcript: buildTranscript(biz, status, items, callerName || 'Caller', ot),
-        createdAt: callDate.toISOString(),
-        paymentStatus,
-        paymentLink,
-        smsSent,
-      })
-    }
-  }
-
-  return calls.reverse()
-}
+export { generateCalls } from './phone-transcript-builder'
 
 export function getPhoneStats(calls: PhoneCallEntry[], period: 'today' | '7d' | '30d' | '90d'): PhoneStats {
   const now = new Date()
@@ -475,8 +312,25 @@ export function getPhoneDemoData(bizId?: string) {
 }
 
 export const VOICE_OPTIONS = [
-  { id: 'af_bella', label: 'Bella', desc: 'Warm, professional (female)' },
-  { id: 'af_sarah', label: 'Sarah', desc: 'Friendly, casual (female)' },
-  { id: 'am_adam', label: 'Adam', desc: 'Authoritative (male)' },
-  { id: 'am_michael', label: 'Michael', desc: 'Conversational (male)' },
+  { id: 'af_bella', label: 'Bella', desc: 'Warm, professional (female)', sampleText: "Thank you for calling! I'd be happy to help you place an order today." },
+  { id: 'af_sarah', label: 'Sarah', desc: 'Friendly, casual (female)', sampleText: "Hey there! Welcome in -- what can I get started for you?" },
+  { id: 'am_adam', label: 'Adam', desc: 'Authoritative (male)', sampleText: "Good evening. I'll take your order whenever you're ready." },
+  { id: 'am_michael', label: 'Michael', desc: 'Conversational (male)', sampleText: "Hi! Thanks for calling -- let me know what sounds good to you." },
 ]
+
+export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+  speed: 1.0,
+  pitch: 1.0,
+  warmth: 0.7,
+  language: 'en',
+}
+
+export const DEFAULT_PERSONALITY: VoicePersonality = {
+  formality: 0.5,
+  upsell: 'gentle',
+  humor: false,
+  customGreeting: '',
+  customHold: '',
+  customClosing: '',
+  brandKeywords: [],
+}
