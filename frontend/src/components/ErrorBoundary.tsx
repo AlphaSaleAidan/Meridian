@@ -1,5 +1,26 @@
-import { Component, type ReactNode } from 'react'
+import { Component, lazy, type ReactNode, type ComponentType } from 'react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
+
+function isChunkLoadError(error: Error): boolean {
+  return (
+    error.message.includes('Failed to fetch dynamically imported module') ||
+    error.message.includes('Loading chunk') ||
+    error.name === 'ChunkLoadError'
+  )
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function lazyRetry<T extends ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+): React.LazyExoticComponent<T> {
+  return lazy(() =>
+    factory().catch(() => {
+      sessionStorage.setItem('meridian_chunk_reload', String(Date.now()))
+      window.location.reload()
+      return new Promise(() => {})
+    }),
+  )
+}
 
 interface Props {
   children: ReactNode
@@ -21,6 +42,15 @@ export default class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: { componentStack?: string }) {
     this.setState({ info: errorInfo?.componentStack || '' })
     console.error('[ErrorBoundary]', error, errorInfo?.componentStack)
+
+    if (isChunkLoadError(error)) {
+      const key = 'meridian_chunk_reload'
+      const last = sessionStorage.getItem(key)
+      if (!last || Date.now() - Number(last) > 10_000) {
+        sessionStorage.setItem(key, String(Date.now()))
+        window.location.reload()
+      }
+    }
   }
 
   render() {
