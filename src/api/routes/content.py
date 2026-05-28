@@ -139,12 +139,11 @@ def _fal_headers() -> dict:
 
 # ── Async background poller ─────────────────────────────────────────────────
 
-async def _poll_fal_job(job_id: str, endpoint: str, fal_request_id: str):
+async def _poll_fal_job(job_id: str, status_url: str, result_url: str):
     """Background task: poll fal.ai until done, update _video_jobs."""
     import asyncio
     headers = _fal_headers()
-    status_url = f"https://queue.fal.run/{endpoint}/requests/{fal_request_id}/status"
-    result_url = f"https://queue.fal.run/{endpoint}/requests/{fal_request_id}"
+    logger.info(f"Job {job_id}: polling status_url={status_url} result_url={result_url}")
 
     async with httpx.AsyncClient(timeout=30) as client:
         for i in range(180):
@@ -231,7 +230,9 @@ async def generate_video(req: VideoGenRequest):
 
     data = submit_resp.json()
     fal_request_id = data.get("request_id")
-    logger.info(f"fal.ai submit response: status={submit_resp.status_code} request_id={fal_request_id} keys={list(data.keys())}")
+    fal_status_url = data.get("status_url")
+    fal_response_url = data.get("response_url")
+    logger.info(f"fal.ai submit: request_id={fal_request_id} status_url={fal_status_url} response_url={fal_response_url} keys={list(data.keys())}")
 
     # If fal returned the result directly (no queue)
     if not fal_request_id:
@@ -247,7 +248,10 @@ async def generate_video(req: VideoGenRequest):
             "durationSeconds": req.durationSeconds,
         }
 
-    # Queue the job and start background polling
+    # Build URLs from fal response or fall back to constructed ones
+    status_url = fal_status_url or f"https://queue.fal.run/{endpoint}/requests/{fal_request_id}/status"
+    response_url = fal_response_url or f"https://queue.fal.run/{endpoint}/requests/{fal_request_id}"
+
     job_id = str(uuid.uuid4())[:8]
     _video_jobs[job_id] = {
         "status": "processing",
@@ -255,13 +259,15 @@ async def generate_video(req: VideoGenRequest):
         "platform": req.platform,
         "fal_request_id": fal_request_id,
         "fal_endpoint": endpoint,
+        "fal_status_url": status_url,
+        "fal_response_url": response_url,
         "fal_status": "IN_QUEUE",
         "submitted_at": time.time(),
         "poll_count": 0,
     }
 
     import asyncio
-    asyncio.create_task(_poll_fal_job(job_id, endpoint, fal_request_id))
+    asyncio.create_task(_poll_fal_job(job_id, status_url, response_url))
 
     return {
         "ok": True,
@@ -305,17 +311,16 @@ async def video_debug(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    endpoint = job.get("fal_endpoint", "")
-    fal_id = job.get("fal_request_id", "")
-    status_url = f"https://queue.fal.run/{endpoint}/requests/{fal_id}/status"
+    status_url = job.get("fal_status_url", "")
     headers = _fal_headers()
 
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(status_url, headers=headers)
         return {
             "job_id": job_id,
-            "fal_request_id": fal_id,
+            "fal_request_id": job.get("fal_request_id"),
             "status_url": status_url,
+            "response_url": job.get("fal_response_url"),
             "http_status": resp.status_code,
             "response": resp.text[:500],
             "poll_count": job.get("poll_count", 0),
