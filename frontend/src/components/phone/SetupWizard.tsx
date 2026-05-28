@@ -111,8 +111,9 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 <label className="text-xs text-[#A1A1A8] block mb-2">Agent Voice</label>
                 <div className="grid grid-cols-2 gap-2">
                   {VOICE_OPTIONS.map(v => (
-                    <button key={v.id} onClick={() => setCfg(p => ({ ...p, voice: v.id }))}
-                      className={clsx('px-3 py-2 rounded-lg border text-left transition-all',
+                    <div key={v.id} onClick={() => setCfg(p => ({ ...p, voice: v.id }))}
+                      role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setCfg(p => ({ ...p, voice: v.id })) }}
+                      className={clsx('px-3 py-2 rounded-lg border text-left transition-all cursor-pointer',
                         cfg.voice === v.id ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
                       <div className="flex items-center gap-1.5">
                         <Volume2 size={12} className={cfg.voice === v.id ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]'} />
@@ -120,7 +121,7 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                         <VoicePlayButton voiceId={v.id} isSelected={cfg.voice === v.id} />
                       </div>
                       <p className="text-[9px] text-[#A1A1A8]/60 mt-0.5">{v.desc}</p>
-                    </button>
+                    </div>
                   ))}
                 </div>
               </div>
