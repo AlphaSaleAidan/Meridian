@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Helmet } from 'react-helmet-async'
 
 interface SEOProps {
   title: string
@@ -6,76 +6,52 @@ interface SEOProps {
   path?: string
   image?: string
   type?: 'website' | 'article'
-  jsonLd?: Record<string, any> | Record<string, any>[]
+  noindex?: boolean
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[]
 }
 
 const BASE_URL = 'https://meridian.tips'
 const DEFAULT_IMAGE = `${BASE_URL}/og-image.png`
 
-function setMeta(name: string, content: string) {
-  let el = document.querySelector(`meta[property="${name}"], meta[name="${name}"]`) as HTMLMetaElement | null
-  if (!el) {
-    el = document.createElement('meta')
-    if (name.startsWith('og:') || name.startsWith('twitter:')) {
-      el.setAttribute('property', name)
-    } else {
-      el.setAttribute('name', name)
-    }
-    document.head.appendChild(el)
-  }
-  el.setAttribute('content', content)
-}
+export default function SEO({
+  title,
+  description,
+  path = '/',
+  image,
+  type = 'website',
+  noindex = false,
+  jsonLd,
+}: SEOProps) {
+  const url = `${BASE_URL}${path}`
+  const ogImage = image || DEFAULT_IMAGE
 
-function setCanonical(url: string) {
-  let el = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
-  if (!el) {
-    el = document.createElement('link')
-    el.setAttribute('rel', 'canonical')
-    document.head.appendChild(el)
-  }
-  el.setAttribute('href', url)
-}
-
-const JSONLD_ID = 'seo-jsonld'
-
-export default function SEO({ title, description, path = '/', image, type = 'website', jsonLd }: SEOProps) {
-  useEffect(() => {
-    document.title = title
-
-    setMeta('description', description)
-    setMeta('og:title', title)
-    setMeta('og:description', description)
-    setMeta('og:url', `${BASE_URL}${path}`)
-    setMeta('og:image', image || DEFAULT_IMAGE)
-    setMeta('og:type', type)
-    setMeta('twitter:title', title)
-    setMeta('twitter:description', description)
-    setMeta('twitter:image', image || DEFAULT_IMAGE)
-    setCanonical(`${BASE_URL}${path}`)
-
-    // JSON-LD
-    let script = document.getElementById(JSONLD_ID) as HTMLScriptElement | null
-    if (jsonLd) {
-      if (!script) {
-        script = document.createElement('script')
-        script.id = JSONLD_ID
-        script.type = 'application/ld+json'
-        document.head.appendChild(script)
-      }
-      script.textContent = JSON.stringify(
+  const jsonLdScript = jsonLd
+    ? JSON.stringify(
         Array.isArray(jsonLd)
           ? { '@context': 'https://schema.org', '@graph': jsonLd }
-          : { '@context': 'https://schema.org', ...jsonLd }
+          : { '@context': 'https://schema.org', ...jsonLd },
       )
-    } else if (script) {
-      script.remove()
-    }
+    : undefined
 
-    return () => {
-      const s = document.getElementById(JSONLD_ID)
-      if (s) s.remove()
-    }
-  }, [title, description, path, image, type, jsonLd])
-
-  return null
+  return (
+    <Helmet>
+      <title>{title}</title>
+      <meta name="description" content={description} />
+      <link rel="canonical" href={url} />
+      {noindex && <meta name="robots" content="noindex,nofollow" />}
+      <meta property="og:type" content={type} />
+      <meta property="og:title" content={title} />
+      <meta property="og:description" content={description} />
+      <meta property="og:url" content={url} />
+      <meta property="og:image" content={ogImage} />
+      <meta property="og:site_name" content="Meridian Intelligence" />
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={title} />
+      <meta name="twitter:description" content={description} />
+      <meta name="twitter:image" content={ogImage} />
+      {jsonLdScript && (
+        <script type="application/ld+json">{jsonLdScript}</script>
+      )}
+    </Helmet>
+  )
 }
