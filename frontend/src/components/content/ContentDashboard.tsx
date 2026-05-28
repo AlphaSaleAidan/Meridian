@@ -53,6 +53,17 @@ export default function ContentDashboard() {
 
   const [upsellOpen, setUpsellOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<ContentTab>('content')
+  const [visitedTabs, setVisitedTabs] = useState<Set<ContentTab>>(new Set(['content']))
+
+  const handleTabChange = (tab: ContentTab) => {
+    setActiveTab(tab)
+    setVisitedTabs(prev => {
+      if (prev.has(tab)) return prev
+      const next = new Set(prev)
+      next.add(tab)
+      return next
+    })
+  }
 
   // Derived stats
   const stats = useMemo(() => {
@@ -179,7 +190,7 @@ export default function ContentDashboard() {
           return (
             <button
               key={t.id}
-              onClick={() => setActiveTab(t.id)}
+              onClick={() => handleTabChange(t.id)}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-medium border-b-2 transition-colors -mb-px ${
                 activeTab === t.id
                   ? 'border-[#1A8FD6] text-[#F5F5F7]'
@@ -203,37 +214,43 @@ export default function ContentDashboard() {
         })}
       </div>
 
-      {/* Generate Post Tab */}
-      {activeTab === 'posts' && (
-        <PostGeneratorTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+      {/* Tabs: mount on first visit, stay mounted, toggle with CSS */}
+      {visitedTabs.has('posts') && (
+        <div className={activeTab !== 'posts' ? 'hidden' : undefined}>
+          <PostGeneratorTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+        </div>
       )}
 
-      {/* SEO Generator Tab */}
-      {activeTab === 'seo' && (
-        <SeoGeneratorTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+      {visitedTabs.has('seo') && (
+        <div className={activeTab !== 'seo' ? 'hidden' : undefined}>
+          <SeoGeneratorTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+        </div>
       )}
 
-      {/* Video Studio Tab */}
-      {activeTab === 'video' && (
-        <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+      {visitedTabs.has('video') && (
+        <div className={activeTab !== 'video' ? 'hidden' : undefined}>
+          <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+        </div>
       )}
 
-      {/* Commercial Editor / Workshop */}
-      {activeTab === 'workshop' && (
-        <WorkshopEditor
-          isDemo={demo}
-          creditBalance={data?.credits?.balance ?? 0}
-          merchantId={orgId}
-          brand={data?.brand ?? null}
-          onBack={() => setActiveTab('video')}
-        />
+      {visitedTabs.has('workshop') && (
+        <div className={activeTab !== 'workshop' ? 'hidden' : undefined}>
+          <WorkshopEditor
+            isDemo={demo}
+            creditBalance={data?.credits?.balance ?? 0}
+            merchantId={orgId}
+            brand={data?.brand ?? null}
+            onBack={() => handleTabChange('video')}
+          />
+        </div>
       )}
 
+      <div className={activeTab !== 'content' ? 'hidden' : 'space-y-6'}>
       {/* Active jobs banner — never shown in demo */}
-      {activeTab === 'content' && !demo && data?.activeJobs && <ActiveJobsBanner jobs={data.activeJobs} />}
+      {!demo && data?.activeJobs && <ActiveJobsBanner jobs={data.activeJobs} />}
 
       {/* Stat cards */}
-      {activeTab === 'content' && stats && (
+      {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard
             label="Credits"
@@ -270,7 +287,7 @@ export default function ContentDashboard() {
         </div>
       )}
 
-      {activeTab === 'content' && <>
+      <>
       {/* Content Creation — the main showcase */}
       <section>
         <div className="flex items-center gap-2 mb-3">
@@ -537,7 +554,8 @@ export default function ContentDashboard() {
         </section>
       )}
 
-      </>}
+      </>
+      </div>
 
       {/* Credit purchase modal */}
       <ContentUpsellModal open={upsellOpen} onClose={() => setUpsellOpen(false)} creditBalance={data?.credits?.balance ?? 0} />
