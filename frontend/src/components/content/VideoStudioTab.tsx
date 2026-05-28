@@ -20,6 +20,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { isCanadaPath } from '@/lib/demo-context'
+import { contentApi } from '@/lib/content-api'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -35,16 +36,16 @@ interface ModelInfo {
 }
 
 const MODELS: Record<VideoModel, ModelInfo> = {
-  'ltx-video':         { name: 'LTX Video 13B',    desc: 'Fast, affordable',        maxDuration: 10, costCredits: 2 },
-  'wan-2.5':           { name: 'Wan 2.5',           desc: 'Alibaba, great quality',  maxDuration: 5,  costCredits: 2 },
-  'mochi':             { name: 'Mochi v1',          desc: 'Best motion realism',     maxDuration: 5,  costCredits: 3 },
-  'hunyuan':           { name: 'HunyuanVideo',      desc: 'Tencent, cinematic',      maxDuration: 5,  costCredits: 3 },
-  'minimax-video':     { name: 'MiniMax Hailuo',    desc: 'Smooth, reliable',        maxDuration: 6,  costCredits: 3 },
-  'seedance-2-fast':   { name: 'Seedance 2 Fast',   desc: 'ByteDance, quick',        maxDuration: 10, costCredits: 3, badge: 'NEW' },
-  'kling-v2.5-turbo':  { name: 'Kling 2.5 Turbo',   desc: 'Fast cinematic',          maxDuration: 10, costCredits: 4 },
-  'seedance-2':        { name: 'Seedance 2.0',      desc: 'ByteDance, cinematic+audio', maxDuration: 10, costCredits: 5, badge: 'CINEMATIC' },
-  'kling-v3':          { name: 'Kling v3 Pro',      desc: 'Top-tier commercial',     maxDuration: 10, costCredits: 6, badge: 'PRO' },
-  'veo-3.1':           { name: 'Veo 3.1',           desc: 'Google, highest quality',  maxDuration: 8,  costCredits: 8, badge: 'BEST' },
+  'ltx-video':         { name: 'LTX Video 13B',    desc: 'Fast, affordable',        maxDuration: 10, costCredits: 200 },
+  'wan-2.5':           { name: 'Wan 2.5',           desc: 'Alibaba, great quality',  maxDuration: 5,  costCredits: 200 },
+  'mochi':             { name: 'Mochi v1',          desc: 'Best motion realism',     maxDuration: 5,  costCredits: 300 },
+  'hunyuan':           { name: 'HunyuanVideo',      desc: 'Tencent, cinematic',      maxDuration: 5,  costCredits: 300 },
+  'minimax-video':     { name: 'MiniMax Hailuo',    desc: 'Smooth, reliable',        maxDuration: 6,  costCredits: 300 },
+  'seedance-2-fast':   { name: 'Seedance 2 Fast',   desc: 'ByteDance, quick',        maxDuration: 10, costCredits: 300, badge: 'NEW' },
+  'kling-v2.5-turbo':  { name: 'Kling 2.5 Turbo',   desc: 'Fast cinematic',          maxDuration: 10, costCredits: 400 },
+  'seedance-2':        { name: 'Seedance 2.0',      desc: 'ByteDance, cinematic+audio', maxDuration: 10, costCredits: 500, badge: 'CINEMATIC' },
+  'kling-v3':          { name: 'Kling v3 Pro',      desc: 'Top-tier commercial',     maxDuration: 10, costCredits: 600, badge: 'PRO' },
+  'veo-3.1':           { name: 'Veo 3.1',           desc: 'Google, highest quality',  maxDuration: 8,  costCredits: 800, badge: 'BEST' },
 }
 
 const STYLES: { id: VideoStyle; label: string; emoji: string; desc: string }[] = [
@@ -107,9 +108,16 @@ const DEMO_VIDEOS = [
 interface Props {
   isDemo: boolean
   creditBalance: number
+  merchantId: string
 }
 
-export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
+interface GeneratedResult {
+  videoUrl: string
+  model: string
+  durationSeconds?: number
+}
+
+export default function VideoStudioTab({ isDemo, creditBalance, merchantId }: Props) {
   const [prompt, setPrompt] = useState('')
   const [selectedModel, setSelectedModel] = useState<VideoModel>('seedance-2-fast')
   const [selectedStyle, setSelectedStyle] = useState<VideoStyle>('product_spotlight')
@@ -118,6 +126,8 @@ export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [previewVideo, setPreviewVideo] = useState<string | null>(null)
+  const [generatedResult, setGeneratedResult] = useState<GeneratedResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const modelInfo = MODELS[selectedModel]
   const totalCost = modelInfo.costCredits * selectedPlatforms.length
@@ -128,12 +138,72 @@ export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
     )
   }
 
+  const [genStatus, setGenStatus] = useState('')
+
   const handleGenerate = async () => {
-    if (isDemo || !prompt.trim()) return
+    if (isDemo || !prompt.trim() || selectedPlatforms.length === 0) return
     setGenerating(true)
-    // Real mode: call contentApi.generateVideo(...)
-    // For now this is wired up to the backend queue
-    setTimeout(() => setGenerating(false), 3000)
+    setError(null)
+    setGeneratedResult(null)
+    setGenStatus('Submitting to AI...')
+
+    try {
+      const platform = selectedPlatforms[0]
+      const res = await contentApi.generateVideo(merchantId, {
+        prompt,
+        platform,
+        model: selectedModel,
+        style: selectedStyle,
+        durationSeconds: duration,
+      })
+
+      if (res.videoUrl) {
+        setGeneratedResult({
+          videoUrl: res.videoUrl,
+          model: MODELS[selectedModel].name,
+          durationSeconds: duration,
+        })
+        setGenerating(false)
+        return
+      }
+
+      if (!res.jobId) {
+        throw new Error('No job ID returned')
+      }
+
+      setGenStatus('Generating video...')
+      const jobId = res.jobId
+      for (let i = 0; i < 180; i++) {
+        await new Promise(r => setTimeout(r, 3000))
+        const status = await contentApi.videoStatus(jobId)
+        const elapsed = Math.round(status.elapsed ?? i * 3)
+        setGenStatus(`Generating video... ${elapsed}s (${status.fal_status ?? 'processing'})`)
+
+        if (status.status === 'completed' && status.videoUrl) {
+          setGeneratedResult({
+            videoUrl: status.videoUrl,
+            model: MODELS[selectedModel].name,
+            durationSeconds: duration,
+          })
+          setGenerating(false)
+          return
+        }
+
+        if (status.status === 'failed') {
+          throw new Error(status.error ?? 'Generation failed')
+        }
+      }
+
+      throw new Error('Generation timed out — try a faster model like Seedance 2 Fast')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate video. Please try again.')
+      setGenerating(false)
+    }
+  }
+
+  const resetResult = () => {
+    setGeneratedResult(null)
+    setError(null)
   }
 
   return (
@@ -341,7 +411,7 @@ export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
             >
               {generating ? (
                 <>
-                  <Loader2 size={14} className="animate-spin" /> Generating...
+                  <Loader2 size={14} className="animate-spin" /> {genStatus || 'Generating...'}
                 </>
               ) : (
                 <>
@@ -352,6 +422,82 @@ export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
           )}
         </div>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-4 border-red-500/20 bg-red-500/5"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-sm text-red-400">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="text-[10px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] flex-shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Generated Result Card */}
+      {generatedResult && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card overflow-hidden border-purple-500/20 bg-gradient-to-br from-purple-500/5 to-transparent"
+        >
+          <div className="p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#F5F5F7] flex items-center gap-2">
+                <Check size={14} className="text-green-400" />
+                Video Generated
+              </h3>
+              <div className="flex items-center gap-2 text-[10px] text-[#A1A1A8]">
+                <span className="bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded font-medium">
+                  {generatedResult.model}
+                </span>
+                {generatedResult.durationSeconds && (
+                  <span className="flex items-center gap-1">
+                    <Clock size={10} /> {generatedResult.durationSeconds}s
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Video Player */}
+            <div className="rounded-lg overflow-hidden bg-[#0A0A0B] border border-[#1F1F23]">
+              <video
+                src={generatedResult.videoUrl}
+                controls
+                className="w-full max-h-[400px]"
+                preload="metadata"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3">
+              <a
+                href={generatedResult.videoUrl}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-purple-600 text-white text-sm font-semibold hover:bg-purple-500 transition-colors"
+              >
+                <Download size={14} /> Download
+              </a>
+              <button
+                onClick={resetResult}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#1F1F23] text-[#A1A1A8] text-sm font-medium hover:text-[#F5F5F7] hover:border-purple-500/30 transition-colors"
+              >
+                <Zap size={14} /> Generate Another
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* How Video Ads Work — demo showcase */}
       {isDemo && (
@@ -462,16 +608,16 @@ export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
             </thead>
             <tbody>
               {([
-                ['LTX Video 13B', '10s', '★★★☆☆', '~20s', '2'],
-                ['Wan 2.5', '5s', '★★★★☆', '~40s', '2'],
-                ['Mochi v1', '5s', '★★★★☆', '~60s', '3'],
-                ['HunyuanVideo', '5s', '★★★★☆', '~60s', '3'],
-                ['MiniMax Hailuo', '6s', '★★★★☆', '~45s', '3'],
-                ['Seedance 2 Fast', '10s', '★★★★☆', '~30s', '3'],
-                ['Kling 2.5 Turbo', '10s', '★★★★☆', '~45s', '4'],
-                ['Seedance 2.0', '10s', '★★★★★', '~90s', '5'],
-                ['Kling v3 Pro', '10s', '★★★★★', '~90s', '6'],
-                ['Veo 3.1', '8s', '★★★★★', '~120s', '8'],
+                ['LTX Video 13B', '10s', '★★★☆☆', '~20s', '200'],
+                ['Wan 2.5', '5s', '★★★★☆', '~40s', '200'],
+                ['Mochi v1', '5s', '★★★★☆', '~60s', '300'],
+                ['HunyuanVideo', '5s', '★★★★☆', '~60s', '300'],
+                ['MiniMax Hailuo', '6s', '★★★★☆', '~45s', '300'],
+                ['Seedance 2 Fast', '10s', '★★★★☆', '~30s', '300'],
+                ['Kling 2.5 Turbo', '10s', '★★★★☆', '~45s', '400'],
+                ['Seedance 2.0', '10s', '★★★★★', '~90s', '500'],
+                ['Kling v3 Pro', '10s', '★★★★★', '~90s', '600'],
+                ['Veo 3.1', '8s', '★★★★★', '~120s', '800'],
               ] as const).map(([name, dur, quality, speed, cost]) => (
                 <tr key={name} className="border-b border-[#1F1F23]/50 text-[#F5F5F7]">
                   <td className="py-2 pr-4 font-medium">{name}</td>
@@ -490,7 +636,7 @@ export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
       {isDemo && (
         <div className="text-center space-y-2 py-2">
           <p className="text-xs text-[#A1A1A8]">
-            Video credits start at <span className="text-amber-400 font-medium">{isCanadaPath() ? 'CA$2.75' : '$2'} for 20 credits</span> — enough for 10 videos with LTX or 5 with Kling.
+            Video credits start at <span className="text-amber-400 font-medium">{isCanadaPath() ? 'CA$2.75' : '$2'} for 2,000 credits</span> — enough for 10 videos with LTX or 5 with Kling.
           </p>
           <p className="text-[10px] text-[#A1A1A8]/40">
             All videos are generated via fal.ai API. No watermarks. Full commercial rights.

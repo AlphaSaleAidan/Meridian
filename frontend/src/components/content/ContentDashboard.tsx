@@ -191,7 +191,7 @@ export default function ContentDashboard() {
 
       {/* Video Studio Tab */}
       {activeTab === 'video' && (
-        <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} />
+        <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} />
       )}
 
       {/* Active jobs banner — never shown in demo */}
@@ -205,7 +205,7 @@ export default function ContentDashboard() {
             value={String(data?.credits?.balance ?? 0)}
             icon={Coins}
             iconColor="text-amber-400"
-            change={demo ? '5 free on signup' : undefined}
+            change={demo ? '500 free on signup' : undefined}
             changeType="positive"
           />
           <StatCard
@@ -353,11 +353,11 @@ export default function ContentDashboard() {
             </div>
             <div className="flex-1">
               <h3 className="text-base font-semibold text-[#F5F5F7]">
-                5 Free Credits on Signup
+                500 Free Credits on Signup
               </h3>
               <p className="text-sm text-[#A1A1A8] mt-1">
-                Every account gets 5 credits free — enough for 5 social posts or 2 SEO articles + a post.
-                Need more? Credits start at {isCanadaPath() ? 'CA$2.75' : '$2'} for 20.
+                Every account gets 500 credits free — enough for 5 social posts, 2 SEO articles, or generate video ads.
+                Need more? Credits start at {isCanadaPath() ? 'CA$2.75' : '$2'} for 2,000.
               </p>
             </div>
             <button

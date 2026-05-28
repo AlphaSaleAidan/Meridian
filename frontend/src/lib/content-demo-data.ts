@@ -15,18 +15,18 @@ export interface ContentCredits {
 }
 
 export const CREDIT_COSTS = {
-  social_post: 1,
-  seo_article: 2,
-  caption_only: 1,
+  social_post: 100,
+  seo_article: 250,
+  caption_only: 50,
   hashtags_only: 0,
-  image_regen: 1,
+  image_regen: 75,
 } as const
 
 export const CREDIT_PACKS = [
-  { credits: 20, priceUsd: 2, priceCad: 2.75, label: 'Starter' },
-  { credits: 50, priceUsd: 4.50, priceCad: 6.20, label: 'Popular', recommended: true },
-  { credits: 150, priceUsd: 12, priceCad: 16.50, label: 'Pro' },
-  { credits: 500, priceUsd: 35, priceCad: 48, label: 'Agency' },
+  { credits: 2000, priceUsd: 2, priceCad: 2.75, label: 'Starter' },
+  { credits: 5000, priceUsd: 4.50, priceCad: 6.20, label: 'Popular', recommended: true },
+  { credits: 15000, priceUsd: 12, priceCad: 16.50, label: 'Pro' },
+  { credits: 50000, priceUsd: 35, priceCad: 48, label: 'Agency' },
 ] as const
 
 export interface ContentDashboardData {
@@ -296,6 +296,6 @@ export function fetchDemoContentData(): ContentDashboardData {
     posts: [demo.post],
     rankings: demo.rankings,
     activeJobs: [],
-    credits: { balance: 5, lifetime_used: 0, free_granted: 5 },
+    credits: { balance: 500, lifetime_used: 0, free_granted: 500 },
   }
 }

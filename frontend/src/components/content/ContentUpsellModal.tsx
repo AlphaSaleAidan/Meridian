@@ -119,8 +119,8 @@ export default function ContentUpsellModal({ open, onClose, creditBalance = 0 }:
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-[#17C5B0]/5 border border-[#17C5B0]/15">
                   <Zap size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
                   <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
-                    Every new account gets <span className="text-[#F5F5F7] font-semibold">5 free credits</span> to try
-                    content generation. That's enough for 5 social posts or 2 SEO articles + a post.
+                    Every new account gets <span className="text-[#F5F5F7] font-semibold">500 free credits</span> to try
+                    content generation. That's enough for 5 social posts, 2 SEO articles, or 10 video clips.
                   </p>
                 </div>
               </div>

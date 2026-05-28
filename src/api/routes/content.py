@@ -2,17 +2,16 @@
 Content API — video and image generation via fal.ai.
 
 Routes:
-  GET  /api/content/dashboard/{org_id}     → Content dashboard data
-  POST /api/content/video/generate          → Queue video generation
-  POST /api/content/calendar/generate/{org} → Queue weekly calendar
-  PATCH /api/content/posts/{id}/approve     → Approve a post
-  PATCH /api/content/posts/{id}/reject      → Reject a post
-  POST /api/content/posts/{id}/regenerate   → Regenerate a post field
+  POST /api/content/video/generate          → Submit video job (returns jobId)
+  GET  /api/content/video/status/{job_id}   → Poll job status
+  POST /api/content/image/generate          → Generate image (sync, fast)
+  GET  /api/content/models                  → Available models
 """
 
 import logging
 import os
 import time
+import uuid
 import httpx
 from collections import defaultdict
 from fastapi import APIRouter, HTTPException
@@ -32,6 +31,9 @@ MAX_PROMPT_LENGTH = 500
 
 _daily_usage: dict[str, dict[str, int]] = defaultdict(lambda: {"video": 0, "image": 0, "day": 0})
 
+# In-memory job tracker (video jobs)
+_video_jobs: dict[str, dict] = {}
+
 
 def _check_daily_cap(merchant_id: str, media_type: str):
     today = int(time.time()) // 86400
@@ -47,6 +49,7 @@ def _check_daily_cap(merchant_id: str, media_type: str):
             detail=f"Daily {media_type} generation limit reached ({cap}/day). Resets at midnight UTC.",
         )
     bucket[media_type] += 1
+
 
 VIDEO_MODELS = {
     "kling-v3":         "fal-ai/kling-video/v3/pro/text-to-video",
@@ -134,11 +137,169 @@ def _fal_headers() -> dict:
     }
 
 
-async def _fal_submit(endpoint: str, payload: dict) -> dict:
-    """Submit a job to fal.ai queue and poll until done."""
+# ── Async background poller ─────────────────────────────────────────────────
+
+async def _poll_fal_job(job_id: str, endpoint: str, fal_request_id: str):
+    """Background task: poll fal.ai until done, update _video_jobs."""
+    import asyncio
+    headers = _fal_headers()
+    status_url = f"https://queue.fal.run/{endpoint}/requests/{fal_request_id}/status"
+    result_url = f"https://queue.fal.run/{endpoint}/requests/{fal_request_id}"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for i in range(180):
+            await asyncio.sleep(3)
+            try:
+                status_resp = await client.get(status_url, headers=headers)
+                if status_resp.status_code != 200:
+                    logger.warning(f"Job {job_id}: status poll returned {status_resp.status_code}")
+                    continue
+
+                status_data = status_resp.json()
+                status = status_data.get("status", "")
+                _video_jobs[job_id]["fal_status"] = status
+                _video_jobs[job_id]["poll_count"] = i + 1
+
+                if status in ("COMPLETED", "completed", "succeeded"):
+                    result_resp = await client.get(result_url, headers=headers)
+                    if result_resp.status_code == 200:
+                        result = result_resp.json()
+                        video_url = (
+                            result.get("video", {}).get("url")
+                            or result.get("video_url")
+                            or (result.get("videos", [{}])[0].get("url") if result.get("videos") else None)
+                        )
+                        _video_jobs[job_id].update({
+                            "status": "completed",
+                            "videoUrl": video_url,
+                            "completed_at": time.time(),
+                        })
+                        logger.info(f"Job {job_id}: completed, video_url={video_url is not None}")
+                    else:
+                        _video_jobs[job_id].update({
+                            "status": "failed",
+                            "error": f"Failed to fetch result (HTTP {result_resp.status_code})",
+                        })
+                    return
+
+                if status in ("FAILED", "failed"):
+                    err = status_data.get("error", "unknown error")
+                    _video_jobs[job_id].update({"status": "failed", "error": str(err)})
+                    logger.error(f"Job {job_id}: fal.ai failed: {err}")
+                    return
+
+            except Exception as e:
+                logger.warning(f"Job {job_id}: poll error: {e}")
+                continue
+
+    _video_jobs[job_id].update({"status": "failed", "error": "Generation timed out (9 min)"})
+    logger.error(f"Job {job_id}: timed out after 9 min")
+
+
+# ── Video endpoints (async submit + poll) ────────────────────────────────────
+
+@router.post("/video/generate")
+async def generate_video(req: VideoGenRequest):
+    _check_daily_cap(req.merchantId, "video")
+    endpoint = VIDEO_MODELS.get(req.model)
+    if not endpoint:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {req.model}")
+
+    logger.info(f"Video gen: merchant={req.merchantId} model={req.model} dur={req.durationSeconds}s")
+
+    headers = _fal_headers()
+    payload = {
+        "prompt": req.prompt,
+        "duration": req.durationSeconds,
+        "aspect_ratio": _aspect_ratio(req.platform),
+    }
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        submit_resp = await client.post(
+            f"{FAL_BASE}/{endpoint}",
+            headers=headers,
+            json=payload,
+        )
+
+    if submit_resp.status_code not in (200, 201):
+        raise HTTPException(
+            status_code=submit_resp.status_code,
+            detail=f"fal.ai submit failed: {submit_resp.text[:300]}",
+        )
+
+    data = submit_resp.json()
+    fal_request_id = data.get("request_id")
+    logger.info(f"fal.ai submit response: status={submit_resp.status_code} request_id={fal_request_id} keys={list(data.keys())}")
+
+    # If fal returned the result directly (no queue)
+    if not fal_request_id:
+        video_url = (
+            data.get("video", {}).get("url")
+            or data.get("video_url")
+            or (data.get("videos", [{}])[0].get("url") if data.get("videos") else None)
+        )
+        return {
+            "ok": True,
+            "videoUrl": video_url,
+            "model": req.model,
+            "durationSeconds": req.durationSeconds,
+        }
+
+    # Queue the job and start background polling
+    job_id = str(uuid.uuid4())[:8]
+    _video_jobs[job_id] = {
+        "status": "processing",
+        "model": req.model,
+        "platform": req.platform,
+        "fal_request_id": fal_request_id,
+        "fal_endpoint": endpoint,
+        "fal_status": "IN_QUEUE",
+        "submitted_at": time.time(),
+        "poll_count": 0,
+    }
+
+    import asyncio
+    asyncio.create_task(_poll_fal_job(job_id, endpoint, fal_request_id))
+
+    return {
+        "ok": True,
+        "jobId": job_id,
+        "status": "processing",
+        "model": req.model,
+    }
+
+
+@router.get("/video/status/{job_id}")
+async def video_status(job_id: str):
+    job = _video_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    result: dict = {
+        "jobId": job_id,
+        "status": job["status"],
+        "model": job.get("model"),
+        "fal_status": job.get("fal_status"),
+        "poll_count": job.get("poll_count", 0),
+        "elapsed": round(time.time() - job.get("submitted_at", time.time()), 1),
+    }
+
+    if job["status"] == "completed":
+        result["videoUrl"] = job.get("videoUrl")
+        result["ok"] = True
+    elif job["status"] == "failed":
+        result["error"] = job.get("error", "Unknown error")
+
+    return result
+
+
+# ── Image endpoint (sync — FLUX is fast) ─────────────────────────────────────
+
+async def _fal_submit_sync(endpoint: str, payload: dict) -> dict:
+    """Submit and poll for fast models (images)."""
     headers = _fal_headers()
 
-    async with httpx.AsyncClient(timeout=600) as client:
+    async with httpx.AsyncClient(timeout=120) as client:
         submit_resp = await client.post(
             f"{FAL_BASE}/{endpoint}",
             headers=headers,
@@ -158,8 +319,9 @@ async def _fal_submit(endpoint: str, payload: dict) -> dict:
         status_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}/status"
         result_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}"
 
-        for _ in range(180):
-            await _async_sleep(3)
+        import asyncio
+        for _ in range(60):
+            await asyncio.sleep(2)
             status_resp = await client.get(status_url, headers=headers)
             if status_resp.status_code != 200:
                 continue
@@ -174,45 +336,7 @@ async def _fal_submit(endpoint: str, payload: dict) -> dict:
                 err = status_data.get("error", "unknown error")
                 raise HTTPException(status_code=500, detail=f"fal.ai generation failed: {err}")
 
-        raise HTTPException(status_code=504, detail="fal.ai generation timed out (9 min limit)")
-
-
-async def _async_sleep(seconds: float):
-    import asyncio
-    await asyncio.sleep(seconds)
-
-
-@router.post("/video/generate")
-async def generate_video(req: VideoGenRequest):
-    _check_daily_cap(req.merchantId, "video")
-    endpoint = VIDEO_MODELS.get(req.model)
-    if not endpoint:
-        raise HTTPException(status_code=400, detail=f"Unknown model: {req.model}")
-    logger.info(f"Video gen: merchant={req.merchantId} model={req.model} dur={req.durationSeconds}s")
-
-    payload = {
-        "prompt": req.prompt,
-        "duration": req.durationSeconds,
-        "aspect_ratio": _aspect_ratio(req.platform),
-    }
-
-    result = await _fal_submit(endpoint, payload)
-
-    video_url = (
-        result.get("video", {}).get("url")
-        or result.get("video_url")
-        or (result.get("videos", [{}])[0].get("url") if result.get("videos") else None)
-    )
-
-    if not video_url:
-        raise HTTPException(status_code=500, detail="fal.ai returned no video URL")
-
-    return {
-        "ok": True,
-        "videoUrl": video_url,
-        "model": req.model,
-        "durationSeconds": req.durationSeconds,
-    }
+        raise HTTPException(status_code=504, detail="Image generation timed out")
 
 
 @router.post("/image/generate")
@@ -225,7 +349,7 @@ async def generate_image(req: ImageGenRequest):
         "safety_tolerance": "2",
     }
 
-    result = await _fal_submit(IMAGE_MODEL, payload)
+    result = await _fal_submit_sync(IMAGE_MODEL, payload)
 
     images = result.get("images", [])
     if not images:

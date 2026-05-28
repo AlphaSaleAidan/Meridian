@@ -87,8 +87,20 @@ export const contentApi = {
     style?: string
     durationSeconds?: number
   }) =>
-    apiFetch<{ ok: boolean; jobId: string }>('/api/content/video/generate', {
+    apiFetch<{ ok: boolean; jobId?: string; videoUrl?: string; model?: string; status?: string }>('/api/content/video/generate', {
       method: 'POST',
       body: { merchantId, ...params },
     }),
+
+  videoStatus: (jobId: string) =>
+    apiFetch<{
+      jobId: string
+      status: 'processing' | 'completed' | 'failed'
+      videoUrl?: string
+      error?: string
+      model?: string
+      fal_status?: string
+      elapsed?: number
+      ok?: boolean
+    }>(`/api/content/video/status/${jobId}`),
 }
