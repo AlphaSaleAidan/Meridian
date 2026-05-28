@@ -251,7 +251,7 @@ export default function ContentDashboard() {
 
       {/* Stat cards */}
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div data-walkthrough="content-stats" className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard
             label="Credits"
             value={String(data?.credits?.balance ?? 0)}

@@ -8,6 +8,7 @@ export type StepId =
   | 'staff'
   | 'camera'
   | 'phone'
+  | 'content'
   | 'anomaly'
   | 'forecast'
   | 'customers'
@@ -68,6 +69,13 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
     id: 'phone',
     tabPath: 'phone-orders',
     elementSelector: '[data-walkthrough="phone-stats"]',
+    fallbackSelector: '.card',
+    spotlightPadding: 16,
+  },
+  {
+    id: 'content',
+    tabPath: 'content',
+    elementSelector: '[data-walkthrough="content-stats"]',
     fallbackSelector: '.card',
     spotlightPadding: 16,
   },
@@ -139,6 +147,11 @@ function restaurant(id: StepId): TourContent {
       title: 'AI phone ordering',
       description: 'An AI voice agent answers calls, takes orders, and routes them to your POS. It handles after-hours calls, busy periods, and sends text-to-pay links automatically.',
     }
+    case 'content': return {
+      title: 'Content marketing engine',
+      description: 'Generate social posts, SEO-optimized articles, and video content — all tailored to your brand. AI writes the copy, you approve and publish across every platform.',
+      tip: 'Restaurants posting 3+ times per week on Google Business Profile see 2x more direction requests than those posting monthly.',
+    }
     case 'anomaly': return {
       title: 'Unusual activity detected',
       description: 'Automatic alerts for void spikes, unexpected revenue dips, or sudden drops in a top-selling dish. You get flagged before it becomes a problem.',
@@ -191,6 +204,10 @@ function fastFood(id: StepId): TourContent {
       title: 'AI phone orders',
       description: 'An AI agent handles phone orders 24/7 — takes the order, sends a payment link, and pushes it to your POS. Frees up the counter during rush.',
       tip: 'Stores using AI phone ordering see 15-20% of their phone calls convert to orders that would have been missed.',
+    }
+    case 'content': return {
+      title: 'Content marketing',
+      description: 'Auto-generate social posts, SEO articles, and promo videos from your menu and sales data. Schedule across Instagram, Facebook, Google, and TikTok from one dashboard.',
     }
     case 'anomaly': return {
       title: 'Anomaly detection',
@@ -245,6 +262,11 @@ function coffeeShop(id: StepId): TourContent {
       title: 'Phone order agent',
       description: 'An AI answers calls, takes orders (including customizations), and sends a text-to-pay link. Keeps your baristas focused on making drinks instead of answering the phone.',
     }
+    case 'content': return {
+      title: 'Social & content engine',
+      description: 'Generate Instagram-ready posts featuring your seasonal specials, SEO articles to drive local search traffic, and short-form video content — all on-brand and scheduled automatically.',
+      tip: 'Coffee shops that post daily specials on Instagram see 25-35% higher engagement than those posting generic brand content.',
+    }
     case 'anomaly': return {
       title: 'When something\'s off',
       description: 'Automatic alerts when your morning rush doesn\'t show up, a seasonal drink underperforms, or your food-to-beverage ratio shifts unexpectedly.',
@@ -298,6 +320,10 @@ function autoShop(id: StepId): TourContent {
       description: 'An AI answers calls, books appointments, provides estimates, and sends text-to-pay links. Handles after-hours calls so you never miss a job.',
       tip: 'Auto shops miss 30-40% of inbound calls during busy hours. An AI phone agent captures those leads automatically.',
     }
+    case 'content': return {
+      title: 'Marketing content',
+      description: 'Generate service-focused content — seasonal maintenance reminders, Google Business posts, and video walkthroughs of common repairs. Build trust and drive repeat visits.',
+    }
     case 'anomaly': return {
       title: 'Anomaly alerts',
       description: 'Flagged when oil change volume drops (competitor?), declined repairs spike (pricing issue?), or a high-value service type disappears from the mix.',
@@ -349,6 +375,10 @@ function smokeShop(id: StepId): TourContent {
     case 'phone': return {
       title: 'AI phone agent',
       description: 'An AI handles incoming calls — answers product availability questions, takes phone orders, and sends text-to-pay links. Keeps your counter staff focused.',
+    }
+    case 'content': return {
+      title: 'Content & promotions',
+      description: 'Generate product spotlight posts, new arrival announcements, and local SEO content. Schedule across your social platforms to drive foot traffic and repeat visits.',
     }
     case 'anomaly': return {
       title: 'Sales anomalies',
