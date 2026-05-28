@@ -12,6 +12,12 @@ import {
   Lock,
   Zap,
   ArrowRight,
+  Instagram,
+  Facebook,
+  MapPin,
+  Music2,
+  Linkedin,
+  Link2,
 } from 'lucide-react'
 import StatCard from '@/components/StatCard'
 import { useContentDashboard } from '@/hooks/useContentDashboard'
@@ -246,6 +252,41 @@ export default function ContentDashboard() {
         </section>
       )}
 
+      {/* Connect Social Accounts — demo only */}
+      {demo && (
+        <section>
+          <h2 className="text-sm font-semibold text-[#F5F5F7] mb-3">Connect Your Accounts</h2>
+          <p className="text-xs text-[#A1A1A8] mb-3 max-w-xl">
+            Link your social media accounts so Meridian can auto-publish content directly.
+            We never post without your approval unless you enable auto-publish.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {[
+              { icon: Instagram, label: 'Instagram', color: 'text-purple-400', borderColor: 'border-purple-500/20 hover:border-purple-500/40' },
+              { icon: Facebook, label: 'Facebook', color: 'text-blue-400', borderColor: 'border-blue-500/20 hover:border-blue-500/40' },
+              { icon: Music2, label: 'TikTok', color: 'text-[#F5F5F7]', borderColor: 'border-[#1F1F23] hover:border-[#F5F5F7]/20' },
+              { icon: Linkedin, label: 'LinkedIn', color: 'text-blue-500', borderColor: 'border-blue-600/20 hover:border-blue-600/40' },
+              { icon: MapPin, label: 'Google Business', color: 'text-green-400', borderColor: 'border-green-500/20 hover:border-green-500/40' },
+            ].map(({ icon: Icon, label, color, borderColor }) => (
+              <button
+                key={label}
+                disabled
+                className={`card p-3 flex flex-col items-center gap-2 border ${borderColor} cursor-not-allowed opacity-60 transition-colors`}
+              >
+                <Icon size={20} className={color} />
+                <span className="text-[10px] font-medium text-[#A1A1A8]">{label}</span>
+                <span className="flex items-center gap-1 text-[9px] text-[#A1A1A8]/40">
+                  <Link2 size={9} /> Connect
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-[#A1A1A8]/30 mt-2 italic">
+            Sign up to connect your social accounts and start publishing
+          </p>
+        </section>
+      )}
+
       {/* Demo upsell banner */}
       {demo && (
         <motion.div
@@ -330,7 +371,79 @@ export default function ContentDashboard() {
       {data?.rankings && data.rankings.length > 0 && (
         <section>
           <h2 className="text-sm font-semibold text-[#F5F5F7] mb-3">SEO Rankings</h2>
+
+          {/* SEO explainer — demo only */}
+          {demo && (
+            <div className="space-y-3 mb-4">
+              <p className="text-xs text-[#A1A1A8] leading-relaxed max-w-2xl">
+                Meridian monitors your Google rankings daily and tracks when AI platforms
+                like ChatGPT, Claude, and Perplexity cite your business in answers.
+                Content we generate is optimized for these keywords automatically.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="card p-3.5 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Search size={14} className="text-amber-400" />
+                    <span className="text-xs font-semibold text-[#F5F5F7]">Keyword Tracking</span>
+                  </div>
+                  <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
+                    We track your most valuable search terms daily — your position,
+                    movement, and which competitors rank above you.
+                  </p>
+                </div>
+                <div className="card p-3.5 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={14} className="text-[#1A8FD6]" />
+                    <span className="text-xs font-semibold text-[#F5F5F7]">AI Citations</span>
+                  </div>
+                  <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
+                    When someone asks ChatGPT "best coffee shop near me" and it
+                    recommends you — we track that. AI answers are the new search results.
+                  </p>
+                </div>
+                <div className="card p-3.5 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <FileText size={14} className="text-[#17C5B0]" />
+                    <span className="text-xs font-semibold text-[#F5F5F7]">Content → Rankings</span>
+                  </div>
+                  <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
+                    Every blog post and article we generate targets your tracked keywords,
+                    building authority so you rank higher on Google and in AI answers.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <RankingsTable rankings={data.rankings.slice(0, 8)} />
+
+          {/* AI citation explainer — demo only */}
+          {demo && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="mt-3 p-3.5 rounded-lg border border-[#1F1F23] bg-[#131316]/50"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 flex-shrink-0 mt-0.5">
+                  <BarChart3 size={12} className="text-amber-400" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-[#F5F5F7]">
+                    Why AI Citations matter
+                  </p>
+                  <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
+                    40% of consumers now use AI assistants to find local businesses.
+                    When ChatGPT or Perplexity recommends your shop by name, that's a
+                    direct referral you can't get from traditional SEO alone. Meridian's
+                    content engine writes articles structured so AI models learn about
+                    your business and cite you in their answers.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </section>
       )}
 

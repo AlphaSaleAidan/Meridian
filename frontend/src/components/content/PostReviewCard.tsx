@@ -12,6 +12,8 @@ import {
   X,
   Check,
   Music2,
+  Lock,
+  MessageSquarePlus,
 } from 'lucide-react'
 import type { ContentPost } from '@/lib/content-demo-data'
 
@@ -67,18 +69,31 @@ export default function PostReviewCard({
 
   return (
     <div className="card p-4 sm:p-5 group hover:border-[#1F1F23]/80 transition-colors">
-      <div className="flex gap-4">
-        {/* Thumbnail */}
-        {post.image_url ? (
+      {/* Large preview image for readOnly/demo */}
+      {readOnly && post.image_url && (
+        <div className="mb-4">
           <img
             src={post.image_url}
             alt=""
-            className="w-20 h-20 rounded-lg object-cover flex-shrink-0 bg-[#1F1F23]"
+            className="w-full aspect-square sm:aspect-[4/3] rounded-lg object-cover bg-[#1F1F23]"
           />
-        ) : (
-          <div className="w-20 h-20 rounded-lg bg-[#1F1F23] flex items-center justify-center flex-shrink-0">
-            <PlatformIcon size={28} className={platform.color} />
-          </div>
+        </div>
+      )}
+
+      <div className="flex gap-4">
+        {/* Thumbnail — compact view for non-readOnly */}
+        {!readOnly && (
+          post.image_url ? (
+            <img
+              src={post.image_url}
+              alt=""
+              className="w-20 h-20 rounded-lg object-cover flex-shrink-0 bg-[#1F1F23]"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-lg bg-[#1F1F23] flex items-center justify-center flex-shrink-0">
+              <PlatformIcon size={28} className={platform.color} />
+            </div>
+          )
         )}
 
         {/* Content */}
@@ -95,10 +110,13 @@ export default function PostReviewCard({
           </div>
 
           {/* Title / Hook */}
-          <p className="text-sm font-semibold text-[#F5F5F7] truncate">{displayTitle}</p>
+          <p className="text-sm font-semibold text-[#F5F5F7]">{displayTitle}</p>
 
-          {/* Body preview */}
-          <p className="text-xs text-[#A1A1A8] line-clamp-2 leading-relaxed">{displayBody}</p>
+          {/* Body — full text in readOnly, clipped otherwise */}
+          <p className={clsx(
+            'text-xs text-[#A1A1A8] leading-relaxed',
+            readOnly ? 'whitespace-pre-line' : 'line-clamp-2',
+          )}>{displayBody}</p>
 
           {/* POS data badge + hashtags */}
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -107,7 +125,7 @@ export default function PostReviewCard({
                 POS Data
               </span>
             )}
-            {post.hashtags?.slice(0, 3).map(tag => (
+            {post.hashtags?.map(tag => (
               <span
                 key={tag}
                 className="text-[10px] text-[#A1A1A8]/60 bg-[#1F1F23] px-1.5 py-0.5 rounded"
@@ -115,26 +133,51 @@ export default function PostReviewCard({
                 {tag}
               </span>
             ))}
-            {(post.hashtags?.length ?? 0) > 3 && (
-              <span className="text-[10px] text-[#A1A1A8]/40">
-                +{(post.hashtags?.length ?? 0) - 3}
-              </span>
-            )}
           </div>
+
+          {/* CTA preview */}
+          {readOnly && post.call_to_action && (
+            <p className="text-[11px] text-[#1A8FD6] font-medium pt-1">{post.call_to_action}</p>
+          )}
         </div>
       </div>
 
-      {/* Action bar — hidden in demo/readOnly mode */}
+      {/* Action bar */}
       {readOnly ? (
-        <div className="mt-4 pt-3 border-t border-[#1F1F23] flex items-center justify-between">
-          {post.status === 'published' && post.published_at && (
-            <span className="text-[10px] text-[#A1A1A8]/50">
-              Published {new Date(post.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-            </span>
-          )}
-          <p className="text-[10px] text-[#A1A1A8]/30 italic ml-auto">
-            Example AI-generated ad — connect your POS to create your own
-          </p>
+        <div className="mt-4 pt-3 border-t border-[#1F1F23] space-y-3">
+          <div className="flex items-center gap-2">
+            <button
+              disabled
+              className="flex items-center gap-1.5 text-[11px] font-medium text-[#A1A1A8]/50 bg-[#1F1F23] px-2.5 py-1.5 rounded-md cursor-not-allowed"
+              title="Connect your POS to generate captions"
+            >
+              <Lock size={12} /> Generate Caption
+            </button>
+            <button
+              disabled
+              className="flex items-center gap-1.5 text-[11px] font-medium text-[#A1A1A8]/50 bg-[#1F1F23] px-2.5 py-1.5 rounded-md cursor-not-allowed"
+              title="Connect your POS to generate hashtags"
+            >
+              <Lock size={12} /> Generate Hashtags
+            </button>
+            <button
+              disabled
+              className="flex items-center gap-1.5 text-[11px] font-medium text-[#A1A1A8]/50 bg-[#1F1F23] px-2.5 py-1.5 rounded-md cursor-not-allowed"
+              title="Connect your accounts to publish"
+            >
+              <Lock size={12} /> Publish
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            {post.status === 'published' && post.published_at && (
+              <span className="text-[10px] text-[#A1A1A8]/50">
+                Published {new Date(post.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            )}
+            <p className="text-[10px] text-[#A1A1A8]/30 italic ml-auto">
+              Example AI-generated ad — connect your POS to create your own
+            </p>
+          </div>
         </div>
       ) : (
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-[#1F1F23]">
