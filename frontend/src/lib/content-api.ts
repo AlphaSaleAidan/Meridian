@@ -79,4 +79,16 @@ export const contentApi = {
     apiFetch<{ ok: boolean; jobIds: string[] }>('/api/content/calendar/generate/' + merchantId, {
       method: 'POST',
     }),
+
+  generateVideo: (merchantId: string, params: {
+    prompt: string
+    platform: string
+    model?: string
+    style?: string
+    durationSeconds?: number
+  }) =>
+    apiFetch<{ ok: boolean; jobId: string }>('/api/content/video/generate', {
+      method: 'POST',
+      body: { merchantId, ...params },
+    }),
 }

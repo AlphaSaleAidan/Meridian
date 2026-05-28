@@ -1499,7 +1499,226 @@ function PhoneSetupCard({ biz, onConnect }: { biz: PhoneBizConfig; onConnect: ()
   )
 }
 
-type Tab = 'overview' | 'calls' | 'settings'
+/* ---------- Text Ordering Tab ---------- */
+const DEMO_SMS_CONVO = [
+  { from: 'customer', text: "Hi, I'd like to place an order" },
+  { from: 'business', text: "Welcome to The Midtown Kitchen! 🍽️ What can I get for you? Text 'menu' to see our full menu." },
+  { from: 'customer', text: 'menu' },
+  { from: 'business', text: "📋 The Midtown Kitchen Menu\n\nMains:\n  Grilled Salmon — $24.99\n  Chicken Parm — $19.99\n  Truffle Burger — $18.99\n\nStarters:\n  Caesar Salad — $12.99\n  Calamari — $13.99\n\nSides:\n  Truffle Fries — $8.99\n\nText what you'd like to order!" },
+  { from: 'customer', text: 'I\'ll have the truffle burger and truffle fries' },
+  { from: 'business', text: "Got it! 1x Truffle Burger ($18.99) and 1x Truffle Fries ($8.99). Anything else?" },
+  { from: 'customer', text: "That's it" },
+  { from: 'business', text: "Your total is $30.46 with tax. What's your name, and is this pickup or delivery?" },
+  { from: 'customer', text: 'Sarah, pickup' },
+  { from: 'business', text: "Order confirmed, Sarah! 🎉\n\n  1x Truffle Burger — $18.99\n  1x Truffle Fries — $8.99\n\nTotal: $30.46 (pickup)\n\nPay here: pay.meridian.ai/checkout/mk-0-1\n\nYour order will be ready in 15-20 min.\n\nThank you! — The Midtown Kitchen" },
+]
+
+function TextOrderingTab({ biz, isDemo }: { biz: PhoneBizConfig; isDemo: boolean }) {
+  const [enabled, setEnabled] = useState(true)
+  const [smsNumber, setSmsNumber] = useState(biz.phone || '+1 (212) 555-2024')
+  const [showConvo, setShowConvo] = useState(true)
+
+  return (
+    <div className="space-y-5">
+      {/* Text-to-Order Header */}
+      <div className="card p-5 border-[#7C5CFF]/15">
+        <div className="flex items-start gap-4">
+          <div className="w-11 h-11 rounded-xl bg-[#7C5CFF]/10 flex items-center justify-center flex-shrink-0">
+            <MessageSquare size={20} className="text-[#7C5CFF]" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg font-bold text-[#F5F5F7]">Text-to-Order</h2>
+            <p className="text-xs text-[#A1A1A8] mt-1">
+              Let customers text your number to place an order and pay — no phone call needed.
+              AI handles the conversation, builds the order, and sends a payment link.
+            </p>
+          </div>
+          <button
+            onClick={() => setEnabled(!enabled)}
+            className={clsx(
+              'relative w-11 h-6 rounded-full transition-colors flex-shrink-0 mt-1',
+              enabled ? 'bg-[#7C5CFF]' : 'bg-[#2A2A2E]'
+            )}
+          >
+            <span className={clsx(
+              'absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
+              enabled ? 'left-[22px]' : 'left-0.5'
+            )} />
+          </button>
+        </div>
+      </div>
+
+      {enabled && (
+        <>
+          {/* How It Works */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {[
+              { step: '1', title: 'Customer Texts', desc: 'They text your number with their order or "menu" to browse', icon: SendHorizontal },
+              { step: '2', title: 'AI Builds Order', desc: 'Our AI guides them through the menu and confirms their order', icon: MessageSquare },
+              { step: '3', title: 'Pay & Pickup', desc: 'They get a payment link via text. Pay, pick up, done.', icon: CreditCard },
+            ].map(s => (
+              <div key={s.step} className="card p-4">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <span className="w-6 h-6 rounded-full bg-[#7C5CFF]/10 flex items-center justify-center text-[10px] font-bold text-[#7C5CFF]">{s.step}</span>
+                  <s.icon size={14} className="text-[#7C5CFF]" />
+                  <span className="text-sm font-semibold text-[#F5F5F7]">{s.title}</span>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8] leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Configuration */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {/* Settings */}
+            <div className="card p-5 space-y-4">
+              <h3 className="text-sm font-semibold text-[#F5F5F7] flex items-center gap-2">
+                <Settings size={14} className="text-[#A1A1A8]" /> Configuration
+              </h3>
+
+              <div>
+                <label className="text-[10px] text-[#A1A1A8] uppercase tracking-wider">SMS Number</label>
+                <div className="mt-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={smsNumber}
+                    onChange={e => setSmsNumber(e.target.value)}
+                    disabled={isDemo}
+                    className="flex-1 px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] font-mono disabled:opacity-50"
+                  />
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(smsNumber.replace(/[^+\d]/g, ''))}
+                    className="p-2 bg-[#1F1F23] rounded-lg hover:bg-[#2A2A2E] transition-colors"
+                    title="Copy number"
+                  >
+                    <Copy size={14} className="text-[#A1A1A8]" />
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8] mt-1">
+                  This is the number customers text to place orders.
+                  Same Twilio number as your phone ordering line.
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-[#1F1F23]">
+                <label className="text-[10px] text-[#A1A1A8] uppercase tracking-wider">Welcome Message</label>
+                <textarea
+                  rows={2}
+                  disabled={isDemo}
+                  defaultValue={`Welcome to ${biz.name}! Text 'menu' to see what we have, or just tell us what you'd like to order.`}
+                  className="mt-1 w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-xs text-[#F5F5F7] resize-none disabled:opacity-50"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-[#1F1F23] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-[#F5F5F7]">Auto-send payment link</p>
+                    <p className="text-[10px] text-[#A1A1A8]">Send Square/Stripe payment link after order confirmation</p>
+                  </div>
+                  <span className="w-9 h-5 rounded-full bg-[#7C5CFF] relative">
+                    <span className="absolute top-0.5 left-[18px] w-4 h-4 rounded-full bg-white shadow" />
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-[#F5F5F7]">Order confirmation receipt</p>
+                    <p className="text-[10px] text-[#A1A1A8]">Text itemized receipt after payment completes</p>
+                  </div>
+                  <span className="w-9 h-5 rounded-full bg-[#7C5CFF] relative">
+                    <span className="absolute top-0.5 left-[18px] w-4 h-4 rounded-full bg-white shadow" />
+                  </span>
+                </div>
+              </div>
+
+              {isDemo && (
+                <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-lg">
+                  <p className="text-[10px] text-amber-400">
+                    Sign up to enable text ordering for your business. Configuration is locked in demo mode.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Live Preview - SMS Conversation */}
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-[#F5F5F7] flex items-center gap-2">
+                  <MessageSquare size={14} className="text-[#7C5CFF]" /> Live Preview
+                </h3>
+                <button
+                  onClick={() => setShowConvo(!showConvo)}
+                  className="text-[10px] text-[#7C5CFF] hover:underline"
+                >
+                  {showConvo ? 'Collapse' : 'Expand'}
+                </button>
+              </div>
+
+              {showConvo && (
+                <div className="bg-[#0A0A0B] rounded-xl p-3 max-h-[420px] overflow-y-auto space-y-2">
+                  {/* Phone frame header */}
+                  <div className="text-center pb-2 border-b border-[#1F1F23] mb-2">
+                    <p className="text-[10px] text-[#A1A1A8]">Messages</p>
+                    <p className="text-xs font-medium text-[#F5F5F7]">{biz.name}</p>
+                    <p className="text-[10px] text-[#A1A1A8] font-mono">{smsNumber}</p>
+                  </div>
+
+                  {DEMO_SMS_CONVO.map((msg, i) => (
+                    <div key={i} className={clsx('flex', msg.from === 'customer' ? 'justify-end' : 'justify-start')}>
+                      <div className={clsx(
+                        'max-w-[80%] px-3 py-2 rounded-2xl text-xs whitespace-pre-line',
+                        msg.from === 'customer'
+                          ? 'bg-[#7C5CFF] text-white rounded-br-md'
+                          : 'bg-[#1F1F23] text-[#F5F5F7] rounded-bl-md'
+                      )}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Promo Banner */}
+          <div className="card p-4 border-[#7C5CFF]/10 bg-gradient-to-r from-[#7C5CFF]/5 to-transparent">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-[#7C5CFF]/10 flex items-center justify-center flex-shrink-0">
+                <Zap size={16} className="text-[#7C5CFF]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-[#F5F5F7] font-medium">Add "Text to Order" signage in your store</p>
+                <p className="text-[10px] text-[#A1A1A8] mt-0.5">
+                  Print table tents, window stickers, or add to your menu: <span className="text-[#7C5CFF] font-mono">Text {smsNumber.replace(/[^+\d]/g, '')} to order</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats (demo) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Text Orders', value: isDemo ? '47' : '0', sub: 'Last 30 days', color: 'text-[#7C5CFF]' },
+              { label: 'Revenue', value: isDemo ? `${biz.currency}1,284` : `${biz.currency}0`, sub: 'Via text orders', color: 'text-[#17C5B0]' },
+              { label: 'Avg Order', value: isDemo ? `${biz.currency}27.32` : '-', sub: 'Per text order', color: 'text-[#F5F5F7]' },
+              { label: 'Payment Rate', value: isDemo ? '89%' : '-', sub: 'Links clicked & paid', color: 'text-[#17C5B0]' },
+            ].map(s => (
+              <DashboardTiltCard key={s.label}>
+                <div className="p-3.5">
+                  <p className="text-[10px] text-[#A1A1A8]">{s.label}</p>
+                  <p className={clsx('text-lg font-bold mt-0.5', s.color)}>{s.value}</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-0.5">{s.sub}</p>
+                </div>
+              </DashboardTiltCard>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+type Tab = 'overview' | 'calls' | 'text_orders' | 'settings'
 
 export default function PhoneOrdersPage() {
   const orgId = useOrgId()
@@ -1627,6 +1846,7 @@ export default function PhoneOrdersPage() {
         {([
           { key: 'overview' as const, label: 'Overview', icon: TrendingUp },
           { key: 'calls' as const, label: 'Call Log', icon: PhoneCall },
+          { key: 'text_orders' as const, label: 'Text Orders', icon: MessageSquare },
           { key: 'settings' as const, label: 'Settings', icon: Settings },
         ]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
@@ -1638,6 +1858,7 @@ export default function PhoneOrdersPage() {
 
       {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
+      {tab === 'text_orders' && <TextOrderingTab biz={business} isDemo={isDemo} />}
       {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} orgId={orgId} />}
 
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}

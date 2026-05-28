@@ -2,23 +2,22 @@
 # Heavy packages (torch-dependent) are commented out to avoid OOM on Railway.
 
 # Vision — Camera Detection (lazy import in src/camera/detector.py)
-ultralytics>=8.4.0
-supervision>=0.28.0
+# ultralytics>=8.4.0    # pulls torch ~2GB — OOM on Railway
+# supervision>=0.28.0   # depends on ultralytics
 opencv-python-headless>=4.8.0
 lapx>=0.9.0
 
 # Prompt Optimization (lazy import in src/ai/dspy_optimizer.py)
-dspy>=2.5.0
+# dspy>=2.5.0           # pulls torch via sentence-transformers
 
 # Agent Memory (lazy import in src/ai/agent_memory.py)
-mem0ai>=0.1.0
+# mem0ai>=0.1.0         # pulls torch + chromadb + onnxruntime
 
 # Pose Estimation (lazy import in src/ai/freemocap/skeletal_tracker.py)
-skellytracker>=0.1.0
+# skellytracker>=0.1.0  # pulls torch + mediapipe
 
 # Forecasting
 statsforecast>=2.0.0
-# prophet>=1.1          # pulls pystan/cmdstanpy ~500MB
 
 # Anomaly Detection (lazy import in src/ai/agents/base.py)
 pyod>=2.0.0

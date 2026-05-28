@@ -31,6 +31,10 @@ app = FastAPI(title="Meridian Phone Agent", version="1.1.0")
 from twilio_voice import router as twilio_router
 app.include_router(twilio_router)
 
+# --- SMS Text-to-Order mode (always available) ---
+from sms_order import router as sms_router
+app.include_router(sms_router)
+
 # --- Open-source Pipecat mode (requires Ollama + GPU) ---
 try:
     from bot import run_call_bot

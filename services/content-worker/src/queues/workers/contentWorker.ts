@@ -12,7 +12,8 @@ import { supabase } from '../../lib/supabase.js'
 // Agent imports
 import { extractBrandVoice } from '../../agents/content/BrandExtractionAgent.js'
 import { generateSocialPost, generateSEOArticle } from '../../agents/content/CopyAgent.js'
-import { generateAdImage, generateVideoClip } from '../../agents/content/ImageAgent.js'
+import { generateAdImage } from '../../agents/content/ImageAgent.js'
+import { generateVideoAd } from '../../agents/content/VideoAgent.js'
 import { publishToSocial, publishToWordPress } from '../../agents/content/PublishAgent.js'
 import { checkRankings } from '../../agents/content/SEOAgent.js'
 import { generateWeeklyCalendar } from '../../agents/content/ContentOrchestrator.js'
@@ -119,10 +120,13 @@ async function processJob(job: Job): Promise<unknown> {
       }
 
       case JOBS.GENERATE_VIDEO: {
-        result = await generateVideoClip({
+        result = await generateVideoAd({
           merchantId,
           prompt: (data.prompt as string) ?? '',
           platform: (data.platform as string) ?? 'instagram_reel',
+          style: data.style as 'product_spotlight' | 'behind_the_scenes' | 'appetizing_food' | 'before_after' | 'testimonial_scene' | 'seasonal_promo' | 'atmosphere' | undefined,
+          businessType: data.businessType as string | undefined,
+          model: data.model as 'kling-v2' | 'kling-v2-master' | 'minimax-video' | 'ltx-video' | 'wan-v2' | 'hunyuan' | undefined,
           durationSeconds: data.durationSeconds as number | undefined,
           postId: data.postId as string | undefined,
         })

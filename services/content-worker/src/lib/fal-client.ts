@@ -86,40 +86,80 @@ export async function generateImage(
   }
 }
 
-interface GenerateVideoParams {
+export type VideoModel =
+  | 'kling-v2'
+  | 'kling-v2-master'
+  | 'minimax-video'
+  | 'ltx-video'
+  | 'wan-v2'
+  | 'hunyuan'
+
+interface VideoModelConfig {
+  falEndpoint: string
+  maxDuration: number
+  defaultDuration: number
+  supportsAspectRatio: boolean
+  costTier: 'low' | 'mid' | 'high'
+}
+
+export const VIDEO_MODELS: Record<VideoModel, VideoModelConfig> = {
+  'kling-v2':        { falEndpoint: 'fal-ai/kling-video/v2/standard', maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+  'kling-v2-master': { falEndpoint: 'fal-ai/kling-video/v2/master',   maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'high' },
+  'minimax-video':   { falEndpoint: 'fal-ai/minimax-video',           maxDuration: 6,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+  'ltx-video':       { falEndpoint: 'fal-ai/ltx-video-v2',            maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'low' },
+  'wan-v2':          { falEndpoint: 'fal-ai/wan/v2.1/1.3b',           maxDuration: 5,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'low' },
+  'hunyuan':         { falEndpoint: 'fal-ai/hunyuan-video',           maxDuration: 5,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+}
+
+export interface GenerateVideoParams {
   prompt: string
   platform: string
   durationSeconds?: number
+  model?: VideoModel
 }
 
-interface GenerateVideoResult {
+export interface GenerateVideoResult {
   videoUrl: string
+  model: VideoModel
+  durationSeconds: number
 }
 
 export async function generateVideo(
   params: GenerateVideoParams
 ): Promise<GenerateVideoResult> {
   const dims = PLATFORM_DIMS[params.platform] ?? PLATFORM_DIMS.instagram_reel
+  const model = params.model ?? 'kling-v2'
+  const config = VIDEO_MODELS[model]
+  const duration = Math.min(params.durationSeconds ?? config.defaultDuration, config.maxDuration)
 
-  const result = await fal.subscribe('fal-ai/kling-video', {
-    input: {
-      prompt: params.prompt,
-      duration: params.durationSeconds ?? 5,
-      aspect_ratio:
-        dims.width > dims.height
-          ? '16:9'
-          : dims.width < dims.height
-            ? '9:16'
-            : '1:1',
-    },
-  })
+  const aspectRatio =
+    dims.width > dims.height
+      ? '16:9'
+      : dims.width < dims.height
+        ? '9:16'
+        : '1:1'
 
-  const data = result.data as Record<string, unknown>
-  const video = data.video as { url: string } | undefined
-
-  if (!video?.url) {
-    throw new Error('fal.ai returned no video')
+  const input: Record<string, unknown> = {
+    prompt: params.prompt,
+    duration,
+  }
+  if (config.supportsAspectRatio) {
+    input.aspect_ratio = aspectRatio
   }
 
-  return { videoUrl: video.url }
+  const result = await fal.subscribe(config.falEndpoint, { input })
+
+  const data = result.data as Record<string, unknown>
+
+  const videoUrl =
+    (data.video as { url: string } | undefined)?.url ??
+    (data.video_url as string | undefined) ??
+    ((data.videos as Array<{ url: string }> | undefined)?.[0]?.url) ??
+    null
+
+  if (!videoUrl) {
+    throw new Error(`fal.ai ${model} returned no video`)
+  }
+
+  return { videoUrl, model, durationSeconds: duration }
 }

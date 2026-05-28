@@ -2,11 +2,18 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libglib2.0-0 libgl1 && \
+    rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY requirements-ml.txt .
-RUN pip install --no-cache-dir -r requirements-ml.txt || echo "ML packages skipped (non-critical)"
+RUN cat requirements-ml.txt | grep -v '^\s*#' | grep -v '^\s*$' | \
+    while read pkg; do \
+      pip install --no-cache-dir "$pkg" || echo "SKIP: $pkg"; \
+    done
 
 COPY src/ ./src/
 

@@ -1,8 +1,54 @@
-__pycache__
+# Node / Frontend
+node_modules/
+frontend/
+nova-labs/
+services/
+.next/
+.vercel/
+.playwright-mcp/
+
+# Git
+.git/
+.gitignore
+
+# Python caches
+__pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Dev files
 *.zip
 *.pdf
-*.md
 *.sql
+*.png
+*.webp
+*.jpg
+*.jpeg
 test_*
 scripts/
+docs/
+.claude/
+
+# Large files and data
+data/
+vendor/
+*.tar
+*.tar.gz
+*.tar.bz2
+betswarm*/
+Alpha-Sale-Pro/
+agents/
+home-v2/
+release/
+logs/
+storage/
+supabase/
+tools/
+edge/
+marketplace/
+migrations/
+tests/
+assets/

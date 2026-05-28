@@ -19,6 +19,7 @@ import {
   Linkedin,
   Link2,
   Coins,
+  Film,
 } from 'lucide-react'
 import StatCard from '@/components/StatCard'
 import { useContentDashboard } from '@/hooks/useContentDashboard'
@@ -29,7 +30,10 @@ import ActiveJobsBanner from './ActiveJobsBanner'
 import PostReviewCard from './PostReviewCard'
 import RankingsTable from './RankingsTable'
 import ContentUpsellModal from './ContentUpsellModal'
+import VideoStudioTab from './VideoStudioTab'
 import type { ContentPost } from '@/lib/content-demo-data'
+
+type ContentTab = 'content' | 'video'
 
 export default function ContentDashboard() {
   const { data, loading, error, refetch } = useContentDashboard()
@@ -42,6 +46,7 @@ export default function ContentDashboard() {
   const basePath = location.pathname.replace(/\/content$/, '')
 
   const [upsellOpen, setUpsellOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<ContentTab>('content')
 
   // Derived stats
   const stats = useMemo(() => {
@@ -155,11 +160,45 @@ export default function ContentDashboard() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex items-center gap-1 border-b border-[#1F1F23] -mb-2">
+        {([
+          { id: 'content' as const, label: 'Content', icon: FileText },
+          { id: 'video' as const, label: 'Video Studio', icon: Film },
+        ]).map(t => {
+          const Icon = t.icon
+          return (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-[11px] font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === t.id
+                  ? 'border-[#1A8FD6] text-[#F5F5F7]'
+                  : 'border-transparent text-[#A1A1A8] hover:text-[#F5F5F7]'
+              }`}
+            >
+              <Icon size={13} />
+              {t.label}
+              {t.id === 'video' && (
+                <span className="text-[8px] font-bold text-purple-400 bg-purple-500/10 px-1 py-0.5 rounded leading-none">
+                  NEW
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Video Studio Tab */}
+      {activeTab === 'video' && (
+        <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} />
+      )}
+
       {/* Active jobs banner — never shown in demo */}
-      {!demo && data?.activeJobs && <ActiveJobsBanner jobs={data.activeJobs} />}
+      {activeTab === 'content' && !demo && data?.activeJobs && <ActiveJobsBanner jobs={data.activeJobs} />}
 
       {/* Stat cards */}
-      {stats && (
+      {activeTab === 'content' && stats && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <StatCard
             label="Credits"
@@ -196,6 +235,7 @@ export default function ContentDashboard() {
         </div>
       )}
 
+      {activeTab === 'content' && <>
       {/* Content Creation — the main showcase */}
       <section>
         <div className="flex items-center gap-2 mb-3">
@@ -461,6 +501,8 @@ export default function ContentDashboard() {
           )}
         </section>
       )}
+
+      </>}
 
       {/* Credit purchase modal */}
       <ContentUpsellModal open={upsellOpen} onClose={() => setUpsellOpen(false)} creditBalance={data?.credits?.balance ?? 0} />
