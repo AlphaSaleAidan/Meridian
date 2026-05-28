@@ -366,7 +366,7 @@ export default function USPortalDashboardPage() {
               </Link>
             </div>
             <div className="px-4 py-4 overflow-x-auto">
-              <div className="grid grid-cols-5 gap-3 min-w-[800px]">
+              <div className="grid grid-cols-3 gap-3 min-w-[800px]">
                 {KANBAN_STAGES.map(stage => {
                   const cfg = STAGE_CONFIG[stage]
                   const stageDeals = deals.filter(d => d.stage === stage)

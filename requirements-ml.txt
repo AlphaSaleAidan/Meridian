@@ -8,10 +8,13 @@ opencv-python-headless>=4.8.0
 lapx>=0.9.0
 
 # Prompt Optimization (lazy import in src/ai/dspy_optimizer.py)
-# dspy>=2.5.0           # pulls torch
+dspy>=2.5.0
 
 # Agent Memory (lazy import in src/ai/agent_memory.py)
-# mem0ai>=0.1.0         # heavy transitive deps
+mem0ai>=0.1.0
+
+# Pose Estimation (lazy import in src/ai/freemocap/skeletal_tracker.py)
+skellytracker>=0.1.0
 
 # Forecasting
 statsforecast>=2.0.0

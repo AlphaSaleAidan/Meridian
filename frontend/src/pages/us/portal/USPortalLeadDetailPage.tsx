@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
@@ -92,6 +92,7 @@ export default function USPortalLeadDetailPage() {
   const { rep } = useSalesAuth()
   const { toast } = useToast()
   const [deal, setDeal] = useState<Deal | null>(null)
+  const dealRef = useRef<Deal | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '' })
@@ -715,6 +716,8 @@ export default function USPortalLeadDetailPage() {
   // Files state
   const [files, setFiles] = useState(DEMO_FILES)
 
+  useEffect(() => { dealRef.current = deal }, [deal])
+
   useEffect(() => {
     if (!id) { setLoading(false); return }
     usLeadsService.getById(id).then(found => {
@@ -728,7 +731,8 @@ export default function USPortalLeadDetailPage() {
     const channel = usLeadsService.subscribe(undefined, deals => {
       const updated = deals.find(d => d.id === id)
       if (updated) {
-        if (deal && updated.stage !== deal.stage) {
+        const current = dealRef.current
+        if (current && updated.stage !== current.stage) {
           notifyStageChange(updated.business_name, updated.stage)
           toast(`${updated.business_name} moved to ${updated.stage.replace(/_/g, ' ')}`, 'info')
         }

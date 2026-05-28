@@ -37,9 +37,23 @@ COMPREFACE_URL = os.environ.get("COMPREFACE_URL", "http://localhost:8000")
 COMPREFACE_API_KEY = os.environ.get("COMPREFACE_API_KEY", "")
 
 ENABLE_DEPTH = os.environ.get("ENABLE_DEPTH", "0") == "1"
+ENABLE_DEMOGRAPHICS = os.environ.get("ENABLE_DEMOGRAPHICS", "1") == "1"
+DEMO_SAMPLE_RATE = int(os.environ.get("DEMO_SAMPLE_RATE", "5"))
 HEARTBEAT_INTERVAL = 60
 TRAFFIC_PUSH_INTERVAL = 900  # 15 minutes
 PERSON_CLASS_ID = 0
+
+_deepface = None
+_deepface_available = False
+
+if ENABLE_DEMOGRAPHICS:
+    try:
+        from deepface import DeepFace
+        _deepface = DeepFace
+        _deepface_available = True
+        logger.info("DeepFace loaded — demographic analysis enabled")
+    except ImportError:
+        logger.warning("deepface not installed — demographic analysis disabled")
 
 
 class CameraProcessor:
@@ -53,7 +67,8 @@ class CameraProcessor:
         self.zone_config = camera_config.get("zone_config", {})
         self.active_hours = camera_config.get("active_hours", {"start": "07:00", "end": "22:00"})
 
-        self.model = YOLO("yolo11n.pt")
+        model_path = camera_config.get("model_path", os.environ.get("YOLO_MODEL", "yolo11n.pt"))
+        self.model = YOLO(model_path)
         self.tracker = None
         self._init_tracker()
 
@@ -61,12 +76,18 @@ class CameraProcessor:
         if ENABLE_DEPTH:
             self._init_depth()
 
+        self._demo_frame_counter = 0
+        self._reset_bucket()
+
+    def _reset_bucket(self):
         self.current_bucket = defaultdict(int)
         self.current_bucket["occupancy_samples"] = []
         self.current_bucket["queue_samples"] = []
         self.current_bucket["wait_samples"] = []
         self.current_bucket["depth_distances"] = []
         self.current_bucket["depth_zone_counts"] = defaultdict(list)
+        self.current_bucket["demographics"] = defaultdict(int)
+        self.current_bucket["vip_sightings"] = []
 
     def _init_tracker(self):
         try:
@@ -94,6 +115,104 @@ class CameraProcessor:
         end_minutes = end_h * 60 + end_m
         return start_minutes <= current_minutes <= end_minutes
 
+    def _analyze_demographics(self, frame: np.ndarray, detections: list):
+        """Run DeepFace on person crops. Samples every DEMO_SAMPLE_RATE frames."""
+        if not _deepface_available or not detections:
+            return
+        self._demo_frame_counter += 1
+        if self._demo_frame_counter % DEMO_SAMPLE_RATE != 0:
+            return
+        h, w = frame.shape[:2]
+        for det in detections[:4]:
+            x1, y1, x2, y2 = int(det[0]), int(det[1]), int(det[2]), int(det[3])
+            pad = int((x2 - x1) * 0.1)
+            crop_y1 = max(0, y1 - pad)
+            crop_y2 = min(h, y1 + int((y2 - y1) * 0.4))
+            crop_x1 = max(0, x1 - pad)
+            crop_x2 = min(w, x2 + pad)
+            face_crop = frame[crop_y1:crop_y2, crop_x1:crop_x2]
+            if face_crop.size == 0:
+                continue
+            try:
+                results = _deepface.analyze(
+                    face_crop,
+                    actions=["age", "gender", "emotion"],
+                    enforce_detection=False,
+                    silent=True,
+                    detector_backend="skip",
+                )
+                if not results:
+                    continue
+                r = results[0] if isinstance(results, list) else results
+                age = r.get("age", 0)
+                if age < 18:
+                    bucket = "age_0-17"
+                elif age < 25:
+                    bucket = "age_18-24"
+                elif age < 35:
+                    bucket = "age_25-34"
+                elif age < 50:
+                    bucket = "age_35-49"
+                else:
+                    bucket = "age_50+"
+                self.current_bucket["demographics"][bucket] += 1
+                gender = r.get("dominant_gender", "")
+                if gender:
+                    self.current_bucket["demographics"][f"gender_{gender[0]}"] += 1
+                emotion = r.get("dominant_emotion", "")
+                if emotion:
+                    self.current_bucket["demographics"][f"emotion_{emotion}"] += 1
+            except Exception as e:
+                logger.debug(f"DeepFace analysis failed: {e}")
+
+    # TODO: VIP checking requires an async camera pipeline refactor.
+    # Once process_camera / process_frame is fully async, wire _check_vip
+    # into the per-frame loop and append results to current_bucket["vip_sightings"].
+    async def _check_vip(
+        self,
+        frame: np.ndarray,
+        detections: list,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> list[dict]:
+        """Check detected faces against VIP collection via CompreFace."""
+        if not COMPREFACE_API_KEY or not detections:
+            return []
+
+        client = http_client or httpx.AsyncClient(timeout=5.0)
+        close_client = http_client is None
+        vips = []
+        h, w = frame.shape[:2]
+        try:
+            for det in detections[:2]:  # Max 2 checks per frame
+                x1, y1, x2, y2 = int(det[0]), int(det[1]), int(det[2]), int(det[3])
+                pad = int((x2 - x1) * 0.1)
+                crop = frame[max(0, y1 - pad):min(h, y2 + pad), max(0, x1 - pad):min(w, x2 + pad)]
+                if crop.size == 0:
+                    continue
+                try:
+                    _, buf = cv2.imencode('.jpg', crop)
+                    resp = await client.post(
+                        f"{COMPREFACE_URL}/api/v1/recognition/recognize",
+                        headers={"x-api-key": COMPREFACE_API_KEY},
+                        files={"file": ("face.jpg", buf.tobytes(), "image/jpeg")},
+                    )
+                    if resp.status_code == 200:
+                        results = resp.json().get("result", [])
+                        for r in results:
+                            subjects = r.get("subjects", [])
+                            for s in subjects:
+                                if s.get("similarity", 0) > 0.9:
+                                    vips.append({
+                                        "subject": s["subject"],
+                                        "similarity": round(s["similarity"], 3),
+                                    })
+                except Exception as e:
+                    logger.debug(f"VIP check failed: {e}")
+        finally:
+            if close_client:
+                await client.aclose()
+        return vips
+
     def process_frame(self, frame: np.ndarray) -> dict:
         """Run YOLO detection + tracking on a single frame. Returns metrics."""
         results = self.model(frame, classes=[PERSON_CLASS_ID], verbose=False)
@@ -117,6 +236,7 @@ class CameraProcessor:
             except Exception as e:
                 logger.debug(f"Tracking failed: {e}")
 
+        self._analyze_demographics(frame, detections)
         self.current_bucket["occupancy_samples"].append(person_count)
 
         queue_zone = self.zone_config.get("checkout", {})
@@ -163,8 +283,9 @@ class CameraProcessor:
         occ = self.current_bucket["occupancy_samples"]
         queue = self.current_bucket["queue_samples"]
 
-        bucket_time = datetime.now(timezone.utc).replace(
-            minute=(datetime.now().minute // 15) * 15, second=0, microsecond=0
+        now_utc = datetime.now(timezone.utc)
+        bucket_time = now_utc.replace(
+            minute=(now_utc.minute // 15) * 15, second=0, microsecond=0
         ).isoformat()
 
         metrics = {
@@ -178,8 +299,11 @@ class CameraProcessor:
             "queue_length_avg": round(sum(queue) / max(len(queue), 1), 1),
             "queue_wait_avg_sec": 0,
             "conversion_rate": 0,
-            "demographic_breakdown": {},
+            "demographic_breakdown": dict(self.current_bucket.get("demographics", {})),
         }
+
+        # VIP sightings (populated when async VIP pipeline is active)
+        metrics["vip_sightings"] = self.current_bucket.get("vip_sightings", [])
 
         # Depth metrics (only present when ENABLE_DEPTH=1)
         depth_dists = self.current_bucket.get("depth_distances", [])
@@ -193,12 +317,7 @@ class CameraProcessor:
                 zone_occ[zone_name] = round(sum(counts) / max(len(counts), 1), 1)
             metrics["depth_zone_occupancy"] = zone_occ
 
-        self.current_bucket = defaultdict(int)
-        self.current_bucket["occupancy_samples"] = []
-        self.current_bucket["queue_samples"] = []
-        self.current_bucket["wait_samples"] = []
-        self.current_bucket["depth_distances"] = []
-        self.current_bucket["depth_zone_counts"] = defaultdict(list)
+        self._reset_bucket()
 
         return metrics
 
@@ -266,7 +385,7 @@ class EdgeAgent:
 
         try:
             while self.running:
-                ret, frame = cap.read()
+                ret, frame = await asyncio.to_thread(cap.read)
                 if not ret:
                     logger.warning(f"Frame read failed: {cam.name}, reconnecting...")
                     cap.release()

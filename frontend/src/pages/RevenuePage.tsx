@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo, lazy, Suspense } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { Download } from 'lucide-react'
+import { Download, Box, BarChart3 } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { formatCents, formatCentsCompact, formatNumber, formatChartDate, formatChartTick } from '@/lib/format'
@@ -14,6 +14,8 @@ import TransactionDrillDown from '@/components/TransactionDrillDown'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import DataPageSkeleton from '@/components/DataPageSkeleton'
 import { useAuth } from '@/lib/auth'
+
+const Revenue3D = lazy(() => import('@/components/Revenue3D'))
 
 const periods = [
   { label: '7D', days: 7 },
@@ -33,20 +35,16 @@ const tooltipStyle = {
 export default function RevenuePage() {
   const [days, setDays] = useState(30)
   const [drillDate, setDrillDate] = useState<string | null>(null)
+  const [view3D, setView3D] = useState(false)
   const orgId = useOrgId()
   const isDemo = useIsDemo()
   const { org } = useAuth()
   const posConnected = !!org?.pos_connected
   const revenue = useApi(() => api.revenue(orgId, days), [orgId, days])
 
-  if (!isDemo && !posConnected) return <DataPageSkeleton title="Revenue"><div /></DataPageSkeleton>
-  if (revenue.loading) return <LoadingPage />
-  if (revenue.error) return <ErrorState message={revenue.error} onRetry={revenue.refetch} />
-  if (!revenue.data) return <LoadingPage />
+  const daily = revenue.data?.daily ?? []
 
-  const data = revenue.data
-
-  const chartData = data.daily.map(d => ({
+  const chartData = useMemo(() => daily.map(d => ({
     rawDate: d.date,
     date: formatChartDate(d.date),
     revenue: d.revenue_cents / 100,
@@ -55,18 +53,18 @@ export default function RevenuePage() {
     refunds: d.refund_cents / 100,
     tips: d.tip_cents / 100,
     discounts: d.discount_cents / 100,
-  }))
+  })), [daily])
 
-  const totalRevenue = data.daily.reduce((s, d) => s + (d.revenue_cents || 0), 0)
-  const totalTxns = data.daily.reduce((s, d) => s + (d.transactions || 0), 0)
-  const totalRefunds = data.daily.reduce((s, d) => s + (d.refund_cents || 0), 0)
-  const totalTips = data.daily.reduce((s, d) => s + (d.tip_cents || 0), 0)
+  const totalRevenue = useMemo(() => daily.reduce((s, d) => s + (d.revenue_cents || 0), 0), [daily])
+  const totalTxns = useMemo(() => daily.reduce((s, d) => s + (d.transactions || 0), 0), [daily])
+  const totalRefunds = useMemo(() => daily.reduce((s, d) => s + (d.refund_cents || 0), 0), [daily])
+  const totalTips = useMemo(() => daily.reduce((s, d) => s + (d.tip_cents || 0), 0), [daily])
 
-  const handleBarClick = (barData: any) => {
+  const handleBarClick = useCallback((barData: any) => {
     if (barData?.activePayload?.[0]?.payload?.rawDate) {
       setDrillDate(barData.activePayload[0].payload.rawDate)
     }
-  }
+  }, [])
 
   const exportCsv = useCallback(() => {
     const esc = (v: string | number) => {
@@ -74,7 +72,7 @@ export default function RevenuePage() {
       return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
     }
     const header = 'Date,Revenue,Transactions,Avg Ticket,Refunds,Tips,Discounts'
-    const rows = data.daily.map(d =>
+    const rows = daily.map(d =>
       [d.date, (d.revenue_cents / 100).toFixed(2), d.transactions, (d.avg_ticket_cents / 100).toFixed(2), (d.refund_cents / 100).toFixed(2), (d.tip_cents / 100).toFixed(2), (d.discount_cents / 100).toFixed(2)].map(esc).join(',')
     )
     const csv = [header, ...rows].join('\n')
@@ -87,7 +85,14 @@ export default function RevenuePage() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [data.daily])
+  }, [daily])
+
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Revenue"><div /></DataPageSkeleton>
+  if (revenue.loading) return <LoadingPage />
+  if (revenue.error) return <ErrorState message={revenue.error} onRetry={revenue.refetch} />
+  if (!revenue.data) return <LoadingPage />
+
+  const data = revenue.data
 
   return (
     <DataPageSkeleton title="Revenue" layout="chart">
@@ -159,25 +164,49 @@ export default function RevenuePage() {
       {/* Revenue Chart */}
       <ScrollReveal variant="fadeUp" delay={0.1}>
         <div className="card p-4 sm:p-5">
-          <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Daily Revenue</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-              <defs>
-                <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#1A8FD6" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#1A8FD6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
-              <XAxis dataKey="date" tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-              <YAxis tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
-                tickFormatter={formatChartTick} width={55} />
-              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number, name: string) => [formatCents(v * 100), name]}
-                cursor={{ stroke: '#1A8FD6', strokeWidth: 1, strokeDasharray: '4 4' }} />
-              <Area type="monotone" dataKey="revenue" stroke="#1A8FD6" strokeWidth={2} fill="url(#revGrad)" dot={false}
-                activeDot={{ r: 5, fill: '#1A8FD6', stroke: '#0A0A0B', strokeWidth: 2 }} name="Revenue" />
-            </AreaChart>
-          </ResponsiveContainer>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-[#F5F5F7]">Daily Revenue</h3>
+            <button
+              onClick={() => setView3D(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#A1A1A8] bg-[#111113] border border-[#1F1F23] rounded-lg hover:border-[#1A8FD6]/40 hover:text-[#F5F5F7] transition-all"
+              title={view3D ? 'Switch to 2D chart' : 'Switch to 3D view'}
+            >
+              {view3D ? <><BarChart3 size={13} /> 2D</> : <><Box size={13} /> 3D</>}
+            </button>
+          </div>
+          {view3D ? (
+            <Suspense fallback={<div className="h-[300px] bg-[#111113] rounded-xl animate-pulse" />}>
+              <Revenue3D
+                data={data.daily.slice(-14).map(d => {
+                  const avgRevenue = data.daily.reduce((s, r) => s + r.revenue_cents, 0) / data.daily.length
+                  return {
+                    label: new Date(d.date).toLocaleDateString('en', { weekday: 'short' }),
+                    value: d.revenue_cents,
+                    color: d.revenue_cents > avgRevenue ? '#0066FF' : '#1F1F23',
+                  }
+                })}
+              />
+            </Suspense>
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#1A8FD6" stopOpacity={0.25} />
+                    <stop offset="100%" stopColor="#1A8FD6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
+                <XAxis dataKey="date" tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
+                  tickFormatter={formatChartTick} width={55} />
+                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number, name: string) => [formatCents(v * 100), name]}
+                  cursor={{ stroke: '#1A8FD6', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                <Area type="monotone" dataKey="revenue" stroke="#1A8FD6" strokeWidth={2} fill="url(#revGrad)" dot={false}
+                  activeDot={{ r: 5, fill: '#1A8FD6', stroke: '#0A0A0B', strokeWidth: 2 }} name="Revenue" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </ScrollReveal>
 

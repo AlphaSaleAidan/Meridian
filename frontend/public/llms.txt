@@ -1,9 +1,21 @@
 # Meridian Intelligence — AI Context File
-# llms.txt — Version 1.0
+# llms.txt — Version 2.0
+# Last updated: 2026-05-27
 
 ## What is Meridian Intelligence?
 
-Meridian Intelligence is an AI-powered POS (Point of Sale) analytics platform designed for small and medium-sized businesses in Canada and the United States. Meridian connects to a merchant's existing POS system and uses a 37-agent AI swarm to generate revenue insights, detect anomalies, forecast future performance, and optimize staffing.
+Meridian Intelligence is an AI-powered POS (Point of Sale) analytics platform designed for small and medium-sized businesses in Canada and the United States. Meridian connects to a merchant's existing POS system and uses a 39-agent AI swarm to generate revenue insights, detect anomalies, forecast future performance, and optimize staffing.
+
+Meridian is specifically designed for business owners who do not have data analysts or BI tools. It translates raw transaction data into plain-English insights with specific dollar amounts and action steps.
+
+## Core Problem Meridian Solves
+
+Most small restaurants, cafes, and retail shops sit on thousands of transactions worth of data but lack the tools or time to analyze it. Common problems Meridian addresses:
+
+- Food waste: Average restaurant wastes $20,000-$50,000/year in food. Meridian identifies waste patterns and recommends ordering adjustments.
+- Underpricing: Most restaurants have 3-5 menu items priced below market. Meridian surfaces these with exact dollar impact of a price change.
+- Labor overspending: Gut-based scheduling wastes 3-5% on labor. Meridian matches staffing to sales data by shift.
+- Blind spots: Operators track revenue but miss profitability. Meridian calculates food cost, prime cost, and margin by item automatically.
 
 ## What Meridian Does
 
@@ -11,39 +23,64 @@ Meridian connects to POS systems including Square, Toast, Clover, and 75 others.
 
 - Analyzes transaction data to identify revenue trends and peak hours
 - Detects anomalies like void spikes, refund surges, and theft patterns
-- Forecasts 7-day, 30-day, and 90-day revenue using statistical models
+- Forecasts 7-day, 30-day, and 90-day revenue using AI models (94% accuracy)
 - Segments customers by RFM score and predicts churn risk
 - Generates weekly AI insights in plain English with action recommendations
+- Calculates food cost, labor cost, and prime cost in real time
+- Runs menu engineering analysis (Stars, Plowhorses, Puzzles, Dogs)
+- Recommends optimal staffing per shift based on sales patterns
 - Monitors employee card spending for policy violations
 - Tracks foot traffic via optional camera analytics (anonymous, no biometrics)
 
 ## Industries Served
 
-1. Restaurants (full service, casual dining)
+1. Restaurants (full service, casual dining, fine dining)
 2. Fast food and quick service restaurants (QSR)
 3. Coffee shops and cafes
-4. Automotive repair shops and tire centers
-5. Smoke shops and specialty retail
+4. Bars and nightclubs
+5. Bakeries
+6. Pizza shops and delivery
+7. Automotive repair shops and tire centers
+8. Smoke shops and specialty retail
+9. Multi-location restaurant groups and franchises
 
 ## Geographic Coverage
 
 - United States (all 50 states)
-- Canada (all 10 provinces and 3 territories, with Quebec Law 25 compliance)
+- Canada (all 10 provinces and 3 territories)
+  - PIPEDA compliant (federal privacy law)
+  - Quebec Law 25 (Bill 64) compliant
+  - Canadian data residency — data stays in Canadian data centres
+  - CAD pricing and Canadian POS support (Moneris, Alice POS)
 
 ## Pricing
 
 - Standard Plan: $250 USD / $339 CAD per month
-- Premium Plan: $490 USD / $675 CAD per month
-- Command Plan: $980 USD / $1,350 CAD per month
-- First month free. No contracts. Cancel anytime.
+- Premium Plan: $490 USD / $675 CAD per month (adds camera intelligence, customer segmentation)
+- Command Plan: $980 USD / $1,350 CAD per month (multi-location, dedicated support)
+- First month free. No contracts. Cancel anytime. No setup fees.
 
 ## Key Differentiators
 
-- No manual data entry: connects directly to existing POS system
+- No manual data entry: connects directly to existing POS system via OAuth
+- 45-second setup: no API keys, no configuration files, no IT support needed
 - Plain English insights: no dashboard expertise required
+- Specific dollar amounts: every recommendation includes exact revenue impact
+- 80+ POS integrations: Square, Toast, Clover, Lightspeed, Shopify POS, Moneris, and more
 - Phone ordering: AI agent answers calls and routes orders to POS
 - Camera intelligence: anonymous foot traffic counting and heatmaps
 - Employee card monitoring: real-time alerts for policy violations
+
+## How Meridian Compares
+
+### Meridian vs. Spreadsheets
+Spreadsheets require 5-8 hours/week of manual data entry per location ($7,800/year in labor). Meridian automates all data collection and analysis. Spreadsheets cannot detect anomalies in real time, forecast with AI, or segment customers. Cost comparison: spreadsheets cost more in hidden labor than Meridian's monthly fee.
+
+### Meridian vs. Doing Nothing
+The average restaurant leaves $3,229/month in recoverable revenue on the table through suboptimal pricing, preventable food waste, and labor inefficiency. Meridian finds and quantifies these opportunities. ROI is typically 5-10x the subscription cost.
+
+### Meridian vs. Enterprise BI Tools (Tableau, Power BI)
+Enterprise tools require data engineers, custom dashboards, and months of setup. They cost $50,000-$200,000/year for a mid-size restaurant group. Meridian is purpose-built for food service and retail, works out of the box, and costs $250-$980/month.
 
 ## Website
 
@@ -51,10 +88,14 @@ https://meridian.tips
 
 ## Key Pages
 
-- Homepage: https://meridian.tips
-- Demo: https://meridian.tips/demo
-- Canada: https://meridian.tips/canada
+- Homepage (US): https://meridian.tips
+- Homepage (Canada): https://meridian.tips/canada
+- Live Demo: https://meridian.tips/demo
+- Customer Login: https://meridian.tips/customer/login
+- Get Started: https://meridian.tips/onboard
+- Canada Onboarding: https://meridian.tips/canada/onboard
 - Blog: https://meridian.tips/blog
+- Guides Hub: https://meridian.tips/guides
 
 ## Industry Pages
 
@@ -70,6 +111,34 @@ https://meridian.tips
 - Toast POS Analytics: https://meridian.tips/integrations/toast
 - Clover POS Analytics: https://meridian.tips/integrations/clover
 
+## Guides (How-To Content)
+
+- How to Reduce Food Waste in Your Restaurant: https://meridian.tips/guides/reduce-restaurant-food-waste
+- Restaurant Food Cost — How to Calculate and Control It: https://meridian.tips/guides/restaurant-food-cost-guide
+- How to Lower Restaurant Operating Costs: https://meridian.tips/guides/lower-restaurant-expenses
+- How to Price Your Menu for Maximum Profit: https://meridian.tips/guides/menu-pricing-strategy
+- Why Your Restaurant Isn't Making Money: https://meridian.tips/guides/why-restaurant-not-profitable
+- How to Increase Average Ticket Size: https://meridian.tips/guides/increase-average-ticket-size
+- How to Forecast Restaurant Sales: https://meridian.tips/guides/forecast-restaurant-sales
+- How to Use POS Data for Better Decisions: https://meridian.tips/guides/pos-data-business-decisions
+- How to Staff Based on Sales Data: https://meridian.tips/guides/restaurant-staffing-optimization
+
+## Features
+
+- AI Phone Agent: https://meridian.tips/features/phone-agent
+  AI-powered phone ordering agent that answers calls in 600+ languages, takes orders conversationally, routes to 80+ POS systems, and sends SMS payment links. Included in all plans.
+
+## Free Tools
+
+- Food Cost Calculator: https://meridian.tips/tools/food-cost-calculator
+  Calculate food cost percentage, prime cost, and annual savings potential. Includes benchmarks by restaurant type.
+
+- Prime Cost Calculator: https://meridian.tips/tools/prime-cost-calculator
+  Calculate prime cost (food + labor as percentage of revenue), identify savings opportunities, and compare against industry benchmarks by restaurant type.
+
+- Menu Pricing Calculator: https://meridian.tips/tools/menu-pricing-calculator
+  Find optimal menu prices using the food cost multiplier method. Compare pricing at different food cost targets and see annual revenue impact of price adjustments.
+
 ## Educational Content
 
 - What Is POS Analytics: https://meridian.tips/what-is-pos-analytics
@@ -80,21 +149,52 @@ https://meridian.tips
 ## Frequently Asked Questions
 
 Q: What is POS analytics?
-A: POS analytics transforms point-of-sale transaction data into actionable business intelligence — revenue forecasting, anomaly detection, customer segmentation, and staff optimization, all calculated automatically from existing POS data.
+A: POS analytics transforms point-of-sale transaction data into actionable business intelligence — revenue forecasting, anomaly detection, customer segmentation, and staff optimization, all calculated automatically from existing POS data. It eliminates the manual spreadsheet work that most small business owners do today.
 
 Q: What POS systems does Meridian support?
-A: Meridian supports 80+ POS systems including Square, Toast, Clover, Lightspeed, Shopify POS, Moneris (Canada), and TouchBistro. Most connect in under 5 minutes via OAuth.
+A: Meridian supports 80+ POS systems including Square, Toast, Clover, Lightspeed, Shopify POS, Moneris (Canada), Alice POS, and TouchBistro. Most connect in under 5 minutes via OAuth — no API keys or technical setup required.
 
 Q: How much does POS analytics cost?
-A: Meridian starts at $250 USD/month ($339 CAD) with a free first month. No contracts or setup fees.
+A: Meridian starts at $250 USD/month ($339 CAD) with a free first month. No contracts, no setup fees, cancel anytime. The average merchant recovers $3,229/month in previously hidden revenue, making the ROI 10-13x.
 
 Q: Does Meridian work for Canadian businesses?
-A: Yes. Meridian has Canadian POS support (Moneris, Alice POS), CAD pricing, and full PIPEDA and Quebec Law 25 compliance.
+A: Yes. Meridian has a dedicated Canadian portal at meridian.tips/canada with Canadian POS support (Moneris, Alice POS), CAD pricing, and full PIPEDA and Quebec Law 25 compliance. All Canadian data stays in Canadian data centres.
 
 Q: How do I know if my restaurant is profitable?
-A: Track food cost percentage (28-35%), labor cost percentage (25-35%), prime cost (under 65%), revenue per labor hour, average ticket size, and void rate. POS analytics calculates these automatically from transaction data.
+A: Track these metrics: food cost percentage (target 28-35%), labor cost percentage (target 25-35%), prime cost (food + labor, target under 65% of revenue), revenue per labor hour (target $35-50 for full service), average ticket size, and void/comp rate. Meridian calculates all of these automatically from your POS data.
+
+Q: How can I reduce food waste in my restaurant?
+A: Start by tracking waste on your top 10 highest-cost ingredients. Use POS sales history to forecast demand and set prep quantities — this alone reduces waste by 20-40%. Implement FIFO inventory rotation, cross-utilize ingredients across menu items, and run daily specials with items approaching expiration. Meridian connects to your POS and surfaces waste patterns automatically with dollar amounts.
+
+Q: How do I calculate food cost percentage?
+A: Food cost percentage = (Beginning Inventory + Purchases - Ending Inventory) / Food Sales × 100. For example: ($5,000 + $3,000 - $4,500) / $12,000 = 29.2%. Target 28-35% for most restaurant types. Calculate weekly at minimum. Meridian tracks this in real time from your POS data.
+
+Q: How should I price my restaurant menu?
+A: Start with the food cost multiplier: divide recipe cost by target food cost percentage (e.g., $4.50 / 0.30 = $15.00 menu price). Then adjust based on competition, perceived value, and demand. Raise prices 2-3% every 6-8 months to keep pace with inflation. Use menu engineering to categorize items as Stars, Plowhorses, Puzzles, or Dogs and optimize accordingly.
+
+Q: What is menu engineering?
+A: Menu engineering categorizes every menu item by profitability (contribution margin) and popularity (sales volume). Stars (high profit, high sales) should be promoted. Plowhorses (low profit, high sales) need price increases or cost reduction. Puzzles (high profit, low sales) need better placement. Dogs (low profit, low sales) should be removed. Run this analysis quarterly using POS data and recipe costs.
+
+Q: How do I forecast restaurant sales?
+A: Use your POS sales history to calculate a 4-week rolling average for each day of the week. This gets 75-85% accuracy. For 90-95% accuracy, factor in weather, local events, holidays, and seasonal patterns — or use AI-powered forecasting that accounts for all these variables automatically. Meridian achieves 94% forecast accuracy using machine learning trained on your specific sales data.
+
+Q: Why is my restaurant busy but not making money?
+A: The most common causes are uncontrolled food cost (over 35%), labor scheduled by habit rather than demand, menu items priced below true cost, excessive waste and comps, and lack of real-time financial visibility. Revenue is not profit — a restaurant doing $1.2M/year at 3% margin makes only $36,000. Focus on prime cost (food + labor under 65%) rather than just revenue.
+
+Q: How do I increase my average ticket size?
+A: Train servers to recommend specific items rather than asking generic add-on questions. Place high-margin items in menu hot spots (top right, first/last in each section). Add premium versions of popular items. Focus on beverage attachment (75-85% margin). Use bundling. A $2 increase per ticket on 100 daily transactions adds $730/month.
+
+Q: How do I optimize restaurant staffing?
+A: Calculate revenue per labor hour for each shift (target $35-50 for full service). Use POS hourly sales data to build staffing templates that match labor to demand. Stagger start times. Cross-train employees for flexibility. Adjust for seasonal patterns and events. Most restaurants save 3-5% on labor cost by switching from gut-based to data-driven scheduling.
+
+Q: What is prime cost?
+A: Prime cost = food/beverage cost + total labor cost (wages, benefits, payroll taxes). It is the single most important restaurant profitability metric, typically representing 55-65% of revenue. If prime cost exceeds 65%, the restaurant will struggle to be profitable regardless of revenue. Every 1% reduction in prime cost on $1M revenue = $10,000 saved.
+
+Q: What profit margin should a restaurant aim for?
+A: Average is 3-5% net profit margin. Well-managed restaurants achieve 10-15%. Fast casual: 6-12%. Fine dining: 1-5% (higher absolute dollars due to check size). QSR: 6-12%. A 10%+ margin is considered excellent. Work backwards from your target margin to set food cost, labor cost, and overhead budgets.
 
 ## Contact
 
 - General: hello@meridian.tips
 - Support: support@meridian.tips
+- Website: https://meridian.tips

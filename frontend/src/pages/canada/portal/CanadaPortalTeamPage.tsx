@@ -131,6 +131,7 @@ export default function CanadaPortalTeamPage() {
   const [removing, setRemoving] = useState(false)
 
   useEffect(() => {
+    if (!rep?.rep_id) return
     async function fetchData() {
       const apiBase = import.meta.env.VITE_API_URL || ''
 
@@ -192,7 +193,7 @@ export default function CanadaPortalTeamPage() {
       setLoading(false)
     }
     fetchData()
-  }, [])
+  }, [rep?.rep_id])
 
   // Enrich team with computed deal stats
   const enrichedTeam = computeTeamStats(team, deals)

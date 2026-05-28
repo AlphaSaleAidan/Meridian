@@ -70,6 +70,14 @@ class MeridianPeopleCounter:
         # Dwell tracking: {track_id: {zone_id, start_time}}
         self._dwell: dict[int, dict] = {}
 
+        # Heatmap accumulator
+        self._heatmap = sv.HeatMapAnnotator(
+            position=sv.Position.BOTTOM_CENTER,
+            opacity=0.6,
+            radius=40,
+            kernel_size=25,
+        )
+
         # Cumulative line crossing counts
         self.cumulative_entries = 0
         self.cumulative_exits = 0
@@ -120,22 +128,35 @@ class MeridianPeopleCounter:
             except Exception as exc:
                 logger.warning("LineZone init failed: %s", exc)
 
-    def process_frame(self, frame: np.ndarray) -> CountResult:
+    def process_frame(
+        self,
+        frame: np.ndarray,
+        precomputed_detections: sv.Detections | None = None,
+    ) -> CountResult:
         result = CountResult()
 
-        yolo_out = self._model(
-            frame, classes=[PERSON_CLASS], conf=self.CONFIDENCE, verbose=False
-        )[0]
+        if precomputed_detections is not None:
+            detections = precomputed_detections
+            result.total_count = len(detections)
+            if len(detections) == 0:
+                result.density = "empty"
+                return result
+            # Already tracked — skip YOLO and tracker
+            result.detections = detections
+        else:
+            yolo_out = self._model(
+                frame, classes=[PERSON_CLASS], conf=self.CONFIDENCE, verbose=False
+            )[0]
 
-        detections = sv.Detections.from_ultralytics(yolo_out)
-        result.total_count = len(detections)
+            detections = sv.Detections.from_ultralytics(yolo_out)
+            result.total_count = len(detections)
 
-        if len(detections) == 0:
-            result.density = "empty"
-            return result
+            if len(detections) == 0:
+                result.density = "empty"
+                return result
 
-        detections = self._tracker.update_with_detections(detections)
-        result.detections = detections
+            detections = self._tracker.update_with_detections(detections)
+            result.detections = detections
 
         if detections.tracker_id is not None:
             result.tracked_ids = detections.tracker_id.tolist()
@@ -173,6 +194,57 @@ class MeridianPeopleCounter:
         result.density = self._classify(result.total_count)
         return result
 
+    def process_frame_with_pose(self, frame: np.ndarray) -> CountResult:
+        """Process frame with pose estimation for activity classification."""
+        result = self.process_frame(frame)
+
+        if result.total_count == 0:
+            return result
+
+        try:
+            pose_model = self._get_pose_model()
+            pose_out = pose_model(frame, classes=[PERSON_CLASS], conf=self.CONFIDENCE, verbose=False)[0]
+
+            if pose_out.keypoints is not None:
+                keypoints = pose_out.keypoints.data.cpu().numpy()
+                activities = []
+                for kps in keypoints:
+                    activity = self._classify_pose(kps)
+                    activities.append(activity)
+                result.zone_counts["_activities"] = len(activities)
+        except Exception as e:
+            logger.debug("Pose estimation failed: %s", e)
+
+        return result
+
+    def _get_pose_model(self):
+        if not hasattr(self, '_pose_model'):
+            self._pose_model = YOLO("yolo11n-pose.pt")
+        return self._pose_model
+
+    @staticmethod
+    def _classify_pose(keypoints: np.ndarray) -> str:
+        """Classify activity from COCO keypoints (17 points)."""
+        if len(keypoints) < 17:
+            return "unknown"
+        nose_y = keypoints[0][1]
+        hip_y = (keypoints[11][1] + keypoints[12][1]) / 2
+        knee_y = (keypoints[13][1] + keypoints[14][1]) / 2
+        if hip_y > 0 and knee_y > 0:
+            if abs(hip_y - knee_y) < 30:
+                return "sitting"
+        if nose_y > 0 and hip_y > 0:
+            torso_height = abs(hip_y - nose_y)
+            if torso_height < 50:
+                return "bending"
+        return "standing"
+
+    def generate_heatmap(self, frame: np.ndarray, detections: sv.Detections | None = None) -> np.ndarray:
+        """Overlay density heatmap on frame using accumulated detection positions."""
+        if detections is None or len(detections) == 0:
+            return frame
+        return self._heatmap.annotate(scene=frame.copy(), detections=detections)
+
     def flush_dwell(self, active_ids: list[int]) -> list[dict]:
         """Return completed dwell records for people who left their zone."""
         now = time.time()
@@ -186,6 +258,13 @@ class MeridianPeopleCounter:
                     "zone_id": rec["zone_id"],
                     "dwell_seconds": secs,
                 })
+
+        # Evict stale entries older than 30 minutes
+        cutoff = now - 1800
+        stale = [tid for tid, rec in self._dwell.items() if rec["start"] < cutoff]
+        for tid in stale:
+            del self._dwell[tid]
+
         return completions
 
     def reset(self) -> None:

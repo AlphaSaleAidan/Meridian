@@ -6,7 +6,7 @@ Rate-limited tasks for Square/Clover API calls.
 """
 import asyncio
 
-from celery import shared_task
+from celery import chain, chord, group, shared_task
 from celery.utils.log import get_task_logger
 
 logger = get_task_logger(__name__)
@@ -55,6 +55,7 @@ def sync_pos_data(self, org_id: str, pos_type: str = "square"):
     name="src.workers.tasks.run_analysis",
     max_retries=3,
     default_retry_delay=30,
+    rate_limit="20/m",
 )
 def run_analysis(self, org_id: str, include_report: bool = False):
     """Run full AI analysis pipeline for a merchant."""
@@ -90,11 +91,13 @@ def run_analysis(self, org_id: str, include_report: bool = False):
 
 
 @shared_task(
+    bind=True,
     name="src.workers.tasks.generate_report",
     max_retries=2,
     default_retry_delay=30,
+    rate_limit="10/m",
 )
-def generate_report(org_id: str):
+def generate_report(self, org_id: str):
     """Generate a weekly report for a single merchant."""
     logger.info(f"Generating report for {org_id}")
 
@@ -115,12 +118,16 @@ def generate_report(org_id: str):
         finally:
             await close_db()
 
-    return run_async(_report())
+    try:
+        return run_async(_report())
+    except Exception as exc:
+        logger.error(f"Report generation failed for {org_id}: {exc}")
+        raise self.retry(exc=exc)
 
 
-@shared_task(name="src.workers.tasks.run_nightly_analysis")
+@shared_task(name="src.workers.tasks.run_nightly_analysis", rate_limit="1/m")
 def run_nightly_analysis():
-    """Nightly batch: sync + analyze all active merchants."""
+    """Nightly batch: sync + analyze all active merchants via Celery canvas."""
     logger.info("Starting nightly analysis batch")
 
     async def _batch():
@@ -131,34 +138,39 @@ def run_nightly_analysis():
             return {"status": "error", "error": "DB unavailable"}
 
         try:
-            orgs = await db.query(
-                "organizations",
-                select="id, pos_type",
-                filters={"status": "eq.active"},
+            orgs = await db.fetch(
+                "SELECT id, pos_type FROM organizations WHERE status = 'active'"
             )
 
-            results = []
+            workflows = []
             for org in orgs:
-                sync_pos_data.apply_async(
-                    args=[org["id"], org.get("pos_type", "square")],
-                    countdown=0,
-                )
-                run_analysis.apply_async(
-                    args=[org["id"]],
-                    countdown=10,
-                )
-                results.append(org["id"])
+                oid = org["id"]
+                pos = org.get("pos_type", "square")
+                workflows.append(chain(
+                    sync_pos_data.si(oid, pos),
+                    run_analysis.si(oid),
+                ))
+            if workflows:
+                chord(group(workflows), run_nightly_analysis_complete.s())()
 
-            return {"status": "dispatched", "merchant_count": len(results)}
+            return {"status": "dispatched", "merchant_count": len(workflows)}
         finally:
             await close_db()
 
     return run_async(_batch())
 
 
-@shared_task(name="src.workers.tasks.generate_weekly_reports")
+@shared_task(name="src.workers.tasks.run_nightly_analysis_complete")
+def run_nightly_analysis_complete(results=None):
+    """Callback fired when all nightly sync+analysis chains finish."""
+    count = len(results) if results else 0
+    logger.info("Nightly batch complete: %d merchants processed", count)
+    return {"status": "complete", "merchant_count": count}
+
+
+@shared_task(name="src.workers.tasks.generate_weekly_reports", rate_limit="1/m")
 def generate_weekly_reports():
-    """Weekly batch: generate reports for all active merchants."""
+    """Weekly batch: generate reports for all active merchants via group."""
     logger.info("Starting weekly report generation")
 
     async def _batch():
@@ -169,14 +181,12 @@ def generate_weekly_reports():
             return {"status": "error", "error": "DB unavailable"}
 
         try:
-            orgs = await db.query(
-                "organizations",
-                select="id",
-                filters={"status": "eq.active"},
+            orgs = await db.fetch(
+                "SELECT id FROM organizations WHERE status = 'active'"
             )
 
-            for org in orgs:
-                generate_report.apply_async(args=[org["id"]])
+            if orgs:
+                group(generate_report.si(org["id"]) for org in orgs)()
 
             return {"status": "dispatched", "merchant_count": len(orgs)}
         finally:
@@ -190,6 +200,7 @@ def generate_weekly_reports():
     name="src.workers.tasks.train_swarm",
     max_retries=2,
     default_retry_delay=60,
+    rate_limit="5/m",
 )
 def train_swarm(self, org_id: str = ""):
     """Run a swarm training cycle on the latest agent outputs."""
@@ -222,7 +233,7 @@ def train_swarm(self, org_id: str = ""):
         raise self.retry(exc=exc)
 
 
-@shared_task(name="src.workers.tasks.process_billing_renewals")
+@shared_task(name="src.workers.tasks.process_billing_renewals", rate_limit="2/m")
 def process_billing_renewals():
     """Daily: create Square invoices for subscriptions due for renewal."""
     logger.info("Processing billing renewals")
@@ -258,10 +269,8 @@ def train_swarm_batch():
             return {"status": "error", "error": "DB unavailable"}
 
         try:
-            orgs = await db.query(
-                "organizations",
-                select="id",
-                filters={"status": "eq.active"},
+            orgs = await db.fetch(
+                "SELECT id FROM organizations WHERE status = 'active'"
             )
 
             for org in orgs:
@@ -393,7 +402,6 @@ def run_cold_storage_archive():
 @shared_task(name="src.workers.tasks.offload_warm_to_r2")
 def offload_warm_to_r2():
     """Upload all WARM archives older than 30 days to R2, then delete local copies."""
-    import shutil
     from datetime import datetime, timedelta, timezone
     from pathlib import Path
     from .cold_storage import ARCHIVE_DIR

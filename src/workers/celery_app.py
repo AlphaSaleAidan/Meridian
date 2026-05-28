@@ -9,6 +9,8 @@ Tasks are defined in src/workers/tasks.py.
 import os
 
 from celery import Celery
+from celery.schedules import crontab
+from kombu import Queue
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
@@ -29,75 +31,81 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     task_default_queue="default",
-    task_queues={
-        "default": {"exchange": "default", "routing_key": "default"},
-        "sync": {"exchange": "sync", "routing_key": "sync"},
-        "analysis": {"exchange": "analysis", "routing_key": "analysis"},
-        "reports": {"exchange": "reports", "routing_key": "reports"},
-    },
+    task_queues=[
+        Queue('critical', routing_key='critical'),
+        Queue('default', routing_key='default'),
+        Queue('bulk', routing_key='bulk'),
+    ],
     task_routes={
-        "src.workers.tasks.sync_pos_data": {"queue": "sync"},
-        "src.workers.tasks.run_analysis": {"queue": "analysis"},
-        "src.workers.tasks.generate_report": {"queue": "reports"},
-        "src.workers.tasks.train_swarm": {"queue": "analysis"},
-        "src.workers.tasks.train_swarm_batch": {"queue": "analysis"},
-        "src.workers.tasks.ingest_scraped_data": {"queue": "analysis"},
-        "src.workers.tasks.batch_local_inference": {"queue": "analysis"},
-        "src.workers.tasks.rebuild_session_context": {"queue": "analysis"},
-        "src.workers.tasks.rebuild_all_context": {"queue": "analysis"},
-        "src.workers.tasks.rebuild_file_digest": {"queue": "analysis"},
-        "src.workers.tasks.rebuild_diff_summaries": {"queue": "analysis"},
-        "src.workers.tasks.compress_sessions": {"queue": "analysis"},
-        "src.workers.tasks.run_cold_storage_archive": {"queue": "analysis"},
-        "src.workers.tasks.archive_org_month": {"queue": "analysis"},
-        "src.workers.tasks.upload_archive_to_r2": {"queue": "analysis"},
-        "src.workers.tasks.offload_warm_to_r2": {"queue": "analysis"},
+        "src.workers.tasks.sync_pos_data": {"queue": "default"},
+        "src.workers.tasks.run_analysis": {"queue": "default"},
+        "src.workers.tasks.process_billing_renewals": {"queue": "critical"},
+        "src.workers.tasks.run_nightly_analysis": {"queue": "bulk"},
+        "src.workers.tasks.run_nightly_analysis_complete": {"queue": "bulk"},
+        "src.workers.tasks.generate_weekly_reports": {"queue": "bulk"},
+        "src.workers.tasks.generate_report": {"queue": "default"},
+        "src.workers.tasks.train_swarm": {"queue": "bulk"},
+        "src.workers.tasks.train_swarm_batch": {"queue": "bulk"},
+        "src.workers.tasks.run_cold_storage_archive": {"queue": "bulk"},
+        "src.workers.tasks.archive_org_month": {"queue": "bulk"},
+        "src.workers.tasks.upload_archive_to_r2": {"queue": "bulk"},
+        "src.workers.tasks.offload_warm_to_r2": {"queue": "bulk"},
+        "src.workers.tasks.ingest_scraped_data": {"queue": "bulk"},
+        "src.workers.tasks.batch_local_inference": {"queue": "default"},
+        "src.workers.tasks.rebuild_session_context": {"queue": "bulk"},
+        "src.workers.tasks.rebuild_all_context": {"queue": "bulk"},
+        "src.workers.tasks.rebuild_file_digest": {"queue": "bulk"},
+        "src.workers.tasks.rebuild_diff_summaries": {"queue": "bulk"},
+        "src.workers.tasks.compress_sessions": {"queue": "bulk"},
+        "src.workers.tasks.send_daily_burn_rate": {"queue": "default"},
     },
+    result_expires=3600,
+    worker_max_tasks_per_child=200,
     beat_schedule={
         "nightly-analysis": {
             "task": "src.workers.tasks.run_nightly_analysis",
-            "schedule": 86400.0,  # 24 hours
-            "options": {"queue": "analysis"},
+            "schedule": crontab(hour=2, minute=0),  # 2 AM UTC daily
+            "options": {"queue": "bulk"},
         },
         "weekly-reports": {
             "task": "src.workers.tasks.generate_weekly_reports",
-            "schedule": 604800.0,  # 7 days
-            "options": {"queue": "reports"},
+            "schedule": crontab(hour=3, minute=0, day_of_week=1),  # Monday 3 AM UTC
+            "options": {"queue": "bulk"},
         },
         "swarm-training": {
             "task": "src.workers.tasks.train_swarm_batch",
-            "schedule": 21600.0,  # 6 hours
-            "options": {"queue": "analysis"},
+            "schedule": crontab(hour=5, minute=0),  # 5 AM UTC daily
+            "options": {"queue": "bulk"},
         },
         "billing-renewals": {
             "task": "src.workers.tasks.process_billing_renewals",
-            "schedule": 86400.0,  # 24 hours
-            "options": {"queue": "default"},
+            "schedule": crontab(hour=6, minute=0),  # 6 AM UTC daily
+            "options": {"queue": "critical"},
         },
         "daily-burn-rate": {
             "task": "src.workers.tasks.send_daily_burn_rate",
-            "schedule": 86400.0,  # 24 hours
-            "options": {"queue": "reports"},
+            "schedule": crontab(hour=8, minute=0),  # 8 AM UTC daily
+            "options": {"queue": "default"},
         },
         "vector-ingestion": {
             "task": "src.workers.tasks.ingest_scraped_data",
             "schedule": 21600.0,  # 6 hours — after each scraper cycle
-            "options": {"queue": "analysis"},
+            "options": {"queue": "bulk"},
         },
         "context-rebuild": {
             "task": "src.workers.tasks.rebuild_all_context",
             "schedule": 21600.0,  # 6 hours — full token-saving pipeline
-            "options": {"queue": "analysis"},
+            "options": {"queue": "bulk"},
         },
         "session-compression": {
             "task": "src.workers.tasks.compress_sessions",
             "schedule": 43200.0,  # 12 hours — compress completed Claude sessions
-            "options": {"queue": "analysis"},
+            "options": {"queue": "bulk"},
         },
         "cold-storage-archive": {
             "task": "src.workers.tasks.run_cold_storage_archive",
-            "schedule": 86400.0,  # 24 hours — runs after nightly analysis
-            "options": {"queue": "analysis"},
+            "schedule": crontab(hour=4, minute=0),  # 4 AM UTC daily
+            "options": {"queue": "bulk"},
         },
     },
 )

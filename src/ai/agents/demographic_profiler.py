@@ -69,8 +69,9 @@ class DemographicProfilerAgent(BaseAgent):
                     daypart = "afternoon"
                 else:
                     daypart = "evening"
-                for age_range, count in demo_breakdown.items():
-                    daypart_demo[daypart][age_range] += count
+                for key, count in demo_breakdown.items():
+                    if key.startswith("age_"):
+                        daypart_demo[daypart][key] += count
             except (ValueError, AttributeError):
                 pass
 

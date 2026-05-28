@@ -26,6 +26,7 @@ class MeridianDetector:
         self._model = YOLO(model_size)
         self._tracker = sv.ByteTrack()
         self._confidence = confidence
+        self._polygon_zone_cache: dict[str, Any] = {}
 
     def process_frame(
         self,
@@ -100,7 +101,10 @@ class MeridianDetector:
                 [[pt[0] * frame_w, pt[1] * frame_h] for pt in polygon_norm],
                 dtype=np.int32,
             )
-            poly_zone = sv.PolygonZone(polygon=polygon_px)
+            zone_key = f"{zone_name}:{frame_w}x{frame_h}"
+            if zone_key not in self._polygon_zone_cache:
+                self._polygon_zone_cache[zone_key] = sv.PolygonZone(polygon=polygon_px)
+            poly_zone = self._polygon_zone_cache[zone_key]
 
             # Build a single-point detection to test containment
             point_det = sv.Detections(

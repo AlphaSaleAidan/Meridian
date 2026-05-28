@@ -47,7 +47,7 @@ export default function USPortalSignupPage() {
           <MeridianEmblem size={40} />
           <span className="text-xl font-bold text-[#F5F5F7] mt-2">Join Meridian Sales</span>
           <span className="text-[10px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
-            US — New Rep Registration {'\u{1F1E8}\u{1F1E6}'}
+            US — New Rep Registration {'\u{1F1FA}\u{1F1F8}'}
           </span>
         </div>
 

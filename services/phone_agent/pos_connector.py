@@ -15,6 +15,8 @@ logger = logging.getLogger("meridian.phone_agent.pos")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 
+TOAST_API_BASE = os.getenv("TOAST_API_BASE_URL", "https://ws-api.toasttab.com")
+
 DIRECT_API_SYSTEMS = {"square", "toast", "clover"}
 
 OAUTH_SYSTEMS = {
@@ -165,7 +167,7 @@ async def _create_toast_order(
 
     async with httpx.AsyncClient() as client:
         res = await client.post(
-            f"https://toast-api-server/orders/v2/orders",
+            f"{TOAST_API_BASE}/orders/v2/orders",
             json=payload,
             headers={
                 "Authorization": f"Bearer {access_token}",

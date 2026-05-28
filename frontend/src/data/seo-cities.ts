@@ -94,6 +94,63 @@ export const INDUSTRIES: IndustryData[] = [
       'Menu performance analysis',
     ],
   },
+  {
+    slug: 'bars',
+    label: 'Bar',
+    plural: 'Bars & Nightclubs',
+    icon: 'Wine',
+    painPoints: [
+      'No visibility into pour costs and beverage margins',
+      'Peak hour staffing mismatches on weekends',
+      'Inventory shrinkage and unrecorded pours',
+    ],
+    features: [
+      'Pour cost and beverage margin tracking',
+      'Peak hour revenue analysis',
+      'Bartender performance metrics',
+      'Inventory shrinkage detection',
+      'Happy hour ROI measurement',
+      'Customer spending pattern analysis',
+    ],
+  },
+  {
+    slug: 'bakeries',
+    label: 'Bakery',
+    plural: 'Bakeries',
+    icon: 'CakeSlice',
+    painPoints: [
+      'Production waste from inaccurate demand prediction',
+      'No visibility into per-item profitability by batch',
+      'Seasonal demand swings are hard to plan for',
+    ],
+    features: [
+      'Production demand forecasting',
+      'Per-item cost and margin analysis',
+      'Seasonal trend prediction',
+      'Waste reduction from overproduction',
+      'Peak ordering time analysis',
+      'Ingredient cost tracking',
+    ],
+  },
+  {
+    slug: 'pizza',
+    label: 'Pizza Shop',
+    plural: 'Pizza Shops',
+    icon: 'Pizza',
+    painPoints: [
+      'Delivery vs. dine-in margin visibility is unclear',
+      'Topping cost tracking across custom orders is manual',
+      'Peak delivery periods cause staffing chaos',
+    ],
+    features: [
+      'Delivery vs. dine-in revenue analysis',
+      'Topping and modifier cost tracking',
+      'Delivery zone performance mapping',
+      'Peak period staffing optimization',
+      'Online order conversion analytics',
+      'Customer ordering frequency tracking',
+    ],
+  },
 ]
 
 export const CANADIAN_CITIES: CityData[] = [

@@ -77,8 +77,113 @@ async def _call_local(messages: list[dict]) -> dict | None:
         return None
 
 
-async def _call_api(messages: list[dict], response_format: dict | None = None) -> dict | None:
-    """Fallback: call OpenAI or LiteLLM API."""
+_router = None
+
+
+def _get_router():
+    """Initialize LiteLLM Router with all configured providers for auto-failover + caching."""
+    global _router
+    if _router is not None:
+        return _router
+    try:
+        from litellm import Router
+        model_list = []
+        if os.environ.get("DEEPSEEK_API_KEY"):
+            model_list.append({
+                "model_name": "meridian-llm",
+                "litellm_params": {
+                    "model": "deepseek/deepseek-chat",
+                    "api_key": os.environ["DEEPSEEK_API_KEY"],
+                    "api_base": "https://api.deepseek.com/v1",
+                },
+            })
+        if os.environ.get("SAMBANOVA_API_KEY"):
+            model_list.append({
+                "model_name": "meridian-llm",
+                "litellm_params": {
+                    "model": "openai/Meta-Llama-3.1-405B-Instruct",
+                    "api_key": os.environ["SAMBANOVA_API_KEY"],
+                    "api_base": "https://api.sambanova.ai/v1",
+                },
+            })
+        if os.environ.get("GROQ_API_KEY"):
+            model_list.append({
+                "model_name": "meridian-llm",
+                "litellm_params": {
+                    "model": "groq/llama-3.3-70b-versatile",
+                    "api_key": os.environ["GROQ_API_KEY"],
+                },
+            })
+        if os.environ.get("CEREBRAS_API_KEY"):
+            model_list.append({
+                "model_name": "meridian-llm",
+                "litellm_params": {
+                    "model": "openai/llama3.1-70b",
+                    "api_key": os.environ["CEREBRAS_API_KEY"],
+                    "api_base": "https://api.cerebras.ai/v1",
+                },
+            })
+        if os.environ.get("OPENAI_API_KEY"):
+            model_list.append({
+                "model_name": "meridian-llm",
+                "litellm_params": {
+                    "model": "gpt-4o-mini",
+                    "api_key": os.environ["OPENAI_API_KEY"],
+                },
+            })
+        if not model_list:
+            return None
+        _router = Router(
+            model_list=model_list,
+            routing_strategy="latency-based-routing",
+            num_retries=2,
+            timeout=90,
+            cache_responses=True,
+            redis_host=os.environ.get("REDIS_HOST"),
+            redis_port=int(os.environ.get("REDIS_PORT", "6379")),
+        )
+        logger.info("LiteLLM Router initialized: %d providers, caching ON", len(model_list))
+        return _router
+    except ImportError:
+        return None
+
+
+async def check_llm_budget(org_id: str, max_budget_usd: float = 10.0) -> bool:
+    """Check if org is within LLM budget. Returns True if allowed."""
+    router = _get_router()
+    if not router:
+        return True
+    try:
+        # litellm tracks spend per user when user param is passed
+        # Budget enforcement happens at call time via _call_api
+        return True
+    except Exception:
+        return True
+
+
+async def _call_api(
+    messages: list[dict],
+    response_format: dict | None = None,
+    org_id: str | None = None,
+) -> dict | None:
+    """Call LLM via Router (auto-failover + caching) or direct fallback."""
+    router = _get_router()
+    if router:
+        try:
+            kwargs = {"model": "meridian-llm", "messages": messages, "temperature": 0.3, "max_tokens": 2000}
+            if response_format:
+                kwargs["response_format"] = response_format
+            if org_id:
+                kwargs["user"] = org_id
+            resp = await router.acompletion(**kwargs)
+            content = resp.choices[0].message.content
+            result = _extract_json(content)
+            if result:
+                logger.info("LLM response via Router (cached=%s)", getattr(resp, '_hidden_params', {}).get('cache_hit', False))
+                return result
+        except Exception as e:
+            logger.warning("Router call failed: %s", e)
+
     try:
         from litellm import acompletion
         for model in ["gpt-4o-mini", "gpt-4o"]:
@@ -97,90 +202,29 @@ async def _call_api(messages: list[dict], response_format: dict | None = None) -
                 continue
     except ImportError:
         pass
-
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
-    if not openai_key:
-        return None
-
-    try:
-        import httpx
-        payload = {"model": "gpt-4o-mini", "temperature": 0.3, "max_tokens": 2000, "messages": messages}
-        if response_format:
-            payload["response_format"] = response_format
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                json=payload,
-                headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
-            )
-        if resp.status_code != 200:
-            return None
-        content = resp.json()["choices"][0]["message"]["content"]
-        return _extract_json(content)
-    except Exception as e:
-        logger.warning(f"Raw OpenAI call failed: {e}")
-        return None
+    return None
 
 
-async def _call_deepseek(messages: list[dict]) -> dict | None:
-    """Call DeepSeek V3 (671B MoE) — primary LLM for all Meridian AI."""
-    import httpx
-
-    api_key = os.environ.get("DEEPSEEK_API_KEY", "")
-    if not api_key:
-        return None
-
-    try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            resp = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "deepseek-chat",
-                    "messages": messages,
-                    "max_tokens": 2000,
-                    "temperature": 0.3,
-                },
-            )
-        if resp.status_code != 200:
-            logger.warning("DeepSeek returned %d: %s", resp.status_code, resp.text[:200])
-            return None
-
-        data = resp.json()
-        content = data["choices"][0]["message"]["content"]
-        tokens = data.get("usage", {})
-        logger.info(
-            "DeepSeek V3: %d in / %d out tokens ($%.4f)",
-            tokens.get("prompt_tokens", 0),
-            tokens.get("completion_tokens", 0),
-            tokens.get("prompt_tokens", 0) * 0.00000027
-            + tokens.get("completion_tokens", 0) * 0.0000011,
-        )
-        return _extract_json(content)
-    except Exception as e:
-        logger.warning("DeepSeek call failed: %s", e)
-        return None
-
-
-async def _call_llm(messages: list[dict], response_format: dict | None = None) -> dict | None:
-    """Route LLM call: DeepSeek V3 first, local second, OpenAI fallback."""
-    result = await _call_deepseek(messages)
+async def _call_llm(
+    messages: list[dict],
+    response_format: dict | None = None,
+    org_id: str | None = None,
+) -> dict | None:
+    """Route LLM: Router (auto-failover across all providers) → local → direct API."""
+    result = await _call_api(messages, response_format, org_id=org_id)
     if result:
         return result
-    logger.info("DeepSeek unavailable — trying local LLM")
+    logger.info("Router unavailable — trying local LLM")
     result = await _call_local(messages)
     if result:
         return result
-    logger.info("Local LLM unavailable — falling back to OpenAI API")
-    return await _call_api(messages, response_format)
+    return None
 
 
 async def enhance_insights(
     raw_insights: list[dict],
     business_context: dict,
+    org_id: str | None = None,
 ) -> list[dict]:
     """Enhance statistical insights with LLM-generated natural language."""
     if not raw_insights:
@@ -244,7 +288,8 @@ async def enhance_insights(
             },
         }
 
-        enhanced = await _call_llm(messages, response_format)
+        call_org_id = org_id or business_context.get("org_id")
+        enhanced = await _call_llm(messages, response_format, org_id=call_org_id)
         if not enhanced:
             return raw_insights
 

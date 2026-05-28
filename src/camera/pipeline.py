@@ -111,10 +111,11 @@ class CameraPipeline:
                 all_counts.append(counts)
 
             # People counter: zone counts, dwell, density
+            # Reuse detections from _detector to avoid a second YOLO pass
             pc = self._people_counters.get(cam_id)
             writer = self._writers.get(cam_id)
             if pc and writer:
-                cr = pc.process_frame(frame)
+                cr = pc.process_frame(frame, precomputed_detections=detections)
                 writer.accumulate(cr.zone_counts, cr.total_count)
                 if cr.entries_this_frame or cr.exits_this_frame:
                     writer.write_entry_exit(cr.entries_this_frame, cr.exits_this_frame)

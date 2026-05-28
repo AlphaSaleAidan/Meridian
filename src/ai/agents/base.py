@@ -112,7 +112,6 @@ class BaseAgent(ABC):
             try:
                 import pandas as pd
                 from statsforecast import StatsForecast
-                from statsforecast.models import AutoARIMA, AutoETS, AutoTheta, SeasonalNaive
 
                 df = pd.DataFrame(series)
                 if "date" in df.columns:
@@ -125,18 +124,35 @@ class BaseAgent(ABC):
                 df = df[["unique_id", "ds", "y"]].sort_values("ds").reset_index(drop=True)
 
                 if n < 30:
+                    from statsforecast.models import SeasonalNaive
                     models = [SeasonalNaive(season_length=7)]
                     model_names = ["SeasonalNaive"]
                 elif n < 90:
-                    models = [AutoETS(season_length=7), AutoARIMA(season_length=7)]
-                    model_names = ["AutoETS", "AutoARIMA"]
+                    try:
+                        from statsforecast.models import MSTL, AutoETS
+                        models = [MSTL(season_length=[7, 30], trend_forecaster=AutoETS(model="ZZN"))]
+                        model_names = ["MSTL"]
+                    except ImportError:
+                        from statsforecast.models import AutoETS, AutoARIMA
+                        models = [AutoETS(season_length=7), AutoARIMA(season_length=7)]
+                        model_names = ["AutoETS", "AutoARIMA"]
                 else:
-                    models = [AutoARIMA(season_length=7), AutoETS(season_length=7), AutoTheta(season_length=7)]
-                    model_names = ["AutoARIMA", "AutoETS", "AutoTheta"]
+                    try:
+                        from statsforecast.models import MSTL, AutoETS, AutoARIMA, AutoTheta
+                        models = [
+                            MSTL(season_length=[7, 30], trend_forecaster=AutoETS(model="ZZN")),
+                            AutoARIMA(season_length=7),
+                            AutoTheta(season_length=7),
+                        ]
+                        model_names = ["MSTL", "AutoARIMA", "AutoTheta"]
+                    except ImportError:
+                        from statsforecast.models import AutoARIMA, AutoETS, AutoTheta
+                        models = [AutoARIMA(season_length=7), AutoETS(season_length=7), AutoTheta(season_length=7)]
+                        model_names = ["AutoARIMA", "AutoETS", "AutoTheta"]
 
                 sf = StatsForecast(models=models, freq="D", n_jobs=1)
                 sf.fit(df)
-                fc = sf.predict(h=periods, level=[90]).reset_index()
+                fc = sf.predict(h=periods, level=[80, 95]).reset_index()
 
                 point_cols = [c for c in fc.columns if c in model_names]
                 if point_cols:
@@ -144,25 +160,51 @@ class BaseAgent(ABC):
                 else:
                     fc["ensemble_mean"] = fc.iloc[:, 2]
 
-                lo_cols = [c for c in fc.columns if c.endswith("-lo-90")]
-                hi_cols = [c for c in fc.columns if c.endswith("-hi-90")]
+                lo80 = [c for c in fc.columns if c.endswith("-lo-80")]
+                hi80 = [c for c in fc.columns if c.endswith("-hi-80")]
+                lo95 = [c for c in fc.columns if c.endswith("-lo-95")]
+                hi95 = [c for c in fc.columns if c.endswith("-hi-95")]
 
                 results = []
                 for _, row in fc.iterrows():
                     predicted = round(row["ensemble_mean"])
-                    if lo_cols and hi_cols:
-                        lower = round(min(row[c] for c in lo_cols))
-                        upper = round(max(row[c] for c in hi_cols))
-                    else:
-                        lower = int(predicted * 0.85)
-                        upper = int(predicted * 1.15)
-                    ds = row["ds"]
-                    results.append({
-                        "date": ds.strftime("%Y-%m-%d") if hasattr(ds, "strftime") else str(ds),
+                    entry = {
+                        "date": row["ds"].strftime("%Y-%m-%d") if hasattr(row["ds"], "strftime") else str(row["ds"]),
                         "predicted": predicted,
-                        "lower": lower,
-                        "upper": upper,
-                    })
+                    }
+                    if lo80 and hi80:
+                        entry["lower_80"] = round(min(row[c] for c in lo80))
+                        entry["upper_80"] = round(max(row[c] for c in hi80))
+                    if lo95 and hi95:
+                        entry["lower"] = round(min(row[c] for c in lo95))
+                        entry["upper"] = round(max(row[c] for c in hi95))
+                    else:
+                        entry["lower"] = int(predicted * 0.85)
+                        entry["upper"] = int(predicted * 1.15)
+                    results.append(entry)
+
+                # Cross-validation for accuracy estimation
+                try:
+                    cv_results = sf.cross_validation(
+                        df=df, h=periods, step_size=7, n_windows=3,
+                    )
+                    if cv_results is not None and len(cv_results) > 0:
+                        from sklearn.metrics import mean_absolute_error
+                        actuals = cv_results["y"].values
+                        # Pick the first model's prediction column for CV
+                        pred_cols = [c for c in cv_results.columns if c in model_names]
+                        if pred_cols:
+                            preds = cv_results[pred_cols[0]].values
+                        else:
+                            preds = cv_results.filter(like=model_names[0]).iloc[:, 0].values
+                        mae = mean_absolute_error(actuals, preds)
+                        # Attach CV metadata to the last entry for downstream consumers
+                        if results:
+                            results[-1]["_cv_mae"] = round(mae, 2)
+                            results[-1]["_cv_windows"] = 3
+                except Exception:
+                    pass  # CV is optional — don't block forecasting
+
                 return results
             except ImportError:
                 logger.debug("statsforecast not installed — trying Prophet")
@@ -227,14 +269,14 @@ class BaseAgent(ABC):
             try:
                 import numpy as np
                 from pyod.models.iforest import IForest
-                from pyod.models.lof import LOF
-                from pyod.models.knn import KNN
+                from pyod.models.ecod import ECOD
+                from pyod.models.copod import COPOD
 
                 arr = np.array(values).reshape(-1, 1)
                 models = [
                     IForest(contamination=contamination, random_state=42),
-                    LOF(contamination=contamination, n_neighbors=min(20, len(values) // 2)),
-                    KNN(contamination=contamination, n_neighbors=min(10, len(values) // 3)),
+                    ECOD(contamination=contamination),
+                    COPOD(contamination=contamination),
                 ]
                 votes = np.zeros(len(values))
                 for m in models:

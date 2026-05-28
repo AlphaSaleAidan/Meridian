@@ -1,5 +1,6 @@
+import { useMemo } from 'react'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Brush,
 } from 'recharts'
 import type { DailyRevenue } from '@/lib/api'
 import { formatCents, formatChartDate } from '@/lib/format'
@@ -19,17 +20,17 @@ const tooltipStyle = {
 }
 
 export default function RevenueChart({ data, height = 300 }: Props) {
-  const chartData = data.map(d => ({
+  const chartData = useMemo(() => data.map(d => ({
     ...d,
     date: formatChartDate(d.date),
     revenue: d.revenue_cents / 100,
-  }))
+  })), [data])
 
   return (
     <div className="card p-5">
       <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Revenue Trend</h3>
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+        <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="#7C5CFF" stopOpacity={0.25} />
@@ -65,7 +66,10 @@ export default function RevenueChart({ data, height = 300 }: Props) {
             contentStyle={tooltipStyle}
             itemStyle={{ color: '#F5F5F7' }}
             labelStyle={{ color: '#A1A1A8' }}
-            formatter={(value: number) => [`${formatCents(value * 100)}`, 'Revenue']}
+            formatter={(value: number, name: string) => [
+              `${formatCents(value * 100)}`,
+              name === 'forecast' ? 'Forecast' : 'Revenue',
+            ]}
             labelFormatter={(label: string) => label}
             cursor={{ stroke: '#7C5CFF', strokeWidth: 1, strokeDasharray: '4 4' }}
           />
@@ -83,7 +87,25 @@ export default function RevenueChart({ data, height = 300 }: Props) {
               strokeWidth: 2,
             }}
           />
-        </AreaChart>
+          {chartData.some(d => (d as Record<string, unknown>).forecast !== undefined) && (
+            <Line
+              type="monotone"
+              dataKey="forecast"
+              stroke="#A78BFA"
+              strokeDasharray="5 5"
+              dot={false}
+              strokeWidth={2}
+            />
+          )}
+          <Brush
+            dataKey="date"
+            height={28}
+            stroke="#7C5CFF"
+            fill="#111113"
+            travellerWidth={8}
+            tickFormatter={() => ''}
+          />
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   )

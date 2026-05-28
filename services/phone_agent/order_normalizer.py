@@ -51,7 +51,7 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
             "matched_menu_item": bool(menu_match),
         })
 
-    tax_rate = 0.13
+    tax_rate = config.tax_rate if hasattr(config, 'tax_rate') else 0.13
     tax = round(subtotal * tax_rate, 2)
     total = round(subtotal + tax, 2)
 

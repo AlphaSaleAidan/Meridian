@@ -234,6 +234,8 @@ export function generateAgents(): AgentInfo[] {
     { id: 'waste-shrinkage', name: 'Waste & Shrinkage', status: 'active', lastRun: hoursAgo(3), nextRun: hoursFromNow(6), findings: 4, confidence: 80, category: 'optimization', description: 'Tracks shrinkage rate, void patterns, and projects annual loss from waste', latestFinding: bizSub('Shrinkage rate 3.1% vs 2% target — void pattern on Register 2 needs investigation') },
     { id: 'foot-traffic', name: 'Foot Traffic', status: 'idle', lastRun: hoursAgo(24), nextRun: hoursFromNow(24), findings: 3, confidence: 72, category: 'analysis', description: 'Counts entries and exits from camera feeds, calculates visitor-to-transaction conversion', latestFinding: bizSub('Conversion rate 34% — 66% of foot traffic leaves without purchasing, signage test recommended') },
     { id: 'queue-monitor', name: 'Queue Monitor', status: 'idle', lastRun: hoursAgo(24), nextRun: hoursFromNow(24), findings: 2, confidence: 71, category: 'optimization', description: 'Tracks real-time queue length and wait times, estimates walkaway revenue loss', latestFinding: bizSub('Avg wait exceeds 3 min during 8-9AM — estimated $320/mo in walkaway losses') },
+    { id: 'prime-cost-analyzer', name: 'Prime Cost Analyzer', status: 'active', lastRun: hoursAgo(2), nextRun: hoursFromNow(6), findings: 4, confidence: 84, category: 'analysis', description: 'Calculates real-time prime cost (COGS + labor) as percentage of revenue and flags when it exceeds 65% threshold', latestFinding: bizSub('Prime cost at 61.3% of revenue — labor running 2.1% above target during afternoon shifts') },
+    { id: 'menu-pricing-optimizer', name: 'Menu Pricing Optimizer', status: 'active', lastRun: hoursAgo(1), nextRun: hoursFromNow(5), findings: 5, confidence: 81, category: 'optimization', description: 'Analyzes menu item pricing using food cost multiplier method and identifies underpriced items with exact dollar impact', latestFinding: bizSub('3 menu items priced 12-18% below optimal — combined repricing opportunity $1,060/mo') },
   ]
 }
 
@@ -926,7 +928,11 @@ export function generateAgentChains(): AgentChainLink[] {
     // ── Coordination Layer ──
     { from: 'day-of-week', to: 'peak-hour-optimizer', trigger: 'daily_patterns_updated', dataPassed: 'Best/worst day performance + day-specific revenue coefficients' },
     { from: 'money-left', to: 'insight-narrator', trigger: 'opportunity_aggregated', dataPassed: 'Total $/mo opportunity figure from all agent recommendations' },
-    { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'Synthesized findings from all 37 agents as narrative brief' },
+    { from: 'prime-cost-analyzer', to: 'margin-optimizer', trigger: 'prime_cost_calculated', dataPassed: 'Prime cost breakdown (COGS % + labor %) with threshold alerts' },
+    { from: 'menu-pricing-optimizer', to: 'pricing-power', trigger: 'pricing_analysis_complete', dataPassed: 'Underpriced items with food cost multiplier targets and dollar impact' },
+    { from: 'margin-optimizer', to: 'prime-cost-analyzer', trigger: 'margin_updated', dataPassed: 'Per-item margin data for COGS component of prime cost' },
+    { from: 'staffing', to: 'prime-cost-analyzer', trigger: 'labor_cost_updated', dataPassed: 'Total labor cost by shift for labor component of prime cost' },
+    { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'Synthesized findings from all 39 agents as narrative brief' },
     { from: 'action-prioritizer', to: 'revenue-forecaster', trigger: 'action_ranked', dataPassed: 'Top actions for impact projection into forecast scenarios' },
     { from: 'revenue-forecaster', to: 'insight-narrator', trigger: 'forecast_updated', dataPassed: 'Updated projections + scenario analysis for executive brief' },
     { from: 'location-analyst', to: 'competitor-benchmarker', trigger: 'location_data_refreshed', dataPassed: 'Multi-location performance deltas for cross-store benchmarking' },

@@ -136,7 +136,7 @@ export default function CityIndustryPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           {[
             { step: '1', title: 'Connect Your POS', desc: 'Authorize your Square, Toast, Clover, or any of 80+ POS systems. Takes under 5 minutes.' },
-            { step: '2', title: 'AI Analyzes Your Data', desc: "Meridian's 37-agent AI swarm processes your transaction history and starts generating insights." },
+            { step: '2', title: 'AI Analyzes Your Data', desc: "Meridian's 39-agent AI swarm processes your transaction history and starts generating insights." },
             { step: '3', title: 'Get Actionable Insights', desc: 'See revenue forecasts, anomaly alerts, and recommendations in plain English within 24 hours.' },
           ].map(s => (
             <div key={s.step} className="text-center">

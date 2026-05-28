@@ -144,7 +144,8 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
           saveRep(profile)
           setRep(profile)
         }
-        window.location.replace('/canada/portal/settings?reset=1')
+        const portalPrefix = window.location.pathname.startsWith('/us/portal') ? '/us/portal' : '/canada/portal'
+        window.location.replace(portalPrefix + '/settings?reset=1')
         return
       }
       if (session?.user?.email) {
@@ -275,7 +276,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
   const resetPassword = useCallback(async (email: string): Promise<string | null> => {
     if (!supabase) return 'Password reset is not available in demo mode'
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/canada/portal/login',
+      redirectTo: window.location.origin + (window.location.pathname.startsWith('/us/portal') ? '/us/portal/login' : '/canada/portal/login'),
     })
     if (!error) return null
     if (error.message.toLowerCase().includes('rate') || error.status === 429)

@@ -333,6 +333,27 @@ class SupabaseREST:
 
         self._handle_error(r, f"RPC {function_name}")
 
+    # ─── Vector Search (pgvector) ────────────────────────────
+
+    async def vector_search(
+        self,
+        table: str,
+        query_embedding: list[float],
+        match_column: str = "embedding",
+        match_count: int = 10,
+        match_threshold: float = 0.7,
+        filters: dict | None = None,
+    ) -> list[dict]:
+        """Similarity search using pgvector (cosine distance)."""
+        payload = {
+            "query_embedding": query_embedding,
+            "match_count": match_count,
+            "match_threshold": match_threshold,
+        }
+        if filters:
+            payload["filter_params"] = filters
+        return await self.rpc(f"match_{table}", payload)
+
     # ─── Analytics Helpers ────────────────────────────────────
 
     async def get_daily_revenue(

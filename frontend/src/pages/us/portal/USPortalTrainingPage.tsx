@@ -361,7 +361,7 @@ const MODULES: Module[] = [
       { id: '39', title: 'Overview & Command Center', completed: false, content: [
         'The Overview page is the first screen a merchant lands on after logging in. It shows four stat cards at the top: Total Revenue (last 30 days), Transaction Count, Average Ticket size, and the Money Left on Table score. Each stat includes a percentage change versus the prior period so the merchant instantly knows if things are trending up or down.',
         'Below the stats is the Revenue Chart — a 30-day line graph showing daily revenue with the trend direction. Merchants can hover over any day to see exact figures. This is the "heartbeat" of the business.',
-        'The next section shows Top AI Insights — the 5 most impactful findings from all 37 agents, sorted by dollar impact. Each insight card shows the type (pricing, staffing, anomaly, etc.), the dollar amount at stake, and a one-line action the merchant should take.',
+        'The next section shows Top AI Insights — the 5 most impactful findings from all 39 agents, sorted by dollar impact. Each insight card shows the type (pricing, staffing, anomaly, etc.), the dollar amount at stake, and a one-line action the merchant should take.',
         'Finally, the Overview shows a summary of active AI agents, the customer retention score across all RFM segments, and a connection status badge (green = live POS sync, yellow = syncing, red = disconnected). This page alone gives the merchant a complete 30-second health check of their business.',
       ]},
       { id: '40', title: 'Revenue & Forecasting Pages', completed: false, content: [
@@ -404,14 +404,14 @@ const MODULES: Module[] = [
   },
   {
     id: 'ai-agents',
-    title: 'Understanding the 37 AI Agents',
+    title: 'Understanding the 39 AI Agents',
     description: 'What each agent does, what it finds, and how to explain it to merchants.',
     icon: Bot,
     duration: '45 min',
     category: 'Product Knowledge',
     lessons: [
       { id: '46', title: 'How AI Agents Work', completed: false, content: [
-        'Meridian runs 37 specialized AI agents on every merchant\'s POS data. Each agent focuses on one specific area — revenue trends, customer behavior, pricing optimization, inventory management, staffing, etc. They run on a schedule (every 1–6 hours depending on the agent) and produce findings with dollar amounts attached.',
+        'Meridian runs 39 specialized AI agents on every merchant\'s POS data. Each agent focuses on one specific area — revenue trends, customer behavior, pricing optimization, inventory management, staffing, etc. They run on a schedule (every 1–6 hours depending on the agent) and produce findings with dollar amounts attached.',
         'Agents are grouped into 5 categories: Analysis (examining data patterns), Forecasting (predicting future trends), Optimization (recommending specific changes), Strategy (high-level business planning), and Coordination (synthesizing findings from other agents).',
         'Each agent has a confidence score (0–100%) that reflects how reliable its findings are. Agents with more data produce higher confidence scores. This is why we tell merchants "the AI gets smarter every week" — confidence scores genuinely improve as more transaction history accumulates.',
         'On the Agent Dashboard, merchants see every agent with its status (active, running, idle), last run time, next scheduled run, number of findings, confidence score, and latest finding. They can click any agent to see its full reasoning chain — the observation, analysis, conclusion, and recommended action.',
@@ -459,7 +459,7 @@ const MODULES: Module[] = [
         'Step 1 — Business Profile: The merchant enters their business name, selects their industry type (restaurant, cafe, smoke shop, salon, retail, food truck, auto shop), and confirms their location. This determines which AI agents are prioritized and what industry benchmarks are used.',
         'Step 2 — POS Connection: The merchant clicks "Connect" next to their POS system (Square, Clover, or Toast). They log into their POS account and authorize Meridian. The OAuth flow takes 30 seconds. Once authorized, the system begins backfilling up to 18 months of transaction history.',
         'Step 3 — Initial Data Sync: A progress screen shows the backfill status. Depending on data volume, this takes 5–30 minutes. Tell the merchant: "Your data is syncing now. You\'ll start seeing insights within 24 hours, and the AI gets smarter every week as it learns your patterns." Do NOT leave until the connection status shows green.',
-        'Step 4 — Dashboard Tour: Walk the merchant through the Overview page, point out the Money Left on Table score, show them the Insights tab, and explain that 37 agents are now running on their data. Set expectations: "Check your dashboard daily for the first week — new insights will keep appearing as the AI analyzes more of your history."',
+        'Step 4 — Dashboard Tour: Walk the merchant through the Overview page, point out the Money Left on Table score, show them the Insights tab, and explain that 39 agents are now running on their data. Set expectations: "Check your dashboard daily for the first week — new insights will keep appearing as the AI analyzes more of your history."',
       ]},
       { id: '52', title: 'The Customer Walkthrough', completed: false, content: [
         'The Customer Walkthrough is a guided tour built into the dashboard that highlights key features with tooltip-style popups. You can trigger it during onboarding to make the merchant comfortable navigating on their own.',
@@ -499,7 +499,7 @@ const MODULES: Module[] = [
       { id: '56', title: 'Key Demo Screens to Master', completed: false, content: [
         'Money Left on Table (Overview page): This is your opening. The big number at the top breaks down into specific categories — pricing gaps, staffing inefficiencies, customer churn, inventory waste. Click into each to show the math behind the number.',
         'Top Actions: This is your closer. Show the #1 ranked action with its full reasoning chain. Walk through: "Here\'s what the AI recommends, here\'s why, here\'s the expected impact, and here\'s how much effort it takes." The reasoning chain (observation → analysis → conclusion → impact) builds trust.',
-        'Agents page: This is your differentiator. Scroll through the 37 agents and say: "Each of these is a specialist analyzing your business right now. A human analyst would take weeks to do what these agents do in hours." Click one agent to show its reasoning.',
+        'Agents page: This is your differentiator. Scroll through the 39 agents and say: "Each of these is a specialist analyzing your business right now. A human analyst would take weeks to do what these agents do in hours." Click one agent to show its reasoning.',
         'Peak Hours heatmap: This is your most visual screen. The color-coded grid instantly shows busy vs. slow periods. Point to the darkest cells: "This is where you make your money. Are you staffed correctly during these hours?" Then point to gray cells: "And these are your dead zones — should you even be open?"',
       ]},
       { id: '57', title: 'Handling Demo Questions', completed: false, content: [

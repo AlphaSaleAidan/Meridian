@@ -107,7 +107,7 @@ export default function MarginsPage() {
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-walkthrough="margin-stats">
         <StaggerItem>
           <DashboardTiltCard className="card p-4">
             <div className="flex items-center gap-2">
@@ -215,7 +215,7 @@ export default function MarginsPage() {
 
       {/* Product Cost Breakdown */}
       <ScrollReveal variant="fadeUp" delay={0.2}>
-        <div className="card overflow-hidden">
+        <div className="card overflow-hidden" data-walkthrough="margin-breakdown">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Product Cost Breakdown</h3>
             <p className="text-[10px] text-[#A1A1A8] mt-0.5">Click "View Cost Formulas" on any product to see ingredient-level calculations</p>

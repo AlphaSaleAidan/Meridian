@@ -12,8 +12,10 @@ pipecat-ai>=0.0.40
 whisperlivekit>=0.3.0
 faster-whisper>=1.0.0
 
-# TTS — Kokoro (replaces Cartesia)
-kokoro>=0.9.4
+# TTS — OmniVoice (replaces Kokoro — voice cloning, 600+ langs, branded voices)
+omnivoice>=0.1.0
+soundfile>=0.12.0
+torch>=2.1.0
 
 # LLM — Ollama client (replaces Anthropic/OpenAI SDK)
 aiohttp>=3.9.0

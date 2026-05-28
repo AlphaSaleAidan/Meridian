@@ -222,8 +222,13 @@ async def _process_webhook(
         result = await processor.handle(event_type, event, connection)
         logger.info(f"Webhook {event_type} result: {result}")
         if connection:
-            from ...db.cache import dashboard_cache
-            dashboard_cache.invalidate_org(connection.get("org_id", ""))
+            from ...db.cache import dashboard_cache, event_bus
+            org_id = connection.get("org_id", "")
+            dashboard_cache.invalidate_org(org_id)
+            if "order" in event_type or "payment" in event_type:
+                event_bus.publish_order(org_id, event_type)
+            elif "inventory" in event_type or "catalog" in event_type:
+                event_bus.publish_inventory(org_id)
     except Exception as e:
         logger.error(f"Webhook processing failed: {e}", exc_info=True)
         # Create error notification if we have a connection
@@ -244,8 +249,7 @@ async def webhook_health():
     """Health check for webhook endpoint — useful for Square verification."""
     return {
         "status": "ready",
-        "signature_key_configured": bool(sq_config.webhook_signature_key),
-        "webhook_url": app_config.webhook_url,
+        "signature_configured": bool(sq_config.webhook_signature_key),
     }
 
 
@@ -262,6 +266,10 @@ async def clover_webhook(
     Clover payload: {appId, merchants: {MERCHANT_ID: [{type, objectId, ts}]}}
     Must respond 200 within 5 seconds.
     """
+    # TODO: Implement Clover webhook signature verification
+    # See: https://docs.clover.com/docs/webhooks
+    logger.warning("Clover webhook received without signature verification")
+
     body = await request.body()
 
     try:
@@ -319,6 +327,10 @@ async def toast_webhook(
     Toast sends: {eventType, restaurantGuid, webhookId, data: {...}}
     Must respond 200 quickly.
     """
+    # TODO: Implement Toast webhook signature verification
+    # See: https://doc.toasttab.com/openapi/webhooks/
+    logger.warning("Toast webhook received without signature verification")
+
     body = await request.body()
 
     try:

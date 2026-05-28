@@ -1,7 +1,7 @@
 import { lazy, Suspense, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, ChevronRight, Shield, Clock, Menu, X } from 'lucide-react'
+import { ArrowRight, ChevronRight, Shield, Clock, Menu, X, MapPin, Lock, Scale } from 'lucide-react'
 
 import SEO from '@/components/SEO'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
@@ -269,11 +269,11 @@ export default function CanadaLandingPage() {
               The numbers <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">speak</em>
             </h2>
           </ScrollReveal>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-2xl mx-auto text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-12 max-w-3xl mx-auto text-center">
             {metrics.map((stat, i) => (
               <ScrollReveal key={stat.label} delay={i * 0.1}>
-                <div>
-                  <div className="text-4xl md:text-5xl font-bold text-[#F5F5F7]">
+                <div className="min-w-0">
+                  <div className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#F5F5F7] whitespace-nowrap">
                     <CountUp end={stat.end} prefix={stat.prefix || ''} suffix={stat.suffix} duration={2200} />
                   </div>
                   <p className="text-[#A1A1A8] text-[13px] mt-2">{stat.label}</p>
@@ -305,6 +305,56 @@ export default function CanadaLandingPage() {
               </ScrollReveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* CANADIAN COMPLIANCE */}
+      <section className="py-24 border-t border-[#1F1F23]/40 relative overflow-hidden">
+        <div className="absolute top-1/3 right-1/4 aurora-glow aurora-teal" style={{ width: 500, height: 500, opacity: 0.06 }} />
+        <div className="max-w-content mx-auto px-6 relative">
+          <ScrollReveal className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
+              Built for <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Canada</em>
+            </h2>
+            <p className="mt-4 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
+              Full compliance with Canadian privacy laws. Your data stays in Canada.
+            </p>
+          </ScrollReveal>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            {[
+              {
+                icon: Shield,
+                title: 'PIPEDA Compliant',
+                desc: 'Full compliance with Canada\'s Personal Information Protection and Electronic Documents Act. Your customer data is handled with the highest privacy standards.',
+              },
+              {
+                icon: Scale,
+                title: 'Quebec Law 25',
+                desc: 'Meets Quebec\'s Law 25 (Bill 64) requirements for data privacy and consent management — the strictest provincial privacy legislation in Canada.',
+              },
+              {
+                icon: Lock,
+                title: 'Canadian Data Residency',
+                desc: 'All data stored and processed in Canadian data centres. Your merchant and customer information never leaves the country.',
+              },
+            ].map((item, i) => (
+              <ScrollReveal key={item.title} delay={i * 0.12}>
+                <div className="rounded-xl border border-[#1F1F23] bg-[#111113] p-6">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-4" style={{ backgroundColor: 'rgba(26,143,214,0.08)' }}>
+                    <item.icon size={20} className="text-[#1A8FD6]" />
+                  </div>
+                  <h3 className="text-[#F5F5F7] font-semibold text-lg mb-2">{item.title}</h3>
+                  <p className="text-[#A1A1A8] text-[13px] leading-relaxed">{item.desc}</p>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+          <ScrollReveal className="mt-8 flex justify-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#1F1F23] bg-[#111113]/80 text-[#A1A1A8] text-[12px]">
+              <MapPin size={14} className="text-[#17C5B0]" />
+              <span>CAD pricing &middot; Moneris &amp; Alice POS support &middot; Canadian data centres</span>
+            </div>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -352,7 +402,8 @@ export default function CanadaLandingPage() {
               <p className="text-[11px] text-[#A1A1A8]/30">&copy; 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>
             </div>
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 text-[12px] text-[#A1A1A8]/60">
-              <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
+              <span className="flex items-center gap-1.5"><Shield size={12} /> PIPEDA &middot; Law 25 compliant</span>
+              <span className="flex items-center gap-1.5"><Lock size={12} /> Bank-level encryption</span>
               <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
               <a onClick={() => navigate('/canada/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
               <a onClick={() => navigate('/canada/portal/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>

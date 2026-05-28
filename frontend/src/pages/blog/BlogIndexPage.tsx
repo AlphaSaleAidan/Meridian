@@ -109,6 +109,18 @@ export default function BlogIndexPage() {
               <span className="text-[#F5F5F7] font-medium">What Is POS Analytics?</span>
               <p className="text-sm text-[#A1A1A8] mt-1">The definitive guide</p>
             </Link>
+            <Link to="/guides" className="bg-[#111113] border border-[#1F1F23] rounded-lg p-4 hover:border-[#17C5B0]/40 transition-colors">
+              <span className="text-[#F5F5F7] font-medium">Guides for Operators</span>
+              <p className="text-sm text-[#A1A1A8] mt-1">Food cost, pricing, staffing, forecasting</p>
+            </Link>
+            <Link to="/best-restaurant-analytics-software" className="bg-[#111113] border border-[#1F1F23] rounded-lg p-4 hover:border-[#17C5B0]/40 transition-colors">
+              <span className="text-[#F5F5F7] font-medium">Best Analytics Software</span>
+              <p className="text-sm text-[#A1A1A8] mt-1">2026 comparison guide</p>
+            </Link>
+            <Link to="/faq" className="bg-[#111113] border border-[#1F1F23] rounded-lg p-4 hover:border-[#17C5B0]/40 transition-colors">
+              <span className="text-[#F5F5F7] font-medium">FAQ</span>
+              <p className="text-sm text-[#A1A1A8] mt-1">40+ questions answered</p>
+            </Link>
           </div>
         </div>
       </div>

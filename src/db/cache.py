@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import os
 import time
 from typing import Any
 
@@ -11,7 +12,7 @@ logger = logging.getLogger("meridian.cache")
 TTL_FAST = 30
 TTL_SLOW = 300
 
-REDIS_URL = "redis://localhost:6379/1"
+REDIS_URL = os.environ.get("REDIS_CACHE_URL", "redis://localhost:6379/1")
 
 
 class RedisTTLCache:
@@ -61,6 +62,14 @@ class RedisTTLCache:
                 pass
 
         self._fallback[key] = (time.monotonic() + ttl_seconds, value)
+        if len(self._fallback) > 1000:
+            self._evict_expired()
+
+    def _evict_expired(self):
+        now = time.monotonic()
+        expired = [k for k, (exp, _) in self._fallback.items() if now > exp]
+        for k in expired:
+            del self._fallback[k]
 
     def invalidate(self, prefix: str = ""):
         if self._use_redis:
@@ -111,3 +120,58 @@ class RedisTTLCache:
 
 
 dashboard_cache = RedisTTLCache()
+
+
+class EventBus:
+    """Redis pub/sub for real-time order and webhook events."""
+
+    CHANNEL_ORDER = "meridian:orders"
+    CHANNEL_INVENTORY = "meridian:inventory"
+    CHANNEL_ALERT = "meridian:alerts"
+
+    def __init__(self, redis_url: str = REDIS_URL):
+        try:
+            self._redis = redis.Redis.from_url(redis_url, decode_responses=True)
+            self._redis.ping()
+            self._available = True
+        except Exception:
+            self._redis = None
+            self._available = False
+            logger.warning("EventBus: Redis unavailable — events will not be published")
+
+    def publish(self, channel: str, event: dict) -> int:
+        if not self._available:
+            return 0
+        try:
+            return self._redis.publish(channel, json.dumps(event, default=str))
+        except Exception as e:
+            logger.debug("EventBus publish failed: %s", e)
+            return 0
+
+    def publish_order(self, org_id: str, event_type: str, data: dict | None = None):
+        self.publish(self.CHANNEL_ORDER, {
+            "org_id": org_id,
+            "type": event_type,
+            "data": data or {},
+            "ts": time.time(),
+        })
+
+    def publish_inventory(self, org_id: str, data: dict | None = None):
+        self.publish(self.CHANNEL_INVENTORY, {
+            "org_id": org_id,
+            "type": "inventory.updated",
+            "data": data or {},
+            "ts": time.time(),
+        })
+
+    def publish_alert(self, org_id: str, title: str, priority: str = "normal"):
+        self.publish(self.CHANNEL_ALERT, {
+            "org_id": org_id,
+            "type": "alert",
+            "title": title,
+            "priority": priority,
+            "ts": time.time(),
+        })
+
+
+event_bus = EventBus()

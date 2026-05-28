@@ -25,6 +25,8 @@ logger = logging.getLogger("meridian.phone")
 
 router = APIRouter(prefix="/twilio", tags=["phone-agent"])
 
+DEMO_MERCHANT_ID = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
+
 # --- AI Provider config ---
 # Primary: SambaNova (OpenAI-compatible endpoint)
 SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY", "")
@@ -250,6 +252,29 @@ def _parse(result: dict) -> tuple[str, dict | None]:
     return " ".join(texts).strip(), tool
 
 
+async def _lookup_merchant_by_phone(phone_number: str) -> str | None:
+    """Look up merchant_id by the Twilio phone number (To field) from Supabase."""
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
+    if not supabase_url or not supabase_key:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(
+                f"{supabase_url}/rest/v1/phone_agent_config"
+                f"?phone_number=eq.{phone_number}&select=merchant_id",
+                headers={
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                },
+            )
+            if res.status_code == 200 and res.json():
+                return res.json()[0]["merchant_id"]
+    except Exception as e:
+        logger.warning("Failed to lookup merchant by phone %s: %s", phone_number, e)
+    return None
+
+
 async def _log_call_start(call_sid: str, caller_phone: str, merchant_id: str = ""):
     """Log a new call to phone_call_logs."""
     try:
@@ -291,13 +316,31 @@ async def _log_call_end(call_sid: str, status: str, order_data: dict | None = No
 
 @router.post("/voice")
 async def twilio_voice(request: Request):
-    """Initial call webhook — greet the caller."""
+    """Initial call webhook — greet the caller.
+    Looks up the merchant by the incoming Twilio phone number (To field).
+    Falls back to DEMO_MERCHANT_ID if no merchant is found.
+    """
     form = await request.form()
     call_sid = form.get("CallSid", "unknown")
     caller_phone = form.get("From", "")
+    twilio_number = form.get("To", "")
     _cleanup()
-    _sessions[call_sid] = {"messages": [], "ts": time.time(), "caller_phone": caller_phone}
-    await _log_call_start(call_sid, caller_phone)
+
+    # Try to resolve merchant from the Twilio number the caller dialed
+    merchant_id = None
+    if twilio_number:
+        merchant_id = await _lookup_merchant_by_phone(twilio_number)
+    if not merchant_id:
+        merchant_id = DEMO_MERCHANT_ID
+        logger.info("No merchant found for %s — using demo merchant %s", twilio_number, DEMO_MERCHANT_ID)
+
+    _sessions[call_sid] = {
+        "messages": [],
+        "ts": time.time(),
+        "caller_phone": caller_phone,
+        "merchant_id": merchant_id,
+    }
+    await _log_call_start(call_sid, caller_phone, merchant_id=merchant_id)
     greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     return Response(content=_gather(greeting), media_type=TWIML)
 

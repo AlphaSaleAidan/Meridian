@@ -24,3 +24,9 @@ frontend/.claude-flow/sessions/
 frontend/.claude-flow/data/
 services/postal/.claude/
 .claude/settings.json
+
+# Model weights
+*.pt
+
+frontend/src/lib/.claude-flow/
+services/labellerr_cv/

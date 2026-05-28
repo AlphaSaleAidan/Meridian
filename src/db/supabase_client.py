@@ -154,3 +154,12 @@ class SupabaseDB:
 
     async def run_migrations(self, migrations_dir: str) -> list[str]:
         return await self._persist.run_migrations(migrations_dir)
+
+    # ─── Vector Search (pgvector) ────────────────────────────
+
+    async def vector_search(self, table: str, query_embedding: list[float], **kwargs) -> list:
+        """Similarity search via pgvector. Delegates to SupabaseREST."""
+        if not hasattr(self, '_rest') or self._rest is None:
+            from .supabase_rest import SupabaseREST
+            self._rest = SupabaseREST(self.config.supabase_url, self.config.supabase_service_key)
+        return await self._rest.vector_search(table, query_embedding, **kwargs)

@@ -28,9 +28,7 @@ export default defineConfig({
   server: {
     port: 3000,
     allowedHosts: true,
-    hmr: {
-      host: '209.126.80.45',
-    },
+    hmr: process.env.VITE_HMR_HOST ? { host: process.env.VITE_HMR_HOST } : undefined,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

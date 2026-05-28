@@ -11,7 +11,7 @@ services:
     environment:
       POSTGRES_URL: jdbc:postgresql://compreface-db:5432/frs
       POSTGRES_USER: frs
-      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD:?COMPREFACE_DB_PASSWORD must be set}
     depends_on:
       - compreface-db
 
@@ -21,7 +21,7 @@ services:
     environment:
       POSTGRES_DB: frs
       POSTGRES_USER: frs
-      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD:-changeme}
+      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD:?COMPREFACE_DB_PASSWORD must be set}
     volumes:
       - compreface-data:/var/lib/postgresql/data
 
