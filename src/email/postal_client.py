@@ -101,9 +101,13 @@ class PostalClient:
         tag: Optional[str] = None,
         reply_to: Optional[str] = None,
         cc: Optional[str] = None,
+        prefer_resend: bool = False,
     ) -> dict:
         """Send email via Postal, falling back to Resend if unavailable."""
         kwargs = dict(from_addr=from_addr, tag=tag, reply_to=reply_to, cc=cc)
+
+        if prefer_resend and self._cfg.resend_api_key:
+            return await self._send_resend(to, subject, html, **kwargs)
 
         # Try Postal first
         if self._cfg.api_key:

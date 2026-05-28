@@ -25,6 +25,7 @@ from .templates import (
     customer_credentials,
     rep_credentials,
     schedule_published,
+    update_brief,
 )
 
 logger = logging.getLogger("meridian.email.send")
@@ -394,3 +395,64 @@ async def send_customer_credentials(
     result = await _client.send(to, subject, html, tag="customer_credentials")
     await _log_send(to, "customer_credentials", subject, result, org_id=org_id, tag="customer_credentials")
     return result
+
+
+async def send_update_brief(
+    recipients: list[str],
+    subject: str,
+    *,
+    greeting: str = "Team",
+    intro: str = "",
+    sections: list[dict],
+    closing: str = "",
+    cta_text: str = "",
+    cta_url: str = "",
+    reply_to: Optional[str] = None,
+) -> list[dict]:
+    """Send an update brief to multiple recipients. Returns list of send results."""
+    html = update_brief.render(
+        subject_line=subject,
+        greeting=greeting,
+        intro=intro,
+        sections=sections,
+        closing=closing,
+        cta_text=cta_text,
+        cta_url=cta_url,
+    )
+    results = []
+    for to in recipients:
+        result = await _client.send(to, subject, html, tag="update_brief", reply_to=reply_to, prefer_resend=True)
+        await _log_send(to, "update_brief", subject, result, tag="update_brief")
+        results.append({"to": to, **result})
+    return results
+
+
+async def fetch_canada_rep_emails() -> list[str]:
+    """Fetch active Canadian rep emails from Supabase."""
+    import os
+    import httpx
+
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not supabase_url or not service_key:
+        logger.warning("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — cannot fetch reps")
+        return []
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{supabase_url}/rest/v1/sales_reps"
+                "?portal_context=in.(canada,all)&is_active=eq.true"
+                "&select=email",
+                headers={
+                    "Authorization": f"Bearer {service_key}",
+                    "apikey": service_key,
+                },
+            )
+        if resp.status_code != 200:
+            logger.error("Failed to fetch rep emails: %s", resp.text)
+            return []
+        return [r["email"] for r in resp.json() if r.get("email")]
+    except Exception as exc:
+        logger.error("Error fetching rep emails: %s", exc)
+        return []
