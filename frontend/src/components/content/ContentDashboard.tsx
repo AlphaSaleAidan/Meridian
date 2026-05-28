@@ -20,6 +20,7 @@ import {
   Link2,
   Coins,
   Film,
+  Clapperboard,
 } from 'lucide-react'
 import StatCard from '@/components/StatCard'
 import { useContentDashboard } from '@/hooks/useContentDashboard'
@@ -31,9 +32,10 @@ import PostReviewCard from './PostReviewCard'
 import RankingsTable from './RankingsTable'
 import ContentUpsellModal from './ContentUpsellModal'
 import VideoStudioTab from './VideoStudioTab'
+import WorkshopEditor from './WorkshopEditor'
 import type { ContentPost } from '@/lib/content-demo-data'
 
-type ContentTab = 'content' | 'video'
+type ContentTab = 'content' | 'video' | 'workshop'
 
 export default function ContentDashboard() {
   const { data, loading, error, refetch } = useContentDashboard()
@@ -165,6 +167,7 @@ export default function ContentDashboard() {
         {([
           { id: 'content' as const, label: 'Content', icon: FileText },
           { id: 'video' as const, label: 'Video Studio', icon: Film },
+          { id: 'workshop' as const, label: 'Commercial Editor', icon: Clapperboard },
         ]).map(t => {
           const Icon = t.icon
           return (
@@ -184,6 +187,11 @@ export default function ContentDashboard() {
                   NEW
                 </span>
               )}
+              {t.id === 'workshop' && (
+                <span className="text-[8px] font-bold text-amber-400 bg-amber-500/10 px-1 py-0.5 rounded leading-none">
+                  PRO
+                </span>
+              )}
             </button>
           )
         })}
@@ -192,6 +200,17 @@ export default function ContentDashboard() {
       {/* Video Studio Tab */}
       {activeTab === 'video' && (
         <VideoStudioTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+      )}
+
+      {/* Commercial Editor / Workshop */}
+      {activeTab === 'workshop' && (
+        <WorkshopEditor
+          isDemo={demo}
+          creditBalance={data?.credits?.balance ?? 0}
+          merchantId={orgId}
+          brand={data?.brand ?? null}
+          onBack={() => setActiveTab('video')}
+        />
       )}
 
       {/* Active jobs banner — never shown in demo */}
