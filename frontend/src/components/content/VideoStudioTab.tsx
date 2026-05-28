@@ -31,21 +31,26 @@ interface ModelInfo {
   name: string
   desc: string
   maxDuration: number
-  costCredits: number
+  baseCost: number
+  costPerSecond: number
   badge?: string
 }
 
+function modelCost(model: ModelInfo, duration: number): number {
+  return model.baseCost + model.costPerSecond * Math.max(0, duration - 3)
+}
+
 const MODELS: Record<VideoModel, ModelInfo> = {
-  'ltx-video':         { name: 'LTX Video 13B',    desc: 'Fast, affordable',        maxDuration: 10, costCredits: 200 },
-  'wan-2.5':           { name: 'Wan 2.5',           desc: 'Alibaba, great quality',  maxDuration: 5,  costCredits: 200 },
-  'mochi':             { name: 'Mochi v1',          desc: 'Best motion realism',     maxDuration: 5,  costCredits: 300 },
-  'hunyuan':           { name: 'HunyuanVideo',      desc: 'Tencent, cinematic',      maxDuration: 5,  costCredits: 300 },
-  'minimax-video':     { name: 'MiniMax Hailuo',    desc: 'Smooth, reliable',        maxDuration: 6,  costCredits: 300 },
-  'seedance-2-fast':   { name: 'Seedance 2 Fast',   desc: 'ByteDance, quick',        maxDuration: 10, costCredits: 300, badge: 'NEW' },
-  'kling-v2.5-turbo':  { name: 'Kling 2.5 Turbo',   desc: 'Fast cinematic',          maxDuration: 10, costCredits: 400 },
-  'seedance-2':        { name: 'Seedance 2.0',      desc: 'ByteDance, cinematic+audio', maxDuration: 10, costCredits: 500, badge: 'CINEMATIC' },
-  'kling-v3':          { name: 'Kling v3 Pro',      desc: 'Top-tier commercial',     maxDuration: 10, costCredits: 600, badge: 'PRO' },
-  'veo-3.1':           { name: 'Veo 3.1',           desc: 'Google, highest quality',  maxDuration: 8,  costCredits: 800, badge: 'BEST' },
+  'ltx-video':         { name: 'LTX Video 13B',    desc: 'Fast, affordable',           maxDuration: 10, baseCost: 100, costPerSecond: 15 },
+  'wan-2.5':           { name: 'Wan 2.5',           desc: 'Alibaba, great quality',     maxDuration: 5,  baseCost: 120, costPerSecond: 20 },
+  'mochi':             { name: 'Mochi v1',          desc: 'Best motion realism',        maxDuration: 5,  baseCost: 150, costPerSecond: 30 },
+  'hunyuan':           { name: 'HunyuanVideo',      desc: 'Tencent, cinematic',         maxDuration: 5,  baseCost: 150, costPerSecond: 30 },
+  'minimax-video':     { name: 'MiniMax Hailuo',    desc: 'Smooth, reliable',           maxDuration: 6,  baseCost: 150, costPerSecond: 30 },
+  'seedance-2-fast':   { name: 'Seedance 2 Fast',   desc: 'ByteDance, quick',           maxDuration: 10, baseCost: 150, costPerSecond: 25, badge: 'NEW' },
+  'kling-v2.5-turbo':  { name: 'Kling 2.5 Turbo',   desc: 'Fast cinematic',             maxDuration: 10, baseCost: 200, costPerSecond: 30 },
+  'seedance-2':        { name: 'Seedance 2.0',      desc: 'ByteDance, cinematic+audio',  maxDuration: 10, baseCost: 250, costPerSecond: 40, badge: 'CINEMATIC' },
+  'kling-v3':          { name: 'Kling v3 Pro',      desc: 'Top-tier commercial',        maxDuration: 10, baseCost: 300, costPerSecond: 45, badge: 'PRO' },
+  'veo-3.1':           { name: 'Veo 3.1',           desc: 'Google, highest quality',     maxDuration: 8,  baseCost: 400, costPerSecond: 60, badge: 'BEST' },
 }
 
 const STYLES: { id: VideoStyle; label: string; emoji: string; desc: string }[] = [
@@ -150,7 +155,8 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId, bran
   const [error, setError] = useState<string | null>(null)
 
   const modelInfo = MODELS[selectedModel]
-  const totalCost = modelInfo.costCredits * selectedPlatforms.length
+  const perVideoCost = modelCost(modelInfo, duration)
+  const totalCost = perVideoCost * selectedPlatforms.length
 
   const togglePlatform = (id: string) => {
     setSelectedPlatforms(prev =>
@@ -378,7 +384,7 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId, bran
               )}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-amber-400">{modelInfo.costCredits} credits/video</span>
+              <span className="text-[10px] text-amber-400">{perVideoCost} credits ({duration}s)</span>
               <ChevronDown size={14} className={`text-[#A1A1A8] transition-transform ${showModelPicker ? 'rotate-180' : ''}`} />
             </div>
           </button>
@@ -415,7 +421,7 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId, bran
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-[10px] text-[#A1A1A8]">up to {m.maxDuration}s</span>
-                        <span className="text-[10px] text-amber-400">{m.costCredits} credits</span>
+                        <span className="text-[10px] text-amber-400">from {m.baseCost} cr</span>
                         {selectedModel === id && <Check size={12} className="text-purple-400" />}
                       </div>
                     </button>
@@ -429,7 +435,7 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId, bran
         {/* Generate Button */}
         <div className="flex items-center justify-between pt-2 border-t border-[#1F1F23]">
           <div className="text-xs text-[#A1A1A8]">
-            {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} × {modelInfo.costCredits} credits = <span className="text-amber-400 font-medium">{totalCost} credits total</span>
+            {selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? 's' : ''} × {perVideoCost} credits ({duration}s) = <span className="text-amber-400 font-medium">{totalCost} credits total</span>
           </div>
           {isDemo ? (
             <button
@@ -660,16 +666,16 @@ export default function VideoStudioTab({ isDemo, creditBalance, merchantId, bran
             </thead>
             <tbody>
               {([
-                ['LTX Video 13B', '10s', '★★★☆☆', '~20s', '200'],
-                ['Wan 2.5', '5s', '★★★★☆', '~40s', '200'],
-                ['Mochi v1', '5s', '★★★★☆', '~60s', '300'],
-                ['HunyuanVideo', '5s', '★★★★☆', '~60s', '300'],
-                ['MiniMax Hailuo', '6s', '★★★★☆', '~45s', '300'],
-                ['Seedance 2 Fast', '10s', '★★★★☆', '~30s', '300'],
-                ['Kling 2.5 Turbo', '10s', '★★★★☆', '~45s', '400'],
-                ['Seedance 2.0', '10s', '★★★★★', '~90s', '500'],
-                ['Kling v3 Pro', '10s', '★★★★★', '~90s', '600'],
-                ['Veo 3.1', '8s', '★★★★★', '~120s', '800'],
+                ['LTX Video 13B', '10s', '★★★☆☆', '~20s', '100 + 15/s'],
+                ['Wan 2.5', '5s', '★★★★☆', '~40s', '120 + 20/s'],
+                ['Mochi v1', '5s', '★★★★☆', '~60s', '150 + 30/s'],
+                ['HunyuanVideo', '5s', '★★★★☆', '~60s', '150 + 30/s'],
+                ['MiniMax Hailuo', '6s', '★★★★☆', '~45s', '150 + 30/s'],
+                ['Seedance 2 Fast', '10s', '★★★★☆', '~30s', '150 + 25/s'],
+                ['Kling 2.5 Turbo', '10s', '★★★★☆', '~45s', '200 + 30/s'],
+                ['Seedance 2.0', '10s', '★★★★★', '~90s', '250 + 40/s'],
+                ['Kling v3 Pro', '10s', '★★★★★', '~90s', '300 + 45/s'],
+                ['Veo 3.1', '8s', '★★★★★', '~120s', '400 + 60/s'],
               ] as const).map(([name, dur, quality, speed, cost]) => (
                 <tr key={name} className="border-b border-[#1F1F23]/50 text-[#F5F5F7]">
                   <td className="py-2 pr-4 font-medium">{name}</td>

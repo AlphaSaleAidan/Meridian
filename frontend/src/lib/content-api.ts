@@ -160,4 +160,71 @@ export const contentApi = {
       director?: { style_notes: string; model_recommendation: string; original_prompt: string }
       enhanced_prompt?: string
     }>(`/api/content/video/status/${jobId}`),
+
+  scrapeWebsite: (merchantId: string, url: string) =>
+    apiFetch<{
+      ok: boolean
+      domain: string
+      title: string
+      meta_description: string
+      meta_keywords: string
+      logos: string[]
+      headings: { level: string; text: string }[]
+      social_links: Record<string, string>
+      brand_colors: string[]
+      content_preview: string
+      word_count: number
+    }>('/api/content/scrape/website', {
+      method: 'POST',
+      body: { merchantId, url },
+    }),
+
+  generatePost: (merchantId: string, params: {
+    prompt: string
+    platform?: string
+    postType?: string
+    referenceImageUrl?: string
+    brand?: { business_name: string; business_type: string; voice_profile?: Record<string, unknown> }
+    websiteContext?: string
+  }) =>
+    apiFetch<{
+      ok: boolean
+      post: {
+        hook: string
+        body: string
+        hashtags: string[]
+        call_to_action: string
+        suggested_image_prompt?: string
+      }
+      platform: string
+    }>('/api/content/post/generate', {
+      method: 'POST',
+      body: { merchantId, ...params },
+    }),
+
+  generateSeo: (merchantId: string, params: {
+    targetKeyword: string
+    websiteUrl?: string
+    contentType?: string
+    wordCount?: number
+    websiteContext?: string
+  }) =>
+    apiFetch<{
+      ok: boolean
+      seo_content: {
+        meta_title: string
+        meta_description: string
+        content_html: string
+        word_count: number
+        keyword_density: number
+        headers: string[]
+        internal_links: string[]
+        schema_suggestion: string
+      }
+      target_keyword: string
+      content_type: string
+    }>('/api/content/seo/generate', {
+      method: 'POST',
+      body: { merchantId, ...params },
+    }),
 }

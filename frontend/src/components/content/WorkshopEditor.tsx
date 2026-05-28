@@ -34,6 +34,8 @@ import {
   RefreshCw,
   Maximize2,
   Minimize2,
+  Upload,
+  X,
 } from 'lucide-react'
 import { contentApi } from '@/lib/content-api'
 
@@ -54,6 +56,7 @@ interface RecurringElement {
   name: string
   description: string
   color: string
+  imageUrl?: string
 }
 
 interface BrandData {
@@ -427,7 +430,7 @@ export default function WorkshopEditor({ isDemo, creditBalance, merchantId, bran
   const [genStatus, setGenStatus] = useState('')
   const [expandedInspector, setExpandedInspector] = useState(true)
   const [showNewElement, setShowNewElement] = useState(false)
-  const [newElement, setNewElement] = useState({ name: '', description: '', type: 'character' as RecurringElement['type'] })
+  const [newElement, setNewElement] = useState({ name: '', description: '', type: 'character' as RecurringElement['type'], imageUrl: '' })
 
   const selectedScene = scenes.find(s => s.id === selectedSceneId) || null
   const totalDuration = scenes.reduce((s, sc) => s + sc.duration, 0)
@@ -473,11 +476,17 @@ export default function WorkshopEditor({ isDemo, creditBalance, merchantId, bran
       name: newElement.name.trim(),
       description: newElement.description.trim(),
       color: ELEMENT_COLORS[elements.length % ELEMENT_COLORS.length],
+      imageUrl: newElement.imageUrl || undefined,
     }
     setElements(prev => [...prev, el])
-    setNewElement({ name: '', description: '', type: 'character' })
+    setNewElement({ name: '', description: '', type: 'character', imageUrl: '' })
     setShowNewElement(false)
   }, [newElement, elements.length])
+
+  const handleElementImageUpload = useCallback((elementId: string, file: File) => {
+    const url = URL.createObjectURL(file)
+    setElements(prev => prev.map(el => el.id === elementId ? { ...el, imageUrl: url } : el))
+  }, [])
 
   const removeElement = useCallback((id: string) => {
     setElements(prev => prev.filter(e => e.id !== id))
@@ -690,6 +699,36 @@ export default function WorkshopEditor({ isDemo, creditBalance, merchantId, bran
                           placeholder="Visual description..."
                           className="w-full bg-transparent border border-[#1F1F23] rounded px-2 py-1 text-[10px] text-[#F5F5F7] placeholder:text-[#A1A1A8]/25 focus:outline-none"
                         />
+                        {/* Image upload */}
+                        <label className="flex items-center gap-1.5 px-2 py-1.5 rounded border border-dashed border-[#1F1F23] hover:border-[#7C5CFF]/30 cursor-pointer transition-colors">
+                          {newElement.imageUrl ? (
+                            <div className="flex items-center gap-1.5 w-full">
+                              <img src={newElement.imageUrl} alt="" className="w-6 h-6 rounded object-cover" />
+                              <span className="text-[9px] text-[#7C5CFF] truncate flex-1">Image attached</span>
+                              <button
+                                onClick={e => { e.preventDefault(); setNewElement(prev => ({ ...prev, imageUrl: '' })) }}
+                                className="p-0.5"
+                              >
+                                <X size={8} className="text-[#A1A1A8]" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <Upload size={10} className="text-[#A1A1A8]/40" />
+                              <span className="text-[9px] text-[#A1A1A8]/40">Upload reference photo</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={e => {
+                              const file = e.target.files?.[0]
+                              if (file) setNewElement(prev => ({ ...prev, imageUrl: URL.createObjectURL(file) }))
+                              e.target.value = ''
+                            }}
+                          />
+                        </label>
                         <button
                           onClick={addElement}
                           disabled={!newElement.name.trim()}
@@ -720,12 +759,27 @@ export default function WorkshopEditor({ isDemo, creditBalance, merchantId, bran
                           key={el.id}
                           className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[#1F1F23]/50 transition-colors"
                         >
-                          <div
-                            className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
-                            style={{ backgroundColor: el.color + '20' }}
-                          >
-                            <Icon size={10} style={{ color: el.color }} />
-                          </div>
+                          {el.imageUrl ? (
+                            <img src={el.imageUrl} alt={el.name} className="w-7 h-7 rounded object-cover flex-shrink-0 border border-[#1F1F23]" />
+                          ) : (
+                            <label
+                              className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0 cursor-pointer hover:ring-1 hover:ring-[#7C5CFF]/30 transition-all"
+                              style={{ backgroundColor: el.color + '20' }}
+                              title="Upload reference photo"
+                            >
+                              <Icon size={10} style={{ color: el.color }} />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={e => {
+                                  const file = e.target.files?.[0]
+                                  if (file) handleElementImageUpload(el.id, file)
+                                  e.target.value = ''
+                                }}
+                              />
+                            </label>
+                          )}
                           <div className="flex-1 min-w-0">
                             <p className="text-[10px] font-medium text-[#F5F5F7] truncate">{el.name}</p>
                             <p className="text-[8px] text-[#A1A1A8]/40 truncate">{el.description || el.type}</p>
@@ -743,27 +797,36 @@ export default function WorkshopEditor({ isDemo, creditBalance, merchantId, bran
                 </div>
 
                 {/* Quick-add suggestions based on brand */}
-                {brand && elements.length === 0 && (
+                {brand && (brand.voice_profile?.top_products || []).length > 0 && (
                   <div className="space-y-1">
                     <span className="text-[8px] text-[#A1A1A8]/30 uppercase tracking-wider">Quick add from brand</span>
-                    {(brand.voice_profile?.top_products || []).slice(0, 3).map((prod, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          const el: RecurringElement = {
-                            id: makeId(),
-                            type: 'object',
-                            name: prod,
-                            description: `Signature product from ${brand.business_name}`,
-                            color: ELEMENT_COLORS[i % ELEMENT_COLORS.length],
-                          }
-                          setElements(prev => [...prev, el])
-                        }}
-                        className="w-full text-left px-2 py-1 rounded text-[9px] text-[#A1A1A8] hover:bg-[#1F1F23]/50 transition-colors"
-                      >
-                        + {prod}
-                      </button>
-                    ))}
+                    {(brand.voice_profile?.top_products || []).slice(0, 5).map((prod, i) => {
+                      const alreadyAdded = elements.some(el => el.name === prod)
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (alreadyAdded) return
+                            const el: RecurringElement = {
+                              id: makeId(),
+                              type: 'object',
+                              name: prod,
+                              description: `Signature product from ${brand.business_name}`,
+                              color: ELEMENT_COLORS[(elements.length + i) % ELEMENT_COLORS.length],
+                            }
+                            setElements(prev => [...prev, el])
+                          }}
+                          disabled={alreadyAdded}
+                          className={`w-full text-left px-2 py-1 rounded text-[9px] transition-colors ${
+                            alreadyAdded
+                              ? 'text-[#A1A1A8]/20 cursor-default'
+                              : 'text-[#A1A1A8] hover:bg-[#1F1F23]/50'
+                          }`}
+                        >
+                          {alreadyAdded ? '✓ ' : '+ '}{prod}
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>

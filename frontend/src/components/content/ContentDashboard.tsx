@@ -21,6 +21,8 @@ import {
   Coins,
   Film,
   Clapperboard,
+  PenTool,
+  Search as SearchIcon,
 } from 'lucide-react'
 import StatCard from '@/components/StatCard'
 import { useContentDashboard } from '@/hooks/useContentDashboard'
@@ -33,9 +35,11 @@ import RankingsTable from './RankingsTable'
 import ContentUpsellModal from './ContentUpsellModal'
 import VideoStudioTab from './VideoStudioTab'
 import WorkshopEditor from './WorkshopEditor'
+import PostGeneratorTab from './PostGeneratorTab'
+import SeoGeneratorTab from './SeoGeneratorTab'
 import type { ContentPost } from '@/lib/content-demo-data'
 
-type ContentTab = 'content' | 'video' | 'workshop'
+type ContentTab = 'content' | 'video' | 'workshop' | 'posts' | 'seo'
 
 export default function ContentDashboard() {
   const { data, loading, error, refetch } = useContentDashboard()
@@ -166,6 +170,8 @@ export default function ContentDashboard() {
       <div className="flex items-center gap-1 border-b border-[#1F1F23] -mb-2">
         {([
           { id: 'content' as const, label: 'Content', icon: FileText },
+          { id: 'posts' as const, label: 'Generate Post', icon: PenTool },
+          { id: 'seo' as const, label: 'SEO', icon: SearchIcon },
           { id: 'video' as const, label: 'Video Studio', icon: Film },
           { id: 'workshop' as const, label: 'Commercial Editor', icon: Clapperboard },
         ]).map(t => {
@@ -196,6 +202,16 @@ export default function ContentDashboard() {
           )
         })}
       </div>
+
+      {/* Generate Post Tab */}
+      {activeTab === 'posts' && (
+        <PostGeneratorTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+      )}
+
+      {/* SEO Generator Tab */}
+      {activeTab === 'seo' && (
+        <SeoGeneratorTab isDemo={demo} creditBalance={data?.credits?.balance ?? 0} merchantId={orgId} brand={data?.brand ?? null} />
+      )}
 
       {/* Video Studio Tab */}
       {activeTab === 'video' && (

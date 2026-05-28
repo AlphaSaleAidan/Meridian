@@ -555,6 +555,310 @@ async def director_styles():
     }
 
 
+# ── Website scraper — extract brand info, logos, content ───────────────────
+
+class ScrapeRequest(BaseModel):
+    url: str
+    merchantId: str
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        v = v.strip()
+        if not v.startswith(("http://", "https://")):
+            v = "https://" + v
+        if len(v) > 2000:
+            raise ValueError("URL too long")
+        return v
+
+
+@router.post("/scrape/website")
+async def scrape_website(req: ScrapeRequest):
+    """Scrape a merchant's website for brand info, logos, meta, and page content."""
+    from bs4 import BeautifulSoup
+    from urllib.parse import urljoin, urlparse
+
+    logger.info(f"Scraping website: {req.url} for merchant={req.merchantId}")
+
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        try:
+            resp = await client.get(req.url, headers={
+                "User-Agent": "MeridianBot/1.0 (content optimization)",
+                "Accept": "text/html,application/xhtml+xml",
+            })
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Website returned {resp.status_code}")
+        except httpx.TimeoutException:
+            raise HTTPException(status_code=504, detail="Website timed out")
+        except httpx.ConnectError:
+            raise HTTPException(status_code=502, detail="Could not connect to website")
+
+    html = resp.text
+    soup = BeautifulSoup(html, "lxml")
+
+    base_url = req.url.rstrip("/")
+    parsed = urlparse(base_url)
+    domain = parsed.netloc
+
+    # Extract title and meta
+    title = soup.title.string.strip() if soup.title and soup.title.string else ""
+    meta_desc = ""
+    meta_kw = ""
+    for meta in soup.find_all("meta"):
+        name = (meta.get("name") or meta.get("property") or "").lower()
+        content = meta.get("content", "")
+        if name in ("description", "og:description"):
+            meta_desc = content
+        if name == "keywords":
+            meta_kw = content
+
+    # Extract logos
+    logos: list[str] = []
+    for tag in soup.find_all("img"):
+        src = tag.get("src", "")
+        alt = (tag.get("alt") or "").lower()
+        cls = " ".join(tag.get("class") or []).lower()
+        if any(kw in alt + cls + src.lower() for kw in ["logo", "brand", "header-img"]):
+            full_url = urljoin(base_url, src)
+            if full_url not in logos:
+                logos.append(full_url)
+    # Also check link[rel=icon]
+    for link in soup.find_all("link", rel=lambda r: r and any(x in r for x in ["icon", "apple-touch-icon"])):
+        href = link.get("href", "")
+        if href:
+            logos.append(urljoin(base_url, href))
+
+    # Extract main text content
+    for tag in soup.find_all(["script", "style", "nav", "footer", "header"]):
+        tag.decompose()
+    body_text = soup.get_text(separator="\n", strip=True)
+    # Deduplicate empty lines and truncate
+    lines = [line.strip() for line in body_text.split("\n") if line.strip()]
+    body_text = "\n".join(lines[:200])  # First ~200 lines
+
+    # Extract headings for structure
+    headings = []
+    for h in soup.find_all(["h1", "h2", "h3"]):
+        text = h.get_text(strip=True)
+        if text:
+            headings.append({"level": h.name, "text": text[:200]})
+
+    # Extract social links
+    social_links: dict[str, str] = {}
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        for platform in ["instagram.com", "facebook.com", "tiktok.com", "twitter.com", "x.com", "linkedin.com", "youtube.com", "yelp.com"]:
+            if platform in href:
+                name = platform.split(".")[0]
+                if name == "x":
+                    name = "twitter"
+                social_links[name] = href
+
+    # Extract colors from inline styles and CSS (basic)
+    colors: list[str] = []
+    import re
+    for style in soup.find_all("style"):
+        found = re.findall(r"#[0-9a-fA-F]{3,8}", style.string or "")
+        colors.extend(found[:10])
+    colors = list(dict.fromkeys(colors))[:8]
+
+    return {
+        "ok": True,
+        "domain": domain,
+        "title": title,
+        "meta_description": meta_desc,
+        "meta_keywords": meta_kw,
+        "logos": logos[:5],
+        "headings": headings[:20],
+        "social_links": social_links,
+        "brand_colors": colors,
+        "content_preview": body_text[:3000],
+        "word_count": len(body_text.split()),
+    }
+
+
+# ── SEO content generation ────────────────────────────────────────────────
+
+class SeoGenRequest(BaseModel):
+    merchantId: str
+    targetKeyword: str
+    websiteUrl: Optional[str] = None
+    contentType: str = "blog_post"  # blog_post, landing_page, product_page, faq
+    wordCount: int = 800
+    websiteContext: Optional[str] = None
+
+    @field_validator("targetKeyword")
+    @classmethod
+    def validate_keyword(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Target keyword cannot be empty")
+        if len(v) > 200:
+            raise ValueError("Keyword too long")
+        return v
+
+    @field_validator("wordCount")
+    @classmethod
+    def validate_word_count(cls, v: int) -> int:
+        if v < 300 or v > 3000:
+            raise ValueError("Word count must be 300-3000")
+        return v
+
+
+SEO_CONTENT_TYPES = {
+    "blog_post": "SEO-optimized blog post with headers, internal link suggestions, and meta description",
+    "landing_page": "Conversion-focused landing page copy with hero, features, social proof, and CTA sections",
+    "product_page": "Product/service page with benefits, specs, FAQ, and structured data suggestions",
+    "faq": "FAQ page with schema markup suggestions targeting featured snippets and People Also Ask",
+}
+
+
+@router.post("/seo/generate")
+async def generate_seo(req: SeoGenRequest):
+    """Generate SEO content using LLM with optional website context."""
+    _check_daily_cap(req.merchantId, "image")  # reuse image cap for text gen
+
+    content_desc = SEO_CONTENT_TYPES.get(req.contentType, SEO_CONTENT_TYPES["blog_post"])
+
+    system_prompt = f"""You are Meridian's SEO content writer. Generate a {content_desc}.
+
+RULES:
+1. Target keyword: "{req.targetKeyword}" — use it in H1, first paragraph, and 2-3 subheadings
+2. Write naturally — keyword density should be 1-2%, not stuffed
+3. Include a meta title (under 60 chars) and meta description (under 155 chars)
+4. Use H2 and H3 headers to structure the content
+5. Include 2-3 internal link placeholders marked as [INTERNAL LINK: topic]
+6. Add 1-2 external authority link suggestions
+7. Write at least {req.wordCount} words
+8. Include a clear CTA at the end
+9. Respond with valid JSON only
+
+If website context is provided, reference the business's actual products, services, and brand voice."""
+
+    user_msg = f"Generate a {req.contentType} targeting '{req.targetKeyword}'"
+    if req.websiteContext:
+        user_msg += f"\n\nWebsite context:\n{req.websiteContext[:2000]}"
+
+    try:
+        from ...ai.llm_layer import _call_llm
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": user_msg
+                + '\n\nRespond with JSON: {"meta_title": "...", "meta_description": "...", '
+                '"content_html": "...", "word_count": 0, "keyword_density": 0.0, '
+                '"headers": ["H2: ...", "H3: ..."], "internal_links": ["topic1"], '
+                '"schema_suggestion": "Article or FAQPage"}'
+            },
+        ]
+
+        result = await _call_llm(messages, org_id=req.merchantId)
+        if not result:
+            raise HTTPException(status_code=503, detail="LLM unavailable — try again")
+
+        return {
+            "ok": True,
+            "seo_content": result,
+            "target_keyword": req.targetKeyword,
+            "content_type": req.contentType,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SEO generation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"SEO generation failed: {str(e)}")
+
+
+# ── Social post generation ────────────────────────────────────────────────
+
+class PostGenRequest(BaseModel):
+    merchantId: str
+    prompt: str
+    platform: str = "instagram"
+    postType: str = "social"  # social, gmb_post, ad_creative
+    referenceImageUrl: Optional[str] = None
+    brand: Optional[BrandProfile] = None
+    websiteContext: Optional[str] = None
+
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Prompt cannot be empty")
+        if len(v) > 500:
+            raise ValueError("Prompt exceeds 500 characters")
+        return v
+
+
+@router.post("/post/generate")
+async def generate_post(req: PostGenRequest):
+    """Generate a social media post with AI."""
+    platform_specs = {
+        "instagram": "Instagram (2200 char cap, 30 hashtags max, visual-first)",
+        "facebook": "Facebook (longer form OK, link previews, engagement questions)",
+        "tiktok": "TikTok (short punchy caption, trending hashtags, CTA)",
+        "google_business": "Google Business Profile (250 chars, local SEO, include hours/location)",
+        "linkedin": "LinkedIn (professional tone, industry insights, thought leadership)",
+    }
+    platform_desc = platform_specs.get(req.platform, platform_specs["instagram"])
+
+    brand_context = ""
+    if req.brand:
+        brand_context = f"\nBusiness: {req.brand.business_name} ({req.brand.business_type})"
+        vp = req.brand.voice_profile or {}
+        if vp.get("tone"):
+            brand_context += f"\nTone: {vp['tone']}"
+        if vp.get("top_products"):
+            brand_context += f"\nTop products: {', '.join(vp['top_products'][:5])}"
+
+    website_context = ""
+    if req.websiteContext:
+        website_context = f"\n\nWebsite info:\n{req.websiteContext[:1500]}"
+
+    system_prompt = f"""You are Meridian's social media copywriter. Generate a {platform_desc} post.
+{brand_context}{website_context}
+
+RULES:
+1. Hook in the first line — stop the scroll
+2. Use the brand's tone and reference their actual products
+3. Include 3-5 relevant hashtags (niche > generic)
+4. End with a specific CTA
+5. Match the platform's best practices
+6. If a reference image is mentioned, describe how the post relates to it
+7. Respond with valid JSON only"""
+
+    try:
+        from ...ai.llm_layer import _call_llm
+
+        user_msg = f"Create a {req.platform} post about: {req.prompt}"
+        if req.referenceImageUrl:
+            user_msg += f"\n\nReference image provided — the post should complement this visual."
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": user_msg
+                + '\n\nRespond with JSON: {"hook": "...", "body": "...", "hashtags": ["..."], '
+                '"call_to_action": "...", "suggested_image_prompt": "..."}'
+            },
+        ]
+
+        result = await _call_llm(messages, org_id=req.merchantId)
+        if not result:
+            raise HTTPException(status_code=503, detail="LLM unavailable — try again")
+
+        return {"ok": True, "post": result, "platform": req.platform}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Post generation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Post generation failed: {str(e)}")
+
+
 @router.get("/models")
 async def list_models():
     return {
