@@ -1,70 +1,22 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Check, Sparkles } from 'lucide-react'
+import { X, Coins, Zap } from 'lucide-react'
 import { clsx } from 'clsx'
 import { isCanadaPath } from '@/lib/demo-context'
+import { CREDIT_PACKS, CREDIT_COSTS } from '@/lib/content-demo-data'
 
 interface ContentUpsellModalProps {
   open: boolean
   onClose: () => void
+  creditBalance?: number
 }
 
-interface Tier {
-  name: string
-  priceUsd: number
-  priceCad: number
-  features: string[]
-  recommended?: boolean
-}
-
-const TIERS: Tier[] = [
-  {
-    name: 'Starter',
-    priceUsd: 49,
-    priceCad: 67,
-    features: [
-      '3 posts per week',
-      '1 platform',
-      'Basic SEO optimization',
-      'AI-generated images',
-    ],
-  },
-  {
-    name: 'Growth',
-    priceUsd: 129,
-    priceCad: 177,
-    recommended: true,
-    features: [
-      '7 posts per week',
-      '3 platforms',
-      'Advanced SEO + articles',
-      'AI images + video briefs',
-      'Rank tracking',
-    ],
-  },
-  {
-    name: 'Command',
-    priceUsd: 299,
-    priceCad: 409,
-    features: [
-      '10 posts per week',
-      'All platforms',
-      'Premium articles (Claude Sonnet)',
-      'Full video production briefs',
-      'Rank tracking + AI citations',
-      'Dedicated brand voice',
-      'WordPress publishing',
-    ],
-  },
-]
-
-export default function ContentUpsellModal({ open, onClose }: ContentUpsellModalProps) {
+export default function ContentUpsellModal({ open, onClose, creditBalance = 0 }: ContentUpsellModalProps) {
   const isCA = isCanadaPath()
 
   return (
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -73,7 +25,6 @@ export default function ContentUpsellModal({ open, onClose }: ContentUpsellModal
             onClick={onClose}
           />
 
-          {/* Modal */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -82,14 +33,14 @@ export default function ContentUpsellModal({ open, onClose }: ContentUpsellModal
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
           >
             <div
-              className="relative bg-[#131316] border border-[#1F1F23] rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto"
+              className="relative bg-[#131316] border border-[#1F1F23] rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
               onClick={e => e.stopPropagation()}
             >
               {/* Header */}
               <div className="flex items-center justify-between p-5 border-b border-[#1F1F23]">
                 <div className="flex items-center gap-2">
-                  <Sparkles size={18} className="text-[#1A8FD6]" />
-                  <h2 className="text-lg font-bold text-[#F5F5F7]">Upgrade Your Content</h2>
+                  <Coins size={18} className="text-amber-400" />
+                  <h2 className="text-lg font-bold text-[#F5F5F7]">Buy Credits</h2>
                 </div>
                 <button
                   onClick={onClose}
@@ -99,53 +50,79 @@ export default function ContentUpsellModal({ open, onClose }: ContentUpsellModal
                 </button>
               </div>
 
-              {/* Tier cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5">
-                {TIERS.map(tier => (
-                  <div
-                    key={tier.name}
-                    className={clsx(
-                      'rounded-lg p-5 flex flex-col',
-                      tier.recommended
-                        ? 'bg-[#1A8FD6]/5 border-2 border-[#1A8FD6] relative'
-                        : 'bg-[#0A0A0B] border border-[#1F1F23]',
-                    )}
-                  >
-                    {tier.recommended && (
-                      <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-bold bg-[#1A8FD6] text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                        Recommended
-                      </span>
-                    )}
+              <div className="p-5 space-y-5">
+                {/* Current balance */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
+                  <span className="text-xs text-[#A1A1A8]">Current balance</span>
+                  <span className="text-sm font-bold text-[#F5F5F7] font-mono flex items-center gap-1.5">
+                    <Coins size={14} className="text-amber-400" />
+                    {creditBalance} credits
+                  </span>
+                </div>
 
-                    <h3 className="text-sm font-semibold text-[#F5F5F7]">{tier.name}</h3>
-                    <div className="mt-2 mb-4">
-                      <span className="text-2xl font-bold text-[#F5F5F7] font-mono">
-                        {isCA ? `CA$${tier.priceCad}` : `$${tier.priceUsd}`}
-                      </span>
-                      <span className="text-xs text-[#A1A1A8]">/mo</span>
-                    </div>
-
-                    <ul className="space-y-2 flex-1">
-                      {tier.features.map(f => (
-                        <li key={f} className="flex items-start gap-2 text-xs text-[#A1A1A8]">
-                          <Check size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-
+                {/* Credit packs */}
+                <div className="grid grid-cols-2 gap-3">
+                  {CREDIT_PACKS.map(pack => {
+                    const rec = 'recommended' in pack && pack.recommended
+                    return (
                     <button
+                      key={pack.credits}
                       className={clsx(
-                        'mt-5 w-full py-2 rounded-lg text-sm font-semibold transition-colors',
-                        tier.recommended
-                          ? 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90'
-                          : 'bg-[#1F1F23] text-[#F5F5F7] hover:bg-[#1F1F23]/80',
+                        'relative rounded-lg p-4 text-left transition-colors',
+                        rec
+                          ? 'bg-[#1A8FD6]/5 border-2 border-[#1A8FD6] hover:bg-[#1A8FD6]/10'
+                          : 'bg-[#0A0A0B] border border-[#1F1F23] hover:border-[#A1A1A8]/30',
                       )}
                     >
-                      Get Started
+                      {rec && (
+                        <span className="absolute -top-2.5 left-3 text-[9px] font-bold bg-[#1A8FD6] text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Best Value
+                        </span>
+                      )}
+                      <p className="text-lg font-bold text-[#F5F5F7] font-mono">{pack.credits}</p>
+                      <p className="text-[10px] text-[#A1A1A8] mb-2">credits</p>
+                      <p className="text-sm font-semibold text-[#F5F5F7]">
+                        {isCA ? `CA$${pack.priceCad.toFixed(2)}` : `$${pack.priceUsd.toFixed(2)}`}
+                      </p>
+                      <p className="text-[10px] text-[#A1A1A8]">
+                        {isCA
+                          ? `CA$${(pack.priceCad / pack.credits).toFixed(2)}`
+                          : `$${(pack.priceUsd / pack.credits).toFixed(2)}`
+                        }/credit
+                      </p>
                     </button>
+                    )
+                  })}
+                </div>
+
+                {/* What credits buy */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-[#F5F5F7]">What credits buy</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { label: 'Social post (image + copy)', cost: CREDIT_COSTS.social_post },
+                      { label: 'SEO article', cost: CREDIT_COSTS.seo_article },
+                      { label: 'Regenerate image', cost: CREDIT_COSTS.image_regen },
+                      { label: 'Caption rewrite', cost: CREDIT_COSTS.caption_only },
+                    ].map(item => (
+                      <div key={item.label} className="flex items-center justify-between p-2 rounded bg-[#0A0A0B] border border-[#1F1F23]">
+                        <span className="text-[10px] text-[#A1A1A8]">{item.label}</span>
+                        <span className="text-[10px] font-mono font-semibold text-amber-400 flex items-center gap-0.5">
+                          <Coins size={9} /> {item.cost}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
+
+                {/* Free credits note */}
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-[#17C5B0]/5 border border-[#17C5B0]/15">
+                  <Zap size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
+                    Every new account gets <span className="text-[#F5F5F7] font-semibold">5 free credits</span> to try
+                    content generation. That's enough for 5 social posts or 2 SEO articles + a post.
+                  </p>
+                </div>
               </div>
             </div>
           </motion.div>

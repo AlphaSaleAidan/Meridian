@@ -69,14 +69,19 @@ export default function PostReviewCard({
 
   return (
     <div className="card p-4 sm:p-5 group hover:border-[#1F1F23]/80 transition-colors">
-      {/* Large preview image for readOnly/demo */}
+      {/* Preview image for readOnly/demo — moderate size with brand overlay */}
       {readOnly && post.image_url && (
-        <div className="mb-4">
+        <div className="mb-4 relative w-36 h-36 sm:w-40 sm:h-40 flex-shrink-0">
           <img
             src={post.image_url}
             alt=""
-            className="w-full aspect-square sm:aspect-[4/3] rounded-lg object-cover bg-[#1F1F23]"
+            className="w-full h-full rounded-lg object-cover bg-[#1F1F23]"
           />
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent rounded-b-lg px-2.5 py-2">
+            <p className="text-[10px] font-semibold text-white truncate">
+              {post.pos_data_reference?.item as string || platform.label}
+            </p>
+          </div>
         </div>
       )}
 

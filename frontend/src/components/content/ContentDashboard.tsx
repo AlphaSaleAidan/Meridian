@@ -18,6 +18,7 @@ import {
   Music2,
   Linkedin,
   Link2,
+  Coins,
 } from 'lucide-react'
 import StatCard from '@/components/StatCard'
 import { useContentDashboard } from '@/hooks/useContentDashboard'
@@ -130,6 +131,12 @@ export default function ContentDashboard() {
               <Settings size={14} /> Settings
             </button>
           )}
+          <button
+            onClick={() => setUpsellOpen(true)}
+            className="flex items-center gap-1.5 text-[11px] font-semibold bg-amber-500 text-[#0A0A0B] hover:bg-amber-400 px-3 py-2 rounded-lg transition-colors"
+          >
+            <Coins size={14} /> {demo ? 'Buy Credits' : 'Credits'}
+          </button>
           {demo ? (
             <button
               disabled
@@ -140,7 +147,6 @@ export default function ContentDashboard() {
             </button>
           ) : (
             <button
-              onClick={() => setUpsellOpen(true)}
               className="flex items-center gap-1.5 text-[11px] font-semibold bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 px-3 py-2 rounded-lg transition-colors"
             >
               <CalendarPlus size={14} /> Generate Calendar
@@ -154,7 +160,15 @@ export default function ContentDashboard() {
 
       {/* Stat cards */}
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+          <StatCard
+            label="Credits"
+            value={String(data?.credits?.balance ?? 0)}
+            icon={Coins}
+            iconColor="text-amber-400"
+            change={demo ? '5 free on signup' : undefined}
+            changeType="positive"
+          />
           <StatCard
             label="Posts Created"
             value={String(stats.postsThisMonth)}
@@ -166,20 +180,18 @@ export default function ContentDashboard() {
             value={String(stats.publishedCount)}
             icon={Sparkles}
             iconColor="text-[#17C5B0]"
-            change={stats.publishedCount > 0 ? `${stats.publishedCount} this month` : undefined}
-            changeType="positive"
           />
           <StatCard
             label="Keywords Tracking"
             value={String(stats.keywordsTracked)}
             icon={Search}
-            iconColor="text-amber-400"
+            iconColor="text-purple-400"
           />
           <StatCard
             label="Avg Rank"
             value={stats.avgRank > 0 ? `#${stats.avgRank}` : '--'}
             icon={BarChart3}
-            iconColor="text-purple-400"
+            iconColor="text-[#1A8FD6]"
           />
         </div>
       )}
@@ -293,23 +305,26 @@ export default function ContentDashboard() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="card p-6 border-[#1A8FD6]/20 bg-gradient-to-br from-[#1A8FD6]/5 to-transparent"
+          className="card p-6 border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-transparent"
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="p-3 rounded-xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20">
-              <Sparkles size={24} className="text-[#1A8FD6]" />
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+              <Coins size={24} className="text-amber-400" />
             </div>
             <div className="flex-1">
               <h3 className="text-base font-semibold text-[#F5F5F7]">
-                Upgrade to Content Creation
+                5 Free Credits on Signup
               </h3>
               <p className="text-sm text-[#A1A1A8] mt-1">
-                AI-powered social posts, SEO articles, and rank tracking — all driven by your real POS data.
-                Starting at {isCanadaPath() ? 'CA$67' : '$49'}/mo.
+                Every account gets 5 credits free — enough for 5 social posts or 2 SEO articles + a post.
+                Need more? Credits start at {isCanadaPath() ? 'CA$2.75' : '$2'} for 20.
               </p>
             </div>
-            <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1A8FD6] text-white text-sm font-medium hover:bg-[#1A8FD6]/90 transition-colors flex-shrink-0">
-              View Plans <ArrowRight size={14} />
+            <button
+              onClick={() => setUpsellOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 text-[#0A0A0B] text-sm font-semibold hover:bg-amber-400 transition-colors flex-shrink-0"
+            >
+              <Coins size={14} /> Buy Credits
             </button>
           </div>
         </motion.div>
@@ -447,8 +462,8 @@ export default function ContentDashboard() {
         </section>
       )}
 
-      {/* Upsell modal — real mode only */}
-      {!demo && <ContentUpsellModal open={upsellOpen} onClose={() => setUpsellOpen(false)} />}
+      {/* Credit purchase modal */}
+      <ContentUpsellModal open={upsellOpen} onClose={() => setUpsellOpen(false)} creditBalance={data?.credits?.balance ?? 0} />
     </motion.div>
   )
 }

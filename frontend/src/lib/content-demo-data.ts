@@ -8,6 +8,27 @@
 
 import { getActiveBusinessType, type BusinessType } from './demo-context'
 
+export interface ContentCredits {
+  balance: number
+  lifetime_used: number
+  free_granted: number
+}
+
+export const CREDIT_COSTS = {
+  social_post: 1,
+  seo_article: 2,
+  caption_only: 1,
+  hashtags_only: 0,
+  image_regen: 1,
+} as const
+
+export const CREDIT_PACKS = [
+  { credits: 20, priceUsd: 2, priceCad: 2.75, label: 'Starter' },
+  { credits: 50, priceUsd: 4.50, priceCad: 6.20, label: 'Popular', recommended: true },
+  { credits: 150, priceUsd: 12, priceCad: 16.50, label: 'Pro' },
+  { credits: 500, priceUsd: 35, priceCad: 48, label: 'Agency' },
+] as const
+
 export interface ContentDashboardData {
   brand: {
     business_name: string
@@ -24,6 +45,7 @@ export interface ContentDashboardData {
   posts: ContentPost[]
   rankings: ContentRanking[]
   activeJobs: ContentJob[]
+  credits: ContentCredits
 }
 
 export interface ContentPost {
@@ -101,7 +123,7 @@ const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
       body: 'The House Burger isn\'t just popular — it\'s carrying the week. Half-pound patty, aged cheddar, house-made aioli on a brioche bun. Our POS data shows it outsells everything else 3-to-1 on Tuesdays.\n\nCome taste why.',
       hashtags: ['#HouseBurger', '#BestBurger', '#CornerBistro', '#LocalEats', '#DowntownDining'],
       call_to_action: 'Reserve your table — link in bio',
-      image_url: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&h=600&fit=crop&q=80',
+      image_url: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=400&h=400&fit=crop&q=80',
       pos_data_reference: { item: 'House Burger', revenue_share: '23%', day: 'Tuesday' },
       published_at: daysAgo(2),
       publish_url: 'https://instagram.com/p/demo',
@@ -138,7 +160,7 @@ const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
       body: 'The Oat Milk Latte accounts for 34% of all morning orders — and we get it. Single-origin Ethiopian beans, house-made oat milk, a hint of vanilla. It\'s the reason 200+ regulars come back every single week.\n\nPaired with our fresh-baked Almond Croissant? That\'s the combo.',
       hashtags: ['#OatMilkLatte', '#CoffeeLovers', '#EmberAndBloom', '#LocalCoffee', '#MorningRitual'],
       call_to_action: 'Order ahead — skip the line',
-      image_url: 'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&h=600&fit=crop&q=80',
+      image_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=400&h=400&fit=crop&q=80',
       pos_data_reference: { item: 'Oat Milk Latte', revenue_share: '34%', period: 'morning' },
       published_at: daysAgo(1),
       publish_url: 'https://instagram.com/p/demo-coffee',
@@ -175,7 +197,7 @@ const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
       body: 'Between 11:30 and 1PM, the Loaded Steak Burrito outsells everything 4-to-1. Hand-cut steak, house queso, fresh pico, and enough heat to wake you up from that morning meeting.\n\n$9.99 combo with Queso Fries. That\'s the move.',
       hashtags: ['#SteakBurrito', '#LunchDeal', '#BlazeBurritoCo', '#FastCasual', '#BurritoLovers'],
       call_to_action: 'Order for pickup — link in bio',
-      image_url: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=600&h=600&fit=crop&q=80',
+      image_url: 'https://images.unsplash.com/photo-1513456852971-30c0b8199d4d?w=400&h=400&fit=crop&q=80',
       pos_data_reference: { item: 'Loaded Steak Burrito', revenue_share: '41%', period: 'lunch rush' },
       published_at: daysAgo(1),
       publish_url: 'https://instagram.com/p/demo-burrito',
@@ -212,7 +234,7 @@ const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
       body: 'Full Synthetic Oil Changes are our most booked service — 47% of all appointments this month. We use premium Mobil 1 synthetic, a 21-point inspection, and get you back on the road in under 30 minutes.\n\nBook online, skip the wait.',
       hashtags: ['#OilChange', '#ApexAutoCare', '#TrustedMechanic', '#AutoRepair'],
       call_to_action: 'Book your appointment at apexautocare.com',
-      image_url: 'https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=600&h=600&fit=crop&q=80',
+      image_url: 'https://images.unsplash.com/photo-1487754180451-c456f719a1fc?w=400&h=400&fit=crop&q=80',
       pos_data_reference: { item: 'Full Synthetic Oil Change', revenue_share: '47%', period: 'this month' },
       published_at: daysAgo(3),
       publish_url: 'https://facebook.com/apexauto/posts/demo',
@@ -249,7 +271,7 @@ const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
       body: 'Our Premium Glass Collection drives 38% of weekend revenue — and we just restocked with 12 new pieces from local artists. Hand-blown, one-of-a-kind, priced from $45.\n\nThese don\'t last. First come, first served.',
       hashtags: ['#PremiumGlass', '#HazeCollective', '#GlassArt', '#SmokeShop', '#HandBlown'],
       call_to_action: 'Visit us this weekend — 2847 Main St',
-      image_url: 'https://images.unsplash.com/photo-1527661929005-f5ca8979c7de?w=600&h=600&fit=crop&q=80',
+      image_url: 'https://images.unsplash.com/photo-1563203369-26f2e4a5ccf7?w=400&h=400&fit=crop&q=80',
       pos_data_reference: { item: 'Premium Glass Collection', revenue_share: '38%', period: 'weekends' },
       published_at: daysAgo(1),
       publish_url: 'https://instagram.com/p/demo-haze',
@@ -274,5 +296,6 @@ export function fetchDemoContentData(): ContentDashboardData {
     posts: [demo.post],
     rankings: demo.rankings,
     activeJobs: [],
+    credits: { balance: 5, lifetime_used: 0, free_granted: 5 },
   }
 }
