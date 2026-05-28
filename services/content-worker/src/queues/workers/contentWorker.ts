@@ -126,7 +126,7 @@ async function processJob(job: Job): Promise<unknown> {
           platform: (data.platform as string) ?? 'instagram_reel',
           style: data.style as 'product_spotlight' | 'behind_the_scenes' | 'appetizing_food' | 'before_after' | 'testimonial_scene' | 'seasonal_promo' | 'atmosphere' | undefined,
           businessType: data.businessType as string | undefined,
-          model: data.model as 'kling-v2' | 'kling-v2-master' | 'minimax-video' | 'ltx-video' | 'wan-v2' | 'hunyuan' | undefined,
+          model: data.model as 'kling-v3' | 'kling-v2.5-turbo' | 'seedance-2' | 'seedance-2-fast' | 'minimax-video' | 'ltx-video' | 'wan-2.5' | 'hunyuan' | 'veo-3.1' | 'mochi' | undefined,
           durationSeconds: data.durationSeconds as number | undefined,
           postId: data.postId as string | undefined,
         })

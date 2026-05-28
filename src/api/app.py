@@ -76,6 +76,7 @@ from .routes.archives import router as archives_router
 from .routes.intelligence import router as intelligence_router
 from .routes.inventory_docs import router as inventory_docs_router
 from .routes.analytics import router as analytics_router
+from .routes.content import router as content_router
 from .routes.portal import router as portal_router
 try:
     from .routes.billing import router as billing_router
@@ -241,6 +242,7 @@ app.include_router(archives_router)
 app.include_router(intelligence_router)
 app.include_router(inventory_docs_router)
 app.include_router(analytics_router)
+app.include_router(content_router)
 app.include_router(portal_router)
 if _has_billing:
     app.include_router(billing_router)

@@ -87,12 +87,16 @@ export async function generateImage(
 }
 
 export type VideoModel =
-  | 'kling-v2'
-  | 'kling-v2-master'
+  | 'kling-v3'
+  | 'kling-v2.5-turbo'
+  | 'seedance-2'
+  | 'seedance-2-fast'
   | 'minimax-video'
   | 'ltx-video'
-  | 'wan-v2'
+  | 'wan-2.5'
   | 'hunyuan'
+  | 'veo-3.1'
+  | 'mochi'
 
 interface VideoModelConfig {
   falEndpoint: string
@@ -103,12 +107,16 @@ interface VideoModelConfig {
 }
 
 export const VIDEO_MODELS: Record<VideoModel, VideoModelConfig> = {
-  'kling-v2':        { falEndpoint: 'fal-ai/kling-video/v2/standard', maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
-  'kling-v2-master': { falEndpoint: 'fal-ai/kling-video/v2/master',   maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'high' },
-  'minimax-video':   { falEndpoint: 'fal-ai/minimax-video',           maxDuration: 6,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
-  'ltx-video':       { falEndpoint: 'fal-ai/ltx-video-v2',            maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'low' },
-  'wan-v2':          { falEndpoint: 'fal-ai/wan/v2.1/1.3b',           maxDuration: 5,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'low' },
-  'hunyuan':         { falEndpoint: 'fal-ai/hunyuan-video',           maxDuration: 5,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+  'kling-v3':          { falEndpoint: 'fal-ai/kling-video/v3/pro/text-to-video',           maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'high' },
+  'kling-v2.5-turbo':  { falEndpoint: 'fal-ai/kling-video/v2.5-turbo/pro/text-to-video',   maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+  'seedance-2':        { falEndpoint: 'fal-ai/bytedance/seedance-2.0/text-to-video',        maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'high' },
+  'seedance-2-fast':   { falEndpoint: 'fal-ai/bytedance/seedance-2.0/fast/text-to-video',   maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+  'minimax-video':     { falEndpoint: 'fal-ai/minimax/video-01-live',                       maxDuration: 6,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+  'ltx-video':         { falEndpoint: 'fal-ai/ltx-video-13b-distilled/image-to-video',      maxDuration: 10, defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'low' },
+  'wan-2.5':           { falEndpoint: 'fal-ai/wan-25-preview/text-to-video',                 maxDuration: 5,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'low' },
+  'hunyuan':           { falEndpoint: 'fal-ai/hunyuan-video',                                maxDuration: 5,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
+  'veo-3.1':           { falEndpoint: 'fal-ai/veo3.1',                                      maxDuration: 8,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'high' },
+  'mochi':             { falEndpoint: 'fal-ai/mochi-v1',                                     maxDuration: 5,  defaultDuration: 5,  supportsAspectRatio: true,  costTier: 'mid' },
 }
 
 export interface GenerateVideoParams {

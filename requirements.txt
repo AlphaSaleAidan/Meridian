@@ -37,3 +37,6 @@ litellm>=1.40.0
 # Monitoring & Analytics
 sentry-sdk[fastapi]>=2.0.0
 posthog>=3.0.0
+
+# AI Generation
+fal-client>=1.0.0

@@ -174,8 +174,8 @@ export async function generateVideoAd(input: VideoAdInput): Promise<VideoAdOutpu
 }
 
 function pickBestModel(durationSeconds: number): VideoModel {
-  if (durationSeconds <= 5) return 'ltx-video'
-  return 'kling-v2'
+  if (durationSeconds <= 5) return 'seedance-2-fast'
+  return 'kling-v3'
 }
 
 // ── Batch Generation ───────────────────────────────────────────────────────

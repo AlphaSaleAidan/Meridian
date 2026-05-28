@@ -23,7 +23,7 @@ import { isCanadaPath } from '@/lib/demo-context'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type VideoModel = 'kling-v2' | 'kling-v2-master' | 'minimax-video' | 'ltx-video' | 'wan-v2' | 'hunyuan'
+type VideoModel = 'kling-v3' | 'kling-v2.5-turbo' | 'seedance-2' | 'seedance-2-fast' | 'minimax-video' | 'ltx-video' | 'wan-2.5' | 'hunyuan' | 'veo-3.1' | 'mochi'
 type VideoStyle = 'product_spotlight' | 'behind_the_scenes' | 'appetizing_food' | 'before_after' | 'testimonial_scene' | 'seasonal_promo' | 'atmosphere'
 
 interface ModelInfo {
@@ -35,12 +35,16 @@ interface ModelInfo {
 }
 
 const MODELS: Record<VideoModel, ModelInfo> = {
-  'ltx-video':       { name: 'LTX Video',     desc: 'Fast, affordable',       maxDuration: 10, costCredits: 2 },
-  'wan-v2':          { name: 'Wan 2.1',        desc: 'Good quality, budget',   maxDuration: 5,  costCredits: 2 },
-  'hunyuan':         { name: 'HunyuanVideo',   desc: 'Tencent, balanced',      maxDuration: 5,  costCredits: 3 },
-  'minimax-video':   { name: 'MiniMax Video',  desc: 'Hailuo engine, smooth',  maxDuration: 6,  costCredits: 3, badge: 'POPULAR' },
-  'kling-v2':        { name: 'Kling v2',       desc: 'High quality, reliable', maxDuration: 10, costCredits: 4 },
-  'kling-v2-master': { name: 'Kling v2 Master',desc: 'Best quality',           maxDuration: 10, costCredits: 6, badge: 'PRO' },
+  'ltx-video':         { name: 'LTX Video 13B',    desc: 'Fast, affordable',        maxDuration: 10, costCredits: 2 },
+  'wan-2.5':           { name: 'Wan 2.5',           desc: 'Alibaba, great quality',  maxDuration: 5,  costCredits: 2 },
+  'mochi':             { name: 'Mochi v1',          desc: 'Best motion realism',     maxDuration: 5,  costCredits: 3 },
+  'hunyuan':           { name: 'HunyuanVideo',      desc: 'Tencent, cinematic',      maxDuration: 5,  costCredits: 3 },
+  'minimax-video':     { name: 'MiniMax Hailuo',    desc: 'Smooth, reliable',        maxDuration: 6,  costCredits: 3 },
+  'seedance-2-fast':   { name: 'Seedance 2 Fast',   desc: 'ByteDance, quick',        maxDuration: 10, costCredits: 3, badge: 'NEW' },
+  'kling-v2.5-turbo':  { name: 'Kling 2.5 Turbo',   desc: 'Fast cinematic',          maxDuration: 10, costCredits: 4 },
+  'seedance-2':        { name: 'Seedance 2.0',      desc: 'ByteDance, cinematic+audio', maxDuration: 10, costCredits: 5, badge: 'CINEMATIC' },
+  'kling-v3':          { name: 'Kling v3 Pro',      desc: 'Top-tier commercial',     maxDuration: 10, costCredits: 6, badge: 'PRO' },
+  'veo-3.1':           { name: 'Veo 3.1',           desc: 'Google, highest quality',  maxDuration: 8,  costCredits: 8, badge: 'BEST' },
 }
 
 const STYLES: { id: VideoStyle; label: string; emoji: string; desc: string }[] = [
@@ -67,7 +71,7 @@ const DEMO_VIDEOS = [
     id: 'dv-1',
     platform: 'instagram_reel',
     style: 'appetizing_food' as VideoStyle,
-    model: 'kling-v2' as VideoModel,
+    model: 'kling-v3' as VideoModel,
     prompt: 'Slow-motion cheese pull on a gourmet burger, warm kitchen lighting, steam rising',
     duration: 5,
     status: 'completed' as const,
@@ -78,7 +82,7 @@ const DEMO_VIDEOS = [
     id: 'dv-2',
     platform: 'tiktok',
     style: 'behind_the_scenes' as VideoStyle,
-    model: 'minimax-video' as VideoModel,
+    model: 'seedance-2' as VideoModel,
     prompt: 'Barista pouring latte art in slow motion, morning light through cafe windows',
     duration: 6,
     status: 'completed' as const,
@@ -89,7 +93,7 @@ const DEMO_VIDEOS = [
     id: 'dv-3',
     platform: 'facebook',
     style: 'atmosphere' as VideoStyle,
-    model: 'ltx-video' as VideoModel,
+    model: 'veo-3.1' as VideoModel,
     prompt: 'Slow dolly through cozy restaurant interior, candlelit tables, warm ambiance',
     duration: 10,
     status: 'completed' as const,
@@ -107,7 +111,7 @@ interface Props {
 
 export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
   const [prompt, setPrompt] = useState('')
-  const [selectedModel, setSelectedModel] = useState<VideoModel>('minimax-video')
+  const [selectedModel, setSelectedModel] = useState<VideoModel>('seedance-2-fast')
   const [selectedStyle, setSelectedStyle] = useState<VideoStyle>('product_spotlight')
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['instagram_reel'])
   const [duration, setDuration] = useState(5)
@@ -458,12 +462,16 @@ export default function VideoStudioTab({ isDemo, creditBalance }: Props) {
             </thead>
             <tbody>
               {([
-                ['LTX Video', '10s', '★★★☆☆', '~30s', '2'],
-                ['Wan 2.1', '5s', '★★★☆☆', '~45s', '2'],
+                ['LTX Video 13B', '10s', '★★★☆☆', '~20s', '2'],
+                ['Wan 2.5', '5s', '★★★★☆', '~40s', '2'],
+                ['Mochi v1', '5s', '★★★★☆', '~60s', '3'],
                 ['HunyuanVideo', '5s', '★★★★☆', '~60s', '3'],
-                ['MiniMax Video', '6s', '★★★★☆', '~45s', '3'],
-                ['Kling v2', '10s', '★★★★☆', '~90s', '4'],
-                ['Kling v2 Master', '10s', '★★★★★', '~120s', '6'],
+                ['MiniMax Hailuo', '6s', '★★★★☆', '~45s', '3'],
+                ['Seedance 2 Fast', '10s', '★★★★☆', '~30s', '3'],
+                ['Kling 2.5 Turbo', '10s', '★★★★☆', '~45s', '4'],
+                ['Seedance 2.0', '10s', '★★★★★', '~90s', '5'],
+                ['Kling v3 Pro', '10s', '★★★★★', '~90s', '6'],
+                ['Veo 3.1', '8s', '★★★★★', '~120s', '8'],
               ] as const).map(([name, dur, quality, speed, cost]) => (
                 <tr key={name} className="border-b border-[#1F1F23]/50 text-[#F5F5F7]">
                   <td className="py-2 pr-4 font-medium">{name}</td>
