@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy } from 'lucide-react'
 import {
   generateScheduleStaff, generateScheduleShifts,
@@ -16,6 +16,11 @@ import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import MobileDayView from '@/components/schedule/MobileDayView'
 import { ROLE_GROUPS } from '@/components/schedule/schedule-helpers'
+import { api } from '@/lib/api'
+import {
+  isUuid, shiftFromApi, shiftToApiCreate, shiftToApiUpdate,
+  staffFromApi, staffToApiCreate,
+} from '@/lib/schedule-api'
 
 function getMonday(d: Date): Date {
   const dt = new Date(d), day = dt.getDay()
@@ -119,6 +124,35 @@ export default function SchedulePage() {
     showDemoSchedule ? generateScheduleStaff() : [])
   const [shifts, setShifts] = useState<ScheduleShift[]>(() =>
     showDemoSchedule ? generateScheduleShifts(weekStartDate) : [])
+
+  // Backend wiring: real org_id must be a UUID (backend validation).
+  const merchantId = org?.org_id ?? ''
+  const liveMode = !showDemoSchedule && isUuid(merchantId)
+
+  // Load staff once per merchant.
+  useEffect(() => {
+    if (!liveMode) return
+    let cancelled = false
+    api.scheduleStaff(merchantId)
+      .then(res => { if (!cancelled) setStaff(res.staff.map(staffFromApi)) })
+      .catch(e => console.warn('scheduleStaff load failed:', e))
+    return () => { cancelled = true }
+  }, [liveMode, merchantId])
+
+  // Load shifts when week changes.
+  useEffect(() => {
+    if (!liveMode) return
+    let cancelled = false
+    const ws = formatDateISO(weekStartDate)
+    api.scheduleShifts(merchantId, ws)
+      .then(res => {
+        if (cancelled) return
+        setShifts(res.shifts.map(shiftFromApi))
+        setIsPublished(res.shifts.length > 0 && res.shifts.every(s => s.status === 'published'))
+      })
+      .catch(e => console.warn('scheduleShifts load failed:', e))
+    return () => { cancelled = true }
+  }, [liveMode, merchantId, weekStartDate])
   const peakHours = useMemo(() => generatePeakHourHeatmap(), [])
   const holidays = useMemo(
     () => getHolidaysForWeek(weekStartDate, country as 'US' | 'CA'),
@@ -165,13 +199,24 @@ export default function SchedulePage() {
     if (showDemoSchedule) setShifts(generateScheduleShifts(next))
   }, [weekStartDate, showDemoSchedule])
 
-  const handleCopyPrevWeek = useCallback(() => {
+  const handleCopyPrevWeek = useCallback(async () => {
     const prevWeekStart = addWeeks(weekStartDate, -1)
-    const prevShifts = showDemoSchedule
-      ? generateScheduleShifts(prevWeekStart)
-      : shifts // fallback: just use current shifts
-    // Re-map shifts to this week
-    const copied = prevShifts
+    let sourceShifts: ScheduleShift[]
+    if (liveMode) {
+      try {
+        const res = await api.scheduleShifts(merchantId, formatDateISO(prevWeekStart))
+        sourceShifts = res.shifts.map(shiftFromApi)
+      } catch (e) {
+        console.warn('copy: load previous week failed:', e)
+        showToast('Could not load previous week')
+        return
+      }
+    } else {
+      sourceShifts = showDemoSchedule
+        ? generateScheduleShifts(prevWeekStart)
+        : shifts
+    }
+    const copied = sourceShifts
       .filter(s => !s.isRecommended)
       .map((s, i) => ({
         ...s,
@@ -181,32 +226,96 @@ export default function SchedulePage() {
       }))
     setShifts(copied)
     setIsPublished(false)
-    showToast(`Copied ${copied.length} shifts from previous week`)
-  }, [weekStartDate, showDemoSchedule, shifts, showToast])
+    if (liveMode) {
+      const portal = portalContext as 'us' | 'ca'
+      const ws = formatDateISO(weekStartDate)
+      try {
+        const results = await Promise.all(copied.map(s =>
+          api.scheduleCreateShift(shiftToApiCreate(s, merchantId, portal, ws))
+        ))
+        setShifts(results.map(r => shiftFromApi(r.shift)))
+        showToast(`Copied ${results.length} shifts from previous week`)
+      } catch (e) {
+        console.warn('copy: persist failed:', e)
+        // Refresh from server to get whatever did persist.
+        const refresh = await api.scheduleShifts(merchantId, ws).catch(() => null)
+        if (refresh) setShifts(refresh.shifts.map(shiftFromApi))
+        showToast('Some shifts failed to save — refreshed from server')
+      }
+    } else {
+      showToast(`Copied ${copied.length} shifts from previous week`)
+    }
+  }, [liveMode, merchantId, portalContext, weekStartDate, showDemoSchedule, shifts, showToast])
 
-  const handleAddStaff = useCallback((m: Omit<ScheduleStaffMember, 'id'>) => {
-    setStaff(prev => [...prev, { ...m, id: `staff-${Date.now()}` }])
-  }, [])
+  const handleAddStaff = useCallback(async (m: Omit<ScheduleStaffMember, 'id'>) => {
+    const optimistic: ScheduleStaffMember = { ...m, id: `staff-${Date.now()}` }
+    setStaff(prev => [...prev, optimistic])
+    if (!liveMode) return
+    try {
+      const portal = portalContext as 'us' | 'ca'
+      const res = await api.scheduleCreateStaff(staffToApiCreate(m, merchantId, portal))
+      setStaff(prev => prev.map(s => s.id === optimistic.id ? staffFromApi(res.staff_member) : s))
+    } catch (e) {
+      console.warn('createStaff failed:', e)
+      setStaff(prev => prev.filter(s => s.id !== optimistic.id))
+      showToast('Could not save staff member — check your connection')
+    }
+  }, [liveMode, merchantId, portalContext, showToast])
 
   const handleShiftClick = useCallback((s: ScheduleShift) => setSelectedShift(s), [])
 
-  const handleSlotClick = useCallback((day: number, hour: number) => {
+  const handleSlotClick = useCallback(async (day: number, hour: number) => {
     const d = addDays(weekStartDate, day)
+    const tempId = `shift-new-${Date.now()}`
     const ns: ScheduleShift = {
-      id: `shift-new-${Date.now()}`, staffMemberId: null, dayOfWeek: day,
+      id: tempId, staffMemberId: null, dayOfWeek: day,
       shiftDate: formatDateISO(d), startTime: `${pad2(hour)}:00`,
       endTime: `${pad2(Math.min(hour + 4, 23))}:00`, role: 'any',
       breakMinutes: 0, notes: '', status: 'draft', isRecommended: false,
     }
     setShifts(prev => [...prev, ns]); setSelectedShift(ns)
-  }, [weekStartDate])
+    if (!liveMode) return
+    try {
+      const portal = portalContext as 'us' | 'ca'
+      const res = await api.scheduleCreateShift(
+        shiftToApiCreate(ns, merchantId, portal, formatDateISO(weekStartDate)),
+      )
+      const saved = shiftFromApi(res.shift)
+      setShifts(prev => prev.map(s => (s.id === tempId ? saved : s)))
+      setSelectedShift(prev => (prev?.id === tempId ? saved : prev))
+    } catch (e) {
+      console.warn('createShift failed:', e)
+      setShifts(prev => prev.filter(s => s.id !== tempId))
+      setSelectedShift(prev => (prev?.id === tempId ? null : prev))
+      showToast('Could not create shift')
+    }
+  }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
 
-  const handleShiftSave = useCallback((u: ScheduleShift) => {
+  const handleShiftSave = useCallback(async (u: ScheduleShift) => {
+    const prevShift = shifts.find(s => s.id === u.id)
     setShifts(prev => prev.map(s => (s.id === u.id ? u : s)))
-  }, [])
-  const handleShiftDelete = useCallback((id: string) => {
+    if (!liveMode || !isUuid(u.id)) return
+    try {
+      await api.scheduleUpdateShift(u.id, shiftToApiUpdate(u))
+    } catch (e) {
+      console.warn('updateShift failed:', e)
+      if (prevShift) setShifts(prev => prev.map(s => (s.id === u.id ? prevShift : s)))
+      showToast('Could not save shift changes')
+    }
+  }, [liveMode, shifts, showToast])
+
+  const handleShiftDelete = useCallback(async (id: string) => {
+    const prevShift = shifts.find(s => s.id === id)
     setShifts(prev => prev.filter(s => s.id !== id))
-  }, [])
+    if (!liveMode || !isUuid(id)) return
+    try {
+      await api.scheduleDeleteShift(id)
+    } catch (e) {
+      console.warn('deleteShift failed:', e)
+      if (prevShift) setShifts(prev => [...prev, prevShift])
+      showToast('Could not delete shift')
+    }
+  }, [liveMode, shifts, showToast])
 
   const handleSplitShift = useCallback((original: ScheduleShift, firstEnd: string, secondStart: string) => {
     const first: ScheduleShift = {
@@ -224,31 +333,94 @@ export default function SchedulePage() {
     showToast('Shift split into two parts')
   }, [showToast])
 
-  const handleShiftMove = useCallback((shiftId: string, newDay: number, newStartHour: number) => {
+  const handleShiftMove = useCallback(async (shiftId: string, newDay: number, newStartHour: number) => {
+    const prevShifts = shifts
+    let moved: ScheduleShift | null = null
     setShifts(prev => prev.map(s => {
       if (s.id !== shiftId) return s
       const dur = parseInt(s.endTime) - parseInt(s.startTime)
       const eH = Math.min(newStartHour + dur, 23)
-      return { ...s, dayOfWeek: newDay, shiftDate: formatDateISO(addDays(weekStartDate, newDay)),
+      const next = { ...s, dayOfWeek: newDay, shiftDate: formatDateISO(addDays(weekStartDate, newDay)),
         startTime: `${pad2(newStartHour)}:00`, endTime: `${pad2(eH)}:00` }
+      moved = next
+      return next
     }))
-  }, [weekStartDate])
+    if (!liveMode || !isUuid(shiftId) || !moved) return
+    try {
+      // dayOfWeek + shiftDate aren't in our PUT schema; emulate via delete+create.
+      const portal = portalContext as 'us' | 'ca'
+      const created = await api.scheduleCreateShift(
+        shiftToApiCreate(moved, merchantId, portal, formatDateISO(weekStartDate)),
+      )
+      await api.scheduleDeleteShift(shiftId).catch(() => {})
+      setShifts(prev => prev.map(s => (s.id === shiftId ? shiftFromApi(created.shift) : s)))
+    } catch (e) {
+      console.warn('moveShift failed:', e)
+      setShifts(prevShifts)
+      showToast('Could not move shift')
+    }
+  }, [liveMode, merchantId, portalContext, weekStartDate, shifts, showToast])
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async () => {
     setIsGenerating(true)
-    setTimeout(() => {
-      const opt = buildOptimalSchedule(staff, peakHours, weekStartDate)
+    const opt = buildOptimalSchedule(staff, peakHours, weekStartDate)
+    if (!liveMode) {
+      // Demo: cosmetic delay + local set.
+      await new Promise(r => setTimeout(r, 1200))
       setShifts(opt); setIsPublished(false); setIsGenerating(false)
       const used = new Set(opt.map(s => s.staffMemberId).filter(Boolean)).size
       showToast(`Schedule generated — ${opt.length} shifts across ${used} staff`)
-    }, 1200)
-  }, [staff, peakHours, weekStartDate, showToast])
+      return
+    }
+    // Live: wipe this week's draft shifts, then bulk-create the optimal set.
+    const portal = portalContext as 'us' | 'ca'
+    const ws = formatDateISO(weekStartDate)
+    setShifts(opt); setIsPublished(false)
+    try {
+      // Drop existing draft shifts for this week.
+      await Promise.all(shifts
+        .filter(s => isUuid(s.id) && s.status === 'draft')
+        .map(s => api.scheduleDeleteShift(s.id).catch(() => {})))
+      const results = await Promise.all(opt.map(s =>
+        api.scheduleCreateShift(shiftToApiCreate(s, merchantId, portal, ws))
+      ))
+      const saved = results.map(r => shiftFromApi(r.shift))
+      setShifts(saved)
+      const used = new Set(saved.map(s => s.staffMemberId).filter(Boolean)).size
+      showToast(`Schedule generated — ${saved.length} shifts across ${used} staff`)
+    } catch (e) {
+      console.warn('generate persist failed:', e)
+      const refresh = await api.scheduleShifts(merchantId, ws).catch(() => null)
+      if (refresh) setShifts(refresh.shifts.map(shiftFromApi))
+      showToast('Some shifts failed to save — refreshed from server')
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [liveMode, merchantId, portalContext, staff, peakHours, weekStartDate, shifts, showToast])
 
-  const handlePublish = useCallback(() => {
+  const handlePublish = useCallback(async () => {
     setIsPublished(true)
     setShifts(prev => prev.map(s => ({ ...s, status: 'published' as const })))
-    showToast(`Schedule published — ${staffScheduled} staff notified`)
-  }, [staffScheduled, showToast])
+    if (!liveMode) {
+      showToast(`Schedule published — ${staffScheduled} staff notified`)
+      return
+    }
+    try {
+      const portal = portalContext as 'us' | 'ca'
+      const res = await api.schedulePublish({
+        merchant_id: merchantId,
+        portal_context: portal,
+        week_start_date: formatDateISO(weekStartDate),
+        published_by: org?.business_name || '',
+        notify_staff: true,
+      })
+      showToast(`Schedule published — ${res.notified_count} staff notified`)
+    } catch (e) {
+      console.warn('publish failed:', e)
+      setIsPublished(false)
+      showToast('Publish failed — please try again')
+    }
+  }, [liveMode, merchantId, portalContext, weekStartDate, org, staffScheduled, showToast])
 
   const handleDownloadPdf = useCallback(async () => {
     const { generateSchedulePdf } = await import('@/lib/generate-schedule-pdf')
@@ -259,7 +431,7 @@ export default function SchedulePage() {
     URL.revokeObjectURL(url)
   }, [shifts, staff, weekStartDate])
 
-  if (!showDemoSchedule) {
+  if (!showDemoSchedule && !liveMode) {
     return (
       <div className="space-y-6">
         <ScrollReveal variant="fadeUp">

@@ -9,6 +9,7 @@
 
 import { demoData } from './demo-data'
 import { getAuthHeaders } from './supabase'
+import type { StaffMemberDto, ShiftDto } from './schedule-api'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -421,4 +422,67 @@ export const api = {
       price_cents: number
       currency: string
     }>('/api/credits/purchase', { method: 'POST', body }),
+
+  // ── Schedule ──
+  scheduleStaff: (merchantId: string) =>
+    apiFetch<{ staff: StaffMemberDto[]; total: number }>(
+      `/api/schedule/staff/${merchantId}`,
+    ),
+
+  scheduleCreateStaff: (body: Record<string, unknown>) =>
+    apiFetch<{ staff_member: StaffMemberDto }>('/api/schedule/staff', {
+      method: 'POST',
+      body,
+    }),
+
+  scheduleUpdateStaff: (staffId: string, body: Record<string, unknown>) =>
+    apiFetch<{ staff_id: string; updated: Record<string, unknown> }>(
+      `/api/schedule/staff/${staffId}`,
+      { method: 'PUT', body },
+    ),
+
+  scheduleDeleteStaff: (staffId: string) =>
+    apiFetch<{ staff_id: string; active: boolean }>(
+      `/api/schedule/staff/${staffId}`,
+      { method: 'DELETE' },
+    ),
+
+  scheduleShifts: (merchantId: string, weekStart: string) =>
+    apiFetch<{ shifts: ShiftDto[]; total: number }>(
+      `/api/schedule/shifts/${merchantId}`,
+      { params: { week_start: weekStart } },
+    ),
+
+  scheduleCreateShift: (body: Record<string, unknown>) =>
+    apiFetch<{ shift: ShiftDto }>('/api/schedule/shifts', {
+      method: 'POST',
+      body,
+    }),
+
+  scheduleUpdateShift: (shiftId: string, body: Record<string, unknown>) =>
+    apiFetch<{ shift_id: string; updated: Record<string, unknown> }>(
+      `/api/schedule/shifts/${shiftId}`,
+      { method: 'PUT', body },
+    ),
+
+  scheduleDeleteShift: (shiftId: string) =>
+    apiFetch<{ shift_id: string; deleted: boolean }>(
+      `/api/schedule/shifts/${shiftId}`,
+      { method: 'DELETE' },
+    ),
+
+  schedulePublish: (body: {
+    merchant_id: string
+    portal_context: 'us' | 'ca'
+    week_start_date: string
+    published_by?: string
+    notify_staff?: boolean
+  }) =>
+    apiFetch<{
+      merchant_id: string
+      week_start_date: string
+      status: string
+      published_at: string
+      notified_count: number
+    }>('/api/schedule/publish', { method: 'POST', body }),
 }
