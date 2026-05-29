@@ -16,6 +16,10 @@ RUN cat requirements-ml.txt | grep -v '^\s*#' | grep -v '^\s*$' | \
     done
 
 COPY src/ ./src/
+# Phone-agent sidecar: caller_memory (deployed always) and the Pipecat bot
+# (only activates when MEDIA_STREAMS_ENABLED=1). Heavy audio deps come from
+# requirements-ml.txt and are tolerated to fail individually.
+COPY services/ ./services/
 
 RUN useradd -r -s /bin/false appuser
 

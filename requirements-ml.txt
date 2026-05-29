@@ -35,3 +35,14 @@ lightgbm>=4.0.0
 
 # A/B Testing
 bayesabtest>=0.3.0
+
+# Phone agent — Pipecat voice pipeline (only loaded when MEDIA_STREAMS_ENABLED=1)
+# Per the Dockerfile pattern, failed installs are tolerated and skipped.
+pipecat-ai>=0.0.45
+silero-vad>=5.0
+useful-moonshine>=0.1.0
+kokoro>=0.9.0
+soundfile>=0.12.0
+# WhisperLiveKit fallback for non-English calls (still torch-dependent)
+whisperlivekit>=0.3.0
+faster-whisper>=1.0.0
