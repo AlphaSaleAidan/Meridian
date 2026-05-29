@@ -167,7 +167,7 @@ def _cleanup():
         del _sessions[sid]
 
 
-async def _ask_sambanova(messages: list[dict]) -> dict | None:
+async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict | None:
     """Call SambaNova via OpenAI-compatible API. Returns None on failure."""
     if not SAMBANOVA_API_KEY:
         return None
@@ -182,7 +182,7 @@ async def _ask_sambanova(messages: list[dict]) -> dict | None:
         }
         for t in TOOLS
     ]
-    openai_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+    openai_messages = [{"role": "system", "content": system_prompt}] + messages
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.post(
@@ -219,9 +219,9 @@ async def _ask_sambanova(messages: list[dict]) -> dict | None:
         return None
 
 
-async def _ask_qwen(messages: list[dict]) -> dict:
+async def _ask_qwen(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
     """Call local Qwen 2.5 7B as fallback. Returns Anthropic-style content blocks."""
-    openai_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
+    openai_messages = [{"role": "system", "content": system_prompt}] + messages
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
@@ -243,14 +243,14 @@ async def _ask_qwen(messages: list[dict]) -> dict:
         return {"content": [{"type": "text", "text": "One moment please."}]}
 
 
-async def _ask_ai(messages: list[dict]) -> dict:
+async def _ask_ai(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
     """SambaNova primary, local Qwen fallback."""
-    result = await _ask_sambanova(messages)
+    result = await _ask_sambanova(messages, system_prompt)
     if result is not None:
         logger.info("AI response via SambaNova")
         return result
     logger.warning("SambaNova unavailable, falling back to local Qwen")
-    return await _ask_qwen(messages)
+    return await _ask_qwen(messages, system_prompt)
 
 
 def _parse(result: dict) -> tuple[str, dict | None]:
@@ -370,11 +370,22 @@ async def twilio_voice(request: Request):
         logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
         return Response(content=_media_stream_twiml(merchant_id, caller_phone), media_type=TWIML)
 
+    # Pull caller history once per call so every /gather turn reuses it.
+    memory_block = ""
+    if caller_phone:
+        try:
+            from caller_memory import build_memory_block_for
+            memory_block = await build_memory_block_for(merchant_id, caller_phone)
+        except Exception as e:
+            logger.warning("caller memory lookup failed: %s", e)
+
+    session_prompt = SYSTEM_PROMPT + (f"\n\n{memory_block}" if memory_block else "")
     _sessions[call_sid] = {
         "messages": [],
         "ts": time.time(),
         "caller_phone": caller_phone,
         "merchant_id": merchant_id,
+        "system_prompt": session_prompt,
     }
     greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     return Response(content=_gather(greeting), media_type=TWIML)
@@ -397,7 +408,7 @@ async def twilio_gather(request: Request):
     session["ts"] = time.time()
     session["messages"].append({"role": "user", "content": speech})
 
-    result = await _ask_ai(session["messages"])
+    result = await _ask_ai(session["messages"], session.get("system_prompt", SYSTEM_PROMPT))
     text, tool = _parse(result)
 
     if tool:

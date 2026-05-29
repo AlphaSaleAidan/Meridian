@@ -34,6 +34,7 @@ from tts_service import build_tts
 from llm_service import build_llm, LLMContext, ORDER_TOOLS
 from order_processor import OrderProcessor
 from merchant_config import MerchantPhoneConfig
+from caller_memory import build_memory_block_for
 
 logger = logging.getLogger("meridian.phone_agent.bot")
 
@@ -84,7 +85,11 @@ class CallRecorder(FrameProcessor):
         await super().cleanup()
 
 
-def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict) -> str:
+def build_system_prompt(
+    config: MerchantPhoneConfig,
+    caller_info: dict,
+    memory_block: str = "",
+) -> str:
     menu_section = ""
     if config.menu_items:
         menu_lines = []
@@ -100,6 +105,7 @@ def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict) -> str:
         menu_section = "\n\nMENU:\n" + "\n".join(menu_lines)
 
     order_types = ", ".join(config.order_types)
+    memory_section = f"\n\n{memory_block}" if memory_block else ""
 
     return f"""You are the AI phone assistant for {config.business_name}.
 Keep replies SHORT — 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
@@ -116,7 +122,7 @@ RULES:
 {menu_section}
 
 CALLER:
-Phone: {caller_info.get('phone', 'unknown')}"""
+Phone: {caller_info.get('phone', 'unknown')}{memory_section}"""
 
 
 async def run_call_bot(
@@ -158,7 +164,15 @@ async def run_call_bot(
         caller_info=caller_info,
     )
 
-    system_prompt = build_system_prompt(merchant_config, caller_info)
+    memory_block = ""
+    caller_phone = caller_info.get("phone", "")
+    if caller_phone:
+        try:
+            memory_block = await build_memory_block_for(merchant_id, caller_phone)
+        except Exception as e:
+            logger.warning("caller memory lookup failed: %s", e)
+
+    system_prompt = build_system_prompt(merchant_config, caller_info, memory_block)
     context = LLMContext(
         messages=[{"role": "system", "content": system_prompt}],
         tools=ORDER_TOOLS,
