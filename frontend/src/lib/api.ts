@@ -378,4 +378,47 @@ export const api = {
     isDemo(orgId) ? delay({ org_id: orgId, cameras: [], total: 0 })
     : !orgId ? delay({ org_id: '', cameras: [], total: 0 })
     : apiFetch<{ org_id: string; cameras: any[]; total: number }>(`/api/vision/cameras/${orgId}`),
+
+  // ── Credit metering ──
+  creditBalance: (merchantId: string) =>
+    isDemo(merchantId) ? delay({ merchant_id: merchantId, balance: 1000, low_balance_threshold: 200, is_low: false, costs: {} })
+    : !merchantId ? delay({ merchant_id: '', balance: 0, low_balance_threshold: 200, is_low: false, costs: {} })
+    : apiFetch<{
+        merchant_id: string
+        balance: number
+        low_balance_threshold: number
+        is_low: boolean
+        costs: Record<string, { credits: number; description: string }>
+      }>(`/api/credits/balance/${merchantId}`),
+
+  creditLedger: (merchantId: string, limit = 50) =>
+    isDemo(merchantId) ? delay({ entries: [] })
+    : !merchantId ? delay({ entries: [] })
+    : apiFetch<{
+        entries: Array<{
+          id: string
+          delta: number
+          action_type: string
+          action_id: string | null
+          balance_after: number
+          metadata: Record<string, unknown>
+          created_at: string
+        }>
+      }>(`/api/credits/ledger/${merchantId}`, { params: { limit } }),
+
+  creditPurchase: (body: {
+    merchant_id: string
+    pack_id: string
+    customer_email: string
+    customer_name?: string
+    currency?: 'USD' | 'CAD'
+  }) =>
+    apiFetch<{
+      purchase_id: string
+      invoice_url: string
+      invoice_id: string
+      credit_amount: number
+      price_cents: number
+      currency: string
+    }>('/api/credits/purchase', { method: 'POST', body }),
 }

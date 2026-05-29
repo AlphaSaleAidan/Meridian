@@ -86,6 +86,19 @@ async def register(body: RegisterRequest):
 
     data = resp.json()
     logger.info(f"User registered: {body.email}")
+
+    # Grant free starter credits to this merchant. Idempotent — calling it
+    # again from another signup path (sales rep portal, etc) is safe.
+    if body.org_id:
+        try:
+            from ..credits import ensure_starter_grant
+            new_balance = await ensure_starter_grant(body.org_id)
+            logger.info("Starter grant for %s: balance now %d", body.org_id, new_balance)
+        except Exception as e:
+            # Never fail signup just because the credit grant flopped — the
+            # admin can issue the grant manually via /api/credits/grant.
+            logger.warning("Starter grant for %s failed: %s", body.org_id, e)
+
     return {"id": data.get("id"), "email": body.email, "status": "registered"}
 
 

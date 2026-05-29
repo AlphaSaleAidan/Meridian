@@ -38,11 +38,12 @@ export const STARTER_CREDIT_GRANT = 1000
 // Dashboard surfaces a top-up nudge when balance falls below this.
 export const LOW_BALANCE_THRESHOLD = 200
 
+// pack_id keys must match backend src/credits/purchase.py PACKS dict.
 export const CREDIT_PACKS = [
-  { credits: 2000, priceUsd: 2, priceCad: 2.75, label: 'Starter' },
-  { credits: 5000, priceUsd: 4.50, priceCad: 6.20, label: 'Popular', recommended: true },
-  { credits: 15000, priceUsd: 12, priceCad: 16.50, label: 'Pro' },
-  { credits: 50000, priceUsd: 35, priceCad: 48, label: 'Agency' },
+  { pack_id: 'starter', credits: 2000, priceUsd: 2, priceCad: 2.75, label: 'Starter' },
+  { pack_id: 'popular', credits: 5000, priceUsd: 4.50, priceCad: 6.20, label: 'Popular', recommended: true },
+  { pack_id: 'pro', credits: 15000, priceUsd: 12, priceCad: 16.50, label: 'Pro' },
+  { pack_id: 'agency', credits: 50000, priceUsd: 35, priceCad: 48, label: 'Agency' },
 ] as const
 
 export interface ContentDashboardData {

@@ -18,8 +18,43 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 
+from ...credits import COSTS, InsufficientCredits, deduct
+
 router = APIRouter(prefix="/api/content", tags=["content"])
 logger = logging.getLogger("meridian.content")
+
+
+async def _charge_credits(merchant_id: str, action: str, action_id: str | None = None) -> None:
+    """Deduct credits for a content action. Raises HTTPException(402) on insufficient balance.
+
+    Demo accounts bypass — they don't have real balances to draw from and
+    showing 402 in the tour would be confusing.
+    """
+    demo_id = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
+    if not merchant_id or merchant_id in ("demo", demo_id):
+        return
+    cost = COSTS.get(action)
+    if not cost or cost.credits <= 0:
+        return
+    try:
+        await deduct(
+            merchant_id=merchant_id,
+            amount=cost.credits,
+            action_type=action,
+            action_id=action_id,
+        )
+    except InsufficientCredits as exc:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "insufficient_credits",
+                "balance": exc.available,
+                "requested": exc.requested,
+                "needed": exc.requested - exc.available,
+                "action": action,
+                "message": f"This action costs {cost.credits} credits. Top up to continue.",
+            },
+        )
 
 FAL_KEY = os.getenv("FAL_KEY", "")
 FAL_BASE = "https://queue.fal.run"
@@ -429,6 +464,7 @@ async def _fal_submit_sync(endpoint: str, payload: dict) -> dict:
 
 @router.post("/image/generate")
 async def generate_image(req: ImageGenRequest):
+    await _charge_credits(req.merchantId, "content_image_regen")
     _check_daily_cap(req.merchantId, "image")
     logger.info(f"Image gen: merchant={req.merchantId} {req.width}x{req.height}")
 
@@ -716,6 +752,7 @@ SEO_CONTENT_TYPES = {
 @router.post("/seo/generate")
 async def generate_seo(req: SeoGenRequest):
     """Generate SEO content using LLM with optional website context."""
+    await _charge_credits(req.merchantId, "content_seo_article")
     _check_daily_cap(req.merchantId, "image")  # reuse image cap for text gen
 
     content_desc = SEO_CONTENT_TYPES.get(req.contentType, SEO_CONTENT_TYPES["blog_post"])
@@ -796,6 +833,7 @@ class PostGenRequest(BaseModel):
 @router.post("/post/generate")
 async def generate_post(req: PostGenRequest):
     """Generate a social media post with AI."""
+    await _charge_credits(req.merchantId, "content_social_post")
     platform_specs = {
         "instagram": "Instagram (2200 char cap, 30 hashtags max, visual-first)",
         "facebook": "Facebook (longer form OK, link previews, engagement questions)",

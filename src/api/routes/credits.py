@@ -1,11 +1,25 @@
-"""Credit balance + ledger API for the dashboard and admin tools."""
+"""Credit balance + ledger + purchase API.
+
+- GET  /api/credits/balance/{merchant_id}        — dashboard widget
+- GET  /api/credits/ledger/{merchant_id}         — billing history
+- GET  /api/credits/packs                        — public price sheet
+- POST /api/credits/grant                        — admin manual add
+- POST /api/credits/deduct                       — server-side debit (content gen, etc)
+- POST /api/credits/purchase                     — start a Square invoice purchase
+- POST /api/credits/webhook/square               — Square webhook (invoice.payment_made → grant)
+- POST /api/credits/starter-grant/{merchant_id}  — signup hook (idempotent)
+"""
+import base64
+import hashlib
+import hmac
+import json as _json
 import logging
 import os
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query, Request, Response
+from pydantic import BaseModel, EmailStr, Field
 
 from ...credits import (
     COSTS,
@@ -17,6 +31,7 @@ from ...credits import (
     get_balance,
     grant,
 )
+from ...credits.purchase import PACKS, create_purchase_invoice, handle_invoice_payment
 
 logger = logging.getLogger("meridian.credits.api")
 router = APIRouter(prefix="/api/credits", tags=["credits"])
@@ -159,3 +174,131 @@ async def post_starter_grant(merchant_id: str):
         "balance": new_balance,
         "starter_grant": STARTER_GRANT,
     }
+
+
+# ── Purchase via Square custom invoices ──
+
+
+class PurchaseRequest(BaseModel):
+    merchant_id: str
+    pack_id: str
+    customer_email: EmailStr
+    customer_name: str = ""
+    currency: str = Field(default="USD", pattern="^(USD|CAD)$")
+
+
+@router.get("/packs")
+async def get_packs():
+    """Public credit-pack catalog. Frontend reads this to render the upsell modal."""
+    return {
+        "packs": [
+            {
+                "pack_id": p.pack_id,
+                "label": p.label,
+                "credits": p.credits,
+                "price_usd": p.price_cents_usd / 100,
+                "price_cad": p.price_cents_cad / 100,
+                "price_per_credit_usd": p.price_cents_usd / 100 / p.credits,
+            }
+            for p in PACKS.values()
+        ]
+    }
+
+
+@router.post("/purchase", status_code=200)
+async def post_purchase(req: PurchaseRequest):
+    """Start a credit-pack purchase. Returns the Square hosted invoice URL.
+
+    The frontend should redirect the user to invoice_url; on payment the
+    Square webhook will grant credits and the dashboard will reflect the
+    new balance on the customer's next poll.
+    """
+    result = await create_purchase_invoice(
+        merchant_id=req.merchant_id,
+        pack_id=req.pack_id,
+        customer_email=req.customer_email,
+        customer_name=req.customer_name,
+        currency=req.currency,
+    )
+    if not result.success:
+        raise HTTPException(status_code=400, detail={"error": result.error})
+    return {
+        "purchase_id": result.purchase_id,
+        "invoice_url": result.invoice_url,
+        "invoice_id": result.invoice_id,
+        "credit_amount": result.credit_amount,
+        "price_cents": result.price_cents,
+        "currency": result.currency,
+    }
+
+
+def _verify_square_signature(request: Request, raw_body: bytes) -> bool:
+    """Mirror of billing webhook signature check.
+
+    Uses CREDITS_SQUARE_WEBHOOK_SIGNATURE_KEY if set so the credit webhook
+    can be a separate Square webhook subscription with its own signing key.
+    Falls back to the shared SQUARE_WEBHOOK_SIGNATURE_KEY for ops simplicity.
+    """
+    sig_key = (
+        os.environ.get("CREDITS_SQUARE_WEBHOOK_SIGNATURE_KEY")
+        or os.environ.get("SQUARE_WEBHOOK_SIGNATURE_KEY", "")
+    )
+    if not sig_key:
+        logger.warning("Square webhook signature key not configured — rejecting")
+        return False
+    signature = request.headers.get("x-square-hmacsha256-signature", "")
+    if not signature:
+        return False
+    notification_url = str(request.url)
+    combined = notification_url.encode("utf-8") + raw_body
+    digest = hmac.new(
+        key=sig_key.encode("utf-8"),
+        msg=combined,
+        digestmod=hashlib.sha256,
+    ).digest()
+    expected_b64 = base64.b64encode(digest).decode("utf-8")
+    return hmac.compare_digest(expected_b64, signature)
+
+
+@router.post("/webhook/square")
+async def square_credit_webhook(request: Request):
+    """Square posts here when a credit-pack invoice is paid.
+
+    Acks 200 quickly so Square doesn't retry. Filters to invoice.payment_made
+    events; ignores anything else (subscription events get handled by the
+    existing /api/billing/webhook on its own).
+    """
+    raw_body = await request.body()
+    if not _verify_square_signature(request, raw_body):
+        return Response(status_code=403)
+
+    try:
+        body = _json.loads(raw_body)
+    except ValueError:
+        return Response(status_code=400)
+
+    event_type = body.get("type", "")
+    data = (body.get("data") or {}).get("object", {})
+
+    if event_type not in ("invoice.payment_made", "invoice.updated"):
+        return {"status": "ignored", "event_type": event_type}
+
+    invoice = data.get("invoice") or {}
+    invoice_id = invoice.get("id", "")
+    if not invoice_id:
+        return {"status": "ignored", "reason": "no invoice id"}
+
+    # invoice.updated fires for non-payment changes too. Only proceed if
+    # the invoice is actually paid.
+    if event_type == "invoice.updated" and invoice.get("status") != "PAID":
+        return {"status": "ignored", "reason": "invoice not paid yet"}
+
+    payment_requests = invoice.get("payment_requests") or []
+    payment_id = ""
+    for pr in payment_requests:
+        comp = pr.get("computed_amount_money") or pr.get("total_completed_amount_money")
+        if comp:
+            payment_id = pr.get("uid", "") or payment_id
+
+    granted = await handle_invoice_payment(invoice_id, square_payment_id=payment_id)
+    return {"status": "ok", "granted": granted, "invoice_id": invoice_id}

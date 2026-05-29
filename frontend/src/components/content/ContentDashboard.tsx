@@ -559,7 +559,14 @@ export default function ContentDashboard() {
       </div>
 
       {/* Credit purchase modal */}
-      <ContentUpsellModal open={upsellOpen} onClose={() => setUpsellOpen(false)} creditBalance={data?.credits?.balance ?? 0} />
+      <ContentUpsellModal
+        open={upsellOpen}
+        onClose={() => setUpsellOpen(false)}
+        creditBalance={data?.credits?.balance ?? 0}
+        merchantId={orgId}
+        customerEmail={org?.email}
+        customerName={org?.business_name}
+      />
     </motion.div>
   )
 }
