@@ -1,113 +1,56 @@
 """
-OmniVoice TTS adapter for Pipecat.
-Replaces Kokoro — supports voice cloning, 600+ languages, branded voices.
-STT (WhisperLiveKit) stays unchanged. Only TTS output is swapped.
+TTS adapters for the Pipecat phone agent pipeline.
+
+Primary: Kokoro-82M (Apache-2.0, ~300 MB, realtime on CPU, top of TTS-Arena Jan 2026).
+Fallback: CosyVoice2 wrapper for voice cloning if a merchant uploads a reference sample.
+
+Both classes implement Pipecat's TTSService interface and emit 8 kHz mono PCM,
+which is what Twilio Media Streams expects (mu-law decoded to linear).
 """
 import asyncio
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
 import numpy as np
 from pipecat.services.ai_services import TTSService
 from pipecat.frames.frames import AudioRawFrame, StartFrame, EndFrame
 
-from voice_profiles import VOICE_PROFILES, get_voice_profile
+from voice_profiles import resolve_kokoro_voice
 
 logger = logging.getLogger("meridian.phone_agent.tts")
 
+# Kokoro generates at 24 kHz; Twilio wants 8 kHz mu-law (we hand it linear PCM, transport encodes).
+_KOKORO_NATIVE_RATE = 24000
+_TWILIO_RATE = 8000
 
-def _resample_to_8khz(audio: np.ndarray, source_rate: int = 24000) -> np.ndarray:
+
+def _resample_to_8khz(audio: np.ndarray, source_rate: int = _KOKORO_NATIVE_RATE) -> np.ndarray:
     from scipy.signal import resample_poly
-    ratio = source_rate // 8000
+    if source_rate == _TWILIO_RATE:
+        return audio
+    ratio = source_rate // _TWILIO_RATE
     return resample_poly(audio, 1, ratio)
 
 
-class OmniVoiceTTS(TTSService):
-
-    def __init__(
-        self,
-        portal: str = "us",
-        ref_audio: str | None = None,
-        output_sample_rate: int = 8000,
-    ):
-        super().__init__()
-        self._portal = portal
-        self._ref_audio = ref_audio
-        self._output_sample_rate = output_sample_rate
-        self._model = None
-        self._voice_config = get_voice_profile(portal)
-
-    async def start(self, frame: StartFrame):
-        await super().start(frame)
-        await self._init_model()
-
-    async def _init_model(self):
-        import torch
-        from omnivoice import OmniVoice
-
-        device = (
-            "mps" if torch.backends.mps.is_available()
-            else "cuda:0" if torch.cuda.is_available()
-            else "cpu"
-        )
-        self._model = OmniVoice.from_pretrained(
-            "k2-fsa/OmniVoice",
-            device_map=device,
-            dtype=torch.float16 if device != "cpu" else torch.float32,
-        )
-        logger.info(
-            "OmniVoice TTS initialized: portal=%s mode=%s device=%s",
-            self._portal, self._voice_config["mode"], device,
-        )
-
-    async def run_tts(self, text: str) -> AsyncGenerator[AudioRawFrame, None]:
-        if self._model is None:
-            await self._init_model()
-
-        voice_cfg = self._voice_config
-        ref_audio = self._ref_audio or voice_cfg.get("ref_audio")
-
-        def _generate():
-            if ref_audio and voice_cfg["mode"] == "clone":
-                audio = self._model.generate(text=text, ref_audio=ref_audio)
-            else:
-                audio = self._model.generate(
-                    text=text, instruct=voice_cfg["instruct"]
-                )
-
-            raw = audio[0] if isinstance(audio, (list, tuple)) else audio
-            if hasattr(raw, "numpy"):
-                raw = raw.numpy()
-            audio_8khz = _resample_to_8khz(raw)
-            return (audio_8khz * 32767).astype(np.int16).tobytes()
-
-        audio_bytes = await asyncio.to_thread(_generate)
-        yield AudioRawFrame(
-            audio=audio_bytes,
-            sample_rate=self._output_sample_rate,
-            num_channels=1,
-        )
-
-    def set_merchant_voice(self, merchant_config):
-        """Update voice profile for a specific merchant (e.g. custom clone)."""
-        self._voice_config = get_voice_profile(self._portal, merchant_config)
-        if merchant_config and getattr(merchant_config, "voice_clone_audio", None):
-            self._ref_audio = merchant_config.voice_clone_audio
-
-    async def stop(self, frame: EndFrame):
-        self._model = None
-        await super().stop(frame)
+def _to_int16_bytes(audio: np.ndarray) -> bytes:
+    clipped = np.clip(audio, -1.0, 1.0)
+    return (clipped * 32767).astype(np.int16).tobytes()
 
 
-# Legacy fallback — rename old Kokoro implementation for rollback
-class KokoroTTSLegacy(TTSService):
+class KokoroTTS(TTSService):
+    """Kokoro-82M streaming TTS.
+
+    Splits text on sentence boundaries and yields one AudioRawFrame per chunk,
+    so the caller hears the first words within ~200ms instead of waiting for the
+    whole response to render.
+    """
 
     def __init__(
         self,
         voice: str = "af_bella",
         speed: float = 1.0,
         lang_code: str = "a",
-        output_sample_rate: int = 8000,
+        output_sample_rate: int = _TWILIO_RATE,
     ):
         super().__init__()
         self._voice = voice
@@ -123,7 +66,7 @@ class KokoroTTSLegacy(TTSService):
     async def _init_pipeline(self):
         from kokoro import KPipeline
         self._pipeline = KPipeline(lang_code=self._lang_code)
-        logger.info("Kokoro TTS (legacy) initialized: voice=%s speed=%.1f", self._voice, self._speed)
+        logger.info("Kokoro TTS initialized: voice=%s speed=%.1f", self._voice, self._speed)
 
     async def run_tts(self, text: str) -> AsyncGenerator[AudioRawFrame, None]:
         if self._pipeline is None:
@@ -132,13 +75,16 @@ class KokoroTTSLegacy(TTSService):
         def _generate():
             chunks = []
             for _graphemes, _phonemes, audio_chunk in self._pipeline(
-                text=text, voice=self._voice, speed=self._speed,
+                text=text,
+                voice=self._voice,
+                speed=self._speed,
                 split_pattern=r"[.!?,;]+",
             ):
-                if audio_chunk is not None and len(audio_chunk) > 0:
-                    audio_8khz = _resample_to_8khz(audio_chunk)
-                    audio_bytes = (audio_8khz * 32767).astype(np.int16).tobytes()
-                    chunks.append(audio_bytes)
+                if audio_chunk is None or len(audio_chunk) == 0:
+                    continue
+                raw = audio_chunk.numpy() if hasattr(audio_chunk, "numpy") else audio_chunk
+                resampled = _resample_to_8khz(raw)
+                chunks.append(_to_int16_bytes(resampled))
             return chunks
 
         chunks = await asyncio.to_thread(_generate)
@@ -149,6 +95,86 @@ class KokoroTTSLegacy(TTSService):
                 num_channels=1,
             )
 
+    def set_merchant_voice(self, merchant_config):
+        """Resolve merchant.voice (e.g. 'af_bella') against the Kokoro voice catalog."""
+        self._voice = resolve_kokoro_voice(merchant_config)
+
     async def stop(self, frame: EndFrame):
         self._pipeline = None
         await super().stop(frame)
+
+
+class CosyVoiceTTS(TTSService):
+    """CosyVoice 2 streaming TTS with optional zero-shot voice cloning.
+
+    Use this when a merchant uploads a 5-30s reference sample for branded voice;
+    Kokoro is the default because it's smaller, faster, and licensed permissively.
+    """
+
+    def __init__(
+        self,
+        ref_audio: Optional[str] = None,
+        ref_text: Optional[str] = None,
+        output_sample_rate: int = _TWILIO_RATE,
+    ):
+        super().__init__()
+        self._ref_audio = ref_audio
+        self._ref_text = ref_text
+        self._output_sample_rate = output_sample_rate
+        self._model = None
+
+    async def start(self, frame: StartFrame):
+        await super().start(frame)
+        await self._init_model()
+
+    async def _init_model(self):
+        from cosyvoice.cli.cosyvoice import CosyVoice2
+        self._model = CosyVoice2("FunAudioLLM/CosyVoice2-0.5B")
+        logger.info("CosyVoice2 TTS initialized: voice_clone=%s", bool(self._ref_audio))
+
+    async def run_tts(self, text: str) -> AsyncGenerator[AudioRawFrame, None]:
+        if self._model is None:
+            await self._init_model()
+
+        def _generate():
+            chunks = []
+            stream = self._model.inference_zero_shot(text, self._ref_text, self._ref_audio, stream=True)
+            for piece in stream:
+                wav = piece["tts_speech"].numpy().squeeze()
+                # CosyVoice native rate is 22.05k; resample to 8k for Twilio
+                from scipy.signal import resample_poly
+                resampled = resample_poly(wav, 8000, 22050)
+                chunks.append(_to_int16_bytes(resampled))
+            return chunks
+
+        chunks = await asyncio.to_thread(_generate)
+        for audio_bytes in chunks:
+            yield AudioRawFrame(
+                audio=audio_bytes,
+                sample_rate=self._output_sample_rate,
+                num_channels=1,
+            )
+
+    def set_merchant_voice(self, merchant_config):
+        clone = getattr(merchant_config, "voice_clone_audio", None)
+        clone_text = getattr(merchant_config, "voice_clone_text", None)
+        if clone:
+            self._ref_audio = clone
+        if clone_text:
+            self._ref_text = clone_text
+
+    async def stop(self, frame: EndFrame):
+        self._model = None
+        await super().stop(frame)
+
+
+def build_tts(merchant_config) -> TTSService:
+    """Factory: CosyVoice if the merchant has a clone, otherwise Kokoro."""
+    clone = getattr(merchant_config, "voice_clone_audio", None)
+    if clone:
+        tts = CosyVoiceTTS()
+        tts.set_merchant_voice(merchant_config)
+        return tts
+    tts = KokoroTTS()
+    tts.set_merchant_voice(merchant_config)
+    return tts

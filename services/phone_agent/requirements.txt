@@ -1,30 +1,35 @@
-# Meridian AI Phone Agent — 100% Open Source Dependencies
-# No paid API SDKs required
+# Meridian AI Phone Agent — Pipecat pipeline dependencies
+# All packages have commercial-friendly licenses (MIT / Apache-2.0 / BSD).
 
 # Web framework
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 
-# Voice pipeline
-pipecat-ai>=0.0.40
+# Voice pipeline — needs Twilio serializer (added in 0.0.40+)
+pipecat-ai>=0.0.45
 
-# STT — WhisperLiveKit + faster-whisper (replaces Deepgram)
+# STT — Moonshine (English, CPU-realtime, ~107ms latency)
+useful-moonshine>=0.1.0
+
+# STT fallback — Whisper for non-English
 whisperlivekit>=0.3.0
 faster-whisper>=1.0.0
 
-# TTS — OmniVoice (replaces Kokoro — voice cloning, 600+ langs, branded voices)
-omnivoice>=0.1.0
+# TTS — Kokoro-82M (Apache-2.0, ~300 MB, top of TTS-Arena Jan 2026)
+kokoro>=0.9.0
 soundfile>=0.12.0
-torch>=2.1.0
 
-# LLM — Ollama client (replaces Anthropic/OpenAI SDK)
+# TTS voice cloning (optional, only if merchant uploads a reference sample)
+# cosyvoice>=0.2.0
+
+# LLM — SambaNova via OpenAI-compatible API + Ollama fallback
 aiohttp>=3.9.0
 
 # Audio processing
 numpy>=1.26.0
 scipy>=1.12.0
 
-# VAD
+# VAD — Silero (MIT, <1ms per chunk on CPU)
 silero-vad>=5.0
 
 # HTTP client for POS APIs + Supabase

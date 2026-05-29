@@ -1,25 +1,38 @@
-"""Voice profile constants for OmniVoice TTS."""
+"""Voice profile catalog for the Pipecat phone agent.
 
-VOICE_PROFILES = {
-    "us": "female, young adult, medium pitch, north american accent",
-    "canada": "female, young adult, medium pitch, canadian accent",
-    "us_male": "male, young adult, medium pitch, north american accent",
-    "canada_male": "male, young adult, medium pitch, canadian accent",
+Maps merchant-facing voice IDs to Kokoro-82M voice slugs. Falls back gracefully
+if a merchant config carries a voice slug we haven't catalogued.
+"""
+
+KOKORO_VOICES = {
+    "af_bella": "af_bella",       # American female (default)
+    "af_sarah": "af_sarah",       # American female (warm)
+    "af_nicole": "af_nicole",     # American female (calm)
+    "am_adam": "am_adam",         # American male (default)
+    "am_michael": "am_michael",   # American male (warm)
+    "bf_emma": "bf_emma",         # British female
+    "bm_george": "bm_george",     # British male
 }
 
-DEFAULT_PORTAL = "us"
+PORTAL_DEFAULTS = {
+    "us": "af_bella",
+    "us_male": "am_adam",
+    "canada": "af_sarah",
+    "canada_male": "am_michael",
+    "uk": "bf_emma",
+    "uk_male": "bm_george",
+}
+
+DEFAULT_VOICE = "af_bella"
 
 
-def get_voice_profile(portal: str = "us", merchant_config=None) -> dict:
-    """Return voice config for a merchant. Checks for custom clone audio."""
-    result = {
-        "mode": "instruct",
-        "instruct": VOICE_PROFILES.get(portal, VOICE_PROFILES[DEFAULT_PORTAL]),
-        "ref_audio": None,
-    }
+def resolve_kokoro_voice(merchant_config=None, portal: str = "us") -> str:
+    """Resolve a merchant config to a Kokoro voice slug.
 
-    if merchant_config and getattr(merchant_config, "voice_clone_audio", None):
-        result["mode"] = "clone"
-        result["ref_audio"] = merchant_config.voice_clone_audio
-
-    return result
+    Priority: explicit merchant.voice → portal default → DEFAULT_VOICE.
+    """
+    if merchant_config is not None:
+        voice = getattr(merchant_config, "voice", None)
+        if voice and voice in KOKORO_VOICES:
+            return KOKORO_VOICES[voice]
+    return PORTAL_DEFAULTS.get(portal, DEFAULT_VOICE)

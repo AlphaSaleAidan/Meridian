@@ -10,11 +10,13 @@ Webhook URL to configure in Twilio Console:
 import json
 import logging
 import os
+import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, WebSocket
 from fastapi.responses import Response
 
 from ...services.pos_connectors.order_dispatcher import create_pos_order
@@ -26,6 +28,16 @@ logger = logging.getLogger("meridian.phone")
 router = APIRouter(prefix="/twilio", tags=["phone-agent"])
 
 DEMO_MERCHANT_ID = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
+
+# Feature flag: when true, /voice returns <Connect><Stream> TwiML and the
+# Pipecat sidecar handles the call over WebSocket. When false, the legacy
+# stitched <Gather>+Polly path runs (instant rollback).
+MEDIA_STREAMS_ENABLED = os.getenv("MEDIA_STREAMS_ENABLED", "0") == "1"
+MEDIA_STREAM_HOST = os.getenv("MEDIA_STREAM_HOST", "api.meridian.tips")
+
+_PHONE_AGENT_DIR = str(Path(__file__).resolve().parents[3] / "services" / "phone_agent")
+if _PHONE_AGENT_DIR not in sys.path:
+    sys.path.insert(0, _PHONE_AGENT_DIR)
 
 # --- AI Provider config ---
 # Primary: SambaNova (OpenAI-compatible endpoint)
@@ -314,11 +326,29 @@ async def _log_call_end(call_sid: str, status: str, order_data: dict | None = No
         logger.warning("Failed to log call end: %s", e)
 
 
+def _media_stream_twiml(merchant_id: str, caller_phone: str) -> str:
+    """TwiML that hands the call off to the Pipecat WebSocket."""
+    stream_url = f"wss://{MEDIA_STREAM_HOST}/twilio/media-stream/{merchant_id}"
+    safe_caller = _escape(caller_phone or "")
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="{stream_url}">
+      <Parameter name="caller_phone" value="{safe_caller}" />
+    </Stream>
+  </Connect>
+</Response>"""
+
+
 @router.post("/voice")
 async def twilio_voice(request: Request):
     """Initial call webhook — greet the caller.
     Looks up the merchant by the incoming Twilio phone number (To field).
     Falls back to DEMO_MERCHANT_ID if no merchant is found.
+
+    When MEDIA_STREAMS_ENABLED, returns <Connect><Stream> so the Pipecat
+    sidecar takes over via WebSocket. Otherwise runs the stitched
+    Twilio-STT / SambaNova / Polly path.
     """
     form = await request.form()
     call_sid = form.get("CallSid", "unknown")
@@ -334,13 +364,18 @@ async def twilio_voice(request: Request):
         merchant_id = DEMO_MERCHANT_ID
         logger.info("No merchant found for %s — using demo merchant %s", twilio_number, DEMO_MERCHANT_ID)
 
+    await _log_call_start(call_sid, caller_phone, merchant_id=merchant_id)
+
+    if MEDIA_STREAMS_ENABLED:
+        logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
+        return Response(content=_media_stream_twiml(merchant_id, caller_phone), media_type=TWIML)
+
     _sessions[call_sid] = {
         "messages": [],
         "ts": time.time(),
         "caller_phone": caller_phone,
         "merchant_id": merchant_id,
     }
-    await _log_call_start(call_sid, caller_phone, merchant_id=merchant_id)
     greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     return Response(content=_gather(greeting), media_type=TWIML)
 
@@ -435,13 +470,87 @@ async def twilio_status(request: Request):
     return Response(content="", status_code=204)
 
 
+@router.websocket("/media-stream/{merchant_id}")
+async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
+    """Twilio Media Streams WebSocket → Pipecat phone-agent pipeline.
+
+    Pipecat reads mu-law 8 kHz audio off the WebSocket, runs Silero VAD →
+    Moonshine STT → SambaNova LLM → Kokoro TTS, and writes mu-law audio back.
+    Only active when MEDIA_STREAMS_ENABLED=1 and the merchant has a config.
+    """
+    await websocket.accept()
+    logger.info("Media stream connected: merchant=%s", merchant_id)
+
+    try:
+        from bot import run_call_bot
+        from merchant_config import get_merchant_config
+    except ImportError as e:
+        logger.error("Pipecat sidecar not importable: %s", e)
+        await websocket.close(code=1011, reason="Phone agent not available")
+        return
+
+    config = await get_merchant_config(merchant_id)
+    if not config:
+        logger.warning("No config for merchant %s — rejecting", merchant_id)
+        await websocket.close(code=1008, reason="Merchant not configured")
+        return
+    if not getattr(config, "active", True):
+        logger.info("Phone agent disabled for merchant %s", merchant_id)
+        await websocket.close(code=1008, reason="Phone agent disabled")
+        return
+
+    # Drain Twilio's prelude (connected → start) to capture streamSid + callSid.
+    # The serializer needs streamSid to address outbound media frames.
+    stream_sid: str | None = None
+    call_sid: str = ""
+    caller_phone: str = ""
+    try:
+        for _ in range(5):
+            msg = await websocket.receive_json()
+            if msg.get("event") == "start":
+                start = msg.get("start", {})
+                stream_sid = start.get("streamSid")
+                call_sid = start.get("callSid", "")
+                params = start.get("customParameters", {}) or {}
+                caller_phone = params.get("caller_phone", "")
+                break
+    except Exception as e:
+        logger.error("Failed to read Twilio start event: %s", e)
+        await websocket.close(code=1011, reason="Bad Twilio handshake")
+        return
+
+    if not stream_sid:
+        logger.error("No streamSid in Twilio handshake — aborting")
+        await websocket.close(code=1011, reason="Missing streamSid")
+        return
+
+    session_ref = call_sid or f"mstream-{int(time.time() * 1000)}"
+    caller_info = {"phone": caller_phone, "session_ref": session_ref}
+
+    try:
+        await run_call_bot(
+            websocket=websocket,
+            merchant_id=merchant_id,
+            session_ref=session_ref,
+            merchant_config=config,
+            caller_info=caller_info,
+            stream_sid=stream_sid,
+            call_sid=call_sid,
+        )
+    except Exception as e:
+        logger.error("Media stream pipeline error: %s", e, exc_info=True)
+    finally:
+        logger.info("Media stream ended: merchant=%s session=%s", merchant_id, session_ref)
+
+
 @router.get("/health")
 async def twilio_health():
     samba_ok = bool(SAMBANOVA_API_KEY)
-    qwen_ok = True
     return {
         "status": "ok",
-        "mode": "twilio",
+        "mode": "media-streams" if MEDIA_STREAMS_ENABLED else "twilio-gather",
+        "media_streams_enabled": MEDIA_STREAMS_ENABLED,
+        "media_stream_host": MEDIA_STREAM_HOST if MEDIA_STREAMS_ENABLED else None,
         "primary_llm": "sambanova" if samba_ok else "qwen-local",
         "fallback_llm": "qwen-local",
         "sambanova_configured": samba_ok,
