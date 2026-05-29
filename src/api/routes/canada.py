@@ -41,6 +41,20 @@ def _get_anon_key() -> str:
     )
 
 
+def _user_token(request) -> str:
+    """Extract the Bearer token from the incoming Authorization header.
+
+    Used by admin endpoints to forward the caller's JWT to Supabase's REST API
+    so that RLS is enforced as the calling user (defense-in-depth — the service
+    role bypasses every policy and silently breaks future RLS tightening).
+    For /auth/v1/admin/* calls, keep using the service role key directly.
+    """
+    auth_header = request.headers.get("authorization", "") or request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header.removeprefix("Bearer ").strip()
+    return ""
+
+
 def _sanitize_text(v: str) -> str:
     """Strip HTML tags and dangerous characters from user input."""
     import re
@@ -239,13 +253,107 @@ async def submit_career_application(req: CareerApplication):
     return await submit_application(req, country="CA")
 
 
+class SignSlaRequest(BaseModel):
+    customer_email: EmailStr
+    signature_name: str
+    business_name: str | None = None
+    province: str | None = None
+    org_id: str | None = None
+    monthly_price_cad_cents: int | None = None
+    setup_fee_cad_cents: int | None = 0
+    pos_system: str | None = None
+    rep_id: str | None = None
+    rep_name: str | None = None
+
+    @field_validator("signature_name")
+    @classmethod
+    def validate_signature(cls, v: str) -> str:
+        if len(v.strip()) < 2:
+            raise ValueError("signature must be at least 2 characters")
+        return _sanitize_text(v)
+
+
+@router.post("/sign-sla")
+async def sign_sla(req: SignSlaRequest, request: Request, claims: dict = Depends(require_jwt)):
+    """Persist a customer's SLA signature + trigger a confirmation email.
+
+    Called by the Canada customer onboarding wizard's SLA step after the
+    customer types their name and ticks the agreement checkbox. Requires a
+    valid Supabase session (the customer just created their account in the
+    previous step). RLS on sla_signatures restricts inserts to authenticated
+    users only.
+    """
+    import httpx
+
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    if not supabase_url:
+        raise HTTPException(503, "Supabase not configured")
+
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    user_token = _user_token(request) or service_key
+    anon_key = _get_anon_key() or service_key
+
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")[:500]
+
+    row = {
+        "customer_email": req.customer_email,
+        "signature_name": req.signature_name.strip(),
+        "business_name": req.business_name,
+        "province": req.province,
+        "org_id": req.org_id,
+        "monthly_price_cad_cents": req.monthly_price_cad_cents,
+        "setup_fee_cad_cents": req.setup_fee_cad_cents or 0,
+        "pos_system": req.pos_system,
+        "rep_id": req.rep_id,
+        "rep_name": req.rep_name,
+        "ip_address": ip_address,
+        "user_agent": user_agent,
+    }
+
+    signed_at = None
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        ins_resp = await client.post(
+            f"{supabase_url}/rest/v1/sla_signatures",
+            headers={
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=row,
+        )
+        if ins_resp.status_code not in (200, 201):
+            logger.error("SLA signature insert failed: %s %s", ins_resp.status_code, ins_resp.text)
+            raise HTTPException(500, "Could not save SLA signature — please try again")
+        rows = ins_resp.json()
+        signed_at = (rows[0].get("signed_at") if rows else None)
+
+    # Send confirmation email (best-effort — signature persistence already succeeded)
+    try:
+        from ...email.send import send_sla_signed
+        await send_sla_signed(
+            to=req.customer_email,
+            business_name=req.business_name or "",
+            rep_name=req.rep_name or "",
+            signed_by=req.signature_name.strip(),
+            signed_date=(signed_at or "").split("T")[0] if signed_at else "",
+            provider_signatory="Aidan Pierce, Founder & CEO",
+            org_id=req.org_id,
+        )
+    except Exception as exc:
+        logger.warning("SLA confirmation email failed for %s: %s", req.customer_email, exc)
+
+    return {"ok": True, "signed_at": signed_at}
+
+
 class RepActionRequest(BaseModel):
     rep_id: str
     admin_email: EmailStr
 
 
 @router.post("/rep-approve")
-async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
+async def approve_rep(req: RepActionRequest, request: Request, admin: dict = Depends(require_admin_jwt)):
     """Admin approves a pending rep — sets is_active=true, creates auth user if needed, sends credentials email."""
     _validate_rep_id(req.rep_id)
 
@@ -257,14 +365,19 @@ async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
+    # Data writes go through the admin's JWT so RLS is enforced as the caller.
+    # The auth admin (user creation) call below stays on service_key — Supabase
+    # /auth/v1/admin/* rejects non-service-role tokens.
+    user_token = _user_token(request) or service_key
+    anon_key = _get_anon_key() or service_key
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         # 1. PATCH is_active = true and verify row was updated
         resp = await client.patch(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {service_key}",
-                "apikey": service_key,
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
                 "Content-Type": "application/json",
                 "Prefer": "return=representation",
             },
@@ -336,7 +449,7 @@ async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin
 
 
 @router.post("/rep-reject")
-async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
+async def reject_rep(req: RepActionRequest, request: Request, admin: dict = Depends(require_admin_jwt)):
     """Admin rejects a pending rep — deletes the sales_reps row."""
     _validate_rep_id(req.rep_id)
 
@@ -345,13 +458,15 @@ async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_admin_
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
+    user_token = _user_token(request) or service_key
+    anon_key = _get_anon_key() or service_key
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {service_key}",
-                "apikey": service_key,
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
             },
         )
         if resp.status_code not in (200, 204):
@@ -369,7 +484,7 @@ class RepUpdateRequest(BaseModel):
 
 
 @router.post("/rep-update")
-async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_jwt)):
+async def update_rep(req: RepUpdateRequest, request: Request, admin: dict = Depends(require_admin_jwt)):
     """Admin updates a rep's name or commission rate."""
     _validate_rep_id(req.rep_id)
 
@@ -378,6 +493,8 @@ async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
+    user_token = _user_token(request) or service_key
+    anon_key = _get_anon_key() or service_key
 
     updates: dict = {}
     if req.name is not None:
@@ -391,8 +508,8 @@ async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_
         resp = await client.patch(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {service_key}",
-                "apikey": service_key,
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
                 "Content-Type": "application/json",
                 "Prefer": "return=representation",
             },
@@ -406,7 +523,7 @@ async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_
 
 
 @router.post("/rep-remove")
-async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
+async def remove_rep(req: RepActionRequest, request: Request, admin: dict = Depends(require_admin_jwt)):
     """Admin removes an active rep from the team — deletes the sales_reps row."""
     _validate_rep_id(req.rep_id)
 
@@ -415,13 +532,15 @@ async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_admin_
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
+    user_token = _user_token(request) or service_key
+    anon_key = _get_anon_key() or service_key
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {service_key}",
-                "apikey": service_key,
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
             },
         )
         if resp.status_code not in (200, 204):
