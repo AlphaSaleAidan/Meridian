@@ -13,12 +13,21 @@ Endpoints:
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
+
+from ..auth import require_org_access
 
 logger = logging.getLogger("meridian.api.predictive")
 
-router = APIRouter(prefix="/api/predictive", tags=["predictive"])
+# Router-level tenancy guard: every endpoint that accepts org_id (query or path)
+# is automatically protected. The POST /scenario endpoint passes org_id in body —
+# that's not auto-checked here; it must enforce internally (P1 follow-up).
+router = APIRouter(
+    prefix="/api/predictive",
+    tags=["predictive"],
+    dependencies=[Depends(require_org_access)],
+)
 
 
 class ScenarioRequest(BaseModel):

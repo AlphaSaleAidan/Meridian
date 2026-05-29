@@ -24,12 +24,16 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 
-from ..auth import require_admin
+from ..auth import require_admin, require_org_access
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
 
 logger = logging.getLogger("meridian.api.dashboard")
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(
+    prefix="/api/dashboard",
+    tags=["dashboard"],
+    dependencies=[Depends(require_org_access)],
+)
 
 _UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
 def _validate_org_id(org_id: str = Query(..., description="Organization ID")) -> str:

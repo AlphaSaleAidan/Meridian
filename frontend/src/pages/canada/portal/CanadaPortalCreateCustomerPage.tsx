@@ -583,7 +583,6 @@ export default function CanadaPortalCreateCustomerPage() {
     }
   }
 
-  const [tempPassword, setTempPassword] = useState('')
   const [customerLoginUrl, setCustomerLoginUrl] = useState('')
   const [customerPortalUrl, setCustomerPortalUrl] = useState('')
   const [autoSendStatus, setAutoSendStatus] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false })
@@ -641,7 +640,14 @@ export default function CanadaPortalCreateCustomerPage() {
       }
 
       const provData = await provRes.json()
-      setTempPassword(provData.temporary_password || '')
+      // Customer sets their own password via a secure Supabase setup link — no plaintext credentials transmitted.
+      if (supabase) {
+        try {
+          await supabase.auth.resetPasswordForEmail(form.email, {
+            redirectTo: `${window.location.origin}/canada/login`,
+          })
+        } catch { /* setup email is best-effort; rep can resend manually */ }
+      }
       setCustomerLoginUrl(provData.login_url || `${window.location.origin}/canada/login`)
       setCustomerPortalUrl(provData.portal_url || '')
 
@@ -665,22 +671,7 @@ export default function CanadaPortalCreateCustomerPage() {
       const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
       setOnboardingLink(link)
 
-      // Auto-send SMS (if phone provided) — track actual delivery status
-      if (form.phone.trim()) {
-        try {
-          const smsBody = `Hey ${form.ownerName.split(' ')[0]}! Your Meridian account is ready. Login: ${provData.login_url || `${window.location.origin}/canada/login`} — Password: ${provData.temporary_password || ''}`
-          const smsRes = await fetch(`${apiUrl}/api/sms/send`, {
-            method: 'POST',
-            headers: authHeaders,
-            body: JSON.stringify({ to: form.phone, body: smsBody }),
-          })
-          if (smsRes.ok) {
-            setAutoSendStatus(s => ({ ...s, sms: true }))
-          }
-        } catch { }
-      }
-
-      // Reflect actual backend email delivery status
+      // Reflect actual backend email delivery status. SMS is rep-initiated via the OS handler — no auto-send.
       setAutoSendStatus(s => ({ ...s, email: !!provData.welcome_email_sent }))
 
       setStep('confirm')
@@ -1178,20 +1169,16 @@ export default function CanadaPortalCreateCustomerPage() {
                   <CheckCircle2 size={14} /> Customer account created!
                 </div>
 
-                {tempPassword && (
-                  <div className="p-4 rounded-xl border border-[#00d4aa]/20 bg-[#00d4aa]/5 space-y-2">
-                    <p className="text-[11px] font-mono text-[#00d4aa] tracking-wider">CUSTOMER LOGIN CREDENTIALS</p>
-                    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
-                      <span className="text-[#6b7a74]">Email:</span>
-                      <span className="text-white font-medium font-mono">{form.email}</span>
-                      <span className="text-[#6b7a74]">Password:</span>
-                      <span className="text-white font-medium font-mono">{tempPassword}</span>
-                      <span className="text-[#6b7a74]">Login:</span>
-                      <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#00d4aa] font-mono hover:underline truncate">{customerLoginUrl}</a>
-                    </div>
-                    <p className="text-[10px] text-[#6b7a74] mt-2">Customer will also receive these via email. They should change their password on first login.</p>
+                <div className="p-4 rounded-xl border border-[#00d4aa]/20 bg-[#00d4aa]/5 space-y-2">
+                  <p className="text-[11px] font-mono text-[#00d4aa] tracking-wider">CUSTOMER ACCOUNT</p>
+                  <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
+                    <span className="text-[#6b7a74]">Email:</span>
+                    <span className="text-white font-medium font-mono">{form.email}</span>
+                    <span className="text-[#6b7a74]">Login:</span>
+                    <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#00d4aa] font-mono hover:underline truncate">{customerLoginUrl}</a>
                   </div>
-                )}
+                  <p className="text-[10px] text-[#6b7a74] mt-2">A secure setup email has been sent. The customer will click the link to set their own password — no credentials need to be shared.</p>
+                </div>
 
                 <div className="space-y-1.5">
                   <p className="text-[11px] font-mono text-[#6b7a74] tracking-wider">ONBOARDING LINK</p>
@@ -1214,7 +1201,7 @@ export default function CanadaPortalCreateCustomerPage() {
                   </button>
                   <button onClick={() => {
                     const subject = `Your Meridian Account is Ready!`
-                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up! Here are your login credentials:\n\nEmail: ${form.email}\nTemporary Password: ${tempPassword}\nLogin: ${customerLoginUrl}\n\nPlease change your password on first login.\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in CAD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
+                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up!\n\nEmail: ${form.email}\nLogin: ${customerLoginUrl}\n\nWe've sent you a separate setup email with a secure link to set your password. Check your inbox (and spam folder) for "Reset your password" from Meridian.\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in CAD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
                     window.open(`mailto:${form.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-white bg-[#1a2420] rounded-lg hover:bg-[#0f1512] border border-[#1a2420] transition-colors">
@@ -1234,7 +1221,6 @@ export default function CanadaPortalCreateCustomerPage() {
               setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
               setStep('details')
               setOnboardingLink('')
-              setTempPassword('')
               setCustomerLoginUrl('')
               setCustomerPortalUrl('')
               setAutoSendStatus({ sms: false, email: false })
@@ -1309,20 +1295,17 @@ export default function CanadaPortalCreateCustomerPage() {
             </div>
           )}
 
-          {/* Customer Credentials Card */}
-          {tempPassword && (
-            <div className="bg-[#0f1512] rounded-xl p-6 border border-[#00d4aa]/20">
-              <p className="text-[11px] font-mono text-[#00d4aa] tracking-wider mb-3">CUSTOMER LOGIN CREDENTIALS</p>
-              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[13px]">
-                <span className="text-[#6b7a74]">Email:</span>
-                <span className="text-white font-medium font-mono">{form.email}</span>
-                <span className="text-[#6b7a74]">Password:</span>
-                <span className="text-white font-medium font-mono">{tempPassword}</span>
-                <span className="text-[#6b7a74]">Login:</span>
-                <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#00d4aa] font-mono hover:underline truncate">{customerLoginUrl}</a>
-              </div>
+          {/* Customer Account Card */}
+          <div className="bg-[#0f1512] rounded-xl p-6 border border-[#00d4aa]/20">
+            <p className="text-[11px] font-mono text-[#00d4aa] tracking-wider mb-3">CUSTOMER ACCOUNT</p>
+            <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-[13px]">
+              <span className="text-[#6b7a74]">Email:</span>
+              <span className="text-white font-medium font-mono">{form.email}</span>
+              <span className="text-[#6b7a74]">Login:</span>
+              <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#00d4aa] font-mono hover:underline truncate">{customerLoginUrl}</a>
             </div>
-          )}
+            <p className="text-[11px] text-[#6b7a74] mt-3">A password-setup email has been sent to the customer.</p>
+          </div>
 
           {/* POS Connection Step */}
           <div className="bg-[#0f1512] rounded-xl p-6 border border-[#1a2420]">
@@ -1371,7 +1354,6 @@ export default function CanadaPortalCreateCustomerPage() {
               setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
               setStep('details')
               setOnboardingLink('')
-              setTempPassword('')
               setCustomerLoginUrl('')
               setCustomerPortalUrl('')
               setProposalGenerated(false)

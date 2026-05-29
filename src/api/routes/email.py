@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from ..auth import require_admin
+from ..auth import require_admin, require_service_auth
 from pydantic import BaseModel, EmailStr
 
 logger = logging.getLogger("meridian.api.email")
@@ -26,7 +26,7 @@ class SendEmailRequest(BaseModel):
     extra: dict = {}
 
 
-@router.post("/send", dependencies=[Depends(require_admin)])
+@router.post("/send", dependencies=[Depends(require_service_auth)])
 async def send_email(req: SendEmailRequest):
     """Send an email using the specified template."""
     from ...email import send as email_send
