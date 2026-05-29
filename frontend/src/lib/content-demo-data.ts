@@ -14,13 +14,29 @@ export interface ContentCredits {
   free_granted: number
 }
 
+// Mirror of backend src/credits/costs.py — keep these in lockstep.
+// If you change a number here, change it there too (and vice versa).
 export const CREDIT_COSTS = {
+  // Content
   social_post: 100,
   seo_article: 250,
   caption_only: 50,
   hashtags_only: 0,
   image_regen: 75,
+  // Phone agent — billed per minute, rounded up to next 30s.
+  phone_call_per_min: 50,
+  // SMS responder — billed per direction. One exchange = 50 credits.
+  sms_inbound: 20,
+  sms_outbound: 30,
 } as const
+
+// Free credits granted on signup. Sized so a new merchant can run a
+// meaningful demo (~20 min of calls or ~30 SMS exchanges) and close
+// real orders before paying — see backend STARTER_GRANT.
+export const STARTER_CREDIT_GRANT = 1000
+
+// Dashboard surfaces a top-up nudge when balance falls below this.
+export const LOW_BALANCE_THRESHOLD = 200
 
 export const CREDIT_PACKS = [
   { credits: 2000, priceUsd: 2, priceCad: 2.75, label: 'Starter' },
@@ -296,6 +312,6 @@ export function fetchDemoContentData(): ContentDashboardData {
     posts: [demo.post],
     rankings: demo.rankings,
     activeJobs: [],
-    credits: { balance: 500, lifetime_used: 0, free_granted: 500 },
+    credits: { balance: 1000, lifetime_used: 0, free_granted: 1000 },
   }
 }

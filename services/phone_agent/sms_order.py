@@ -18,7 +18,9 @@ Conversation state is stored in-memory keyed by (merchant_id, customer_phone).
 import json
 import logging
 import os
+import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -30,6 +32,24 @@ from order_normalizer import normalize_order
 from pos_connector import create_pos_order
 from payment_links import create_payment_link
 from sms_checkout import send_checkout_sms
+
+# Credit metering lives in src/credits/. Add the project root to sys.path so
+# this sidecar file can import it whether running standalone (python main.py)
+# or mounted under the main API app.
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+try:
+    from src.credits import (
+        SMS_INBOUND,
+        SMS_OUTBOUND,
+        deduct,
+        has_balance,
+        InsufficientCredits,
+    )
+    _CREDITS_AVAILABLE = True
+except ImportError:
+    _CREDITS_AVAILABLE = False
 
 logger = logging.getLogger("meridian.phone_agent.sms_order")
 
@@ -369,6 +389,33 @@ async def handle_inbound_sms(request: Request):
             f"Text ordering isn't enabled for {config.business_name}. "
             f"Please call {config.phone_number} to place an order."
         )
+
+    # Credit metering: one deduction per exchange (1 inbound processed +
+    # 1 outbound reply). Multi-segment replies eat the extra cost — fine
+    # at our margins, and keeps the merchant's mental model simple.
+    is_demo = merchant_id == os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
+    if _CREDITS_AVAILABLE and not is_demo:
+        exchange_cost = SMS_INBOUND.credits + SMS_OUTBOUND.credits
+        try:
+            await deduct(
+                merchant_id=merchant_id,
+                amount=exchange_cost,
+                action_type="sms_exchange",
+                action_id=message_sid,
+                metadata={
+                    "customer_phone": customer_phone,
+                    "merchant_phone": merchant_phone,
+                    "inbound_chars": len(body),
+                },
+            )
+        except InsufficientCredits:
+            logger.info("SMS refused — merchant %s has insufficient credits", merchant_id)
+            # One last courtesy reply to inform the caller, then we stop responding.
+            # We don't deduct for this notice since the merchant is already out.
+            return _twiml_sms(
+                "Sorry, this number's account is temporarily paused. "
+                "Please contact the business directly."
+            )
 
     key = _session_key(merchant_phone, customer_phone)
     session = _sms_sessions.get(key)

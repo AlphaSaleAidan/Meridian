@@ -22,6 +22,14 @@ from fastapi.responses import Response
 from ...services.pos_connectors.order_dispatcher import create_pos_order
 from ...services.pos_connectors.base import OrderResult
 from ...db import get_db
+from ...credits import (
+    COSTS,
+    PHONE_CALL_PER_MIN,
+    cost_for_phone_call,
+    deduct,
+    has_balance,
+    InsufficientCredits,
+)
 
 logger = logging.getLogger("meridian.phone")
 
@@ -326,6 +334,52 @@ async def _log_call_end(call_sid: str, status: str, order_data: dict | None = No
         logger.warning("Failed to log call end: %s", e)
 
 
+def _credits_paused_twiml() -> str:
+    """TwiML for when the merchant has run out of credits.
+
+    Spoken once, then hang up. The merchant sees the bounced call in their
+    dashboard (status = 'credits_paused') with a top-up CTA.
+    """
+    msg = (
+        "Sorry, this number's account is temporarily paused. "
+        "Please contact the business directly to place your order."
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">{_escape(msg)}</Say>
+  <Hangup />
+</Response>"""
+
+
+async def _charge_for_call(merchant_id: str, call_sid: str, duration_seconds: int) -> None:
+    """Post-call: deduct the metered cost. Logs but does not raise on failure."""
+    cost = cost_for_phone_call(duration_seconds)
+    if cost <= 0:
+        return
+    try:
+        new_balance = await deduct(
+            merchant_id=merchant_id,
+            amount=cost,
+            action_type="phone_call",
+            action_id=call_sid,
+            metadata={"duration_seconds": duration_seconds},
+        )
+        logger.info(
+            "Charged %d credits for call %s (%ds) — new balance %d",
+            cost, call_sid, duration_seconds, new_balance,
+        )
+    except InsufficientCredits:
+        # Best-effort: the merchant ran the call past their balance during
+        # the conversation. We still want the ledger to reflect what we
+        # owe Twilio for — flag it for dashboard reconciliation.
+        logger.warning(
+            "Call %s for merchant %s went %d credits negative (over-run)",
+            call_sid, merchant_id, cost,
+        )
+    except Exception as e:
+        logger.error("Failed to charge for call %s: %s", call_sid, e)
+
+
 def _media_stream_twiml(merchant_id: str, caller_phone: str) -> str:
     """TwiML that hands the call off to the Pipecat WebSocket."""
     stream_url = f"wss://{MEDIA_STREAM_HOST}/twilio/media-stream/{merchant_id}"
@@ -365,6 +419,17 @@ async def twilio_voice(request: Request):
         logger.info("No merchant found for %s — using demo merchant %s", twilio_number, DEMO_MERCHANT_ID)
 
     await _log_call_start(call_sid, caller_phone, merchant_id=merchant_id)
+
+    # Pre-call gate: refuse if the merchant can't cover even one minute.
+    # Demo merchant bypasses (the canonical test number always works).
+    if merchant_id != DEMO_MERCHANT_ID:
+        if not await has_balance(merchant_id, PHONE_CALL_PER_MIN.credits):
+            logger.info(
+                "Refusing call %s — merchant %s has insufficient credits",
+                call_sid, merchant_id,
+            )
+            await _log_call_end(call_sid, "credits_paused")
+            return Response(content=_credits_paused_twiml(), media_type=TWIML)
 
     if MEDIA_STREAMS_ENABLED:
         logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
@@ -470,13 +535,32 @@ async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> Or
 
 @router.post("/status")
 async def twilio_status(request: Request):
-    """Call status callback — clean up session on completion."""
+    """Call status callback — clean up session, log, and charge credits."""
     form = await request.form()
     call_sid = form.get("CallSid", "")
     status = form.get("CallStatus", "")
+    # Twilio sends duration on completion; fall back to session start_ts
+    # so we still bill correctly if the duration param is missing.
+    duration_str = form.get("CallDuration", "") or "0"
+    try:
+        duration_seconds = int(duration_str)
+    except ValueError:
+        duration_seconds = 0
+
     if status in ("completed", "failed", "busy", "no-answer", "canceled"):
+        session = _sessions.get(call_sid, {})
+        merchant_id = session.get("merchant_id", "")
+        if duration_seconds == 0 and session.get("ts"):
+            duration_seconds = int(time.time() - session["ts"])
+
         if call_sid in _sessions:
             await _log_call_end(call_sid, status)
+
+        # Only charge for completed, billable calls. failed / busy / no-answer
+        # cost us nothing meaningful and we don't pass them on.
+        if status == "completed" and merchant_id and merchant_id != DEMO_MERCHANT_ID and duration_seconds > 0:
+            await _charge_for_call(merchant_id, call_sid, duration_seconds)
+
         _sessions.pop(call_sid, None)
     return Response(content="", status_code=204)
 
@@ -510,6 +594,16 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
         await websocket.close(code=1008, reason="Phone agent disabled")
         return
 
+    # Pre-call credit gate — same as the TwiML voice route. The /voice
+    # webhook fires first and would have returned the paused TwiML, so
+    # in practice we only reach here when the merchant had credits at
+    # /voice time. This is a defense-in-depth check for race conditions.
+    if merchant_id != DEMO_MERCHANT_ID:
+        if not await has_balance(merchant_id, PHONE_CALL_PER_MIN.credits):
+            logger.info("WebSocket refused — merchant %s has insufficient credits", merchant_id)
+            await websocket.close(code=1008, reason="Insufficient credits")
+            return
+
     # Drain Twilio's prelude (connected → start) to capture streamSid + callSid.
     # The serializer needs streamSid to address outbound media frames.
     stream_sid: str | None = None
@@ -537,6 +631,16 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
 
     session_ref = call_sid or f"mstream-{int(time.time() * 1000)}"
     caller_info = {"phone": caller_phone, "session_ref": session_ref}
+
+    # Populate session bookkeeping so /twilio/status can charge for the call.
+    # Without this, the status handler reads an empty session and skips billing.
+    if call_sid:
+        _sessions[call_sid] = {
+            "merchant_id": merchant_id,
+            "ts": time.time(),
+            "caller_phone": caller_phone,
+            "mode": "media-streams",
+        }
 
     try:
         await run_call_bot(

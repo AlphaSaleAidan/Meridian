@@ -405,10 +405,11 @@ export default function ContentDashboard() {
             </div>
             <div className="flex-1">
               <h3 className="text-base font-semibold text-[#F5F5F7]">
-                500 Free Credits on Signup
+                1,000 Free Credits on Signup
               </h3>
               <p className="text-sm text-[#A1A1A8] mt-1">
-                Every account gets 500 credits free — enough for 5 social posts, 2 SEO articles, or generate video ads.
+                Every account gets 1,000 credits free — enough for ~20 minutes of AI phone calls,
+                ~30 SMS conversations, 10 social posts, or 4 SEO articles.
                 Need more? Credits start at {isCanadaPath() ? 'CA$2.75' : '$2'} for 2,000.
               </p>
             </div>

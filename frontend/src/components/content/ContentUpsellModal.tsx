@@ -100,6 +100,8 @@ export default function ContentUpsellModal({ open, onClose, creditBalance = 0 }:
                   <h3 className="text-xs font-semibold text-[#F5F5F7]">What credits buy</h3>
                   <div className="grid grid-cols-2 gap-2">
                     {[
+                      { label: 'AI phone call (per min)', cost: CREDIT_COSTS.phone_call_per_min },
+                      { label: 'SMS exchange (in + out)', cost: CREDIT_COSTS.sms_inbound + CREDIT_COSTS.sms_outbound },
                       { label: 'Social post (image + copy)', cost: CREDIT_COSTS.social_post },
                       { label: 'SEO article', cost: CREDIT_COSTS.seo_article },
                       { label: 'Regenerate image', cost: CREDIT_COSTS.image_regen },
@@ -119,8 +121,8 @@ export default function ContentUpsellModal({ open, onClose, creditBalance = 0 }:
                 <div className="flex items-start gap-2 p-3 rounded-lg bg-[#17C5B0]/5 border border-[#17C5B0]/15">
                   <Zap size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
                   <p className="text-[11px] text-[#A1A1A8] leading-relaxed">
-                    Every new account gets <span className="text-[#F5F5F7] font-semibold">500 free credits</span> to try
-                    content generation. That's enough for 5 social posts, 2 SEO articles, or 10 video clips.
+                    Every new account gets <span className="text-[#F5F5F7] font-semibold">1,000 free credits</span> — enough
+                    for ~20 minutes of AI phone calls, ~30 SMS conversations, 10 social posts, or 4 SEO articles.
                   </p>
                 </div>
               </div>

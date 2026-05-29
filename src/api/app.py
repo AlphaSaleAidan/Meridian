@@ -66,6 +66,8 @@ from .routes.email import router as email_api_router
 from ..email.webhooks import router as email_webhook_router
 from .routes.phone import router as phone_router
 from .routes.phone_dashboard import router as phone_dashboard_router
+from .routes.sms import router as sms_router
+from .routes.credits import router as credits_router
 from .routes.pos_connections import router as pos_connections_router
 from .routes.inference import router as inference_router
 from .routes.website import router as website_router
@@ -232,6 +234,8 @@ app.include_router(email_api_router)
 app.include_router(email_webhook_router)
 app.include_router(phone_router)
 app.include_router(phone_dashboard_router)
+app.include_router(sms_router)
+app.include_router(credits_router)
 app.include_router(pos_connections_router)
 app.include_router(inference_router)
 app.include_router(website_router)
