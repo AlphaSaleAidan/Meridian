@@ -78,6 +78,27 @@ def _serialize_costs() -> dict[str, dict[str, Any]]:
     }
 
 
+@router.get("/_debug/config")
+async def debug_config():
+    """Temporary: confirm the credits module sees Supabase env at runtime.
+    Returns presence (not values) of the env vars it depends on. Remove
+    once we've verified the live deploy is wired up.
+    """
+    from ...credits import service as _svc
+    return {
+        "supabase_url_set": bool(_svc.SUPABASE_URL),
+        "supabase_url_host": _svc.SUPABASE_URL.split("//")[-1].split("/")[0] if _svc.SUPABASE_URL else "",
+        "supabase_key_set": bool(_svc.SUPABASE_KEY),
+        "supabase_key_len": len(_svc.SUPABASE_KEY or ""),
+        "supabase_key_source": (
+            "SERVICE_ROLE" if os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+            else "SERVICE_KEY" if os.getenv("SUPABASE_SERVICE_KEY")
+            else "ANON" if os.getenv("SUPABASE_ANON_KEY")
+            else "NONE"
+        ),
+    }
+
+
 @router.get("/balance/{merchant_id}", response_model=BalanceResponse)
 async def get_credit_balance(merchant_id: str):
     """Current balance + the price sheet. Single fetch for the dashboard header."""
