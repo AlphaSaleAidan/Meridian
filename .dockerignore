@@ -3,6 +3,11 @@ node_modules/
 frontend/
 nova-labs/
 services/
+# Keep the phone-agent sidecar in the image — the /twilio/media-stream
+# WebSocket route sys.path-inserts and imports from it. Other services/*
+# dirs (higgsfield, training_video_pipeline, deerflow, etc.) stay excluded
+# because they're either heavy or unrelated to the API runtime.
+!services/phone_agent/
 .next/
 .vercel/
 .playwright-mcp/
