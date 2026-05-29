@@ -19,11 +19,18 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, HTTPException, Depends
 
+from ..auth import require_org_access
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
 
 logger = logging.getLogger("meridian.api.analytics")
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard-analytics"])
+# Router-level tenancy guard: every endpoint that accepts org_id (query or path)
+# is automatically protected. See require_org_access in ../auth.py.
+router = APIRouter(
+    prefix="/api/dashboard",
+    tags=["dashboard-analytics"],
+    dependencies=[Depends(require_org_access)],
+)
 
 _UUID_RE = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I

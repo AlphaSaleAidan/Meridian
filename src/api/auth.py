@@ -83,6 +83,106 @@ async def require_admin_jwt(user: dict = Depends(require_jwt)) -> dict:
     return user
 
 
+async def _check_org_membership(user: dict, org_id: str) -> bool:
+    """Return True if the JWT user is the owner of, or a member of, the given org.
+
+    Membership rules:
+      - businesses.owner_user_id == user.id
+      - OR business_users row with business_id == org_id AND user_id == user.id AND is_active
+      - OR user email is in the global ADMIN_EMAILS allowlist (for support access)
+    """
+    import httpx
+    email = (user.get("email") or "").lower()
+    if email and email in [e.lower() for e in ADMIN_EMAILS]:
+        return True
+
+    user_id = user.get("id") or user.get("sub") or ""
+    if not user_id or not org_id:
+        return False
+
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = (
+        os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+        or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    )
+    if not supabase_url or not service_key:
+        # If Supabase isn't configured we can't verify — fail closed.
+        return False
+
+    headers = {"Authorization": f"Bearer {service_key}", "apikey": service_key}
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            owner_resp = await client.get(
+                f"{supabase_url}/rest/v1/businesses",
+                params={"id": f"eq.{org_id}", "owner_user_id": f"eq.{user_id}", "select": "id"},
+                headers=headers,
+            )
+            if owner_resp.status_code == 200 and owner_resp.json():
+                return True
+
+            member_resp = await client.get(
+                f"{supabase_url}/rest/v1/business_users",
+                params={
+                    "business_id": f"eq.{org_id}",
+                    "user_id": f"eq.{user_id}",
+                    "is_active": "eq.true",
+                    "select": "user_id",
+                },
+                headers=headers,
+            )
+            if member_resp.status_code == 200 and member_resp.json():
+                return True
+    except Exception as exc:
+        logger.warning("org membership lookup failed for user=%s org=%s: %s", email, org_id, exc)
+
+    return False
+
+
+async def require_org_access(
+    request: Request,
+    auth_header: str = Depends(_auth_header),
+) -> dict | None:
+    """Tenancy guard for org-scoped endpoints.
+
+    Behavior:
+      - If the request has no org_id (in query or path), this is a no-op and returns None.
+        Other auth deps (e.g. require_admin on admin endpoints) handle their own checks.
+      - If org_id is present, requires a valid JWT and verifies org membership.
+      - On mismatch: raises 403 by default. If TENANCY_ENFORCEMENT_DISABLED is truthy,
+        logs a warning and lets the call through (emergency rollback knob).
+
+    Apply at the router level:
+        router = APIRouter(prefix="...", dependencies=[Depends(require_org_access)])
+    """
+    org_id = request.query_params.get("org_id") or request.path_params.get("org_id")
+    if not org_id:
+        return None
+
+    if not auth_header:
+        raise HTTPException(401, "Authorization header required for org-scoped endpoint")
+    token = auth_header.removeprefix("Bearer ").strip()
+    user = await _verify_supabase_token(token)
+    if not user:
+        raise HTTPException(401, "Invalid or expired token")
+
+    if await _check_org_membership(user, org_id):
+        return user
+
+    disabled = os.environ.get("TENANCY_ENFORCEMENT_DISABLED", "").lower() in ("true", "1", "yes")
+    if disabled:
+        logger.warning(
+            "TENANCY_WARN (enforcement disabled) user=%s email=%s tried org=%s",
+            user.get("id"), user.get("email"), org_id,
+        )
+        return user
+
+    logger.warning(
+        "TENANCY_DENY user=%s email=%s tried org=%s",
+        user.get("id"), user.get("email"), org_id,
+    )
+    raise HTTPException(403, "Access denied: you are not a member of this organization")
+
+
 async def require_service_auth(
     admin_key: str = Depends(_admin_key_header),
     auth_header: str = Depends(_auth_header),
@@ -163,6 +263,28 @@ _default_limiter = RateLimiter(requests_per_minute=30)
 _scrape_limiter = RateLimiter(requests_per_minute=5)
 
 
+class HourRateLimiter:
+    """Sliding-window rate limiter measured in requests per hour."""
+    def __init__(self, requests_per_hour: int):
+        self._rph = requests_per_hour
+        self._hits: dict[str, list[float]] = defaultdict(list)
+        self._lock = Lock()
+
+    def check(self, client_ip: str) -> bool:
+        now = time.monotonic()
+        cutoff = now - 3600.0
+        with self._lock:
+            hits = self._hits[client_ip]
+            self._hits[client_ip] = [t for t in hits if t > cutoff]
+            if len(self._hits[client_ip]) >= self._rph:
+                return False
+            self._hits[client_ip].append(now)
+            return True
+
+
+_signup_limiter = HourRateLimiter(requests_per_hour=5)
+
+
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
@@ -178,3 +300,9 @@ async def rate_limit(request: Request):
 async def rate_limit_scrape(request: Request):
     if not _scrape_limiter.check(_client_ip(request)):
         raise HTTPException(429, "Scrape rate limited — max 5 per minute")
+
+
+async def rate_limit_signup(request: Request):
+    """Hard cap on rep-signup attempts: 5 per hour per IP, to block account-spam bots."""
+    if not _signup_limiter.check(_client_ip(request)):
+        raise HTTPException(429, "Too many signup attempts — try again in an hour")

@@ -14,9 +14,10 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 
+from ..auth import require_org_access
 from ...security.encryption import encrypt_token, decrypt_token
 from ...services.pos_connectors import (
     GenericRESTConnector,
@@ -28,7 +29,14 @@ from ...services.pos_connectors import (
 
 logger = logging.getLogger("meridian.api.pos_connections")
 
-router = APIRouter(prefix="/api/pos", tags=["pos-connections"])
+# Router-level tenancy guard: every endpoint that accepts org_id in query OR path
+# is automatically protected. POST endpoints that pass org_id in body (e.g.
+# /connect, /test-connection, /upload-csv) must enforce internally (P1 follow-up).
+router = APIRouter(
+    prefix="/api/pos",
+    tags=["pos-connections"],
+    dependencies=[Depends(require_org_access)],
+)
 
 
 class TestConnectionRequest(BaseModel):

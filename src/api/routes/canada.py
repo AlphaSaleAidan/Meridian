@@ -13,7 +13,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_admin, require_jwt, require_admin_jwt
+from ..auth import require_admin, require_jwt, require_admin_jwt, rate_limit_signup
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
@@ -75,7 +75,6 @@ class RepSignupRequest(BaseModel):
 
 class CreateCustomerRequest(BaseModel):
     email: EmailStr
-    password: str
     business_name: str
     contact_name: str
     phone: str | None = None
@@ -89,17 +88,15 @@ class CreateCustomerRequest(BaseModel):
     def sanitize_names(cls, v: str) -> str:
         return _sanitize_text(v)
 
-    @field_validator("password")
-    @classmethod
-    def validate_customer_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("password must be at least 8 characters")
-        return v
 
-
-@router.post("/rep-signup")
+@router.post("/rep-signup", dependencies=[Depends(rate_limit_signup)])
 async def rep_signup(req: RepSignupRequest):
-    """Create a new sales rep: auth user + sales_reps row."""
+    """Create a new sales rep: auth user + sales_reps row.
+
+    Rate limited to 5 signups per hour per IP to block account-spam bots.
+    Account is still created with `is_active=False` and requires admin approval
+    before the rep can interact with deals.
+    """
     import httpx
 
     supabase_url = os.environ.get("SUPABASE_URL", "")
@@ -181,6 +178,7 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
     verified Supabase session instead of a static service token.
     """
     import httpx
+    import secrets
 
     user_id = claims.get("id", "")
     logger.info("create-customer called by user %s (%s)", user_id, claims.get("email", ""))
@@ -197,6 +195,10 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
         raise HTTPException(503, "Supabase not configured")
 
     org_id = str(uuid.uuid4())
+    # Server-generated random password — never returned to the caller.
+    # The customer sets their own password via the Supabase recovery email
+    # that the frontend triggers after this endpoint returns.
+    server_password = secrets.token_urlsafe(24)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
@@ -208,7 +210,7 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
             },
             json={
                 "email": req.email,
-                "password": req.password,
+                "password": server_password,
                 "email_confirm": True,
                 "user_metadata": {
                     "full_name": req.contact_name,
