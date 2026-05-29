@@ -19,7 +19,12 @@ import httpx
 logger = logging.getLogger("meridian.phone_agent.memory")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
+# Match the project-wide fallback chain used by src/db, src/auth, etc.
+SUPABASE_KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    or os.getenv("SUPABASE_SERVICE_KEY")
+    or os.getenv("SUPABASE_ANON_KEY", "")
+)
 
 # Pull the last N orders for the caller; small N keeps the prompt tight.
 _HISTORY_LIMIT = 5
