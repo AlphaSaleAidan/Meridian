@@ -125,3 +125,32 @@ export function laborPctTone(pct: number, targetPct: number, warningPct: number,
   if (pct <= warningPct) return { fg: '#D4A843', bg: '#D4A843',  label: 'watch' }
   return                      { fg: '#E06B5E', bg: '#E06B5E',  label: 'over' }
 }
+
+/**
+ * Demo weekly revenue per business type, calibrated against the actual
+ * labor cost produced by generateScheduleShifts for each type so labor%
+ * lands mid-band on the demo dashboard.
+ */
+export const DEMO_WEEKLY_REVENUE_CENTS: Record<string, number> = {
+  coffee_shop: 31_000_00,
+  restaurant:  23_000_00,
+  fast_food:   22_000_00,
+  auto_shop:   22_000_00,
+  smoke_shop:  15_000_00,
+}
+
+/** Sum labor cost (cents) over real (non-recommended) shifts. */
+export function computeWeeklyLaborCents(
+  shifts: ScheduleShift[],
+  staff: ScheduleStaffMember[],
+): number {
+  const staffMap = new Map(staff.map(s => [s.id, s]))
+  return shifts
+    .filter(s => !s.isRecommended)
+    .reduce((sum, s) => {
+      const m = staffMap.get(s.staffMemberId || '')
+      if (!m) return sum
+      const hrs = Math.max(0, (timeToMinutes(s.endTime) - timeToMinutes(s.startTime) - s.breakMinutes) / 60)
+      return sum + Math.round(m.hourlyRate * hrs)
+    }, 0)
+}

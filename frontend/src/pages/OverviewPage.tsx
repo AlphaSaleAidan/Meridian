@@ -1,13 +1,19 @@
 import { useLocation, Link } from 'react-router-dom'
+import { useMemo } from 'react'
 import {
   DollarSign, ShoppingCart, Receipt,
-  Target, Bot, LineChart, Users,
+  Target, Bot, LineChart, Users, Percent,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { formatCents, formatCentsCompact, formatNumber, formatPercent } from '@/lib/format'
 import StatCard from '@/components/StatCard'
+import {
+  DEMO_WEEKLY_REVENUE_CENTS, getLaborTarget, laborPctTone, computeWeeklyLaborCents,
+} from '@/components/schedule/schedule-helpers'
+import { useDemoContext, getActiveBusinessType } from '@/lib/demo-context'
+import { generateScheduleShifts, generateScheduleStaff } from '@/lib/agent-data'
 import MoneyLeftCard from '@/components/MoneyLeftCard'
 import RevenueChart from '@/components/RevenueChart'
 import InsightCard from '@/components/InsightCard'
@@ -50,6 +56,26 @@ export default function OverviewPage() {
       )
     : 0
 
+  // Labor % of weekly revenue — computed for demo so the Overview KPI matches
+  // the Schedule page. Live wiring (real shifts via /api/schedule) is a follow-up.
+  const demoCtx = useDemoContext()
+  const businessType = demoCtx.businessType ?? getActiveBusinessType()
+  const labor = useMemo(() => {
+    if (!isDemo) return null
+    const weekStart = new Date()
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
+    weekStart.setHours(0, 0, 0, 0)
+    const shifts = generateScheduleShifts(weekStart)
+    const staff = generateScheduleStaff()
+    const cents = computeWeeklyLaborCents(shifts, staff)
+    const rev = DEMO_WEEKLY_REVENUE_CENTS[businessType] ?? 0
+    if (rev === 0) return null
+    const pct = (cents / rev) * 100
+    const target = getLaborTarget(businessType)
+    const tone = laborPctTone(pct, target.targetPct, target.warningPct, target.floorPct)
+    return { pct, tone, target }
+  }, [isDemo, businessType])
+
   if (skip) return <DataPageSkeleton title="Overview"><div /></DataPageSkeleton>
   if (overview.loading) return <LoadingPage />
   if (overview.error) return <ErrorState message={overview.error} onRetry={overview.refetch} />
@@ -78,7 +104,7 @@ export default function OverviewPage() {
         </div>
       </ScrollReveal>
 
-      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-walkthrough="overview-stats">
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4" data-walkthrough="overview-stats">
         <StaggerItem>
           <StatCard
             label="Total Revenue"
@@ -112,6 +138,23 @@ export default function OverviewPage() {
             icon={Users}
             iconColor="text-[#7C5CFF]"
             subtitle={avgRetention > 0 ? 'weighted by segment' : 'analyzing...'}
+          />
+        </StaggerItem>
+        <StaggerItem>
+          <StatCard
+            label="Labor Cost %"
+            value={labor ? `${labor.pct.toFixed(1)}%` : '—'}
+            icon={Percent}
+            iconColor={
+              labor?.tone.label === 'on-target' ? 'text-[#17C5B0]'
+              : labor?.tone.label === 'over' ? 'text-[#E06B5E]'
+              : 'text-[#D4A843]'
+            }
+            subtitle={
+              labor
+                ? `target ${labor.target.floorPct}-${labor.target.warningPct}% · ${labor.tone.label}`
+                : 'connect schedule'
+            }
           />
         </StaggerItem>
       </StaggerContainer>

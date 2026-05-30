@@ -16,7 +16,7 @@ import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import MobileDayView from '@/components/schedule/MobileDayView'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
-import { ROLE_GROUPS, getLaborTarget, laborPctTone } from '@/components/schedule/schedule-helpers'
+import { ROLE_GROUPS, getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
 import {
   isUuid, shiftFromApi, shiftToApiCreate, shiftToApiUpdate,
@@ -251,16 +251,6 @@ export default function SchedulePage() {
   // Labor cost as % of projected weekly revenue.
   // Live: pulled from /api/schedule/projected-revenue.
   // Demo: typical weekly revenue by business type so the % feels real.
-  // Calibrated to land mid-band given the schedule generator's actual labor cost
-  // per business type. Without this calibration the demo restaurant showed 19.7%
-  // (understaffed amber) instead of the realistic 28-32% green band.
-  const DEMO_WEEKLY_REVENUE_CENTS: Record<string, number> = {
-    coffee_shop: 31_000_00,
-    restaurant:  23_000_00,
-    fast_food:   22_000_00,
-    auto_shop:   22_000_00,
-    smoke_shop:  15_000_00,
-  }
   const effectiveRevenueCents =
     projectedRevenueCents ?? DEMO_WEEKLY_REVENUE_CENTS[businessType] ?? 0
   const laborPct = effectiveRevenueCents > 0
