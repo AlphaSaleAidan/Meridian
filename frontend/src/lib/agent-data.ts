@@ -1138,13 +1138,15 @@ export function generateScheduleStaff(): ScheduleStaffMember[] {
       }
     })
 
-    const baseRate = bizType === 'auto_shop' ? 2800
-      : bizType === 'restaurant' ? 1800
-      : bizType === 'coffee_shop' ? 1600
-      : bizType === 'fast_food' ? 1400
-      : 1500
+    // 2026-realistic hourly base rates (in cents). Restaurant servers $22-28,
+    // kitchen $20-26, managers $30-38. Other types scaled similarly.
+    const baseRate = bizType === 'auto_shop' ? 3000
+      : bizType === 'restaurant' ? 2400
+      : bizType === 'coffee_shop' ? 1900
+      : bizType === 'fast_food' ? 1700
+      : 1800
     // Leads/supervisors/managers get higher rate
-    const roleBonus = s.role.includes('lead') || s.role.includes('supervisor') || s.role.includes('manager') ? 400 : 0
+    const roleBonus = s.role.includes('lead') || s.role.includes('supervisor') || s.role.includes('manager') ? 800 : 0
 
     return {
       id: `staff-${i + 1}`,

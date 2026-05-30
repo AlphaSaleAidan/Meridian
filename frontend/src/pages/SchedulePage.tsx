@@ -42,30 +42,61 @@ function buildOptimalSchedule(
   weekStart: Date,
 ): ScheduleShift[] {
   const maxI = Math.max(...peaks.map(p => p.intensity), 1)
-  const ranked = [...staff].sort((a, b) => b.hourlyRate - a.hourlyRate)
   const demand = new Map<string, number>()
   for (const c of peaks) {
     const r = c.intensity / maxI
     const need = r > 0.75 ? 3 : r > 0.5 ? 2 : r > 0.25 ? 1 : 0
     if (need > 0) demand.set(`${c.day}-${c.hour}`, need)
   }
+  // Track minutes already assigned per staff member during this generation.
+  const minutesAssigned = new Map<string, number>()
+  staff.forEach(s => minutesAssigned.set(s.id, 0))
   const asgn = new Map<string, Map<number, Set<number>>>()
-  ranked.forEach(s => asgn.set(s.id, new Map()))
+  staff.forEach(s => asgn.set(s.id, new Map()))
   const slots = [...demand.entries()]
     .map(([k, need]) => {
       const [d, h] = k.split('-').map(Number)
       return { day: d, hour: h, need, intensity: peaks.find(p => p.day === d && p.hour === h)?.intensity ?? 0 }
     })
     .sort((a, b) => b.intensity - a.intensity)
+  const OVERTIME_THRESHOLD_MIN = 40 * 60
   for (const slot of slots) {
+    // Sort candidates by (least-loaded first, then cheapest). This
+    // distributes hours evenly AND prefers cheaper labor for equivalent staff.
+    const candidates = [...staff].sort((a, b) => {
+      const ma = minutesAssigned.get(a.id) ?? 0
+      const mb = minutesAssigned.get(b.id) ?? 0
+      if (ma !== mb) return ma - mb
+      return a.hourlyRate - b.hourlyRate
+    })
     let filled = 0
-    for (const m of ranked) {
+    for (const m of candidates) {
       if (filled >= slot.need) break
       const av = m.availability[DAY_KEYS[slot.day]]
       if (!av?.available || slot.hour < parseInt(av.start) || slot.hour >= parseInt(av.end)) continue
       const dm = asgn.get(m.id)!
+      // Skip if already assigned this exact hour on this day.
+      if (dm.get(slot.day)?.has(slot.hour)) continue
+      // Overtime guard: skip if adding this hour would push past 40h/week,
+      // UNLESS no cheaper candidate is available later in this loop.
+      const currentMins = minutesAssigned.get(m.id) ?? 0
+      if (currentMins + 60 > OVERTIME_THRESHOLD_MIN) {
+        const cheaperAvailable = candidates.some(other => {
+          if (other.id === m.id) return false
+          if (other.hourlyRate >= m.hourlyRate) return false
+          const otherMins = minutesAssigned.get(other.id) ?? 0
+          if (otherMins + 60 > OVERTIME_THRESHOLD_MIN) return false
+          const oav = other.availability[DAY_KEYS[slot.day]]
+          if (!oav?.available || slot.hour < parseInt(oav.start) || slot.hour >= parseInt(oav.end)) return false
+          const odm = asgn.get(other.id)!
+          if (odm.get(slot.day)?.has(slot.hour)) return false
+          return true
+        })
+        if (cheaperAvailable) continue
+      }
       if (!dm.has(slot.day)) dm.set(slot.day, new Set())
       dm.get(slot.day)!.add(slot.hour)
+      minutesAssigned.set(m.id, currentMins + 60)
       filled++
     }
   }
@@ -220,7 +251,7 @@ export default function SchedulePage() {
     : null
   const laborTarget = useMemo(() => getLaborTarget(businessType), [businessType])
   const laborTone = laborPct !== null
-    ? laborPctTone(laborPct, laborTarget.targetPct, laborTarget.warningPct)
+    ? laborPctTone(laborPct, laborTarget.targetPct, laborTarget.warningPct, laborTarget.floorPct)
     : null
 
   // Handlers
@@ -499,27 +530,36 @@ export default function SchedulePage() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowAddStaff(true)}
+              aria-label="Add staff member"
+              title="Add staff"
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
-              <Plus size={13} />Staff
+              <Plus size={13} /><span className="hidden sm:inline">Staff</span>
             </button>
             <button onClick={handleCopyPrevWeek}
+              aria-label="Copy shifts from previous week"
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
               title="Copy shifts from previous week">
-              <Copy size={13} />Copy Week
+              <Copy size={13} /><span className="hidden sm:inline">Copy Week</span>
             </button>
             <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
+              aria-label={isGenerating ? 'Generating schedule' : 'Generate schedule'}
+              title={isGenerating ? 'Generating...' : 'Generate'}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#17C5B0]/20 hover:shadow-[#17C5B0]/30 hover:brightness-110 disabled:opacity-40">
               <Sparkles size={14} className={isGenerating ? 'animate-spin' : ''} />
-              {isGenerating ? 'Generating...' : 'Generate'}
+              <span className="hidden sm:inline">{isGenerating ? 'Generating...' : 'Generate'}</span>
             </button>
             <button onClick={handlePublish}
               disabled={realShifts.length === 0 || isPublished}
+              aria-label={isPublished ? 'Schedule published' : 'Publish schedule'}
+              title={isPublished ? 'Published' : 'Publish'}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${isPublished
                 ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
                 : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-30'}`}>
-              <Send size={13} />{isPublished ? 'Published' : 'Publish'}
+              <Send size={13} /><span className="hidden sm:inline">{isPublished ? 'Published' : 'Publish'}</span>
             </button>
             <button onClick={handleDownloadPdf}
+              aria-label="Download schedule as PDF"
+              title="Download PDF"
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
               <FileDown size={13} />
             </button>
@@ -571,7 +611,7 @@ export default function SchedulePage() {
                   borderColor: laborTone ? `${laborTone.fg}40` : '#1F1F23',
                   backgroundColor: laborTone ? `${laborTone.bg}15` : 'transparent',
                 }}
-                title={`Labor cost vs ${(effectiveRevenueCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} projected weekly revenue. Target ${laborTarget.targetPct}% • Warn ${laborTarget.warningPct}%.`}
+                title={`Labor cost vs ${(effectiveRevenueCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} projected weekly revenue. Floor ${laborTarget.floorPct}% • Target ${laborTarget.targetPct}% • Warn ${laborTarget.warningPct}%.`}
               >
                 <Percent size={11} style={{ color: laborTone?.fg }} />
                 <span className="text-[12px] font-mono font-semibold" style={{ color: laborTone?.fg }}>
@@ -585,7 +625,13 @@ export default function SchedulePage() {
 
       {/* Role filter bar */}
       <ScrollReveal variant="fadeUp" delay={0.04}>
-        <div className="flex items-center gap-1.5 px-1 overflow-x-auto pb-1">
+        <div
+          className="flex items-center gap-1.5 px-1 pr-6 overflow-x-auto pb-1"
+          style={{
+            maskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+            WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
+          }}
+        >
           {FILTER_OPTIONS.map(opt => {
             const isActive = roleFilter === opt.key
             const color = 'color' in opt ? opt.color : undefined

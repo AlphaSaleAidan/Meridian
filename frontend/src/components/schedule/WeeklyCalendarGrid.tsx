@@ -2,7 +2,6 @@ import { useState, useMemo, useCallback } from 'react'
 import { Plus, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import type { ScheduleShift, ScheduleStaffMember, Holiday } from '@/lib/agent-data'
 import type { BusinessType } from '@/lib/demo-context'
-import ScheduleSummaryRow from './ScheduleSummaryRow'
 import {
   groupStaffByRole, getStaffWeeklyHours, isStaffAvailable,
   fmtTime, addDays, dateStr, DAY_KEYS,
@@ -220,15 +219,6 @@ export default function WeeklyCalendarGrid({
         <div className="px-4 py-10 text-center">
           <p className="text-sm text-[#A1A1A8]/40">No staff members yet — add your team to get started</p>
         </div>
-      )}
-
-      {/* Summary row */}
-      {staff.length > 0 && (
-        <ScheduleSummaryRow
-          shifts={shifts}
-          staff={staff}
-          weekStartDate={weekStartDate}
-        />
       )}
     </div>
   )

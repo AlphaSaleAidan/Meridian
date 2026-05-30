@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Plus } from 'lucide-react'
 import type { ScheduleShift, ScheduleStaffMember } from '@/lib/agent-data'
+import { fmtTime } from './schedule-helpers'
 
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function formatDateISO(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
@@ -87,7 +88,7 @@ export default function MobileDayView({ shifts, staff, holidays, weekStartDate, 
                 <div className="text-[11px] text-[#A1A1A8]/50 capitalize">{member?.role?.replace(/_/g, ' ') || shift.role}</div>
               </div>
               <div className="text-right flex-shrink-0">
-                <div className="text-[12px] font-mono text-[#F5F5F7]/80">{shift.startTime}-{shift.endTime}</div>
+                <div className="text-[12px] font-mono text-[#F5F5F7]/80">{fmtTime(shift.startTime)}-{fmtTime(shift.endTime)}</div>
               </div>
             </button>
           )
