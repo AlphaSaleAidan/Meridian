@@ -259,7 +259,7 @@ export default function SchedulePage() {
     restaurant:  23_000_00,
     fast_food:   22_000_00,
     auto_shop:   22_000_00,
-    smoke_shop:  40_000_00,
+    smoke_shop:  15_000_00,
   }
   const effectiveRevenueCents =
     projectedRevenueCents ?? DEMO_WEEKLY_REVENUE_CENTS[businessType] ?? 0
