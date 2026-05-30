@@ -10,6 +10,7 @@ interface Props {
 
 const statusConfig: Record<string, { label: string; icon: typeof Wifi; color: string; dot: string }> = {
   connected: { label: 'Connected', icon: Wifi, color: 'text-[#4FE3C1]', dot: 'bg-[#4FE3C1]' },
+  active:    { label: 'Connected', icon: Wifi, color: 'text-[#4FE3C1]', dot: 'bg-[#4FE3C1]' },
   syncing: { label: 'Syncing', icon: Loader2, color: 'text-amber-400', dot: 'bg-amber-400' },
   error: { label: 'Error', icon: AlertCircle, color: 'text-red-400', dot: 'bg-red-400' },
   pending: { label: 'Pending', icon: Loader2, color: 'text-[#A1A1A8]', dot: 'bg-[#A1A1A8]' },
@@ -39,7 +40,7 @@ export default function ConnectionBadge({ status, provider, lastSync, onConnect 
         <Icon size={14} className={config.color} />
         <span className="text-xs font-medium text-[#A1A1A8]">
           {provider ? `${provider.charAt(0).toUpperCase() + provider.slice(1)} • ` : ''}{config.label}
-          {lastSync && status === 'connected' && (
+          {lastSync && (status === 'connected' || status === 'active') && (
             <span className="text-[#A1A1A8]/50"> • {formatRelativeTime(lastSync)}</span>
           )}
         </span>

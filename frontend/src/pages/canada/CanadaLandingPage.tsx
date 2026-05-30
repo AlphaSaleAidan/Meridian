@@ -61,7 +61,7 @@ export default function CanadaLandingPage() {
     <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
       <SEO
         title="Meridian Intelligence Canada — AI-Powered POS Analytics | CAD Pricing"
-        description="AI analytics for Canadian restaurants, cafes, and retail. Connect Square, Moneris, or Clover. PIPEDA and Quebec Law 25 compliant. Starting at CA$339/month."
+        description="AI analytics for Canadian restaurants, cafes, and retail. Connect Square, Moneris, or Clover. Built for PIPEDA and Quebec Law 25. Starting at CA$339/month."
         path="/canada"
       />
       <GrainOverlay />
@@ -324,13 +324,13 @@ export default function CanadaLandingPage() {
             {[
               {
                 icon: Shield,
-                title: 'PIPEDA Compliant',
-                desc: 'Full compliance with Canada\'s Personal Information Protection and Electronic Documents Act. Your customer data is handled with the highest privacy standards.',
+                title: 'Built for PIPEDA',
+                desc: 'Designed around Canada\'s Personal Information Protection and Electronic Documents Act. Customer data is handled with documented retention, consent, and access controls.',
               },
               {
                 icon: Scale,
-                title: 'Quebec Law 25',
-                desc: 'Meets Quebec\'s Law 25 (Bill 64) requirements for data privacy and consent management — the strictest provincial privacy legislation in Canada.',
+                title: 'Aligned with Quebec Law 25',
+                desc: 'Built to support Quebec\'s Law 25 (Bill 64) requirements for data privacy and consent — the strictest provincial privacy legislation in Canada.',
               },
               {
                 icon: Lock,
@@ -402,7 +402,7 @@ export default function CanadaLandingPage() {
               <p className="text-[11px] text-[#A1A1A8]/30">&copy; 2026 <span className="font-semibold bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Meridian</span></p>
             </div>
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 text-[12px] text-[#A1A1A8]/60">
-              <span className="flex items-center gap-1.5"><Shield size={12} /> PIPEDA &middot; Law 25 compliant</span>
+              <span className="flex items-center gap-1.5"><Shield size={12} /> Built for PIPEDA &middot; Law 25</span>
               <span className="flex items-center gap-1.5"><Lock size={12} /> Bank-level encryption</span>
               <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
               <a onClick={() => navigate('/canada/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>

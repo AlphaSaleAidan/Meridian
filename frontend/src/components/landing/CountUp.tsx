@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useInView } from 'framer-motion'
+import { useInView, useReducedMotion } from 'framer-motion'
 
 interface Props {
   end: number
@@ -11,7 +11,12 @@ interface Props {
 
 /**
  * Animated count-up that triggers when entering viewport.
- * Uses font-mono for numeric display.
+ *
+ * Static-render value is the FINAL number (not 0) so non-scrolling renderers —
+ * Googlebot, LinkedIn link unfurler, Twitter cards, OG screenshot tools — see
+ * the real social-proof number in our marketing copy instead of $0/0%/0s.
+ * When the viewport actually scrolls past, we snap back and animate up.
+ * Honors prefers-reduced-motion by skipping animation entirely.
  */
 export default function CountUp({
   end,
@@ -22,12 +27,14 @@ export default function CountUp({
 }: Props) {
   const ref = useRef<HTMLSpanElement>(null)
   const isInView = useInView(ref, { once: true, margin: '-80px' })
-  const [value, setValue] = useState(0)
+  const reduceMotion = useReducedMotion()
+  const [value, setValue] = useState(end)
+  const animatedRef = useRef(false)
 
   useEffect(() => {
-    if (!isInView) return
-
-    const start = 0
+    if (!isInView || animatedRef.current || reduceMotion) return
+    animatedRef.current = true
+    setValue(0)
     const startTime = performance.now()
 
     const tick = (now: number) => {
@@ -35,12 +42,12 @@ export default function CountUp({
       const progress = Math.min(elapsed / duration, 1)
       // ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3)
-      setValue(Math.round(start + (end - start) * eased))
+      setValue(Math.round(end * eased))
       if (progress < 1) requestAnimationFrame(tick)
     }
 
     requestAnimationFrame(tick)
-  }, [isInView, end, duration])
+  }, [isInView, end, duration, reduceMotion])
 
   return (
     <span ref={ref} className={`font-mono ${className}`}>

@@ -145,7 +145,7 @@ export default function ActionsPage() {
       <ScrollReveal variant="fadeUp">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-[#F5F5F7]">Top 3 Actions Today</h1>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Top Actions Today</h1>
             <p className="text-sm text-[#A1A1A8] mt-1">
               AI-prioritized by ROI potential and effort required
             </p>

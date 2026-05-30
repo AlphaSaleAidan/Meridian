@@ -522,10 +522,10 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-2xl md:text-3xl font-bold text-[#F5F5F7] tracking-tight leading-tight">
                   Built for Canada.{' '}
-                  <span style={{ color: ACCENT_CA }}>PIPEDA compliant.</span>
+                  <span style={{ color: ACCENT_CA }}>Built for PIPEDA.</span>
                 </h3>
                 <p className="mt-4 text-[#A1A1A8] text-[15px] leading-relaxed max-w-md">
-                  CAD pricing, Moneris &amp; Alice POS integration, Quebec Law 25 compliance.
+                  CAD pricing, Moneris &amp; Alice POS integration, aligned with Quebec Law 25.
                   Canadian data stays in Canada.
                 </p>
                 <div className="mt-6 flex flex-wrap items-center gap-4">
@@ -597,7 +597,7 @@ export default function LandingPage() {
             },
             {
               q: 'Does Meridian work for Canadian businesses?',
-              a: 'Yes. Meridian has a dedicated Canadian portal with CAD pricing, Canadian POS integrations including Moneris and Alice POS, and full PIPEDA and Quebec Law 25 compliance. Visit meridian.tips/canada for details.',
+              a: 'Yes. Meridian has a dedicated Canadian portal with CAD pricing, Canadian POS integrations including Moneris and Alice POS, and is built for PIPEDA and Quebec Law 25. Visit meridian.tips/canada for details.',
             },
             {
               q: 'How long does it take to set up Meridian?',

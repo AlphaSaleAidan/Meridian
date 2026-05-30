@@ -39,7 +39,7 @@ export default function OverviewPage() {
   const insights = useApi(() => skip ? api.insights('', 5) : api.insights(orgId, 5), [orgId, skip])
   const forecastData = useApi(() => skip ? api.forecasts('') : api.forecasts(orgId), [orgId, skip])
 
-  const topActions = isDemo ? generateTopActions() : []
+  const topActions = (isDemo ? generateTopActions() : []).slice(0, 3)
   const agents = isDemo ? generateAgents() : []
   const segments = isDemo ? generateRFMSegments() : []
   const activeAgents = agents.filter(a => a.status === 'active' || a.status === 'running').length
@@ -65,7 +65,9 @@ export default function OverviewPage() {
           <div>
             <h1 className="text-2xl font-bold text-[#F5F5F7]">Dashboard</h1>
             <p className="text-sm text-[#A1A1A8] mt-1">
-              Last 30 days • <span className="font-mono">{data.days_with_data}</span> days with data • <span className="font-mono">{activeAgents}</span> agents active
+              Last 30 days • <span className="font-mono">{data.days_with_data}</span> days with data{activeAgents > 0 && (
+                <> • <span className="font-mono">{activeAgents}</span> AI {activeAgents === 1 ? 'agent' : 'agents'} on duty</>
+              )}
             </p>
           </div>
           <ConnectionBadge
