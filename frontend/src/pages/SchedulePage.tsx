@@ -5,7 +5,7 @@ import {
   generatePeakHourHeatmap, getHolidaysForWeek,
   type ScheduleShift, type ScheduleStaffMember,
 } from '@/lib/agent-data'
-import { getActiveBusinessType, isCanadaPath } from '@/lib/demo-context'
+import { getActiveBusinessType, isCanadaPath, useDemoContext } from '@/lib/demo-context'
 import { formatCents } from '@/lib/format'
 import ScrollReveal from '@/components/ScrollReveal'
 import AnalyzingDataState from '@/components/AnalyzingDataState'
@@ -140,7 +140,11 @@ const FILTER_OPTIONS = [
 export default function SchedulePage() {
   const isDemo = useIsDemo()
   const { org } = useAuth()
-  const businessType = getActiveBusinessType()
+  // Subscribe to demo context so switching business type triggers re-render of
+  // labor target band + projected revenue. Fall back to module-level state for
+  // pre-login renders where the provider's not mounted yet.
+  const demoCtx = useDemoContext()
+  const businessType = demoCtx.businessType ?? getActiveBusinessType()
   const portalContext = isCanadaPath() ? 'ca' : 'us'
   const country = portalContext === 'ca' ? 'CA' : 'US'
   const [weekStartDate, setWeekStartDate] = useState(() => getMonday(new Date()))
@@ -201,8 +205,17 @@ export default function SchedulePage() {
   }, [liveMode, merchantId, weekStartDate])
   const peakHours = useMemo(
     () => livePeakHours ?? generatePeakHourHeatmap(),
-    [livePeakHours],
+    [livePeakHours, businessType],
   )
+
+  // Regenerate demo staff + shifts when business type changes so all five
+  // demo scenarios show coherent data (hours per role, peak coverage, labor%).
+  useEffect(() => {
+    if (!showDemoSchedule) return
+    setStaff(generateScheduleStaff())
+    setShifts(generateScheduleShifts(weekStartDate))
+    setIsPublished(false)
+  }, [businessType, showDemoSchedule, weekStartDate])
   const holidays = useMemo(
     () => getHolidaysForWeek(weekStartDate, country as 'US' | 'CA'),
     [weekStartDate, country])
