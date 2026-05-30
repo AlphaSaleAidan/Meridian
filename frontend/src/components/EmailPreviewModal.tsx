@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import DOMPurify from 'dompurify'
 import { X, Send, Loader2 } from 'lucide-react'
 
 interface EmailPreviewModalProps {
@@ -130,7 +131,7 @@ export default function EmailPreviewModal({ template, firstName, portal, onClose
               </span>
             </div>
             {/* Template body */}
-            <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bodyHtml) }} />
             {/* Footer */}
             <div style={{ borderTop: '1px solid #eee', marginTop: 28, paddingTop: 16, textAlign: 'center' as const }}>
               <p style={{ margin: 0, fontSize: 11, color: '#aaa' }}>

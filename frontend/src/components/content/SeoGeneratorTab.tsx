@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
+import DOMPurify from 'dompurify'
 import {
   Search,
   Globe,
@@ -382,7 +383,7 @@ export default function SeoGeneratorTab({ isDemo, creditBalance, merchantId, bra
           <div className="bg-[#0A0A0B] rounded-lg border border-[#1F1F23] p-4 max-h-[400px] overflow-y-auto">
             <div
               className="prose prose-sm prose-invert max-w-none text-[11px] text-[#A1A1A8] [&_h2]:text-[#F5F5F7] [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-4 [&_h3]:text-[#F5F5F7] [&_h3]:text-xs [&_h3]:font-medium [&_h3]:mt-3 [&_p]:mt-2 [&_li]:mt-1"
-              dangerouslySetInnerHTML={{ __html: result.content_html }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(result.content_html) }}
             />
           </div>
 

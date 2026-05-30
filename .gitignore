@@ -30,3 +30,7 @@ services/postal/.claude/
 
 frontend/src/lib/.claude-flow/
 services/labellerr_cv/
+
+# Catch every nested .claude-flow/ tooling drop wherever it lands
+**/.claude-flow/
+services/higgsfield/

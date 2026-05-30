@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { useLocation } from 'react-router-dom'
 import { X, Send, Sparkles, ChevronRight, Square, Wrench, FileCode, Search, Database, Activity } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { getAuthHeaders } from '@/lib/supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
-const ADMIN_KEY = import.meta.env.VITE_ADMIN_KEY || ''
 
 const ADMIN_EMAILS = [
   'apierce@alphasale.co',
@@ -54,7 +54,7 @@ export default function GarryWidget() {
   const abortRef = useRef<AbortController | null>(null)
 
   const isAdmin = rep?.email && ADMIN_EMAILS.includes(rep.email.toLowerCase())
-  if (!isAdmin && !ADMIN_KEY) return null
+  if (!isAdmin) return null
   if (HIDDEN_PATHS.includes(pathname)) return null
 
   useEffect(() => {
@@ -78,8 +78,13 @@ export default function GarryWidget() {
     try {
       abortRef.current = new AbortController()
 
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (ADMIN_KEY) headers['X-Admin-Key'] = ADMIN_KEY
+      // Forward the authenticated session JWT — backend trusts that for admin ops.
+      // Never embed a static admin key in the client bundle.
+      const authHeaders = await getAuthHeaders()
+      const headers: Record<string, string> = {
+        ...authHeaders,
+        'Content-Type': 'application/json',
+      }
 
       const resp = await fetch(`${API_BASE}/api/garry/chat`, {
         method: 'POST',
