@@ -9,7 +9,7 @@
 
 import { demoData } from './demo-data'
 import { getAuthHeaders } from './supabase'
-import type { StaffMemberDto, ShiftDto } from './schedule-api'
+import type { StaffMemberDto, ShiftDto, PeakHourPoint } from './schedule-api'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -485,4 +485,30 @@ export const api = {
       published_at: string
       notified_count: number
     }>('/api/schedule/publish', { method: 'POST', body }),
+
+  schedulePeakHours: (merchantId: string, weeks = 8) =>
+    apiFetch<{
+      merchant_id: string
+      weeks: number
+      peaks: PeakHourPoint[]
+    }>(`/api/schedule/peak-hours/${merchantId}`, { params: { weeks } }),
+
+  scheduleRecommend: (merchantId: string, weekStart: string, weeksBack = 8) =>
+    apiFetch<{
+      recommendations: Array<{
+        id: string
+        day_of_week: number
+        start_time: string
+        end_time: string
+        role: string
+        reason: string
+        priority: 'critical' | 'recommended' | 'optional'
+        peak_intensity?: number
+      }>
+      merchant_id: string
+      weeks_analyzed?: number
+    }>(`/api/schedule/recommend/${merchantId}`, {
+      method: 'POST',
+      params: { week_start: weekStart, weeks_back: weeksBack },
+    }),
 }

@@ -1027,6 +1027,7 @@ export interface ScheduleStaffMember {
   color: string
   hourlyRate: number  // cents
   availability: Record<string, { available: boolean; start: string; end: string }>
+  phone?: string
 }
 
 export interface ScheduleShift {

@@ -17,7 +17,16 @@ export interface StaffMemberDto {
   color: string
   hourly_rate: number
   availability: Record<string, { available: boolean; start: string; end: string }>
+  phone?: string | null
   active: boolean
+}
+
+export interface PeakHourPoint {
+  day: number
+  hour: number
+  intensity: number
+  txn_count: number
+  revenue_cents: number
 }
 
 export interface ShiftDto {
@@ -51,6 +60,7 @@ export function staffFromApi(dto: StaffMemberDto): ScheduleStaffMember {
     color: dto.color,
     hourlyRate: dto.hourly_rate,
     availability: dto.availability || {},
+    phone: dto.phone || undefined,
   }
 }
 
@@ -67,6 +77,7 @@ export function staffToApiCreate(
     color: s.color,
     hourly_rate: s.hourlyRate,
     availability: s.availability,
+    phone: s.phone || null,
   }
 }
 

@@ -32,6 +32,7 @@ export default function AddStaffModal({ open, onClose, onSave, businessType, exi
   const [role, setRole] = useState(existing?.role || '')
   const [color, setColor] = useState(existing?.color || STAFF_COLORS[0])
   const [hourlyRate, setHourlyRate] = useState(existing ? String(existing.hourlyRate / 100) : '')
+  const [phone, setPhone] = useState(existing?.phone || '')
   const [availability, setAvailability] = useState<Record<string, { available: boolean; start: string; end: string }>>(
     existing?.availability || Object.fromEntries(DAY_KEYS.map(d => [d, { available: true, start: '09:00', end: '17:00' }]))
   )
@@ -48,6 +49,7 @@ export default function AddStaffModal({ open, onClose, onSave, businessType, exi
       color,
       hourlyRate: hourlyRate ? Math.round(parseFloat(hourlyRate) * 100) : 0,
       availability,
+      phone: phone.trim() || undefined,
     })
     onClose()
   }
@@ -136,6 +138,23 @@ export default function AddStaffModal({ open, onClose, onSave, businessType, exi
                 placeholder="0.00"
               />
             </div>
+          </div>
+
+          {/* Phone (for SMS on publish) */}
+          <div>
+            <label className="text-[11px] font-medium text-[#A1A1A8]/60 block mb-1">
+              Phone (for shift SMS, optional)
+            </label>
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#1F1F23] text-sm text-[#F5F5F7] focus:border-[#1A8FD6]/40 focus:outline-none transition-colors"
+              placeholder="+15551234567"
+            />
+            <p className="text-[10px] text-[#A1A1A8]/40 mt-1">
+              Include country code. We'll text their shifts when you publish.
+            </p>
           </div>
 
           {/* Availability */}

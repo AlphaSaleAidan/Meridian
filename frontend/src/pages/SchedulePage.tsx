@@ -124,18 +124,28 @@ export default function SchedulePage() {
     showDemoSchedule ? generateScheduleStaff() : [])
   const [shifts, setShifts] = useState<ScheduleShift[]>(() =>
     showDemoSchedule ? generateScheduleShifts(weekStartDate) : [])
+  const [livePeakHours, setLivePeakHours] = useState<{ day: number; hour: number; intensity: number }[] | null>(null)
 
   // Backend wiring: real org_id must be a UUID (backend validation).
   const merchantId = org?.org_id ?? ''
   const liveMode = !showDemoSchedule && isUuid(merchantId)
 
-  // Load staff once per merchant.
+  // Load staff + peak hours once per merchant.
   useEffect(() => {
     if (!liveMode) return
     let cancelled = false
     api.scheduleStaff(merchantId)
       .then(res => { if (!cancelled) setStaff(res.staff.map(staffFromApi)) })
       .catch(e => console.warn('scheduleStaff load failed:', e))
+    api.schedulePeakHours(merchantId, 8)
+      .then(res => {
+        if (cancelled) return
+        // Only override the synthetic heatmap if the real one has signal.
+        setLivePeakHours(res.peaks.length > 0
+          ? res.peaks.map(p => ({ day: p.day, hour: p.hour, intensity: p.intensity }))
+          : null)
+      })
+      .catch(e => console.warn('schedulePeakHours load failed:', e))
     return () => { cancelled = true }
   }, [liveMode, merchantId])
 
@@ -153,7 +163,10 @@ export default function SchedulePage() {
       .catch(e => console.warn('scheduleShifts load failed:', e))
     return () => { cancelled = true }
   }, [liveMode, merchantId, weekStartDate])
-  const peakHours = useMemo(() => generatePeakHourHeatmap(), [])
+  const peakHours = useMemo(
+    () => livePeakHours ?? generatePeakHourHeatmap(),
+    [livePeakHours],
+  )
   const holidays = useMemo(
     () => getHolidaysForWeek(weekStartDate, country as 'US' | 'CA'),
     [weekStartDate, country])
