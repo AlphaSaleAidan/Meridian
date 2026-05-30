@@ -15,6 +15,7 @@ import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import MobileDayView from '@/components/schedule/MobileDayView'
+import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
 import { ROLE_GROUPS, getLaborTarget, laborPctTone } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
 import {
@@ -331,6 +332,36 @@ export default function SchedulePage() {
   }, [liveMode, merchantId, portalContext, showToast])
 
   const handleShiftClick = useCallback((s: ScheduleShift) => setSelectedShift(s), [])
+
+  const handleAcceptRecommendation = useCallback(async (rec: {
+    dayOfWeek: number; startTime: string; endTime: string; role: string
+  }) => {
+    const d = addDays(weekStartDate, rec.dayOfWeek)
+    const tempId = `shift-rec-${Date.now()}`
+    const ns: ScheduleShift = {
+      id: tempId, staffMemberId: null, dayOfWeek: rec.dayOfWeek,
+      shiftDate: formatDateISO(d), startTime: rec.startTime,
+      endTime: rec.endTime, role: rec.role,
+      breakMinutes: 0, notes: 'Added from AI recommendation',
+      status: 'draft', isRecommended: false,
+    }
+    setShifts(prev => [...prev, ns])
+    setIsPublished(false)
+    showToast('Recommendation added — assign a staff member')
+    if (!liveMode) return
+    try {
+      const portal = portalContext as 'us' | 'ca'
+      const res = await api.scheduleCreateShift(
+        shiftToApiCreate(ns, merchantId, portal, formatDateISO(weekStartDate)),
+      )
+      const saved = shiftFromApi(res.shift)
+      setShifts(prev => prev.map(s => (s.id === tempId ? saved : s)))
+    } catch (e) {
+      console.warn('accept recommendation persist failed:', e)
+      setShifts(prev => prev.filter(s => s.id !== tempId))
+      showToast('Could not save recommendation')
+    }
+  }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
 
   const handleSlotClick = useCallback(async (day: number, hour: number) => {
     const d = addDays(weekStartDate, day)
@@ -686,6 +717,20 @@ export default function SchedulePage() {
           weekStartDate={weekStartDate}
           onShiftClick={handleShiftClick} onSlotClick={handleSlotClick}
         />
+      )}
+
+      {/* AI Recommendations — surfaces uncovered peak windows */}
+      {!isGenerating && (
+        <ScrollReveal variant="fadeUp" delay={0.06}>
+          <RecommendationsPanel
+            merchantId={merchantId}
+            weekStart={formatDateISO(weekStartDate)}
+            liveMode={liveMode}
+            peakHoursFallback={peakHours}
+            currentShifts={shifts}
+            onAccept={handleAcceptRecommendation}
+          />
+        </ScrollReveal>
       )}
 
       <AddStaffModal open={showAddStaff} onClose={() => setShowAddStaff(false)}
