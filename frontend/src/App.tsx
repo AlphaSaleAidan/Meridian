@@ -1,6 +1,5 @@
 import { Suspense, useEffect } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
-import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/lib/auth'
 import { SalesAuthProvider } from '@/lib/sales-auth'
 import { ToastProvider } from '@/components/Toast'
@@ -524,7 +523,6 @@ export default function App() {
           </ToastProvider>
         </SalesAuthProvider>
       </AuthProvider>
-      <Analytics />
     </ErrorBoundary>
   )
 }
