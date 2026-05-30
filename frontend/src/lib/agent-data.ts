@@ -736,17 +736,75 @@ export function generateCustomerRankings(): CustomerProfile[] {
   ].map(c => ({ ...c, avgOrderCents: cx(c.avgOrderCents), totalSpentCents: cx(c.totalSpentCents), ltvCents: cx(c.ltvCents!) } as CustomerProfile))
 }
 
+export interface DailyForecast {
+  dayLabel: string
+  dayIndex: number  // 0..6 (Mon=0)
+  dateISO: string
+  predictedCents: number
+  lowerCents: number
+  upperCents: number
+  seasonalIndex: number  // >1 above avg, <1 below — drives the "Friday peak" story
+  vsAvgPct: number  // % deviation from the weekly avg, signed
+}
+
+/**
+ * 7-day daily revenue forecast: weekday seasonality × small positive trend.
+ *
+ * Seasonal index comes from the calibrated DAY_INTENSITY_BY_TYPE table so the
+ * forecast tells the same story as the schedule (Friday/Saturday heavier for
+ * a restaurant, weekends dead for an auto shop, etc.).
+ *
+ * Trend is a deterministic +0.4%/day compounding lift — emulates the
+ * "modest growth" baseline that backtests near zero error on demo data.
+ */
+export function generateDailyForecast(weekStartDate?: Date): DailyForecast[] {
+  const bizType = getActiveBusinessType()
+  const profile = getBusinessProfile(bizType)
+  const rc = profile.revenue
+  const intens = DAY_INTENSITY_BY_TYPE[bizType] ?? [1, 1, 1, 1, 1, 1, 1]
+  const intensAvg = intens.reduce((s, x) => s + x, 0) / 7
+  const wkdayAvg = (rc.weekdayMin + rc.weekdayMax) / 2
+  const wkendAvg = (rc.weekendMin + rc.weekendMax) / 2
+  const dayBaseAvg = (wkdayAvg * 5 + wkendAvg * 2) / 7
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const start = weekStartDate ?? (() => {
+    const d = new Date()
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+    d.setHours(0, 0, 0, 0)
+    return d
+  })()
+  return labels.map((label, i) => {
+    const seasonal = intens[i] / intensAvg
+    const trend = Math.pow(1.004, i)  // +0.4% per day, compounding
+    const predicted = Math.round(dayBaseAvg * seasonal * trend)
+    const vsAvg = ((predicted - dayBaseAvg) / dayBaseAvg) * 100
+    const d = new Date(start); d.setDate(d.getDate() + i)
+    return {
+      dayLabel: label,
+      dayIndex: i,
+      dateISO: d.toISOString().slice(0, 10),
+      predictedCents: cx(predicted),
+      lowerCents: cx(Math.round(predicted * 0.88)),
+      upperCents: cx(Math.round(predicted * 1.12)),
+      seasonalIndex: seasonal,
+      vsAvgPct: vsAvg,
+    }
+  })
+}
+
 export function generateForecastPeriods(): ForecastPeriod[] {
-  const rc = getBusinessProfile(getActiveBusinessType()).revenue
-  const avgDaily = (rc.weekdayMin + rc.weekdayMax) / 2
-  const weeklyBase = Math.floor(avgDaily * 5 + ((rc.weekendMin + rc.weekendMax) / 2) * 2)
-  const monthlyBase = Math.floor(weeklyBase * 4.3)
-  const quarterlyBase = monthlyBase * 3
+  // 7-day total = sum of daily forecasts so the Forecasts page and Schedule
+  // recommendations stay consistent. 30/90-day extrapolate from the 7-day
+  // base with a small compounding growth assumption.
+  const daily = generateDailyForecast()
+  const weeklyTotal = daily.reduce((s, d) => s + d.predictedCents, 0)
+  const monthlyBase = Math.round(weeklyTotal * 4.3 * 1.018)  // +1.8% monthly trend
+  const quarterlyBase = Math.round(monthlyBase * 3 * 1.03)   // +3% over the quarter
 
   return [
-    { label: '7-Day', days: 7, predictedCents: cx(weeklyBase), lowerCents: cx(Math.floor(weeklyBase * 0.85)), upperCents: cx(Math.floor(weeklyBase * 1.15)), confidence: 89, growthPct: 4.2, errorRate: 0.10, scenarioOptimisticCents: cx(Math.floor(weeklyBase * 1.15)), scenarioExpectedCents: cx(weeklyBase), scenarioPessimisticCents: cx(Math.floor(weeklyBase * 0.85)), modelMethod: 'AutoETS + AutoARIMA ensemble' },
-    { label: '30-Day', days: 30, predictedCents: cx(monthlyBase), lowerCents: cx(Math.floor(monthlyBase * 0.88)), upperCents: cx(Math.floor(monthlyBase * 1.12)), confidence: 82, growthPct: 8.3, errorRate: 0.13, scenarioOptimisticCents: cx(Math.floor(monthlyBase * 1.15)), scenarioExpectedCents: cx(monthlyBase), scenarioPessimisticCents: cx(Math.floor(monthlyBase * 0.85)), modelMethod: 'AutoARIMA + AutoETS + AutoTheta ensemble' },
-    { label: '90-Day', days: 90, predictedCents: cx(quarterlyBase), lowerCents: cx(Math.floor(quarterlyBase * 0.86)), upperCents: cx(Math.floor(quarterlyBase * 1.14)), confidence: 71, growthPct: 12.1, errorRate: 0.18, scenarioOptimisticCents: cx(Math.floor(quarterlyBase * 1.15)), scenarioExpectedCents: cx(quarterlyBase), scenarioPessimisticCents: cx(Math.floor(quarterlyBase * 0.85)), modelMethod: 'AutoARIMA + AutoETS + AutoTheta ensemble' },
+    { label: '7-Day', days: 7, predictedCents: weeklyTotal, lowerCents: Math.round(weeklyTotal * 0.88), upperCents: Math.round(weeklyTotal * 1.12), confidence: 89, growthPct: 2.8, errorRate: 0.10, scenarioOptimisticCents: Math.round(weeklyTotal * 1.12), scenarioExpectedCents: weeklyTotal, scenarioPessimisticCents: Math.round(weeklyTotal * 0.88), modelMethod: 'Weekday seasonality + trend' },
+    { label: '30-Day', days: 30, predictedCents: monthlyBase, lowerCents: Math.round(monthlyBase * 0.88), upperCents: Math.round(monthlyBase * 1.12), confidence: 82, growthPct: 8.3, errorRate: 0.13, scenarioOptimisticCents: Math.round(monthlyBase * 1.12), scenarioExpectedCents: monthlyBase, scenarioPessimisticCents: Math.round(monthlyBase * 0.88), modelMethod: 'Seasonal decomposition + trend extrapolation' },
+    { label: '90-Day', days: 90, predictedCents: quarterlyBase, lowerCents: Math.round(quarterlyBase * 0.86), upperCents: Math.round(quarterlyBase * 1.14), confidence: 71, growthPct: 12.1, errorRate: 0.18, scenarioOptimisticCents: Math.round(quarterlyBase * 1.14), scenarioExpectedCents: quarterlyBase, scenarioPessimisticCents: Math.round(quarterlyBase * 0.86), modelMethod: 'Seasonal decomposition + trend extrapolation' },
   ]
 }
 
@@ -1165,7 +1223,7 @@ export function generateScheduleStaff(): ScheduleStaffMember[] {
  * the previous demo did the opposite, which made every Saturday feel
  * understaffed and broke the AI recommendations story.
  */
-const DAY_INTENSITY_BY_TYPE: Record<string, number[]> = {
+export const DAY_INTENSITY_BY_TYPE: Record<string, number[]> = {
   // Mon  Tue  Wed  Thu  Fri  Sat  Sun
   coffee_shop: [0.95, 0.95, 0.90, 0.90, 1.00, 0.85, 0.70],
   restaurant:  [0.55, 0.65, 0.75, 0.85, 1.00, 1.00, 0.80],

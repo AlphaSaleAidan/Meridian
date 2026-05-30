@@ -10,7 +10,7 @@ import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import { useOrgId, useTier, tierLimits } from '@/hooks/useOrg'
-import { generateForecastPeriods } from '@/lib/agent-data'
+import { generateForecastPeriods, generateDailyForecast } from '@/lib/agent-data'
 import { useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { TrendingUp, TrendingDown, Minus, Target, BarChart3 } from 'lucide-react'
@@ -113,6 +113,46 @@ export default function ForecastsPage() {
           </DashboardTiltCard>
         </StaggerItem>
       </StaggerContainer>
+
+      {/* 7-Day Daily Forecast — weekday seasonality story */}
+      {isDemo && (() => {
+        const daily = generateDailyForecast()
+        const maxCents = Math.max(...daily.map(d => d.predictedCents), 1)
+        return (
+          <ScrollReveal variant="fadeUp" delay={0.04}>
+            <div className="card p-4 sm:p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <BarChart3 size={14} className="text-[#17C5B0]" />
+                <h3 className="text-sm font-semibold text-[#F5F5F7]">Next 7 Days — Daily Demand Forecast</h3>
+                <span className="text-[9px] text-[#A1A1A8]/40 ml-auto font-mono">weekday seasonality + trend</span>
+              </div>
+              <div className="grid grid-cols-7 gap-2">
+                {daily.map(d => {
+                  const heightPct = Math.round((d.predictedCents / maxCents) * 100)
+                  const above = d.vsAvgPct > 5
+                  const below = d.vsAvgPct < -5
+                  const fillColor = above ? '#17C5B0' : below ? '#D4A843' : '#1A8FD6'
+                  return (
+                    <div key={d.dayIndex} className="flex flex-col items-center">
+                      <div className="w-full h-32 flex items-end mb-1.5">
+                        <div className="w-full rounded-t-md transition-all" style={{ height: `${Math.max(heightPct, 4)}%`, backgroundColor: fillColor + '30', borderTop: `2px solid ${fillColor}` }} />
+                      </div>
+                      <span className="text-[10px] font-semibold text-[#F5F5F7]">{d.dayLabel}</span>
+                      <span className="text-[10px] font-mono text-[#A1A1A8]">{formatCentsCompact(d.predictedCents)}</span>
+                      <span className={clsx('text-[9px] font-mono', above ? 'text-[#17C5B0]' : below ? 'text-[#D4A843]' : 'text-[#A1A1A8]/40')}>
+                        {d.vsAvgPct >= 0 ? '+' : ''}{d.vsAvgPct.toFixed(0)}%
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-[#A1A1A8]/50 mt-3 font-mono">
+                Δ vs weekly average — green = above, amber = below. Drives the schedule recommendations.
+              </p>
+            </div>
+          </ScrollReveal>
+        )
+      })()}
 
       {/* Scenario Analysis + Ensemble Model Info */}
       {(() => {
