@@ -1,5 +1,5 @@
-import { motion, type Variants } from 'framer-motion'
-import type { ReactNode } from 'react'
+import { motion, useReducedMotion, type Variants } from 'framer-motion'
+import { useEffect, useState, type ReactNode } from 'react'
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
@@ -30,6 +30,14 @@ interface Props {
   once?: boolean
 }
 
+/**
+ * Scroll-triggered reveal.
+ *
+ * Bots, link unfurlers (LinkedIn/Twitter cards), and prefers-reduced-motion
+ * users skip the animation entirely so content is always present in the
+ * static render. We also force-reveal after 1.2s as a safety net for any
+ * IntersectionObserver edge case (PDF renderers, headless screenshotters).
+ */
 export default function ScrollReveal({
   children,
   variant = 'fadeUp',
@@ -37,11 +45,25 @@ export default function ScrollReveal({
   className = '',
   once = true,
 }: Props) {
+  const reducedMotion = useReducedMotion()
+  const [forceVisible, setForceVisible] = useState(false)
+
+  useEffect(() => {
+    if (reducedMotion) return
+    const t = setTimeout(() => setForceVisible(true), 1200)
+    return () => clearTimeout(t)
+  }, [reducedMotion])
+
+  if (reducedMotion) {
+    return <div className={className}>{children}</div>
+  }
+
   return (
     <motion.div
       initial="hidden"
+      animate={forceVisible ? 'visible' : undefined}
       whileInView="visible"
-      viewport={{ once, margin: '-40px' }}
+      viewport={{ once, amount: 'some' }}
       variants={variants[variant]}
       transition={{ delay }}
       className={className}
@@ -63,11 +85,25 @@ export function StaggerContainer({
   staggerDelay?: number
   [key: string]: unknown
 }) {
+  const reducedMotion = useReducedMotion()
+  const [forceVisible, setForceVisible] = useState(false)
+
+  useEffect(() => {
+    if (reducedMotion) return
+    const t = setTimeout(() => setForceVisible(true), 1200)
+    return () => clearTimeout(t)
+  }, [reducedMotion])
+
+  if (reducedMotion) {
+    return <div className={className} {...rest}>{children}</div>
+  }
+
   return (
     <motion.div
       initial="hidden"
+      animate={forceVisible ? 'visible' : undefined}
       whileInView="visible"
-      viewport={{ once: true, margin: '-40px' }}
+      viewport={{ once: true, amount: 'some' }}
       variants={{
         hidden: {},
         visible: { transition: { staggerChildren: staggerDelay } },
@@ -87,6 +123,10 @@ export function StaggerItem({
   children: ReactNode
   className?: string
 }) {
+  const reducedMotion = useReducedMotion()
+  if (reducedMotion) {
+    return <div className={className}>{children}</div>
+  }
   return (
     <motion.div
       variants={{

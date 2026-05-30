@@ -1,5 +1,5 @@
-import { motion, type Variants } from 'framer-motion'
-import type { ReactNode } from 'react'
+import { motion, useReducedMotion, type Variants } from 'framer-motion'
+import { useEffect, useState, type ReactNode } from 'react'
 
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1]
 
@@ -37,11 +37,25 @@ export default function ScrollReveal({
   className = '',
   once = true,
 }: Props) {
+  const reducedMotion = useReducedMotion()
+  const [forceVisible, setForceVisible] = useState(false)
+
+  useEffect(() => {
+    if (reducedMotion) return
+    const t = setTimeout(() => setForceVisible(true), 1200)
+    return () => clearTimeout(t)
+  }, [reducedMotion])
+
+  if (reducedMotion) {
+    return <div className={className}>{children}</div>
+  }
+
   return (
     <motion.div
       initial="hidden"
+      animate={forceVisible ? 'visible' : undefined}
       whileInView="visible"
-      viewport={{ once, margin: '-60px' }}
+      viewport={{ once, amount: 'some' }}
       variants={variants[variant]}
       transition={{ delay }}
       className={className}
