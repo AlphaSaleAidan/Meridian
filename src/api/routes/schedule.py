@@ -522,6 +522,38 @@ async def get_peak_hours(
     }
 
 
+# ─── Projected Revenue (for labor % KPI) ──────────────────────
+
+
+@router.get("/projected-revenue/{merchant_id}")
+async def get_projected_revenue(
+    merchant_id: str,
+    _auth=Depends(require_service_auth),
+    weeks: int = Query(8, ge=1, le=26),
+):
+    """Trailing-average weekly revenue from POS transactions.
+
+    Used by the schedule UI to compute labor cost percentage:
+        labor_pct = scheduled_labor_cents / projected_weekly_cents * 100
+    """
+    _validate_uuid(merchant_id, "merchant_id")
+    db = get_db()
+    result = await db.rpc(
+        "schedule_projected_weekly_revenue",
+        {"p_merchant_id": merchant_id, "p_weeks_back": weeks},
+    )
+    projected = 0
+    if isinstance(result, list) and result:
+        projected = int(result[0]) if result[0] is not None else 0
+    elif isinstance(result, (int, float)):
+        projected = int(result)
+    return {
+        "merchant_id": merchant_id,
+        "projected_weekly_cents": projected,
+        "weeks_analyzed": weeks,
+    }
+
+
 # ─── AI Recommendation Endpoint ───────────────────────────────
 
 

@@ -96,3 +96,28 @@ export function fmtTime(t: string): string {
   if (h === 0 || h === 12) return `12${h === 0 ? 'a' : 'p'}`
   return h < 12 ? `${h}a` : `${h - 12}p`
 }
+
+/**
+ * Industry labor cost targets as % of revenue. Below `targetPct` is healthy
+ * (green); between target and `warningPct` is yellow; above warning is red.
+ * Numbers drawn from standard industry rule-of-thumb ranges.
+ */
+export const LABOR_TARGETS: Record<string, { targetPct: number; warningPct: number }> = {
+  coffee_shop: { targetPct: 25, warningPct: 32 },
+  restaurant:  { targetPct: 30, warningPct: 38 },
+  fast_food:   { targetPct: 28, warningPct: 35 },
+  auto_shop:   { targetPct: 35, warningPct: 45 },
+  smoke_shop:  { targetPct: 15, warningPct: 22 },
+}
+
+export function getLaborTarget(businessType: string): { targetPct: number; warningPct: number } {
+  return LABOR_TARGETS[businessType] || LABOR_TARGETS.coffee_shop
+}
+
+export function laborPctTone(pct: number, targetPct: number, warningPct: number): {
+  fg: string; bg: string; label: 'on-target' | 'watch' | 'over'
+} {
+  if (pct <= targetPct)  return { fg: '#17C5B0', bg: '#17C5B0',  label: 'on-target' }
+  if (pct <= warningPct) return { fg: '#D4A843', bg: '#D4A843',  label: 'watch' }
+  return                      { fg: '#E06B5E', bg: '#E06B5E',  label: 'over' }
+}

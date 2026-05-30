@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy } from 'lucide-react'
+import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy, Percent } from 'lucide-react'
 import {
   generateScheduleStaff, generateScheduleShifts,
   generatePeakHourHeatmap, getHolidaysForWeek,
@@ -15,7 +15,7 @@ import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import MobileDayView from '@/components/schedule/MobileDayView'
-import { ROLE_GROUPS } from '@/components/schedule/schedule-helpers'
+import { ROLE_GROUPS, getLaborTarget, laborPctTone } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
 import {
   isUuid, shiftFromApi, shiftToApiCreate, shiftToApiUpdate,
@@ -125,6 +125,7 @@ export default function SchedulePage() {
   const [shifts, setShifts] = useState<ScheduleShift[]>(() =>
     showDemoSchedule ? generateScheduleShifts(weekStartDate) : [])
   const [livePeakHours, setLivePeakHours] = useState<{ day: number; hour: number; intensity: number }[] | null>(null)
+  const [projectedRevenueCents, setProjectedRevenueCents] = useState<number | null>(null)
 
   // Backend wiring: real org_id must be a UUID (backend validation).
   const merchantId = org?.org_id ?? ''
@@ -146,6 +147,9 @@ export default function SchedulePage() {
           : null)
       })
       .catch(e => console.warn('schedulePeakHours load failed:', e))
+    api.scheduleProjectedRevenue(merchantId, 8)
+      .then(res => { if (!cancelled) setProjectedRevenueCents(res.projected_weekly_cents) })
+      .catch(e => console.warn('scheduleProjectedRevenue load failed:', e))
     return () => { cancelled = true }
   }, [liveMode, merchantId])
 
@@ -198,6 +202,26 @@ export default function SchedulePage() {
   const staffScheduled = useMemo(() =>
     new Set(realShifts.map(s => s.staffMemberId).filter(Boolean)).size
   , [realShifts])
+
+  // Labor cost as % of projected weekly revenue.
+  // Live: pulled from /api/schedule/projected-revenue.
+  // Demo: typical weekly revenue by business type so the % feels real.
+  const DEMO_WEEKLY_REVENUE_CENTS: Record<string, number> = {
+    coffee_shop: 18_000_00,
+    restaurant:  35_000_00,
+    fast_food:   25_000_00,
+    auto_shop:   22_000_00,
+    smoke_shop:  12_000_00,
+  }
+  const effectiveRevenueCents =
+    projectedRevenueCents ?? DEMO_WEEKLY_REVENUE_CENTS[businessType] ?? 0
+  const laborPct = effectiveRevenueCents > 0
+    ? (totalLaborCents / effectiveRevenueCents) * 100
+    : null
+  const laborTarget = useMemo(() => getLaborTarget(businessType), [businessType])
+  const laborTone = laborPct !== null
+    ? laborPctTone(laborPct, laborTarget.targetPct, laborTarget.warningPct)
+    : null
 
   // Handlers
   const handlePrevWeek = useCallback(() => {
@@ -540,6 +564,21 @@ export default function SchedulePage() {
               <DollarSign size={13} className="text-[#A1A1A8]/50" />
               <span className="text-[12px] font-mono text-[#A1A1A8]">{totalLaborCents > 0 ? formatCents(totalLaborCents) : '--'}</span>
             </div>
+            {laborPct !== null && totalLaborCents > 0 && (
+              <div
+                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border"
+                style={{
+                  borderColor: laborTone ? `${laborTone.fg}40` : '#1F1F23',
+                  backgroundColor: laborTone ? `${laborTone.bg}15` : 'transparent',
+                }}
+                title={`Labor cost vs ${(effectiveRevenueCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} projected weekly revenue. Target ${laborTarget.targetPct}% • Warn ${laborTarget.warningPct}%.`}
+              >
+                <Percent size={11} style={{ color: laborTone?.fg }} />
+                <span className="text-[12px] font-mono font-semibold" style={{ color: laborTone?.fg }}>
+                  {laborPct.toFixed(1)}%
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </ScrollReveal>

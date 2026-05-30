@@ -493,6 +493,13 @@ export const api = {
       peaks: PeakHourPoint[]
     }>(`/api/schedule/peak-hours/${merchantId}`, { params: { weeks } }),
 
+  scheduleProjectedRevenue: (merchantId: string, weeks = 8) =>
+    apiFetch<{
+      merchant_id: string
+      projected_weekly_cents: number
+      weeks_analyzed: number
+    }>(`/api/schedule/projected-revenue/${merchantId}`, { params: { weeks } }),
+
   scheduleRecommend: (merchantId: string, weekStart: string, weeksBack = 8) =>
     apiFetch<{
       recommendations: Array<{
