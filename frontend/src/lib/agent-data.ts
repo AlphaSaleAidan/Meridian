@@ -1159,35 +1159,53 @@ export function generateScheduleStaff(): ScheduleStaffMember[] {
   })
 }
 
+/**
+ * Day-of-week traffic intensity by business type (0..1 of full coverage).
+ * Indices are Mon..Sun. Restaurant weekends are HEAVIER than weekdays —
+ * the previous demo did the opposite, which made every Saturday feel
+ * understaffed and broke the AI recommendations story.
+ */
+const DAY_INTENSITY_BY_TYPE: Record<string, number[]> = {
+  // Mon  Tue  Wed  Thu  Fri  Sat  Sun
+  coffee_shop: [0.95, 0.95, 0.90, 0.90, 1.00, 0.85, 0.70],
+  restaurant:  [0.55, 0.65, 0.75, 0.85, 1.00, 1.00, 0.80],
+  fast_food:   [0.80, 0.80, 0.85, 0.85, 1.00, 0.95, 0.85],
+  auto_shop:   [1.00, 1.00, 1.00, 1.00, 0.90, 0.40, 0.00],
+  smoke_shop:  [0.75, 0.75, 0.80, 0.85, 1.00, 1.00, 0.65],
+}
+
 export function generateScheduleShifts(weekStartDate: Date): ScheduleShift[] {
   const bizType = getActiveBusinessType()
   const staff = generateScheduleStaff()
   const hours = BIZ_HOURS[bizType] || BIZ_HOURS.coffee_shop
+  const intensity = DAY_INTENSITY_BY_TYPE[bizType] || DAY_INTENSITY_BY_TYPE.coffee_shop
   const shifts: ScheduleShift[] = []
   let shiftId = 1
 
   for (let day = 0; day < 7; day++) {
     const shiftDate = addDays(weekStartDate, day)
     const dateStr = formatDateISO(shiftDate)
-    const isWeekend = day >= 5
+    const dayIntensity = intensity[day] ?? 0.8
+    // Number of staff scheduled today scales with traffic; always at least 2.
+    const staffCount = Math.max(2, Math.round(staff.length * dayIntensity))
+    // Rotate which staff work each day so the schedule isn't identical.
+    const rotated = [
+      ...staff.slice(day % staff.length),
+      ...staff.slice(0, day % staff.length),
+    ].slice(0, staffCount)
 
-    // Determine staffing: fewer staff on weekends for some biz types
-    const staffForDay = isWeekend
-      ? staff.filter((_, i) => i % 3 !== 0).slice(0, Math.max(2, staff.length - 1))
-      : staff
+    const openH = hours.open
+    const closeH = hours.close
+    // Heavier days extend hours by 1; lighter days trim 1 off close.
+    const adjustedClose = dayIntensity >= 0.95 ? Math.min(closeH + 1, 23) : closeH
+    const midPoint = Math.floor((openH + adjustedClose) / 2)
 
-    staffForDay.forEach((member) => {
-      // Create realistic shift patterns: openers and closers
-      const staffIdx = staff.indexOf(member)
-      const isOpener = staffIdx % 2 === 0
-      const openH = hours.open
-      const closeH = hours.close
-      const midPoint = Math.floor((openH + closeH) / 2)
-
+    rotated.forEach((member, idx) => {
+      const isOpener = idx % 2 === 0
       const startH = isOpener ? openH : midPoint
-      const endH = isOpener ? midPoint + 1 : closeH
+      const endH = isOpener ? midPoint + 1 : adjustedClose
+      if (endH <= startH) return
       const breakMins = (endH - startH) >= 6 ? 30 : 0
-
       shifts.push({
         id: `shift-${shiftId++}`,
         staffMemberId: member.id,

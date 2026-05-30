@@ -41,7 +41,7 @@ export default function MobileDayView({ shifts, staff, holidays, weekStartDate, 
   )
 
   return (
-    <div className="lg:hidden space-y-3">
+    <div className="lg:hidden space-y-3 pb-24">
       {/* Day tabs */}
       <div className="flex gap-1 overflow-x-auto pb-1">
         {MOBILE_DAYS.map((name, di) => {

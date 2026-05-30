@@ -36,7 +36,7 @@ const ALL_ITEMS: TabItem[] = [
 ]
 
 const STORAGE_KEY = 'meridian_nav_favorites'
-const DEFAULT_FAVS = ['', 'revenue', 'insights', 'actions']
+const DEFAULT_FAVS = ['', 'revenue', 'schedule', 'actions']
 const MAX_FAVS = 4
 
 function loadFavorites(): string[] {
