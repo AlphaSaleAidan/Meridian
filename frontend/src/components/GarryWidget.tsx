@@ -3,16 +3,9 @@ import { useLocation } from 'react-router-dom'
 import { X, Send, Sparkles, ChevronRight, Square, Wrench, FileCode, Search, Database, Activity } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { getAuthHeaders } from '@/lib/supabase'
+import { isUsAdmin } from '@/lib/us-admins'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
-
-const ADMIN_EMAILS = [
-  'apierce@alphasale.co',
-  'aidanpierce72@gmail.com',
-  'aidanpierce@meridian.tips',
-  'cheungenochmgmt@gmail.com',
-  'aidanvietnguyen@gmail.com',
-]
 
 const QUICK_ACTIONS = [
   { label: 'System status', prompt: 'Check the system status — processes, memory, disk.' },
@@ -53,8 +46,7 @@ export default function GarryWidget() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const isAdmin = rep?.email && ADMIN_EMAILS.includes(rep.email.toLowerCase())
-  if (!isAdmin) return null
+  if (!isUsAdmin(rep?.email)) return null
   if (HIDDEN_PATHS.includes(pathname)) return null
 
   useEffect(() => {

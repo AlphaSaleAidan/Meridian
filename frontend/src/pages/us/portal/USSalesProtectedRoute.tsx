@@ -3,6 +3,7 @@ import { Navigate, useLocation, Link } from 'react-router-dom'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import { ShieldX } from 'lucide-react'
+import { isUsAdmin } from '@/lib/us-admins'
 
 export default function USSalesProtectedRoute({ children }: { children: React.ReactNode }) {
   const { ready, authenticated, rep } = useSalesAuth()
@@ -45,9 +46,7 @@ export default function USSalesProtectedRoute({ children }: { children: React.Re
   }
 
   if (rep && rep.portal_context === 'canada') {
-    const adminEmails = ['apierce@alphasale.co','aidanpierce72@gmail.com','aidanpierce@meridian.tips','cheungenochmgmt@gmail.com','aidanvietnguyen@gmail.com']
-    const isAdmin = adminEmails.some(a => a.toLowerCase() === (rep.email ?? '').toLowerCase())
-    if (!isAdmin) return <AccessDenied />
+    if (!isUsAdmin(rep.email)) return <AccessDenied />
   }
 
   return <>{children}</>

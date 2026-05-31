@@ -300,10 +300,10 @@ export default function USPortalLeadDetailPage() {
       })
       if (!res.ok) throw new Error('Email delivery failed')
       setCredentialEmailed(true)
-      toast('Login credentials emailed to ' + deal.contact_email, 'success')
+      toast('Welcome email sent to ' + deal.contact_email, 'success')
     } catch {
-      toast('Credentials email failed — share them manually', 'error')
-      setCustomerError('Failed to send email — you can share the credentials manually.')
+      toast('Welcome email failed — ask the customer to check the setup link Supabase sent', 'error')
+      setCustomerError('Failed to send welcome email. The customer should still receive the password-setup link from Supabase.')
     } finally {
       setCredentialEmailing(false)
     }
@@ -507,13 +507,14 @@ export default function USPortalLeadDetailPage() {
     setSlaGenerating(true)
     try {
       const slaInput: SlaInput = {
+        country: 'US',
         clientCompanyName: deal.business_name,
-        province: deal.province || 'New York',
+        region: deal.province || 'New York',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
-        monthlyPriceCad: monthlyPrice * 100,
-        setupFeeCad: (Number(setupFee) || 0) * 100,
+        monthlyPriceCents: monthlyPrice * 100,
+        setupFeeCents: (Number(setupFee) || 0) * 100,
         startDate: new Date().toISOString().slice(0, 10),
       }
       const blob = await generateSlaDocument(slaInput)
@@ -536,13 +537,14 @@ export default function USPortalLeadDetailPage() {
     setSlaSigning(true)
     try {
       const slaInput: SlaInput = {
+        country: 'US',
         clientCompanyName: deal.business_name,
-        province: deal.province || 'New York',
+        region: deal.province || 'New York',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
-        monthlyPriceCad: monthlyPrice * 100,
-        setupFeeCad: (Number(setupFee) || 0) * 100,
+        monthlyPriceCents: monthlyPrice * 100,
+        setupFeeCents: (Number(setupFee) || 0) * 100,
         startDate: new Date().toISOString().slice(0, 10),
         clientSignature: slaSignature,
       }

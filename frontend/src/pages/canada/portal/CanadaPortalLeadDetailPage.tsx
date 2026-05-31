@@ -511,13 +511,14 @@ export default function CanadaPortalLeadDetailPage() {
     setSlaGenerating(true)
     try {
       const slaInput: SlaInput = {
+        country: 'CA',
         clientCompanyName: deal.business_name,
-        province: deal.province || 'Ontario',
+        region: deal.province || 'Ontario',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
-        monthlyPriceCad: monthlyPrice * 100,
-        setupFeeCad: (Number(setupFee) || 0) * 100,
+        monthlyPriceCents: monthlyPrice * 100,
+        setupFeeCents: (Number(setupFee) || 0) * 100,
         startDate: new Date().toISOString().slice(0, 10),
       }
       const blob = await generateSlaDocument(slaInput)
@@ -540,13 +541,14 @@ export default function CanadaPortalLeadDetailPage() {
     setSlaSigning(true)
     try {
       const slaInput: SlaInput = {
+        country: 'CA',
         clientCompanyName: deal.business_name,
-        province: deal.province || 'Ontario',
+        region: deal.province || 'Ontario',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
-        monthlyPriceCad: monthlyPrice * 100,
-        setupFeeCad: (Number(setupFee) || 0) * 100,
+        monthlyPriceCents: monthlyPrice * 100,
+        setupFeeCents: (Number(setupFee) || 0) * 100,
         startDate: new Date().toISOString().slice(0, 10),
         clientSignature: slaSignature,
       }

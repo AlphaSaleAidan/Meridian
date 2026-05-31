@@ -263,10 +263,9 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
 async def sign_sla(req: SignSlaRequest, request: Request, claims: dict = Depends(require_jwt)):
     """Persist a US customer's SLA signature + trigger a confirmation email.
 
-    Mirrors the Canada handler. The schema's `province`/`monthly_price_cad_cents`
-    columns are reused for US data (USD cents and US state) until a follow-up
-    migration adds country-neutral columns — see TODO in
-    supabase/migrations/20260529_sla_signatures.sql.
+    Mirrors the Canada handler. Writes US data into the country='US' columns
+    (state, monthly_price_usd_cents, setup_fee_usd_cents) added in migration
+    20260531_sla_signatures_us_columns.sql.
     """
     import httpx
 
@@ -282,15 +281,14 @@ async def sign_sla(req: SignSlaRequest, request: Request, claims: dict = Depends
     user_agent = request.headers.get("user-agent", "")[:500]
 
     row = {
+        "country": "US",
         "customer_email": req.customer_email,
         "signature_name": req.signature_name.strip(),
         "business_name": req.business_name,
-        # US state stored in the `province` column until schema is generalized.
-        "province": req.state,
+        "state": req.state,
         "org_id": req.org_id,
-        # USD cents stored in the `*_cad_cents` columns until schema is generalized.
-        "monthly_price_cad_cents": req.monthly_price_usd_cents,
-        "setup_fee_cad_cents": req.setup_fee_usd_cents or 0,
+        "monthly_price_usd_cents": req.monthly_price_usd_cents,
+        "setup_fee_usd_cents": req.setup_fee_usd_cents or 0,
         "pos_system": req.pos_system,
         "rep_id": req.rep_id,
         "rep_name": req.rep_name,

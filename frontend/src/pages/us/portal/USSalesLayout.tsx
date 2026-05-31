@@ -18,6 +18,7 @@ import {
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import USSalesPortalMobileNav from './USSalesPortalMobileNav'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { isUsAdmin } from '@/lib/us-admins'
 import { useMobile } from '@/hooks/useMobile'
 import ClineAIChatWidget from '@/components/ClineAIChatWidget'
 
@@ -36,14 +37,6 @@ const salesNavItems = [
 const adminNavItems = [
   { heading: 'Admin' },
 ] as const
-
-const ADMIN_EMAILS = [
-  'apierce@alphasale.co',
-  'aidanpierce72@gmail.com',
-  'aidanpierce@meridian.tips',
-  'cheungenochmgmt@gmail.com',
-  'aidanvietnguyen@gmail.com',
-]
 
 type NavHeading = { heading: string }
 type NavItem = { path: string; icon: typeof LayoutDashboard; label: string }
@@ -96,7 +89,7 @@ export default function USSalesLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
+  const isAdmin = isUsAdmin(rep?.email)
   const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 
   const sidebarContent = (

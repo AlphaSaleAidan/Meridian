@@ -1,16 +1,22 @@
 /**
  * SLA generator — opens a polished HTML legal document in a new browser tab.
- * Crisp vector text, print-ready, responsive.
+ * Crisp vector text, print-ready, responsive. Renders Canada or US flavors.
  */
 
+export type SlaCountry = 'CA' | 'US'
+
 export interface SlaInput {
+  country: SlaCountry
   clientCompanyName: string
-  province: string
+  /** Province (Canada) or state (US). */
+  region: string
   posSystem: string
   repName: string
   planName?: string
-  monthlyPriceCad: number
-  setupFeeCad: number
+  /** Monthly fee in minor units (cents) of the local currency. */
+  monthlyPriceCents: number
+  /** One-time setup fee in minor units (cents) of the local currency. */
+  setupFeeCents: number
   startDate: string
   clientSignature?: string
 }
@@ -19,22 +25,46 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function formatCad(cents: number): string {
+function formatMoney(country: SlaCountry, cents: number): string {
+  if (country === 'US') {
+    return `US$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  }
   return `CA$${(cents / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
-function isQuebec(province: string): boolean {
-  const p = province.toLowerCase().trim()
+function isQuebec(region: string): boolean {
+  const p = region.toLowerCase().trim()
   return p === 'qc' || p === 'quebec' || p === 'québec'
 }
 
 function buildSlaHtml(input: SlaInput): string {
-  const today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+  const locale = input.country === 'US' ? 'en-US' : 'en-CA'
+  const today = new Date().toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' })
   const effectiveDate = input.startDate
-    ? new Date(input.startDate).toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })
+    ? new Date(input.startDate).toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' })
     : today
 
-  const quebecSection = isQuebec(input.province) ? `
+  // Country-specific labels and clauses
+  const isUS = input.country === 'US'
+  const regionLabel = isUS ? 'State' : 'Province'
+  const countryName = isUS ? 'United States' : 'Canada'
+  const currencyName = isUS ? 'United States Dollars (USD)' : 'Canadian Dollars (CAD)'
+  const taxNote = isUS
+    ? 'All fees are exclusive of applicable federal, state, and local taxes (sales tax where applicable).'
+    : 'All fees are exclusive of applicable federal and provincial taxes (GST/HST/QST).'
+  const privacyLawText = isUS
+    ? '<strong>US Privacy Compliance.</strong> The Provider shall comply with applicable United States federal and state privacy laws, including the California Consumer Privacy Act (CCPA/CPRA) and the Virginia, Colorado, Connecticut, and Utah consumer privacy statutes where applicable to the Client.'
+    : '<strong>PIPEDA Compliance.</strong> The Provider shall comply with the Personal Information Protection and Electronic Documents Act (PIPEDA) and all applicable provincial privacy legislation.'
+  const breachAuthority = isUS
+    ? 'In the event of a breach of security safeguards, the Provider shall notify the Client without unreasonable delay and shall cooperate with the Client in making any required notifications to affected individuals or regulators (including state Attorneys General) under applicable US breach-notification statutes.'
+    : 'In the event of a breach of security safeguards, the Provider shall notify the Client and the Office of the Privacy Commissioner of Canada.'
+  const governingLaw = isUS
+    ? `This Agreement shall be governed by the laws of the State of ${esc(input.region)} and the federal laws of the United States.`
+    : `This Agreement shall be governed by the laws of the Province of ${esc(input.region)} and the federal laws of Canada.`
+  const subtitle = isUS ? 'Meridian AI Business Solutions &mdash; United States' : 'Meridian AI Business Solutions &mdash; Canada'
+
+  // Quebec Law 25 — only renders when applicable
+  const quebecSection = !isUS && isQuebec(input.region) ? `
       <h3>8A. Quebec Law 25 — Additional Obligations</h3>
       <p>8A.1 The Provider designates a person responsible for the protection of personal information in accordance with Quebec&rsquo;s Act respecting the protection of personal information in the private sector (Quebec Law 25).</p>
       <p>8A.2 Before implementing any new system involving personal information of Quebec residents, the Provider shall conduct a Privacy Impact Assessment (PIA).</p>
@@ -149,7 +179,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
   <!-- Title -->
   <div class="title-block">
     <h1>Service Level Agreement</h1>
-    <div class="subtitle">Meridian AI Business Solutions &mdash; Canada</div>
+    <div class="subtitle">${subtitle}</div>
   </div>
 
   <!-- Parties -->
@@ -157,7 +187,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
     <div class="parties-grid">
       <div class="label">Provider</div><div class="value">Meridian AI Business Solutions</div>
       <div class="label">Client</div><div class="value">${esc(input.clientCompanyName)}</div>
-      <div class="label">Province</div><div class="value">${esc(input.province)}</div>
+      <div class="label">${regionLabel}</div><div class="value">${esc(input.region)}</div>
       <div class="label">Effective Date</div><div class="value">${effectiveDate}</div>
       <div class="label">Agreement Date</div><div class="value">${today}</div>
     </div>
@@ -200,10 +230,10 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
   <!-- 3. Fees -->
   <div class="section">
     <h2>3. Fees and Payment</h2>
-    <p>3.1 <strong>Monthly Service Fee.</strong> The Client shall pay a monthly service fee of <strong>${formatCad(input.monthlyPriceCad)}</strong> (plus applicable taxes) for the ${input.planName ? `Meridian <strong>${esc(input.planName)}</strong> plan` : 'Services described herein'}.</p>
-    <p>3.2 <strong>Setup Fee.</strong> ${input.setupFeeCad > 0 ? `A one-time setup fee of <strong>${formatCad(input.setupFeeCad)}</strong> (plus applicable taxes) is payable upon execution of this Agreement.` : 'No setup fee is applicable under this Agreement.'}</p>
-    <p>3.3 <strong>Payment Terms.</strong> All invoices are due and payable within thirty (30) days. Payments shall be made in Canadian Dollars (CAD).</p>
-    <p>3.4 <strong>Taxes.</strong> All fees are exclusive of applicable federal and provincial taxes (GST/HST/QST).</p>
+    <p>3.1 <strong>Monthly Service Fee.</strong> The Client shall pay a monthly service fee of <strong>${formatMoney(input.country, input.monthlyPriceCents)}</strong> (plus applicable taxes) for the ${input.planName ? `Meridian <strong>${esc(input.planName)}</strong> plan` : 'Services described herein'}.</p>
+    <p>3.2 <strong>Setup Fee.</strong> ${input.setupFeeCents > 0 ? `A one-time setup fee of <strong>${formatMoney(input.country, input.setupFeeCents)}</strong> (plus applicable taxes) is payable upon execution of this Agreement.` : 'No setup fee is applicable under this Agreement.'}</p>
+    <p>3.3 <strong>Payment Terms.</strong> All invoices are due and payable within thirty (30) days. Payments shall be made in ${currencyName}.</p>
+    <p>3.4 <strong>Taxes.</strong> ${taxNote}</p>
     <p>3.5 <strong>Late Payment.</strong> Overdue invoices shall bear interest at 1.5% per month (18% per annum) or the maximum rate permitted by law.</p>
   </div>
 
@@ -243,10 +273,10 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
   <!-- 8. Privacy -->
   <div class="section">
     <h2>8. Data Protection &amp; Privacy Compliance</h2>
-    <p>8.1 <strong>PIPEDA Compliance.</strong> The Provider shall comply with the Personal Information Protection and Electronic Documents Act (PIPEDA) and all applicable provincial privacy legislation.</p>
+    <p>8.1 ${privacyLawText}</p>
     <p>8.2 <strong>Data Collection.</strong> The Provider shall collect only such personal information as is reasonably necessary for the Services.</p>
     <p>8.3 <strong>Data Security.</strong> The Provider shall implement reasonable administrative, technical, and physical safeguards to protect personal information.</p>
-    <p>8.4 <strong>Breach Notification.</strong> In the event of a breach of security safeguards, the Provider shall notify the Client and the Office of the Privacy Commissioner of Canada.</p>
+    <p>8.4 <strong>Breach Notification.</strong> ${breachAuthority}</p>
     <p>8.5 <strong>Data Retention.</strong> Personal information shall be retained only for so long as reasonably necessary or as required by applicable law.</p>
     ${quebecSection}
   </div>
@@ -254,7 +284,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
   <!-- 9. General -->
   <div class="section">
     <h2>9. General Provisions</h2>
-    <p>9.1 <strong>Governing Law.</strong> This Agreement shall be governed by the laws of the Province of ${esc(input.province)} and the federal laws of Canada.</p>
+    <p>9.1 <strong>Governing Law.</strong> ${governingLaw}</p>
     <p>9.2 <strong>Entire Agreement.</strong> This Agreement constitutes the entire agreement between the parties and supersedes all prior agreements.</p>
     <p>9.3 <strong>Amendment.</strong> This Agreement may be amended only by written instrument signed by both parties.</p>
     <p>9.4 <strong>Assignment.</strong> Neither party may assign without prior written consent, except in connection with a merger or acquisition.</p>

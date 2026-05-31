@@ -5,6 +5,7 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
+import { isUsAdmin } from '@/lib/us-admins'
 
 interface TeamMember {
   id: string
@@ -31,14 +32,6 @@ interface Applicant {
   applied_at: string
   status: 'pending' | 'approved' | 'rejected'
 }
-
-const ADMIN_EMAILS = [
-  'apierce@alphasale.co',
-  'aidanpierce72@gmail.com',
-  'aidanpierce@meridian.tips',
-  'cheungenochmgmt@gmail.com',
-  'aidanvietnguyen@gmail.com',
-]
 
 const DEMO_TEAM: TeamMember[] = [
   { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2025-09-15', role: 'admin', location: 'Cape Coral, FL' },
@@ -81,10 +74,7 @@ function getRoleBadge(role: string) {
   }
 }
 
-function isAdmin(email: string | undefined): boolean {
-  if (!email) return false
-  return ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
-}
+const isAdmin = isUsAdmin
 
 function computeTeamStats(team: TeamMember[], deals: Deal[]) {
   const assignedDealIds = new Set<string>()
@@ -144,7 +134,7 @@ export default function USPortalTeamPage() {
           if (reps && reps.length > 0) {
             setTeam(reps.map((r: Record<string, unknown>) => {
               const email = (r.email as string) || ''
-              const adminRole = ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
+              const adminRole = isUsAdmin(email)
               return {
                 id: r.id as string || '',
                 name: r.name as string,

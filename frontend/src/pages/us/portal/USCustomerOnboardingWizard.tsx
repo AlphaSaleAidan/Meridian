@@ -102,7 +102,6 @@ export default function USCustomerOnboardingWizard() {
   // SLA (Service Agreement)
   const [slaSignature, setSlaSignature] = useState('')
   const [slaAgreed, setSlaAgreed] = useState(false)
-  const [slaSubmitted, setSlaSubmitted] = useState(false)
 
   // POS
   const [posProvider, setPosProvider] = useState<string | null>(null)
@@ -180,6 +179,9 @@ export default function USCustomerOnboardingWizard() {
 
   // ── Account ──
   async function handleAccountNext() {
+    // If the auth user + org already exist (e.g. customer hit Back from SLA),
+    // skip re-running signup — that would fail on duplicate email and strand them.
+    if (org?.org_id) { setStep('sla'); return }
     if (!account.businessName.trim()) { setError('Business name is required'); return }
     if (!account.ownerName.trim()) { setError('Your name is required'); return }
     if (!account.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account.email)) { setError('Please enter a valid email address'); return }
@@ -245,12 +247,10 @@ export default function USCustomerOnboardingWizard() {
         // signature for follow-up.
         console.error('[SLA] persistence failed:', body)
       }
-      setSlaSubmitted(true)
       setStep('pos')
     } catch (err: any) {
       console.error('[SLA] error:', err)
       // Soft-fail same as above — customer continues.
-      setSlaSubmitted(true)
       setStep('pos')
     } finally {
       setSaving(false)
