@@ -1,7 +1,9 @@
 # Meridian Intelligence Platform
 
 > AI-powered POS analytics for independent businesses (restaurants, smoke shops, cafes, retail, auto shops, dispensaries).
-> FastAPI + React/Vite + Supabase + Square/Clover/Toast + Celery/Redis + 39-Agent AI Swarm
+> FastAPI + React/Vite + Supabase + Square/Clover/Toast + Celery/Redis + 41-agent AI swarm.
+
+> **Security posture (post 2026-05-31 audit merges):** All four SEV-0 customer-readiness gaps and the canada.py JWT-forwarding work are now on `main`. See [`docs/AUTH_HARDENING_PLAN.md`](docs/AUTH_HARDENING_PLAN.md) for the original findings and the resolution commits (`dbc333f`, `c9cbb07`).
 
 ## Runtime
 
@@ -36,11 +38,11 @@ Env vars: `DEEPSEEK_API_KEY`, `SAMBANOVA_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API
 
 ## Backend Map (`src/`)
 
-**API Routes** (`src/api/routes/`, 37 modules): dashboard, onboarding (656L), pos_connections (717L), website (715L), billing (478L), us (465L), vision (397L), webhooks (397L), phone (407L), stripe_checkout (366L), canada (371L), spaces (308L), schedule (403L), oauth (275L), predictive (204L), intelligence (227L), email (190L), inference (93L), careers (143L), admin (56L), compliance, phone_dashboard (204L), inventory_docs (224L), and more
+**API Routes** (`src/api/routes/`, 36 modules): dashboard, onboarding (656L), pos_connections (717L), website (715L), billing (478L), us (465L), vision (397L), webhooks (397L), phone (407L), stripe_checkout (366L), canada (371L), spaces (308L), schedule (403L), oauth (275L), predictive (204L), intelligence (227L), email (190L), inference (93L), careers (143L), admin (56L), compliance, phone_dashboard (204L), inventory_docs (224L), and more
 
-**AI Engine** (`src/ai/`): engine.py (main orchestrator), llm_layer.py (multi-provider routing), swarm_trainer.py, agent_memory.py, reasoning/karpathy_loop.py, cross_reference_orchestrator.py, dspy_optimizer.py (lazy-loaded)
+**AI Engine** (`src/ai/`): engine.py (main orchestrator), llm_layer.py (LiteLLM Router with auto-failover + caching across DeepSeek/SambaNova/Groq/Cerebras/OpenAI), swarm_trainer.py, agent_memory.py, reasoning/karpathy_loop.py, cross_reference_orchestrator.py, dspy_optimizer.py (lazy-loaded)
 
-**45 AI Agents** (`src/ai/agents/`): All inherit base.py — action_prioritizer, basket_analysis, customer_ltv, customer_recognizer, day_of_week, demographic_profiler, discount_analyzer, dwell_time, employee_perf, feature_engineer, foot_traffic, forecaster, and 33 more. Subdirs: alerts/, canada/, economics/, financial/, freemocap/, industry_templates/, reid/, scheduling/, security/
+**41 AI Agents** (`src/ai/agents/`): All inherit base.py — action_prioritizer, basket_analysis, customer_ltv, customer_recognizer, day_of_week, demographic_profiler, discount_analyzer, dwell_time, employee_perf, feature_engineer, foot_traffic, forecaster, and 29 more. Subdirs: alerts/, canada/, economics/, financial/, freemocap/, industry_templates/, reid/, scheduling/, security/
 
 **Predictive** (`src/ai/predictive/`): churn_warning, demand_forecast, dynamic_pricing, goal_tracker, root_cause, scenario_engine
 
@@ -58,11 +60,33 @@ Env vars: `DEEPSEEK_API_KEY`, `SAMBANOVA_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API
 
 **Other**: email/ (Postal+Resend, 14 templates), sms/client.py (Telnyx+Twilio), billing/billing_service.py, auth/ (Supabase JWT, RBAC), analytics/burn_rate.py, cline/ (self-healing agent)
 
+## Authorization (`src/api/auth.py`)
+
+Pick the right dep per endpoint — getting this wrong is what produced the 2026-05-29 audit:
+
+| Dep | Use for | Mechanism |
+|-----|---------|-----------|
+| `require_admin` | Internal admin tools that no end user touches | `X-Admin-Key` header against `MERIDIAN_ADMIN_KEY` env var |
+| `require_admin_jwt` | Admin operations performed by a known Aidan/Enoch user | JWT verify → email in `ADMIN_EMAILS` allowlist |
+| `require_jwt` | Any authenticated request | Supabase JWT verification only |
+| `require_org_access` | Any per-org data endpoint (dashboard, analytics, predictive, pos_connections, etc.) | `require_jwt` + membership check (`businesses.owner_user_id` OR `business_users` active OR admin allowlist) |
+| `require_service_auth` | Service-to-service calls | Either admin key OR valid JWT |
+
+Emergency rollback knob: `TENANCY_ENFORCEMENT_DISABLED=true` flips `require_org_access` into warn-only without redeploying.
+
+`canada.py` and `us.py` admin endpoints now **forward the caller's JWT** to Supabase (`Bearer {user_token}`) so RLS enforces row-level access at the DB layer; the service-role key is only used for `/auth/v1/admin/users` calls (where Supabase rejects non-service tokens) and as a fall-through when the user token is somehow missing.
+
+Customer-facing flows:
+- Customer accounts are created server-side (no plaintext password ever leaves the backend or hits the frontend) and the customer sets their own password via `supabase.auth.resetPasswordForEmail()` after onboarding.
+- SLA signatures captured during onboarding persist to `sla_signatures` with IP + UA audit trail; agreement text is the legally binding record.
+
+Rate-limited routes: `/api/canada/rep-signup` (5/hr per IP) via `HourRateLimiter`.
+
 ## Services (`services/`)
 
 | Service | Stack | Purpose |
 |---------|-------|---------|
-| phone_agent | Pipecat + OmniVoice TTS + WhisperLiveKit STT + Ollama | AI phone order agent (600+ languages, voice cloning) |
+| phone_agent | Pipecat + Kokoro/CosyVoice2 TTS + WhisperLiveKit STT + Ollama | AI phone order agent — Kokoro default, CosyVoice2 when merchant has a voice clone |
 | deerflow | FastAPI + frontend | Visual knowledge graph builder |
 | evolver | Node.js | ML model training/optimization (GEP) |
 | labellerr_cv | Python notebooks | Computer vision labeling/training |
@@ -70,7 +94,8 @@ Env vars: `DEEPSEEK_API_KEY`, `SAMBANOVA_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API
 | training_video_pipeline | Python | Video generation/processing |
 
 ### Phone Agent Pipeline
-Fonoster audio → WhisperLiveKit STT → Ollama LLM (llama3.3:70b) → OmniVoice TTS → Fonoster audio. Voice profiles: US (female, north american), Canada (female, canadian). Supports voice cloning via ref_audio. KokoroTTS legacy preserved for rollback.
+Fonoster audio → WhisperLiveKit STT → Ollama LLM (llama3.3:70b) → TTS → Fonoster audio.
+TTS factory: `build_tts(merchant_config)` returns `CosyVoiceTTS` when the merchant has a `ref_audio` clone, otherwise `KokoroTTS` (Kokoro-82M, Apache-2.0, ~300 MB, realtime on CPU). Voice profiles: US (female, north american), Canada (female, canadian). Both implementations live in `services/phone_agent/tts_service.py`.
 
 ## Frontend Map (`frontend/src/`)
 
@@ -82,7 +107,7 @@ Fonoster audio → WhisperLiveKit STT → Ollama LLM (llama3.3:70b) → OmniVoic
 
 **Hooks**: useOrg.ts (CRITICAL: isDemoPath — demo only on /demo and /canada/demo), useApi.ts, useInsightsCooldown.ts
 
-**Lib**: demo-data.ts, demo-industries.ts, agent-data.ts (39 agents), pos-systems.ts (4492L — 80+ POS systems), auth.tsx, supabase.ts
+**Lib**: demo-data.ts, demo-industries.ts, agent-data.ts (frontend agent registry; 41 backend agents), pos-systems.ts (4492L — 80+ POS systems), auth.tsx, supabase.ts
 
 **Data**: seo-cities.ts (20 CA + 20 US cities × 7 industries), seo-guides.ts (9 guides), pos-systems.ts
 
@@ -94,7 +119,7 @@ Configured in `.claude/settings.json`:
 
 ## Common Tasks
 
-- **Add API endpoint**: Create in `src/api/routes/`, import+include_router in `src/api/app.py`
+- **Add API endpoint**: Create in `src/api/routes/`, import+include_router in `src/api/app.py`. **Pick an auth dep** (`require_admin` / `require_admin_jwt` / `require_jwt` / `require_org_access` / `require_service_auth`) per the Authorization table above — never ship an unauthenticated data endpoint.
 - **Add Celery task**: Define in `src/workers/tasks.py`, add route+beat in `celery_app.py`
 - **Add AI agent**: Inherit `src/ai/agents/base.py:BaseAgent`, register in `__init__.py`
 - **Add email template**: Create in `src/email/templates/`, use base.py helpers
@@ -106,7 +131,8 @@ Configured in `.claude/settings.json`:
 
 - Never commit `.env` or credentials
 - All Supabase tables need RLS
-- Use `org_id` guards on all data endpoints
+- Use `org_id` guards on all data endpoints — prefer the `require_org_access` dep over hand-rolled checks
+- Never accept `admin_email` / role / org_id from a request body — derive from the JWT
 - Demo data only on `/demo` and `/canada/demo` paths
 - Money in cents (integer), display with CA$ for Canada
 - Email: Postal primary, Resend fallback
@@ -115,3 +141,4 @@ Configured in `.claude/settings.json`:
 - Max 500 lines per file — split if larger
 - Heavy ML packages (torch, prophet, dspy, mem0ai) are lazy-imported — don't add to top-level imports
 - LLM calls go through `src/ai/llm_layer.py` — never call OpenAI/DeepSeek directly from route handlers
+- Plaintext customer passwords never leave the backend — use `supabase.auth.resetPasswordForEmail()` for account setup
