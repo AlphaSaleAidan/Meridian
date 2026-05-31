@@ -8,6 +8,7 @@ import {
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
+import { parseCsv } from '@/lib/csv-parse'
 import POSSystemPicker from '@/components/POSSystemPicker'
 // US portal — prices are already in USD, no conversion needed
 
@@ -158,6 +159,17 @@ export default function USCustomerOnboardingWizard() {
   const remainingSec = Math.max(0, TOTAL_DURATION - processingElapsed)
   const remainingMin = Math.ceil(remainingSec / 60)
 
+  // Revoke any in-memory blob preview URLs when the wizard unmounts so they
+  // don't leak past the user navigating away mid-flow.
+  useEffect(() => {
+    return () => {
+      setInventoryDocs(docs => {
+        docs.forEach(d => { if (d.preview) URL.revokeObjectURL(d.preview) })
+        return docs
+      })
+    }
+  }, [])
+
   // Square checkout callback — clear param after handling to prevent re-trigger
   useEffect(() => {
     const checkoutStatus = searchParams.get('checkout')
@@ -296,17 +308,17 @@ export default function USCustomerOnboardingWizard() {
     reader.onload = (event) => {
       try {
         const text = event.target?.result as string
-        const lines = text.split('\n').filter(l => l.trim())
-        if (lines.length < 2) { setError('CSV must have a header row and at least one data row'); return }
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+        const rows = parseCsv(text)
+        if (rows.length < 2) { setError('CSV must have a header row and at least one data row'); return }
+        const headers = rows[0].map(h => h.trim().toLowerCase())
         const nameIdx = headers.findIndex(h => h.includes('name') || h.includes('item') || h.includes('product'))
         const catIdx = headers.findIndex(h => h.includes('cat') || h.includes('type'))
         const costIdx = headers.findIndex(h => h.includes('cost') || h.includes('price') || h.includes('cogs'))
         const supplierIdx = headers.findIndex(h => h.includes('supplier') || h.includes('vendor'))
         const unitIdx = headers.findIndex(h => h.includes('unit'))
         const items: InventoryItem[] = []
-        for (let i = 1; i < lines.length; i++) {
-          const cols = lines[i].split(',').map(c => c.trim().replace(/^["']|["']$/g, ''))
+        for (let i = 1; i < rows.length; i++) {
+          const cols = rows[i].map(c => c.trim())
           if (nameIdx < 0 || !cols[nameIdx]) continue
           items.push({ id: uid(), name: cols[nameIdx] || '', category: catIdx >= 0 ? (cols[catIdx] || '') : '', costPerUnit: costIdx >= 0 ? (cols[costIdx] || '') : '', supplier: supplierIdx >= 0 ? (cols[supplierIdx] || '') : '', unit: unitIdx >= 0 ? (cols[unitIdx] || 'each') : 'each' })
         }
@@ -332,7 +344,12 @@ export default function USCustomerOnboardingWizard() {
   }
 
   function removeInventoryDoc(idx: number) {
-    setInventoryDocs(prev => { const next = [...prev]; next.splice(idx, 1); return next })
+    setInventoryDocs(prev => {
+      const next = [...prev]
+      const [removed] = next.splice(idx, 1)
+      if (removed?.preview) URL.revokeObjectURL(removed.preview)
+      return next
+    })
   }
 
   async function handleInventoryNext() {

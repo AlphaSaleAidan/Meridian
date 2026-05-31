@@ -6,6 +6,7 @@ import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
 import { isUsAdmin } from '@/lib/us-admins'
+import { useToast } from '@/components/Toast'
 
 interface TeamMember {
   id: string
@@ -107,6 +108,7 @@ function computeTeamStats(team: TeamMember[], deals: Deal[]) {
 
 export default function USPortalTeamPage() {
   const { rep } = useSalesAuth()
+  const { toast } = useToast()
   const admin = isAdmin(rep?.email)
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
@@ -224,11 +226,11 @@ export default function USPortalTeamPage() {
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
-        alert(err.detail || 'Failed to approve rep')
+        toast(err.detail || 'Failed to approve rep', 'error')
         return
       }
     } catch {
-      alert('Network error — please try again')
+      toast('Network error — please try again', 'error')
       return
     }
     setApplicants(prev => prev.filter(a => a.id !== applicant.id))
@@ -252,12 +254,12 @@ export default function USPortalTeamPage() {
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
-        alert(err.detail || 'Failed to remove rep')
+        toast(err.detail || 'Failed to remove rep', 'error')
         setRemoving(false)
         return
       }
     } catch {
-      alert('Network error — please try again')
+      toast('Network error — please try again', 'error')
       setRemoving(false)
       return
     }
@@ -278,11 +280,11 @@ export default function USPortalTeamPage() {
       })
       if (!resp.ok) {
         const err = await resp.json().catch(() => ({}))
-        alert(err.detail || 'Failed to reject rep')
+        toast(err.detail || 'Failed to reject rep', 'error')
         return
       }
     } catch {
-      alert('Network error — please try again')
+      toast('Network error — please try again', 'error')
       return
     }
     setApplicants(prev => prev.filter(a => a.id !== applicant.id))
@@ -774,11 +776,11 @@ export default function USPortalTeamPage() {
                     })
                     if (!resp.ok) {
                       const err = await resp.json().catch(() => ({}))
-                      alert(err.detail || 'Failed to save')
+                      toast(err.detail || 'Failed to save', 'error')
                       return
                     }
                   } catch {
-                    alert('Network error — please try again')
+                    toast('Network error — please try again', 'error')
                     return
                   }
                   setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))

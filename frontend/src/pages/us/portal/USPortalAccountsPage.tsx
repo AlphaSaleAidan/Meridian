@@ -50,8 +50,10 @@ export default function USPortalAccountsPage() {
   useEffect(() => {
     usLeadsService.list(rep?.rep_id).then(deals => {
       setClients(deriveClientsFromLeads(deals))
-    }).catch(() => {
+    }).catch(err => {
+      console.error('[Accounts] Failed to load clients:', err)
       setClients([])
+      toast('Could not load accounts — check your connection and refresh', 'error')
     }).finally(() => setLoading(false))
     const channel = usLeadsService.subscribe(rep?.rep_id, deals => {
       setClients(deriveClientsFromLeads(deals))
@@ -95,6 +97,8 @@ export default function USPortalAccountsPage() {
       if (res.ok) {
         setNotifiedIds(prev => new Set(prev).add(client.id))
         toast('Payment reminder sent', 'success')
+      } else {
+        toast('Failed to send notification', 'error')
       }
     } catch {
       toast('Failed to send notification', 'error')
@@ -106,7 +110,7 @@ export default function USPortalAccountsPage() {
     setCardUpdateId(client.id)
     try {
       const headers = await getAuthHeaders()
-      await fetch(`${API_BASE}/api/billing/update-payment-method`, {
+      const res = await fetch(`${API_BASE}/api/billing/update-payment-method`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -116,6 +120,8 @@ export default function USPortalAccountsPage() {
           business_name: client.business_name,
         }),
       })
+      if (res.ok) toast('Card update request sent', 'success')
+      else toast('Failed to send card update request', 'error')
     } catch {
       toast('Failed to send card update request', 'error')
     }

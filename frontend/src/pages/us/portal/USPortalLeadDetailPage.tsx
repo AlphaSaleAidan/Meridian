@@ -17,6 +17,7 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { useToast } from '@/components/Toast'
 import { notifyStageChange } from '@/lib/notifications'
+import { openBlobInNewTab } from '@/lib/blob-url'
 
 const STAGE_TO_STEP: Record<string, number> = {
   proposal_shown: 1,
@@ -461,14 +462,16 @@ export default function USPortalLeadDetailPage() {
 
   function handleDownloadInvoice() {
     if (!invoiceBlob) return
-    const url = URL.createObjectURL(invoiceBlob)
-    window.open(url, '_blank')
+    openBlobInNewTab(invoiceBlob)
   }
 
   async function handleEmailInvoice() {
-    if (!deal) return
-    if (!invoiceBlob) await handleGenerateInvoice()
+    if (!deal || invoiceEmailing) return
+    // Set the loading flag BEFORE the await so a rapid double-click can't
+    // race past us during invoice generation and queue up two send calls
+    // (which Square would treat as two separate invoices).
     setInvoiceEmailing(true)
+    if (!invoiceBlob) await handleGenerateInvoice()
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/email/send`, {
@@ -528,8 +531,7 @@ export default function USPortalLeadDetailPage() {
 
   function handleDownloadSla() {
     if (!slaBlob) return
-    const url = URL.createObjectURL(slaBlob)
-    window.open(url, '_blank')
+    openBlobInNewTab(slaBlob)
   }
 
   async function handleSignSla() {
@@ -640,8 +642,7 @@ export default function USPortalLeadDetailPage() {
     try {
       const blob = await generateProposalPdf(input)
       setProposalBlob(blob)
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      openBlobInNewTab(blob)
       if (deal && (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted')) {
         await usLeadsService.updateStage(deal.id, 'proposal_shown')
         setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
@@ -660,8 +661,7 @@ export default function USPortalLeadDetailPage() {
     try {
       const blob = await generateProposalPdf(input)
       setProposalBlob(blob)
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
+      openBlobInNewTab(blob)
     } catch (err) {
       console.error('[Proposal] Generation failed:', err)
     } finally {
@@ -674,9 +674,9 @@ export default function USPortalLeadDetailPage() {
   }
 
   async function handleEmailProposal() {
-    if (!deal) return
-    if (!proposalBlob) await handleGenerateProposal()
+    if (!deal || proposalEmailing) return
     setProposalEmailing(true)
+    if (!proposalBlob) await handleGenerateProposal()
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/email/send`, {
@@ -1332,8 +1332,8 @@ export default function USPortalLeadDetailPage() {
           {files.map(file => (
             <div key={file.id} className="flex items-center gap-3 p-3 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg hover:border-[#17C5B0]/20 transition-colors cursor-pointer group"
               onClick={() => {
-                if (file.tag === 'Proposal' && proposalBlob) { const u = URL.createObjectURL(proposalBlob); window.open(u, '_blank') }
-                else if (file.tag === 'Contract' && slaBlob) { const u = URL.createObjectURL(slaBlob); window.open(u, '_blank') }
+                if (file.tag === 'Proposal' && proposalBlob) openBlobInNewTab(proposalBlob)
+                else if (file.tag === 'Contract' && slaBlob) openBlobInNewTab(slaBlob)
               }}
             >
               <FileText size={16} className="text-[#A1A1A8] flex-shrink-0 group-hover:text-[#17C5B0] transition-colors" />
