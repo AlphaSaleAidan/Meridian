@@ -34,13 +34,13 @@ const MODULES: Module[] = [
     category: 'Getting Started',
     lessons: [
       { id: '1', title: 'Welcome to Meridian Sales', completed: false, content: [
-        'Meridian is an AI-powered POS analytics platform for independent business owners — restaurants, smoke shops, cafes, salons, and retail. We connect to their existing POS system (Square, Clover, Toast, Moneris, Lightspeed) and surface actionable insights they can\'t get on their own.',
+        'Meridian is an AI-powered POS analytics platform for independent business owners — restaurants, smoke shops, cafes, salons, and retail. We connect to their existing POS system (Square, Clover, Toast live today — with Lightspeed and 75+ more on the roadmap, plus CSV upload as an immediate path for any POS) and surface actionable insights they can\'t get on their own.',
         'Your role: find businesses using a POS system, show them what they\'re missing, and close them on a $299–$1,199/mo subscription. You earn 70% commission on every deal for the lifetime of the account.',
         'The US market is massive and underserved. Most small businesses have no analytics beyond what their POS dashboard shows. Meridian fills that gap with AI agents that run 24/7 — revenue forecasting, peak hour optimization, customer churn warnings, and inventory intelligence.',
         'Key stat to remember: the average Meridian merchant discovers $2,800/mo in "money left on the table" within the first week. That\'s your opening hook.',
       ]},
       { id: '2', title: 'Understanding the Product', completed: false, content: [
-        'Meridian connects to a merchant\'s POS via OAuth (Square, Clover) or API key (Toast, Moneris). Once connected, we backfill 18 months of transaction history and run 24 AI agents across their data.',
+        'Meridian connects to a merchant\'s POS via OAuth (Square, Clover) or partner-approved OAuth (Toast — apply at partners.toasttab.com, 2–4 week approval). For other POS systems, CSV upload works today. Once connected, we backfill 18 months of transaction history and run 39 AI agents across their data.',
         'Core features to demo: (1) Money Left on Table score — the single dollar amount a business is losing monthly. (2) Revenue Forecasting — 7/14/30 day predictions using AutoARIMA + LightGBM ensemble. (3) Peak Hour Optimizer — tells them exactly when to staff up or run promos. (4) Customer Churn Warnings — flags regulars who stopped coming before it\'s too late.',
         'Premium features (higher plans): Camera Intelligence (foot traffic, queue length, dwell time), 3D Store Scanning (zone-level revenue attribution), and Multi-Location rollups.',
         'What makes us different from competitors: we don\'t just show charts — we tell the owner exactly what to do and how much money it\'s worth. Every insight comes with a dollar amount and a specific action.',
@@ -92,12 +92,12 @@ const MODULES: Module[] = [
         '"$299/month is too expensive." → "I understand. Let me ask — if I could show you $3,000/month in revenue you\'re currently missing, would $299 to capture that be worth it? That\'s what our AI typically finds in the first week."',
         '"I already have analytics in my POS." → "Square/Clover gives you what happened. We tell you what to do about it — and exactly how much each action is worth. That\'s the difference between a dashboard and intelligence."',
         '"I need to think about it." → "Totally fair. What specifically would you want to think through? I want to make sure I\'ve answered everything." (Then address the real objection they reveal.)',
-        '"Can I try it for free?" → "We don\'t offer free trials because the onboarding takes real work — we connect your POS, backfill 18 months of data, and run 24 AI agents. But it\'s month-to-month, no contract. If you don\'t see value in month one, you cancel with one click."',
+        '"Can I try it for free?" → "We don\'t offer free trials because the onboarding takes real work — we connect your POS, backfill 18 months of data, and run 39 AI agents. But it\'s month-to-month, no contract. If you don\'t see value in month one, you cancel with one click."',
         '"I\'m locked into a contract with [competitor]." → "When does it end? Let me show you the demo now so you know exactly what you\'re switching to when it\'s up. I\'ll follow up 30 days before your renewal."',
       ]},
       { id: '9', title: 'Competitive Positioning', completed: false, content: [
         'MarketMan/BlueCart (inventory-only): "They only cover inventory. We cover revenue, customers, staff, forecasting, and inventory — all from one POS connection. They\'re a feature; we\'re the whole picture."',
-        'Lightspeed Analytics: "Lightspeed only works with Lightspeed POS. We work with Square, Clover, Toast, Moneris, and Lightspeed. And we don\'t just report — we prescribe actions with dollar amounts."',
+        'Lightspeed Analytics: "Lightspeed only works with Lightspeed POS. We have live direct integrations with Square, Clover, and Toast — and config-ready connectors plus CSV upload for 75+ more including Lightspeed, Moneris, and TouchBistro. And we don\'t just report — we prescribe actions with dollar amounts."',
         'Generic BI tools (Power BI, Tableau): "Those require a data team to set up and maintain. We\'re plug-and-play — connect your POS, get insights in 24 hours. No SQL, no dashboards to build."',
         'Key differentiator: Meridian is the only platform that (1) works across all major POS systems, (2) uses AI agents that proactively surface insights with dollar amounts, and (3) requires zero technical setup from the merchant.',
       ]},
@@ -126,7 +126,7 @@ const MODULES: Module[] = [
         'Open with the Overview dashboard (30 seconds): "This is your command center. One glance and you see your revenue trend, top insights, and the money left on the table score — that\'s the single most important number."',
         'Money Left on Table (2 minutes): "This $2,800 number? That\'s real money this business is losing every month. Click into it — here\'s exactly where it\'s coming from: pricing gaps, peak hour understaffing, customer churn. Each one has a dollar amount and a specific action."',
         'Pick 2–3 features based on discovery (5 minutes total): Show the ones that match their pain points. Don\'t show everything — it overwhelms them. "Based on what you told me about [their issue], let me show you this..."',
-        'AI Agents page (1 minute): "These 24 agents run on your data 24/7. They\'re finding patterns a human would take weeks to spot. When something changes — a revenue dip, an inventory anomaly, a churning customer — you get an alert with what to do about it."',
+        'AI Agents page (1 minute): "These 39 agents run on your data 24/7. They\'re finding patterns a human would take weeks to spot. When something changes — a revenue dip, an inventory anomaly, a churning customer — you get an alert with what to do about it."',
         'Close the demo (1 minute): "So based on what you\'ve seen, the Standard plan at $299/mo would give you [relevant features]. Want to get started today? I can have your POS connected and insights running by tomorrow."',
       ]},
       { id: '13', title: 'Closing After the Demo', completed: false, content: [
@@ -301,8 +301,8 @@ const MODULES: Module[] = [
       ]},
       { id: '32', title: 'US Payment Processing Landscape', completed: false, content: [
         'Top POS systems in the US (by market share): (1) Square — dominant in small businesses, food trucks, and cafes. (2) Clover — popular in smoke shops, retail, and restaurants. (3) Toast — the leading restaurant-specific POS. (4) Lightspeed — strong in retail and hospitality. (5) Moneris — less common in the US but present in some markets.',
-        'Meridian currently connects to: Square, Clover, Toast. Lightspeed and Moneris integrations are on the roadmap.',
-        'If a prospect is on Lightspeed or Moneris: "We\'re building that integration right now. I can put you on the early access list — you\'ll be one of the first connected. In the meantime, we can do a CSV import of your transaction data to show you the insights immediately."',
+        'Meridian has live direct API integrations with: Square, Clover, Toast (Toast requires Toast Partner Program approval — apply at partners.toasttab.com, 2–4 week approval cycle). For 75+ other POS systems including Lightspeed, Shopify POS, SpotOn, Revel, and TouchBistro, we have config-ready connectors and offer CSV upload as the immediate path to insights.',
+        'If a prospect is on a non-live POS: "We support your POS via CSV upload today — five minutes to upload, 24 hours to first insights from all 39 AI agents. Direct API integration is on our roadmap." Never promise a date for direct integration we don\'t already support live.',
       ]},
       { id: '33', title: 'Sales Tax Considerations', completed: false, content: [
         'Sales tax varies by state — Meridian\'s subscription is a digital service and may be subject to state sales tax. Check your state\'s rules.',
@@ -324,11 +324,12 @@ const MODULES: Module[] = [
     duration: '25 min',
     category: 'Technical',
     lessons: [
-      { id: '35', title: 'Moneris Integration Walkthrough', completed: false, content: [
-        'Note: Moneris integration is currently in development. For now, use the CSV import method to get Moneris merchants started.',
-        'CSV Import process: (1) The merchant exports their transaction report from Moneris Go portal → Reports → Transaction Report → Export CSV. (2) In the Meridian onboarding wizard, select "Manual CSV Import" and upload the file. (3) Our system maps Moneris fields automatically.',
-        'What to tell the merchant: "We\'re building a direct Moneris connection that will sync automatically. For now, we can import your data via CSV — it takes 5 minutes and gives you full access to all AI insights. Once the direct integration is live, we\'ll switch you over automatically."',
-        'Export tip: Tell the merchant to export at least 6 months of data for the AI to detect meaningful patterns. 12–18 months is ideal.',
+      { id: '35', title: 'CSV Import for Unsupported POS Systems', completed: false, content: [
+        'When a merchant uses a POS we don\'t yet have a live direct integration for (Moneris, Lightspeed, TouchBistro, SpotOn, Revel, and 75+ others), CSV upload is the official path. It works today, is covered by our connector framework, and delivers the same 39 AI agent insights — just on a daily refresh instead of real-time webhooks.',
+        'CSV Import process: (1) Merchant exports their transaction report from their POS (every POS has an export — usually under Reports → Transactions → Export CSV). (2) In the Meridian onboarding wizard, select "Manual CSV Import" and choose the POS from the dropdown. (3) Our normalizer maps fields automatically based on the POS-specific column mapping in our registry.',
+        'What to tell the merchant: "Your POS isn\'t on our live OAuth list yet — Square, Clover, and Toast are the three that are. But we have a config-ready connector for your system and CSV upload works today. Five minutes to upload, 24 hours to first insights. When direct API access ships, we\'ll migrate you automatically with no loss of history."',
+        'Export tip: Ask for at least 6 months of data — 12–18 months is ideal. Most POSes will let the merchant export 1+ year in a single CSV. If the file is too large, split by month.',
+        'Never promise a date for direct integration of a POS we don\'t already support live. "On the roadmap" is honest; "coming next month" is not.',
       ]},
       { id: '36', title: 'Square US Setup', completed: false, content: [
         'Square OAuth flow: (1) In the onboarding wizard, click "Connect Square." (2) Merchant logs into their Square account and authorizes Meridian. (3) We automatically backfill up to 18 months of transaction history. (4) Incremental sync runs every 15 minutes + real-time webhooks.',

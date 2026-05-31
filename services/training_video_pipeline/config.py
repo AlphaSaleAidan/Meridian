@@ -81,7 +81,7 @@ TRAINING_CURRICULUM = {
     "module_9": {
         "name": "POS Connection Guides",
         "lessons": [
-            {"id": "9.1", "title": "Moneris Integration Walkthrough", "duration_target": 180},
+            {"id": "9.1", "title": "CSV Import for Unsupported POS Systems", "duration_target": 180},
             {"id": "9.2", "title": "Square Canada Setup", "duration_target": 180},
             {"id": "9.3", "title": "Clover Canada Configuration", "duration_target": 180},
             {"id": "9.4", "title": "Troubleshooting POS Connections", "duration_target": 240},

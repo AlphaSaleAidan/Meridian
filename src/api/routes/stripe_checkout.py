@@ -35,11 +35,13 @@ STRIPE_PRICE_IDS = {
     "command": os.getenv("STRIPE_PRICE_COMMAND", ""),
 }
 
-# Plan tier → default price in cents (fallback for ad-hoc prices)
+# Plan tier → default price in cents (fallback for ad-hoc prices when env-var price IDs not set).
+# Matches the published USD pricing in rep training: Standard $299, Premium $599, Command $1,199.
+# Canadian merchants are billed in CAD via env-configured CAD price IDs (CA$343 / CA$685 / CA$1,370).
 PLAN_PRICES = {
-    "standard": 25000,   # $250
-    "premium": 50000,    # $500
-    "command": 100000,   # $1000
+    "standard": 29900,   # $299
+    "premium": 59900,    # $599
+    "command": 119900,   # $1,199
 }
 
 
@@ -90,7 +92,7 @@ def _get_monthly_amount(plan: str, custom_price_cents: Optional[int]) -> int:
     """Resolve the monthly amount in cents."""
     if custom_price_cents and custom_price_cents > 0:
         return custom_price_cents
-    return PLAN_PRICES.get(plan, 25000)
+    return PLAN_PRICES.get(plan, 29900)
 
 
 # ── Routes ──
