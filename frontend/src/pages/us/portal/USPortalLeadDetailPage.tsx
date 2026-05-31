@@ -137,7 +137,7 @@ export default function USPortalLeadDetailPage() {
 
   // Customer account creation state
   const [customerCreating, setCustomerCreating] = useState(false)
-  const [customerCredentials, setCustomerCredentials] = useState<{ email: string; password: string } | null>(null)
+  const [customerCredentials, setCustomerCredentials] = useState<{ email: string } | null>(null)
   const [customerError, setCustomerError] = useState<string | null>(null)
   const [credentialEmailing, setCredentialEmailing] = useState(false)
   const [credentialEmailed, setCredentialEmailed] = useState(false)
@@ -223,13 +223,6 @@ export default function USPortalLeadDetailPage() {
     }
   }
 
-  function generatePassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-    let pw = ''
-    for (let i = 0; i < 12; i++) pw += chars[Math.floor(Math.random() * chars.length)]
-    return pw
-  }
-
   async function handleCreateCustomerAccount() {
     if (!deal) return
     setCustomerCreating(true)
@@ -241,7 +234,6 @@ export default function USPortalLeadDetailPage() {
       setCustomerCreating(false)
       return
     }
-    const password = generatePassword()
 
     try {
       if (!supabase) throw new Error('Database not connected')
@@ -253,7 +245,6 @@ export default function USPortalLeadDetailPage() {
         headers: authHeaders,
         body: JSON.stringify({
           email,
-          password,
           business_name: deal.business_name,
           contact_name: deal.contact_name,
           phone: deal.contact_phone,
@@ -269,7 +260,13 @@ export default function USPortalLeadDetailPage() {
         throw new Error(body.detail || 'Failed to create customer account')
       }
 
-      setCustomerCredentials({ email, password })
+      // Trigger Supabase password-setup email — customer sets their own password via secure link.
+      // No password ever leaves the server, no plaintext credentials in transit.
+      await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/customer/login`,
+      })
+
+      setCustomerCredentials({ email })
       await usLeadsService.updateStage(deal.id, 'customer_walkthrough')
       setDeal(prev => prev ? { ...prev, stage: 'customer_walkthrough' } : prev)
     } catch (err) {
@@ -286,16 +283,15 @@ export default function USPortalLeadDetailPage() {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
-          template: 'customer_credentials',
+          template: 'welcome',
           to: deal.contact_email,
           first_name: deal.contact_name.split(' ')[0],
           portal: 'us',
           extra: {
             business_name: deal.business_name,
             email: customerCredentials.email,
-            password: customerCredentials.password,
             login_url: `${window.location.origin}/customer/login`,
             rep_name: rep?.name || '',
             rep_email: rep?.email || '',
@@ -318,7 +314,8 @@ export default function USPortalLeadDetailPage() {
     setPaymentStatus('checking')
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
-      const res = await fetch(`${API_BASE}/api/billing/status/${deal.id}`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${API_BASE}/api/billing/status/${deal.id}`, { headers })
       if (!res.ok) { setPaymentStatus('unavailable'); return }
       const data = await res.json()
       const status = data.status as string
@@ -340,7 +337,7 @@ export default function USPortalLeadDetailPage() {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/billing/notify-payment-failed`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
           org_id: deal.id,
           customer_email: deal.contact_email,
@@ -368,7 +365,7 @@ export default function USPortalLeadDetailPage() {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/billing/update-payment-method`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
           org_id: deal.id,
           customer_email: deal.contact_email,
@@ -407,7 +404,7 @@ export default function USPortalLeadDetailPage() {
       try {
         const checkoutRes = await fetch(`${API_BASE}/api/billing/create-checkout`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await getAuthHeaders(),
           body: JSON.stringify({
             org_id: deal.id,
             plan: planName.toLowerCase(),
@@ -476,7 +473,7 @@ export default function USPortalLeadDetailPage() {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
           template: 'invoice_sent',
           to: deal.contact_email,
@@ -558,7 +555,7 @@ export default function USPortalLeadDetailPage() {
       try {
         const emailRes = await fetch(`${API_BASE}/api/email/send`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await getAuthHeaders(),
           body: JSON.stringify({
             to: deal.contact_email,
             template: 'sla_signed',
@@ -591,7 +588,7 @@ export default function USPortalLeadDetailPage() {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
           to: deal.contact_email,
           template: 'sla_signed',
@@ -682,7 +679,7 @@ export default function USPortalLeadDetailPage() {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/email/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({
           template: 'proposal_sent',
           to: deal.contact_email,
@@ -1403,11 +1400,7 @@ export default function USPortalLeadDetailPage() {
                   <span className="text-xs text-[#A1A1A8]">Email</span>
                   <span className="text-sm text-white font-mono">{customerCredentials.email}</span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#A1A1A8]">Password</span>
-                  <span className="text-sm text-white font-mono">{customerCredentials.password}</span>
-                </div>
-                <p className="text-[10px] text-[#4a5550] mt-1">Share these credentials with the customer. They can change their password after first login.</p>
+                <p className="text-[10px] text-[#4a5550] mt-1">A secure setup email has been sent to the customer. They&apos;ll click the link to set their own password — no credentials need to be shared manually.</p>
               </div>
               <button
                 onClick={handleEmailCredentials}

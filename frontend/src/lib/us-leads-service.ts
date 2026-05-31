@@ -119,8 +119,12 @@ export const usLeadsService = {
     onChanged: (deals: Deal[]) => void,
   ): RealtimeChannel | null {
     if (!supabase) return null
+    // Channel name must be unique per subscription — otherwise mounting a second
+    // page that subscribes (e.g. Leads + LeadDetail at the same time) collides
+    // with the first and removeChannel from one unmount kills the other's stream.
+    const channelName = `us_leads_realtime_${repId ?? 'all'}_${Math.random().toString(36).slice(2, 10)}`
     const channel = supabase
-      .channel('us_leads_realtime')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'us_leads' },

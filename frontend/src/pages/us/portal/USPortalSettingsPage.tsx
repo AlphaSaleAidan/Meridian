@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Settings, User, Bell, Shield, Check, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -12,6 +12,15 @@ export default function USPortalSettingsPage() {
   const [saving, setSaving] = useState(false)
   const [name, setName] = useState(rep?.name || '')
   const [phone, setPhone] = useState(rep?.phone || '')
+
+  // Repopulate when `rep` resolves after mount — without this the form starts
+  // empty (or stale) and a save silently wipes name/phone on the rep record.
+  useEffect(() => {
+    if (rep) {
+      setName(rep.name || '')
+      setPhone(rep.phone || '')
+    }
+  }, [rep?.rep_id, rep?.name, rep?.phone])
 
   const [showPwSection, setShowPwSection] = useState(isPasswordReset)
   const [pw, setPw] = useState('')

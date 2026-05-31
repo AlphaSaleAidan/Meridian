@@ -41,9 +41,9 @@ const ADMIN_EMAILS = [
 ]
 
 const DEMO_TEAM: TeamMember[] = [
-  { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2025-09-15', role: 'admin', location: 'Toronto, ON' },
-  { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03', role: 'admin', location: 'Vancouver, BC' },
-  { id: '3', name: 'Aidan Nguyen', email: 'aidanvietnguyen@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-09', role: 'admin', location: 'Toronto, ON' },
+  { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2025-09-15', role: 'admin', location: 'Cape Coral, FL' },
+  { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03', role: 'admin', location: 'Austin, TX' },
+  { id: '3', name: 'Aidan Nguyen', email: 'aidanvietnguyen@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-09', role: 'admin', location: 'Miami, FL' },
 ]
 
 function normalizeRate(v: number): number {
@@ -124,7 +124,7 @@ export default function USPortalTeamPage() {
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>('reps')
+  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(admin ? 'reps' : 'leaderboard')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
@@ -312,11 +312,12 @@ export default function USPortalTeamPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-white">Team Management</h1>
-        <p className="text-sm text-[#A1A1A8] mt-0.5">Manage your sales reps, commissions, and payouts.</p>
+        <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+        <p className="text-sm text-[#A1A1A8] mt-0.5">{admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat Cards — admin only (non-admins go straight to the leaderboard) */}
+      {admin && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4">
           <div className="flex items-center gap-3">
@@ -369,6 +370,7 @@ export default function USPortalTeamPage() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 bg-[#111113] border border-[#1F1F23] rounded-xl p-1 w-fit">
@@ -628,10 +630,10 @@ export default function USPortalTeamPage() {
             <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5">
               <h3 className="text-xs font-semibold text-[#A1A1A8] uppercase tracking-wider mb-3">Commission Formulas</h3>
               <div className="space-y-2 text-[11px] font-mono text-[#4a5550]">
-                <p><span className="text-[#7c3aed]">Monthly Comm</span> = Commission Rate % × MRR (CAD)</p>
+                <p><span className="text-[#7c3aed]">Monthly Comm</span> = Commission Rate % × MRR (USD)</p>
                 <p><span className="text-[#7c3aed]">Lifetime Est</span> = Commission Rate % × MRR × {AVG_LIFETIME_MONTHS} months</p>
                 <p><span className="text-[#f59e0b]">Balance Owed</span> = Lifetime Est − Total Paid</p>
-                <p><span className="text-[#17C5B0]">Pipeline MRR</span> = Sum of open deal monthly values (CAD)</p>
+                <p><span className="text-[#17C5B0]">Pipeline MRR</span> = Sum of open deal monthly values (USD)</p>
               </div>
             </div>
           )}

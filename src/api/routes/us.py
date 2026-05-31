@@ -76,6 +76,15 @@ def _get_anon_key() -> str:
     )
 
 
+def _user_token(request) -> str:
+    """Extract the Bearer token from the incoming Authorization header so we can
+    forward the caller's JWT to Supabase REST (RLS enforced as the user)."""
+    auth_header = request.headers.get("authorization", "") or request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header.removeprefix("Bearer ").strip()
+    return ""
+
+
 # ── Request Models ──────────────────────────────────────────
 
 
@@ -124,6 +133,26 @@ class CreateCustomerRequest(BaseModel):
         if len(v) < 8:
             raise ValueError("password must be at least 8 characters")
         return v
+
+
+class SignSlaRequest(BaseModel):
+    customer_email: EmailStr
+    signature_name: str
+    business_name: str | None = None
+    state: str | None = None
+    org_id: str | None = None
+    monthly_price_usd_cents: int | None = None
+    setup_fee_usd_cents: int | None = 0
+    pos_system: str | None = None
+    rep_id: str | None = None
+    rep_name: str | None = None
+
+    @field_validator("signature_name")
+    @classmethod
+    def validate_signature(cls, v: str) -> str:
+        if len(v.strip()) < 2:
+            raise ValueError("signature must be at least 2 characters")
+        return _sanitize_text(v)
 
 
 class RepActionRequest(BaseModel):
@@ -228,6 +257,81 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
             raise HTTPException(400, "Could not create customer account")
 
     return {"ok": True, "org_id": org_id}
+
+
+@router.post("/sign-sla")
+async def sign_sla(req: SignSlaRequest, request: Request, claims: dict = Depends(require_jwt)):
+    """Persist a US customer's SLA signature + trigger a confirmation email.
+
+    Mirrors the Canada handler. The schema's `province`/`monthly_price_cad_cents`
+    columns are reused for US data (USD cents and US state) until a follow-up
+    migration adds country-neutral columns — see TODO in
+    supabase/migrations/20260529_sla_signatures.sql.
+    """
+    import httpx
+
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    if not supabase_url:
+        raise HTTPException(503, "Supabase not configured")
+
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    user_token = _user_token(request) or service_key
+    anon_key = _get_anon_key() or service_key
+
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent", "")[:500]
+
+    row = {
+        "customer_email": req.customer_email,
+        "signature_name": req.signature_name.strip(),
+        "business_name": req.business_name,
+        # US state stored in the `province` column until schema is generalized.
+        "province": req.state,
+        "org_id": req.org_id,
+        # USD cents stored in the `*_cad_cents` columns until schema is generalized.
+        "monthly_price_cad_cents": req.monthly_price_usd_cents,
+        "setup_fee_cad_cents": req.setup_fee_usd_cents or 0,
+        "pos_system": req.pos_system,
+        "rep_id": req.rep_id,
+        "rep_name": req.rep_name,
+        "ip_address": ip_address,
+        "user_agent": user_agent,
+    }
+
+    signed_at = None
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        ins_resp = await client.post(
+            f"{supabase_url}/rest/v1/sla_signatures",
+            headers={
+                "Authorization": f"Bearer {user_token}",
+                "apikey": anon_key,
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            json=row,
+        )
+        if ins_resp.status_code not in (200, 201):
+            logger.error("US SLA signature insert failed: %s %s", ins_resp.status_code, ins_resp.text)
+            raise HTTPException(500, "Could not save SLA signature — please try again")
+        rows = ins_resp.json()
+        signed_at = (rows[0].get("signed_at") if rows else None)
+
+    # Send confirmation email (best-effort — signature persistence already succeeded)
+    try:
+        from ...email.send import send_sla_signed
+        await send_sla_signed(
+            to=req.customer_email,
+            business_name=req.business_name or "",
+            rep_name=req.rep_name or "",
+            signed_by=req.signature_name.strip(),
+            signed_date=(signed_at or "").split("T")[0] if signed_at else "",
+            provider_signatory="Aidan Pierce, Founder & CEO",
+            org_id=req.org_id,
+        )
+    except Exception as exc:
+        logger.warning("US SLA confirmation email failed for %s: %s", req.customer_email, exc)
+
+    return {"ok": True, "signed_at": signed_at}
 
 
 @router.get("/team")

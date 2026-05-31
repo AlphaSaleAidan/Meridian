@@ -46,7 +46,7 @@ export default function USSalesProtectedRoute({ children }: { children: React.Re
 
   if (rep && rep.portal_context === 'canada') {
     const adminEmails = ['apierce@alphasale.co','aidanpierce72@gmail.com','aidanpierce@meridian.tips','cheungenochmgmt@gmail.com','aidanvietnguyen@gmail.com']
-    const isAdmin = adminEmails.some(a => a.toLowerCase() === rep.email.toLowerCase())
+    const isAdmin = adminEmails.some(a => a.toLowerCase() === (rep.email ?? '').toLowerCase())
     if (!isAdmin) return <AccessDenied />
   }
 

@@ -261,11 +261,11 @@ export default function USPortalOnboardingPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Phone</label>
-                  <input type="tel" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} className={inputClass} placeholder="(604) 555-1234" />
+                  <input type="tel" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} className={inputClass} placeholder="(555) 555-1234" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">City</label>
-                  <input value={profile.city} onChange={e => setProfile(p => ({ ...p, city: e.target.value }))} className={inputClass} placeholder="Vancouver" />
+                  <input value={profile.city} onChange={e => setProfile(p => ({ ...p, city: e.target.value }))} className={inputClass} placeholder="Miami" />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">State</label>

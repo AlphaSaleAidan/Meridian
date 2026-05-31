@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Loader2, Upload, Plus, Trash2,
   Store, User, Wifi, Package, Users, Calendar, Camera, Shield,
-  X, CreditCard, AlertCircle,
+  X, CreditCard, AlertCircle, FileText,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
@@ -33,10 +33,11 @@ const btnPrimary = `flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium 
 const btnBack = `flex items-center gap-2 px-4 py-2.5 text-[13px] ${T.muted} hover:text-[#F5F5F7] transition-colors`
 const cardCls = `rounded-xl p-6 ${T.cardBorder} ${T.cardBg}`
 
-type Step = 'account' | 'pos' | 'inventory' | 'staff' | 'schedule' | 'checkout' | 'processing' | 'done'
+type Step = 'account' | 'sla' | 'pos' | 'inventory' | 'staff' | 'schedule' | 'checkout' | 'processing' | 'done'
 
 const STEPS: { key: Step; label: string; icon: typeof Store }[] = [
   { key: 'account', label: 'Account', icon: User },
+  { key: 'sla', label: 'Agreement', icon: FileText },
   { key: 'pos', label: 'Connect POS', icon: Wifi },
   { key: 'inventory', label: 'Inventory', icon: Package },
   { key: 'staff', label: 'Staff', icon: Users },
@@ -97,6 +98,11 @@ export default function USCustomerOnboardingWizard() {
     confirmPassword: '',
   })
   const [province, setProvince] = useState('')
+
+  // SLA (Service Agreement)
+  const [slaSignature, setSlaSignature] = useState('')
+  const [slaAgreed, setSlaAgreed] = useState(false)
+  const [slaSubmitted, setSlaSubmitted] = useState(false)
 
   // POS
   const [posProvider, setPosProvider] = useState<string | null>(null)
@@ -199,9 +205,56 @@ export default function USCustomerOnboardingWizard() {
         } catch {}
       }
 
-      setStep('pos')
+      setStep('sla')
     } catch (err: any) { setError(err.message || 'Signup failed') }
     finally { setSaving(false) }
+  }
+
+  // ── Service Agreement (SLA) ──
+  async function handleSlaSubmit() {
+    if (!slaSignature.trim() || slaSignature.trim().length < 2) {
+      setError('Please type your full legal name as your signature.')
+      return
+    }
+    if (!slaAgreed) {
+      setError('Please confirm you have read and agree to the Service Agreement.')
+      return
+    }
+    setSaving(true); setError(null)
+    try {
+      const headers = await getAuthHeaders()
+      const resp = await fetch(`${API_BASE}/api/us/sign-sla`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          customer_email: account.email,
+          signature_name: slaSignature.trim(),
+          business_name: account.businessName,
+          state: province || null,
+          org_id: org?.org_id || null,
+          monthly_price_usd_cents: Math.round(monthlyPriceUSD * 100),
+          pos_system: posProvider || null,
+          rep_id: searchParams.get('rep') || null,
+          rep_name: searchParams.get('rep_name') || null,
+        }),
+      })
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}))
+        // Soft-fail: log the failure but let the customer continue so they're
+        // not stranded mid-onboarding. The rep portal will surface the missing
+        // signature for follow-up.
+        console.error('[SLA] persistence failed:', body)
+      }
+      setSlaSubmitted(true)
+      setStep('pos')
+    } catch (err: any) {
+      console.error('[SLA] error:', err)
+      // Soft-fail same as above — customer continues.
+      setSlaSubmitted(true)
+      setStep('pos')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // ── POS ──
@@ -581,7 +634,7 @@ export default function USCustomerOnboardingWizard() {
                 <div>
                   <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Password</label>
                   <input type="password" value={account.password} onChange={e => updateAccount('password', e.target.value)}
-                    placeholder="Min 6 characters" className={inputCls} />
+                    placeholder="Min 8 characters" className={inputCls} />
                 </div>
                 <div>
                   <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Confirm Password</label>
@@ -596,7 +649,104 @@ export default function USCustomerOnboardingWizard() {
             <div className="flex justify-end">
               <button onClick={handleAccountNext} disabled={saving} className={btnPrimary}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-                {saving ? 'Creating Account...' : 'Next: Connect POS'} <ArrowRight size={14} />
+                {saving ? 'Creating Account...' : 'Next: Service Agreement'} <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ SLA ═══ */}
+        {step === 'sla' && (
+          <div className="space-y-4">
+            <div className="text-center mb-6">
+              <h1 className={`text-xl font-bold ${T.text}`}>Service Agreement</h1>
+              <p className={`text-[13px] ${T.muted} mt-1`}>
+                Please review and sign to activate your Meridian subscription.
+              </p>
+            </div>
+
+            <div className={`${cardCls} max-h-96 overflow-y-auto space-y-3 text-[12.5px] ${T.text} leading-relaxed`}>
+              <h2 className="text-[14px] font-bold">Meridian AI Analytics Services — Service Agreement</h2>
+              <p className={T.muted}>
+                This Agreement is entered into between <span className={T.text}>Meridian Analytics Inc.</span> ("Provider")
+                and <span className={T.text}>{account.businessName || '[Business Name]'}</span> ("Client"),
+                represented by <span className={T.text}>{account.ownerName || '[Owner Name]'}</span>.
+              </p>
+
+              <h3 className="text-[13px] font-semibold mt-3">1. Services</h3>
+              <p className={T.muted}>Provider will deliver AI-powered POS analytics, including transaction analysis,
+                revenue forecasting, anomaly detection, and operational recommendations for the Client's business.</p>
+
+              <h3 className="text-[13px] font-semibold mt-3">2. Subscription &amp; Billing</h3>
+              <p className={T.muted}>Monthly subscription of <span className={T.text}>${monthlyPriceUSD.toLocaleString()}</span>{' '}
+                billed via Square. Cancel anytime; no long-term commitment. All amounts in United States dollars.</p>
+
+              <h3 className="text-[13px] font-semibold mt-3">3. Data Privacy</h3>
+              <p className={T.muted}>Client data is collected, used, and disclosed in accordance with applicable United States
+                federal and state privacy laws (including the California Consumer Privacy Act where applicable). Client retains
+                ownership of all transaction data. Provider acts as a data processor only and will not sell or share Client data
+                with third parties for advertising. Data is encrypted at rest and in transit (AES-256, TLS 1.3). Client may
+                request access, correction, or deletion of personal information at any time by contacting <span className={T.text}>privacy@meridian.tips</span>.</p>
+
+              <h3 className="text-[13px] font-semibold mt-3">4. Term &amp; Termination</h3>
+              <p className={T.muted}>Either party may terminate this Agreement at any time with 30 days' written notice.
+                Upon termination, Provider will return or destroy all Client data within 60 days.</p>
+
+              <h3 className="text-[13px] font-semibold mt-3">5. Limitation of Liability</h3>
+              <p className={T.muted}>Provider's total liability under this Agreement is limited to the fees paid by Client
+                in the 12 months preceding the claim. Provider is not liable for indirect or consequential damages.</p>
+
+              <h3 className="text-[13px] font-semibold mt-3">6. Governing Law</h3>
+              <p className={T.muted}>This Agreement is governed by the laws of {province || 'the Client\'s state of residence'},
+                United States. Disputes will be resolved in the courts of competent jurisdiction therein.</p>
+
+              <p className={`${T.muted} mt-4 text-[11px] italic`}>
+                A copy of this signed agreement will be emailed to {account.email || 'your email address'} immediately after signing.
+              </p>
+            </div>
+
+            <div className={`${cardCls} space-y-3`}>
+              <div>
+                <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>
+                  Signature — type your full legal name to sign
+                </label>
+                <input
+                  type="text"
+                  value={slaSignature}
+                  onChange={e => setSlaSignature(e.target.value)}
+                  placeholder={account.ownerName || 'Your full legal name'}
+                  className={inputCls}
+                />
+              </div>
+              <label className={`flex items-start gap-2 text-[12px] ${T.text} cursor-pointer`}>
+                <input
+                  type="checkbox"
+                  checked={slaAgreed}
+                  onChange={e => setSlaAgreed(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  I have read and agree to the Meridian Service Agreement above, and I confirm I have authority to bind
+                  {' '}{account.businessName || 'my business'} to this Agreement.
+                </span>
+              </label>
+            </div>
+
+            {error && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[12px] text-red-400">{error}</div>
+            )}
+
+            <div className="flex justify-between items-center">
+              <button onClick={() => setStep('account')} className={btnBack}>
+                <ArrowLeft size={14} /> Back
+              </button>
+              <button
+                onClick={handleSlaSubmit}
+                disabled={saving || !slaSignature.trim() || !slaAgreed}
+                className={btnPrimary}
+              >
+                {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                {saving ? 'Signing...' : 'Sign & Continue'} <ArrowRight size={14} />
               </button>
             </div>
           </div>
@@ -617,7 +767,7 @@ export default function USCustomerOnboardingWizard() {
               currency="USD"
             />
             <div className="flex justify-between">
-              <button onClick={() => setStep('account')} className={btnBack}><ArrowLeft size={14} /> Back</button>
+              <button onClick={() => setStep('sla')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <button onClick={handlePosNext} disabled={saving || !posProvider} className={btnPrimary}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
                 {saving ? 'Connecting...' : 'Next: Inventory'} <ArrowRight size={14} />
