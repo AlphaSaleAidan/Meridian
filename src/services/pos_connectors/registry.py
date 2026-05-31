@@ -99,6 +99,16 @@ SYSTEM_CONFIGS: dict[str, dict] = {
         "end_date_param": "filter",
         "category": "multi_vertical",
         "supports_orders": True,
+        # Bank-channel rebrands — all route to Clover OAuth.
+        # Resolver: SYSTEM_ALIASES maps these keys back to "clover".
+        "aliases": [
+            "pnc-pos",
+            "wells-fargo-pos",
+            "worldpay-pos",
+            "tsys-pos",
+            "global-payments-genius",
+            "fiserv-pos",
+        ],
     },
 
     # ═══════════════════════════════════════════════════════════
@@ -782,6 +792,10 @@ SYSTEM_CONFIGS: dict[str, dict] = {
         "sms_fallback": True,
     },
     "pos-nation": {
+        # NOTE: Category fixed cannabis→retail on 2026-05-31.
+        # POS Nation has NO cannabis product — they sell multi-vertical retail
+        # (liquor / grocery / cigar / c-store). The cannabis tag was triggering
+        # compliance logic on the wrong merchants.
         "base_url": "",
         "auth_type": "csv_only",
         "csv_columns": {
@@ -791,7 +805,7 @@ SYSTEM_CONFIGS: dict[str, dict] = {
             "items": "Item Name",
             "payment_method": "Tender Type",
         },
-        "category": "cannabis",
+        "category": "retail",
         "supports_orders": False,
         "sms_fallback": True,
     },
@@ -853,6 +867,27 @@ SYSTEM_CONFIGS: dict[str, dict] = {
         "catalog_endpoint": "/partner/products",
         "customers_endpoint": "/partner/members",
         "data_key": "values",
+        "category": "cannabis",
+        "supports_orders": False,
+    },
+    "greenline-pos": {
+        # BLAZE-owned Canadian cannabis POS — AGCO/BCLDB compliant.
+        # Docs: https://getgreenline.co — partner program; per-tenant API keys.
+        "base_url": "https://api.getgreenline.co/v1",
+        "auth_type": "header",
+        "auth_header_name": "X-Api-Key",
+        "test_endpoint": "/locations",
+        "transactions_endpoint": "/orders",
+        "catalog_endpoint": "/products",
+        "customers_endpoint": "/customers",
+        "employees_endpoint": "/employees",
+        "data_key": "data",
+        "page_param": "page",
+        "limit_param": "per_page",
+        "page_size": 100,
+        "date_format": "%Y-%m-%dT%H:%M:%SZ",
+        "start_date_param": "from",
+        "end_date_param": "to",
         "category": "cannabis",
         "supports_orders": False,
     },
@@ -1179,11 +1214,138 @@ SYSTEM_CONFIGS: dict[str, dict] = {
         "supports_orders": False,
         "sms_fallback": True,
     },
+
+    # ═══════════════════════════════════════════════════════════
+    # WAVE 1.5 ADDITIONS (Phase 2 gap research, 2026-05-31)
+    # Salon/wellness vertical + Heartland tractable branches
+    # ═══════════════════════════════════════════════════════════
+
+    "boulevard": {
+        # Modern salon/spa POS — GraphQL Admin API, self-serve dev portal.
+        # Docs: https://developers.joinblvd.com — OAuth 2.0 client credentials.
+        # Note: GraphQL endpoint — these REST-shaped fields apply to the
+        # documented REST adapter; full GraphQL queries handled at connector layer.
+        "base_url": "https://dashboard.boulevard.io/api/2020-01",
+        "auth_type": "oauth_client_credentials",
+        "token_url": "https://dashboard.boulevard.io/api/auth/token",
+        "test_endpoint": "/locations",
+        "transactions_endpoint": "/appointments",
+        "catalog_endpoint": "/services",
+        "customers_endpoint": "/clients",
+        "employees_endpoint": "/staff",
+        "data_key": "data",
+        "page_param": "page",
+        "limit_param": "per_page",
+        "page_size": 100,
+        "date_format": "%Y-%m-%dT%H:%M:%SZ",
+        "start_date_param": "start_at",
+        "end_date_param": "end_at",
+        "category": "salon",
+        "supports_orders": False,
+    },
+    "mindbody": {
+        # Wellness anchor — salon/spa/fitness. Public API v6 with OAuth+OIDC.
+        # Docs: https://developers.mindbodyonline.com/PublicDocumentation
+        # Requires site-specific siteId header.
+        "base_url": "https://api.mindbodyonline.com/public/v6",
+        "auth_type": "header",
+        "auth_header_name": "Authorization",
+        "extra_headers": {
+            "Api-Key": "{api_key}",
+            "SiteId": "{site_id}",
+        },
+        "test_endpoint": "/site/sites",
+        "transactions_endpoint": "/sale/sales",
+        "catalog_endpoint": "/sale/services",
+        "customers_endpoint": "/client/clients",
+        "employees_endpoint": "/staff/staff",
+        "data_key": "Sales",
+        "page_param": "offset",
+        "limit_param": "limit",
+        "page_size": 200,
+        "date_format": "%Y-%m-%dT%H:%M:%S",
+        "start_date_param": "StartSaleDateTime",
+        "end_date_param": "EndSaleDateTime",
+        "category": "salon",
+        "supports_orders": False,
+    },
+    "heartland-retail": {
+        # Distinct from compound `heartland` entry — Springboard Retail rebrand.
+        # Docs: https://dev.retail.heartland.us — self-serve bearer tokens.
+        # The only tractable Heartland branch (Restaurant + Portico are partner-gated).
+        "base_url": "https://api.springboardretail.com/api/v1",
+        "auth_type": "bearer",
+        "test_endpoint": "/stores",
+        "transactions_endpoint": "/sales",
+        "catalog_endpoint": "/items",
+        "customers_endpoint": "/customers",
+        "employees_endpoint": "/users",
+        "data_key": "results",
+        "page_param": "page",
+        "limit_param": "per_page",
+        "page_size": 100,
+        "date_format": "%Y-%m-%dT%H:%M:%SZ",
+        "start_date_param": "created_at_min",
+        "end_date_param": "created_at_max",
+        "category": "retail",
+        "supports_orders": False,
+    },
+    "heartland-restaurant": {
+        # Distinct from compound `heartland` entry — Genius cloud restaurant SKU.
+        # Docs: https://www.heartland.us/partners/developers — partner program required.
+        # Integration target: ~35k venues, 7shifts and other partners integrate directly.
+        "base_url": "https://api.heartland.us/restaurant/v1",
+        "auth_type": "header",
+        "auth_header_name": "X-Api-Key",
+        "test_endpoint": "/locations",
+        "transactions_endpoint": "/orders",
+        "catalog_endpoint": "/menu/items",
+        "customers_endpoint": "/customers",
+        "employees_endpoint": "/employees",
+        "data_key": "data",
+        "page_param": "page",
+        "limit_param": "limit",
+        "page_size": 100,
+        "date_format": "%Y-%m-%dT%H:%M:%SZ",
+        "start_date_param": "from",
+        "end_date_param": "to",
+        "category": "restaurant",
+        "supports_orders": False,
+    },
 }
 
 
+# Bank-channel rebrands and parent-product aliases → canonical system keys.
+# Resolves merchant-facing names (e.g. "PNC POS") to the underlying connector.
+SYSTEM_ALIASES: dict[str, str] = {
+    # Clover bank-channel rebrands
+    "pnc-pos": "clover",
+    "wells-fargo-pos": "clover",
+    "worldpay-pos": "clover",
+    "tsys-pos": "clover",
+    "global-payments-genius": "clover",
+    "fiserv-pos": "clover",
+    # Parent-product SKU variants
+    "toast-now": "toast",
+    "square-for-restaurants": "square",
+    "shopify-lite": "shopify-pos",
+    "shopify-starter": "shopify-pos",
+    "shopify-pos-pro": "shopify-pos",
+    # POSes that were already covered under different names
+    "vend": "lightspeed-retail",      # Vend is now Lightspeed Retail X-Series
+    "restroworks": "posist",           # Posist rebranded to Restroworks
+    "revel-express": "revel",          # SKU variant
+    "lavu-lite": "lavu",               # SKU variant
+}
+
+
+def resolve_alias(system_key: str) -> str:
+    """Return the canonical system key, resolving aliases if present."""
+    return SYSTEM_ALIASES.get(system_key, system_key)
+
+
 def get_connector_config(system_key: str) -> dict | None:
-    return SYSTEM_CONFIGS.get(system_key)
+    return SYSTEM_CONFIGS.get(resolve_alias(system_key))
 
 
 def get_all_configs() -> dict[str, dict]:
