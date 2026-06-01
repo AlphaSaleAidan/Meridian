@@ -89,6 +89,30 @@ export default function USSalesLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // Preload sibling page chunks on idle so tab switches don't flash the
+  // InlineFallback pulse.
+  useEffect(() => {
+    const preload = () => {
+      void import('./USPortalDashboardPage')
+      void import('./USPortalLeadsPage')
+      void import('./USPortalLeadDetailPage')
+      void import('./USPortalCreateCustomerPage')
+      void import('./USPortalAccountsPage')
+      void import('./USPortalCommissionsPage')
+      void import('./USPortalTrainingPage')
+      void import('./USPortalTeamPage')
+      void import('./USPortalSettingsPage')
+      void import('./USPortalBadgePage')
+    }
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    if (typeof ric === 'function') {
+      ric(preload)
+    } else {
+      const t = setTimeout(preload, 250)
+      return () => clearTimeout(t)
+    }
+  }, [])
+
   const isAdmin = isUsAdmin(rep?.email)
   const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 

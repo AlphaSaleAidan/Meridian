@@ -104,6 +104,32 @@ export default function CanadaSalesLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // Preload all sibling portal page chunks so tab switches don't flash the
+  // InlineFallback pulse. Runs on idle after the layout mounts so the initial
+  // render isn't delayed.
+  useEffect(() => {
+    const preload = () => {
+      void import('./CanadaPortalDashboardPage')
+      void import('./CanadaPortalLeadsPage')
+      void import('./CanadaPortalLeadDetailPage')
+      void import('./CanadaPortalCreateCustomerPage')
+      void import('./CanadaPortalAccountsPage')
+      void import('./CanadaPortalCommissionsPage')
+      void import('./CanadaPortalTrainingPage')
+      void import('./CanadaPortalProposalsPage')
+      void import('./CanadaPortalTeamPage')
+      void import('./CanadaPortalSettingsPage')
+      void import('@/pages/us/portal/USPortalBadgePage')
+    }
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    if (typeof ric === 'function') {
+      ric(preload)
+    } else {
+      const t = setTimeout(preload, 250)
+      return () => clearTimeout(t)
+    }
+  }, [])
+
   const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
   const salesNavItems = [...salesNavBase, isAdmin ? teamNavAdmin : teamNavRep, ...salesNavTail]
   const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
