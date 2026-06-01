@@ -38,8 +38,26 @@ export function useDemoContext() {
   return useContext(DemoContext)
 }
 
+const STORAGE_KEY = 'meridian.demo.businessType'
+const VALID_TYPES: BusinessType[] = ['coffee_shop', 'restaurant', 'fast_food', 'auto_shop', 'smoke_shop']
+
+function readStoredBusinessType(): BusinessType | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const v = window.sessionStorage.getItem(STORAGE_KEY)
+    return v && (VALID_TYPES as string[]).includes(v) ? (v as BusinessType) : null
+  } catch {
+    return null
+  }
+}
+
+function writeStoredBusinessType(type: BusinessType): void {
+  if (typeof window === 'undefined') return
+  try { window.sessionStorage.setItem(STORAGE_KEY, type) } catch { /* private mode */ }
+}
+
 // Module-level state so non-React code (api.ts, demo-data.ts) can read the selection
-let _activeBusinessType: BusinessType = 'restaurant'
+let _activeBusinessType: BusinessType = readStoredBusinessType() ?? 'restaurant'
 export function getActiveBusinessType(): BusinessType { return _activeBusinessType }
 
 export function isCanadaPath(): boolean {
@@ -70,10 +88,20 @@ function detectBusinessType(org: { business_type?: string | null; pos_provider?:
 
 export function DemoContextProvider({ children }: { children: ReactNode }) {
   const { authenticated, org } = useAuth()
-  const [businessType, setBusinessTypeState] = useState<BusinessType>('restaurant')
-  const [showSelector, setShowSelector] = useState(false)
+  const stored = readStoredBusinessType()
+  const [businessType, setBusinessTypeState] = useState<BusinessType>(stored ?? 'restaurant')
+  // Open the selector on first visit so demo viewers pick their vertical before
+  // any data renders — otherwise every demo page silently shows restaurant SKUs.
+  // Skip the prompt if we already have a stored selection from this session.
+  // The auth effect below closes it for authenticated users with a real org.
+  const [showSelector, setShowSelector] = useState(stored === null)
 
   useEffect(() => {
+    // On /demo paths, never let auth state override the prospect's selection —
+    // a logged-in salesperson would otherwise force their own org's vertical
+    // onto the demo and silently close the selector before they can pick.
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/demo')) return
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/canada/demo')) return
     if (authenticated && org) {
       const detected = detectBusinessType(org)
       _activeBusinessType = detected
@@ -84,6 +112,7 @@ export function DemoContextProvider({ children }: { children: ReactNode }) {
 
   function setBusinessType(type: BusinessType) {
     _activeBusinessType = type
+    writeStoredBusinessType(type)
     setBusinessTypeState(type)
     setShowSelector(false)
   }
