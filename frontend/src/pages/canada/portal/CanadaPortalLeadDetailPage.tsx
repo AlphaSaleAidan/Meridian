@@ -1407,16 +1407,26 @@ export default function CanadaPortalLeadDetailPage() {
           <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
           <button
             onClick={async () => {
+              const pipeline: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
+              const currentIdx = pipeline.findIndex(s => STAGE_TO_STEP[s] === currentStep)
+              const nextIdx = currentIdx < 0 ? 0 : currentIdx + 1
+              if (nextIdx >= pipeline.length) {
+                toast('Already at final stage', 'info')
+                return
+              }
+              const nextStage = pipeline[nextIdx]
               try {
-                const pipeline: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
-                const currentIdx = pipeline.findIndex(s => STAGE_TO_STEP[s] === currentStep)
-                const nextIdx = currentIdx < 0 ? 0 : currentIdx + 1
-                if (nextIdx >= pipeline.length) return
-                const nextStage = pipeline[nextIdx]
                 await canadaLeadsService.updateStage(deal.id, nextStage)
                 setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
+                toast(`Advanced to ${nextStage.replace(/_/g, ' ')}`, 'success')
               } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
                 console.error('Stage advance failed:', err)
+                // Most common silent-fail causes: stale Supabase JWT (RLS denies
+                // auth.role() = 'authenticated'), or the new stage value isn't
+                // in canada_leads_stage_check. Surface to the rep so they can
+                // refresh / re-login instead of clicking a dead button.
+                toast(`Couldn't advance: ${msg}. Try refreshing the page.`, 'error')
               }
             }}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 transition-all"

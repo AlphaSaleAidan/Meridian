@@ -136,14 +136,12 @@ export const posSystems: POSSystem[] = [
     merchantRequirements: [
       { label: 'Access Token', fieldId: 'square_access_token', fieldType: 'password', placeholder: 'sq0atp-XXXXXXXXXXXX', howToFind: 'Square Dashboard → Developer → Applications → your app → Access Token (Production).', required: true },
       { label: 'Application ID', fieldId: 'square_application_id', fieldType: 'text', placeholder: 'sq0idp-XXXXXXXXXXXX', howToFind: 'Square Dashboard → Developer → Applications → your app → Application ID.', required: true },
-      { label: 'Location ID', fieldId: 'square_location_id', fieldType: 'text', placeholder: 'LXXXXXXXXXXXX', howToFind: 'Square Dashboard → Account & Settings → Locations → click location → Location ID at top.', required: true },
     ],
     setupSteps: [
       { step: 1, title: 'Get Credentials', instruction: 'Log in to Square Dashboard → Developer → Applications.', srAction: 'Walk merchant through Square Developer portal' },
       { step: 2, title: 'Copy Access Token', instruction: 'Copy the Production Access Token from your app.', srAction: 'Ensure Production token, not Sandbox' },
       { step: 3, title: 'Copy Application ID', instruction: 'Copy the Application ID from the same page.', srAction: 'Verify the Application ID matches' },
-      { step: 4, title: 'Find Location ID', instruction: 'Go to Account & Settings → Locations → copy your Location ID.', srAction: 'Confirm correct location for multi-location merchants' },
-      { step: 5, title: 'Enter & Connect', instruction: 'Paste all three values above and click Save & Connect.', srAction: 'Verify data appears in Meridian dashboard' },
+      { step: 4, title: 'Enter & Connect', instruction: 'Paste both values above and click Save & Connect — Meridian fetches your locations automatically.', srAction: 'Verify data appears in Meridian dashboard. For multi-location merchants, locations are listed in Settings → Locations after connection.' },
     ],
     estimatedSetupMinutes: 5,
     canadaAvailable: true,
