@@ -23,11 +23,14 @@ import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { useToast } from '@/components/Toast'
 import { notifyStageChange } from '@/lib/notifications'
 
+// POS connection is no longer part of the rep's pipeline — customers self-connect
+// from their own dashboard. We keep pos_connected mapped to step 3 (now Customer
+// Walkthrough) so existing leads in that stage still render correctly.
 const STAGE_TO_STEP: Record<string, number> = {
   proposal_shown: 1,
   customer_checkout: 2,
-  pos_connected: 3,
-  customer_walkthrough: 4,
+  customer_walkthrough: 3,
+  pos_connected: 3, // legacy alias — renders same step as walkthrough
   closed_lost: 0,
   // Legacy mappings
   appointment_set: 1,
@@ -36,14 +39,13 @@ const STAGE_TO_STEP: Record<string, number> = {
   demo_scheduled: 1,
   proposal_sent: 1,
   negotiation: 2,
-  closed_won: 4,
+  closed_won: 3,
 }
 
 const STEPS = [
   { num: 1, label: 'Proposal Shown' },
   { num: 2, label: 'Customer Checkout' },
-  { num: 3, label: 'POS Connected' },
-  { num: 4, label: 'Customer Walkthrough' },
+  { num: 3, label: 'Customer Walkthrough' },
 ]
 
 const DEMO_FILES = [
@@ -1402,12 +1404,12 @@ export default function CanadaPortalLeadDetailPage() {
       </div>
 
       {/* Stage Advancement */}
-      {currentStep > 0 && currentStep < 4 && deal.stage !== 'closed_lost' && (
+      {currentStep > 0 && currentStep < 3 && deal.stage !== 'closed_lost' && (
         <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
           <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
           <button
             onClick={async () => {
-              const pipeline: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']
+              const pipeline: DealStage[] = ['proposal_shown', 'customer_checkout', 'customer_walkthrough']
               const currentIdx = pipeline.findIndex(s => STAGE_TO_STEP[s] === currentStep)
               const nextIdx = currentIdx < 0 ? 0 : currentIdx + 1
               if (nextIdx >= pipeline.length) {
