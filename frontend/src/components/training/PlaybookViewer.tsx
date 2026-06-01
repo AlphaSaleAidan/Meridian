@@ -27,18 +27,52 @@ const SECTION_META: Record<string, { label: string; icon: typeof BookOpen; order
   '50-cheatsheets':         { label: 'Cheat Sheets',         icon: ClipboardList, order: 5 },
 }
 
-const HIDDEN_PREFIXES = ['_template']
+// Any file whose name starts with `_` is treated as an internal note (templates,
+// data-requirements matrices, decision trees, etc.) and not shown to reps.
+const HIDDEN_PREFIXES = ['_']
+
+// Acronyms that should always render fully uppercased (case-insensitive match on token).
+const ACRONYMS = new Set([
+  'pos', 'ai', 'api', 'ui', 'ux', 'kpi', 'roi', 'faq', 'b2b', 'b2c', 'ltv', 'cac',
+  'crm', 'cs', 'csv', 'pdf', 'rtsp', 'sms', 'mms', 'ip', 'ar', 'ml', 'llm', 'qsr',
+  'sla', 'soc', 'sso', 'mfa', 'gdpr', 'pipeda', 'l25', 'irs', 'cra', 'sql',
+])
+
+// Specific multi-word names that don't follow normal title-case rules.
+const SPECIAL_TITLES: Record<string, string> = {
+  'pos-integrations':    'POS Integrations',
+  'pos-analytics':       'POS Analytics',
+  'pos':                 'POS',
+  'cross-reference':     'Cross-Reference',
+  'cheatsheets':         'Cheat Sheets',
+  'q-and-a':             'Q & A',
+  'q-a':                 'Q & A',
+  'faq':                 'FAQ',
+  'open-questions':      'Open Questions',
+}
 
 function titleFromPath(path: string): string {
-  const filename = path.split('/').pop() ?? path
+  // Strip trailing slash so directory paths like "30-features/pos-analytics/" work.
+  const stripped = path.replace(/\/+$/, '')
+  const filename = stripped.split('/').pop() ?? stripped
   const stem = filename.replace(/\.md$/, '')
+
+  if (!stem) return 'Untitled'
   if (stem === 'README') return 'Overview'
-  if (stem === '_index') return 'Index'
+  if (stem === '_index') return 'Overview'
   if (stem === '_open-questions') return 'Open Questions'
-  return stem
-    .replace(/^\d+-/, '')
-    .split('-')
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+
+  // Strip leading underscore (internal-doc marker) + a leading numeric prefix.
+  const cleaned = stem.replace(/^_+/, '').replace(/^\d+[-_]/, '')
+
+  // Special-case multi-word slugs that have known canonical titles.
+  if (SPECIAL_TITLES[cleaned.toLowerCase()]) return SPECIAL_TITLES[cleaned.toLowerCase()]
+
+  // Otherwise: split on dashes AND underscores, uppercase known acronyms, title-case the rest.
+  return cleaned
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map(w => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
     .join(' ')
 }
 
@@ -70,7 +104,7 @@ function buildTree(paths: string[]): TreeNode[] {
       const subKey = parts.slice(0, i + 1).join('/')
       let sub = parent.children.find(c => c.key === subKey)
       if (!sub) {
-        sub = { key: subKey, label: titleFromPath(parts[i] + '/'), children: [] }
+        sub = { key: subKey, label: titleFromPath(parts[i]), children: [] }
         parent.children.push(sub)
       }
       parent = sub

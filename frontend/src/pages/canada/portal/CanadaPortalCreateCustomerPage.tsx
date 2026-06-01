@@ -10,6 +10,7 @@ import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
+import { verticalsByGroup, findVerticalBySlug } from '@/data/cadVerticals'
 
 type Step = 'details' | 'plan' | 'customize' | 'preview' | 'confirm'
 
@@ -715,7 +716,10 @@ export default function CanadaPortalCreateCustomerPage() {
     window.open(`sms:${form.phone}?body=${encodeURIComponent(msg)}`, '_blank')
   }
 
-  const verticals = ['Restaurant', 'Cafe', 'Bar', 'Smoke Shop', 'Boutique', 'Salon', 'Food Truck', 'Convenience Store', 'Other']
+  // Grouped CAD verticals (43 total) — values are deck slugs (e.g. "ca-restaurant"),
+  // matching the proposals catalog so the lead detail page can auto-link the right deck.
+  const verticalGroups = verticalsByGroup()
+  const selectedVertical = findVerticalBySlug(form.vertical)
   const stepLabels = ['Details', 'Plan', 'Price', 'Proposal', 'Confirm']
   const steps: Step[] = ['details', 'plan', 'customize', 'preview', 'confirm']
   const currentIdx = steps.indexOf(step)
@@ -797,12 +801,30 @@ export default function CanadaPortalCreateCustomerPage() {
                   className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white placeholder-[#4a5550] focus:border-[#00d4aa]/50 focus:outline-none transition-colors" />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">Business Type</label>
-                <select value={form.vertical} onChange={e => update('vertical', e.target.value)}
-                  className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0f0d] border border-[#1a2420] text-white focus:border-[#00d4aa]/50 focus:outline-none transition-colors">
-                  <option value="">Select type...</option>
-                  {verticals.map(v => <option key={v} value={v}>{v}</option>)}
+                <label className="block text-[11px] font-medium text-[#6b7a74] mb-1.5">
+                  Business Type
+                  <span className="ml-1.5 text-[10px] text-[#4a5550] font-normal">(auto-links a proposal deck)</span>
+                </label>
+                <select
+                  value={form.vertical}
+                  onChange={e => update('vertical', e.target.value)}
+                  className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0a0e0c] border border-[#1f2a26] text-white focus:border-[#00d4aa]/50 focus:outline-none transition-colors"
+                >
+                  <option value="">Select industry…</option>
+                  {verticalGroups.map(({ group, items }) => (
+                    <optgroup key={group.key} label={group.label}>
+                      {items.map(v => (
+                        <option key={v.slug} value={v.slug}>{v.title}</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
+                {selectedVertical && (
+                  <p className="mt-1.5 text-[10px] text-[#00d4aa]/80 leading-snug">
+                    Deck linked: <span className="text-[#00d4aa] font-medium">{selectedVertical.title}</span>
+                    <span className="text-[#4a5550]"> — {selectedVertical.blurb}</span>
+                  </p>
+                )}
               </div>
             </div>
 

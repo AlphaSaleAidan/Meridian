@@ -7,6 +7,7 @@ import {
   Building2,
   Wallet,
   GraduationCap,
+  FileText,
   Users,
   Menu,
   X,
@@ -29,6 +30,7 @@ const salesNavBase = [
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/canada/portal/commissions', icon: Wallet, label: 'Commissions' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
+  { path: '/canada/portal/proposals', icon: FileText, label: 'Proposals' },
 ] as const
 
 const teamNavAdmin = { path: '/canada/portal/team', icon: Users, label: 'Team' } as const

@@ -1,10 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
   FileText, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
-  AlertTriangle, CreditCard, RefreshCw, Send, Eye, ExternalLink,
+  AlertTriangle, CreditCard, RefreshCw, Send, Eye, ExternalLink, Copy, Tag,
 } from 'lucide-react'
+import {
+  findVerticalByValue,
+  buildPersonalizedDeckUrl,
+  CAD_VERTICALS,
+} from '@/data/cadVerticals'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
@@ -108,6 +113,10 @@ export default function CanadaPortalLeadDetailPage() {
   const [proposalGenerating, setProposalGenerating] = useState(false)
   const [proposalEmailing, setProposalEmailing] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
+
+  // Deck-link card state (industry-specific personalized proposal deck)
+  const [deckLinkCopied, setDeckLinkCopied] = useState(false)
+  const [deckTagging, setDeckTagging] = useState(false)
 
   // Invoice state
   const [invoiceBlob, setInvoiceBlob] = useState<Blob | null>(null)
@@ -855,6 +864,35 @@ export default function CanadaPortalLeadDetailPage() {
         </div>
       )}
 
+      {/* Proposal deck for this lead (industry-specific) */}
+      <LeadDeckCard
+        deal={deal}
+        rep={rep}
+        copied={deckLinkCopied}
+        tagging={deckTagging}
+        onCopy={async (url) => {
+          try {
+            await navigator.clipboard.writeText(url)
+            setDeckLinkCopied(true)
+            setTimeout(() => setDeckLinkCopied(false), 1800)
+          } catch {
+            toast('Could not copy link — try long-pressing the Open button.', 'error')
+          }
+        }}
+        onTagVertical={async (slug) => {
+          if (!deal) return
+          setDeckTagging(true)
+          try {
+            await canadaLeadsService.update(deal.id, { vertical: slug })
+            setDeal(prev => prev ? { ...prev, vertical: slug } : prev)
+          } catch (err) {
+            toast(err instanceof Error ? `Could not tag lead: ${err.message}` : 'Could not tag lead.', 'error')
+          } finally {
+            setDeckTagging(false)
+          }
+        }}
+      />
+
       {/* Stepper */}
       <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
         <HorizontalStepper currentStep={currentStep} />
@@ -1474,6 +1512,108 @@ export default function CanadaPortalLeadDetailPage() {
           <X size={16} /> Mark as Lost
         </button>
       )}
+    </div>
+  )
+}
+
+/* ─── LeadDeckCard ─────────────────────────────────────────────────────────
+ * Industry-specific proposal-deck card.
+ *  - If deal.vertical resolves to a known CAD deck → show deck title/blurb + share buttons.
+ *  - If unknown/missing → show a quick-tag chip row with the most common verticals.
+ * ──────────────────────────────────────────────────────────────────────── */
+interface LeadDeckCardProps {
+  deal: Deal
+  rep: { name?: string | null; email?: string | null; phone?: string | null } | null
+  copied: boolean
+  tagging: boolean
+  onCopy: (url: string) => void | Promise<void>
+  onTagVertical: (slug: string) => void | Promise<void>
+}
+
+function LeadDeckCard({ deal, rep, copied, tagging, onCopy, onTagVertical }: LeadDeckCardProps) {
+  const deck = useMemo(() => findVerticalByValue(deal.vertical), [deal.vertical])
+  const personalizedUrl = useMemo(
+    () => (deck ? buildPersonalizedDeckUrl(deck.slug, rep, deal.business_name) : ''),
+    [deck, rep, deal.business_name],
+  )
+
+  // Quick-tag chip selection — 6 most common CAD verticals for fast tagging.
+  const quickTagSlugs = ['ca-qsr', 'ca-coffee', 'ca-bar', 'ca-salon', 'ca-dental', 'ca-liquor']
+  const quickTags = useMemo(
+    () => quickTagSlugs.map(s => CAD_VERTICALS.find(v => v.slug === s)).filter(Boolean) as typeof CAD_VERTICALS,
+    [],
+  )
+
+  if (!deck) {
+    return (
+      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Tag size={14} className="text-[#f0b429]" />
+          <h2 className="text-sm font-semibold text-white">Tag this lead with a business type</h2>
+        </div>
+        <p className="text-xs text-[#6b7a74]">
+          Pick the industry to auto-generate the matching personalized proposal deck for {deal.business_name}.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {quickTags.map(v => (
+            <button
+              key={v.slug}
+              disabled={tagging}
+              onClick={() => onTagVertical(v.slug)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#1a2420] bg-[#0a0e0c] text-[11px] text-[#a0a8a4] hover:border-[#00d4aa]/40 hover:text-white disabled:opacity-50 transition-colors"
+            >
+              {tagging ? <Loader2 size={10} className="animate-spin" /> : null}
+              {v.title}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-[#4a5550]">
+          Looking for something else? Edit the lead or visit the Proposals page for all 43 verticals.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-[#0f1512] border border-[#00d4aa]/20 rounded-xl p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkles size={14} className="text-[#00d4aa]" />
+            <h2 className="text-sm font-semibold text-white">Proposal for this lead</h2>
+          </div>
+          <h3 className="text-[15px] font-semibold text-white leading-tight">{deck.title}</h3>
+          <p className="text-xs text-[#a0a8a4] mt-1 leading-relaxed">{deck.blurb}</p>
+          <p className="text-[10px] text-[#6b7a74] mt-2">
+            Avg ticket <span className="text-white">{deck.avgTicket}</span> · Payback{' '}
+            <span className="text-[#00d4aa]">{deck.payback}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2 pt-1">
+        <a
+          href={personalizedUrl}
+          target="_blank"
+          rel="noopener"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#00d4aa] text-[#001a14] text-[12px] font-semibold hover:bg-[#00bd97] active:scale-[0.98] transition-all"
+        >
+          Open personalized deck
+          <ExternalLink size={11} />
+        </a>
+        <button
+          onClick={() => onCopy(personalizedUrl)}
+          className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all ${
+            copied
+              ? 'border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[#00d4aa]'
+              : 'border-[#1f2a26] bg-[#0a0e0c] text-[#a0a8a4] hover:border-[#1a3a30] hover:text-white active:scale-[0.98]'
+          }`}
+          title="Copy personalized link"
+        >
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? 'Copied' : 'Copy link'}
+        </button>
+      </div>
     </div>
   )
 }

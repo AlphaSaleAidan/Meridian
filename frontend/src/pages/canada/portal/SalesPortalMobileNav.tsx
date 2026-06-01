@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard, Target, Building2, Wallet, MoreHorizontal,
-  GraduationCap, Users, Settings, X, Trophy, CreditCard,
+  GraduationCap, FileText, Users, Settings, X, Trophy, CreditCard,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -26,6 +26,7 @@ const PRIMARY_TABS = [
 function getMoreItems(isAdmin: boolean) {
   return [
     { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
+    { path: '/canada/portal/proposals', icon: FileText, label: 'Proposals' },
     { path: '/canada/portal/team', icon: isAdmin ? Users : Trophy, label: isAdmin ? 'Team' : 'Leaderboard' },
     { path: '/canada/portal/badge', icon: CreditCard, label: 'My Badge' },
     { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
