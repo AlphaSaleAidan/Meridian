@@ -10,7 +10,7 @@ import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
-import { verticalsByGroup, findVerticalBySlug } from '@/data/cadVerticals'
+import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
 
 type Step = 'details' | 'plan' | 'customize' | 'preview' | 'confirm'
 
@@ -50,6 +50,8 @@ function ProposalOverlay({
   repPhone,
   checkoutUrl,
   onDownloadPdf,
+  verticalTitle,
+  deckUrl,
 }: {
   open: boolean
   onClose: () => void
@@ -64,6 +66,8 @@ function ProposalOverlay({
   repPhone?: string
   checkoutUrl: string
   onDownloadPdf: () => void
+  verticalTitle?: string
+  deckUrl?: string
 }) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const totalSlides = 8
@@ -138,10 +142,15 @@ function ProposalOverlay({
           </div>
           <div className="relative z-10">
             <p className="text-[11px] font-mono tracking-[0.2em] text-[#00d4aa] uppercase mb-8">
-              MERIDIAN CANADA · PROPOSAL (CAD)
+              MERIDIAN CANADA · {verticalTitle ? `${verticalTitle.toUpperCase()} ` : ''}PROPOSAL (CAD)
             </p>
             <p className="text-[15px] text-[#6b7a74] italic font-serif mb-2">Prepared for</p>
             <h1 className="text-4xl sm:text-6xl font-bold text-white leading-tight">{businessName}</h1>
+            {verticalTitle && (
+              <p className="mt-3 text-[13px] font-mono tracking-[0.14em] text-[#00d4aa] uppercase">
+                {verticalTitle}
+              </p>
+            )}
             <div className="mt-8 space-y-1">
               <p className="text-[13px] text-[#6b7a74]">{today}</p>
               <p className="text-[13px] text-[#6b7a74]">{ownerName} · {repEmail}</p>
@@ -413,6 +422,22 @@ function ProposalOverlay({
             </div>
           </div>
 
+          {deckUrl && (
+            <div className="mt-8 max-w-xl w-full bg-gradient-to-br from-[#00d4aa]/5 to-transparent border border-[#00d4aa]/25 rounded-xl p-4 text-center">
+              <p className="text-[10px] font-mono tracking-[0.14em] text-[#00d4aa] uppercase mb-2">
+                Explore the full {verticalTitle || ''} deck
+              </p>
+              <a
+                href={deckUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[12px] text-white underline decoration-[#00d4aa]/60 break-all"
+              >
+                {deckUrl}
+              </a>
+            </div>
+          )}
+
           {/* Footer stats */}
           <div className="flex flex-wrap justify-center gap-8 mt-10 text-center">
             <div>
@@ -509,6 +534,14 @@ export default function CanadaPortalCreateCustomerPage() {
 
   const buildProposalInput = useCallback((): ProposalInput | null => {
     if (!rep) return null
+    const vertical = findVerticalBySlug(form.vertical)
+    const deckUrl = vertical
+      ? buildPersonalizedDeckUrl(
+          vertical.slug,
+          { name: rep.name, email: rep.email, phone: rep.phone },
+          form.businessName || null,
+        )
+      : undefined
     return {
       businessName: form.businessName,
       ownerName: form.ownerName,
@@ -520,6 +553,9 @@ export default function CanadaPortalCreateCustomerPage() {
       firstMonthFree: form.firstMonthFree,
       rep,
       checkoutUrl: checkoutUrl || undefined,
+      verticalSlug: vertical?.slug,
+      verticalTitle: vertical?.title,
+      deckUrl,
     }
   }, [form, selectedPlan, setupFee, rep, checkoutUrl])
 
@@ -836,6 +872,7 @@ export default function CanadaPortalCreateCustomerPage() {
                 onChange={(key) => update('pos', key)}
                 mode="new-customer"
                 portalContext="canada"
+                vertical={form.vertical || null}
               />
             </div>
 
@@ -1406,6 +1443,20 @@ export default function CanadaPortalCreateCustomerPage() {
         repPhone={rep?.phone || undefined}
         checkoutUrl={checkoutUrl}
         onDownloadPdf={handleDownloadPdf}
+        verticalTitle={selectedVertical?.title}
+        deckUrl={
+          selectedVertical
+            ? `${DECK_BASE_URL}/${selectedVertical.slug}` +
+              (rep?.name || rep?.email || form.businessName
+                ? `?${new URLSearchParams({
+                    ...(rep?.name ? { rep: rep.name } : {}),
+                    ...(rep?.email ? { email: rep.email } : {}),
+                    ...(rep?.phone ? { phone: rep.phone } : {}),
+                    ...(form.businessName ? { business: form.businessName } : {}),
+                  }).toString()}`
+                : '')
+            : undefined
+        }
       />
     </div>
   )

@@ -15,6 +15,12 @@ interface POSSystemPickerProps {
   portalContext: 'us' | 'canada'
   currency?: 'USD' | 'CAD'
   className?: string
+  /**
+   * Optional CAD vertical slug (e.g. 'ca-restaurant') from cadVerticals.
+   * When set, systems with a matching `recommendedVerticals` entry are surfaced first
+   * inside each status group.
+   */
+  vertical?: string | null
 }
 
 interface PickerTheme {
@@ -98,6 +104,7 @@ export default function POSSystemPicker({
   portalContext,
   currency = portalContext === 'canada' ? 'CAD' : 'USD',
   className,
+  vertical,
 }: POSSystemPickerProps) {
   const t = themes[portalContext]
   const [open, setOpen] = useState(false)
@@ -131,13 +138,26 @@ export default function POSSystemPicker({
     if (portalContext === 'canada') {
       systems = systems.filter(s => s.canadaAvailable !== false)
     }
+    if (vertical) {
+      // Stable sort: vertical-recommended systems first, others in original order.
+      systems = [...systems].sort((a, b) => {
+        const aMatch = a.recommendedVerticals?.includes(vertical) ? 0 : 1
+        const bMatch = b.recommendedVerticals?.includes(vertical) ? 0 : 1
+        return aMatch - bMatch
+      })
+    }
     return systems
-  }, [portalContext])
+  }, [portalContext, vertical])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return q ? available.filter(s => s.name.toLowerCase().includes(q)) : available
   }, [search, available])
+
+  const recommendedKeys = useMemo(() => {
+    if (!vertical) return new Set<string>()
+    return new Set(available.filter(s => s.recommendedVerticals?.includes(vertical)).map(s => s.key))
+  }, [available, vertical])
 
   const groups = useMemo(() => [
     { label: 'Currently Supported', icon: <CheckCircle2 size={14} className={t.teal} />, status: 'integrated' as const, items: filtered.filter(s => s.status === 'integrated') },
@@ -221,6 +241,15 @@ export default function POSSystemPicker({
                   >
                     <POSLogo system={sys.key as POSSystemKey} size="sm" />
                     <span className={clsx('flex-1 text-xs font-medium', t.text)}>{sys.name}</span>
+                    {recommendedKeys.has(sys.key) && (
+                      <span
+                        className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                        style={{ color: t.accent, backgroundColor: `${t.accent}1A`, border: `1px solid ${t.accent}33` }}
+                        title="Recommended for this business type"
+                      >
+                        ★ Rec
+                      </span>
+                    )}
                     <POSStatusBadge status={sys.status} />
                     {sys.status !== 'integrated' && (
                       <span className={clsx('text-[9px] font-medium', t.textDim)}>(Demo)</span>

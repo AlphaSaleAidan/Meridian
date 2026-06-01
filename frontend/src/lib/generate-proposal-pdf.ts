@@ -17,6 +17,12 @@ export interface ProposalInput {
   firstMonthFree: boolean
   rep: SalesRepProfile
   checkoutUrl?: string
+  /** CAD vertical deck slug (e.g. 'ca-restaurant') — falls back to generic copy when omitted. */
+  verticalSlug?: string
+  /** Human-readable business-type label from cadVerticals (e.g. 'Coffee Shops'). */
+  verticalTitle?: string
+  /** Live deck URL (https://meridian-decks.vercel.app/<slug>?...) — surfaced on the CTA slide. */
+  deckUrl?: string
 }
 
 function esc(s: string): string {
@@ -24,7 +30,7 @@ function esc(s: string): string {
 }
 
 function buildProposalHtml(input: ProposalInput): string {
-  const { businessName, ownerName, plan, customPrice, setupFee, firstMonthFree, rep, checkoutUrl } = input
+  const { businessName, ownerName, plan, customPrice, setupFee, firstMonthFree, rep, checkoutUrl, verticalTitle, deckUrl } = input
   const price = customPrice || plan.price
   const dueToday = (firstMonthFree ? 0 : price) + setupFee
   const firstName = ownerName.split(' ')[0]
@@ -171,12 +177,13 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
 <!-- ═══════ SLIDE 1: Title ═══════ -->
 <section class="slide bg-radial" id="s1" style="padding-top:120px">
   <div class="slide-inner" style="display:flex;flex-direction:column;justify-content:center;min-height:70vh">
-    <div class="eyebrow" style="margin-bottom:32px">Meridian Intelligence &middot; Proposal &middot; ${date}</div>
+    <div class="eyebrow" style="margin-bottom:32px">Meridian Intelligence &middot; ${verticalTitle ? esc(verticalTitle) + ' Proposal' : 'Proposal'} &middot; ${date}</div>
     <div class="hero-title">Prepared for</div>
     <div class="hero-title" style="color:var(--violet)">${esc(businessName)}</div>
     <div class="accent-bar"></div>
-    <p class="subtitle" style="margin-top:32px">
-      AI-powered analytics that turns your POS data, camera feeds, and weather patterns into revenue growth. Insights no spreadsheet can give you.
+    ${verticalTitle ? `<p style="margin-top:24px;font-size:14px;color:var(--cyan);font-family:'Inter',monospace;letter-spacing:0.12em;text-transform:uppercase">${esc(verticalTitle)}</p>` : ''}
+    <p class="subtitle" style="margin-top:${verticalTitle ? '16' : '32'}px">
+      AI-powered analytics built for ${verticalTitle ? esc(verticalTitle.toLowerCase()) : 'independent operators'} — turns your POS data, camera feeds, and weather patterns into revenue growth. Insights no spreadsheet can give you.
     </p>
     <div style="margin-top:64px;font-size:14px;color:var(--dim)">
       Prepared by ${esc(rep.name)} &middot; ${esc(rep.email)}${rep.phone ? ' &middot; ' + esc(rep.phone) : ''}
@@ -471,7 +478,11 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
          <p style="font-size:13px;color:var(--dim);margin-top:12px">${esc(checkoutUrl)}</p>`
       : `<div class="btn-primary" style="margin-top:48px">GET STARTED</div>`
     }
-    <div style="margin-top:64px;display:flex;gap:48px;flex-wrap:wrap;justify-content:center">
+    ${deckUrl ? `<div style="margin-top:40px;padding:20px 32px;border:1px solid rgba(79,227,193,0.25);border-radius:12px;background:linear-gradient(180deg,rgba(79,227,193,0.05),transparent);text-align:center;max-width:680px;margin-left:auto;margin-right:auto">
+      <div style="font-family:'Inter',monospace;font-size:10px;color:var(--cyan);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:8px">Explore the full ${verticalTitle ? esc(verticalTitle) + ' ' : ''}deck</div>
+      <a href="${esc(deckUrl)}" target="_blank" style="font-size:14px;color:var(--white);word-break:break-all;text-decoration:none;border-bottom:1px solid var(--cyan)">${esc(deckUrl)}</a>
+    </div>` : ''}
+    <div style="margin-top:48px;display:flex;gap:48px;flex-wrap:wrap;justify-content:center">
       <div style="text-align:center"><div style="font-family:monospace;font-size:10px;color:var(--dim);letter-spacing:0.12em;margin-bottom:6px">YOUR REP</div><div style="font-size:16px;color:var(--muted)">${esc(rep.name)}</div></div>
       <div style="text-align:center"><div style="font-family:monospace;font-size:10px;color:var(--dim);letter-spacing:0.12em;margin-bottom:6px">EMAIL</div><div style="font-size:16px;color:var(--muted)">${esc(rep.email)}</div></div>
       ${rep.phone ? `<div style="text-align:center"><div style="font-family:monospace;font-size:10px;color:var(--dim);letter-spacing:0.12em;margin-bottom:6px">PHONE</div><div style="font-size:16px;color:var(--muted)">${esc(rep.phone)}</div></div>` : ''}
