@@ -8,12 +8,104 @@ Rewrites raw statistical insights with:
   - Industry-contextualized advice
   - Priority-ranked action items
 """
+import inspect
 import json
 import logging
 import os
 import re
+import time
+
+from .trace_recorder import record as _trace_record, new_trace_id as _new_trace_id
 
 logger = logging.getLogger("meridian.ai.llm_layer")
+
+
+def _caller_agent_name(default: str = "llm_layer") -> str:
+    """Best-effort: walk the stack for a frame whose ``self`` looks like a
+    BaseAgent (has a ``name`` attribute). Falls back to the first non-internal
+    function name (e.g. ``enhance_insights``), then ``default``.
+
+    Internal llm_layer helpers (``_call_llm``, ``_call_api``, ``_call_local``)
+    are skipped so the recorded agent_name reflects the real call site."""
+    internal = {"_call_llm", "_call_api", "_call_local", "_caller_agent_name", "_record_llm_call"}
+    try:
+        stack = inspect.stack()
+        for frame_info in stack[1:20]:
+            local_self = frame_info.frame.f_locals.get("self")
+            if local_self is not None:
+                cls_name = type(local_self).__name__
+                if cls_name != "type":
+                    agent_name = getattr(local_self, "name", None)
+                    if isinstance(agent_name, str) and agent_name and agent_name != "base":
+                        return agent_name
+                    if cls_name.endswith("Agent") or cls_name.endswith("Generator"):
+                        return cls_name
+        # No agent-like self; pick the first non-internal frame's function name.
+        for frame_info in stack[1:20]:
+            fn = frame_info.function
+            if fn and fn not in internal and not fn.startswith("<"):
+                return fn
+    except Exception:
+        pass
+    return default
+
+
+def _record_llm_call(
+    *,
+    trace_id: str,
+    agent_name: str,
+    provider: str | None,
+    model: str | None,
+    latency_ms: int,
+    success: bool,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+    error: str | None = None,
+    task_kind: str = "llm_call",
+) -> None:
+    """Best-effort wrapper around trace_recorder.record (already no-ops on
+    failure, but the wrapper keeps the call sites tidy)."""
+    try:
+        _trace_record(
+            trace_id=trace_id,
+            agent_name=agent_name,
+            tier=None,  # populated by Step 3 tier resolver
+            provider=provider,
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            latency_ms=latency_ms,
+            success=success,
+            task_kind=task_kind,
+            error=error,
+        )
+    except Exception:
+        pass
+
+
+def _extract_provider_model(resp) -> tuple[str | None, str | None]:
+    """Pull provider/model out of a LiteLLM response object."""
+    model = getattr(resp, "model", None)
+    provider = None
+    hp = getattr(resp, "_hidden_params", None) or {}
+    if isinstance(hp, dict):
+        provider = hp.get("custom_llm_provider") or hp.get("api_provider") or hp.get("model_id")
+    if not provider and isinstance(model, str) and "/" in model:
+        provider = model.split("/", 1)[0]
+    return provider, model
+
+
+def _extract_token_usage(resp) -> tuple[int, int]:
+    """Pull (prompt_tokens, completion_tokens) from a LiteLLM response usage."""
+    usage = getattr(resp, "usage", None)
+    if usage is None:
+        return 0, 0
+    if isinstance(usage, dict):
+        return int(usage.get("prompt_tokens", 0) or 0), int(usage.get("completion_tokens", 0) or 0)
+    return (
+        int(getattr(usage, "prompt_tokens", 0) or 0),
+        int(getattr(usage, "completion_tokens", 0) or 0),
+    )
 
 SYSTEM_PROMPT = """You are Meridian's AI business analyst for small businesses.
 You receive statistical analysis results from POS transaction data.
@@ -49,8 +141,11 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-async def _call_local(messages: list[dict]) -> dict | None:
+async def _call_local(messages: list[dict], trace_id: str | None = None) -> dict | None:
     """Call local Llama model via llama-cpp-python."""
+    tid = trace_id or _new_trace_id()
+    agent_name = _caller_agent_name()
+    start = time.perf_counter()
     try:
         import asyncio
         from ..inference.local_llm import get_llm
@@ -62,17 +157,35 @@ async def _call_local(messages: list[dict]) -> dict | None:
                 max_tokens=2000,
                 temperature=0.3,
             )
-            return resp["choices"][0]["message"]["content"]
+            return resp
 
         loop = asyncio.get_event_loop()
-        content = await loop.run_in_executor(None, _run)
+        resp = await loop.run_in_executor(None, _run)
+        content = resp["choices"][0]["message"]["content"]
+        usage = resp.get("usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+        completion_tokens = int(usage.get("completion_tokens", 0) or 0)
+        latency_ms = int((time.perf_counter() - start) * 1000)
         result = _extract_json(content)
+        ok = result is not None
+        _record_llm_call(
+            trace_id=tid, agent_name=agent_name, provider="local",
+            model="llama-cpp", latency_ms=latency_ms, success=ok,
+            prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+            error=None if ok else "non_json_response",
+        )
         if result:
             logger.info("LLM response from local llama-3.1-8b")
             return result
         logger.warning(f"Local LLM returned non-JSON: {content[:200]}")
         return None
     except Exception as e:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        _record_llm_call(
+            trace_id=tid, agent_name=agent_name, provider="local",
+            model="llama-cpp", latency_ms=latency_ms, success=False,
+            error=repr(e)[:200],
+        )
         logger.warning(f"Local LLM failed: {e}")
         return None
 
@@ -165,10 +278,20 @@ async def _call_api(
     messages: list[dict],
     response_format: dict | None = None,
     org_id: str | None = None,
+    trace_id: str | None = None,
 ) -> dict | None:
-    """Call LLM via Router (auto-failover + caching) or direct fallback."""
+    """Call LLM via Router (auto-failover + caching) or direct fallback.
+
+    Every LiteLLM call records one row to ``swarm_traces`` via
+    ``trace_recorder``. The recorder is no-op-safe so this never adds risk
+    to the happy path.
+    """
+    tid = trace_id or _new_trace_id()
+    agent_name = _caller_agent_name()
+
     router = _get_router()
     if router:
+        start = time.perf_counter()
         try:
             kwargs = {"model": "meridian-llm", "messages": messages, "temperature": 0.3, "max_tokens": 2000}
             if response_format:
@@ -176,28 +299,63 @@ async def _call_api(
             if org_id:
                 kwargs["user"] = org_id
             resp = await router.acompletion(**kwargs)
+            latency_ms = int((time.perf_counter() - start) * 1000)
             content = resp.choices[0].message.content
+            provider, model = _extract_provider_model(resp)
+            ptok, ctok = _extract_token_usage(resp)
             result = _extract_json(content)
+            ok = result is not None
+            _record_llm_call(
+                trace_id=tid, agent_name=agent_name, provider=provider, model=model,
+                latency_ms=latency_ms, success=ok,
+                prompt_tokens=ptok, completion_tokens=ctok,
+                error=None if ok else "non_json_response",
+            )
             if result:
                 logger.info("LLM response via Router (cached=%s)", getattr(resp, '_hidden_params', {}).get('cache_hit', False))
                 return result
         except Exception as e:
+            latency_ms = int((time.perf_counter() - start) * 1000)
+            _record_llm_call(
+                trace_id=tid, agent_name=agent_name, provider="router",
+                model="meridian-llm", latency_ms=latency_ms, success=False,
+                error=repr(e)[:200],
+            )
             logger.warning("Router call failed: %s", e)
 
     try:
         from litellm import acompletion
         for model in ["gpt-4o-mini", "gpt-4o"]:
+            start = time.perf_counter()
             try:
                 kwargs = {"model": model, "messages": messages, "temperature": 0.3, "max_tokens": 2000}
                 if response_format and "gpt" in model:
                     kwargs["response_format"] = response_format
                 resp = await acompletion(**kwargs)
+                latency_ms = int((time.perf_counter() - start) * 1000)
                 content = resp.choices[0].message.content
+                provider, resp_model = _extract_provider_model(resp)
+                ptok, ctok = _extract_token_usage(resp)
                 result = _extract_json(content)
+                ok = result is not None
+                _record_llm_call(
+                    trace_id=tid, agent_name=agent_name,
+                    provider=provider or "openai", model=resp_model or model,
+                    latency_ms=latency_ms, success=ok,
+                    prompt_tokens=ptok, completion_tokens=ctok,
+                    error=None if ok else "non_json_response",
+                )
                 if result:
                     logger.info(f"LLM response from API {model}")
                     return result
             except Exception as e:
+                latency_ms = int((time.perf_counter() - start) * 1000)
+                _record_llm_call(
+                    trace_id=tid, agent_name=agent_name,
+                    provider="openai", model=model,
+                    latency_ms=latency_ms, success=False,
+                    error=repr(e)[:200],
+                )
                 logger.warning(f"LiteLLM {model} failed: {e}")
                 continue
     except ImportError:
@@ -210,12 +368,17 @@ async def _call_llm(
     response_format: dict | None = None,
     org_id: str | None = None,
 ) -> dict | None:
-    """Route LLM: Router (auto-failover across all providers) → local → direct API."""
-    result = await _call_api(messages, response_format, org_id=org_id)
+    """Route LLM: Router (auto-failover across all providers) → local → direct API.
+
+    A single ``trace_id`` is propagated so the router attempt and the local
+    fallback (if any) share a correlation key in ``swarm_traces``.
+    """
+    tid = _new_trace_id()
+    result = await _call_api(messages, response_format, org_id=org_id, trace_id=tid)
     if result:
         return result
     logger.info("Router unavailable — trying local LLM")
-    result = await _call_local(messages)
+    result = await _call_local(messages, trace_id=tid)
     if result:
         return result
     return None
