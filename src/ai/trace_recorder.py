@@ -1,26 +1,14 @@
 """
 Trace recorder — minimal SQLite tee for swarm baseline instrumentation.
 
-Records one row per agent invocation or LLM call into
-``data/swarm_traces.sqlite`` (table ``swarm_traces``, schema in
-``migrations/2026-06-02-swarm_traces.sql``).
+One row per agent invocation or LLM call, written to ``data/swarm_traces.sqlite``
+(table ``swarm_traces``, schema in ``migrations/2026-06-02-swarm_traces.sql``).
 
-Design goals:
-  * stdlib only (sqlite3, time, uuid, contextlib, logging, threading, pathlib);
-  * lazy import + lazy connect — first call applies the schema;
-  * safe no-op if the DB is unreachable or the schema apply fails;
-  * "few ms" overhead on the happy path (single INSERT, indexed table);
-  * thread-safe enough for asyncio.gather fanout (uses one connection per
-    thread, and ``check_same_thread=False``).
+Design: stdlib only, lazy connect, safe no-op on failure, one connection per
+thread (``check_same_thread=False``) for asyncio.gather fanout.
 
-Public API:
-  * ``record(...)`` — fire-and-forget single-row insert.
-  * ``trace(...)`` — context manager that auto-times the block and records
-    success/failure based on whether the block raised.
-  * ``new_trace_id()`` — uuid helper so callers can correlate rows.
-  * ``set_db_path(path)`` — override default for tests / scripts.
-
-This module MUST stay under 300 lines.
+Public API: ``record(...)``, ``trace(...)`` (ctx mgr), ``new_trace_id()``,
+``set_db_path(path)``.
 """
 
 from __future__ import annotations
