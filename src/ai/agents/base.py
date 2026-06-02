@@ -15,15 +15,42 @@ Agents are organized in tiers (1-5) that determine execution order:
   Provides auditable reasoning chains, null hypothesis testing, and
   confidence-calibrated outputs. Chain stored under result["_reasoning"].
 """
+import functools
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from ..agent_logger import get_agent_logger
+from ..agent_logger import agent_run_tracer, get_agent_logger
 
 logger = logging.getLogger("meridian.ai.agents")
+
+
+def _wrap_analyze_with_tracer(fn):
+    """Wrap an agent's ``analyze`` coroutine so each call records a
+    swarm_traces row. The wrapper is idempotent — wrapping an already
+    wrapped function is a no-op (we tag it with ``_swarm_traced``)."""
+    if getattr(fn, "_swarm_traced", False):
+        return fn
+
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def _async_wrapped(self, *args, **kwargs):
+            agent_name = getattr(self, "name", None) or type(self).__name__
+            with agent_run_tracer(agent_name, task_kind="agent_run"):
+                return await fn(self, *args, **kwargs)
+        _async_wrapped._swarm_traced = True  # type: ignore[attr-defined]
+        return _async_wrapped
+
+    @functools.wraps(fn)
+    def _sync_wrapped(self, *args, **kwargs):
+        agent_name = getattr(self, "name", None) or type(self).__name__
+        with agent_run_tracer(agent_name, task_kind="agent_run"):
+            return fn(self, *args, **kwargs)
+    _sync_wrapped._swarm_traced = True  # type: ignore[attr-defined]
+    return _sync_wrapped
 
 
 @dataclass
@@ -65,6 +92,16 @@ class BaseAgent(ABC):
         self._data_avail: DataAvailability | None = None
         self._chain = None
         self._json_logger = get_agent_logger(self.__class__.__name__)
+
+    def __init_subclass__(cls, **kwargs):
+        """Auto-tee every subclass ``analyze`` invocation into swarm_traces.
+        Statistical agents that never touch an LLM are still recorded with
+        name + latency + success, which is the baseline view the masterplan
+        requires (docs/swarm_baseline.md §3)."""
+        super().__init_subclass__(**kwargs)
+        own_analyze = cls.__dict__.get("analyze")
+        if own_analyze is not None and callable(own_analyze):
+            setattr(cls, "analyze", _wrap_analyze_with_tracer(own_analyze))
 
     @abstractmethod
     async def analyze(self) -> dict:
