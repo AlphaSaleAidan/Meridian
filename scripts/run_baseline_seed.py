@@ -44,6 +44,12 @@ from typing import Awaitable, Callable
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 
+# Load .env (DEEPSEEK_API_KEY etc.) via the same hook the FastAPI app uses.
+# Without this, the seed runner would only see provider keys if the operator
+# already exported them — surprising UX for a script the masterplan tells
+# them to "just run".
+import src.config  # noqa: E402, F401 — side-effect: load_dotenv()
+
 from src.ai.trace_recorder import record, new_trace_id  # noqa: E402
 
 # ---------------------------------------------------------------------------

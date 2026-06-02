@@ -26,6 +26,23 @@ luminol>=0.4
 # Customer LTV
 lifetimes>=0.11.0
 
+# Wave 1B — pymc-marketing is the Bayesian successor to lifetimes (adds
+# per-customer credible intervals). Pin <0.12 because 0.12+ requires
+# pydantic>=2.10 (uses ``SupportedPrior`` with pydantic schema generation),
+# while production currently pins pydantic==2.9.2 in requirements.txt.
+# Re-evaluate this cap when the FastAPI app is on pydantic>=2.10.
+pymc-marketing>=0.10,<0.12
+
+# Wave 1A — panel price elasticity (OLS + DoubleML).
+statsmodels>=0.14
+econml>=0.15
+
+# Wave 1D — XGBoost/LightGBM + CalibratedClassifierCV for churn classifier.
+# (lightgbm is already declared above; xgboost is new.)
+xgboost>=2.0
+# SHAP — explainability layer used by the churn classifier (Wave 1D + 2B).
+shap>=0.45
+
 # Basket Analysis (lazy import in src/ai/agents/base.py)
 mlxtend>=0.23
 
