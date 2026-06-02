@@ -225,6 +225,28 @@ async def main() -> int:
     print(f"   llm_keys_present: {_has_any_llm_key()}")
     print()
 
+    # ─── Data-egress guard ────────────────────────────────────────────────
+    # Tasks like ``analyze_merchant`` read real merchant rows from Postgres
+    # and ship pieces of them to remote LLM providers (DeepSeek, SambaNova,
+    # Groq, Cerebras, OpenAI). Customer data must not leave the VPS unless
+    # the operator has explicitly confirmed that ``DEMO_ORG_ID`` points at a
+    # synthetic / demo merchant. Without that acknowledgement we refuse to
+    # run anything that touches a real org and report it as a hard error,
+    # not a silent skip.
+    if _demo_org() and os.environ.get("MERIDIAN_BASELINE_CONFIRMED_DEMO") != "1":
+        print(
+            "REFUSING TO RUN: DEMO_ORG_ID is set but "
+            "MERIDIAN_BASELINE_CONFIRMED_DEMO is not '1'.\n"
+            "Confirm the org is synthetic/demo, then re-run with:\n"
+            "  MERIDIAN_BASELINE_CONFIRMED_DEMO=1 DEMO_ORG_ID=<uuid> "
+            "python3 scripts/run_baseline_seed.py\n"
+            "Aborting before any task can egress real customer data.",
+            file=sys.stderr,
+        )
+        return 2
+    # ──────────────────────────────────────────────────────────────────────
+
+
     attempted = 0
     skipped = 0
     failed = 0
