@@ -76,18 +76,24 @@ def _fit_pymc_marketing_clv(rfm) -> tuple:
     draws = int(os.environ.get("MERIDIAN_CLV_MCMC_DRAWS", "500"))
     tune = int(os.environ.get("MERIDIAN_CLV_MCMC_TUNE", "500"))
     chains = int(os.environ.get("MERIDIAN_CLV_MCMC_CHAINS", "2"))
+    # ``cores`` controls how many chains PyMC samples in parallel. Default
+    # is ``chains`` (matches PyMC's default), but on a memory-constrained
+    # host (this VPS shares 47GB with qwen-server + PoolDrop) the eval can
+    # cap at MERIDIAN_CLV_MCMC_CORES=1 to keep total fit RSS bounded.
+    cores = int(os.environ.get("MERIDIAN_CLV_MCMC_CORES", "0")) or chains
 
     bg_data = rfm[["customer_id", "frequency", "recency", "T"]].copy()
     bg_model = BetaGeoModel(data=bg_data)
     bg_model.build_model()
-    bg_model.fit(progressbar=False, draws=draws, tune=tune, chains=chains)
-
-    p_alive_post = bg_model.expected_probability_alive(
-        customer_id=rfm["customer_id"],
-        frequency=rfm["frequency"],
-        recency=rfm["recency"],
-        T=rfm["T"],
+    bg_model.fit(
+        progressbar=False, draws=draws, tune=tune, chains=chains, cores=cores,
     )
+
+    # pymc-marketing's posterior helpers take the input DataFrame
+    # directly (positional-or-keyword ``data``), NOT per-column kwargs.
+    # Passing the original frame keeps customer order aligned with the
+    # downstream dict construction.
+    p_alive_post = bg_model.expected_probability_alive(data=bg_data)
     p_alive_mean = p_alive_post.mean(dim=("chain", "draw"))
     churn_risk = [
         cid for cid, p in zip(rfm["customer_id"].tolist(),
@@ -103,16 +109,20 @@ def _fit_pymc_marketing_clv(rfm) -> tuple:
     gg_data = returning[["customer_id", "frequency", "monetary_value"]]
     gg_model = GammaGammaModel(data=gg_data)
     gg_model.build_model()
-    gg_model.fit(progressbar=False, draws=draws, tune=tune, chains=chains)
+    gg_model.fit(
+        progressbar=False, draws=draws, tune=tune, chains=chains, cores=cores,
+    )
 
+    # expected_customer_lifetime_value expects ``data`` to carry every
+    # column either model touches (customer_id, frequency, recency, T,
+    # monetary_value). ``future_t`` replaces lifetimes' ``time`` kwarg.
+    clv_input = returning[[
+        "customer_id", "frequency", "recency", "T", "monetary_value",
+    ]]
     clv_post = gg_model.expected_customer_lifetime_value(
         transaction_model=bg_model,
-        customer_id=returning["customer_id"],
-        frequency=returning["frequency"],
-        recency=returning["recency"],
-        T=returning["T"],
-        monetary_value=returning["monetary_value"],
-        time=12,
+        data=clv_input,
+        future_t=12,
         discount_rate=0.01,
     )
     clv_mean = clv_post.mean(dim=("chain", "draw"))
