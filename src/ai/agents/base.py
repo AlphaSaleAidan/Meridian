@@ -300,20 +300,46 @@ class BaseAgent(ABC):
     def find_associations(
         self, baskets: list[list[str]], min_support: float = 0.01, min_lift: float = 1.2
     ) -> list[dict]:
-        """Basket analysis: mlxtend Apriori or manual pair counting."""
+        """Basket analysis: mlxtend FP-Growth (default) / Apriori / manual pair counting.
+
+        Backend is selected by MERIDIAN_BASKET_BACKEND env var:
+          "fpgrowth" (default) — faster, same API + output as Apriori
+          "apriori"            — legacy backend, kept for one reporting cycle
+        Unknown values fall back to "fpgrowth".
+        """
         if len(baskets) >= 50:
             try:
+                import os
                 import pandas as pd
-                from mlxtend.frequent_patterns import apriori, association_rules
+                from mlxtend.frequent_patterns import (
+                    apriori,
+                    association_rules,
+                    fpgrowth,
+                )
                 from mlxtend.preprocessing import TransactionEncoder
+
+                backend = os.environ.get("MERIDIAN_BASKET_BACKEND", "fpgrowth").lower()
+                freq_algo = apriori if backend == "apriori" else fpgrowth
 
                 te = TransactionEncoder()
                 te_arr = te.fit(baskets).transform(baskets)
                 df = pd.DataFrame(te_arr, columns=te.columns_)
-                freq = apriori(df, min_support=min_support, use_colnames=True)
+                freq = freq_algo(df, min_support=min_support, use_colnames=True)
                 if freq.empty:
                     return []
                 rules = association_rules(freq, metric="lift", min_threshold=min_lift)
+                # Deterministic top-N across backends: highest-lift first,
+                # then support (prefer more frequent), then confidence, then
+                # the rule itself. Without this, head(20) returns different
+                # subsets under Apriori vs FP-Growth because the underlying
+                # algorithms enumerate itemsets in different orders.
+                rules = rules.assign(
+                    _ante=rules["antecedents"].map(lambda s: tuple(sorted(s))),
+                    _cons=rules["consequents"].map(lambda s: tuple(sorted(s))),
+                ).sort_values(
+                    ["lift", "support", "confidence", "_ante", "_cons"],
+                    ascending=[False, False, False, True, True],
+                ).drop(columns=["_ante", "_cons"])
                 return [
                     {
                         "antecedents": list(row["antecedents"]),
