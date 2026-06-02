@@ -4,24 +4,30 @@ Trace recorder — minimal SQLite tee for swarm baseline instrumentation.
 One row per agent invocation or LLM call, written to ``data/swarm_traces.sqlite``
 (table ``swarm_traces``, schema in ``migrations/2026-06-02-swarm_traces.sql``).
 
-Design: stdlib only, lazy connect, safe no-op on failure, one connection per
-thread (``check_same_thread=False``) for asyncio.gather fanout.
+Design: stdlib only, lazy connect, safe no-op on failure. ``record()`` is
+non-blocking — it enqueues into a bounded queue and returns immediately, so
+the SQLite write never blocks the event loop. A daemon worker thread drains
+the queue. On overflow the row is dropped (with a debug log), because the
+recorder must never delay a realtime caller (e.g. the Pipecat phone agent).
+An ``atexit`` hook flushes the queue before process death.
 
 Public API: ``record(...)``, ``trace(...)`` (ctx mgr), ``new_trace_id()``,
-``set_db_path(path)``.
+``set_db_path(path)``, ``flush(timeout=None)``.
 """
 
 from __future__ import annotations
 
+import atexit
 import logging
 import os
+import queue
 import sqlite3
 import threading
 import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 logger = logging.getLogger("meridian.ai.trace_recorder")
 
@@ -164,6 +170,108 @@ def _get_conn() -> sqlite3.Connection | None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Background queue + worker — keeps record() non-blocking on the hot path.
+# ---------------------------------------------------------------------------
+
+# Bounded so a stuck disk can't grow memory unboundedly. The realtime contract
+# is "never block"; if the queue is full we drop. 10k rows is generous for the
+# Meridian workload (a full analyze_merchant fanout is ~80 rows).
+_QUEUE_MAX = int(os.environ.get("MERIDIAN_TRACE_QUEUE_MAX", "10000"))
+_QUEUE: queue.Queue = queue.Queue(maxsize=_QUEUE_MAX)
+_WORKER: threading.Thread | None = None
+_WORKER_LOCK = threading.Lock()
+_DROPPED = 0  # observability for the dashboard later
+_SENTINEL: tuple = ()
+
+
+def _worker_loop() -> None:
+    """Drain ``_QUEUE`` into SQLite. One worker, one connection per worker
+    thread (via the existing ``_get_conn`` thread-local)."""
+    while True:
+        row = _QUEUE.get()
+        if row is _SENTINEL:
+            _QUEUE.task_done()
+            return
+        try:
+            conn = _get_conn()
+            if conn is not None:
+                conn.execute(
+                    """
+                    INSERT INTO swarm_traces (
+                        trace_id, agent_name, tier, provider, model,
+                        prompt_tokens, completion_tokens, latency_ms,
+                        escalated_from, success, task_kind, error
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    row,
+                )
+        except Exception as exc:  # never escalate to producers
+            logger.debug("trace_recorder worker insert failed: %s", exc)
+        finally:
+            _QUEUE.task_done()
+
+
+def _ensure_worker() -> None:
+    global _WORKER
+    if _WORKER is not None and _WORKER.is_alive():
+        return
+    with _WORKER_LOCK:
+        if _WORKER is not None and _WORKER.is_alive():
+            return
+        t = threading.Thread(
+            target=_worker_loop,
+            name="meridian-trace-writer",
+            daemon=True,
+        )
+        t.start()
+        _WORKER = t
+
+
+def flush(timeout: float | None = 5.0) -> bool:
+    """Block until all queued rows are written. Returns True on success.
+
+    Used by tests, the baseline aggregator, and the atexit hook. Never called
+    by realtime producers.
+    """
+    if _WORKER is None or not _WORKER.is_alive():
+        return True
+    try:
+        _QUEUE.join() if timeout is None else _wait_join(timeout)
+        return True
+    except Exception:
+        return False
+
+
+def _wait_join(timeout: float) -> None:
+    """Bounded variant of queue.Queue.join — stdlib Queue.join doesn't accept
+    a timeout, so we poll unfinished_tasks. Acceptable; this is called from
+    test paths and shutdown, never from the hot path."""
+    deadline = time.monotonic() + timeout
+    while True:
+        with _QUEUE.all_tasks_done:
+            if _QUEUE.unfinished_tasks == 0:
+                return
+        if time.monotonic() >= deadline:
+            return
+        time.sleep(0.01)
+
+
+def _atexit_drain() -> None:
+    """Flush remaining rows on interpreter shutdown so a crash doesn't lose
+    the tail of a run."""
+    if _WORKER is None or not _WORKER.is_alive():
+        return
+    _wait_join(timeout=2.0)
+    try:
+        _QUEUE.put_nowait(_SENTINEL)
+    except queue.Full:
+        pass  # interpreter exiting; drop the sentinel
+
+
+atexit.register(_atexit_drain)
+
+
 def record(
     *,
     trace_id: str | None = None,
@@ -179,36 +287,44 @@ def record(
     escalated_from: str | None = None,
     error: str | None = None,
 ) -> None:
-    """Insert one row into ``swarm_traces``. Never raises."""
-    conn = _get_conn()
-    if conn is None:
-        return
+    """Enqueue one ``swarm_traces`` row. Non-blocking. Never raises.
+
+    The actual SQLite ``INSERT`` happens on a background daemon thread, so the
+    caller's coroutine / phone-order loop is never blocked by disk IO. If the
+    queue is full (disk wedged, worker hung) the row is dropped and a counter
+    is incremented — better to lose a trace than to add jitter on a live call.
+    """
+    global _DROPPED
+    _ensure_worker()
+    row: tuple[Any, ...] = (
+        trace_id or new_trace_id(),
+        agent_name,
+        tier,
+        provider,
+        model,
+        int(prompt_tokens or 0),
+        int(completion_tokens or 0),
+        int(latency_ms or 0),
+        escalated_from,
+        1 if success else 0,
+        task_kind,
+        (error or None) if not success else None,
+    )
     try:
-        conn.execute(
-            """
-            INSERT INTO swarm_traces (
-                trace_id, agent_name, tier, provider, model,
-                prompt_tokens, completion_tokens, latency_ms,
-                escalated_from, success, task_kind, error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                trace_id or new_trace_id(),
-                agent_name,
-                tier,
-                provider,
-                model,
-                int(prompt_tokens or 0),
-                int(completion_tokens or 0),
-                int(latency_ms or 0),
-                escalated_from,
-                1 if success else 0,
-                task_kind,
-                (error or None) if not success else None,
-            ),
-        )
-    except Exception as exc:  # never escalate to the caller
-        logger.debug("trace_recorder.record failed: %s", exc)
+        _QUEUE.put_nowait(row)
+    except queue.Full:
+        _DROPPED += 1
+        if _DROPPED == 1 or _DROPPED % 1000 == 0:
+            logger.warning(
+                "trace_recorder: queue full (max=%d), dropping row "
+                "(total dropped=%d)",
+                _QUEUE_MAX, _DROPPED,
+            )
+
+
+def dropped_count() -> int:
+    """Observability hook for tests / dashboards."""
+    return _DROPPED
 
 
 @contextmanager
