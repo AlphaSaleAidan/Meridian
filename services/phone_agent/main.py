@@ -1,13 +1,17 @@
 """
-Meridian AI Phone Agent — FastAPI server.
+Meridian AI Phone Agent sidecar — FastAPI server.
 
-Two modes:
-  1. Twilio Voice webhooks (production-ready, no GPU needed)
-     - Twilio handles STT + TTS, Claude API handles the brain
-     - Works immediately with a Twilio phone number
+Production note: the canonical Twilio Voice webhook is served by
+src/api/routes/phone.py (mounted into the main API app). This sidecar exists
+for:
+  1. SMS Text-to-Order (sms_order.router is also re-exported by
+     src/api/routes/sms.py — same handler, two mount points)
+  2. Open-source Pipecat pipeline for the Media Streams WebSocket path
+     (Fonoster/FreeSWITCH SIP, Ollama LLM, WhisperLiveKit STT, Kokoro TTS).
+     Requires Ollama + GPU.
 
-  2. Open-source Pipecat pipeline (requires GPU + Docker)
-     - Fonoster/FreeSWITCH SIP, Ollama LLM, WhisperLiveKit STT, Kokoro TTS
+The standalone Twilio Gather handler that used to live here (twilio_voice.py)
+was deleted in favour of the unified production path.
 """
 import logging
 import os
@@ -25,11 +29,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("meridian.phone_agent")
 
-app = FastAPI(title="Meridian Phone Agent", version="1.1.0")
-
-# --- Twilio Voice mode (always available) ---
-from twilio_voice import router as twilio_router
-app.include_router(twilio_router)
+app = FastAPI(title="Meridian Phone Agent Sidecar", version="1.2.0")
 
 # --- SMS Text-to-Order mode (always available) ---
 from sms_order import router as sms_router
@@ -41,7 +41,7 @@ try:
     HAS_PIPECAT = True
 except ImportError:
     HAS_PIPECAT = False
-    logger.info("Pipecat not available — Twilio-only mode")
+    logger.info("Pipecat not available — SMS-only sidecar mode")
 
 OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
@@ -50,8 +50,7 @@ OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 async def health():
     result: dict = {
         "status": "ok",
-        "twilio_mode": "active",
-        "anthropic_key_set": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "sms_mode": "active",
     }
 
     if HAS_PIPECAT:
