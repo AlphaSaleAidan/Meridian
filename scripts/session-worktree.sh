@@ -90,12 +90,18 @@ cmd_new() {
     # — they mutate the shared store in place.
     #
     # Drift-at-birth check: if the base branch's frontend/package-lock.json
-    # doesn't match /root/Meridian's, an `npm install` here would silently
-    # propagate THIS worktree's lock state into the shared store, breaking
-    # every other worktree. In that case we refuse to symlink and tell the
-    # user to either `npm ci` here (isolated install) or rebase to a base
-    # whose lockfile matches.
-    local symlink_ok=1
+    # doesn't match /root/Meridian's, we STILL symlink (so code-only and
+    # backend-only sessions can run tsc/eslint/vite-build cleanly — reads via
+    # the symlink are safe even under drift because most modules overlap),
+    # but we print a specific drift warning naming the two hazards:
+    #   (1) npm install/update/uninstall would propagate THIS worktree's lock
+    #       state into the shared store. Always unsafe under drift. Covered
+    #       by the always-printed DEP-MUTATION RULE below.
+    #   (2) tsc here will fail ONLY if a file imports a dependency that's in
+    #       this worktree's package.json but not yet in the shared node_modules.
+    #       Diagnosable from the error message ("Cannot find module X");
+    #       fixable with `npm ci` for an isolated install.
+    local drift_warn=0
     if [ -d "$REPO_ROOT/frontend/node_modules" ]; then
         local shared_lock="$REPO_ROOT/frontend/package-lock.json"
         local new_lock="$path/frontend/package-lock.json"
@@ -104,27 +110,39 @@ cmd_new() {
             shared_hash=$(sha256sum "$shared_lock" | cut -d' ' -f1)
             new_hash=$(sha256sum "$new_lock" | cut -d' ' -f1)
             if [ "$shared_hash" != "$new_hash" ]; then
-                symlink_ok=0
-                cat >&2 <<EOF
-⚠ DRIFT-AT-BIRTH: '$base' has a different frontend/package-lock.json than $REPO_ROOT.
-  NOT symlinking node_modules — a symlink here would corrupt the shared store
-  the moment anything runs 'npm install'.
-
-  Choose one before running anything that touches node_modules:
-    (a) isolated install (slow, ~500MB, safe):
-          cd $path/frontend && npm ci
-    (b) rebase this branch onto a base whose lockfile matches $REPO_ROOT/frontend/package-lock.json
-
-  To re-check drift at any point from inside this worktree:
-    cd $path && $0 check
-EOF
+                drift_warn=1
             fi
         fi
 
-        if [ "$symlink_ok" = "1" ]; then
-            echo "→ symlinking frontend/node_modules → $REPO_ROOT/frontend/node_modules"
-            rm -rf "$path/frontend/node_modules" 2>/dev/null
-            ln -s "$REPO_ROOT/frontend/node_modules" "$path/frontend/node_modules"
+        echo "→ symlinking frontend/node_modules → $REPO_ROOT/frontend/node_modules"
+        rm -rf "$path/frontend/node_modules" 2>/dev/null
+        ln -s "$REPO_ROOT/frontend/node_modules" "$path/frontend/node_modules"
+
+        if [ "$drift_warn" = "1" ]; then
+            cat >&2 <<EOF
+
+⚠ DRIFT-AT-BIRTH: '$base' has a different frontend/package-lock.json than $REPO_ROOT.
+  Symlinked anyway so code-only and backend-only sessions still work via tsc/eslint.
+
+  Two specific hazards under drift:
+
+  1. npm install / npm install <pkg> / npm uninstall / npm update is UNSAFE here.
+     It would silently propagate THIS worktree's lock state into the shared
+     store, breaking every other worktree. See the DEP-MUTATION RULE below
+     for the safe alternative (npm ci).
+
+  2. Under drift, tsc here will fail ONLY if a file imports a dependency
+     that's in this worktree's package.json but not yet in the shared
+     node_modules. If you see 'Cannot find module X' from the pre-commit
+     hook, that's this — fix with:
+       cd $path/frontend && npm ci   # isolated install (~500MB, slow)
+
+  Code-only and backend-only commits flow normally; tsc resolves against the
+  shared store and passes when no missing-dep import is involved.
+
+  To re-check drift state at any point from inside this worktree:
+    cd $path && $0 check
+EOF
         fi
     else
         echo "⚠ no $REPO_ROOT/frontend/node_modules to symlink — run 'cd frontend && npm install' in the worktree if you need tsc/lint."
