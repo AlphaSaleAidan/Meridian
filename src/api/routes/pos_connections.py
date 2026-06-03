@@ -49,6 +49,11 @@ class ConnectRequest(BaseModel):
     pos_system: str
     credentials: dict
     restaurant_guid: Optional[str] = None
+    # P0: optional concierge attribution. Reps that onboard a merchant
+    # pass their sales_reps.id here so we can credit the connection.
+    # NULL = self-serve / unattributed. Validated as UUID at the DB
+    # boundary by the FK (`pos_connections.connected_by_rep_id`).
+    connected_by_rep_id: Optional[str] = None
 
 
 class DisconnectRequest(BaseModel):
@@ -240,20 +245,27 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
         limit=1,
     )
 
+    # P0: rep attribution. Only write the column when a rep was passed
+    # so we don't clobber an existing attribution on re-connect.
+    rep_id = req.connected_by_rep_id or None
+
     if existing:
         connection_id = existing[0]["id"]
+        update_fields = {
+            "status": "connected",
+            "credentials_encrypted": encrypted_creds,
+            "last_error": None,
+            "updated_at": now,
+        }
+        if rep_id:
+            update_fields["connected_by_rep_id"] = rep_id
         await db.update(
             "pos_connections",
-            {
-                "status": "connected",
-                "credentials_encrypted": encrypted_creds,
-                "last_error": None,
-                "updated_at": now,
-            },
+            update_fields,
             filters={"id": f"eq.{connection_id}"},
         )
     else:
-        await db.insert("pos_connections", {
+        insert_fields = {
             "id": connection_id,
             "org_id": req.org_id,
             "provider": req.pos_system,
@@ -263,7 +275,10 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             "historical_import_complete": False,
             "created_at": now,
             "updated_at": now,
-        })
+        }
+        if rep_id:
+            insert_fields["connected_by_rep_id"] = rep_id
+        await db.insert("pos_connections", insert_fields)
 
     org_update = {
         "pos_system": req.pos_system,
@@ -294,6 +309,13 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
 
     await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
 
+    # P0/P1: auto-trigger initial backfill for every provider that
+    # has an API path. Previously Square + Clover were skipped here on
+    # the theory that "OAuth paths run their own backfill from the
+    # callback" — true for Square OAuth, but the wizard's
+    # credential-paste path (which is what the UI actually exercises
+    # today) never goes through the callback and so left the
+    # connection idle until a manual /api/pos/sync trigger.
     if req.pos_system == "toast":
         background_tasks.add_task(
             _run_toast_backfill,
@@ -301,7 +323,21 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             connection_id=connection_id,
             credentials=req.credentials,
         )
-    elif req.pos_system not in ("square", "clover"):
+    elif req.pos_system == "square":
+        background_tasks.add_task(
+            _run_square_backfill,
+            org_id=req.org_id,
+            connection_id=connection_id,
+            credentials=req.credentials,
+        )
+    elif req.pos_system == "clover":
+        background_tasks.add_task(
+            _run_clover_backfill,
+            org_id=req.org_id,
+            connection_id=connection_id,
+            credentials=req.credentials,
+        )
+    else:
         api_config = get_connector_config(req.pos_system)
         if api_config and api_config.get("auth_type") != "csv_only":
             background_tasks.add_task(
@@ -376,6 +412,122 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
 
     except Exception as e:
         logger.error(f"Toast backfill failed for org={org_id}: {e}", exc_info=True)
+        await db.update(
+            "pos_connections",
+            {"status": "error", "last_error": str(e)[:500]},
+            filters={"id": f"eq.{connection_id}"},
+        )
+
+
+async def _run_square_backfill(org_id: str, connection_id: str, credentials: dict):
+    """P1: run Square initial backfill from the credential-paste path.
+
+    Mirrors the OAuth-callback backfill kickoff in `oauth.py:run_backfill`.
+    The mapper now persists customer_id + currency thanks to the P0
+    schema migration + mapper updates.
+    """
+    from ...db import get_db
+    from ...square.client import SquareClient
+    from ...square.sync_engine import SyncEngine
+
+    db = get_db()
+    access_token = credentials.get("access_token", "")
+    if not access_token:
+        logger.error(f"Square backfill: no access_token for org={org_id}")
+        return
+
+    try:
+        async with SquareClient(access_token=access_token) as client:
+            engine = SyncEngine(
+                client=client,
+                org_id=org_id,
+                pos_connection_id=connection_id,
+            )
+            result = await engine.run_initial_backfill()
+
+        if result.locations:
+            await db.batch_upsert("locations", result.locations, on_conflict="org_id,external_id")
+        if result.products:
+            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
+        if result.transactions:
+            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
+        if result.transaction_items:
+            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+
+        await db.update(
+            "pos_connections",
+            {
+                "historical_import_complete": True,
+                "last_sync_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            filters={"id": f"eq.{connection_id}"},
+        )
+        logger.info(
+            f"Square backfill complete for org={org_id}: "
+            f"{len(result.transactions)} txns, {len(result.transaction_items)} items"
+        )
+    except Exception as e:
+        logger.error(f"Square backfill failed for org={org_id}: {e}", exc_info=True)
+        await db.update(
+            "pos_connections",
+            {"status": "error", "last_error": str(e)[:500]},
+            filters={"id": f"eq.{connection_id}"},
+        )
+
+
+async def _run_clover_backfill(org_id: str, connection_id: str, credentials: dict):
+    """P1: run Clover initial backfill from the credential-paste path.
+
+    Mirrors `_run_square_backfill`. The Clover mapper now persists
+    customer_id (already there pre-P0) and currency (added in P0).
+    """
+    from ...db import get_db
+    from ...clover.client import CloverClient
+    from ...clover.sync_engine import CloverSyncEngine
+
+    db = get_db()
+    access_token = credentials.get("access_token", "")
+    merchant_id = credentials.get("merchant_id", "")
+    if not (access_token and merchant_id):
+        logger.error(
+            f"Clover backfill: missing access_token or merchant_id for org={org_id}"
+        )
+        return
+
+    try:
+        client = CloverClient(access_token=access_token, merchant_id=merchant_id)
+        engine = CloverSyncEngine(
+            client=client,
+            org_id=org_id,
+            pos_connection_id=connection_id,
+        )
+        result = await engine.run_initial_backfill()
+
+        if result.locations:
+            await db.batch_upsert("locations", result.locations, on_conflict="org_id,external_id")
+        if result.products:
+            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
+        if result.transactions:
+            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
+        if result.transaction_items:
+            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+
+        await db.update(
+            "pos_connections",
+            {
+                "historical_import_complete": True,
+                "last_sync_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            filters={"id": f"eq.{connection_id}"},
+        )
+        logger.info(
+            f"Clover backfill complete for org={org_id}: "
+            f"{len(result.transactions)} txns, {len(result.transaction_items)} items"
+        )
+    except Exception as e:
+        logger.error(f"Clover backfill failed for org={org_id}: {e}", exc_info=True)
         await db.update(
             "pos_connections",
             {"status": "error", "last_error": str(e)[:500]},

@@ -10,27 +10,28 @@ import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { CAD_RATE } from '@/lib/canada-proposal-plans'
+import { PRICING } from '@/lib/format'
 
 // ── Canada Theme ──
 const T = {
-  pageBg:    'bg-[#0a0f0d]',
-  cardBg:    'bg-[#0f1512]',
-  cardBorder:'border-[#1a2420]',
-  inputBg:   'bg-[#0a0f0d]',
-  inputBorder:'border-[#1a2420]',
+  pageBg:    'bg-pm-canada-bg',
+  cardBg:    'bg-pm-canada-surface',
+  cardBorder:'border-pm-canada-border',
+  inputBg:   'bg-pm-canada-bg',
+  inputBorder:'border-pm-canada-border',
   accent:    '#00d4aa',
-  accentBg:  'bg-[#00d4aa]',
-  accentHover:'hover:bg-[#00d4aa]/90',
-  accentTxt: 'text-[#00d4aa]',
-  accentBorder:'border-[#00d4aa]',
-  muted:     'text-[#6b7a74]',
-  text:      'text-[#F5F5F7]',
-  focusBorder:'focus:border-[#00d4aa]/50',
+  accentBg:  'bg-pm-accent',
+  accentHover:'hover:bg-pm-accent/90',
+  accentTxt: 'text-pm-accent',
+  accentBorder:'border-pm-accent',
+  muted:     'text-pm-canada-text-muted',
+  text:      'text-pm-text',
+  focusBorder:'focus:border-pm-accent/50',
 } as const
 
-const inputCls = `w-full px-3 py-2.5 text-[13px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/40 ${T.focusBorder} focus:outline-none`
-const btnPrimary = `flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium ${T.accentBg} text-[#0a0f0d] rounded-lg ${T.accentHover} disabled:opacity-50 transition-colors`
-const btnBack = `flex items-center gap-2 px-4 py-2.5 text-[13px] ${T.muted} hover:text-[#F5F5F7] transition-colors`
+const inputCls = `w-full px-3 py-2.5 text-sm-tight rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-pm-canada-text-muted/40 ${T.focusBorder} focus:outline-none`
+const btnPrimary = `flex items-center gap-2 px-6 py-2.5 text-sm-tight font-medium ${T.accentBg} text-pm-canada-bg rounded-lg ${T.accentHover} disabled:opacity-50 transition-colors`
+const btnBack = `flex items-center gap-2 px-4 py-2.5 text-sm-tight ${T.muted} hover:text-pm-text transition-colors`
 const cardCls = `rounded-xl p-6 ${T.cardBorder} ${T.cardBg}`
 
 type Step = 'account' | 'sla' | 'pos' | 'inventory' | 'staff' | 'schedule' | 'checkout' | 'processing' | 'done'
@@ -120,7 +121,7 @@ export default function CanadaCustomerOnboardingWizard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [paymentComplete, setPaymentComplete] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const monthlyPrice = prefill.price ? parseInt(prefill.price) : 250
+  const monthlyPrice = prefill.price ? parseInt(prefill.price) : PRICING.DEFAULT_MONTHLY_CAD
   const monthlyPriceCAD = Math.round(monthlyPrice * CAD_RATE)
 
   // Processing — 20-minute AI analysis timer (persists across page reloads)
@@ -268,8 +269,11 @@ export default function CanadaCustomerOnboardingWizard() {
           body: JSON.stringify({ org_id: orgId, pos_system: posProvider, connection_status: 'pending' }),
         })
       } else {
-        const err = await connectPos(posProvider, '')
-        if (err && err !== 'API key is required') { setError(err); setSaving(false); return }
+        // P1: connectPos signature changed to credentials object. Pass
+        // {} for the selection-only path (credential collection lives
+        // in a later step / the rep-facing portal).
+        const err = await connectPos(posProvider, {})
+        if (err) { setError(err); setSaving(false); return }
       }
       setStep('inventory')
     } catch (err: any) { setError(err.message || 'Connection failed') }
@@ -559,7 +563,7 @@ export default function CanadaCustomerOnboardingWizard() {
             <MeridianEmblem size={32} />
             <MeridianWordmark className="text-lg" />
           </div>
-          <span className="text-[10px] font-semibold text-[#00d4aa] uppercase tracking-widest">Canada</span>
+          <span className="text-2xs font-semibold text-pm-accent uppercase tracking-widest">Canada</span>
         </div>
 
         {/* Progress */}
@@ -570,8 +574,8 @@ export default function CanadaCustomerOnboardingWizard() {
               const isDone = i < currentStepIdx
               return (
                 <div key={s.key} className="flex-1 flex flex-col gap-1.5">
-                  <div className={`h-1 rounded-full transition-all duration-500 ${isDone ? 'bg-[#00d4aa]' : isActive ? 'bg-[#00d4aa]' : 'bg-[#1a2420]'}`} />
-                  <span className={`text-[9px] font-medium text-center ${isActive ? 'text-[#F5F5F7]' : isDone ? 'text-[#00d4aa]' : 'text-[#6b7a74]/30'}`}>
+                  <div className={`h-1 rounded-full transition-all duration-500 ${isDone ? 'bg-pm-accent' : isActive ? 'bg-pm-accent' : 'bg-pm-canada-border'}`} />
+                  <span className={`text-[9px] font-medium text-center ${isActive ? 'text-pm-text' : isDone ? 'text-pm-accent' : 'text-pm-canada-text-muted/30'}`}>
                     {s.label}
                   </span>
                 </div>
@@ -581,7 +585,7 @@ export default function CanadaCustomerOnboardingWizard() {
         )}
 
         {error && (
-          <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[13px] flex items-center gap-2">
+          <div className="mb-4 px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm-tight flex items-center gap-2">
             <AlertCircle size={14} /> {error}
           </div>
         )}
@@ -591,35 +595,35 @@ export default function CanadaCustomerOnboardingWizard() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <h1 className={`text-xl font-bold ${T.text}`}>Welcome to Meridian</h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>Set up your account in a few minutes and start seeing insights</p>
+              <p className={`text-sm-tight ${T.muted} mt-1`}>Set up your account in a few minutes and start seeing insights</p>
             </div>
             <div className={`${cardCls} space-y-4`}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Business Name</label>
+                  <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Business Name</label>
                   <input type="text" value={account.businessName} onChange={e => updateAccount('businessName', e.target.value)}
                     placeholder="Your business name" className={inputCls} />
                 </div>
                 <div>
-                  <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Your Name</label>
+                  <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Your Name</label>
                   <input type="text" value={account.ownerName} onChange={e => updateAccount('ownerName', e.target.value)}
                     placeholder="Full name" className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Email</label>
+                  <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Email</label>
                   <input type="email" value={account.email} onChange={e => updateAccount('email', e.target.value)}
                     placeholder="you@business.ca" className={inputCls} />
                 </div>
                 <div>
-                  <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Phone</label>
+                  <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Phone</label>
                   <input type="tel" value={account.phone} onChange={e => updateAccount('phone', e.target.value)}
                     placeholder="(604) 555-1234" className={inputCls} />
                 </div>
               </div>
               <div>
-                <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Province</label>
+                <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Province</label>
                 <select value={province} onChange={e => setProvince(e.target.value)}
                   className={inputCls}>
                   <option value="">Select province...</option>
@@ -628,18 +632,18 @@ export default function CanadaCustomerOnboardingWizard() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Password</label>
+                  <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Password</label>
                   <input type="password" value={account.password} onChange={e => updateAccount('password', e.target.value)}
                     placeholder="Min 6 characters" className={inputCls} />
                 </div>
                 <div>
-                  <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Confirm Password</label>
+                  <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Confirm Password</label>
                   <input type="password" value={account.confirmPassword} onChange={e => updateAccount('confirmPassword', e.target.value)}
                     placeholder="Confirm password" className={inputCls} />
                 </div>
               </div>
             </div>
-            <div className={`flex items-center gap-2 text-[11px] ${T.muted}/50`}>
+            <div className={`flex items-center gap-2 text-2xs ${T.muted}/50`}>
               <Shield size={12} /> Your data is encrypted with bank-level security
             </div>
             <div className="flex justify-end">
@@ -656,29 +660,29 @@ export default function CanadaCustomerOnboardingWizard() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <h1 className={`text-xl font-bold ${T.text}`}>Service Agreement</h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>
+              <p className={`text-sm-tight ${T.muted} mt-1`}>
                 Please review and sign to activate your Meridian subscription.
                 {province === 'Quebec' ? ' Includes Quebec Law 25 disclosures.' : ' PIPEDA-compliant.'}
               </p>
             </div>
 
-            <div className={`${cardCls} max-h-96 overflow-y-auto space-y-3 text-[12.5px] ${T.text} leading-relaxed`}>
-              <h2 className="text-[14px] font-bold">Meridian AI Analytics Services — Service Agreement</h2>
+            <div className={`${cardCls} max-h-96 overflow-y-auto space-y-3 text-xs ${T.text} leading-relaxed`}>
+              <h2 className="text-sm font-bold">Meridian AI Analytics Services — Service Agreement</h2>
               <p className={T.muted}>
                 This Agreement is entered into between <span className={T.text}>Meridian Analytics Inc.</span> ("Provider")
                 and <span className={T.text}>{account.businessName || '[Business Name]'}</span> ("Client"),
                 represented by <span className={T.text}>{account.ownerName || '[Owner Name]'}</span>.
               </p>
 
-              <h3 className="text-[13px] font-semibold mt-3">1. Services</h3>
+              <h3 className="text-sm-tight font-semibold mt-3">1. Services</h3>
               <p className={T.muted}>Provider will deliver AI-powered POS analytics, including transaction analysis,
                 revenue forecasting, anomaly detection, and operational recommendations for the Client's business.</p>
 
-              <h3 className="text-[13px] font-semibold mt-3">2. Subscription &amp; Billing</h3>
+              <h3 className="text-sm-tight font-semibold mt-3">2. Subscription &amp; Billing</h3>
               <p className={T.muted}>Monthly subscription of <span className={T.text}>CA${monthlyPriceCAD.toLocaleString()}</span>{' '}
                 billed via Square. Cancel anytime; no long-term commitment. All amounts in Canadian dollars.</p>
 
-              <h3 className="text-[13px] font-semibold mt-3">3. Data Privacy — PIPEDA</h3>
+              <h3 className="text-sm-tight font-semibold mt-3">3. Data Privacy — PIPEDA</h3>
               <p className={T.muted}>Client data is collected, used, and disclosed in accordance with Canada's Personal
                 Information Protection and Electronic Documents Act (PIPEDA). Client retains ownership of all transaction
                 data. Provider acts as a data processor only and will not sell or share Client data with third parties for
@@ -686,7 +690,7 @@ export default function CanadaCustomerOnboardingWizard() {
 
               {province === 'Quebec' && (
                 <>
-                  <h3 className="text-[13px] font-semibold mt-3">4. Quebec — Law 25 (Loi 25)</h3>
+                  <h3 className="text-sm-tight font-semibold mt-3">4. Quebec — Law 25 (Loi 25)</h3>
                   <p className={T.muted}>For Quebec-based Clients, Provider complies with An Act respecting the protection of
                     personal information in the private sector, as amended by Law 25. Client is informed that personal
                     information may be stored on servers located in Canada and the United States. Client has the right to
@@ -696,26 +700,26 @@ export default function CanadaCustomerOnboardingWizard() {
                 </>
               )}
 
-              <h3 className="text-[13px] font-semibold mt-3">{province === 'Quebec' ? '5.' : '4.'} Term &amp; Termination</h3>
+              <h3 className="text-sm-tight font-semibold mt-3">{province === 'Quebec' ? '5.' : '4.'} Term &amp; Termination</h3>
               <p className={T.muted}>Either party may terminate this Agreement at any time with 30 days' written notice.
                 Upon termination, Provider will return or destroy all Client data within 60 days.</p>
 
-              <h3 className="text-[13px] font-semibold mt-3">{province === 'Quebec' ? '6.' : '5.'} Limitation of Liability</h3>
+              <h3 className="text-sm-tight font-semibold mt-3">{province === 'Quebec' ? '6.' : '5.'} Limitation of Liability</h3>
               <p className={T.muted}>Provider's total liability under this Agreement is limited to the fees paid by Client
                 in the 12 months preceding the claim. Provider is not liable for indirect or consequential damages.</p>
 
-              <h3 className="text-[13px] font-semibold mt-3">{province === 'Quebec' ? '7.' : '6.'} Governing Law</h3>
+              <h3 className="text-sm-tight font-semibold mt-3">{province === 'Quebec' ? '7.' : '6.'} Governing Law</h3>
               <p className={T.muted}>This Agreement is governed by the laws of {province || 'the Client\'s province of residence'},
                 Canada. Disputes will be resolved in the courts of competent jurisdiction therein.</p>
 
-              <p className={`${T.muted} mt-4 text-[11px] italic`}>
+              <p className={`${T.muted} mt-4 text-2xs italic`}>
                 A copy of this signed agreement will be emailed to {account.email || 'your email address'} immediately after signing.
               </p>
             </div>
 
             <div className={`${cardCls} space-y-3`}>
               <div>
-                <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>
+                <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>
                   Signature — type your full legal name to sign
                 </label>
                 <input
@@ -726,7 +730,7 @@ export default function CanadaCustomerOnboardingWizard() {
                   className={inputCls}
                 />
               </div>
-              <label className={`flex items-start gap-2 text-[12px] ${T.text} cursor-pointer`}>
+              <label className={`flex items-start gap-2 text-xs ${T.text} cursor-pointer`}>
                 <input
                   type="checkbox"
                   checked={slaAgreed}
@@ -741,7 +745,7 @@ export default function CanadaCustomerOnboardingWizard() {
             </div>
 
             {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[12px] text-red-400">{error}</div>
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{error}</div>
             )}
 
             <div className="flex justify-between items-center">
@@ -765,7 +769,7 @@ export default function CanadaCustomerOnboardingWizard() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <h1 className={`text-xl font-bold ${T.text}`}>Connect Your POS</h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>We'll pull in your transaction history to start generating insights</p>
+              <p className={`text-sm-tight ${T.muted} mt-1`}>We'll pull in your transaction history to start generating insights</p>
             </div>
             <POSSystemPicker
               value={posProvider}
@@ -789,59 +793,59 @@ export default function CanadaCustomerOnboardingWizard() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <h1 className={`text-xl font-bold ${T.text}`}>Inventory &amp; Cost of Goods</h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>Upload your inventory to unlock margin analysis &amp; product insights</p>
+              <p className={`text-sm-tight ${T.muted} mt-1`}>Upload your inventory to unlock margin analysis &amp; product insights</p>
             </div>
             <div className={`${cardCls} space-y-4`}>
               <div className="flex items-center gap-3">
                 <button onClick={() => fileInputRef.current?.click()}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-[12px] font-medium ${T.text} ${T.cardBg} rounded-lg hover:bg-[#1a2420] ${T.cardBorder} transition-colors`}>
+                  className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium ${T.text} ${T.cardBg} rounded-lg hover:bg-pm-canada-border ${T.cardBorder} transition-colors`}>
                   <Upload size={14} /> Upload CSV
                 </button>
                 <input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
-                {csvUploaded && <span className={`text-[11px] ${T.accentTxt} flex items-center gap-1`}><CheckCircle2 size={12} /> {inventoryItems.length} items imported</span>}
-                <span className={`text-[10px] ${T.muted}/40 ml-auto`}>Columns: name, category, cost, supplier, unit</span>
+                {csvUploaded && <span className={`text-2xs ${T.accentTxt} flex items-center gap-1`}><CheckCircle2 size={12} /> {inventoryItems.length} items imported</span>}
+                <span className={`text-2xs ${T.muted}/40 ml-auto`}>Columns: name, category, cost, supplier, unit</span>
               </div>
-              <div className={`text-[10px] ${T.muted}/40 text-center py-1`}>— or add manually —</div>
+              <div className={`text-2xs ${T.muted}/40 text-center py-1`}>— or add manually —</div>
               <div className="space-y-2 max-h-[300px] overflow-y-auto">
                 {inventoryItems.map((item) => (
                   <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
                     <input type="text" value={item.name} onChange={e => updateInventoryItem(item.id, 'name', e.target.value)}
-                      placeholder="Item name" className={`col-span-3 px-2 py-2 text-[11px] rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
+                      placeholder="Item name" className={`col-span-3 px-2 py-2 text-2xs rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-pm-canada-text-muted/20 ${T.focusBorder} focus:outline-none`} />
                     <input type="text" value={item.category} onChange={e => updateInventoryItem(item.id, 'category', e.target.value)}
-                      placeholder="Category" className={`col-span-2 px-2 py-2 text-[11px] rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
+                      placeholder="Category" className={`col-span-2 px-2 py-2 text-2xs rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-pm-canada-text-muted/20 ${T.focusBorder} focus:outline-none`} />
                     <input type="number" value={item.costPerUnit} onChange={e => updateInventoryItem(item.id, 'costPerUnit', e.target.value)}
-                      placeholder="CA$" className={`col-span-2 px-2 py-2 text-[11px] rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
+                      placeholder="CA$" className={`col-span-2 px-2 py-2 text-2xs rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-pm-canada-text-muted/20 ${T.focusBorder} focus:outline-none`} />
                     <input type="text" value={item.supplier} onChange={e => updateInventoryItem(item.id, 'supplier', e.target.value)}
-                      placeholder="Supplier" className={`col-span-3 px-2 py-2 text-[11px] rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
+                      placeholder="Supplier" className={`col-span-3 px-2 py-2 text-2xs rounded ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-pm-canada-text-muted/20 ${T.focusBorder} focus:outline-none`} />
                     <select value={item.unit} onChange={e => updateInventoryItem(item.id, 'unit', e.target.value)}
-                      className={`col-span-1 px-1 py-2 text-[10px] rounded ${T.inputBg} ${T.inputBorder} ${T.muted} focus:outline-none`}>
+                      className={`col-span-1 px-1 py-2 text-2xs rounded ${T.inputBg} ${T.inputBorder} ${T.muted} focus:outline-none`}>
                       <option value="each">ea</option><option value="lb">lb</option><option value="oz">oz</option><option value="case">case</option>
                     </select>
-                    <button onClick={() => removeInventoryItem(item.id)} className="col-span-1 p-1 text-[#6b7a74]/30 hover:text-red-400 transition-colors">
+                    <button onClick={() => removeInventoryItem(item.id)} className="col-span-1 p-1 text-pm-canada-text-muted/30 hover:text-red-400 transition-colors">
                       <Trash2 size={12} />
                     </button>
                   </div>
                 ))}
               </div>
-              <button onClick={addInventoryItem} className={`flex items-center gap-1.5 text-[12px] ${T.accentTxt} hover:text-[#F5F5F7] transition-colors`}>
+              <button onClick={addInventoryItem} className={`flex items-center gap-1.5 text-xs ${T.accentTxt} hover:text-pm-text transition-colors`}>
                 <Plus size={14} /> Add Item
               </button>
             </div>
             <div className={`${cardCls} space-y-3`}>
               <div className="flex items-center gap-2 mb-1">
                 <Package size={14} className={T.accentTxt} />
-                <h3 className={`text-[13px] font-semibold ${T.text}`}>Upload Inventory Documents</h3>
+                <h3 className={`text-sm-tight font-semibold ${T.text}`}>Upload Inventory Documents</h3>
               </div>
-              <p className={`text-[11px] ${T.muted}`}>
+              <p className={`text-2xs ${T.muted}`}>
                 Upload invoices, supplier price lists, or inventory spreadsheets — our AI will extract product names, costs, and margins automatically.
               </p>
               <div onClick={() => inventoryDocRef.current?.click()}
-                className={`flex flex-col items-center justify-center py-8 cursor-pointer rounded-lg border-2 border-dashed ${T.cardBorder} hover:border-[#00d4aa]/30 transition-colors`}>
-                <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mb-2">
+                className={`flex flex-col items-center justify-center py-8 cursor-pointer rounded-lg border-2 border-dashed ${T.cardBorder} hover:border-pm-accent/30 transition-colors`}>
+                <div className="w-12 h-12 rounded-full bg-pm-accent/10 flex items-center justify-center mb-2">
                   <Upload size={20} className={T.accentTxt} />
                 </div>
-                <p className={`text-[12px] font-medium ${T.text}`}>Drop files or click to upload</p>
-                <p className={`text-[10px] ${T.muted} mt-1`}>PDF, Excel, images of invoices — any format</p>
+                <p className={`text-xs font-medium ${T.text}`}>Drop files or click to upload</p>
+                <p className={`text-2xs ${T.muted} mt-1`}>PDF, Excel, images of invoices — any format</p>
               </div>
               <input ref={inventoryDocRef} type="file" accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.heic" multiple onChange={handleInventoryDocUpload} className="sr-only" />
               {inventoryDocs.length > 0 && (
@@ -850,18 +854,18 @@ export default function CanadaCustomerOnboardingWizard() {
                     <div key={idx} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${T.cardBg} border ${T.cardBorder}`}>
                       <Package size={14} className={T.accentTxt} />
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[11px] font-medium ${T.text} truncate`}>{doc.file.name}</p>
+                        <p className={`text-2xs font-medium ${T.text} truncate`}>{doc.file.name}</p>
                         <p className={`text-[9px] ${T.muted}`}>{(doc.file.size / 1024).toFixed(0)} KB</p>
                       </div>
                       <span className={`text-[9px] px-2 py-0.5 rounded-full ${doc.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' : doc.status === 'processing' ? 'bg-blue-500/10 text-blue-400' : 'bg-green-500/10 text-green-400'}`}>
                         {doc.status === 'pending' ? 'Ready to process' : doc.status === 'processing' ? 'Processing...' : 'Done'}
                       </span>
-                      <button onClick={() => removeInventoryDoc(idx)} className="p-1 text-[#6b7a74]/30 hover:text-red-400 transition-colors">
+                      <button onClick={() => removeInventoryDoc(idx)} className="p-1 text-pm-canada-text-muted/30 hover:text-red-400 transition-colors">
                         <X size={12} />
                       </button>
                     </div>
                   ))}
-                  <p className={`text-[10px] ${T.accentTxt} flex items-center gap-1`}>
+                  <p className={`text-2xs ${T.accentTxt} flex items-center gap-1`}>
                     <Shield size={10} /> AI bot will process these after setup — extracting products, costs &amp; margins into structured tables
                   </p>
                 </div>
@@ -870,7 +874,7 @@ export default function CanadaCustomerOnboardingWizard() {
             <div className="flex justify-between">
               <button onClick={() => setStep('pos')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <div className="flex items-center gap-2">
-                <button onClick={() => setStep('staff')} className={`text-[12px] ${T.muted} hover:text-[#F5F5F7] transition-colors`}>Skip for now</button>
+                <button onClick={() => setStep('staff')} className={`text-xs ${T.muted} hover:text-pm-text transition-colors`}>Skip for now</button>
                 <button onClick={handleInventoryNext} disabled={saving} className={btnPrimary}>
                   {saving ? <Loader2 size={14} className="animate-spin" /> : null} Next: Staff <ArrowRight size={14} />
                 </button>
@@ -884,15 +888,15 @@ export default function CanadaCustomerOnboardingWizard() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <h1 className={`text-xl font-bold ${T.text}`}>Add Your Team</h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>We'll use this for labor cost analysis and staffing optimization</p>
+              <p className={`text-sm-tight ${T.muted} mt-1`}>We'll use this for labor cost analysis and staffing optimization</p>
             </div>
             <div className={`${cardCls} space-y-3`}>
               {staffMembers.map((member) => (
                 <div key={member.id} className="grid grid-cols-12 gap-2 items-center">
                   <input type="text" value={member.name} onChange={e => updateStaffMember(member.id, 'name', e.target.value)}
-                    placeholder="Name" className={`col-span-4 px-3 py-2.5 text-[12px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
+                    placeholder="Name" className={`col-span-4 px-3 py-2.5 text-xs rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-pm-canada-text-muted/20 ${T.focusBorder} focus:outline-none`} />
                   <select value={member.role} onChange={e => updateStaffMember(member.id, 'role', e.target.value)}
-                    className={`col-span-4 px-3 py-2.5 text-[12px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} focus:outline-none`}>
+                    className={`col-span-4 px-3 py-2.5 text-xs rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} focus:outline-none`}>
                     <option value="">Role...</option>
                     <option value="Manager">Manager</option><option value="Cashier">Cashier</option>
                     <option value="Server">Server</option><option value="Cook">Cook</option>
@@ -900,17 +904,17 @@ export default function CanadaCustomerOnboardingWizard() {
                     <option value="Host">Host</option><option value="Other">Other</option>
                   </select>
                   <input type="number" value={member.hourlyRate} onChange={e => updateStaffMember(member.id, 'hourlyRate', e.target.value)}
-                    placeholder="CA$/hr" className={`col-span-3 px-3 py-2.5 text-[12px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
-                  <button onClick={() => removeStaffMember(member.id)} className="col-span-1 p-1 text-[#6b7a74]/30 hover:text-red-400 transition-colors">
+                    placeholder="CA$/hr" className={`col-span-3 px-3 py-2.5 text-xs rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-pm-canada-text-muted/20 ${T.focusBorder} focus:outline-none`} />
+                  <button onClick={() => removeStaffMember(member.id)} className="col-span-1 p-1 text-pm-canada-text-muted/30 hover:text-red-400 transition-colors">
                     <Trash2 size={14} />
                   </button>
                 </div>
               ))}
-              <button onClick={addStaffMember} className={`flex items-center gap-1.5 text-[12px] ${T.accentTxt} hover:text-[#F5F5F7] transition-colors`}>
+              <button onClick={addStaffMember} className={`flex items-center gap-1.5 text-xs ${T.accentTxt} hover:text-pm-text transition-colors`}>
                 <Plus size={14} /> Add Staff Member
               </button>
               {staffMembers.length === 0 && (
-                <p className={`text-[11px] ${T.muted}/40 text-center py-4`}>
+                <p className={`text-2xs ${T.muted}/40 text-center py-4`}>
                   Add your team members to unlock labor cost insights and staffing recommendations
                 </p>
               )}
@@ -918,7 +922,7 @@ export default function CanadaCustomerOnboardingWizard() {
             <div className="flex justify-between">
               <button onClick={() => setStep('inventory')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <div className="flex items-center gap-2">
-                <button onClick={() => setStep('schedule')} className={`text-[12px] ${T.muted} hover:text-[#F5F5F7] transition-colors`}>Skip for now</button>
+                <button onClick={() => setStep('schedule')} className={`text-xs ${T.muted} hover:text-pm-text transition-colors`}>Skip for now</button>
                 <button onClick={handleStaffNext} disabled={saving} className={btnPrimary}>
                   Next: Schedule <ArrowRight size={14} />
                 </button>
@@ -932,7 +936,7 @@ export default function CanadaCustomerOnboardingWizard() {
           <div className="space-y-4">
             <div className="text-center mb-6">
               <h1 className={`text-xl font-bold ${T.text}`}>Upload Your Schedule</h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>Snap a photo of your weekly schedule — we'll extract the data automatically</p>
+              <p className={`text-sm-tight ${T.muted} mt-1`}>Snap a photo of your weekly schedule — we'll extract the data automatically</p>
             </div>
             <div className={cardCls}>
               {schedulePreview ? (
@@ -944,18 +948,18 @@ export default function CanadaCustomerOnboardingWizard() {
                       <X size={14} />
                     </button>
                   </div>
-                  <div className={`flex items-center gap-2 text-[11px] ${T.accentTxt}`}>
+                  <div className={`flex items-center gap-2 text-2xs ${T.accentTxt}`}>
                     <CheckCircle2 size={12} /> Schedule photo ready — we'll process it with OCR
                   </div>
                 </div>
               ) : (
                 <div onClick={() => scheduleInputRef.current?.click()}
-                  className={`flex flex-col items-center justify-center py-12 cursor-pointer rounded-lg border-2 border-dashed ${T.cardBorder} hover:border-[#00d4aa]/30 transition-colors`}>
-                  <div className="w-14 h-14 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mb-3">
+                  className={`flex flex-col items-center justify-center py-12 cursor-pointer rounded-lg border-2 border-dashed ${T.cardBorder} hover:border-pm-accent/30 transition-colors`}>
+                  <div className="w-14 h-14 rounded-full bg-pm-accent/10 flex items-center justify-center mb-3">
                     <Camera size={24} className={T.accentTxt} />
                   </div>
-                  <p className={`text-[13px] font-medium ${T.text}`}>Take a photo or upload an image</p>
-                  <p className={`text-[11px] ${T.muted} mt-1`}>JPG, PNG, or PDF — we'll extract shift data</p>
+                  <p className={`text-sm-tight font-medium ${T.text}`}>Take a photo or upload an image</p>
+                  <p className={`text-2xs ${T.muted} mt-1`}>JPG, PNG, or PDF — we'll extract shift data</p>
                 </div>
               )}
               <input ref={scheduleInputRef} type="file" accept="image/*,.pdf" onChange={handleScheduleUpload} className="sr-only" />
@@ -963,7 +967,7 @@ export default function CanadaCustomerOnboardingWizard() {
             <div className="flex justify-between">
               <button onClick={() => setStep('staff')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <div className="flex items-center gap-2">
-                <button onClick={() => setStep('checkout')} className={`text-[12px] ${T.muted} hover:text-[#F5F5F7] transition-colors`}>Skip for now</button>
+                <button onClick={() => setStep('checkout')} className={`text-xs ${T.muted} hover:text-pm-text transition-colors`}>Skip for now</button>
                 <button onClick={handleScheduleNext} disabled={saving} className={btnPrimary}>
                   {saving ? <Loader2 size={14} className="animate-spin" /> : null} Next: Payment <ArrowRight size={14} />
                 </button>
@@ -979,7 +983,7 @@ export default function CanadaCustomerOnboardingWizard() {
               <h1 className={`text-xl font-bold ${T.text}`}>
                 {paymentComplete ? 'Payment Confirmed!' : 'Activate Your Subscription'}
               </h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>
+              <p className={`text-sm-tight ${T.muted} mt-1`}>
                 {paymentComplete
                   ? 'Your dashboard is ready — pay the invoice from your email at your convenience'
                   : "We'll send a Square invoice to your email — pay when ready"}
@@ -987,19 +991,19 @@ export default function CanadaCustomerOnboardingWizard() {
             </div>
 
             {paymentComplete ? (
-              <div className="rounded-xl p-6 border border-[#00d4aa]/30 bg-[#00d4aa]/5 text-center">
-                <div className="w-14 h-14 rounded-full bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center mx-auto mb-4">
+              <div className="rounded-xl p-6 border border-pm-accent/30 bg-pm-accent/5 text-center">
+                <div className="w-14 h-14 rounded-full bg-pm-accent/15 border border-pm-accent/30 flex items-center justify-center mx-auto mb-4">
                   <CheckCircle2 size={28} className={T.accentTxt} />
                 </div>
-                <p className={`text-[14px] font-medium ${T.text}`}>Invoices Sent!</p>
-                <p className={`text-[12px] ${T.muted} mt-1`}>
+                <p className={`text-sm font-medium ${T.text}`}>Invoices Sent!</p>
+                <p className={`text-xs ${T.muted} mt-1`}>
                   Two invoices sent to <span className={T.text}>{account.email}</span>:
                 </p>
-                <div className={`mt-2 space-y-1 text-[11px] ${T.muted}`}>
+                <div className={`mt-2 space-y-1 text-2xs ${T.muted}`}>
                   <p>1. <span className={T.text}>CA${monthlyPriceCAD}</span> — Setup fee (due in 3 days)</p>
                   <p>2. <span className={T.text}>CA${monthlyPriceCAD}/mo</span> — Monthly recurring (due in 30 days)</p>
                 </div>
-                <p className={`text-[11px] ${T.muted}/60 mt-2`}>
+                <p className={`text-2xs ${T.muted}/60 mt-2`}>
                   Pay via the links in your email — your dashboard is ready to use now
                 </p>
               </div>
@@ -1007,12 +1011,12 @@ export default function CanadaCustomerOnboardingWizard() {
               <div className={`${cardCls} space-y-4`}>
                 <div className={`rounded-lg p-4 ${T.pageBg} ${T.cardBorder}`}>
                   <div className="flex justify-between items-center mb-3">
-                    <span className={`text-[13px] font-medium ${T.text}`}>Meridian Analytics (Canada)</span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#00d4aa]/10 text-[#00d4aa] font-medium border border-[#00d4aa]/20">
+                    <span className={`text-sm-tight font-medium ${T.text}`}>Meridian Analytics (Canada)</span>
+                    <span className="text-2xs px-2 py-0.5 rounded-full bg-pm-accent/10 text-pm-accent font-medium border border-pm-accent/20">
                       {prefill.plan || 'Standard'}
                     </span>
                   </div>
-                  <div className="space-y-2 text-[12px]">
+                  <div className="space-y-2 text-xs">
                     <div className={`flex justify-between ${T.muted}`}>
                       <span>Setup fee (due in 3 days)</span>
                       <span className={T.text}>CA${monthlyPriceCAD}.00</span>
@@ -1032,17 +1036,17 @@ export default function CanadaCustomerOnboardingWizard() {
                 </div>
 
                 {checkoutError && (
-                  <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] flex items-start gap-2">
+                  <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
                     <AlertCircle size={14} className="mt-0.5 shrink-0" />
                     <div>
                       <p>{checkoutError}</p>
-                      <button onClick={() => setCheckoutError(null)} className="text-[11px] text-red-400/60 hover:text-red-400 mt-1 underline">Dismiss</button>
+                      <button onClick={() => setCheckoutError(null)} className="text-2xs text-red-400/60 hover:text-red-400 mt-1 underline">Dismiss</button>
                     </div>
                   </div>
                 )}
 
                 <button onClick={handleSquareCheckout} disabled={checkoutLoading}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3.5 text-[14px] font-semibold text-white bg-[#006AFF] rounded-lg hover:bg-[#0055CC] disabled:opacity-50 transition-colors">
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3.5 text-sm font-semibold text-white bg-[#006AFF] rounded-lg hover:bg-[#0055CC] disabled:opacity-50 transition-colors">
                   {checkoutLoading ? (
                     <><Loader2 size={16} className="animate-spin" /> Creating Invoice...</>
                   ) : (
@@ -1050,12 +1054,12 @@ export default function CanadaCustomerOnboardingWizard() {
                   )}
                 </button>
 
-                <div className={`flex items-center justify-center gap-2 text-[10px] ${T.muted}/40`}>
+                <div className={`flex items-center justify-center gap-2 text-2xs ${T.muted}/40`}>
                   <Shield size={10} /> Secured by Square &bull; 256-bit encryption
                 </div>
 
-                <div className="rounded-lg p-3 bg-[#00d4aa]/5 border border-[#00d4aa]/15">
-                  <p className={`text-[11px] ${T.muted} leading-relaxed`}>
+                <div className="rounded-lg p-3 bg-pm-accent/5 border border-pm-accent/15">
+                  <p className={`text-2xs ${T.muted} leading-relaxed`}>
                     <span className={`${T.accentTxt} font-medium`}>How billing works:</span> You'll receive two Square invoices via email — a one-time
                     setup fee and your monthly recurring subscription. Pay at your convenience through the secure links.
                     We'll review and reconfirm your plan every 3 months. Cancel anytime from your dashboard settings.
@@ -1071,7 +1075,7 @@ export default function CanadaCustomerOnboardingWizard() {
               {paymentComplete && (
                 <div className="w-full flex justify-center">
                   <button onClick={startProcessing}
-                    className={`flex items-center gap-2 px-8 py-3 text-[14px] font-medium text-[#0a0f0d] ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.15)]`}>
+                    className={`flex items-center gap-2 px-8 py-3 text-sm font-medium text-pm-canada-bg ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.15)]`}>
                     Launch My Dashboard <ArrowRight size={16} />
                   </button>
                 </div>
@@ -1083,8 +1087,8 @@ export default function CanadaCustomerOnboardingWizard() {
         {/* ═══ Processing ═══ */}
         {step === 'processing' && (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="w-16 h-16 rounded-full bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center mb-5 animate-pulse">
-              <Loader2 size={28} className="text-[#00d4aa] animate-spin" />
+            <div className="w-16 h-16 rounded-full bg-pm-accent/15 border border-pm-accent/30 flex items-center justify-center mb-5 animate-pulse">
+              <Loader2 size={28} className="text-pm-accent animate-spin" />
             </div>
             <h2 className={`text-lg font-bold ${T.text} mb-1`}>Analyzing Your Business Data</h2>
             <p className={`text-xs ${T.muted} mb-6 text-center max-w-sm`}>
@@ -1093,16 +1097,16 @@ export default function CanadaCustomerOnboardingWizard() {
 
             {/* Progress bar */}
             <div className="w-full max-w-sm mb-2">
-              <div className="h-2 rounded-full bg-[#1a2420] overflow-hidden">
+              <div className="h-2 rounded-full bg-pm-canada-border overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-[#00d4aa] to-[#1A8FD6] transition-all duration-1000 ease-linear"
+                  className="h-full rounded-full bg-gradient-to-r from-pm-accent to-pm-blue transition-all duration-1000 ease-linear"
                   style={{ width: `${processingPct}%` }}
                 />
               </div>
             </div>
             <div className="flex items-center justify-between w-full max-w-sm mb-6">
-              <span className="text-[11px] font-mono text-[#00d4aa]">{processingPct}%</span>
-              <span className={`text-[11px] ${T.muted}/60`}>
+              <span className="text-2xs font-mono text-pm-accent">{processingPct}%</span>
+              <span className={`text-2xs ${T.muted}/60`}>
                 ~{remainingMin} min remaining
               </span>
             </div>
@@ -1113,20 +1117,20 @@ export default function CanadaCustomerOnboardingWizard() {
                 const done = currentPhaseIdx === -1 || i < currentPhaseIdx
                 const active = i === currentPhaseIdx
                 return (
-                  <div key={phase.label} className={`flex items-center gap-2.5 text-[12px] transition-all duration-300 ${
-                    done ? 'text-[#00d4aa]' : active ? 'text-[#F5F5F7]' : 'text-[#6b7a74]/20'
+                  <div key={phase.label} className={`flex items-center gap-2.5 text-xs transition-all duration-300 ${
+                    done ? 'text-pm-accent' : active ? 'text-pm-text' : 'text-pm-canada-text-muted/20'
                   }`}>
                     {done ? <CheckCircle2 size={13} className="flex-shrink-0" /> : active ? <Loader2 size={13} className="animate-spin flex-shrink-0" /> : <div className="w-[13px] h-[13px] flex-shrink-0" />}
                     <span>{phase.label}</span>
-                    {phase.ai && active && <span className="ml-auto text-[9px] font-mono text-[#00d4aa]/50">AI</span>}
+                    {phase.ai && active && <span className="ml-auto text-[9px] font-mono text-pm-accent/50">AI</span>}
                   </div>
                 )
               })}
             </div>
 
             {/* Safe-to-leave notice */}
-            <div className="mt-8 px-4 py-3 rounded-xl bg-[#1a2420]/60 border border-[#1a2420] w-full max-w-sm">
-              <p className={`text-[11px] ${T.muted} text-center`}>
+            <div className="mt-8 px-4 py-3 rounded-xl bg-pm-canada-border/60 border border-pm-canada-border w-full max-w-sm">
+              <p className={`text-2xs ${T.muted} text-center`}>
                 You can close this page and come back anytime — your progress is saved automatically.
               </p>
             </div>
@@ -1136,15 +1140,15 @@ export default function CanadaCustomerOnboardingWizard() {
         {/* ═══ Done ═══ */}
         {step === 'done' && (
           <div className="flex flex-col items-center justify-center py-16">
-            <div className="w-20 h-20 rounded-full bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center mb-6">
+            <div className="w-20 h-20 rounded-full bg-pm-accent/15 border border-pm-accent/30 flex items-center justify-center mb-6">
               <CheckCircle2 size={40} className={T.accentTxt} />
             </div>
             <h2 className={`text-2xl font-bold ${T.text} mb-2`}>You're All Set!</h2>
-            <p className={`text-[14px] ${T.muted} text-center max-w-sm mb-8`}>
+            <p className={`text-sm ${T.muted} text-center max-w-sm mb-8`}>
               Your dashboard is live. We're already analyzing your data and generating insights.
             </p>
             <button onClick={() => navigate('/canada/dashboard')}
-              className={`flex items-center gap-2 px-8 py-3 text-[14px] font-medium text-[#0a0f0d] ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.2)]`}>
+              className={`flex items-center gap-2 px-8 py-3 text-sm font-medium text-pm-canada-bg ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.2)]`}>
               Go to Dashboard <ArrowRight size={16} />
             </button>
           </div>

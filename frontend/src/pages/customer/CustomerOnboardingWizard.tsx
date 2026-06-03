@@ -22,12 +22,30 @@ const STEPS: { key: Step; label: string; icon: typeof Store }[] = [
   { key: 'checkout', label: 'Payment', icon: CreditCard },
 ]
 
+// Field keys MUST match what the backend test handlers read (see
+// src/api/routes/pos_connections.py). Wrong keys = silent rejection
+// at the "all three fields are required" check, which is exactly
+// what broke Clover + Toast pre-P1.
 const POS_PROVIDERS = [
-  { id: 'square', label: 'Square', color: '#006AFF', fields: [{ key: 'access_token', label: 'Access Token', placeholder: 'EAAAl...' }] },
-  { id: 'clover', label: 'Clover', color: '#43B02A', fields: [{ key: 'api_key', label: 'API Key', placeholder: 'Your Clover API key' }, { key: 'merchant_id', label: 'Merchant ID', placeholder: 'XXXXXXXXXX' }] },
-  { id: 'toast', label: 'Toast', color: '#FF6600', fields: [{ key: 'api_key', label: 'API Key', placeholder: 'Your Toast API key' }, { key: 'restaurant_guid', label: 'Restaurant GUID', placeholder: 'xxxxxxxx-xxxx-...' }] },
-  { id: 'lightspeed', label: 'Lightspeed', color: '#E4002B', fields: [{ key: 'api_key', label: 'API Key', placeholder: 'Your Lightspeed API key' }] },
-  { id: 'other', label: 'Other', color: '#7C5CFF', fields: [{ key: 'provider_name', label: 'Provider Name', placeholder: 'e.g. Revel, Shopify POS' }, { key: 'api_key', label: 'API Key', placeholder: 'Your API key' }] },
+  { id: 'square', label: 'Square', color: '#006AFF', fields: [
+      { key: 'access_token', label: 'Access Token', placeholder: 'EAAAl...' },
+  ] },
+  { id: 'clover', label: 'Clover', color: '#43B02A', fields: [
+      { key: 'access_token', label: 'Access Token', placeholder: 'Your Clover access token' },
+      { key: 'merchant_id',  label: 'Merchant ID',   placeholder: 'XXXXXXXXXX' },
+  ] },
+  { id: 'toast', label: 'Toast', color: '#FF6600', fields: [
+      { key: 'client_id',       label: 'Client ID',       placeholder: 'Toast partner client_id' },
+      { key: 'client_secret',   label: 'Client Secret',   placeholder: 'Toast partner client_secret' },
+      { key: 'restaurant_guid', label: 'Restaurant GUID', placeholder: 'xxxxxxxx-xxxx-...' },
+  ] },
+  { id: 'lightspeed', label: 'Lightspeed', color: '#E4002B', fields: [
+      { key: 'access_token', label: 'API Key', placeholder: 'Your Lightspeed API key' },
+  ] },
+  { id: 'other', label: 'Other', color: '#7C5CFF', fields: [
+      { key: 'provider_name', label: 'Provider Name', placeholder: 'e.g. Revel, Shopify POS' },
+      { key: 'access_token',  label: 'API Key',       placeholder: 'Your API key' },
+  ] },
 ]
 
 interface StaffMember {
@@ -250,8 +268,12 @@ export default function CustomerOnboardingWizard() {
     setError(null)
 
     try {
-      const apiKey = Object.values(posFields).join('::')
-      const err = await connectPos(posProvider, apiKey)
+      // P1: forward the full per-provider credentials object so
+      // multi-field providers (Clover, Toast) actually authenticate.
+      // posFields is { fieldKey: value } keyed by the field.key values
+      // from POS_PROVIDERS above, which already match the backend's
+      // expected credential keys.
+      const err = await connectPos(posProvider, posFields)
       if (err) { setError(err); setSaving(false); return }
       saveProgress('inventory')
       setStep('inventory')
@@ -560,13 +582,69 @@ export default function CustomerOnboardingWizard() {
   const currentStepIdx = STEPS.findIndex(s => s.key === step)
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center px-4 py-8">
-      <div className="w-full max-w-xl">
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-2.5 mb-6">
-          <MeridianEmblem size={32} />
-          <MeridianWordmark className="text-lg" />
-        </div>
+    <div className="min-h-screen bg-[#0A0A0B] relative overflow-hidden">
+      {/* Backdrop — radial accents so the page doesn't feel like an empty void */}
+      <div className="pointer-events-none absolute inset-0 z-0">
+        <div className="absolute -top-40 -right-40 w-[720px] h-[720px] rounded-full opacity-25 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #1A8FD6 0%, transparent 65%)' }} />
+        <div className="absolute -bottom-60 -left-40 w-[640px] h-[640px] rounded-full opacity-20 blur-3xl"
+          style={{ background: 'radial-gradient(circle, #17C5B0 0%, transparent 65%)' }} />
+        <div className="absolute inset-0 opacity-[0.04]"
+          style={{ backgroundImage: 'radial-gradient(#fff 1px, transparent 1px)', backgroundSize: '32px 32px' }} />
+      </div>
+
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(560px,640px)] min-h-screen">
+        {/* ── Left: value-prop panel (desktop only) ── */}
+        <aside className="hidden lg:flex flex-col justify-between px-12 py-10 border-r border-[#1F1F23]/60 bg-[#0B0B0E]/40 backdrop-blur-sm">
+          <div className="flex items-center gap-2.5">
+            <MeridianEmblem size={32} />
+            <MeridianWordmark className="text-lg" />
+          </div>
+          <div className="space-y-8 max-w-md">
+            <div>
+              <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-[#17C5B0] mb-3">
+                Why Meridian
+              </p>
+              <h2 className="text-3xl font-bold text-[#F5F5F7] leading-tight">
+                See your business in <span className="text-[#1A8FD6]">real time</span> — and act on it.
+              </h2>
+              <p className="text-[14px] text-[#A1A1A8] mt-4 leading-relaxed">
+                Connect your POS once. We turn every transaction into staffing, pricing, and inventory decisions you'd otherwise miss.
+              </p>
+            </div>
+            <ul className="space-y-3">
+              {[
+                ['Live POS sync', 'Square, Toast, Clover, Lightspeed + 200 more — no integration work on your side.'],
+                ['Forecasts, not dashboards', '7 / 30 / 90-day revenue + demand predictions with confidence bands.'],
+                ['Schedules built from your data', 'AI staffing recommendations based on real peak windows. Saves 8 hrs/week.'],
+                ['Bank-level security', 'SOC 2 controls. Your raw transaction data never leaves our encrypted store.'],
+              ].map(([title, body]) => (
+                <li key={title} className="flex gap-3">
+                  <CheckCircle2 size={16} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-[13px] font-medium text-[#F5F5F7]">{title}</p>
+                    <p className="text-[12px] text-[#A1A1A8]/80 leading-relaxed">{body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="rounded-xl border border-[#1F1F23] bg-[#0F0F12]/80 p-4">
+            <p className="text-[12px] text-[#F5F5F7] leading-relaxed italic">
+              "We hooked up Meridian on a Tuesday and by Friday we'd cut $2,800 in weekly labor without a single complaint from the floor."
+            </p>
+            <p className="text-[11px] text-[#A1A1A8]/70 mt-2">— Mateo R., owner, 3-location coffee group</p>
+          </div>
+        </aside>
+
+        {/* ── Right: form panel ── */}
+        <main className="flex flex-col items-center px-4 sm:px-8 py-8 sm:py-10">
+          <div className="w-full max-w-xl">
+            {/* Mobile-only logo (desktop shows it in the side panel) */}
+            <div className="flex items-center justify-center gap-2.5 mb-6 lg:hidden">
+              <MeridianEmblem size={32} />
+              <MeridianWordmark className="text-lg" />
+            </div>
 
         {/* Progress */}
         {step !== 'done' && step !== 'processing' && (
@@ -1080,6 +1158,8 @@ export default function CustomerOnboardingWizard() {
             </button>
           </div>
         )}
+          </div>
+        </main>
       </div>
     </div>
   )

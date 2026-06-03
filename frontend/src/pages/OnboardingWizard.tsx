@@ -13,20 +13,24 @@ const providers = [
   { id: 'other', label: 'Other', desc: 'Custom API integration', color: '#7C5CFF' },
 ]
 
-const providerFields: Record<string, { label: string; placeholder: string }[]> = {
-  square: [{ label: 'Access Token', placeholder: 'EAAAl...' }],
+// Field `key` MUST match what the backend test/connect handlers
+// read in src/api/routes/pos_connections.py — wrong keys = silent
+// rejection (the bug P1 closes).
+const providerFields: Record<string, { key: string; label: string; placeholder: string }[]> = {
+  square: [{ key: 'access_token', label: 'Access Token', placeholder: 'EAAAl...' }],
   clover: [
-    { label: 'API Key', placeholder: 'Your Clover API key' },
-    { label: 'Merchant ID', placeholder: 'XXXXXXXXXX' },
+    { key: 'access_token', label: 'Access Token', placeholder: 'Your Clover access token' },
+    { key: 'merchant_id',  label: 'Merchant ID',   placeholder: 'XXXXXXXXXX' },
   ],
   toast: [
-    { label: 'API Key', placeholder: 'Your Toast API key' },
-    { label: 'Restaurant GUID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+    { key: 'client_id',       label: 'Client ID',       placeholder: 'Toast partner client_id' },
+    { key: 'client_secret',   label: 'Client Secret',   placeholder: 'Toast partner client_secret' },
+    { key: 'restaurant_guid', label: 'Restaurant GUID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
   ],
-  lightspeed: [{ label: 'API Key', placeholder: 'Your Lightspeed API key' }],
+  lightspeed: [{ key: 'access_token', label: 'API Key', placeholder: 'Your Lightspeed API key' }],
   other: [
-    { label: 'Provider Name', placeholder: 'e.g. Revel, Shopify POS' },
-    { label: 'API Key', placeholder: 'Your API key or access token' },
+    { key: 'provider_name', label: 'Provider Name', placeholder: 'e.g. Revel, Shopify POS' },
+    { key: 'access_token',  label: 'API Key',       placeholder: 'Your API key or access token' },
   ],
 }
 
@@ -51,11 +55,16 @@ export default function OnboardingWizard() {
 
   async function handleConnect() {
     if (!provider) return
-    const apiKey = fields.join('::')
     if (fields.some(f => !f.trim())) {
       setError('All fields are required')
       return
     }
+    // P1: build the per-provider credentials object from the
+    // positional `fields` state using the matching `providerFields`
+    // keys so the backend gets the right credential names.
+    const keys = providerFields[provider]?.map(f => f.key) || []
+    const credentials: Record<string, string> = {}
+    keys.forEach((k, i) => { if (fields[i]) credentials[k] = fields[i] })
     setError(null)
     setStep('connecting')
 
@@ -64,7 +73,7 @@ export default function OnboardingWizard() {
     )
 
     try {
-      const err = await Promise.race([connectPos(provider, apiKey), timeout]) as string | null
+      const err = await Promise.race([connectPos(provider, credentials), timeout]) as string | null
       if (err) {
         setError(err)
         setStep('credentials')

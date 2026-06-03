@@ -104,7 +104,9 @@ export default function CustomerWalkthrough({ userId, posConnected = false, onDi
     if (!posApiKey.trim()) { setPosError('Enter your API access token'); return }
     setConnectingPos(true)
     setPosError(null)
-    const err = await connectPos(posProvider, posApiKey.trim())
+    // P1: connectPos now takes a credentials object; single-field
+    // walkthrough → access_token (works for Square + most generic-REST).
+    const err = await connectPos(posProvider, { access_token: posApiKey.trim() })
     setConnectingPos(false)
     if (err) { setPosError(err); return }
     setPosVerified(true)
