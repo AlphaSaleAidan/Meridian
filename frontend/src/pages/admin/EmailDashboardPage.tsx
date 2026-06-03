@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Mail, Send, CheckCircle, AlertTriangle, MousePointerClick, Eye, RefreshCw } from 'lucide-react'
+import { getAuthHeaders } from '@/lib/supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -75,9 +76,10 @@ export default function EmailDashboardPage() {
   async function load() {
     setLoading(true)
     try {
+      const authHeaders = await getAuthHeaders()
       const [statsRes, logRes] = await Promise.all([
-        fetch(`${API_BASE}/api/email/stats`),
-        fetch(`${API_BASE}/api/email/log?limit=100${filter ? `&template=${filter}` : ''}`),
+        fetch(`${API_BASE}/api/email/stats`, { headers: authHeaders }),
+        fetch(`${API_BASE}/api/email/log?limit=100${filter ? `&template=${filter}` : ''}`, { headers: authHeaders }),
       ])
       if (statsRes.ok) setStats(await statsRes.json())
       if (logRes.ok) {

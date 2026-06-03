@@ -292,7 +292,7 @@ export default function CanadaPortalLeadDetailPage() {
       // Trigger Supabase password-setup email — customer sets their own password via secure link.
       // No password ever leaves the server, no plaintext credentials in transit.
       await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/canada/login`,
+        redirectTo: `${window.location.origin}/customer/login`,
       })
 
       setCustomerCredentials({ email })
@@ -321,7 +321,7 @@ export default function CanadaPortalLeadDetailPage() {
           extra: {
             business_name: deal.business_name,
             email: customerCredentials.email,
-            login_url: `${window.location.origin}/canada/login`,
+            login_url: `${window.location.origin}/customer/login`,
             rep_name: rep?.name || '',
             rep_email: rep?.email || '',
           },
@@ -444,7 +444,7 @@ export default function CanadaPortalLeadDetailPage() {
             customer_email: deal.contact_email,
             customer_name: deal.contact_name,
             business_name: deal.business_name,
-            return_url: `${window.location.origin}/canada/login`,
+            return_url: `${window.location.origin}/customer/login`,
             setup_fee_cents: setupFeeCents,
             first_month_free: firstMonthFree,
             rep_id: rep.rep_id || '',
