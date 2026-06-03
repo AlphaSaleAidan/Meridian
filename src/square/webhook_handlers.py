@@ -124,7 +124,7 @@ class WebhookProcessor:
         if not order_id or not connection:
             return {"action": "skipped", "reason": "Missing order_id or connection"}
 
-        access_token = decrypt_token(connection.get("access_token_encrypted", ""))
+        access_token = decrypt_token(connection.get("access_token_enc", ""))
         client = SquareClient(access_token=access_token)
         mapper = self._build_mapper(connection)
 
@@ -195,7 +195,7 @@ class WebhookProcessor:
         if not payment_id or not connection:
             return {"action": "skipped", "reason": "Missing payment_id or connection"}
 
-        access_token = decrypt_token(connection.get("access_token_encrypted", ""))
+        access_token = decrypt_token(connection.get("access_token_enc", ""))
         client = SquareClient(access_token=access_token)
         mapper = self._build_mapper(connection)
 
@@ -222,7 +222,7 @@ class WebhookProcessor:
         if not connection:
             return {"action": "skipped", "reason": "No connection"}
 
-        access_token = decrypt_token(connection.get("access_token_encrypted", ""))
+        access_token = decrypt_token(connection.get("access_token_enc", ""))
         client = SquareClient(access_token=access_token)
         mapper = self._build_mapper(connection)
 
