@@ -26,7 +26,7 @@ export interface AuthState {
   signup: (email: string, password: string, fullName: string, businessName: string, meta?: Record<string, string>) => Promise<string | null>
   logout: () => Promise<void>
   validateToken: (token: string) => Promise<string | null>
-  connectPos: (provider: string, credentials: Record<string, string>) => Promise<string | null>
+  connectPos: (provider: string, credentials: Record<string, string>, repId?: string | null) => Promise<string | null>
   resetPassword: (email: string) => Promise<string | null>
   markOnboarded: () => void
 }
@@ -349,6 +349,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const connectPos = useCallback(async (
     provider: string,
     credentials: Record<string, string>,
+    repId?: string | null,
   ): Promise<string | null> => {
     // P1: credentials is the full per-provider shape.
     //   Square → { access_token }
@@ -416,6 +417,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // on the backend ConnectRequest so it gets persisted to
           // pos_connections.merchant_id for Toast.
           restaurant_guid: credsToSend.restaurant_guid,
+          // P2: rep attribution. Forwarded to the backend's
+          // ConnectRequest.connected_by_rep_id; written to
+          // pos_connections only when present.
+          connected_by_rep_id: repId || null,
         }),
       })
       const connectData = await connectRes.json()
