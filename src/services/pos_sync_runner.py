@@ -61,7 +61,7 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
 
 
 async def _sync_square(org_id, conn_id, connection, since):
-    token = decrypt_token(connection.get("access_token_encrypted", ""))
+    token = decrypt_token(connection.get("access_token_enc", ""))
     from ..square.client import SquareClient
     from ..square.sync_engine import SyncEngine
 
@@ -71,7 +71,7 @@ async def _sync_square(org_id, conn_id, connection, since):
 
 
 async def _sync_clover(org_id, conn_id, connection, since):
-    token = decrypt_token(connection.get("access_token_encrypted", ""))
+    token = decrypt_token(connection.get("access_token_enc", ""))
     merchant_id = connection.get("merchant_id", "")
     from ..clover.client import CloverClient
     from ..clover.sync_engine import CloverSyncEngine
