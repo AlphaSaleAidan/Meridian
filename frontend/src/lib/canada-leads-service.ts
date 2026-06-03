@@ -85,7 +85,17 @@ function rowToDeal(row: unknown): Deal {
 // `list()` revalidates in the background. The realtime subscription also
 // writes through this cache.
 const _listCache = new Map<string, Deal[]>()
-const _listInflight = new Map<string, Promise<Deal[]>>()
+
+// Fix #2: track inflight with a timestamp so stuck promises don't get
+// re-attached to every new mount. If an inflight call is older than
+// `_INFLIGHT_REUSE_MS`, the next caller starts a fresh request instead
+// of awaiting the (likely dead) one. A 15s timeout on the underlying
+// query also rejects the inflight promise so its `finally` clears the
+// map entry.
+type Inflight = { promise: Promise<Deal[]>; startedAt: number }
+const _listInflight = new Map<string, Inflight>()
+const _INFLIGHT_REUSE_MS = 1_000
+const _LIST_TIMEOUT_MS = 15_000
 const _cacheKey = (repId?: string) => repId || '__all__'
 
 function _invalidateCaches() {
@@ -102,15 +112,35 @@ export const canadaLeadsService = {
   async list(repId?: string): Promise<Deal[]> {
     if (!supabase) return []
     const key = _cacheKey(repId)
-    // De-dupe concurrent calls so rapid tab navigation doesn't spam the API.
-    const inflight = _listInflight.get(key)
-    if (inflight) return inflight
-    const promise = (async () => {
+    // De-dupe concurrent calls so rapid tab navigation doesn't spam the
+    // API — but only reuse an inflight promise that's <1s old. A stuck
+    // request (dropped TCP, slow network, paused JS context after a
+    // background tab) used to attach every subsequent mount to a dead
+    // promise, leaving every tab on the "loading" skeleton until the
+    // user did a full page refresh.
+    const existing = _listInflight.get(key)
+    const now = Date.now()
+    if (existing && now - existing.startedAt < _INFLIGHT_REUSE_MS) {
+      return existing.promise
+    }
+    // Either no inflight, or the inflight is old enough to be suspect —
+    // start fresh. The old promise (if any) continues running in the
+    // background; its `finally` will only clear the map entry if its
+    // key still points at it, so it can't evict our new entry.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), _LIST_TIMEOUT_MS)
+    const startedAt = Date.now()
+    // Hoist the holder so the inner finally can compare against `holder.promise`
+    // after it's assigned — the previous shape tripped TS2454 because the
+    // closure referenced `promise` before it was bound.
+    const holder: { promise: Promise<Deal[]> } = { promise: undefined as unknown as Promise<Deal[]> }
+    holder.promise = (async () => {
       try {
         let query = supabase!
           .from('canada_leads')
           .select('*')
           .order('created_at', { ascending: false })
+          .abortSignal(controller.signal)
         if (repId) query = query.eq('rep_id', repId)
         const { data, error } = await query
         if (error) throw new LeadsServiceError(error.message)
@@ -118,11 +148,18 @@ export const canadaLeadsService = {
         _listCache.set(key, deals)
         return deals
       } finally {
-        _listInflight.delete(key)
+        clearTimeout(timeoutId)
+        const current = _listInflight.get(key)
+        // Only clear if we're still the current entry — a fresher
+        // request may have replaced us in the meantime, in which case
+        // we must not evict it.
+        if (current && current.promise === holder.promise) {
+          _listInflight.delete(key)
+        }
       }
     })()
-    _listInflight.set(key, promise)
-    return promise
+    _listInflight.set(key, { promise: holder.promise, startedAt })
+    return holder.promise
   },
 
   async getById(id: string): Promise<Deal | null> {
