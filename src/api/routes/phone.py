@@ -486,6 +486,14 @@ async def twilio_gather(request: Request):
             order_result = await _dispatch_order(call_sid, session, tool.arguments)
             order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
 
+            # PAYMENT_LINK_HANDOFF — Session 2 integration point.
+            # services/phone_agent/voice_sms_handoff.send_payment_link_to_caller
+            # already exists and is unit-import-safe. Wire it here ONLY
+            # after sms_order.py CASL changes have settled on prod, so we
+            # don't integrate against a moving SMS base. Confirmation
+            # text will need a "Check your phone for a payment link"
+            # tail once the call site lands.
+
             confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
             await _log_call_end(call_sid, "order_placed", tool.arguments)
