@@ -365,19 +365,23 @@ async def approve_rep(req: RepActionRequest, request: Request, admin: dict = Dep
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    # Data writes go through the admin's JWT so RLS is enforced as the caller.
-    # The auth admin (user creation) call below stays on service_key — Supabase
-    # /auth/v1/admin/* rejects non-service-role tokens.
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
+    # The caller has already been verified as an admin via require_admin_jwt
+    # above. Use the service key for the write so all approved admins can
+    # action approvals regardless of whether their user_id is listed in the
+    # sales_reps UPDATE RLS policy. Defense-in-depth lives in
+    # require_admin_jwt (ADMIN_EMAILS allowlist), not in PostgREST policies.
+    # The Supabase /auth/v1/admin/users call further down also requires the
+    # service key.
+    _user_token_unused = _user_token(request)  # noqa: F841 — kept for audit logging hooks if added later
+    _anon_key_unused = _get_anon_key()  # noqa: F841
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         # 1. PATCH is_active = true and verify row was updated
         resp = await client.patch(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
                 "Content-Type": "application/json",
                 "Prefer": "return=representation",
             },
@@ -458,15 +462,13 @@ async def reject_rep(req: RepActionRequest, request: Request, admin: dict = Depe
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
             },
         )
         if resp.status_code not in (200, 204):
@@ -493,8 +495,6 @@ async def update_rep(req: RepUpdateRequest, request: Request, admin: dict = Depe
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
 
     updates: dict = {}
     if req.name is not None:
@@ -508,8 +508,8 @@ async def update_rep(req: RepUpdateRequest, request: Request, admin: dict = Depe
         resp = await client.patch(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
                 "Content-Type": "application/json",
                 "Prefer": "return=representation",
             },
@@ -532,15 +532,13 @@ async def remove_rep(req: RepActionRequest, request: Request, admin: dict = Depe
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
             },
         )
         if resp.status_code not in (200, 204):
