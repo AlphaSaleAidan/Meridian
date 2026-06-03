@@ -51,6 +51,7 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "400M",
+      env: { ...GATEWAY_ENV },
     },
     {
       name: "celery-beat",
@@ -60,6 +61,7 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "200M",
+      env: { ...GATEWAY_ENV },
     },
     {
       name: "deerflow",
@@ -69,6 +71,7 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "200M",
+      env: { ...GATEWAY_ENV },
     },
     {
       name: "scraper",
@@ -78,6 +81,7 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "300M",
+      env: { ...GATEWAY_ENV },
     },
     {
       name: "qwen-server",

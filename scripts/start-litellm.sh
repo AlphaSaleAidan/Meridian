@@ -50,8 +50,32 @@ if [ "$_have_any_upstream" -eq 0 ]; then
   echo "WARN: no upstream provider keys set — only meridian-local will answer" >&2
 fi
 
+# Render the effective config with the budget cap injected from env. We do
+# this in shell because LiteLLM's `os.environ/X` resolver returns a string
+# and the spend>cap compare is numeric — see the comment on max_budget in
+# litellm.config.yaml.
+EFFECTIVE_CONFIG="/run/meridian-fixer/litellm.config.effective.yaml"
+# Fall back to /tmp if the meridian-fixer runtime dir isn't writable (e.g.,
+# very first boot before tmpfiles.d has run).
+if ! { [ -w "$(dirname "$EFFECTIVE_CONFIG")" ] 2>/dev/null; }; then
+  EFFECTIVE_CONFIG="/tmp/litellm.config.effective.yaml"
+fi
+_budget="${LITELLM_MAX_BUDGET:-9.0}"
+# Validate it's a positive number; otherwise the proxy will throw the same
+# misleading 401 the env-var path used to.
+if ! printf '%s' "$_budget" | grep -qE '^[0-9]+(\.[0-9]+)?$'; then
+  echo "FATAL: LITELLM_MAX_BUDGET ($_budget) is not numeric" >&2
+  exit 1
+fi
+sed "s/__LITELLM_MAX_BUDGET__/$_budget/" "$CONFIG" > "$EFFECTIVE_CONFIG"
+
+# LiteLLM also reads LITELLM_MAX_BUDGET directly from the process environment
+# as a string, which then fails the spend>cap numeric compare. Drop it so the
+# YAML's numeric value is the only source.
+unset LITELLM_MAX_BUDGET
+
 exec "$LITELLM_BIN" \
-  --config "$CONFIG" \
+  --config "$EFFECTIVE_CONFIG" \
   --port 4000 \
   --host 127.0.0.1 \
   --num_workers 1

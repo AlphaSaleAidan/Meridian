@@ -76,15 +76,20 @@ litellm_settings:
     host: "localhost"
     port: 6379
     ttl: 600
-  # Phase-4 budget cap on K2.6 spend (USD); set to None to disable
-  max_budget: 25.0
+  # Budget cap on total gateway spend (USD per budget_duration window).
+  # The placeholder is substituted at launch time from .env.litellm:LITELLM_MAX_BUDGET
+  # (see scripts/start-litellm.sh). Doing the swap in shell rather than via
+  # `os.environ/X` because LiteLLM doesn't cast env-var resolved values back
+  # to float — the comparison `current_spend > max_budget` then fails with a
+  # TypeError surfaced as a misleading 401. Edit only LITELLM_MAX_BUDGET in
+  # .env.litellm when funding more credit; committed config stays stable.
+  max_budget: __LITELLM_MAX_BUDGET__
   budget_duration: "30d"
 
 general_settings:
   store_model_in_db: false
   disable_spend_logs: false
-  alerting:
-    - "slack"
-  alert_types:
-    - "budget_alerts"
-    - "llm_exceptions"
+  # Slack alerting deferred — needs SLACK_WEBHOOK_URL. Add the alerting block
+  # back when the webhook is provisioned. Until then, spend tracking happens
+  # via the proxy's built-in spend log (queryable at /global/spend with the
+  # master key) so we don't lose visibility.
