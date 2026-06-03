@@ -464,3 +464,152 @@ def upload_archive_to_r2(org_id: str, year: int, month: int):
     result = run_async(_upload())
     logger.info(f"R2 upload complete: {result}")
     return result
+
+
+# ════════════════════════════════════════════════════════════
+# P3: POS pipeline on Celery
+# ════════════════════════════════════════════════════════════
+# Previously: backfill ran via FastAPI background_tasks (pinning an
+# API worker for the duration of a large merchant's initial sync);
+# incremental_sync.py and token_refresh.py were async functions with
+# no Celery wrapping and no beat schedule, so the only periodic POS
+# sync was via the nightly-analysis chord. P3 fixes all three:
+#
+#   backfill_pos_connection       — dispatched by /api/pos/connect
+#                                    and the OAuth callbacks via
+#                                    .delay(); replaces the
+#                                    FastAPI background_tasks path.
+#   incremental_sync_all          — beat: every 15 min.
+#   refresh_pos_tokens            — beat: daily 04:45 UTC. Closes the
+#                                    Square 30-day refresh-token
+#                                    cliff (refreshes anything
+#                                    expiring within 7 days).
+#
+# All three use the existing run_async() bridge — the underlying
+# functions live in pos_connections.py / incremental_sync.py /
+# token_refresh.py and are lazy-imported inside each task body so
+# Celery worker startup doesn't have to load the FastAPI router
+# graph.
+
+
+@shared_task(
+    bind=True,
+    name="src.workers.tasks.backfill_pos_connection",
+    max_retries=3,
+    default_retry_delay=120,
+    # Backfills can take many minutes on a large merchant; don't
+    # rate-limit them at the queue level — the per-provider
+    # _run_*_backfill helpers respect their own client pagination
+    # limits. acks_late + worker_max_tasks_per_child=200 are
+    # configured globally in celery_app.py so a long-running
+    # backfill that gets killed by `pm2 restart celery-worker` is
+    # re-queued.
+)
+def backfill_pos_connection(
+    self,
+    provider: str,
+    org_id: str,
+    connection_id: str,
+    credentials: dict,
+):
+    """Run initial POS backfill on the Celery path.
+
+    Replaces the FastAPI background_tasks kickoff. Dispatches by
+    provider to the existing `_run_*_backfill` async helpers in
+    `src.api.routes.pos_connections` so the actual ingestion logic
+    stays in one place. Credentials travel inline on the task
+    payload; they're encrypted at rest in `pos_connections`
+    immediately before this task is queued, so the inline copy
+    only exists for the duration of the queued task.
+    """
+    logger.info(
+        f"Celery backfill: provider={provider} org={org_id} conn={connection_id}"
+    )
+
+    async def _run():
+        from ..api.routes.pos_connections import (
+            _run_toast_backfill,
+            _run_square_backfill,
+            _run_clover_backfill,
+            _run_generic_backfill,
+        )
+        if provider == "toast":
+            return await _run_toast_backfill(
+                org_id=org_id, connection_id=connection_id, credentials=credentials,
+            )
+        if provider == "square":
+            return await _run_square_backfill(
+                org_id=org_id, connection_id=connection_id, credentials=credentials,
+            )
+        if provider == "clover":
+            return await _run_clover_backfill(
+                org_id=org_id, connection_id=connection_id, credentials=credentials,
+            )
+        return await _run_generic_backfill(
+            org_id=org_id, connection_id=connection_id,
+            pos_system=provider, credentials=credentials,
+        )
+
+    try:
+        run_async(_run())
+        return {"status": "ok", "provider": provider, "org_id": org_id}
+    except Exception as exc:
+        logger.error(
+            f"Backfill failed for {provider}/{org_id}: {exc}", exc_info=True,
+        )
+        raise self.retry(exc=exc)
+
+
+@shared_task(
+    name="src.workers.tasks.incremental_sync_all",
+    rate_limit="1/m",
+)
+def incremental_sync_all():
+    """Periodic incremental sync across every active connection.
+
+    Beat-scheduled every 15 minutes. Iterates
+    `pos_connections.status=connected AND historical_import_complete=true`
+    and runs each connection's incremental sync on its provider.
+
+    Today this only covers Square (incremental_sync.py is the
+    Square-specific worker). When Toast/Clover periodic syncs are
+    needed, extend `run_all_incremental_syncs` to branch by provider.
+    """
+    async def _run():
+        from .incremental_sync import run_all_incremental_syncs
+        await run_all_incremental_syncs()
+        return {"status": "ok"}
+    try:
+        result = run_async(_run())
+        logger.info(f"Incremental sync sweep complete: {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"Incremental sync sweep failed: {exc}", exc_info=True)
+        # Don't retry — the next beat tick (15 min) will pick up.
+        return {"status": "error", "error": str(exc)}
+
+
+@shared_task(
+    name="src.workers.tasks.refresh_pos_tokens",
+    rate_limit="1/h",
+)
+def refresh_pos_tokens():
+    """Refresh any POS OAuth tokens expiring within 7 days.
+
+    Beat-scheduled daily 04:45 UTC. Closes the Square 30-day
+    refresh-token cliff — without this, every merchant goes silently
+    dead a month after connecting. Clover tokens don't auto-expire
+    (`token_refresh.refresh_expiring_tokens` skips connections with
+    NULL `token_expires_at`), so this safely no-ops for them.
+    """
+    async def _run():
+        from .token_refresh import refresh_expiring_tokens
+        stats = await refresh_expiring_tokens()
+        return stats
+    try:
+        result = run_async(_run())
+        logger.info(f"Token refresh complete: {result}")
+        return result
+    except Exception as exc:
+        logger.error(f"Token refresh failed: {exc}", exc_info=True)
+        return {"status": "error", "error": str(exc)}

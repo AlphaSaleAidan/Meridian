@@ -275,16 +275,19 @@ async def callback(
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
-            # Kick off historical backfill in background
+            # P3: dispatch backfill onto Celery instead of FastAPI
+            # background_tasks. Uses the same backfill_pos_connection
+            # task the credential-paste path uses (single dispatch
+            # entrypoint, single retry policy). The Square access
+            # token travels inline; it's already encrypted on
+            # pos_connections by the time .delay() is called.
             conn_id = existing[0]["id"] if existing else connection_data["id"]
-            from ...workers.backfill import run_backfill
-            background_tasks.add_task(
-                run_backfill,
-                access_token=tokens["access_token"],
-                org_id=org_id,
-                connection_id=conn_id,
+            from ...workers.tasks import backfill_pos_connection
+            backfill_pos_connection.delay(
+                "square", org_id, conn_id,
+                {"access_token": tokens["access_token"]},
             )
-            logger.info(f"Queued backfill task for org={org_id}, connection={conn_id}")
+            logger.info(f"Queued Square backfill on Celery for org={org_id}, connection={conn_id}")
 
         else:
             logger.warning("DB not initialized — tokens returned but not persisted")
