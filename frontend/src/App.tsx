@@ -45,6 +45,8 @@ const LandingPage = lazyRetry(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazyRetry(() => import('@/components/CanadaLayout'))
 const CustomerOnboardingWizard = lazyRetry(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazyRetry(() => import('@/pages/CareersPage'))
+const PrivacyPage = lazyRetry(() => import('@/pages/PrivacyPage'))
+const TermsPage = lazyRetry(() => import('@/pages/TermsPage'))
 const AdminPage = lazyRetry(() => import('@/pages/AdminPage'))
 const ITDashboardPage = lazyRetry(() => import('@/pages/ITDashboardPage'))
 const POSCoveragePage = lazyRetry(() => import('@/pages/admin/POSCoveragePage'))
@@ -243,6 +245,8 @@ export default function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
               <Route path="/careers" element={<CareersPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
 
               {/* SEO — Industry landing pages */}
               <Route path="/for/restaurants" element={<RestaurantsPage />} />
