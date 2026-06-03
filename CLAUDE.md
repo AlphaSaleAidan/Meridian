@@ -30,6 +30,21 @@ Server: 209.126.80.45 (AMD EPYC 12c, 48GB RAM, 484GB disk)
 - Admin phone: +19495067494
 - Supabase project: kbuzufjxwflrutowwnfl
 
+## Development workflow
+
+**Every session that makes commits MUST work in its own `git worktree`, not in `/root/Meridian` directly.** Shared trees race each other — branch switches in one session shuffle dirty files in another, and pre-commit hooks fire against whoever happens to be there. Past incident: 2026-06-03 cross-session race where commits landed on the wrong branch because two sessions interleaved bash invocations in `/root/Meridian`.
+
+```bash
+scripts/session-worktree.sh new my-feature              # off origin/main
+scripts/session-worktree.sh new pos-fix swarm-upgrade   # off a local branch
+scripts/session-worktree.sh list                        # see all active worktrees
+scripts/session-worktree.sh rm my-feature               # tear down (refuses if dirty)
+```
+
+The worktree lives at `/tmp/meridian-<name>` on branch `session/<name>`. `frontend/node_modules` is symlinked so the pre-commit `tsc` hook works without re-installing. Full workflow + caveats in [`docs/SESSION-WORKTREE.md`](docs/SESSION-WORKTREE.md).
+
+`/root/Meridian` is reserved for: long-running pinned branches, read-only inspection, and running the pm2-managed services. Not for new commit production.
+
 ## LLM Routing Chain
 
 `llm_layer.py` routes: DeepSeek V3 → SambaNova (free, 405B) → Groq (free, 70B) → Local Llama → Cerebras (free, 70B) → OpenAI (fallback).
