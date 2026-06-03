@@ -53,6 +53,7 @@ class CloverDataMapper:
         category_lookup: dict[str, str] | None = None,
         employee_cache: dict[str, str] | None = None,
         pos_connection_id: str | None = None,
+        currency: str | None = None,             # ISO 4217 from merchant.defaultCurrency
     ):
         self.org_id = org_id
         self.location_id = location_id
@@ -60,6 +61,10 @@ class CloverDataMapper:
         self.category_lookup = category_lookup or {}
         self.employee_cache = employee_cache or {}
         self.pos_connection_id = pos_connection_id
+        # ISO 4217 currency from the Clover merchant's defaultCurrency.
+        # Clover orders don't carry currency inline so it's pinned at
+        # construction (same pattern as Toast).
+        self.currency = currency
 
     # ─── Location Mapper (Merchant → Location) ────────────────
 
@@ -227,6 +232,11 @@ class CloverDataMapper:
             "status": self._map_order_state(cl_order.get("state", "")),
             "item_count": len(cl_order.get("lineItems", {}).get("elements", [])),
             "customer_id": cl_order.get("customers", {}).get("elements", [{}])[0].get("id") if cl_order.get("customers") else None,
+            # Clover customer email lives on the customer record itself,
+            # not embedded in the order. A directory prefetch can patch
+            # it in; left NULL here so the inline mapper stays cheap.
+            "customer_email": None,
+            "currency": self.currency,
             "is_online": cl_order.get("isOnline", False),
             "source": cl_order.get("orderType", {}).get("label", "in-store") if cl_order.get("orderType") else "in-store",
             "created_at": _clover_ts_to_iso(cl_order.get("createdTime")),

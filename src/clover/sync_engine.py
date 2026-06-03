@@ -86,6 +86,10 @@ class CloverSyncEngine:
             mapper = CloverDataMapper(
                 org_id=self.org_id,
                 pos_connection_id=self.pos_connection_id,
+                # P0: pin currency from merchant.defaultCurrency so
+                # map_transaction can fill transactions.currency.
+                # Clover orders don't carry currency inline.
+                currency=merchant.get("defaultCurrency"),
             )
             result.locations = [mapper.map_merchant_to_location(merchant)]
             logger.info(f"Merchant: {merchant.get('name', 'Unknown')}")
@@ -246,10 +250,18 @@ class CloverSyncEngine:
         self._emit_progress()
 
         try:
+            # P0: fetch merchant once for currency. Clover orders
+            # don't carry currency inline, so we pin it on the mapper
+            # at construction. One extra API call per incremental run
+            # is cheap relative to the order pagination cost.
+            merchant = await self.client.get_merchant()
+            currency = merchant.get("defaultCurrency") if merchant else None
+
             # Build mapper with existing lookups (loaded from DB in production)
             mapper = CloverDataMapper(
                 org_id=self.org_id,
                 pos_connection_id=self.pos_connection_id,
+                currency=currency,
             )
 
             orders = await self.client.list_orders(

@@ -14,9 +14,18 @@ logger = logging.getLogger("meridian.toast.mappers")
 
 class ToastDataMapper:
 
-    def __init__(self, org_id: str, pos_connection_id: str):
+    def __init__(
+        self,
+        org_id: str,
+        pos_connection_id: str,
+        currency: str | None = None,
+    ):
         self.org_id = org_id
         self.pos_connection_id = pos_connection_id
+        # ISO 4217 currency, populated from the Toast restaurant info
+        # at the start of sync. Toast orders don't carry currency
+        # inline, so we pin it at construction.
+        self.currency = currency
 
     def map_order(self, order: dict) -> tuple[dict, list[dict]]:
         """Map a Toast order to a Meridian transaction + items."""
@@ -37,6 +46,11 @@ class ToastDataMapper:
         tip_cents = 0
         discount_cents = 0
         payment_method = None
+        # Customer identity may live on any check on the order. Pick the
+        # first non-null one so multi-check orders still attribute to a
+        # customer when one is attached.
+        customer_id = None
+        customer_email = None
 
         for check in checks:
             total_cents += int(round((check.get("totalAmount") or 0) * 100))
@@ -47,6 +61,11 @@ class ToastDataMapper:
                     payment_method = payment.get("type", "UNKNOWN")
             for discount in check.get("appliedDiscounts", []):
                 discount_cents += abs(int(round((discount.get("discountAmount") or 0) * 100)))
+            check_customer = check.get("customer") or {}
+            if not customer_id:
+                customer_id = check_customer.get("guid")
+            if not customer_email:
+                customer_email = check_customer.get("email")
 
         server = order.get("server", {})
         employee_name = None
@@ -71,6 +90,10 @@ class ToastDataMapper:
             "employee_name": employee_name,
             "employee_external_id": employee_ext_id,
             "transaction_at": dt.isoformat(),
+            # P0: identity + currency persistence.
+            "customer_id": customer_id,
+            "customer_email": customer_email,
+            "currency": self.currency,
             "metadata": {"source": "toast", "toast_guid": external_id},
         }
 
