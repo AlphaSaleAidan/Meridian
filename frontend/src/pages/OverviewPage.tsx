@@ -219,37 +219,79 @@ export default function OverviewPage() {
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Revenue Forecast</h3>
             </div>
             {forecastData.data && forecastData.data.forecasts.length > 0 ? (() => {
-              const fc = forecastData.data!.forecasts.filter(f => f.type === 'daily_revenue')
+              const fc = forecastData.data!.forecasts
+                .filter(f => f.type === 'daily_revenue')
+                .sort((a, b) => a.period_start.localeCompare(b.period_start))
               const now = new Date()
-              const buckets = [
+              const BUCKETS = [
                 { label: '7-Day', days: 7 },
-                ...(limits.forecastDays >= 30 ? [{ label: '30-Day', days: 30 }] : []),
-                ...(limits.forecastDays >= 90 ? [{ label: '90-Day', days: 90 }] : []),
+                { label: '30-Day', days: 30 },
+                { label: '90-Day', days: 90 },
               ]
+              // Build chart data over up to 90 days (or whatever exists)
+              const chartPts = fc.slice(0, 90).map((f, i) => ({
+                i,
+                pred: f.predicted_cents,
+                lo: f.lower_bound_cents || f.predicted_cents * 0.85,
+                hi: f.upper_bound_cents || f.predicted_cents * 1.15,
+              }))
+              const W = 100, H = 32
+              const maxY = chartPts.length > 0 ? Math.max(...chartPts.map(p => p.hi)) : 1
+              const minY = chartPts.length > 0 ? Math.min(...chartPts.map(p => p.lo)) : 0
+              const yRange = maxY - minY || 1
+              const x = (i: number) => chartPts.length <= 1 ? 0 : (i / (chartPts.length - 1)) * W
+              const y = (v: number) => H - ((v - minY) / yRange) * H
+              const bandPath = chartPts.length > 1
+                ? `M ${chartPts.map(p => `${x(p.i).toFixed(2)},${y(p.hi).toFixed(2)}`).join(' L ')} L ${[...chartPts].reverse().map(p => `${x(p.i).toFixed(2)},${y(p.lo).toFixed(2)}`).join(' L ')} Z`
+                : ''
+              const linePath = chartPts.length > 1
+                ? `M ${chartPts.map(p => `${x(p.i).toFixed(2)},${y(p.pred).toFixed(2)}`).join(' L ')}`
+                : ''
               return (
-                <div className={clsx('grid gap-3', `grid-cols-${buckets.length}`)}>
-                  {buckets.map(b => {
-                    const cutoff = new Date(now)
-                    cutoff.setDate(cutoff.getDate() + b.days)
-                    const inRange = fc.filter(f => new Date(f.period_start) <= cutoff)
-                    const total = inRange.reduce((s, f) => s + f.predicted_cents, 0)
-                    const lower = inRange.reduce((s, f) => s + (f.lower_bound_cents || f.predicted_cents * 0.85), 0)
-                    const upper = inRange.reduce((s, f) => s + (f.upper_bound_cents || f.predicted_cents * 1.15), 0)
-                    const avgConf = inRange.length > 0
-                      ? Math.round(inRange.reduce((s, f) => s + (f.confidence || 0.7) * 100, 0) / inRange.length)
-                      : 0
-                    return (
-                      <div key={b.label} className="text-center">
-                        <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{b.label}</p>
-                        <p className="text-lg sm:text-xl font-bold font-mono text-[#F5F5F7] mt-1">{formatCentsCompact(total)}</p>
-                        <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">{avgConf}% conf</p>
-                        <p className="text-[9px] text-[#A1A1A8]/30 font-mono">
-                          {formatCentsCompact(lower)} – {formatCentsCompact(upper)}
-                        </p>
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    {BUCKETS.map(b => {
+                      const cutoff = new Date(now)
+                      cutoff.setDate(cutoff.getDate() + b.days)
+                      const inRange = fc.filter(f => new Date(f.period_start) <= cutoff)
+                      if (inRange.length === 0) {
+                        return (
+                          <div key={b.label} className="text-center opacity-60">
+                            <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{b.label}</p>
+                            <p className="text-lg sm:text-xl font-bold font-mono text-[#A1A1A8]/40 mt-1">—</p>
+                            <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">not enough data</p>
+                          </div>
+                        )
+                      }
+                      const total = inRange.reduce((s, f) => s + f.predicted_cents, 0)
+                      const lower = inRange.reduce((s, f) => s + (f.lower_bound_cents || f.predicted_cents * 0.85), 0)
+                      const upper = inRange.reduce((s, f) => s + (f.upper_bound_cents || f.predicted_cents * 1.15), 0)
+                      const avgConf = Math.round(inRange.reduce((s, f) => s + (f.confidence || 0.7) * 100, 0) / inRange.length)
+                      return (
+                        <div key={b.label} className="text-center">
+                          <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{b.label}</p>
+                          <p className="text-lg sm:text-xl font-bold font-mono text-[#F5F5F7] mt-1">{formatCentsCompact(total)}</p>
+                          <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">{avgConf}% conf</p>
+                          <p className="text-[9px] text-[#A1A1A8]/30 font-mono">
+                            {formatCentsCompact(lower)} – {formatCentsCompact(upper)}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {chartPts.length > 1 && (
+                    <div className="mt-4 pt-3 border-t border-[#1F1F23]">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] uppercase tracking-wider text-[#A1A1A8]/60">Forecast curve</span>
+                        <span className="text-[9px] text-[#A1A1A8]/40 font-mono">predicted · 85–115% band</span>
                       </div>
-                    )
-                  })}
-                </div>
+                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-12 sm:h-16">
+                        <path d={bandPath} fill="#1A8FD6" fillOpacity="0.14" />
+                        <path d={linePath} stroke="#1A8FD6" strokeWidth="0.7" fill="none" vectorEffect="non-scaling-stroke" />
+                      </svg>
+                    </div>
+                  )}
+                </>
               )
             })() : (
               <p className="text-sm text-[#A1A1A8]/50">Forecasts will appear after enough data is analyzed.</p>

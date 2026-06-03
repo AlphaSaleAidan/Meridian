@@ -1,31 +1,7 @@
+import { z } from 'zod'
 import { supabase } from './supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Deal, DealStage } from './canada-sales-demo-data'
-
-function normalizeRate(v: number): number {
-  return v <= 1 ? Math.round(v * 100) : v
-}
-
-function rowToDeal(row: Record<string, unknown>): Deal {
-  return {
-    id: row.id as string,
-    business_name: row.business_name as string,
-    contact_name: row.contact_name as string,
-    contact_email: row.contact_email as string,
-    contact_phone: (row.contact_phone as string) || '',
-    vertical: (row.vertical as string) || '',
-    stage: row.stage as DealStage,
-    monthly_value: Number(row.monthly_value) || 0,
-    commission_rate: normalizeRate(Number(row.commission_rate) || 0.7),
-    expected_close_date: (row.expected_close_date as string) || '',
-    notes: (row.notes as string) || '',
-    source: (row.source as string) || '',
-    city: (row.city as string) || '',
-    province: (row.province as string) || '',
-    created_at: row.created_at as string,
-    updated_at: row.updated_at as string,
-  }
-}
 
 export class LeadsServiceError extends Error {
   constructor(message: string) {
@@ -34,18 +10,156 @@ export class LeadsServiceError extends Error {
   }
 }
 
+function normalizeRate(v: number): number {
+  return v <= 1 ? Math.round(v * 100) : v
+}
+
+const DEAL_STAGES = [
+  'proposal_shown',
+  'customer_checkout',
+  'pos_connected',
+  'customer_walkthrough',
+  'closed_won',
+  'closed_lost',
+  'appointment_set',
+  'prospecting',
+  'contacted',
+  'demo_scheduled',
+  'proposal_sent',
+  'negotiation',
+] as const
+
+// Schema for a row coming back from Supabase `canada_leads`. Required fields
+// throw clearly if the backend renames or drops them; optional/nullable fields
+// fall back to safe defaults instead of silently becoming `undefined`.
+const CanadaLeadRowSchema = z.object({
+  id: z.string(),
+  business_name: z.string(),
+  contact_name: z.string(),
+  contact_email: z.string(),
+  contact_phone: z.string().nullish(),
+  vertical: z.string().nullish(),
+  stage: z.enum(DEAL_STAGES).or(z.string()),
+  monthly_value: z.union([z.number(), z.string()]).nullish(),
+  commission_rate: z.union([z.number(), z.string()]).nullish(),
+  expected_close_date: z.string().nullish(),
+  notes: z.string().nullish(),
+  source: z.string().nullish(),
+  city: z.string().nullish(),
+  province: z.string().nullish(),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).passthrough()
+
+export type CanadaLeadRow = z.infer<typeof CanadaLeadRowSchema>
+
+function rowToDeal(row: unknown): Deal {
+  const parsed = CanadaLeadRowSchema.safeParse(row)
+  if (!parsed.success) {
+    const issues = parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ')
+    throw new LeadsServiceError(`Invalid canada_leads row: ${issues}`)
+  }
+  const r = parsed.data
+  return {
+    id: r.id,
+    business_name: r.business_name,
+    contact_name: r.contact_name,
+    contact_email: r.contact_email,
+    contact_phone: r.contact_phone || '',
+    vertical: r.vertical || '',
+    stage: r.stage as DealStage,
+    monthly_value: Number(r.monthly_value) || 0,
+    commission_rate: normalizeRate(Number(r.commission_rate) || 0.7),
+    expected_close_date: r.expected_close_date || '',
+    notes: r.notes || '',
+    source: r.source || '',
+    city: r.city || '',
+    province: r.province || '',
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  }
+}
+
+// Module-level cache keyed by rep_id (empty string = "no rep filter"). Lets
+// tab switches inside the portal show the last-known list immediately while
+// `list()` revalidates in the background. The realtime subscription also
+// writes through this cache.
+const _listCache = new Map<string, Deal[]>()
+
+// Fix #2: track inflight with a timestamp so stuck promises don't get
+// re-attached to every new mount. If an inflight call is older than
+// `_INFLIGHT_REUSE_MS`, the next caller starts a fresh request instead
+// of awaiting the (likely dead) one. A 15s timeout on the underlying
+// query also rejects the inflight promise so its `finally` clears the
+// map entry.
+type Inflight = { promise: Promise<Deal[]>; startedAt: number }
+const _listInflight = new Map<string, Inflight>()
+const _INFLIGHT_REUSE_MS = 1_000
+const _LIST_TIMEOUT_MS = 15_000
+const _cacheKey = (repId?: string) => repId || '__all__'
+
+function _invalidateCaches() {
+  _listCache.clear()
+}
+
 export const canadaLeadsService = {
+  /** Synchronous read of the last-known list. Returns null if never fetched. */
+  cached(repId?: string): Deal[] | null {
+    const key = _cacheKey(repId)
+    return _listCache.has(key) ? _listCache.get(key)! : null
+  },
+
   async list(repId?: string): Promise<Deal[]> {
     if (!supabase) return []
-    let query = supabase
-      .from('canada_leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (repId) query = query.eq('rep_id', repId)
-    const { data, error } = await query
-    if (error) throw new LeadsServiceError(error.message)
-    if (!data) return []
-    return data.map(rowToDeal)
+    const key = _cacheKey(repId)
+    // De-dupe concurrent calls so rapid tab navigation doesn't spam the
+    // API — but only reuse an inflight promise that's <1s old. A stuck
+    // request (dropped TCP, slow network, paused JS context after a
+    // background tab) used to attach every subsequent mount to a dead
+    // promise, leaving every tab on the "loading" skeleton until the
+    // user did a full page refresh.
+    const existing = _listInflight.get(key)
+    const now = Date.now()
+    if (existing && now - existing.startedAt < _INFLIGHT_REUSE_MS) {
+      return existing.promise
+    }
+    // Either no inflight, or the inflight is old enough to be suspect —
+    // start fresh. The old promise (if any) continues running in the
+    // background; its `finally` will only clear the map entry if its
+    // key still points at it, so it can't evict our new entry.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), _LIST_TIMEOUT_MS)
+    const startedAt = Date.now()
+    // Hoist the holder so the inner finally can compare against `holder.promise`
+    // after it's assigned — the previous shape tripped TS2454 because the
+    // closure referenced `promise` before it was bound.
+    const holder: { promise: Promise<Deal[]> } = { promise: undefined as unknown as Promise<Deal[]> }
+    holder.promise = (async () => {
+      try {
+        let query = supabase!
+          .from('canada_leads')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .abortSignal(controller.signal)
+        if (repId) query = query.eq('rep_id', repId)
+        const { data, error } = await query
+        if (error) throw new LeadsServiceError(error.message)
+        const deals = (data || []).map(rowToDeal)
+        _listCache.set(key, deals)
+        return deals
+      } finally {
+        clearTimeout(timeoutId)
+        const current = _listInflight.get(key)
+        // Only clear if we're still the current entry — a fresher
+        // request may have replaced us in the meantime, in which case
+        // we must not evict it.
+        if (current && current.promise === holder.promise) {
+          _listInflight.delete(key)
+        }
+      }
+    })()
+    _listInflight.set(key, { promise: holder.promise, startedAt })
+    return holder.promise
   },
 
   async getById(id: string): Promise<Deal | null> {
@@ -84,6 +198,7 @@ export const canadaLeadsService = {
       .select()
       .single()
     if (error) throw new Error(error.message)
+    _invalidateCaches()
     if (data) return rowToDeal(data)
     return deal
   },
@@ -96,6 +211,7 @@ export const canadaLeadsService = {
       .update({ stage, updated_at: now })
       .eq('id', id)
     if (error) throw new LeadsServiceError(error.message)
+    _invalidateCaches()
   },
 
   async update(id: string, updates: Partial<Deal>): Promise<void> {
@@ -106,12 +222,14 @@ export const canadaLeadsService = {
       .update({ ...updates, updated_at: now })
       .eq('id', id)
     if (error) throw new LeadsServiceError(error.message)
+    _invalidateCaches()
   },
 
   async delete(id: string): Promise<void> {
     if (!supabase) return
     const { error } = await supabase.from('canada_leads').delete().eq('id', id)
     if (error) throw new LeadsServiceError(error.message)
+    _invalidateCaches()
   },
 
   subscribe(
@@ -119,8 +237,19 @@ export const canadaLeadsService = {
     onChanged: (deals: Deal[]) => void,
   ): RealtimeChannel | null {
     if (!supabase) return null
+    // Unique channel name per subscription so concurrent subscribers
+    // (e.g. StrictMode double-mount + a tab navigation in flight)
+    // don't share a single Supabase singleton channel by name.
+    // Without this, the unmounting page's `removeChannel(...)` cleanup
+    // killed the just-mounted page's binding — the "can't open the
+    // next tab without a full refresh" symptom.
+    const name = `canada_leads_realtime_${repId || 'all'}_${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36)
+    }`
     const channel = supabase
-      .channel('canada_leads_realtime')
+      .channel(name)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'canada_leads' },

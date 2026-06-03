@@ -39,6 +39,7 @@ import ClineChatWidget from './ClineChatWidget'
 import ClineErrorBoundary from './ClineErrorBoundary'
 import CommandPalette from './CommandPalette'
 import OfflineBanner from './OfflineBanner'
+import { DashboardProcessingBanner } from './DataPageSkeleton'
 
 const navGroups = [
   {
@@ -79,7 +80,7 @@ const navGroups = [
     label: 'Tools',
     items: [
       { path: 'agents', icon: Bot, label: 'AI Agents' },
-      { path: 'camera-intelligence', icon: Video, label: 'Camera Intel' },
+      { path: 'camera-analytics', icon: Video, label: 'Camera Intel' },
       { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
       { path: 'my-website', icon: Globe, label: 'My Website' },
       { path: 'space', icon: Box, label: '3D Space' },
@@ -126,6 +127,38 @@ export default function Layout() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  // Preload sibling dashboard page chunks on idle so tab switches don't
+  // flash the "Loading data..." spinner. Mirrors the fix applied to the
+  // Canada/US sales portals.
+  useEffect(() => {
+    const preload = () => {
+      void import('@/pages/OverviewPage')
+      void import('@/pages/RevenuePage')
+      void import('@/pages/ProductsPage')
+      void import('@/pages/InsightsPage')
+      void import('@/pages/ForecastsPage')
+      void import('@/pages/ActionsPage')
+      void import('@/pages/AnomaliesPage')
+      void import('@/pages/InventoryPage')
+      void import('@/pages/MarginsPage')
+      void import('@/pages/MenuEngineeringPage')
+      void import('@/pages/PeakHoursPage')
+      void import('@/pages/CustomersPage')
+      void import('@/pages/StaffPage')
+      void import('@/pages/SchedulePage')
+      void import('@/pages/AgentDashboardPage')
+      void import('@/pages/NotificationsPage')
+      void import('@/pages/SettingsPage')
+    }
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    if (typeof ric === 'function') {
+      ric(preload)
+    } else {
+      const t = setTimeout(preload, 300)
+      return () => clearTimeout(t)
+    }
   }, [])
 
   const sidebarContent = (
@@ -266,6 +299,7 @@ export default function Layout() {
         {/* Page content */}
         <main id="main-content" className="flex-1 overflow-y-auto">
           <OfflineBanner />
+          <DashboardProcessingBanner />
           {needsOnboarding ? (
             <OnboardingWizard />
           ) : (

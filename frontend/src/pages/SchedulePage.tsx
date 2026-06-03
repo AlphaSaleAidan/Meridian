@@ -101,6 +101,14 @@ function buildOptimalSchedule(
       filled++
     }
   }
+  // Build shifts by grouping each staff member's contiguous hours per day.
+  // Then merge short gaps (≤2h) on the same day and extend short shifts to a
+  // 4-hour minimum so the schedule looks like a real human roster, not a
+  // patchwork of 1-hour blips. Extension respects per-staff availability and
+  // the 40-hour weekly cap.
+  const MIN_SHIFT_HOURS = 4
+  const MERGE_GAP_HOURS = 2
+  const MAX_WEEK_MIN = OVERTIME_THRESHOLD_MIN
   const shifts: ScheduleShift[] = []
   let sid = 1
   for (const [staffId, dayMap] of asgn) {
@@ -109,20 +117,68 @@ function buildOptimalSchedule(
     for (const [day, hrs] of dayMap) {
       if (hrs.size === 0) continue
       const sorted = [...hrs].sort((a, b) => a - b)
-      const groups: number[][] = []
+      // First, group strictly contiguous hours.
+      let groups: number[][] = []
       let g = [sorted[0]]
       for (let i = 1; i < sorted.length; i++) {
         if (sorted[i] === g[g.length - 1] + 1) g.push(sorted[i])
         else { groups.push(g); g = [sorted[i]] }
       }
       groups.push(g)
+      // Extend FIRST so short blocks reach the 4-hour minimum, then merge
+      // adjacent blocks with small gaps. Doing extend-then-merge fixes the
+      // case where a 3-hour lunch block (11–14) and a 4-hour dinner block
+      // (17–21) appear to have a 3-hour gap; after extension to (11–15) the
+      // real gap is 2 hours and the two blocks merge into one shift.
+      const av = member.availability[DAY_KEYS[day]]
+      const availStart = av?.available ? parseInt(av.start) : 0
+      const availEnd = av?.available ? parseInt(av.end) : 24
+      const extended: number[][] = []
+      for (let gi = 0; gi < groups.length; gi++) {
+        const grp = groups[gi]
+        let s = grp[0], e = grp[grp.length - 1] + 1
+        // Cap extension so we don't overlap the previous extended group or
+        // push into the next group's first hour.
+        const prev = extended[extended.length - 1]
+        const prevEnd = prev ? prev[prev.length - 1] + 1 : availStart
+        const nextStart = gi + 1 < groups.length ? groups[gi + 1][0] : availEnd
+        while (e - s < MIN_SHIFT_HOURS) {
+          const currentTotal = (minutesAssigned.get(member.id) ?? 0)
+          if (currentTotal + 60 > MAX_WEEK_MIN) break
+          if (e < availEnd && e < nextStart) { e++; minutesAssigned.set(member.id, currentTotal + 60) }
+          else if (s > availStart && s > prevEnd) { s--; minutesAssigned.set(member.id, currentTotal + 60) }
+          else break
+        }
+        const filled: number[] = []
+        for (let h = s; h < e; h++) filled.push(h)
+        extended.push(filled)
+      }
+      // Now merge runs whose gap is ≤ MERGE_GAP_HOURS. gap=0 (adjacent runs
+      // after extension) merges too. Bridged gap hours count toward the staff
+      // member's weekly total since the person is on the clock through it.
+      const merged: number[][] = [extended[0]]
+      for (let i = 1; i < extended.length; i++) {
+        const last = merged[merged.length - 1]
+        const gap = extended[i][0] - (last[last.length - 1] + 1)
+        if (gap <= MERGE_GAP_HOURS) {
+          for (let h = last[last.length - 1] + 1; h < extended[i][0]; h++) {
+            last.push(h)
+            minutesAssigned.set(member.id, (minutesAssigned.get(member.id) ?? 0) + 60)
+          }
+          for (const h of extended[i]) last.push(h)
+        } else {
+          merged.push(extended[i])
+        }
+      }
+      groups = merged
       for (const grp of groups) {
         const sH = grp[0], eH = grp[grp.length - 1] + 1
+        const hrs = eH - sH
         shifts.push({
           id: `shift-opt-${sid++}`, staffMemberId: staffId, dayOfWeek: day,
           shiftDate: formatDateISO(addDays(weekStart, day)),
           startTime: `${pad2(sH)}:00`, endTime: `${pad2(eH)}:00`,
-          role: member.role, breakMinutes: eH - sH > 5 ? 30 : 0,
+          role: member.role, breakMinutes: hrs >= 6 ? 30 : 0,
           notes: '', status: 'draft', isRecommended: false,
         })
       }

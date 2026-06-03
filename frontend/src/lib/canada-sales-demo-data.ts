@@ -271,20 +271,56 @@ export function deriveCommissionsFromLeads(deals: Deal[]): Commission[] {
   return commissions.sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
-export const STAGE_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  proposal_shown:       { label: 'Proposal Shown',       color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
-  customer_checkout:    { label: 'Customer Checkout',     color: '#F59E0B', bg: '#F59E0B/10', border: '#F59E0B/20' },
-  pos_connected:        { label: 'POS Connected',         color: '#F97316', bg: '#F97316/10', border: '#F97316/20' },
-  customer_walkthrough: { label: 'Customer Walkthrough',  color: '#17C5B0', bg: '#17C5B0/10', border: '#17C5B0/20' },
-  closed_lost:          { label: 'Closed Lost',           color: '#EF4444', bg: '#EF4444/10', border: '#EF4444/20' },
+// `color`/`bg`/`border` are legacy hex/string fields still consumed by the US portal.
+// `textClass`/`dotClass`/`softBgClass` are the Tailwind-native fields used by the
+// Canada portal — added in Phase 3b to eliminate inline `style={{ color: cfg.color }}`.
+// softBgClass approximates the prior `${cfg.color}15`/`${cfg.color}18` ad-hoc
+// alpha (both ~8–9% opacity) with /10.
+type StageConfig = {
+  label: string
+  color: string
+  bg: string
+  border: string
+  textClass: string
+  dotClass: string
+  softBgClass: string
+}
+
+const STAGE_PROPOSAL: StageConfig = {
+  label: 'Proposal Shown', color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20',
+  textClass: 'text-pm-violet', dotClass: 'bg-pm-violet', softBgClass: 'bg-pm-violet/10',
+}
+const STAGE_CHECKOUT: StageConfig = {
+  label: 'Customer Checkout', color: '#F59E0B', bg: '#F59E0B/10', border: '#F59E0B/20',
+  textClass: 'text-pm-amber-orange', dotClass: 'bg-pm-amber-orange', softBgClass: 'bg-pm-amber-orange/10',
+}
+const STAGE_POS: StageConfig = {
+  label: 'POS Connected', color: '#F97316', bg: '#F97316/10', border: '#F97316/20',
+  textClass: 'text-[#f97316]', dotClass: 'bg-[#f97316]', softBgClass: 'bg-[#f97316]/10',
+}
+const STAGE_WALKTHROUGH: StageConfig = {
+  label: 'Customer Walkthrough', color: '#17C5B0', bg: '#17C5B0/10', border: '#17C5B0/20',
+  textClass: 'text-[#17c5b0]', dotClass: 'bg-[#17c5b0]', softBgClass: 'bg-[#17c5b0]/10',
+}
+const STAGE_LOST: StageConfig = {
+  label: 'Closed Lost', color: '#EF4444', bg: '#EF4444/10', border: '#EF4444/20',
+  textClass: 'text-[#ef4444]', dotClass: 'bg-[#ef4444]', softBgClass: 'bg-[#ef4444]/10',
+}
+
+export const STAGE_CONFIG: Record<string, StageConfig> = {
+  proposal_shown:       STAGE_PROPOSAL,
+  customer_checkout:    STAGE_CHECKOUT,
+  pos_connected:        STAGE_POS,
+  customer_walkthrough: STAGE_WALKTHROUGH,
+  closed_lost:          STAGE_LOST,
   // Legacy mappings
-  appointment_set:{ label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
-  prospecting:    { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
-  contacted:      { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
-  demo_scheduled: { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
-  proposal_sent:  { label: 'Proposal Shown',    color: '#1A8FD6', bg: '#1A8FD6/10', border: '#1A8FD6/20' },
-  negotiation:    { label: 'Customer Checkout',  color: '#F59E0B', bg: '#F59E0B/10', border: '#F59E0B/20' },
-  closed_won:     { label: 'Customer Walkthrough', color: '#17C5B0', bg: '#17C5B0/10', border: '#17C5B0/20' },
+  appointment_set: STAGE_PROPOSAL,
+  prospecting:     STAGE_PROPOSAL,
+  contacted:       STAGE_PROPOSAL,
+  demo_scheduled:  STAGE_PROPOSAL,
+  proposal_sent:   STAGE_PROPOSAL,
+  negotiation:     STAGE_CHECKOUT,
+  closed_won:      STAGE_WALKTHROUGH,
 }
 
 export const STAGE_ORDER: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected', 'customer_walkthrough']

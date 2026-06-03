@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
-import { canadaLeadsService } from '@/lib/canada-leads-service'
+import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
+import { formatCad } from '@/lib/format'
+import { PortalPage } from './PortalPage'
 
 interface TeamMember {
   id: string
@@ -50,34 +52,38 @@ function normalizeRate(v: number): number {
   return v <= 1 ? Math.round(v * 100) : v
 }
 
-const AVATAR_COLORS = ['#00d4aa', '#7c3aed', '#f59e0b', '#1a8fd6']
+// Hash-derived avatar palette. softBg (~12.5% → /15) sits behind the bold
+// text-color initials. Class-emitting so Tailwind keeps these in its pass.
+type AvatarClasses = { text: string; softBg: string }
+const AVATAR_CLASSES: AvatarClasses[] = [
+  { text: 'text-pm-accent',        softBg: 'bg-pm-accent/15' },
+  { text: 'text-pm-purple',        softBg: 'bg-pm-purple/15' },
+  { text: 'text-pm-amber-orange',  softBg: 'bg-pm-amber-orange/15' },
+  { text: 'text-pm-violet',        softBg: 'bg-pm-violet/15' },
+]
 const AVG_LIFETIME_MONTHS = 18
-
-function formatCad(amount: number): string {
-  return 'CA$' + Math.round(amount).toLocaleString('en-CA')
-}
 
 function getInitials(name: string): string {
   const parts = name.split(' ')
   return (parts[0]?.[0] || '') + (parts[1]?.[0] || '')
 }
 
-function getAvatarColor(name: string): string {
+function getAvatarClasses(name: string): AvatarClasses {
   let hash = 0
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash)
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+  return AVATAR_CLASSES[Math.abs(hash) % AVATAR_CLASSES.length]
 }
 
 function getRoleBadge(role: string) {
   switch (role) {
     case 'admin':
-      return { text: 'Admin', bg: 'bg-[#7c3aed]/10', textColor: 'text-[#7c3aed]', border: 'border-[#7c3aed]/20' }
+      return { text: 'Admin', bg: 'bg-pm-purple/10', textColor: 'text-pm-purple', border: 'border-pm-purple/20' }
     case 'active':
-      return { text: 'Active', bg: 'bg-[#00d4aa]/10', textColor: 'text-[#00d4aa]', border: 'border-[#00d4aa]/20' }
+      return { text: 'Active', bg: 'bg-pm-accent/10', textColor: 'text-pm-accent', border: 'border-pm-accent/20' }
     case 'onboarding':
-      return { text: 'Onboarding', bg: 'bg-[#f59e0b]/10', textColor: 'text-[#f59e0b]', border: 'border-[#f59e0b]/20' }
+      return { text: 'Onboarding', bg: 'bg-pm-amber-orange/10', textColor: 'text-pm-amber-orange', border: 'border-pm-amber-orange/20' }
     default:
-      return { text: 'Inactive', bg: 'bg-[#6b7a74]/10', textColor: 'text-[#6b7a74]', border: 'border-[#6b7a74]/20' }
+      return { text: 'Inactive', bg: 'bg-pm-canada-text-muted/10', textColor: 'text-pm-canada-text-muted', border: 'border-pm-canada-text-muted/20' }
   }
 }
 
@@ -120,79 +126,81 @@ export default function CanadaPortalTeamPage() {
   const admin = isAdmin(rep?.email)
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
-  const [deals, setDeals] = useState<Deal[]>([])
-  const [commissions, setCommissions] = useState<Commission[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
-  const [loading, setLoading] = useState(true)
+  const [teamLoading, setTeamLoading] = useState(true)
+  const [teamError, setTeamError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(admin ? 'reps' : 'leaderboard')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
   const [removing, setRemoving] = useState(false)
 
-  useEffect(() => {
-    if (!rep?.rep_id) return
-    async function fetchData() {
-      const apiBase = import.meta.env.VITE_API_URL || ''
+  // Deals come from the shared React Query cache so creates/updates on the
+  // Leads page refresh team stats automatically.
+  const { data: deals = [], isLoading: dealsLoading, error: dealsError } = useCanadaLeads(rep?.rep_id)
+  useCanadaLeadsRealtime(rep?.rep_id)
+  const commissions: Commission[] = useMemo(() => deriveCommissionsFromLeads(deals), [deals])
 
-      // Fetch team + applicants from backend API (requires JWT)
+  // PortalPage wraps the page body; either source of failure surfaces the
+  // banner, and the page only shows the skeleton on a truly cold start
+  // (both team list and deals empty).
+  const pageIsLoading = teamLoading || dealsLoading
+  const pageError = teamError ?? dealsError ?? null
+  const pageIsEmpty = team.length === 0 && deals.length === 0
+
+  useEffect(() => {
+    if (!rep?.rep_id) { setTeamLoading(false); return }
+    let cancelled = false
+    async function fetchTeam() {
+      const apiBase = import.meta.env.VITE_API_URL || ''
       try {
         const headers = await getAuthHeaders()
         const resp = await fetch(`${apiBase}/api/canada/team`, { headers })
-        if (resp.ok) {
-          const { reps, applicants: apps } = await resp.json()
-          if (reps && reps.length > 0) {
-            setTeam(reps.map((r: Record<string, unknown>) => {
-              const email = (r.email as string) || ''
-              const adminRole = ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
-              return {
-                id: r.id as string || '',
-                name: r.name as string,
-                email,
-                phone: (r.phone as string) || '',
-                commission_rate: normalizeRate(Number(r.commission_rate) || 0.7),
-                deals_open: 0,
-                deals_won: 0,
-                total_mrr: 0,
-                total_earned: 0,
-                total_paid: 0,
-                is_active: true,
-                joined: (r.created_at as string || '').slice(0, 10),
-                role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
-                location: 'Canada',
-              }
-            }))
-          }
-          if (apps && apps.length > 0) {
-            setApplicants(apps.map((r: Record<string, unknown>) => ({
-              id: r.id as string || '',
-              name: r.name as string || 'Unknown',
-              email: (r.email as string) || '',
-              phone: (r.phone as string) || '',
-              applied_at: (r.created_at as string || '').slice(0, 10),
-              status: 'pending' as const,
-            })))
-          }
+        if (!resp.ok) {
+          throw new Error(`Failed to load team (${resp.status})`)
         }
-      } catch {
-        // fall back to demo data
+        const { reps, applicants: apps } = await resp.json()
+        if (cancelled) return
+        if (reps && reps.length > 0) {
+          setTeam(reps.map((r: Record<string, unknown>) => {
+            const email = (r.email as string) || ''
+            const adminRole = ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
+            return {
+              id: r.id as string || '',
+              name: r.name as string,
+              email,
+              phone: (r.phone as string) || '',
+              commission_rate: normalizeRate(Number(r.commission_rate) || 0.7),
+              deals_open: 0,
+              deals_won: 0,
+              total_mrr: 0,
+              total_earned: 0,
+              total_paid: 0,
+              is_active: true,
+              joined: (r.created_at as string || '').slice(0, 10),
+              role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
+              location: 'Canada',
+            }
+          }))
+        }
+        if (apps && apps.length > 0) {
+          setApplicants(apps.map((r: Record<string, unknown>) => ({
+            id: r.id as string || '',
+            name: r.name as string || 'Unknown',
+            email: (r.email as string) || '',
+            phone: (r.phone as string) || '',
+            applied_at: (r.created_at as string || '').slice(0, 10),
+            status: 'pending' as const,
+          })))
+        }
+      } catch (err) {
+        if (!cancelled) setTeamError(err instanceof Error ? err.message : 'Could not load team data.')
+      } finally {
+        if (!cancelled) setTeamLoading(false)
       }
-
-      // Fetch deals for real pipeline calculation
-      let fetchedDeals: Deal[] = []
-      try {
-        fetchedDeals = await canadaLeadsService.list(rep?.rep_id)
-        setDeals(fetchedDeals)
-      } catch {
-        // ignore
-      }
-
-      // Derive commissions from leads data
-      const comms = deriveCommissionsFromLeads(fetchedDeals)
-      setCommissions(comms)
-      setLoading(false)
     }
-    fetchData()
+    fetchTeam()
+    return () => { cancelled = true }
   }, [rep?.rep_id])
 
   // Enrich team with computed deal stats
@@ -298,111 +306,108 @@ export default function CanadaPortalTeamPage() {
     setApplicants(prev => prev.filter(a => a.id !== applicant.id))
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">M</span>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-5">
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
-        <p className="text-sm text-[#6b7a74] mt-0.5">{admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
+        <p className="text-sm text-pm-canada-text-muted mt-0.5">{admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
       </div>
+
+      <PortalPage
+        isLoading={pageIsLoading}
+        error={pageError}
+        isEmpty={pageIsEmpty}
+        errorTitle="Could not load team data"
+      >
 
       {/* Stat Cards */}
       {admin ? (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-                <Users size={16} className="text-[#00d4aa]" />
+              <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
+                <Users size={16} className="text-pm-accent" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Reps</p>
+                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Total Reps</p>
                 <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
-                <p className="text-[10px] text-[#4a5550]">{totalActive} active{totalOnboarding > 0 ? ` / ${totalOnboarding} onboarding` : ''}</p>
+                <p className="text-2xs text-pm-canada-text-faint">{totalActive} active{totalOnboarding > 0 ? ` / ${totalOnboarding} onboarding` : ''}</p>
               </div>
             </div>
           </div>
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
-                <Target size={16} className="text-[#f59e0b]" />
+              <div className="w-9 h-9 rounded-lg bg-pm-amber-orange/10 flex items-center justify-center">
+                <Target size={16} className="text-pm-amber-orange" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Pipeline</p>
+                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Pipeline</p>
                 <p className="text-lg font-bold text-white">{openDeals.length} deals</p>
-                <p className="text-[10px] text-[#4a5550]">{formatCad(pipelineMrr)}/mo MRR</p>
+                <p className="text-2xs text-pm-canada-text-faint">{formatCad(pipelineMrr)}/mo MRR</p>
               </div>
             </div>
           </div>
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#7c3aed]/10 flex items-center justify-center">
-                <DollarSign size={16} className="text-[#7c3aed]" />
+              <div className="w-9 h-9 rounded-lg bg-pm-purple/10 flex items-center justify-center">
+                <DollarSign size={16} className="text-pm-purple" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Total Commissions</p>
+                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Total Commissions</p>
                 <p className="text-lg font-bold text-white">{formatCad(totalCommission)}</p>
-                <p className="text-[10px] text-[#4a5550]">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
+                <p className="text-2xs text-pm-canada-text-faint">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
               </div>
             </div>
           </div>
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
-                <CreditCard size={16} className="text-[#f59e0b]" />
+              <div className="w-9 h-9 rounded-lg bg-pm-amber-orange/10 flex items-center justify-center">
+                <CreditCard size={16} className="text-pm-amber-orange" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Balance Owed</p>
-                <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-[#f59e0b]' : 'text-white')}>
+                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Balance Owed</p>
+                <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-pm-amber-orange' : 'text-white')}>
                   {formatCad(balanceOwed)}
                 </p>
-                <p className="text-[10px] text-[#4a5550]">{wonDeals.length} signed deals</p>
+                <p className="text-2xs text-pm-canada-text-faint">{wonDeals.length} signed deals</p>
               </div>
             </div>
           </div>
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-                <Users size={16} className="text-[#00d4aa]" />
+              <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
+                <Users size={16} className="text-pm-accent" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Team Size</p>
+                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Team Size</p>
                 <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
               </div>
             </div>
           </div>
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#f59e0b]/10 flex items-center justify-center">
-                <Trophy size={16} className="text-[#f59e0b]" />
+              <div className="w-9 h-9 rounded-lg bg-pm-amber-orange/10 flex items-center justify-center">
+                <Trophy size={16} className="text-pm-amber-orange" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Your Rank</p>
+                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Your Rank</p>
                 <p className="text-lg font-bold text-white">
                   #{[...enrichedTeam].sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won).findIndex(m => m.email === rep?.email) + 1 || '—'}
                 </p>
               </div>
             </div>
           </div>
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-                <Target size={16} className="text-[#00d4aa]" />
+              <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
+                <Target size={16} className="text-pm-accent" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Your Deals</p>
+                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Your Deals</p>
                 <p className="text-lg font-bold text-white">{enrichedTeam.find(m => m.email === rep?.email)?.deals_won || 0} won</p>
               </div>
             </div>
@@ -411,25 +416,25 @@ export default function CanadaPortalTeamPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-[#0f1512] border border-[#1a2420] rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-pm-canada-surface border border-pm-canada-border rounded-xl p-1 w-fit">
         {admin && (
           <button
             onClick={() => setActiveTab('reps')}
-            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-pm-canada-border text-white' : 'text-pm-canada-text-muted hover:text-white')}
           >
             Sales Reps
           </button>
         )}
         <button
           onClick={() => setActiveTab('leaderboard')}
-          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'text-[#6b7a74] hover:text-white')}
+          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-pm-amber-orange/20 text-pm-amber-orange' : 'text-pm-canada-text-muted hover:text-white')}
         >
           Leaderboard
         </button>
         {admin && (
           <button
             onClick={() => setActiveTab('payouts')}
-            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'payouts' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'payouts' ? 'bg-pm-canada-border text-white' : 'text-pm-canada-text-muted hover:text-white')}
           >
             Payouts
           </button>
@@ -437,11 +442,11 @@ export default function CanadaPortalTeamPage() {
         {admin && (
           <button
             onClick={() => setActiveTab('applications')}
-            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors relative', activeTab === 'applications' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors relative', activeTab === 'applications' ? 'bg-pm-canada-border text-white' : 'text-pm-canada-text-muted hover:text-white')}
           >
             Applications
             {applicants.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[#f59e0b] text-[#0a0f0d] text-[9px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-pm-amber-orange text-pm-canada-bg text-[9px] font-bold flex items-center justify-center">
                 {applicants.length}
               </span>
             )}
@@ -453,10 +458,10 @@ export default function CanadaPortalTeamPage() {
       {activeTab === 'reps' && (
         <>
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a74]/60" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-pm-canada-text-muted/60" />
             <input
               type="text" value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 bg-[#0f1512] border border-[#1a2420] rounded-xl text-sm text-white placeholder-[#4a5550] focus:outline-none focus:border-[#00d4aa]/50"
+              className="w-full pl-9 pr-3 py-2.5 bg-pm-canada-surface border border-pm-canada-border rounded-xl text-sm text-white placeholder-pm-canada-text-faint focus:outline-none focus:border-pm-accent/50"
               placeholder="Search team members..."
             />
           </div>
@@ -464,42 +469,42 @@ export default function CanadaPortalTeamPage() {
           <div className="space-y-3">
             {filtered.map(member => {
               const badge = getRoleBadge(member.role)
-              const avatarColor = getAvatarColor(member.name)
+              const avatar = getAvatarClasses(member.name)
               const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
 
               return (
-                <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                <div key={member.id} className="bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
-                      <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${avatar.softBg}`}>
+                      <span className={`text-xs font-bold ${avatar.text}`}>{getInitials(member.name)}</span>
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white truncate">{member.name}</p>
-                        <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border', badge.bg, badge.textColor, badge.border)}>
+                        <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border', badge.bg, badge.textColor, badge.border)}>
                           {badge.text}
                         </span>
                       </div>
-                      {admin && <p className="text-xs text-[#6b7a74] mt-0.5">{member.email}</p>}
-                      <p className="text-[10px] text-[#4a5550]">{member.location}</p>
+                      {admin && <p className="text-xs text-pm-canada-text-muted mt-0.5">{member.email}</p>}
+                      <p className="text-2xs text-pm-canada-text-faint">{member.location}</p>
                     </div>
 
                     {/* Stats */}
                     <div className="hidden sm:flex items-center gap-4 text-center">
                       <div>
-                        <p className="text-[10px] text-[#4a5550]">Deals</p>
+                        <p className="text-2xs text-pm-canada-text-faint">Deals</p>
                         <p className="text-xs font-bold text-white">{member.deals_open + member.deals_won}</p>
                       </div>
                       {admin && (
                         <>
                           <div>
-                            <p className="text-[10px] text-[#4a5550]">MRR</p>
-                            <p className="text-xs font-bold text-[#00d4aa]">{formatCad(member.total_mrr)}</p>
+                            <p className="text-2xs text-pm-canada-text-faint">MRR</p>
+                            <p className="text-xs font-bold text-pm-accent">{formatCad(member.total_mrr)}</p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-[#4a5550]">Comm/mo</p>
-                            <p className="text-xs font-bold text-[#7c3aed]">{formatCad(monthlyComm)}</p>
+                            <p className="text-2xs text-pm-canada-text-faint">Comm/mo</p>
+                            <p className="text-xs font-bold text-pm-purple">{formatCad(monthlyComm)}</p>
                           </div>
                         </>
                       )}
@@ -507,14 +512,14 @@ export default function CanadaPortalTeamPage() {
 
                     {admin && (
                       <div className="hidden sm:block">
-                        <span className="text-sm font-bold text-[#7c3aed]">{member.commission_rate}%</span>
+                        <span className="text-sm font-bold text-pm-purple">{member.commission_rate}%</span>
                       </div>
                     )}
 
                     {admin && (
                       <button
                         onClick={() => { setEditingMember(member); setEditRate(String(member.commission_rate)); setEditName(member.name) }}
-                        className="p-1.5 rounded-lg hover:bg-[#1a2420] text-[#6b7a74] transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-pm-canada-border text-pm-canada-text-muted transition-colors"
                       >
                         <MoreVertical size={14} />
                       </button>
@@ -531,16 +536,16 @@ export default function CanadaPortalTeamPage() {
       {activeTab === 'leaderboard' && (
         <div className="space-y-4">
           {/* Apple Vision Pro Incentive Banner */}
-          <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-[#7c3aed]/30 rounded-xl p-5">
-            <div className="absolute top-0 right-0 w-40 h-40 bg-[#7c3aed]/8 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-[#1a8fd6]/5 rounded-full blur-3xl" />
+          <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-pm-purple/30 rounded-xl p-5">
+            <div className="absolute top-0 right-0 w-40 h-40 bg-pm-purple/[0.08] rounded-full blur-3xl" />
+            <div className="absolute bottom-0 left-1/4 w-32 h-32 bg-pm-blue/5 rounded-full blur-3xl" />
             <div className="relative">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-base font-bold text-white">Apple Vision Pro</h3>
-                <span className="px-2 py-0.5 rounded-full bg-[#7c3aed]/20 text-[#a855f7] text-[10px] font-bold border border-[#7c3aed]/30 animate-pulse">ACTIVE INCENTIVE</span>
+                <span className="px-2 py-0.5 rounded-full bg-pm-purple/20 text-[#a855f7] text-2xs font-bold border border-pm-purple/30 animate-pulse">ACTIVE INCENTIVE</span>
               </div>
-              <p className="text-xs text-[#a1a1a8] mt-1.5 leading-relaxed">Top performing rep by <span className="text-white font-medium">December 31, 2026</span> wins an Apple Vision Pro. Ranked by total MRR signed.</p>
-              <div className="mt-3 flex items-center gap-4 text-[10px] text-[#6b7a74]">
+              <p className="text-xs text-pm-muted mt-1.5 leading-relaxed">Top performing rep by <span className="text-white font-medium">December 31, 2026</span> wins an Apple Vision Pro. Ranked by total MRR signed.</p>
+              <div className="mt-3 flex items-center gap-4 text-2xs text-pm-canada-text-muted">
                 <span className="flex items-center gap-1"><Clock size={10} /> Ends: Dec 31, 2026</span>
                 <span className="flex items-center gap-1"><Award size={10} /> CA$5,499 value</span>
                 <span className="flex items-center gap-1"><Trophy size={10} /> Top MRR wins</span>
@@ -553,47 +558,47 @@ export default function CanadaPortalTeamPage() {
             {[...enrichedTeam]
               .sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won)
               .map((member, idx) => {
-                const avatarColor = getAvatarColor(member.name)
+                const avatar = getAvatarClasses(member.name)
                 const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
-                const rankIcon = idx === 0 ? <Crown size={16} className="text-[#f59e0b]" /> : idx === 1 ? <Medal size={16} className="text-[#c0c0c0]" /> : idx === 2 ? <Medal size={16} className="text-[#cd7f32]" /> : <span className="text-xs text-[#6b7a74] font-bold w-4 text-center">{idx + 1}</span>
+                const rankIcon = idx === 0 ? <Crown size={16} className="text-pm-amber-orange" /> : idx === 1 ? <Medal size={16} className="text-[#c0c0c0]" /> : idx === 2 ? <Medal size={16} className="text-[#cd7f32]" /> : <span className="text-xs text-pm-canada-text-muted font-bold w-4 text-center">{idx + 1}</span>
 
                 return (
                   <div key={member.id} className={clsx(
-                    'bg-[#0f1512] border rounded-xl px-5 py-4 transition-all',
-                    idx === 0 ? 'border-[#f59e0b]/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]' : 'border-[#1a2420]'
+                    'bg-pm-canada-surface border rounded-xl px-5 py-4 transition-all',
+                    idx === 0 ? 'border-pm-amber-orange/30 shadow-[0_0_20px_rgba(245,158,11,0.05)]' : 'border-pm-canada-border'
                   )}>
                     <div className="flex items-center gap-4">
                       <div className="w-8 flex items-center justify-center flex-shrink-0">
                         {rankIcon}
                       </div>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
-                        <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${avatar.softBg}`}>
+                        <span className={`text-xs font-bold ${avatar.text}`}>{getInitials(member.name)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold text-white">{member.name}</p>
-                          {idx === 0 && <Trophy size={12} className="text-[#f59e0b]" />}
+                          {idx === 0 && <Trophy size={12} className="text-pm-amber-orange" />}
                         </div>
-                        <p className="text-[10px] text-[#6b7a74]">{member.location}</p>
+                        <p className="text-2xs text-pm-canada-text-muted">{member.location}</p>
                       </div>
                       <div className="flex items-center gap-6 text-center">
                         <div>
-                          <p className="text-[10px] text-[#4a5550]">Deals Won</p>
+                          <p className="text-2xs text-pm-canada-text-faint">Deals Won</p>
                           <p className="text-sm font-bold text-white">{member.deals_won}</p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-[#4a5550]">MRR</p>
-                          <p className="text-sm font-bold text-[#00d4aa]">{formatCad(member.total_mrr)}</p>
+                          <p className="text-2xs text-pm-canada-text-faint">MRR</p>
+                          <p className="text-sm font-bold text-pm-accent">{formatCad(member.total_mrr)}</p>
                         </div>
                         {admin && (
                           <div>
-                            <p className="text-[10px] text-[#4a5550]">Comm/mo</p>
-                            <p className="text-sm font-bold text-[#7c3aed]">{formatCad(monthlyComm)}</p>
+                            <p className="text-2xs text-pm-canada-text-faint">Comm/mo</p>
+                            <p className="text-sm font-bold text-pm-purple">{formatCad(monthlyComm)}</p>
                           </div>
                         )}
                         <div>
-                          <p className="text-[10px] text-[#4a5550]">Pipeline</p>
-                          <p className="text-sm font-bold text-[#f59e0b]">{member.deals_open}</p>
+                          <p className="text-2xs text-pm-canada-text-faint">Pipeline</p>
+                          <p className="text-sm font-bold text-pm-amber-orange">{member.deals_open}</p>
                         </div>
                       </div>
                     </div>
@@ -603,9 +608,9 @@ export default function CanadaPortalTeamPage() {
           </div>
 
           {/* Leaderboard Rules */}
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
-            <h3 className="text-xs font-semibold text-[#6b7a74] uppercase tracking-wider mb-3">How Rankings Work</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-[11px] text-[#4a5550]">
+          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5">
+            <h3 className="text-xs font-semibold text-pm-canada-text-muted uppercase tracking-wider mb-3">How Rankings Work</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-2xs text-pm-canada-text-faint">
               <div>
                 <p className="text-white font-medium mb-1">Primary: Total MRR</p>
                 <p>Ranked by total monthly recurring revenue from signed deals.</p>
@@ -632,29 +637,29 @@ export default function CanadaPortalTeamPage() {
               {enrichedTeam.map(member => {
                 const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
                 const owed = member.total_earned - member.total_paid
-                const avatarColor = getAvatarColor(member.name)
+                const avatar = getAvatarClasses(member.name)
 
                 return (
-                  <div key={member.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                  <div key={member.id} className="bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
-                        <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${avatar.softBg}`}>
+                        <span className={`text-xs font-bold ${avatar.text}`}>{getInitials(member.name)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{member.name}</p>
-                        <p className="text-[10px] text-[#6b7a74]">
+                        <p className="text-2xs text-pm-canada-text-muted">
                           {member.deals_won} signed · {member.commission_rate}% rate · {formatCad(member.total_mrr)} MRR · {formatCad(monthlyComm)}/mo comm
                         </p>
-                        <p className="text-[10px] text-[#4a5550]">
+                        <p className="text-2xs text-pm-canada-text-faint">
                           Lifetime est: {formatCad(member.total_earned)} ({AVG_LIFETIME_MONTHS}mo avg)
                         </p>
                       </div>
                       {owed <= 0 ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#00d4aa]/10 text-[#00d4aa] border border-[#00d4aa]/20">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs font-medium bg-pm-accent/10 text-pm-accent border border-pm-accent/20">
                           Paid up &#10003;
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs font-medium bg-pm-amber-orange/10 text-pm-amber-orange border border-pm-amber-orange/20">
                           {formatCad(owed)} owed
                         </span>
                       )}
@@ -667,13 +672,13 @@ export default function CanadaPortalTeamPage() {
 
           {/* Formulas Reference — admin only */}
           {admin && (
-            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
-              <h3 className="text-xs font-semibold text-[#6b7a74] uppercase tracking-wider mb-3">Commission Formulas</h3>
-              <div className="space-y-2 text-[11px] font-mono text-[#4a5550]">
-                <p><span className="text-[#7c3aed]">Monthly Comm</span> = Commission Rate % × MRR (CAD)</p>
-                <p><span className="text-[#7c3aed]">Lifetime Est</span> = Commission Rate % × MRR × {AVG_LIFETIME_MONTHS} months</p>
-                <p><span className="text-[#f59e0b]">Balance Owed</span> = Lifetime Est − Total Paid</p>
-                <p><span className="text-[#00d4aa]">Pipeline MRR</span> = Sum of open deal monthly values (CAD)</p>
+            <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5">
+              <h3 className="text-xs font-semibold text-pm-canada-text-muted uppercase tracking-wider mb-3">Commission Formulas</h3>
+              <div className="space-y-2 text-2xs font-mono text-pm-canada-text-faint">
+                <p><span className="text-pm-purple">Monthly Comm</span> = Commission Rate % × MRR (CAD)</p>
+                <p><span className="text-pm-purple">Lifetime Est</span> = Commission Rate % × MRR × {AVG_LIFETIME_MONTHS} months</p>
+                <p><span className="text-pm-amber-orange">Balance Owed</span> = Lifetime Est − Total Paid</p>
+                <p><span className="text-pm-accent">Pipeline MRR</span> = Sum of open deal monthly values (CAD)</p>
               </div>
             </div>
           )}
@@ -685,29 +690,29 @@ export default function CanadaPortalTeamPage() {
                 const statusBadge = (() => {
                   switch (comm.status) {
                     case 'paid':
-                      return { text: 'paid', bg: 'bg-[#00d4aa]/10', textColor: 'text-[#00d4aa]', border: 'border-[#00d4aa]/20' }
+                      return { text: 'paid', bg: 'bg-pm-accent/10', textColor: 'text-pm-accent', border: 'border-pm-accent/20' }
                     case 'earned':
-                      return { text: 'earned', bg: 'bg-[#7c3aed]/10', textColor: 'text-[#7c3aed]', border: 'border-[#7c3aed]/20' }
+                      return { text: 'earned', bg: 'bg-pm-purple/10', textColor: 'text-pm-purple', border: 'border-pm-purple/20' }
                     case 'pending':
-                      return { text: 'pending', bg: 'bg-[#f59e0b]/10', textColor: 'text-[#f59e0b]', border: 'border-[#f59e0b]/20' }
+                      return { text: 'pending', bg: 'bg-pm-amber-orange/10', textColor: 'text-pm-amber-orange', border: 'border-pm-amber-orange/20' }
                     default:
-                      return { text: comm.status, bg: 'bg-[#6b7a74]/10', textColor: 'text-[#6b7a74]', border: 'border-[#6b7a74]/20' }
+                      return { text: comm.status, bg: 'bg-pm-canada-text-muted/10', textColor: 'text-pm-canada-text-muted', border: 'border-pm-canada-text-muted/20' }
                   }
                 })()
 
                 return (
-                  <div key={comm.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-3">
+                  <div key={comm.id} className="bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-[#7c3aed]/10 flex items-center justify-center flex-shrink-0">
-                        <DollarSign size={12} className="text-[#7c3aed]" />
+                      <div className="w-7 h-7 rounded-full bg-pm-purple/10 flex items-center justify-center flex-shrink-0">
+                        <DollarSign size={12} className="text-pm-purple" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-semibold text-white">{formatCad(comm.commission_amount)}</p>
-                        <p className="text-[10px] text-[#6b7a74]">
+                        <p className="text-2xs text-pm-canada-text-muted">
                           {comm.client_name}{admin ? ` · ${comm.commission_rate}%` : ''}
                         </p>
                       </div>
-                      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border', statusBadge.bg, statusBadge.textColor, statusBadge.border)}>
+                      <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border', statusBadge.bg, statusBadge.textColor, statusBadge.border)}>
                         {statusBadge.text}
                       </span>
                     </div>
@@ -725,49 +730,49 @@ export default function CanadaPortalTeamPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-white">Sales Rep Applications</h3>
-              <p className="text-xs text-[#6b7a74] mt-0.5">New reps who signed up at /canada/portal/signup appear here for approval.</p>
+              <p className="text-xs text-pm-canada-text-muted mt-0.5">New reps who signed up at /canada/portal/signup appear here for approval.</p>
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0f1512] border border-[#1a2420] text-[10px] font-medium text-[#6b7a74]">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-pm-canada-surface border border-pm-canada-border text-2xs font-medium text-pm-canada-text-muted">
               <UserPlus size={12} /> {applicants.length} pending
             </div>
           </div>
 
           {applicants.length === 0 ? (
-            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-10 text-center">
-              <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                <UserPlus size={20} className="text-[#00d4aa]" />
+            <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-10 text-center">
+              <div className="w-12 h-12 rounded-full bg-pm-accent/10 flex items-center justify-center mx-auto mb-3">
+                <UserPlus size={20} className="text-pm-accent" />
               </div>
-              <p className="text-sm text-[#6b7a74]">No pending applications.</p>
-              <p className="text-[11px] text-[#4a5550] mt-1">New reps who sign up will appear here for your review.</p>
+              <p className="text-sm text-pm-canada-text-muted">No pending applications.</p>
+              <p className="text-2xs text-pm-canada-text-faint mt-1">New reps who sign up will appear here for your review.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {applicants.map(applicant => {
-                const avatarColor = getAvatarColor(applicant.name)
+                const avatar = getAvatarClasses(applicant.name)
                 return (
-                  <div key={applicant.id} className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4">
+                  <div key={applicant.id} className="bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
-                        <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(applicant.name)}</span>
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${avatar.softBg}`}>
+                        <span className={`text-xs font-bold ${avatar.text}`}>{getInitials(applicant.name)}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{applicant.name}</p>
-                        <p className="text-xs text-[#6b7a74]">{applicant.email}</p>
-                        {applicant.phone && <p className="text-[10px] text-[#4a5550]">{applicant.phone}</p>}
-                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-[#4a5550]">
+                        <p className="text-xs text-pm-canada-text-muted">{applicant.email}</p>
+                        {applicant.phone && <p className="text-2xs text-pm-canada-text-faint">{applicant.phone}</p>}
+                        <div className="flex items-center gap-1.5 mt-1 text-2xs text-pm-canada-text-faint">
                           <Clock size={10} /> Applied {applicant.applied_at}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleApproveApplicant(applicant)}
-                          className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-[#00d4aa] text-[#0a0f0d] rounded-lg hover:bg-[#00d4aa]/90 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-2 text-2xs font-medium bg-pm-accent text-pm-canada-bg rounded-lg hover:bg-pm-accent/90 transition-colors"
                         >
                           <CheckCircle2 size={12} /> Approve
                         </button>
                         <button
                           onClick={() => handleRejectApplicant(applicant)}
-                          className="flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-2 text-2xs font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors"
                         >
                           <XCircle size={12} /> Reject
                         </button>
@@ -780,36 +785,37 @@ export default function CanadaPortalTeamPage() {
           )}
         </div>
       )}
+      </PortalPage>
 
       {/* Admin Payout Editor Modal */}
       {editingMember && admin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-sm bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+          <div className="w-full max-w-sm bg-pm-canada-surface border border-pm-canada-border rounded-xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-semibold text-white">Edit Team Member</h3>
-              <button onClick={() => setEditingMember(null)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
-                <X size={18} className="text-[#6b7a74]" />
+              <button onClick={() => setEditingMember(null)} className="p-1.5 rounded-lg hover:bg-pm-canada-border transition-colors">
+                <X size={18} className="text-pm-canada-text-muted" />
               </button>
             </div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Display Name</label>
+            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Display Name</label>
             <input
               type="text" value={editName} onChange={e => setEditName(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white focus:outline-none focus:border-[#00d4aa]/50 mb-4"
+              className="w-full px-3 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white focus:outline-none focus:border-pm-accent/50 mb-4"
             />
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate (%)</label>
+            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Commission Rate (%)</label>
             <input
               type="number" min={0} max={100} value={editRate} onChange={e => setEditRate(e.target.value)}
-              className="w-full px-3 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white focus:outline-none focus:border-[#00d4aa]/50"
+              className="w-full px-3 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white focus:outline-none focus:border-pm-accent/50"
             />
             <button
               onClick={() => editingMember && handleRemoveMember(editingMember)}
               disabled={removing}
-              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mb-4 text-[11px] font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2 mb-4 text-2xs font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
             >
               <Trash2 size={12} /> {removing ? 'Removing...' : 'Remove from Team'}
             </button>
             <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
+              <button onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-pm-canada-text-muted hover:text-white transition-colors">Cancel</button>
               <button
                 onClick={async () => {
                   const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
@@ -834,7 +840,7 @@ export default function CanadaPortalTeamPage() {
                   setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
                   setEditingMember(null)
                 }}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 transition-all"
               >
                 <Save size={14} /> Save
               </button>

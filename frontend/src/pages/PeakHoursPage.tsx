@@ -112,7 +112,18 @@ export default function PeakHoursPage() {
 
   const peakCell = cells.length ? cells.reduce((max, c) => c.intensity > max.intensity ? c : max, cells[0]) : null
   const totalTxns = cells.reduce((s, c) => s + c.transactions, 0)
-  const morningRevenue = cells.filter(c => c.hour >= 7 && c.hour < 10).reduce((s, c) => s + c.revenue, 0)
+  // Open-hours-aware morning window: find the first 3 hours of business that
+  // actually had revenue, so businesses that open at 10/11/12 don't show a
+  // nonsense 0% AM Revenue stat.
+  const firstOpenHour = (() => {
+    for (let h = 5; h < 22; h++) {
+      const rev = cells.filter(c => c.hour === h).reduce((s, c) => s + c.revenue, 0)
+      if (rev > 0) return h
+    }
+    return 7
+  })()
+  const morningWindowEnd = firstOpenHour + 3
+  const morningRevenue = cells.filter(c => c.hour >= firstOpenHour && c.hour < morningWindowEnd).reduce((s, c) => s + c.revenue, 0)
   const totalRevenue = cells.reduce((s, c) => s + c.revenue, 0)
   const morningPct = totalRevenue > 0 ? Math.round(morningRevenue / totalRevenue * 100) : 0
 
@@ -196,7 +207,7 @@ export default function PeakHoursPage() {
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Peak Hour Optimizer Recommendation</h3>
               <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-                Your <span className="text-[#F5F5F7] font-medium">7-9AM window</span> generates {morningPct}% of daily revenue
+                Your <span className="text-[#F5F5F7] font-medium">{hourLabels[firstOpenHour]}–{hourLabels[morningWindowEnd]} window</span> generates {morningPct}% of daily revenue
                 but current staffing is 1 person below optimal. Adding 1 staff member during this window would
                 reduce average queue time from 4.2 to 2.1 minutes and recover an estimated
                 <span className="text-[#17C5B0] font-medium"> $520/month</span> in lost walkout revenue.

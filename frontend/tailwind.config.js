@@ -29,6 +29,24 @@ export default {
           // Legacy aliases (kept for any remaining references)
           violet:  '#1A8FD6',
           cyan:    '#17C5B0',
+          // ── Phase 3: Canada portal palette ───────────────────────────────
+          // Distinct from pm.bg/surface/border (which are neutral-dark).
+          // The Canada sales portal is built on a green-tinted dark theme;
+          // these tokens preserve that visual without forcing pm.* to shift.
+          accent: '#00d4aa', // Canada brand accent (CTAs, focus, success)
+          canada: {
+            bg:           '#0a0f0d', // page background
+            surface:      '#0f1512', // card / surface
+            border:       '#1a2420', // border
+            'text-muted': '#6b7a74', // muted body text on Canada dark
+            'text-faint': '#4a5550', // faint label/secondary text
+          },
+          amber: {
+            gold:   '#f0b429', // earned commissions, MRR target
+            orange: '#f59e0b', // stale / urgent / past-due
+          },
+          purple: '#7c3aed', // admin / team violet (NOT pm.violet, which is the legacy pm.blue alias)
+          indigo: '#7C5CFF', // pending payout (semantically distinct from pm.purple)
         },
         slate: {
           850: '#172033',
@@ -39,6 +57,13 @@ export default {
         sans:  ['Geist Sans', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
         mono:  ['Geist Mono', 'JetBrains Mono', 'Fira Code', 'monospace'],
         serif: ['Instrument Serif', 'Georgia', 'serif'],
+      },
+      // Phase 3: Canada portal type ramp. `2xs` absorbs the 10px+11px drift;
+      // `sm-tight` preserves the deliberate 13px base used throughout the
+      // onboarding wizard / new-customer flow.
+      fontSize: {
+        '2xs':      ['11px', { lineHeight: '14px' }],
+        'sm-tight': ['13px', { lineHeight: '18px' }],
       },
       maxWidth: {
         content: '1240px',

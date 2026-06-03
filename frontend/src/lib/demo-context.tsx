@@ -44,7 +44,7 @@ const VALID_TYPES: BusinessType[] = ['coffee_shop', 'restaurant', 'fast_food', '
 function readStoredBusinessType(): BusinessType | null {
   if (typeof window === 'undefined') return null
   try {
-    const v = window.sessionStorage.getItem(STORAGE_KEY)
+    const v = window.localStorage.getItem(STORAGE_KEY)
     return v && (VALID_TYPES as string[]).includes(v) ? (v as BusinessType) : null
   } catch {
     return null
@@ -53,7 +53,7 @@ function readStoredBusinessType(): BusinessType | null {
 
 function writeStoredBusinessType(type: BusinessType): void {
   if (typeof window === 'undefined') return
-  try { window.sessionStorage.setItem(STORAGE_KEY, type) } catch { /* private mode */ }
+  try { window.localStorage.setItem(STORAGE_KEY, type) } catch { /* private mode */ }
 }
 
 // Module-level state so non-React code (api.ts, demo-data.ts) can read the selection
