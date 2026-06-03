@@ -210,3 +210,78 @@ implementation work is preserved behind the flag and can be revisited
 without re-implementing.
 
 ---
+
+## 4. POS beta-gate (P0+P1) verified only on synthetic payloads
+
+**Discovered:** 2026-06-03, immediately after the P0+P1 beta gate.
+**Owner:** TBD — first real-merchant connection is the load test.
+**Severity:** Beta-blocker risk surface. Code paths verified, but a
+real Square / Clover / Toast merchant has not yet been connected.
+
+### What
+
+The P0 schema migration (`supabase/migrations/20260603_pos_beta_wiring.sql`)
++ P1 application wiring were verified end-to-end on **synthetic
+order payloads**, not against a live merchant token, because:
+
+1. The only Square production token on this box is the operator's own
+   dev/test Square account (1 location, 56 orders, 0% `customer_id`
+   coverage — Stage A recon
+   `eval/reports/square_recon_2026-06-03.md`). Useless as an
+   identity-persistence test.
+2. No Clover or Toast credentials are on the box at all.
+3. The Meridian production transactions table itself still has 3
+   rows (Phase 1 recon).
+
+### What was actually tested
+
+- `Square DataMapper.map_transaction` — fed a synthetic
+  `{id, location_id, customer_id, total_money:{currency:'CAD'}, ...}`
+  payload; verified output keys include `customer_id`,
+  `customer_email`, `currency`.
+- `Toast ToastDataMapper.map_order` — fed a synthetic order with
+  `checks[0].customer = {guid, email}`; verified the same three keys
+  populate.
+- `Clover CloverDataMapper.map_order_to_transaction` — fed a
+  synthetic order with `customers.elements[0].id`; verified.
+- `normalize_transaction` (GenericREST) — fed synthetic payloads with
+  inline + caller-default currency variants; verified.
+- Production DB columns + FK + indexes — verified via
+  `information_schema` query after the management-API apply.
+- Frontend type-check (`tsc --noEmit`) passed on every edited file
+  plus the 7 `connectPos` callers.
+- Production smoke test (a real Square merchant credential-pasting
+  into the wizard and watching the backfill land on the
+  `transactions` table with `customer_id` + `currency` populated)
+  has **NOT** been run.
+
+### What we still don't know
+
+- Whether Square's `/v2/orders/search` response shape on a real
+  merchant matches what the mapper expects (esp. tender shapes,
+  void/cancel state mapping, line-item line-discount handling on
+  large orders).
+- Whether Clover's `/orders` response shape on a real bank-channel
+  rebrand (PNC POS, Wells Fargo POS, etc.) deserialises the same
+  way as canonical Clover.
+- Whether Toast's `client_id` / `client_secret` exchange round-trip
+  works under our actual partner-program credentials (we don't
+  have a Toast partner token).
+- Whether `db.batch_upsert` (Supabase REST PostgREST under the
+  hood) rejects unknown columns silently or noisily if a sync
+  engine accidentally emits one — we haven't observed a row land
+  in `transactions` from a real backfill yet.
+
+### What unblocks each of these
+
+The **first real beta merchant** unblocks them all at once:
+connect, watch the backfill complete (or fail), then inspect
+`transactions` for `customer_id` + `currency` + `customer_email`
+populated rows and `pos_connections.connected_by_rep_id` written.
+If anything is dropped silently, the gap shows up as a column
+returning NULL where the upstream payload had a value.
+
+Until that happens, treat P0+P1 as "code is in place, contract
+not yet observed in production".
+
+---
