@@ -18,7 +18,12 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_service_auth, require_jwt, require_admin_jwt
+from ..auth import (
+    ADMIN_EMAILS as ALL_ADMIN_EMAILS,
+    require_service_auth,
+    require_jwt,
+    require_admin_jwt,
+)
 
 logger = logging.getLogger("meridian.api.us")
 
@@ -34,11 +39,25 @@ router = APIRouter(prefix="/api/us", tags=["us"])
 
 US_ORG_ID = "us-org-00000000-0000-0000-0000-000000000001"
 
-ADMIN_EMAILS = [
+# US portal admin scope is INTENTIONALLY NARROWER than the canada/compliance
+# scope defined in src/api/auth.py:ADMIN_EMAILS. Per business policy, US
+# portal admin = Aidan Pierce only (across all his email addresses). Enoch
+# Cheung and Aidan Nguyen are Canada/compliance admins and must NOT be
+# granted US write access. Do NOT collapse this back to ALL_ADMIN_EMAILS —
+# if you need both lists to be the same, change US policy first.
+#
+# The intersection-with-centralized pattern means removing an admin from
+# auth.py automatically removes them here too, while the explicit allowlist
+# below controls who *can* be a US admin.
+_US_ADMIN_ALLOWLIST = {
     "apierce@alphasale.co",
     "aidanpierce72@gmail.com",
     "aidanpierce@meridian.tips",
-]
+}
+ADMIN_EMAILS = [e for e in ALL_ADMIN_EMAILS if e in _US_ADMIN_ALLOWLIST]
+# NOTE: ADMIN_EMAILS is not yet referenced elsewhere in this module — it
+# exists as the policy artifact for when US admin gating gets wired up.
+# A per-scope role-tags refactor is filed as a follow-up issue.
 
 
 def _sanitize_text(v: str) -> str:
