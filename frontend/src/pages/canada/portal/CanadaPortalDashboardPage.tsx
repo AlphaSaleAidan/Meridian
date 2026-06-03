@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Users,
@@ -13,30 +13,19 @@ import {
   X,
   Rocket,
   Clock,
-  AlertTriangle,
   CheckCircle2,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import {
   STAGE_CONFIG,
-  STAGE_ORDER,
   deriveClientsFromLeads,
   deriveCommissionsFromLeads,
-  type SalesOverview,
   type Deal,
   type DealStage,
-  type SalesClient,
-  type Commission,
 } from '@/lib/canada-sales-demo-data'
-import { canadaLeadsService } from '@/lib/canada-leads-service'
-
-function formatCad(value: number): string {
-  return 'CA$' + Math.round(value).toLocaleString('en-CA')
-}
-
-function formatCadMo(value: number): string {
-  return 'CA$' + Math.round(value).toLocaleString('en-CA') + '/mo'
-}
+import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
+import { formatCad, formatCadMo } from '@/lib/format'
+import { PortalPage } from './PortalPage'
 
 function titleCase(name: string): string {
   return name
@@ -79,67 +68,16 @@ const MONTH1_MRR_GOAL = 2025
 export default function CanadaPortalDashboardPage() {
   const { rep } = useSalesAuth()
   const navigate = useNavigate()
-  const [overview, setOverview] = useState<SalesOverview | null>(null)
-  const [deals, setDeals] = useState<Deal[]>([])
-  const [clients, setClients] = useState<SalesClient[]>([])
-  const [commissions, setCommissions] = useState<Commission[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
+  const { data: deals = [], isLoading, error } = useCanadaLeads(rep?.rep_id)
+  useCanadaLeadsRealtime(rep?.rep_id)
+
   const [bannerDismissed, setBannerDismissed] = useState(false)
   const [welcomeDismissed, setWelcomeDismissed] = useState(() =>
     localStorage.getItem('meridian_ca_rep_welcomed') === '1'
   )
 
-  const applyDeals = useCallback((d: Deal[]) => {
-    setDeals(d)
-    const c = deriveClientsFromLeads(d)
-    const cm = deriveCommissionsFromLeads(d)
-    setClients(c)
-    setCommissions(cm)
-
-    const activePipeline = d.filter((deal: Deal) => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(deal.stage))
-    const closedWon = d.filter((deal: Deal) => deal.stage === 'customer_walkthrough' || deal.stage === 'closed_won' || deal.stage === 'pos_connected')
-    const allDeals = d.filter((deal: Deal) => deal.stage !== 'closed_lost')
-    const totalEarned = cm.reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
-    const totalPaid = cm.filter((cItem: Commission) => cItem.status === 'paid').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0)
-
-    setOverview({
-      total_deals: activePipeline.length,
-      pipeline_value: activePipeline.reduce((s: number, deal: Deal) => s + deal.monthly_value, 0),
-      closed_this_month: closedWon.length,
-      monthly_commission_earned: cm.filter((cItem: Commission) => cItem.status === 'earned').reduce((s: number, cItem: Commission) => s + cItem.commission_amount, 0),
-      total_earned: totalEarned,
-      total_paid: totalPaid,
-      pending_payout: totalEarned - totalPaid,
-      active_clients: c.filter((cl: SalesClient) => cl.is_active).length,
-      conversion_rate: allDeals.length > 0 ? Math.round((closedWon.length / allDeals.length) * 100) : 0,
-    })
-  }, [])
-
-  useEffect(() => {
-    canadaLeadsService.list(rep?.rep_id).then(d => {
-      applyDeals(d)
-    }).catch((err) => {
-      setLoadError(err?.message || 'Could not load data. Check your connection and refresh.')
-      setOverview({
-        total_deals: 0, pipeline_value: 0, closed_this_month: 0,
-        monthly_commission_earned: 0, total_earned: 0, total_paid: 0,
-        pending_payout: 0, active_clients: 0, conversion_rate: 0,
-      })
-    }).finally(() => setLoading(false))
-    const channel = canadaLeadsService.subscribe(rep?.rep_id, applyDeals)
-    return () => { canadaLeadsService.unsubscribe(channel) }
-  }, [rep?.rep_id, applyDeals])
-
-  if (loading || !overview) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">M</span>
-        </div>
-      </div>
-    )
-  }
+  const clients = useMemo(() => deriveClientsFromLeads(deals), [deals])
+  const commissions = useMemo(() => deriveCommissionsFromLeads(deals), [deals])
 
   const activeClients = clients.filter(c => c.is_active && c.pos_connected)
   const clientMrr = activeClients.reduce((sum, c) => sum + c.monthly_revenue, 0)
@@ -158,7 +96,28 @@ export default function CanadaPortalDashboardPage() {
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
     .slice(0, 5)
 
-  const hasZeroLeads = deals.length === 0
+  // PortalPage gates the empty state on !isLoading internally so the race
+  // (#6) closes structurally — pass the raw predicate.
+  const hasNoLeads = deals.length === 0
+
+  const zeroLeadsEmptyState = (
+    <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl py-16 px-6 text-center">
+      <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-pm-accent/10 border border-pm-accent/20 flex items-center justify-center">
+        <Rocket size={28} className="text-pm-accent" />
+      </div>
+      <h2 className="text-lg font-bold text-white mb-2">Your first deal is waiting.</h2>
+      <p className="text-sm text-pm-canada-text-muted max-w-md mx-auto mb-6">
+        Start building your pipeline by creating your first lead. Track every stage from appointment through onboarding.
+      </p>
+      <button
+        onClick={() => navigate('/canada/portal/leads?new=true')}
+        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-pm-accent text-pm-canada-bg text-sm font-semibold hover:bg-pm-accent/90 transition-colors"
+      >
+        <Plus size={16} />
+        Create Your First Lead
+      </button>
+    </div>
+  )
 
   return (
     <div className="space-y-6">
@@ -167,18 +126,15 @@ export default function CanadaPortalDashboardPage() {
         <h1 className="text-xl font-bold text-white">
           {getGreeting()}, {rep ? getFirstName(rep.name) : 'there'}.
         </h1>
-        <p className="text-sm text-[#6b7a74] mt-1">{getFormattedDate()}</p>
+        <p className="text-sm text-pm-canada-text-muted mt-1">{getFormattedDate()}</p>
       </div>
 
       {/* ── Welcome Walkthrough Banner ── */}
       {!welcomeDismissed && (
-        <div
-          className="relative rounded-xl p-5 border-l-4 border-[#00d4aa]"
-          style={{ background: 'linear-gradient(135deg, rgba(0,212,170,0.08) 0%, rgba(0,180,150,0.04) 100%)' }}
-        >
+        <div className="relative rounded-xl p-5 border-l-4 border-pm-accent bg-gradient-to-br from-pm-accent/[0.08] to-pm-accent/[0.04]">
           <button
             onClick={() => { localStorage.setItem('meridian_ca_rep_welcomed', '1'); setWelcomeDismissed(true) }}
-            className="absolute top-3 right-3 text-[#6b7a74] hover:text-white transition-colors"
+            className="absolute top-3 right-3 text-pm-canada-text-muted hover:text-white transition-colors"
             aria-label="Dismiss"
           >
             <X size={16} />
@@ -186,57 +142,40 @@ export default function CanadaPortalDashboardPage() {
           <h3 className="text-base font-bold text-white mb-4">Welcome to Meridian!</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex items-start gap-2.5">
-              <div className="w-6 h-6 rounded-full bg-[#00d4aa]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle2 size={14} className="text-[#00d4aa]" />
+              <div className="w-6 h-6 rounded-full bg-pm-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={14} className="text-pm-accent" />
               </div>
               <div>
-                <Link to="/canada/portal/leads?new=true" className="text-sm font-semibold text-[#00d4aa] hover:underline">
+                <Link to="/canada/portal/leads?new=true" className="text-sm font-semibold text-pm-accent hover:underline">
                   1. Add your first lead
                 </Link>
-                <p className="text-xs text-[#6b7a74] mt-0.5">Open the leads page and create a new lead to get started.</p>
+                <p className="text-xs text-pm-canada-text-muted mt-0.5">Open the leads page and create a new lead to get started.</p>
               </div>
             </div>
             <div className="flex items-start gap-2.5">
-              <div className="w-6 h-6 rounded-full bg-[#00d4aa]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle2 size={14} className="text-[#00d4aa]" />
+              <div className="w-6 h-6 rounded-full bg-pm-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={14} className="text-pm-accent" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">2. Send a proposal</p>
-                <p className="text-xs text-[#6b7a74] mt-0.5">Open a lead and send a proposal to start the sales process.</p>
+                <p className="text-xs text-pm-canada-text-muted mt-0.5">Open a lead and send a proposal to start the sales process.</p>
               </div>
             </div>
             <div className="flex items-start gap-2.5">
-              <div className="w-6 h-6 rounded-full bg-[#00d4aa]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <CheckCircle2 size={14} className="text-[#00d4aa]" />
+              <div className="w-6 h-6 rounded-full bg-pm-accent/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <CheckCircle2 size={14} className="text-pm-accent" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">3. Connect a customer</p>
-                <p className="text-xs text-[#6b7a74] mt-0.5">Walk your customer through POS setup to activate their dashboard.</p>
+                <p className="text-xs text-pm-canada-text-muted mt-0.5">Walk your customer through POS setup to activate their dashboard.</p>
               </div>
             </div>
           </div>
           <button
             onClick={() => { localStorage.setItem('meridian_ca_rep_welcomed', '1'); setWelcomeDismissed(true) }}
-            className="mt-4 px-4 py-1.5 text-xs font-medium text-[#6b7a74] border border-[#1a2420] rounded-lg hover:text-white hover:border-[#6b7a74] transition-colors"
+            className="mt-4 px-4 py-1.5 text-xs font-medium text-pm-canada-text-muted border border-pm-canada-border rounded-lg hover:text-white hover:border-pm-canada-text-muted transition-colors"
           >
             Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* ── Connection Error Banner ── */}
-      {loadError && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3">
-          <AlertTriangle size={18} className="text-red-400 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-red-400">Could not load your data</p>
-            <p className="text-xs text-red-400/70 mt-0.5">{loadError}</p>
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-3 py-1.5 text-xs font-medium text-white border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
-          >
-            Retry
           </button>
         </div>
       )}
@@ -250,7 +189,7 @@ export default function CanadaPortalDashboardPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white">Application Pending Approval</h3>
-              <p className="text-xs text-[#6b7a74] mt-0.5">Your account is being reviewed by the team. You'll get full access once an admin approves your application.</p>
+              <p className="text-xs text-pm-canada-text-muted mt-0.5">Your account is being reviewed by the team. You'll get full access once an admin approves your application.</p>
             </div>
           </div>
         </div>
@@ -258,24 +197,24 @@ export default function CanadaPortalDashboardPage() {
 
       {/* ── First 30 Days Banner ── */}
       {showFirst30Banner && rep?.is_active && (
-        <div className="relative bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 overflow-hidden">
+        <div className="relative bg-pm-canada-surface border border-pm-accent/30 rounded-xl p-5 overflow-hidden">
           <button
             onClick={() => setBannerDismissed(true)}
-            className="absolute top-3 right-3 text-[#6b7a74] hover:text-white transition-colors"
+            className="absolute top-3 right-3 text-pm-canada-text-muted hover:text-white transition-colors"
             aria-label="Dismiss"
           >
             <X size={16} />
           </button>
           <div className="flex items-center gap-2 mb-2">
-            <Rocket size={16} className="text-[#00d4aa]" />
-            <span className="text-xs font-semibold text-[#00d4aa] uppercase tracking-wider">Month 1 Goal</span>
+            <Rocket size={16} className="text-pm-accent" />
+            <span className="text-xs font-semibold text-pm-accent uppercase tracking-wider">Month 1 Goal</span>
           </div>
           <p className="text-sm text-white mb-3">
-            Target: <span className="font-semibold text-[#f0b429]">CA$2,025</span> MRR
-            <span className="mx-2 text-[#6b7a74]">|</span>
-            Your current MRR: <span className="font-semibold text-[#f0b429]">CA${mrr.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            Target: <span className="font-semibold text-pm-amber-gold">CA$2,025</span> MRR
+            <span className="mx-2 text-pm-canada-text-muted">|</span>
+            Your current MRR: <span className="font-semibold text-pm-amber-gold">CA${mrr.toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </p>
-          <div className="w-full h-2 rounded-full bg-[#1a2420] overflow-hidden">
+          <div className="w-full h-2 rounded-full bg-pm-canada-border overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-700 ease-out"
               style={{
@@ -284,7 +223,7 @@ export default function CanadaPortalDashboardPage() {
               }}
             />
           </div>
-          <p className="text-[11px] text-[#6b7a74] mt-2">
+          <p className="text-2xs text-pm-canada-text-muted mt-2">
             {mrrProgress >= 100
               ? 'Goal reached! Outstanding work.'
               : `${Math.round(mrrProgress)}% of your Month 1 target`}
@@ -292,240 +231,208 @@ export default function CanadaPortalDashboardPage() {
         </div>
       )}
 
-      {/* ── Stat Cards (4 across) ── */}
+      {/* ── Stat Cards (4 across) ──
+          Rendered OUTSIDE <PortalPage> so a zero-leads account still sees the
+          stat cards (zeros) and the empty-state CTA appears BELOW them rather
+          than replacing them. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           label="Active Accounts"
           value={String(activeClients.length)}
           subtitle="POS connected & billing"
-          icon={<Users size={18} className="text-[#00d4aa]" />}
-          iconBg="bg-[#00d4aa]/15"
+          icon={<Users size={18} className="text-pm-accent" />}
+          iconBg="bg-pm-accent/15"
           bars={[40, 60, 35, 80, 55, 70]}
-          barColor="#00d4aa"
+          barClass="bg-pm-accent"
         />
         <StatCard
           label="MRR"
           value={formatCad(mrr)}
           subtitle="Monthly recurring revenue"
-          icon={<DollarSign size={18} className="text-[#f0b429]" />}
-          iconBg="bg-[#f0b429]/15"
-          valueColor="#f0b429"
+          icon={<DollarSign size={18} className="text-pm-amber-gold" />}
+          iconBg="bg-pm-amber-gold/15"
+          valueClass="text-pm-amber-gold"
           bars={[30, 45, 50, 65, 55, 72]}
-          barColor="#f0b429"
+          barClass="bg-pm-amber-gold"
         />
         <StatCard
           label="In Pipeline"
           value={String(pipelineDeals.length)}
           subtitle={`CA$${Math.round(pipelineValue).toLocaleString('en-CA')}/mo potential`}
-          icon={<TrendingUp size={18} className="text-[#00d4aa]" />}
-          iconBg="bg-[#00d4aa]/15"
+          icon={<TrendingUp size={18} className="text-pm-accent" />}
+          iconBg="bg-pm-accent/15"
           bars={[55, 40, 70, 60, 85, 50]}
-          barColor="#00d4aa"
+          barClass="bg-pm-accent"
         />
         <StatCard
           label="Commissions"
           value={formatCad(totalCommEarned)}
           subtitle={`${commissionRate}% rate | ${formatCad(pendingComm)} pending`}
-          icon={<CreditCard size={18} className="text-[#f0b429]" />}
-          iconBg="bg-[#f0b429]/15"
-          valueColor="#f0b429"
+          icon={<CreditCard size={18} className="text-pm-amber-gold" />}
+          iconBg="bg-pm-amber-gold/15"
+          valueClass="text-pm-amber-gold"
           bars={[60, 45, 70, 50, 80, 65]}
-          barColor="#f0b429"
+          barClass="bg-pm-amber-gold"
         />
       </div>
 
-      {/* ── Empty State (zero leads) ── */}
-      {hasZeroLeads ? (
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl py-16 px-6 text-center">
-          <div className="w-16 h-16 mx-auto mb-5 rounded-2xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center">
-            <Rocket size={28} className="text-[#00d4aa]" />
-          </div>
-          <h2 className="text-lg font-bold text-white mb-2">Your first deal is waiting.</h2>
-          <p className="text-sm text-[#6b7a74] max-w-md mx-auto mb-6">
-            Start building your pipeline by creating your first lead. Track every stage from appointment through onboarding.
-          </p>
-          <button
-            onClick={() => navigate('/canada/portal/leads?new=true')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold hover:bg-[#00d4aa]/90 transition-colors"
+      <PortalPage isLoading={isLoading} error={error} isEmpty={hasNoLeads} emptyState={zeroLeadsEmptyState}>
+      {/* ── Pipeline Kanban (compact) ── */}
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl">
+        <div className="px-5 py-4 border-b border-pm-canada-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Deal Pipeline</h2>
+          <Link
+            to="/canada/portal/leads"
+            className="text-xs text-pm-accent hover:text-pm-accent/80 flex items-center gap-1 transition-colors"
           >
-            <Plus size={16} />
-            Create Your First Lead
-          </button>
+            View all <ArrowRight size={12} />
+          </Link>
         </div>
-      ) : (
-        <>
-          {/* ── Pipeline Kanban (compact) ── */}
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
-            <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Deal Pipeline</h2>
-              <Link
-                to="/canada/portal/leads"
-                className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
-              >
-                View all <ArrowRight size={12} />
-              </Link>
-            </div>
-            <div className="px-4 py-4 overflow-x-auto">
-              <div className="grid grid-cols-3 gap-3 min-w-[800px]">
-                {KANBAN_STAGES.map(stage => {
-                  const cfg = STAGE_CONFIG[stage]
-                  const stageDeals = deals.filter(d => d.stage === stage)
-                  const visibleDeals = stageDeals.slice(0, 3)
-                  const remaining = stageDeals.length - visibleDeals.length
-                  return (
-                    <div key={stage} className="flex flex-col">
-                      <div className="flex items-center gap-2 mb-3 px-1">
-                        <div
-                          className="w-2 h-2 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: cfg.color }}
-                        />
-                        <span className="text-xs font-medium text-[#6b7a74] truncate">
-                          {cfg.label}
-                        </span>
-                        <span
-                          className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
-                          style={{ color: cfg.color, backgroundColor: `${cfg.color}15` }}
-                        >
-                          {stageDeals.length}
-                        </span>
+        <div className="px-4 py-4 overflow-x-auto">
+          <div className="grid grid-cols-3 gap-3 min-w-[800px]">
+            {KANBAN_STAGES.map(stage => {
+              const cfg = STAGE_CONFIG[stage]
+              const stageDeals = deals.filter(d => d.stage === stage)
+              const visibleDeals = stageDeals.slice(0, 3)
+              const remaining = stageDeals.length - visibleDeals.length
+              return (
+                <div key={stage} className="flex flex-col">
+                  <div className="flex items-center gap-2 mb-3 px-1">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dotClass}`} />
+                    <span className="text-xs font-medium text-pm-canada-text-muted truncate">
+                      {cfg.label}
+                    </span>
+                    <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${cfg.textClass} ${cfg.softBgClass}`}>
+                      {stageDeals.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2 flex-1">
+                    {visibleDeals.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-pm-canada-border bg-pm-canada-bg px-3 py-4 text-center">
+                        <p className="text-2xs text-pm-canada-text-faint">No deals</p>
                       </div>
-                      <div className="space-y-2 flex-1">
-                        {visibleDeals.length === 0 ? (
-                          <div className="rounded-lg border border-dashed border-[#1a2420] bg-[#0a0f0d] px-3 py-4 text-center">
-                            <p className="text-[11px] text-[#4a5550]">No deals</p>
-                          </div>
-                        ) : (
-                          <>
-                            {visibleDeals.map(deal => (
-                              <Link
-                                key={deal.id}
-                                to={`/canada/portal/leads/${deal.id}`}
-                                className="block rounded-lg border border-[#1a2420] bg-[#0a0f0d] px-3 py-2.5 hover:border-[#2a3430] transition-colors"
-                              >
-                                <p className="text-xs font-medium text-white truncate">
-                                  {deal.business_name}
-                                </p>
-                                <p className="text-[11px] text-[#6b7a74] truncate mt-0.5">
-                                  {deal.contact_name}
-                                </p>
-                                <p
-                                  className="text-[11px] font-semibold mt-1.5"
-                                  style={{ color: cfg.color }}
-                                >
-                                  {formatCadMo(deal.monthly_value)}
-                                </p>
-                              </Link>
-                            ))}
-                            {remaining > 0 && (
-                              <Link
-                                to="/canada/portal/leads"
-                                className="block rounded-lg border border-dashed border-[#1a2420] bg-[#0a0f0d] px-3 py-2.5 text-center hover:border-[#2a3430] transition-colors"
-                              >
-                                <p className="text-[11px] text-[#00d4aa]">+{remaining} more</p>
-                              </Link>
-                            )}
-                          </>
+                    ) : (
+                      <>
+                        {visibleDeals.map(deal => (
+                          <Link
+                            key={deal.id}
+                            to={`/canada/portal/leads/${deal.id}`}
+                            className="block rounded-lg border border-pm-canada-border bg-pm-canada-bg px-3 py-2.5 hover:border-[#2a3430] transition-colors"
+                          >
+                            <p className="text-xs font-medium text-white truncate">
+                              {deal.business_name}
+                            </p>
+                            <p className="text-2xs text-pm-canada-text-muted truncate mt-0.5">
+                              {deal.contact_name}
+                            </p>
+                            <p className={`text-2xs font-semibold mt-1.5 ${cfg.textClass}`}>
+                              {formatCadMo(deal.monthly_value)}
+                            </p>
+                          </Link>
+                        ))}
+                        {remaining > 0 && (
+                          <Link
+                            to="/canada/portal/leads"
+                            className="block rounded-lg border border-dashed border-pm-canada-border bg-pm-canada-bg px-3 py-2.5 text-center hover:border-[#2a3430] transition-colors"
+                          >
+                            <p className="text-2xs text-pm-accent">+{remaining} more</p>
+                          </Link>
                         )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Active Accounts ── */}
-          {activeClients.length > 0 && (
-            <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
-              <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-white">Active Accounts</h2>
-                <Link
-                  to="/canada/portal/accounts"
-                  className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
-                >
-                  View all <ArrowRight size={12} />
-                </Link>
-              </div>
-              <div className="divide-y divide-[#1a2420]">
-                {activeClients.map(client => (
-                  <Link
-                    key={client.id}
-                    to="/canada/portal/accounts"
-                    className="px-5 py-3 flex items-center gap-3 hover:bg-[#0a0f0d]/50 transition-colors block"
-                  >
-                    <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center flex-shrink-0">
-                      <Users size={14} className="text-[#00d4aa]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{client.business_name}</p>
-                      <p className="text-[11px] text-[#6b7a74]">
-                        {client.pos_provider ? client.pos_provider.charAt(0).toUpperCase() + client.pos_provider.slice(1) : 'No POS'}
-                        <span className="mx-1.5 text-[#2a3430]">|</span>
-                        {formatCadMo(client.monthly_revenue)}
-                      </p>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Recent Activity Feed ── */}
-          <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl">
-            <div className="px-5 py-4 border-b border-[#1a2420] flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Recent Activity</h2>
-              <Link
-                to="/canada/portal/leads"
-                className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 flex items-center gap-1 transition-colors"
-              >
-                View all <ArrowRight size={12} />
-              </Link>
-            </div>
-            <div className="divide-y divide-[#1a2420]">
-              {recentActivity.length === 0 ? (
-                <div className="px-5 py-6 text-center text-sm text-[#4a5550]">
-                  No recent activity.
+                      </>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                recentActivity.map(deal => {
-                  const cfg = STAGE_CONFIG[deal.stage]
-                  const updated = new Date(deal.updated_at)
-                  const timeAgo = getRelativeTime(updated)
-                  return (
-                    <Link
-                      key={deal.id}
-                      to={`/canada/portal/leads/${deal.id}`}
-                      className="px-5 py-3 flex items-center gap-3 hover:bg-[#0a0f0d]/50 transition-colors block"
-                    >
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                        style={{ backgroundColor: `${cfg.color}18` }}
-                      >
-                        <div
-                          className="w-2.5 h-2.5 rounded-full"
-                          style={{ backgroundColor: cfg.color }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{deal.business_name}</p>
-                        <p className="text-[11px] text-[#6b7a74]">
-                          <span style={{ color: cfg.color }}>{cfg.label}</span>
-                          <span className="mx-1.5 text-[#2a3430]">|</span>
-                          {formatCadMo(deal.monthly_value)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 text-[11px] text-[#4a5550] flex-shrink-0">
-                        <Clock size={11} />
-                        {timeAgo}
-                      </div>
-                    </Link>
-                  )
-                })
-              )}
-            </div>
+              )
+            })}
           </div>
-        </>
+        </div>
+      </div>
+
+      {/* ── Active Accounts ── */}
+      {activeClients.length > 0 && (
+        <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl">
+          <div className="px-5 py-4 border-b border-pm-canada-border flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-white">Active Accounts</h2>
+            <Link
+              to="/canada/portal/accounts"
+              className="text-xs text-pm-accent hover:text-pm-accent/80 flex items-center gap-1 transition-colors"
+            >
+              View all <ArrowRight size={12} />
+            </Link>
+          </div>
+          <div className="divide-y divide-pm-canada-border">
+            {activeClients.map(client => (
+              <Link
+                key={client.id}
+                to="/canada/portal/accounts"
+                className="px-5 py-3 flex items-center gap-3 hover:bg-pm-canada-bg/50 transition-colors block"
+              >
+                <div className="w-8 h-8 rounded-lg bg-pm-accent/10 flex items-center justify-center flex-shrink-0">
+                  <Users size={14} className="text-pm-accent" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{client.business_name}</p>
+                  <p className="text-2xs text-pm-canada-text-muted">
+                    {client.pos_provider ? client.pos_provider.charAt(0).toUpperCase() + client.pos_provider.slice(1) : 'No POS'}
+                    <span className="mx-1.5 text-[#2a3430]">|</span>
+                    {formatCadMo(client.monthly_revenue)}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
+
+      {/* ── Recent Activity Feed ── */}
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl">
+        <div className="px-5 py-4 border-b border-pm-canada-border flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-white">Recent Activity</h2>
+          <Link
+            to="/canada/portal/leads"
+            className="text-xs text-pm-accent hover:text-pm-accent/80 flex items-center gap-1 transition-colors"
+          >
+            View all <ArrowRight size={12} />
+          </Link>
+        </div>
+        <div className="divide-y divide-pm-canada-border">
+          {recentActivity.length === 0 ? (
+            <div className="px-5 py-6 text-center text-sm text-pm-canada-text-faint">
+              No recent activity.
+            </div>
+          ) : (
+            recentActivity.map(deal => {
+              const cfg = STAGE_CONFIG[deal.stage]
+              const updated = new Date(deal.updated_at)
+              const timeAgo = getRelativeTime(updated)
+              return (
+                <Link
+                  key={deal.id}
+                  to={`/canada/portal/leads/${deal.id}`}
+                  className="px-5 py-3 flex items-center gap-3 hover:bg-pm-canada-bg/50 transition-colors block"
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${cfg.softBgClass}`}>
+                    <div className={`w-2.5 h-2.5 rounded-full ${cfg.dotClass}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate">{deal.business_name}</p>
+                    <p className="text-2xs text-pm-canada-text-muted">
+                      <span className={cfg.textClass}>{cfg.label}</span>
+                      <span className="mx-1.5 text-[#2a3430]">|</span>
+                      {formatCadMo(deal.monthly_value)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 text-2xs text-pm-canada-text-faint flex-shrink-0">
+                    <Clock size={11} />
+                    {timeAgo}
+                  </div>
+                </Link>
+              )
+            })
+          )}
+        </div>
+      </div>
+      </PortalPage>
 
       {/* ── Quick Actions ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -561,31 +468,28 @@ function StatCard({
   subtitle,
   icon,
   iconBg,
-  valueColor,
+  valueClass,
   bars,
-  barColor,
+  barClass,
 }: {
   label: string
   value: string
   subtitle: string
   icon: React.ReactNode
   iconBg: string
-  valueColor?: string
+  valueClass?: string
   bars: number[]
-  barColor: string
+  barClass: string
 }) {
   return (
-    <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 flex flex-col justify-between">
+    <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 flex flex-col justify-between">
       <div className="flex items-start justify-between mb-3">
-        <p className="text-xs font-medium text-[#6b7a74]">{label}</p>
+        <p className="text-xs font-medium text-pm-canada-text-muted">{label}</p>
         <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${iconBg}`}>
           {icon}
         </div>
       </div>
-      <p
-        className="text-2xl font-bold mb-1"
-        style={{ color: valueColor || '#ffffff' }}
-      >
+      <p className={`text-2xl font-bold mb-1 ${valueClass ?? 'text-white'}`}>
         {value}
       </p>
       {/* Sparkline bar chart */}
@@ -593,16 +497,15 @@ function StatCard({
         {bars.map((h, i) => (
           <div
             key={i}
-            className="flex-1 rounded-sm transition-all"
+            className={`flex-1 rounded-sm transition-all ${barClass}`}
             style={{
               height: `${h}%`,
-              backgroundColor: barColor,
               opacity: 0.25 + (i / bars.length) * 0.55,
             }}
           />
         ))}
       </div>
-      <p className="text-[11px] text-[#4a5550] truncate">{subtitle}</p>
+      <p className="text-2xs text-pm-canada-text-faint truncate">{subtitle}</p>
     </div>
   )
 }
@@ -620,9 +523,9 @@ function QuickAction({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-2.5 bg-[#0f1512] border border-[#1a2420] rounded-xl px-4 py-3.5 text-sm font-medium text-white hover:border-[#00d4aa]/40 hover:text-[#00d4aa] transition-colors w-full"
+      className="flex items-center gap-2.5 bg-pm-canada-surface border border-pm-canada-border rounded-xl px-4 py-3.5 text-sm font-medium text-white hover:border-pm-accent/40 hover:text-pm-accent transition-colors w-full"
     >
-      <span className="text-[#6b7a74] group-hover:text-[#00d4aa]">{icon}</span>
+      <span className="text-pm-canada-text-muted group-hover:text-pm-accent">{icon}</span>
       {label}
     </button>
   )

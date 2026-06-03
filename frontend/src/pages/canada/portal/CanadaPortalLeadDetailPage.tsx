@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
   FileText, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
@@ -13,6 +14,13 @@ import {
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
+import {
+  useCanadaLead,
+  useUpdateCanadaLead,
+  useUpdateCanadaLeadStage,
+  canadaKeys,
+} from '@/lib/canada-queries'
+import { PortalPage, PortalLoadingSkeleton } from './PortalPage'
 import { getPlan } from '@/lib/canada-proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
@@ -65,16 +73,16 @@ function HorizontalStepper({ currentStep }: { currentStep: number }) {
               <div
                 className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
                   step.num < currentStep
-                    ? 'bg-[#00d4aa] text-white'
+                    ? 'bg-pm-accent text-white'
                     : step.num === currentStep
-                    ? 'border-2 border-[#00d4aa] text-[#00d4aa] bg-transparent'
-                    : 'bg-[#1a2420] text-[#6b7a74]'
+                    ? 'border-2 border-pm-accent text-pm-accent bg-transparent'
+                    : 'bg-pm-canada-border text-pm-canada-text-muted'
                 }`}
               >
                 {step.num < currentStep ? <Check size={18} /> : step.num}
               </div>
-              <span className={`text-[10px] mt-1.5 whitespace-nowrap ${
-                step.num <= currentStep ? 'text-[#00d4aa]' : 'text-[#6b7a74]'
+              <span className={`text-2xs mt-1.5 whitespace-nowrap ${
+                step.num <= currentStep ? 'text-pm-accent' : 'text-pm-canada-text-muted'
               }`}>
                 {step.label}
               </span>
@@ -83,7 +91,7 @@ function HorizontalStepper({ currentStep }: { currentStep: number }) {
             {/* Connector line */}
             {idx < STEPS.length - 1 && (
               <div className={`flex-1 h-0.5 mx-2 mt-[-18px] ${
-                step.num < currentStep ? 'bg-[#00d4aa]' : 'bg-[#1a2420]'
+                step.num < currentStep ? 'bg-pm-accent' : 'bg-pm-canada-border'
               }`} />
             )}
           </div>
@@ -98,9 +106,19 @@ export default function CanadaPortalLeadDetailPage() {
   const navigate = useNavigate()
   const { rep } = useSalesAuth()
   const { toast } = useToast()
-  const [deal, setDeal] = useState<Deal | null>(null)
+  const qc = useQueryClient()
+  const updateLead = useUpdateCanadaLead()
+  const updateStage = useUpdateCanadaLeadStage()
+  const { data: dealData, isLoading, error } = useCanadaLead(id)
+  const deal = dealData ?? null
+  // Convenience helper: optimistically patch the cached deal so the UI
+  // updates immediately while a mutation is in flight. Mutation onSuccess
+  // invalidations will rewrite it again with the server's authoritative copy.
+  const patchDeal = useCallback((updater: (prev: Deal | null) => Deal | null) => {
+    if (!id) return
+    qc.setQueryData<Deal | null>(canadaKeys.lead(id), (prev) => updater(prev ?? null))
+  }, [id, qc])
   const dealRef = useRef<Deal | null>(null)
-  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '' })
   const [editSaving, setEditSaving] = useState(false)
@@ -217,15 +235,15 @@ export default function CanadaPortalLeadDetailPage() {
         setPosConnected(true)
         setPosVerifying(false)
         if (deal) {
-          await canadaLeadsService.updateStage(deal.id, 'pos_connected')
-          setDeal(prev => prev ? { ...prev, stage: 'pos_connected' } : prev)
+          await updateStage.mutateAsync({ id: deal.id, stage: 'pos_connected' })
+          patchDeal(prev => prev ? { ...prev, stage: 'pos_connected' } : prev)
         }
       } else {
         setPosVerifying(false)
         setPosPending(`${system.name} credentials saved — waiting for data verification. The swarm will confirm data is flowing and notify you.`)
         if (deal && deal.stage !== 'pos_connected' && deal.stage !== 'customer_walkthrough') {
-          await canadaLeadsService.updateStage(deal.id, 'customer_checkout')
-          setDeal(prev => prev ? { ...prev, stage: 'customer_checkout' } : prev)
+          await updateStage.mutateAsync({ id: deal.id, stage: 'customer_checkout' })
+          patchDeal(prev => prev ? { ...prev, stage: 'customer_checkout' } : prev)
         }
       }
     } catch {
@@ -278,8 +296,8 @@ export default function CanadaPortalLeadDetailPage() {
       })
 
       setCustomerCredentials({ email })
-      await canadaLeadsService.updateStage(deal.id, 'customer_walkthrough')
-      setDeal(prev => prev ? { ...prev, stage: 'customer_walkthrough' } : prev)
+      await updateStage.mutateAsync({ id: deal.id, stage: 'customer_walkthrough' })
+      patchDeal(prev => prev ? { ...prev, stage: 'customer_walkthrough' } : prev)
     } catch (err) {
       setCustomerError(err instanceof Error ? err.message : 'Failed to create account')
     } finally {
@@ -464,8 +482,8 @@ export default function CanadaPortalLeadDetailPage() {
       setInvoiceBlob(blob)
 
       if (deal.stage === 'proposal_shown' || deal.stage === 'appointment_set') {
-        await canadaLeadsService.updateStage(deal.id, 'customer_checkout')
-        setDeal(prev => prev ? { ...prev, stage: 'customer_checkout' } : prev)
+        await updateStage.mutateAsync({ id: deal.id, stage: 'customer_checkout' })
+        patchDeal(prev => prev ? { ...prev, stage: 'customer_checkout' } : prev)
       }
     } catch (err) {
       console.error('[Invoice] Generation failed:', err)
@@ -658,8 +676,8 @@ export default function CanadaPortalLeadDetailPage() {
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
       if (deal && (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted')) {
-        await canadaLeadsService.updateStage(deal.id, 'proposal_shown')
-        setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
+        await updateStage.mutateAsync({ id: deal.id, stage: 'proposal_shown' })
+        patchDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
       }
     } catch (err) {
       console.error('[Proposal] Generation failed:', err)
@@ -715,8 +733,8 @@ export default function CanadaPortalLeadDetailPage() {
       setProposalSent(true)
       toast('Proposal emailed to ' + deal.contact_email, 'success')
       if (deal.stage === 'appointment_set' || deal.stage === 'proposal_shown' || deal.stage === 'contacted' || deal.stage === 'demo_scheduled') {
-        await canadaLeadsService.updateStage(deal.id, 'proposal_shown')
-        setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
+        await updateStage.mutateAsync({ id: deal.id, stage: 'proposal_shown' })
+        patchDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
       }
     } catch (err) {
       console.error('[Proposal] Email failed:', err)
@@ -732,17 +750,21 @@ export default function CanadaPortalLeadDetailPage() {
 
   useEffect(() => { dealRef.current = deal }, [deal])
 
+  // Keep monthlyPrice in sync with the loaded/refreshed deal.
   useEffect(() => {
-    if (!id) { setLoading(false); return }
-    canadaLeadsService.getById(id).then(found => {
-      setDeal(found)
-      if (found) {
-        setMonthlyPrice(found.monthly_value || 500)
-      }
-    }).catch(() => {
-      setDeal(null)
-    }).finally(() => setLoading(false))
-    const channel = canadaLeadsService.subscribe(undefined, deals => {
+    if (deal) setMonthlyPrice(deal.monthly_value || 500)
+  }, [deal])
+
+  // Bridge the realtime subscription into the query cache, but keep the
+  // stage-change notification side-effect that's specific to this page.
+  useEffect(() => {
+    if (!id) return
+    // Subscribe with the same rep filter the rest of the page uses, so the
+    // realtime payload's scope matches the canadaKeys.leads(rep?.rep_id)
+    // bucket we write through to below — prevents unfiltered deals from
+    // bleeding into a scoped reader (e.g. a future admin/manager variant
+    // holding a real rep_id while viewing this lead).
+    const channel = canadaLeadsService.subscribe(rep?.rep_id, deals => {
       const updated = deals.find(d => d.id === id)
       if (updated) {
         const current = dealRef.current
@@ -750,31 +772,36 @@ export default function CanadaPortalLeadDetailPage() {
           notifyStageChange(updated.business_name, updated.stage)
           toast(`${updated.business_name} moved to ${updated.stage.replace(/_/g, ' ')}`, 'info')
         }
-        setDeal(updated)
-        setMonthlyPrice(updated.monthly_value || 500)
+        qc.setQueryData(canadaKeys.lead(id), updated)
+        qc.setQueryData(canadaKeys.leads(rep?.rep_id), deals)
       }
     })
     return () => { canadaLeadsService.unsubscribe(channel) }
-  }, [id])
+  }, [id, qc, rep?.rep_id, toast])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">S</span>
-        </div>
-      </div>
-    )
-  }
+  const notFoundEmptyState = (
+    <div className="space-y-4">
+      <Link to="/canada/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-pm-canada-text-muted hover:text-white transition-colors">
+        <ArrowLeft size={16} /> Leads
+      </Link>
+      <div className="text-center py-16 text-pm-canada-text-muted">Lead not found.</div>
+    </div>
+  )
 
-  if (!deal) {
+  // Status-shell early return: PortalPage owns skeleton/error/not-found.
+  // The happy-path body below only renders when `deal` is loaded.
+  if (isLoading || error || !deal) {
     return (
-      <div className="space-y-4">
-        <Link to="/canada/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-[#6b7a74] hover:text-white transition-colors">
-          <ArrowLeft size={16} /> Leads
-        </Link>
-        <div className="text-center py-16 text-[#6b7a74]">Lead not found.</div>
-      </div>
+      <PortalPage
+        isLoading={isLoading}
+        error={error}
+        isEmpty={!deal}
+        emptyState={notFoundEmptyState}
+        loadingSkeleton={<PortalLoadingSkeleton char="S" />}
+      >
+        {/* Unreachable — wrapper handles all three branches above. */}
+        <></>
+      </PortalPage>
     )
   }
 
@@ -797,21 +824,21 @@ export default function CanadaPortalLeadDetailPage() {
     input.click()
   }
 
-  const inputClass = 'w-full px-3 py-2.5 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
+  const inputClass = 'w-full px-3 py-2.5 bg-pm-canada-surface border border-pm-canada-border rounded-lg text-sm text-white placeholder-pm-canada-text-muted focus:outline-none focus:border-pm-accent/50 focus:ring-1 focus:ring-pm-accent/20 transition-colors'
 
   return (
     <div className="space-y-6 max-w-3xl">
       {/* Back link */}
-      <Link to="/canada/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-[#6b7a74] hover:text-white transition-colors">
+      <Link to="/canada/portal/leads" className="inline-flex items-center gap-1.5 text-sm text-pm-canada-text-muted hover:text-white transition-colors">
         <ArrowLeft size={16} /> Leads
       </Link>
 
       {/* Header */}
       {editing ? (
-        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
+        <div className="bg-pm-canada-surface border border-pm-accent/30 rounded-xl p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[#00d4aa]">Edit Lead</h2>
-            <button onClick={() => setEditing(false)} className="text-xs text-[#6b7a74] hover:text-white">Cancel</button>
+            <h2 className="text-sm font-semibold text-pm-accent">Edit Lead</h2>
+            <button onClick={() => setEditing(false)} className="text-xs text-pm-canada-text-muted hover:text-white">Cancel</button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input value={editForm.business_name} onChange={e => setEditForm(f => ({ ...f, business_name: e.target.value }))} className={inputClass} placeholder="Business Name" />
@@ -825,8 +852,8 @@ export default function CanadaPortalLeadDetailPage() {
             onClick={async () => {
               setEditSaving(true)
               try {
-                await canadaLeadsService.update(deal.id, editForm)
-                setDeal(prev => prev ? { ...prev, ...editForm } : prev)
+                await updateLead.mutateAsync({ id: deal.id, updates: editForm })
+                patchDeal(prev => prev ? { ...prev, ...editForm } : prev)
                 setEditing(false)
               } catch (err) {
                 setPosError(err instanceof Error ? `Save failed: ${err.message}` : 'Failed to save changes. Please try again.')
@@ -834,7 +861,7 @@ export default function CanadaPortalLeadDetailPage() {
                 setEditSaving(false)
               }
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+            className="flex items-center gap-2 px-4 py-2 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
           >
             {editSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Save Changes
@@ -844,8 +871,8 @@ export default function CanadaPortalLeadDetailPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">{deal.business_name}</h1>
-            <p className="text-sm text-[#6b7a74] mt-1">
-              {deal.contact_name} &middot; <span className="text-[#f0b429] font-semibold">CA${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
+            <p className="text-sm text-pm-canada-text-muted mt-1">
+              {deal.contact_name} &middot; <span className="text-pm-amber-gold font-semibold">CA${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
             </p>
           </div>
           <button
@@ -859,7 +886,7 @@ export default function CanadaPortalLeadDetailPage() {
               })
               setEditing(true)
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#6b7a74] border border-[#1a2420] rounded-lg hover:text-white hover:border-[#2a3430] transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pm-canada-text-muted border border-pm-canada-border rounded-lg hover:text-white hover:border-[#2a3430] transition-colors"
           >
             <Pencil size={12} /> Edit
           </button>
@@ -885,8 +912,8 @@ export default function CanadaPortalLeadDetailPage() {
           if (!deal) return
           setDeckTagging(true)
           try {
-            await canadaLeadsService.update(deal.id, { vertical: slug })
-            setDeal(prev => prev ? { ...prev, vertical: slug } : prev)
+            await updateLead.mutateAsync({ id: deal.id, updates: { vertical: slug } })
+            patchDeal(prev => prev ? { ...prev, vertical: slug } : prev)
           } catch (err) {
             toast(err instanceof Error ? `Could not tag lead: ${err.message}` : 'Could not tag lead.', 'error')
           } finally {
@@ -896,17 +923,17 @@ export default function CanadaPortalLeadDetailPage() {
       />
 
       {/* Stepper */}
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
         <HorizontalStepper currentStep={currentStep} />
       </div>
 
       {/* Step 1 - Proposal (always visible) */}
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Proposal</h2>
 
         {/* Monthly Price Slider */}
         <div>
-          <label className="text-xs text-[#6b7a74] block mb-1.5">Monthly Price (CAD)</label>
+          <label className="text-xs text-pm-canada-text-muted block mb-1.5">Monthly Price (CAD)</label>
           <div className="flex items-center gap-3">
             <input
               type="range"
@@ -915,16 +942,16 @@ export default function CanadaPortalLeadDetailPage() {
               step={50}
               value={monthlyPrice}
               onChange={e => setMonthlyPrice(Number(e.target.value))}
-              className="flex-1 h-2 bg-[#1a2420] rounded-full appearance-none cursor-pointer accent-[#00d4aa]"
+              className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent"
             />
-            <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">CA${monthlyPrice.toLocaleString()}/mo</span>
+            <span className="text-sm font-semibold text-pm-amber-gold w-28 text-right">CA${monthlyPrice.toLocaleString()}/mo</span>
           </div>
-          <p className="text-[10px] text-[#4a5550] mt-1">~US${Math.round(monthlyPrice / 1.37).toLocaleString()}/mo</p>
+          <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / 1.37).toLocaleString()}/mo</p>
         </div>
 
         {/* Setup Fee */}
         <div>
-          <label className="text-xs text-[#6b7a74] block mb-1.5">Setup Fee</label>
+          <label className="text-xs text-pm-canada-text-muted block mb-1.5">Setup Fee</label>
           <input
             type="text"
             value={setupFee}
@@ -936,7 +963,7 @@ export default function CanadaPortalLeadDetailPage() {
 
         {/* First month free */}
         <label className="flex items-center gap-3 cursor-pointer">
-          <div className={`w-9 h-5 rounded-full transition-colors relative ${firstMonthFree ? 'bg-[#00d4aa]' : 'bg-[#1a2420]'}`}
+          <div className={`w-9 h-5 rounded-full transition-colors relative ${firstMonthFree ? 'bg-pm-accent' : 'bg-pm-canada-border'}`}
             onClick={() => setFirstMonthFree(!firstMonthFree)}
           >
             <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${firstMonthFree ? 'translate-x-4' : 'translate-x-0.5'}`} />
@@ -948,7 +975,7 @@ export default function CanadaPortalLeadDetailPage() {
         <button
           onClick={handleGenerateProposal}
           disabled={proposalGenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
         >
           {proposalGenerating ? (
             <><Loader2 size={16} className="animate-spin" /> Generating…</>
@@ -958,10 +985,10 @@ export default function CanadaPortalLeadDetailPage() {
         </button>
 
         {proposalBlob && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <span className="text-xs text-[#00d4aa] font-medium">Proposal ready — 9 slides, PDF generated.</span>
-            <button onClick={handleDownloadProposal} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
+            <CheckCircle2 size={16} className="text-pm-accent" />
+            <span className="text-xs text-pm-accent font-medium">Proposal ready — 9 slides, PDF generated.</span>
+            <button onClick={handleDownloadProposal} className="ml-auto text-pm-accent hover:text-white transition-colors">
               <Download size={14} />
             </button>
           </div>
@@ -971,7 +998,7 @@ export default function CanadaPortalLeadDetailPage() {
           <button
             onClick={handleViewProposal}
             disabled={proposalGenerating}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
           >
             {proposalGenerating ? (
               <><Loader2 size={16} className="animate-spin" /> Generating…</>
@@ -982,12 +1009,12 @@ export default function CanadaPortalLeadDetailPage() {
           <button
             onClick={handleEmailProposal}
             disabled={proposalEmailing || proposalGenerating}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border text-white text-sm font-medium rounded-lg hover:border-pm-accent/30 disabled:opacity-50 transition-all"
           >
             {proposalEmailing ? (
               <><Loader2 size={16} className="animate-spin" /> Sending…</>
             ) : proposalSent ? (
-              <><CheckCircle2 size={16} className="text-[#00d4aa]" /> Sent!</>
+              <><CheckCircle2 size={16} className="text-pm-accent" /> Sent!</>
             ) : (
               <><Mail size={16} /> Email Proposal</>
             )}
@@ -997,16 +1024,16 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Step 2 - Invoice / Customer Checkout (visible at step 2+) */}
       {currentStep >= 2 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Invoice &amp; Checkout</h2>
-        <p className="text-xs text-[#6b7a74]">
+        <p className="text-xs text-pm-canada-text-muted">
           Generate a custom invoice in CAD with a QR code the customer can scan to view. Invoices recur monthly.
         </p>
 
         <button
           onClick={handleGenerateInvoice}
           disabled={invoiceGenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
         >
           {invoiceGenerating ? (
             <><Loader2 size={16} className="animate-spin" /> Generating Invoice…</>
@@ -1017,37 +1044,37 @@ export default function CanadaPortalLeadDetailPage() {
 
         {invoiceBlob && (
           <>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-              <CheckCircle2 size={16} className="text-[#00d4aa]" />
-              <span className="text-xs text-[#00d4aa] font-medium">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
+              <CheckCircle2 size={16} className="text-pm-accent" />
+              <span className="text-xs text-pm-accent font-medium">
                 Invoice #{invoiceNumber} ready — includes QR code for online viewing.
               </span>
-              <button onClick={handleDownloadInvoice} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+              <button onClick={handleDownloadInvoice} className="ml-auto text-pm-accent hover:text-white transition-colors">
                 <Download size={14} />
               </button>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={handleDownloadInvoice}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border text-white text-sm font-medium rounded-lg hover:border-pm-accent/30 transition-all"
               >
                 <Eye size={16} /> View Invoice
               </button>
               <button
                 onClick={handleEmailInvoice}
                 disabled={invoiceEmailing}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border text-white text-sm font-medium rounded-lg hover:border-pm-accent/30 disabled:opacity-50 transition-all"
               >
                 {invoiceEmailing ? (
                   <><Loader2 size={16} className="animate-spin" /> Sending…</>
                 ) : invoiceEmailed ? (
-                  <><CheckCircle2 size={16} className="text-[#00d4aa]" /> Invoice Sent!</>
+                  <><CheckCircle2 size={16} className="text-pm-accent" /> Invoice Sent!</>
                 ) : (
                   <><Mail size={16} /> Email Invoice</>
                 )}
               </button>
             </div>
-            <p className="text-[10px] text-[#4a5550]">
+            <p className="text-2xs text-pm-canada-text-faint">
               Recurring monthly — customer will be billed CA${monthlyPrice.toLocaleString()}/mo automatically.
             </p>
           </>
@@ -1057,16 +1084,16 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Payment Status & Card Management (visible at step 2+) */}
       {currentStep >= 2 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CreditCard size={16} className="text-[#00d4aa]" />
+            <CreditCard size={16} className="text-pm-accent" />
             <h2 className="text-sm font-semibold text-white">Payment Status</h2>
           </div>
           <button
             onClick={checkPaymentStatus}
             disabled={paymentStatus === 'checking'}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium text-[#6b7a74] border border-[#1a2420] rounded-lg hover:text-[#00d4aa] hover:border-[#00d4aa]/30 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-2xs font-medium text-pm-canada-text-muted border border-pm-canada-border rounded-lg hover:text-pm-accent hover:border-pm-accent/30 disabled:opacity-50 transition-colors"
           >
             <RefreshCw size={10} className={paymentStatus === 'checking' ? 'animate-spin' : ''} />
             {paymentStatus === 'idle' ? 'Check Status' : 'Refresh'}
@@ -1074,32 +1101,32 @@ export default function CanadaPortalLeadDetailPage() {
         </div>
 
         {paymentStatus === 'idle' && (
-          <p className="text-xs text-[#6b7a74]">Click "Check Status" to see if the customer has paid.</p>
+          <p className="text-xs text-pm-canada-text-muted">Click "Check Status" to see if the customer has paid.</p>
         )}
 
         {paymentStatus === 'checking' && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1a2420]">
-            <Loader2 size={14} className="text-[#00d4aa] animate-spin" />
-            <span className="text-xs text-[#6b7a74]">Checking payment status...</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-canada-border">
+            <Loader2 size={14} className="text-pm-accent animate-spin" />
+            <span className="text-xs text-pm-canada-text-muted">Checking payment status...</span>
           </div>
         )}
 
         {paymentStatus === 'active' && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
+            <CheckCircle2 size={16} className="text-pm-accent" />
             <div>
-              <span className="text-xs text-[#00d4aa] font-medium">Payment confirmed — subscription active</span>
-              <p className="text-[10px] text-[#4a5550] mt-0.5">Card on file is being used for recurring billing.</p>
+              <span className="text-xs text-pm-accent font-medium">Payment confirmed — subscription active</span>
+              <p className="text-2xs text-pm-canada-text-faint mt-0.5">Card on file is being used for recurring billing.</p>
             </div>
           </div>
         )}
 
         {paymentStatus === 'pending' && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
-            <Clock size={16} className="text-[#f0b429]" />
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
+            <Clock size={16} className="text-pm-amber-gold" />
             <div>
-              <span className="text-xs text-[#f0b429] font-medium">Payment pending — invoice sent, awaiting payment</span>
-              <p className="text-[10px] text-[#4a5550] mt-0.5">The customer has been invoiced but hasn't paid yet.</p>
+              <span className="text-xs text-pm-amber-gold font-medium">Payment pending — invoice sent, awaiting payment</span>
+              <p className="text-2xs text-pm-canada-text-faint mt-0.5">The customer has been invoiced but hasn't paid yet.</p>
             </div>
           </div>
         )}
@@ -1112,7 +1139,7 @@ export default function CanadaPortalLeadDetailPage() {
                 <span className="text-xs text-red-400 font-medium">
                   {paymentStatus === 'past_due' ? 'Payment past due' : 'Payment failed'}
                 </span>
-                <p className="text-[10px] text-[#4a5550] mt-0.5">
+                <p className="text-2xs text-pm-canada-text-faint mt-0.5">
                   {paymentStatus === 'past_due'
                     ? 'Invoice is overdue. Notify the customer or send a new payment link.'
                     : 'The customer\'s payment was declined. Send them a link to update their card.'}
@@ -1137,7 +1164,7 @@ export default function CanadaPortalLeadDetailPage() {
               <button
                 onClick={handleSendCardUpdateLink}
                 disabled={cardUpdateSending}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
               >
                 {cardUpdateSending ? (
                   <><Loader2 size={14} className="animate-spin" /> Creating Link...</>
@@ -1148,18 +1175,18 @@ export default function CanadaPortalLeadDetailPage() {
             </div>
 
             {cardUpdateUrl && (
-              <div className="p-3 rounded-lg bg-[#0a0f0d] border border-[#1a2420] space-y-2">
-                <p className="text-[10px] text-[#6b7a74]">Payment update link (sent to customer):</p>
+              <div className="p-3 rounded-lg bg-pm-canada-bg border border-pm-canada-border space-y-2">
+                <p className="text-2xs text-pm-canada-text-muted">Payment update link (sent to customer):</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     readOnly
                     value={cardUpdateUrl}
-                    className="flex-1 px-2 py-1.5 bg-[#0f1512] border border-[#1a2420] rounded text-[11px] text-white font-mono truncate"
+                    className="flex-1 px-2 py-1.5 bg-pm-canada-surface border border-pm-canada-border rounded text-2xs text-white font-mono truncate"
                   />
                   <button
                     onClick={() => { navigator.clipboard.writeText(cardUpdateUrl); }}
-                    className="px-3 py-1.5 text-[10px] text-[#00d4aa] border border-[#00d4aa]/30 rounded hover:bg-[#00d4aa]/10 transition-colors"
+                    className="px-3 py-1.5 text-2xs text-pm-accent border border-pm-accent/30 rounded hover:bg-pm-accent/10 transition-colors"
                   >
                     Copy
                   </button>
@@ -1170,8 +1197,8 @@ export default function CanadaPortalLeadDetailPage() {
         )}
 
         {paymentStatus === 'unavailable' && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1a2420]">
-            <span className="text-xs text-[#6b7a74]">No billing record found yet — invoice may not have been created.</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-canada-border">
+            <span className="text-xs text-pm-canada-text-muted">No billing record found yet — invoice may not have been created.</span>
           </div>
         )}
       </div>
@@ -1179,19 +1206,19 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Step 2b - SLA Document (visible at step 2+) */}
       {currentStep >= 2 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
         <div className="flex items-center gap-2">
-          <FileText size={16} className="text-[#00d4aa]" />
+          <FileText size={16} className="text-pm-accent" />
           <h2 className="text-sm font-semibold text-white">Service Level Agreement</h2>
         </div>
-        <p className="text-xs text-[#6b7a74]">
+        <p className="text-xs text-pm-canada-text-muted">
           Generate an SLA document for the client to sign. {deal?.province && (deal.province.toLowerCase().includes('quebec') || deal.province.toLowerCase() === 'qc') ? 'Includes PIPEDA + Quebec Law 25 compliance.' : 'Includes PIPEDA compliance.'}
         </p>
 
         <button
           onClick={handleGenerateSla}
           disabled={slaGenerating}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#1a2420] border border-[#2a3830] text-white text-sm font-semibold rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-pm-canada-border border border-[#2a3830] text-white text-sm font-semibold rounded-lg hover:border-pm-accent/30 disabled:opacity-50 transition-all"
         >
           {slaGenerating ? (
             <><Loader2 size={16} className="animate-spin" /> Generating SLA…</>
@@ -1202,12 +1229,12 @@ export default function CanadaPortalLeadDetailPage() {
 
         {slaBlob && (
           <>
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-              <CheckCircle2 size={16} className="text-[#00d4aa]" />
-              <span className="text-xs text-[#00d4aa] font-medium">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
+              <CheckCircle2 size={16} className="text-pm-accent" />
+              <span className="text-xs text-pm-accent font-medium">
                 SLA document ready{slaSigned ? ' — signed' : ''}.
               </span>
-              <button onClick={handleDownloadSla} className="ml-auto text-[#00d4aa] hover:text-white transition-colors">
+              <button onClick={handleDownloadSla} className="ml-auto text-pm-accent hover:text-white transition-colors">
                 <Download size={14} />
               </button>
             </div>
@@ -1215,14 +1242,14 @@ export default function CanadaPortalLeadDetailPage() {
             <div className="flex gap-3">
               <button
                 onClick={handleDownloadSla}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 transition-all"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border text-white text-sm font-medium rounded-lg hover:border-pm-accent/30 transition-all"
               >
                 <Eye size={16} /> View SLA
               </button>
               {!slaSigned ? (
                 <button
                   onClick={() => setShowSlaSign(true)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 transition-all"
                 >
                   <Pencil size={16} /> Sign SLA
                 </button>
@@ -1230,12 +1257,12 @@ export default function CanadaPortalLeadDetailPage() {
                 <button
                   onClick={handleEmailSla}
                   disabled={slaEmailing}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] text-white text-sm font-medium rounded-lg hover:border-[#00d4aa]/30 disabled:opacity-50 transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border text-white text-sm font-medium rounded-lg hover:border-pm-accent/30 disabled:opacity-50 transition-all"
                 >
                   {slaEmailing ? (
                     <><Loader2 size={16} className="animate-spin" /> Sending…</>
                   ) : slaEmailed ? (
-                    <><CheckCircle2 size={16} className="text-[#00d4aa]" /> SLA Sent!</>
+                    <><CheckCircle2 size={16} className="text-pm-accent" /> SLA Sent!</>
                   ) : (
                     <><Mail size={16} /> Email Signed SLA</>
                   )}
@@ -1244,10 +1271,10 @@ export default function CanadaPortalLeadDetailPage() {
             </div>
 
             {slaSigned && (
-              <div className="text-[10px] text-[#4a5550] space-y-0.5">
+              <div className="text-2xs text-pm-canada-text-faint space-y-0.5">
                 <p>Provider: Aidan Pierce, Founder & CEO — {new Date().toLocaleDateString('en-CA')}</p>
                 <p>Client: {slaSignature} — {new Date().toLocaleDateString('en-CA')}</p>
-                {slaEmailed && <p className="text-[#00d4aa]">Signed copy emailed to {deal?.contact_email}</p>}
+                {slaEmailed && <p className="text-pm-accent">Signed copy emailed to {deal?.contact_email}</p>}
               </div>
             )}
           </>
@@ -1256,51 +1283,51 @@ export default function CanadaPortalLeadDetailPage() {
         {/* Signature Modal */}
         {showSlaSign && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="w-full max-w-lg bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+            <div className="w-full max-w-lg bg-pm-canada-surface border border-pm-canada-border rounded-xl p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-5">
                 <h3 className="text-base font-semibold text-white">Sign Service Level Agreement</h3>
-                <button onClick={() => setShowSlaSign(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
-                  <X size={18} className="text-[#6b7a74]" />
+                <button onClick={() => setShowSlaSign(false)} className="p-1.5 rounded-lg hover:bg-pm-canada-border transition-colors">
+                  <X size={18} className="text-pm-canada-text-muted" />
                 </button>
               </div>
-              <p className="text-xs text-[#6b7a74] mb-4">
+              <p className="text-xs text-pm-canada-text-muted mb-4">
                 By typing your full legal name below, you acknowledge that you have read and agree to the terms of the Service Level Agreement between Meridian AI Business Solutions and {deal?.business_name}. A signed copy will be emailed to both parties.
               </p>
               <div className="space-y-4">
                 {/* Provider signature — pre-filled */}
-                <div className="p-4 bg-[#0a0f0d] border border-[#1a2420] rounded-lg">
-                  <p className="text-[10px] text-[#6b7a74] mb-1">Provider — Meridian AI Business Solutions</p>
-                  <p className="text-lg font-serif italic text-[#00d4aa]">Aidan Pierce</p>
-                  <p className="text-[10px] text-[#4a5550] mt-1">Founder & CEO</p>
+                <div className="p-4 bg-pm-canada-bg border border-pm-canada-border rounded-lg">
+                  <p className="text-2xs text-pm-canada-text-muted mb-1">Provider — Meridian AI Business Solutions</p>
+                  <p className="text-lg font-serif italic text-pm-accent">Aidan Pierce</p>
+                  <p className="text-2xs text-pm-canada-text-faint mt-1">Founder & CEO</p>
                 </div>
 
                 {/* Client signature */}
                 <div>
-                  <label className="text-xs text-[#6b7a74] mb-1.5 block">Client — {deal?.business_name}</label>
+                  <label className="text-xs text-pm-canada-text-muted mb-1.5 block">Client — {deal?.business_name}</label>
                   <input
                     type="text"
                     value={slaSignature}
                     onChange={e => setSlaSignature(e.target.value)}
                     placeholder="Client signatory full legal name"
-                    className="w-full px-3 py-2.5 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors"
+                    className="w-full px-3 py-2.5 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white placeholder-pm-canada-text-muted focus:outline-none focus:border-pm-accent/50 focus:ring-1 focus:ring-pm-accent/20 transition-colors"
                   />
                 </div>
                 {slaSignature.trim() && (
-                  <div className="p-4 bg-[#0a0f0d] border border-[#1a2420] rounded-lg">
-                    <p className="text-[10px] text-[#6b7a74] mb-1">Client signature preview</p>
+                  <div className="p-4 bg-pm-canada-bg border border-pm-canada-border rounded-lg">
+                    <p className="text-2xs text-pm-canada-text-muted mb-1">Client signature preview</p>
                     <p className="text-xl font-serif italic text-white">{slaSignature}</p>
                   </div>
                 )}
 
-                <p className="text-[10px] text-[#4a5550]">
+                <p className="text-2xs text-pm-canada-text-faint">
                   Date: {new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
                 <div className="flex justify-end gap-2 mt-4">
-                  <button onClick={() => setShowSlaSign(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
+                  <button onClick={() => setShowSlaSign(false)} className="px-4 py-2 text-sm text-pm-canada-text-muted hover:text-white transition-colors">Cancel</button>
                   <button
                     onClick={handleSignSla}
                     disabled={!slaSignature.trim() || slaSigning}
-                    className="px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                    className="px-4 py-2 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
                   >
                     {slaSigning ? 'Signing…' : 'Sign & Send Copies'}
                   </button>
@@ -1314,7 +1341,7 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Step 3 - Connect POS (visible at step 3+) */}
       {currentStep >= 3 && (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-4">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Connect POS System</h2>
 
         <POSSystemPicker
@@ -1326,16 +1353,16 @@ export default function CanadaPortalLeadDetailPage() {
         />
 
         {posConnecting && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
-            <Loader2 size={16} className="text-[#f0b429] animate-spin" />
-            <span className="text-xs text-[#f0b429] font-medium">Connecting — saving credentials...</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
+            <Loader2 size={16} className="text-pm-amber-gold animate-spin" />
+            <span className="text-xs text-pm-amber-gold font-medium">Connecting — saving credentials...</span>
           </div>
         )}
 
         {posVerifying && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
-            <Loader2 size={16} className="text-[#f0b429] animate-spin" />
-            <span className="text-xs text-[#f0b429] font-medium">Verifying — checking if we can pull data with these credentials...</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
+            <Loader2 size={16} className="text-pm-amber-gold animate-spin" />
+            <span className="text-xs text-pm-amber-gold font-medium">Verifying — checking if we can pull data with these credentials...</span>
           </div>
         )}
 
@@ -1346,16 +1373,16 @@ export default function CanadaPortalLeadDetailPage() {
         )}
 
         {posPending && !posError && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
-            <Clock size={16} className="text-[#f0b429]" />
-            <span className="text-xs text-[#f0b429] font-medium">{posPending}</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
+            <Clock size={16} className="text-pm-amber-gold" />
+            <span className="text-xs text-pm-amber-gold font-medium">{posPending}</span>
           </div>
         )}
 
         {posConnected && !posVerifying && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <span className="text-xs text-[#00d4aa] font-medium">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
+            <CheckCircle2 size={16} className="text-pm-accent" />
+            <span className="text-xs text-pm-accent font-medium">
               POS connected and verified — data is flowing. This deal is now active.
             </span>
           </div>
@@ -1364,50 +1391,51 @@ export default function CanadaPortalLeadDetailPage() {
       )}
 
       {/* Project Files */}
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">Project Files</h2>
-          <button onClick={handleUpload} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#00d4aa] border border-[#00d4aa]/30 rounded-lg hover:bg-[#00d4aa]/10 transition-all">
+          <button onClick={handleUpload} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pm-accent border border-pm-accent/30 rounded-lg hover:bg-pm-accent/10 transition-all">
             <Upload size={14} /> Upload
           </button>
         </div>
 
         <div className="space-y-2">
           {files.map(file => (
-            <div key={file.id} className="flex items-center gap-3 p-3 bg-[#0a0f0d] border border-[#1a2420] rounded-lg hover:border-[#00d4aa]/20 transition-colors cursor-pointer group"
+            <div key={file.id} className="flex items-center gap-3 p-3 bg-pm-canada-bg border border-pm-canada-border rounded-lg hover:border-pm-accent/20 transition-colors cursor-pointer group"
               onClick={() => {
                 if (file.tag === 'Proposal' && proposalBlob) { const u = URL.createObjectURL(proposalBlob); window.open(u, '_blank') }
                 else if (file.tag === 'Contract' && slaBlob) { const u = URL.createObjectURL(slaBlob); window.open(u, '_blank') }
               }}
             >
-              <FileText size={16} className="text-[#6b7a74] flex-shrink-0 group-hover:text-[#00d4aa] transition-colors" />
+              <FileText size={16} className="text-pm-canada-text-muted flex-shrink-0 group-hover:text-pm-accent transition-colors" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white truncate group-hover:text-[#00d4aa] transition-colors">{file.name}</p>
-                <p className="text-[11px] text-[#4a5550]">{file.description}</p>
+                <p className="text-xs font-medium text-white truncate group-hover:text-pm-accent transition-colors">{file.name}</p>
+                <p className="text-2xs text-pm-canada-text-faint">{file.description}</p>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded bg-[#1a2420] text-[#6b7a74] font-medium flex-shrink-0">
+              <span className="text-2xs px-2 py-0.5 rounded bg-pm-canada-border text-pm-canada-text-muted font-medium flex-shrink-0">
                 {file.tag}
               </span>
-              <ExternalLink size={14} className="text-[#4a5550] group-hover:text-[#00d4aa] transition-colors flex-shrink-0" />
+              <ExternalLink size={14} className="text-pm-canada-text-faint group-hover:text-pm-accent transition-colors flex-shrink-0" />
               <button
                 onClick={(e) => { e.stopPropagation(); removeFile(file.id) }}
                 className="p-1 rounded hover:bg-red-500/10 transition-colors flex-shrink-0"
               >
-                <Trash2 size={14} className="text-[#6b7a74] hover:text-red-400" />
+                <Trash2 size={14} className="text-pm-canada-text-muted hover:text-red-400" />
               </button>
             </div>
           ))}
           {files.length === 0 && (
-            <p className="text-xs text-[#4a5550] text-center py-4">No files uploaded yet.</p>
+            <p className="text-xs text-pm-canada-text-faint text-center py-4">No files uploaded yet.</p>
           )}
         </div>
       </div>
 
       {/* Stage Advancement */}
       {currentStep > 0 && currentStep < 3 && deal.stage !== 'closed_lost' && (
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5 space-y-3">
+        <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-3">
           <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
           <button
+            data-testid="advance-stage-button"
             onClick={async () => {
               const pipeline: DealStage[] = ['proposal_shown', 'customer_checkout', 'customer_walkthrough']
               const currentIdx = pipeline.findIndex(s => STAGE_TO_STEP[s] === currentStep)
@@ -1418,8 +1446,8 @@ export default function CanadaPortalLeadDetailPage() {
               }
               const nextStage = pipeline[nextIdx]
               try {
-                await canadaLeadsService.updateStage(deal.id, nextStage)
-                setDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
+                await updateStage.mutateAsync({ id: deal.id, stage: nextStage })
+                patchDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
                 toast(`Advanced to ${nextStage.replace(/_/g, ' ')}`, 'success')
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err)
@@ -1431,7 +1459,7 @@ export default function CanadaPortalLeadDetailPage() {
                 toast(`Couldn't advance: ${msg}. Try refreshing the page.`, 'error')
               }
             }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-accent/30 text-pm-accent text-sm font-medium rounded-lg hover:bg-pm-accent/10 transition-all"
           >
             <ChevronRight size={16} /> Advance to Next Stage
           </button>
@@ -1440,28 +1468,28 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Create Customer Account Login (visible at step 3+) */}
       {currentStep >= 3 && (
-        <div className="bg-[#0f1512] border border-[#00d4aa]/30 rounded-xl p-5 space-y-3">
+        <div className="bg-pm-canada-surface border border-pm-accent/30 rounded-xl p-5 space-y-3">
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <h2 className="text-sm font-semibold text-[#00d4aa]">Create Customer Account Login</h2>
+            <CheckCircle2 size={16} className="text-pm-accent" />
+            <h2 className="text-sm font-semibold text-pm-accent">Create Customer Account Login</h2>
           </div>
-          <p className="text-xs text-[#6b7a74]">
+          <p className="text-xs text-pm-canada-text-muted">
             Generate a login for {deal.contact_name} to access the Meridian customer portal. They'll be guided through a walkthrough to verify their POS connection, set up cameras, and explore their dashboard.
           </p>
 
           {customerCredentials ? (
             <div className="space-y-3">
-              <div className="p-4 rounded-lg bg-[#0a0f0d] border border-[#1a2420] space-y-2">
+              <div className="p-4 rounded-lg bg-pm-canada-bg border border-pm-canada-border space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#6b7a74]">Email</span>
+                  <span className="text-xs text-pm-canada-text-muted">Email</span>
                   <span className="text-sm text-white font-mono">{customerCredentials.email}</span>
                 </div>
-                <p className="text-[10px] text-[#4a5550] mt-1">A secure setup email has been sent to the customer. They&apos;ll click the link to set their own password — no credentials need to be shared manually.</p>
+                <p className="text-2xs text-pm-canada-text-faint mt-1">A secure setup email has been sent to the customer. They&apos;ll click the link to set their own password — no credentials need to be shared manually.</p>
               </div>
               <button
                 onClick={handleEmailCredentials}
                 disabled={credentialEmailing || credentialEmailed}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#00d4aa]/30 text-[#00d4aa] text-sm font-medium rounded-lg hover:bg-[#00d4aa]/10 disabled:opacity-50 transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-accent/30 text-pm-accent text-sm font-medium rounded-lg hover:bg-pm-accent/10 disabled:opacity-50 transition-all"
               >
                 {credentialEmailing ? (
                   <><Loader2 size={16} className="animate-spin" /> Sending...</>
@@ -1482,7 +1510,7 @@ export default function CanadaPortalLeadDetailPage() {
               <button
                 onClick={handleCreateCustomerAccount}
                 disabled={customerCreating}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
               >
                 {customerCreating ? (
                   <><Loader2 size={16} className="animate-spin" /> Creating Account...</>
@@ -1497,12 +1525,12 @@ export default function CanadaPortalLeadDetailPage() {
 
       {/* Customer Walkthrough status */}
       {deal.stage === 'customer_walkthrough' && (
-        <div className="bg-[#0f1512] border border-[#00d4aa]/20 rounded-xl p-5 space-y-2">
+        <div className="bg-pm-canada-surface border border-pm-accent/20 rounded-xl p-5 space-y-2">
           <div className="flex items-center gap-2">
-            <CheckCircle2 size={16} className="text-[#00d4aa]" />
-            <h2 className="text-sm font-semibold text-[#00d4aa]">Active Deal — Customer Onboarding</h2>
+            <CheckCircle2 size={16} className="text-pm-accent" />
+            <h2 className="text-sm font-semibold text-pm-accent">Active Deal — Customer Onboarding</h2>
           </div>
-          <p className="text-xs text-[#6b7a74]">
+          <p className="text-xs text-pm-canada-text-muted">
             This deal is active. The customer has been set up and is going through their onboarding walkthrough.
           </p>
         </div>
@@ -1513,7 +1541,7 @@ export default function CanadaPortalLeadDetailPage() {
         <button
           onClick={async () => {
             try {
-              await canadaLeadsService.updateStage(deal.id, 'closed_lost')
+              await updateStage.mutateAsync({ id: deal.id, stage: 'closed_lost' })
               navigate('/canada/portal/leads')
             } catch (err) {
               console.error('Mark as lost failed:', err)
@@ -1558,12 +1586,12 @@ function LeadDeckCard({ deal, rep, copied, tagging, onCopy, onTagVertical }: Lea
 
   if (!deck) {
     return (
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4 space-y-3">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4 space-y-3">
         <div className="flex items-center gap-2">
-          <Tag size={14} className="text-[#f0b429]" />
+          <Tag size={14} className="text-pm-amber-gold" />
           <h2 className="text-sm font-semibold text-white">Tag this lead with a business type</h2>
         </div>
-        <p className="text-xs text-[#6b7a74]">
+        <p className="text-xs text-pm-canada-text-muted">
           Pick the industry to auto-generate the matching personalized proposal deck for {deal.business_name}.
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -1572,14 +1600,14 @@ function LeadDeckCard({ deal, rep, copied, tagging, onCopy, onTagVertical }: Lea
               key={v.slug}
               disabled={tagging}
               onClick={() => onTagVertical(v.slug)}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#1a2420] bg-[#0a0e0c] text-[11px] text-[#a0a8a4] hover:border-[#00d4aa]/40 hover:text-white disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-pm-canada-border bg-pm-canada-bg text-2xs text-pm-muted hover:border-pm-accent/40 hover:text-white disabled:opacity-50 transition-colors"
             >
               {tagging ? <Loader2 size={10} className="animate-spin" /> : null}
               {v.title}
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-[#4a5550]">
+        <p className="text-2xs text-pm-canada-text-faint">
           Looking for something else? Edit the lead or visit the Proposals page for all 43 verticals.
         </p>
       </div>
@@ -1587,18 +1615,18 @@ function LeadDeckCard({ deal, rep, copied, tagging, onCopy, onTagVertical }: Lea
   }
 
   return (
-    <div className="bg-[#0f1512] border border-[#00d4aa]/20 rounded-xl p-5 space-y-3">
+    <div className="bg-pm-canada-surface border border-pm-accent/20 rounded-xl p-5 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles size={14} className="text-[#00d4aa]" />
+            <Sparkles size={14} className="text-pm-accent" />
             <h2 className="text-sm font-semibold text-white">Proposal for this lead</h2>
           </div>
-          <h3 className="text-[15px] font-semibold text-white leading-tight">{deck.title}</h3>
-          <p className="text-xs text-[#a0a8a4] mt-1 leading-relaxed">{deck.blurb}</p>
-          <p className="text-[10px] text-[#6b7a74] mt-2">
+          <h3 className="text-sm font-semibold text-white leading-tight">{deck.title}</h3>
+          <p className="text-xs text-pm-muted mt-1 leading-relaxed">{deck.blurb}</p>
+          <p className="text-2xs text-pm-canada-text-muted mt-2">
             Avg ticket <span className="text-white">{deck.avgTicket}</span> · Payback{' '}
-            <span className="text-[#00d4aa]">{deck.payback}</span>
+            <span className="text-pm-accent">{deck.payback}</span>
           </p>
         </div>
       </div>
@@ -1608,17 +1636,17 @@ function LeadDeckCard({ deal, rep, copied, tagging, onCopy, onTagVertical }: Lea
           href={personalizedUrl}
           target="_blank"
           rel="noopener"
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#00d4aa] text-[#001a14] text-[12px] font-semibold hover:bg-[#00bd97] active:scale-[0.98] transition-all"
+          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pm-accent text-[#001a14] text-xs font-semibold hover:bg-pm-accent active:scale-[0.98] transition-all"
         >
           Open personalized deck
           <ExternalLink size={11} />
         </a>
         <button
           onClick={() => onCopy(personalizedUrl)}
-          className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all ${
+          className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
             copied
-              ? 'border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[#00d4aa]'
-              : 'border-[#1f2a26] bg-[#0a0e0c] text-[#a0a8a4] hover:border-[#1a3a30] hover:text-white active:scale-[0.98]'
+              ? 'border-pm-accent/40 bg-pm-accent/10 text-pm-accent'
+              : 'border-pm-canada-border bg-pm-canada-bg text-pm-muted hover:border-[#1a3a30] hover:text-white active:scale-[0.98]'
           }`}
           title="Copy personalized link"
         >
