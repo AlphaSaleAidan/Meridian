@@ -440,13 +440,26 @@ async def _run_square_backfill(org_id: str, connection_id: str, credentials: dic
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
 
+        # Sweep §3.9: persist the primary discovered location so the
+        # 15-min incremental sync can scope /v2/orders/search by
+        # location_ids instead of fanning out across every location on
+        # the merchant's account. Mappers populate `external_id` on each
+        # location dict (src/square/mappers.py:84). Only set the field
+        # when we actually discovered locations — otherwise leave the
+        # existing value untouched.
+        update_fields = {
+            "historical_import_complete": True,
+            "last_sync_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if result.locations:
+            primary_ext = result.locations[0].get("external_id")
+            if primary_ext:
+                update_fields["external_location_id"] = primary_ext
+
         await db.update(
             "pos_connections",
-            {
-                "historical_import_complete": True,
-                "last_sync_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
+            update_fields,
             filters={"id": f"eq.{connection_id}"},
         )
         logger.info(
@@ -499,13 +512,23 @@ async def _run_clover_backfill(org_id: str, connection_id: str, credentials: dic
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
 
+        # Sweep §3.9: persist primary discovered location so incremental
+        # sync can scope by location_id. Mappers populate `external_id`
+        # on each location dict (src/clover/mappers.py:98). No-op when
+        # no locations came back.
+        update_fields = {
+            "historical_import_complete": True,
+            "last_sync_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if result.locations:
+            primary_ext = result.locations[0].get("external_id")
+            if primary_ext:
+                update_fields["external_location_id"] = primary_ext
+
         await db.update(
             "pos_connections",
-            {
-                "historical_import_complete": True,
-                "last_sync_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            },
+            update_fields,
             filters={"id": f"eq.{connection_id}"},
         )
         logger.info(
