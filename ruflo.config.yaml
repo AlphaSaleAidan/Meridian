@@ -2,8 +2,20 @@ name: meridian-pos-intelligence
 version: 3.0.0
 description: 37-agent POS + Vision + Cross-Reference Intelligence swarm for Meridian analytics platform
 
-model: claude-haiku-3-5-20251001
+# Swarm default model — routed through the LiteLLM gateway (litellm.config.yaml).
+# Aliases: meridian-architect (K2.6 swarm lead) | meridian-fixer (K2.6 fixer) |
+# meridian-fast (free/cheap workers) | meridian-local (qwen-server :8002 fallback).
+# Swap K2.6 to self-hosted vLLM by editing only litellm.config.yaml — nothing here changes.
+model: meridian-architect
 max_tokens: 4096
+
+# Per-priority worker tier (consumed by claude-flow router; ruflo respects these
+# when an agent omits an explicit model: field).
+model_aliases:
+  critical: meridian-architect   # K2.6 — queen / consensus / safety-critical
+  high: meridian-architect       # K2.6 — planning, critique, narrative
+  medium: meridian-fast          # free tier — mechanical analysis
+  low: meridian-fast             # free tier — large-volume background scans
 
 topology: hierarchical
 max_agents: 37
@@ -427,7 +439,7 @@ training:
   dspy:
     enabled: true
     compile_threshold: 10  # min examples before recompilation
-    model: openai/gpt-4o
+    model: meridian-fast   # cheap tier — DSPy recompile is low-volume periodic work
   memory:
     backend: mem0     # persistent cross-cycle agent memory
     fallback: dict    # in-memory when mem0 unavailable

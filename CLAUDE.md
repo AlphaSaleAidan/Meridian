@@ -32,9 +32,34 @@ Server: 209.126.80.45 (AMD EPYC 12c, 48GB RAM, 484GB disk)
 
 ## LLM Routing Chain
 
-`llm_layer.py` routes: DeepSeek V3 → SambaNova (free, 405B) → Groq (free, 70B) → Local Llama → Cerebras (free, 70B) → OpenAI (fallback).
+`llm_layer.py` routes (in-process, application LLM enhancements): DeepSeek V3 → SambaNova (free, 405B) → Groq (free, 70B) → Local Llama → Cerebras (free, 70B) → OpenAI (fallback).
 
 Env vars: `DEEPSEEK_API_KEY`, `SAMBANOVA_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY`
+
+## Model Gateway (2026-06-04)
+
+All NEW agentic work (Ruflo swarm, the fixer, ad-hoc Claude Code sessions) routes through a single LiteLLM proxy on **`127.0.0.1:4000`** (PM2: `litellm-gateway`). Four aliases the rest of the stack speaks:
+
+| Alias | Backed by | Use for |
+|-------|-----------|---------|
+| `meridian-architect` | Kimi K2.6 via OpenRouter | Swarm queen / planning / critique / safety-critical reasoning |
+| `meridian-fixer` | Kimi K2.6 via OpenRouter | Autonomous server fixer (`/opt/meridian-fixer/`, PM2 `meridian-fixer`) |
+| `meridian-fast` | Groq / Cerebras / SambaNova / DeepSeek (round-robin) | High-volume mechanical worker subtasks |
+| `meridian-local` | `qwen-server` on :8002 (llama-cpp Qwen2.5-7B) | Truly free fallback, no API keys |
+
+**Fallback chain (router-level):** `architect` / `fixer` → `fast` → `local`. The gateway answers even with zero upstream keys.
+
+**Files:**
+- `litellm.config.yaml` — model + router config (canonical source for swapping providers)
+- `.env.litellm` — secrets (0600, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY`, master key)
+- `scripts/start-litellm.sh` — PM2 launcher
+- Budget cap: `max_budget: $25/30d` on K2.6 (`litellm.config.yaml`); raise after first real workload sized.
+
+**Swap to self-hosted K2.6 (when GPUs land):** edit only `meridian-architect` and `meridian-fixer` entries in `litellm.config.yaml` — change `model:` to `openai/Kimi-K2.6-AWQ` and `api_base: http://gpu-host:8000/v1`. Nothing downstream changes; the aliases stay the same.
+
+**Cline IDE decommissioned same day** — Aidan's ad-hoc fix-it tool now is `/fix <description>` in Telegram (Garry relays to the K2.6 fixer; diff comes back for `/approve <task_id>` or `/reject`). The merchant-facing `src/cline/` Karpathy-reasoning health agent is unrelated and untouched.
+
+**Grafana dashboard for per-model spend/latency**: deferred — see `docs/litellm-grafana-future.md` for the deployment sketch when traffic justifies it.
 
 ## Backend Map (`src/`)
 

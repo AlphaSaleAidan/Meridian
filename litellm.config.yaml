@@ -1,0 +1,90 @@
+# Meridian LiteLLM gateway — single-host on 127.0.0.1:4000.
+#
+# Four model aliases the rest of the stack speaks:
+#   meridian-architect → Kimi K2.6 (planning + critique, swarm lead)
+#   meridian-fixer     → Kimi K2.6 (autonomous server fixer)
+#   meridian-fast      → free/cheap tier (high-volume worker subtasks)
+#   meridian-local     → llama-cpp qwen-server on :8002 (truly free fallback)
+#
+# Fallback chain: K2.6 → fast → local. Swap K2.6 to self-hosted vLLM later by
+# changing only the meridian-architect/meridian-fixer entries to a local
+# openai/* model + api_base. Nothing downstream changes.
+
+model_list:
+  # --- Primary reasoning + swarm lead ---
+  - model_name: "meridian-architect"
+    litellm_params:
+      model: "openrouter/moonshotai/kimi-k2.6"
+      max_tokens: 16384
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      timeout: 600
+      stream_timeout: 600
+
+  # --- Autonomous fixer (agentic coding) ---
+  - model_name: "meridian-fixer"
+    litellm_params:
+      model: "openrouter/moonshotai/kimi-k2.6"
+      max_tokens: 16384
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      timeout: 600
+      stream_timeout: 600
+
+  # --- Fast / cheap tier (any provider with a key serves; LiteLLM round-robins) ---
+  - model_name: "meridian-fast"
+    litellm_params:
+      model: "groq/llama-3.3-70b-versatile"
+      api_key: "os.environ/GROQ_API_KEY"
+  - model_name: "meridian-fast"
+    litellm_params:
+      model: "cerebras/llama-3.3-70b"
+      api_key: "os.environ/CEREBRAS_API_KEY"
+  - model_name: "meridian-fast"
+    litellm_params:
+      model: "openai/Meta-Llama-3.1-405B-Instruct"
+      api_base: "https://api.sambanova.ai/v1"
+      api_key: "os.environ/SAMBANOVA_API_KEY"
+  - model_name: "meridian-fast"
+    litellm_params:
+      model: "deepseek/deepseek-chat"
+      api_key: "os.environ/DEEPSEEK_API_KEY"
+
+  # --- Local fallback: existing llama-cpp qwen-server on :8002 (OpenAI-compatible) ---
+  - model_name: "meridian-local"
+    litellm_params:
+      model: "openai/Qwen2.5-7B-Instruct"
+      api_base: "http://localhost:8002/v1"
+      api_key: "sk-local-noauth"
+      timeout: 120
+
+router_settings:
+  routing_strategy: "simple-shuffle"
+  num_retries: 2
+  timeout: 600
+  fallbacks:
+    - "meridian-architect": ["meridian-fast", "meridian-local"]
+    - "meridian-fixer": ["meridian-fast", "meridian-local"]
+    - "meridian-fast": ["meridian-local"]
+  redis_host: "localhost"
+  redis_port: 6379
+
+litellm_settings:
+  set_verbose: false
+  drop_params: true
+  cache: true
+  cache_params:
+    type: "redis"
+    host: "localhost"
+    port: 6379
+    ttl: 600
+  # Phase-4 budget cap on K2.6 spend (USD); set to None to disable
+  max_budget: 25.0
+  budget_duration: "30d"
+
+general_settings:
+  store_model_in_db: false
+  disable_spend_logs: false
+  alerting:
+    - "slack"
+  alert_types:
+    - "budget_alerts"
+    - "llm_exceptions"

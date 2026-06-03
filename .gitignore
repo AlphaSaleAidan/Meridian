@@ -34,3 +34,4 @@ services/labellerr_cv/
 # Catch every nested .claude-flow/ tooling drop wherever it lands
 **/.claude-flow/
 services/higgsfield/
+.env.litellm

@@ -1,4 +1,10 @@
 # Cline Rules — Meridian Intelligence
+#
+# 📌 2026-06-04 cutover note: Cline IDE was decommissioned in favor of the
+# Meridian Fixer (Kimi K2.6 via LiteLLM gateway). The rules below are retained
+# as project conventions — they're still read by Claude Code, the fixer
+# daemon, and any future Cline-compatible tooling. See CLAUDE.md "Model Gateway"
+# for the new flow.
 
 ## What This Project Is
 

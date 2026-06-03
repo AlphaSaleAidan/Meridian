@@ -1,3 +1,27 @@
+// Read LITELLM_MASTER_KEY out of the 0600 .env.litellm at fork time so the
+// secret never lands in this file (which is checked into git).
+const _fs = require("fs");
+function _readLitellmKey() {
+  try {
+    const raw = _fs.readFileSync("/root/Meridian/.env.litellm", "utf8");
+    const m = raw.match(/^LITELLM_MASTER_KEY=["']?([^"'\n]+)["']?$/m);
+    return m ? m[1] : "";
+  } catch (_e) {
+    return "";
+  }
+}
+const LITELLM_MASTER_KEY = _readLitellmKey();
+const GATEWAY_ENV = {
+  // OpenAI-compatible bridge — anything speaking OpenAI clients hits :4000.
+  OPENAI_BASE_URL: "http://127.0.0.1:4000/v1",
+  OPENAI_API_KEY: LITELLM_MASTER_KEY,
+  // Anthropic-compatible bridge — `claude -p` headless hits :4000 the same way.
+  ANTHROPIC_BASE_URL: "http://127.0.0.1:4000",
+  ANTHROPIC_AUTH_TOKEN: LITELLM_MASTER_KEY,
+  // Convenience for app-side code that wants the canonical gateway URL.
+  RUFLO_GATEWAY: "http://127.0.0.1:4000/v1",
+};
+
 module.exports = {
   apps: [
     {
@@ -16,6 +40,7 @@ module.exports = {
         ENABLE_SWARM_TRAINING: "1",
         ENABLE_CANADA_INTELLIGENCE: "1",
         ENABLE_FINANCIAL_INTELLIGENCE: "1",
+        ...GATEWAY_ENV,
       },
     },
     {
@@ -71,6 +96,36 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "200M",
+      env: {
+        ...GATEWAY_ENV,
+      },
+    },
+    {
+      // Unified model gateway on 127.0.0.1:4000 — see /root/Meridian/litellm.config.yaml.
+      // Aliases: meridian-architect | meridian-fixer | meridian-fast | meridian-local.
+      name: "litellm-gateway",
+      script: "/root/Meridian/scripts/start-litellm.sh",
+      interpreter: "none",
+      cwd: "/root/Meridian",
+      exec_mode: "fork",
+      instances: 1,
+      max_memory_restart: "1G",
+      restart_delay: 5000,
+      max_restarts: 10,
+    },
+    {
+      // Autonomous K2.6 fixer daemon — listens on /run/meridian-fixer/sock.
+      // Runs as the non-root meridian-fixer user; escalates only via sudoers
+      // to /opt/meridian-fixer/{worktree,apply}.sh. See /opt/meridian-fixer/.
+      name: "meridian-fixer",
+      script: "/opt/meridian-fixer/start.sh",
+      interpreter: "none",
+      cwd: "/opt/meridian-fixer",
+      exec_mode: "fork",
+      instances: 1,
+      max_memory_restart: "512M",
+      restart_delay: 5000,
+      max_restarts: 10,
     },
   ],
 };
