@@ -62,12 +62,12 @@ async def run_backfill(
             on_conflict="org_id,external_id",
         )
 
-    if result.categories:
-        await db.batch_upsert(
-            "categories",
-            result.categories,
-            on_conflict="org_id,external_id",
-        )
+    # Sweep §3.1: the `categories` table does not exist in the production
+    # schema, so this upsert previously failed (silently — guarded by the
+    # `if result.categories` check, which is empty for any merchant whose
+    # catalog has no CATEGORY CatalogObjects). Categories are recorded
+    # via the product rows' metadata; no separate table is needed.
+    # Reversible: re-add the block if a categories table migration ships.
 
     if result.products:
         await db.batch_upsert(
