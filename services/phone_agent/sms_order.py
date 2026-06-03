@@ -247,6 +247,7 @@ async def _handle_order_submission(
         config.pos_system,
         config.pos_access_token,
         config.pos_location_id,
+        demo_safe=getattr(config, "demo_safe", False),
     )
 
     payment_link_result: dict = {}

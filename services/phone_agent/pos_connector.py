@@ -47,10 +47,51 @@ async def create_pos_order(
     pos_system: str,
     access_token: str,
     location_id: str,
+    *,
+    demo_safe: bool = False,
 ) -> dict:
+    """Create a POS order with layered guards against accidental live writes.
+
+    Layers (cheapest first):
+      1. POS_ORDERS_DISABLED env killswitch — global override.
+      2. demo_safe per-merchant flag — set on demo / test rows; logs-only
+         regardless of whether the merchant happens to have a populated
+         pos_access_token (the production-shape risk under the live-creds
+         plan: token populated by OAuth → stray call → real order).
+      3. Input sanitisation — whitespace-only tokens are functionally null.
+      4. POS-specific requirements — Square requires location_id; refuse
+         if it's missing rather than passing through and hoping Square
+         rejects cleanly.
+
+    Returns {"success": False, "reason": "<gate-name>"} when a guard
+    blocks the call. The reason is structured so callers (and tests)
+    can distinguish "logs-only because guarded" from "logs-only because
+    POS failed."
+    """
+    if os.getenv("POS_ORDERS_DISABLED", "0") == "1":
+        logger.info("POS_ORDERS_DISABLED env set — skipping POS write")
+        return {"success": False, "reason": "pos_orders_disabled"}
+
+    if demo_safe:
+        logger.info(
+            "demo_safe merchant — skipping POS write (pos_system=%s, token_present=%s)",
+            pos_system, bool(access_token and access_token.strip()),
+        )
+        return {"success": False, "reason": "demo_safe"}
+
+    pos_system = (pos_system or "").strip()
+    access_token = (access_token or "").strip()
+    location_id = (location_id or "").strip()
+
     if not pos_system or not access_token:
         logger.info("No POS configured — order logged without POS creation")
         return {"success": False, "reason": "no_pos_configured"}
+
+    if pos_system == "square" and not location_id:
+        logger.warning(
+            "Square POS configured but location_id missing — refusing to fire order"
+        )
+        return {"success": False, "reason": "square_missing_location_id"}
 
     try:
         if pos_system == "square":

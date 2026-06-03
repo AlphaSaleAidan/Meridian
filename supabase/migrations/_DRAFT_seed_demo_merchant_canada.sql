@@ -41,7 +41,8 @@ INSERT INTO phone_agent_config (
     transfer_number,
     sms_checkout_enabled,
     sms_ordering_enabled,
-    tax_rate
+    tax_rate,
+    demo_safe
 ) VALUES (
     'demo-merchant',
     'Meridian Demo Restaurant',
@@ -86,7 +87,8 @@ INSERT INTO phone_agent_config (
     NULL,  -- transfer_number — no human handoff in the demo
     true,
     true,
-    0.13   -- Ontario HST (already the schema default but explicit here for clarity)
+    0.13,  -- Ontario HST (already the schema default but explicit here for clarity)
+    true   -- demo_safe: even with a populated pos_access_token, this row never fires a live Square call
 )
 ON CONFLICT (merchant_id) DO UPDATE SET
     business_name = EXCLUDED.business_name,
@@ -103,6 +105,7 @@ ON CONFLICT (merchant_id) DO UPDATE SET
     sms_checkout_enabled = EXCLUDED.sms_checkout_enabled,
     sms_ordering_enabled = EXCLUDED.sms_ordering_enabled,
     tax_rate = EXCLUDED.tax_rate,
+    demo_safe = EXCLUDED.demo_safe,
     updated_at = now();
     -- phone_number, pos_system, pos_access_token, pos_location_id NOT
     -- updated on conflict — those are owned by the provisioning script

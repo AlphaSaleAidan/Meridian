@@ -95,6 +95,7 @@ async def send_payment_link_to_caller(
         getattr(merchant_config, "pos_system", "") or "",
         getattr(merchant_config, "pos_access_token", "") or "",
         getattr(merchant_config, "pos_location_id", "") or "",
+        demo_safe=bool(getattr(merchant_config, "demo_safe", False)),
     )
 
     payment_link_result: dict = {}

@@ -38,6 +38,10 @@ class MerchantPhoneConfig:
     sms_checkout_enabled: bool
     sms_ordering_enabled: bool
     tax_rate: float = 0.13
+    # When true, create_pos_order returns logs-only regardless of token
+    # state. Demo / test merchants set this to keep live POS calls off
+    # the demo path even after the merchant completes Square OAuth.
+    demo_safe: bool = False
 
 
 async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]:
@@ -86,6 +90,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 sms_checkout_enabled=row.get("sms_checkout_enabled", True),
                 sms_ordering_enabled=row.get("sms_ordering_enabled", True),
                 tax_rate=row.get("tax_rate", 0.13),
+                demo_safe=bool(row.get("demo_safe", False)),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
