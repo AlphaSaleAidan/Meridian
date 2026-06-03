@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-.env
+.env*
 *.zip
 *.pdf
 .DS_Store
@@ -34,3 +34,5 @@ services/labellerr_cv/
 # Catch every nested .claude-flow/ tooling drop wherever it lands
 **/.claude-flow/
 services/higgsfield/
+data/swarm_traces.sqlite
+frontend/test-results/
