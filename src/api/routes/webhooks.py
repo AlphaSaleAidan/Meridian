@@ -120,7 +120,8 @@ async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
     rows = await _db_instance.select(
         "pos_connections",
         filters={
-            "merchant_id": f"eq.{merchant_id}",
+            # P6: schema column is external_merchant_id.
+            "external_merchant_id": f"eq.{merchant_id}",
             "status": "eq.connected",
         },
         limit=1,
@@ -129,8 +130,8 @@ async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
         return None
 
     conn = rows[0]
-    # Inject access_token for the SquareClient
-    conn["access_token"] = conn.get("access_token_encrypted", "")
+    # P6: schema column is access_token_enc.
+    conn["access_token"] = conn.get("access_token_enc", "")
     return conn
 
 
@@ -396,7 +397,8 @@ async def _get_connection_by_provider_merchant(provider: str, merchant_id: str) 
         "pos_connections",
         filters={
             "provider": f"eq.{provider}",
-            "merchant_id": f"eq.{merchant_id}",
+            # P6: schema column is external_merchant_id.
+            "external_merchant_id": f"eq.{merchant_id}",
             "status": "eq.connected",
         },
         limit=1,
@@ -405,5 +407,6 @@ async def _get_connection_by_provider_merchant(provider: str, merchant_id: str) 
         return None
 
     conn = rows[0]
-    conn["access_token"] = conn.get("access_token_encrypted", "")
+    # P6: schema column is access_token_enc.
+    conn["access_token"] = conn.get("access_token_enc", "")
     return conn

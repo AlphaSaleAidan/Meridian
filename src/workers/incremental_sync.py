@@ -78,7 +78,8 @@ async def run_all_incremental_syncs():
         org_id = conn.get("org_id", "unknown")
         try:
             from ..security.encryption import decrypt_token
-            access_token = decrypt_token(conn.get("access_token_encrypted", ""))
+            # P6: schema column is access_token_enc.
+            access_token = decrypt_token(conn.get("access_token_enc", ""))
 
             if not access_token:
                 logger.warning(f"No access token for connection {conn_id}")
@@ -88,12 +89,18 @@ async def run_all_incremental_syncs():
             if conn.get("last_sync_at"):
                 last_sync = datetime.fromisoformat(conn["last_sync_at"].replace("Z", "+00:00"))
 
+            # P6: schema has singular `external_location_id` (text),
+            # not the array `location_ids` the code originally read.
+            # Wrap the single id in a list for the existing call
+            # signature; None means "discover all locations".
+            external_loc = conn.get("external_location_id")
+            location_ids = [external_loc] if external_loc else None
             await run_incremental_sync(
                 access_token=access_token,
                 org_id=org_id,
                 connection_id=conn_id,
                 last_sync_at=last_sync,
-                location_ids=conn.get("location_ids"),
+                location_ids=location_ids,
             )
 
             await db.update(

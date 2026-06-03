@@ -271,7 +271,10 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             "provider": req.pos_system,
             "status": "connected",
             "credentials_encrypted": encrypted_creds,
-            "merchant_id": req.restaurant_guid or req.credentials.get("merchant_id", ""),
+            # P6: write to `external_merchant_id` (the actual column) —
+            # the schema has no `merchant_id` column, so the previous
+            # write was silently dropped by PostgREST.
+            "external_merchant_id": req.restaurant_guid or req.credentials.get("merchant_id", ""),
             "historical_import_complete": False,
             "created_at": now,
             "updated_at": now,
@@ -635,7 +638,10 @@ async def upload_csv(
             "org_id": org_id,
             "provider": pos_system,
             "status": "connected",
-            "merchant_id": "",
+            # P6: schema column is `external_merchant_id`, not
+            # `merchant_id`. CSV-only POS has no upstream merchant id
+            # at upload time, so the value stays empty.
+            "external_merchant_id": "",
             "historical_import_complete": True,
             "last_sync_at": now,
             "created_at": now,
@@ -670,7 +676,10 @@ async def get_connections(org_id: str):
             "id": conn["id"],
             "provider": conn.get("provider"),
             "status": conn.get("status"),
-            "merchant_id": conn.get("merchant_id"),
+            # P6: schema column is `external_merchant_id` — the prior
+            # `conn.get("merchant_id")` read always returned None
+            # because that column doesn't exist.
+            "merchant_id": conn.get("external_merchant_id"),
             "last_sync_at": conn.get("last_sync_at"),
             "historical_import_complete": conn.get("historical_import_complete", False),
             "last_error": conn.get("last_error"),
@@ -703,9 +712,10 @@ async def disconnect_pos(req: DisconnectRequest):
 
     conn = connections[0]
 
-    if req.pos_system == "square" and conn.get("access_token_encrypted"):
+    # P6: schema column is `access_token_enc`, not `access_token_encrypted`.
+    if req.pos_system == "square" and conn.get("access_token_enc"):
         try:
-            token = decrypt_token(conn["access_token_encrypted"])
+            token = decrypt_token(conn["access_token_enc"])
             from ...square.oauth import OAuthManager
             await OAuthManager().revoke_token(token)
         except Exception as e:
@@ -767,6 +777,8 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
 
         if pos_system == "square":
             creds = connection.get("credentials_encrypted") or {}
+            # P6: read the correct column; the old `access_token_encrypted`
+            # fallback is dead code now (column never existed).
             token = decrypt_token(creds.get("access_token", "") or connection.get("access_token_enc", ""))
             from ...square.client import SquareClient
             async with SquareClient(access_token=token) as client:
@@ -777,7 +789,8 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
         elif pos_system == "clover":
             creds = connection.get("credentials_encrypted") or {}
             token = decrypt_token(creds.get("access_token", "") or connection.get("access_token_enc", ""))
-            merchant_id = connection.get("external_merchant_id", "") or connection.get("merchant_id", "")
+            # P6: `merchant_id` column doesn't exist; only external_merchant_id.
+            merchant_id = connection.get("external_merchant_id", "")
             from ...clover.client import CloverClient
             client = CloverClient(access_token=token, merchant_id=merchant_id)
             from ...clover.sync_engine import CloverSyncEngine
@@ -811,7 +824,8 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
                 auth_method=api_config.get("auth_type", "bearer"),
                 base_url=api_config.get("base_url", ""),
                 credentials=decrypted,
-                merchant_id=connection.get("merchant_id", ""),
+                # P6: read external_merchant_id, the actual schema column.
+                merchant_id=connection.get("external_merchant_id", ""),
             )
             connector = GenericRESTConnector(conn_config, api_config)
             sync_result = await connector.run_sync(since=since)
