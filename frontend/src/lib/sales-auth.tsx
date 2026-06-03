@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { supabase } from './supabase'
+import { canadaLeadsService } from './canada-leads-service'
 
 export type PortalContext = 'us' | 'canada' | 'all'
 
@@ -290,6 +291,10 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     if (supabase) supabase.auth.signOut()
     setRep(null)
     clearRep()
+    // Drop the canada_leads module-level cache so a second rep on the
+    // same browser doesn't see the previous rep's deals via React
+    // Query's `initialData` seed until staleTime expires.
+    canadaLeadsService.invalidateCaches()
   }, [])
 
   return (

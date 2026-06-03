@@ -109,6 +109,13 @@ export const canadaLeadsService = {
     return _listCache.has(key) ? _listCache.get(key)! : null
   },
 
+  /** Drops the module-level list cache. Call on logout / rep switch so a
+   * second rep on the same browser doesn't see the previous rep's deals
+   * via `initialData` until staleTime expires. */
+  invalidateCaches(): void {
+    _invalidateCaches()
+  },
+
   async list(repId?: string): Promise<Deal[]> {
     if (!supabase) return []
     const key = _cacheKey(repId)
