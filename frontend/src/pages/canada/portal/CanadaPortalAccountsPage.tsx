@@ -42,16 +42,25 @@ export default function CanadaPortalAccountsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
   // P2: per-client live POS connection state. Key = client.id, value
-  // = the first row from GET /api/pos/connections/{org_id}. Lazy-
-  // fetched on expansion so we don't hammer the API for a long list.
-  // Each row carries provider + last_sync_at + status, replacing the
-  // canada_leads-derived `client.pos_provider` for these surfaces.
-  const [posByClient, setPosByClient] = useState<Record<string, {
+  // = a tagged union: 'none' (org has no pos_connections row),
+  // 'error' (the fetch itself errored), or 'connected' (the first row
+  // from GET /api/pos/connections/{org_id}). Lazy-fetched on
+  // expansion so we don't hammer the API for a long list. Sweep §2.6:
+  // the old shape collapsed 'none' and 'error' to `null`, hiding
+  // backend failures behind a "Not connected" badge.
+  type PosConn = {
     provider: string | null
     status: string | null
     last_sync_at: string | null
     historical_import_complete: boolean
-  } | null>>({})
+  }
+  type PosConnState =
+    | { kind: 'none' }
+    | { kind: 'error' }
+    | { kind: 'connected'; conn: PosConn }
+  const [posByClient, setPosByClient] = useState<Record<string, PosConnState | undefined>>({})
+  const getConn = (s: PosConnState | undefined): PosConn | null =>
+    s?.kind === 'connected' ? s.conn : null
   const [billingStatuses, setBillingStatuses] = useState<Record<string, BillingStatus>>({})
   const [notifyingId, setNotifyingId] = useState<string | null>(null)
   const [notifiedIds, setNotifiedIds] = useState<Set<string>>(new Set())
@@ -101,10 +110,11 @@ export default function CanadaPortalAccountsPage() {
   }
 
   // P2: lazy fetch the live POS connection for a client when its tile
-  // is expanded. Stores the row in posByClient[client.id], or NULL
-  // when the org has no pos_connections row at all (which is the most
-  // honest "Not connected" state). Auth headers carry the rep's
-  // Supabase JWT; backend `require_org_access` enforces tenancy.
+  // is expanded. Stores a tagged state in posByClient[client.id] —
+  // 'none' (org has no pos_connections row), 'error' (fetch failed),
+  // or 'connected' (first row from /api/pos/connections/{org_id}).
+  // Auth headers carry the rep's Supabase JWT; backend
+  // `require_org_access` enforces tenancy.
   async function fetchPosConnection(clientId: string) {
     if (posByClient[clientId] !== undefined) return
     try {
@@ -114,22 +124,24 @@ export default function CanadaPortalAccountsPage() {
         { headers },
       )
       if (!res.ok) {
-        setPosByClient(prev => ({ ...prev, [clientId]: null }))
+        setPosByClient(prev => ({ ...prev, [clientId]: { kind: 'error' } }))
         return
       }
       const data = await res.json()
       const conn = (data?.connections || [])[0] || null
       setPosByClient(prev => ({
         ...prev,
-        [clientId]: conn ? {
-          provider: conn.provider || null,
-          status: conn.status || null,
-          last_sync_at: conn.last_sync_at || null,
-          historical_import_complete: !!conn.historical_import_complete,
-        } : null,
+        [clientId]: conn
+          ? { kind: 'connected', conn: {
+              provider: conn.provider || null,
+              status: conn.status || null,
+              last_sync_at: conn.last_sync_at || null,
+              historical_import_complete: !!conn.historical_import_complete,
+            } }
+          : { kind: 'none' },
       }))
     } catch {
-      setPosByClient(prev => ({ ...prev, [clientId]: null }))
+      setPosByClient(prev => ({ ...prev, [clientId]: { kind: 'error' } }))
     }
   }
 
@@ -142,7 +154,7 @@ export default function CanadaPortalAccountsPage() {
   // and re-fetches the connection so last_sync_at refreshes. No
   // setTimeout fakery — the button reflects actual server state.
   async function handleSyncPos(client: SalesClient) {
-    const conn = posByClient[client.id]
+    const conn = getConn(posByClient[client.id])
     const provider = conn?.provider
     if (!provider) {
       toast('No connected POS — nothing to sync.', 'error')
@@ -320,7 +332,7 @@ export default function CanadaPortalAccountsPage() {
                   <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-pm-canada-border border border-pm-canada-border">
                     <Wifi size={10} className="text-pm-canada-text-muted" />
                     <span className="text-2xs text-pm-canada-text-muted font-medium capitalize">
-                      {posByClient[client.id]?.provider || client.pos_provider || 'N/A'}
+                      {getConn(posByClient[client.id])?.provider || client.pos_provider || 'N/A'}
                     </span>
                   </div>
 
@@ -400,9 +412,13 @@ export default function CanadaPortalAccountsPage() {
                     <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
                       <p className="text-2xs text-pm-canada-text-faint">POS System</p>
                       <p className="text-xs font-semibold text-white capitalize">
-                        {posByClient[client.id] === undefined
-                          ? (client.pos_provider || 'Loading…')
-                          : (posByClient[client.id]?.provider || 'Not connected')}
+                        {(() => {
+                          const s = posByClient[client.id]
+                          if (s === undefined) return client.pos_provider || 'Loading…'
+                          if (s.kind === 'error') return 'Couldn’t load'
+                          if (s.kind === 'connected') return s.conn.provider || 'Not connected'
+                          return 'Not connected'
+                        })()}
                       </p>
                     </div>
                     <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
@@ -502,15 +518,19 @@ export default function CanadaPortalAccountsPage() {
                       no more setTimeout theatre. */}
                   <div className="space-y-3">
                     <p className="text-2xs text-pm-canada-text-faint">
-                      {posByClient[client.id] === undefined
-                        ? 'Last POS sync: loading…'
-                        : posByClient[client.id]?.last_sync_at
-                          ? `Last POS sync: ${new Date(posByClient[client.id]!.last_sync_at!).toLocaleString('en-CA')}`
-                          : 'Last POS sync: never'}
+                      {(() => {
+                        const s = posByClient[client.id]
+                        if (s === undefined) return 'Last POS sync: loading…'
+                        if (s.kind === 'error') return 'Last POS sync: couldn’t load'
+                        const ts = s.kind === 'connected' ? s.conn.last_sync_at : null
+                        return ts
+                          ? `Last POS sync: ${new Date(ts).toLocaleString('en-CA')}`
+                          : 'Last POS sync: never'
+                      })()}
                     </p>
                     <button
                       onClick={() => handleSyncPos(client)}
-                      disabled={syncingId === client.id || !posByClient[client.id]?.provider}
+                      disabled={syncingId === client.id || !getConn(posByClient[client.id])?.provider}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border rounded-xl text-xs text-pm-canada-text-muted hover:border-pm-accent/30 hover:text-pm-accent disabled:opacity-50 transition-colors"
                     >
                       <RefreshCw size={12} className={syncingId === client.id ? 'animate-spin' : ''} />
