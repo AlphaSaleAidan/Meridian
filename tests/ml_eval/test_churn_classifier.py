@@ -170,7 +170,7 @@ def fit_both():
             n_estimators=200, max_depth=3, random_state=RNG_SEED,
             eval_metric="logloss", verbosity=0,
         ),
-        method="isotonic",
+        method="sigmoid",
         cv=3,
     )
     cal.fit(X_train, y_train)

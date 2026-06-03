@@ -345,7 +345,7 @@ class ChurnWarningAgent:
                         n_estimators=50, max_depth=3, random_state=42,
                         eval_metric="logloss", verbosity=0,
                     ),
-                    method="isotonic",
+                    method="sigmoid",
                     cv=3,
                 )
                 calibrated_model.fit(X, y)
@@ -362,7 +362,7 @@ class ChurnWarningAgent:
                         n_estimators=50, max_depth=3, random_state=42,
                         verbosity=-1,
                     ),
-                    method="isotonic",
+                    method="sigmoid",
                     cv=3,
                 )
                 calibrated_model.fit(X, y)
