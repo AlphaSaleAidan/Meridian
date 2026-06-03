@@ -1,13 +1,14 @@
 """
 Twilio Voice webhook routes for Meridian AI Phone Agent.
-Twilio handles telephony, STT, and TTS. SambaNova (primary) + local Qwen (fallback) provide the brain.
-No external AI APIs required — Qwen 2.5 7B runs locally on port 8002.
+
+Twilio handles telephony, STT, and TTS. The LLM brain is provided by
+src/services/llm_client.LLMClient(channel="voice"), which walks the voice
+provider chain (SambaNova → DeepSeek → local Qwen) defined in PROVIDER_CHAINS.
 
 Webhook URL to configure in Twilio Console:
-    Voice: https://api.meridian.tips/twilio/voice
-        Status: https://api.meridian.tips/twilio/status
-        """
-import json
+    Voice:  https://api.meridian.tips/twilio/voice
+    Status: https://api.meridian.tips/twilio/status
+"""
 import logging
 import os
 import sys
@@ -21,6 +22,7 @@ from fastapi.responses import Response
 
 from ...services.pos_connectors.order_dispatcher import create_pos_order
 from ...services.pos_connectors.base import OrderResult
+from ...services.llm_client import LLMClient
 from ...db import get_db
 from ...credits import (
     COSTS,
@@ -47,14 +49,9 @@ _PHONE_AGENT_DIR = str(Path(__file__).resolve().parents[3] / "services" / "phone
 if _PHONE_AGENT_DIR not in sys.path:
     sys.path.insert(0, _PHONE_AGENT_DIR)
 
-# --- AI Provider config ---
-# Primary: SambaNova (OpenAI-compatible endpoint)
-SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY", "")
-SAMBANOVA_BASE_URL = "https://api.sambanova.ai/v1"
-SAMBANOVA_MODEL = os.getenv("SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct")
-
-# Fallback: Local Qwen 2.5 7B (same server as Garry)
-QWEN_URL = os.getenv("GARRY_LLM_URL", "http://localhost:8002")
+# One client per channel. LLMClient is stateless across calls; module-level
+# is just for readability. Provider/model is chosen by PROVIDER_CHAINS["voice"].
+_voice_llm = LLMClient(channel="voice")
 
 _sessions: dict[str, dict[str, Any]] = {}
 SESSION_TTL = 600
@@ -73,43 +70,50 @@ DEMO_MENU = [
     {"name": "Apple Pie", "price": 4.49},
 ]
 
-TOOLS = [
+# OpenAI function-tool shape (LLMClient passes through to provider unchanged).
+VOICE_TOOLS = [
     {
-        "name": "submit_order",
-        "description": "Call ONLY after customer confirms their complete order.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "customer_name": {"type": "string"},
-                "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in"]},
-                "items": {
-                    "type": "array",
+        "type": "function",
+        "function": {
+            "name": "submit_order",
+            "description": "Call ONLY after customer confirms their complete order.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_name": {"type": "string"},
+                    "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in"]},
                     "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "quantity": {"type": "integer"},
-                            "size": {"type": "string"},
-                            "modifications": {"type": "array", "items": {"type": "string"}},
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "quantity": {"type": "integer"},
+                                "size": {"type": "string"},
+                                "modifications": {"type": "array", "items": {"type": "string"}},
+                            },
+                            "required": ["name", "quantity"],
                         },
-                        "required": ["name", "quantity"],
                     },
+                    "special_requests": {"type": "string"},
                 },
-                "special_requests": {"type": "string"},
+                "required": ["customer_name", "order_type", "items"],
             },
-            "required": ["customer_name", "order_type", "items"],
         },
     },
     {
-        "name": "end_call",
-        "description": "Call when conversation is done (no order, or after order placed).",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "reason": {"type": "string", "enum": ["order_placed", "no_order", "wrong_number", "question_only"]},
-                "farewell": {"type": "string"},
+        "type": "function",
+        "function": {
+            "name": "end_call",
+            "description": "Call when conversation is done (no order, or after order placed).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reason": {"type": "string", "enum": ["order_placed", "no_order", "wrong_number", "question_only"]},
+                    "farewell": {"type": "string"},
+                },
+                "required": ["reason", "farewell"],
             },
-            "required": ["reason", "farewell"],
         },
     },
 ]
@@ -175,101 +179,75 @@ def _cleanup():
         del _sessions[sid]
 
 
-async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict | None:
-    """Call SambaNova via OpenAI-compatible API. Returns None on failure."""
-    if not SAMBANOVA_API_KEY:
+def _build_system_prompt_for(row: dict) -> str:
+    """Build a per-merchant system prompt from a phone_agent_config row."""
+    business_name = row.get("business_name") or "this restaurant"
+    menu_items = row.get("menu_items") or []
+    order_types_list = row.get("order_types") or ["pickup", "delivery"]
+    order_types = ", ".join(order_types_list)
+
+    if menu_items:
+        lines = []
+        for item in menu_items:
+            try:
+                price = float(item.get("price", 0))
+            except (TypeError, ValueError):
+                price = 0.0
+            line = f" - {item.get('name', 'item')}: ${price:.2f}"
+            if item.get("sizes"):
+                line += f" (sizes: {', '.join(item['sizes'])})"
+            opts = item.get("modifications") or item.get("options")
+            if opts:
+                line += f" (options: {', '.join(opts)})"
+            lines.append(line)
+        menu_block = "\n".join(lines)
+    else:
+        menu_block = _menu_text()  # demo fallback
+
+    return f"""You are a friendly AI phone ordering assistant for {business_name}.
+Keep responses SHORT - 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
+
+MENU:
+{menu_block}
+
+ORDER TYPES: {order_types}
+
+RULES:
+- Help the customer build their order item by item.
+- Suggest sizes or options when relevant.
+- When done, read back the order with total price, ask for their name and pickup/delivery/dine-in.
+- If delivery, ask for address.
+- Once confirmed, call submit_order.
+- For items not on menu, let them know politely.
+- Keep it brief - phone conversations should be quick."""
+
+
+async def _load_merchant_phone_config(merchant_id: str) -> dict | None:
+    """Load the full phone_agent_config row for a merchant. None if not found.
+
+    Used to build a per-merchant system prompt + greeting. Returning None
+    causes the caller to fall back to the hardcoded DEMO_MENU / SYSTEM_PROMPT,
+    which is how Session 1 stays non-breaking before Session 2 seeds the row.
+    """
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
+    if not supabase_url or not supabase_key:
         return None
-    openai_tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": t["name"],
-                "description": t["description"],
-                "parameters": t["input_schema"],
-            },
-        }
-        for t in TOOLS
-    ]
-    openai_messages = [{"role": "system", "content": system_prompt}] + messages
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.post(
-                f"{SAMBANOVA_BASE_URL}/chat/completions",
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(
+                f"{supabase_url}/rest/v1/phone_agent_config"
+                f"?merchant_id=eq.{merchant_id}&select=*",
                 headers={
-                    "Authorization": f"Bearer {SAMBANOVA_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": SAMBANOVA_MODEL,
-                    "max_tokens": 300,
-                    "messages": openai_messages,
-                    "tools": openai_tools,
-                    "tool_choice": "auto",
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
                 },
             )
-            if resp.status_code != 200:
-                logger.warning("SambaNova API %d: %s", resp.status_code, resp.text[:200])
-                return None
-            data = resp.json()
-            choice = data["choices"][0]["message"]
-            content = []
-            if choice.get("content"):
-                content.append({"type": "text", "text": choice["content"]})
-            for tc in choice.get("tool_calls") or []:
-                content.append({
-                    "type": "tool_use",
-                    "name": tc["function"]["name"],
-                    "input": json.loads(tc["function"]["arguments"]),
-                })
-            return {"content": content}
-    except Exception as exc:
-        logger.warning("SambaNova error: %s", exc)
-        return None
-
-
-async def _ask_qwen(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
-    """Call local Qwen 2.5 7B as fallback. Returns Anthropic-style content blocks."""
-    openai_messages = [{"role": "system", "content": system_prompt}] + messages
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{QWEN_URL}/v1/chat/completions",
-                json={
-                    "messages": openai_messages,
-                    "max_tokens": 300,
-                    "temperature": 0.5,
-                },
-            )
-            if resp.status_code != 200:
-                logger.error("Qwen API %d: %s", resp.status_code, resp.text[:200])
-                return {"content": [{"type": "text", "text": "One moment please."}]}
-            data = resp.json()
-            text = data["choices"][0]["message"].get("content", "")
-            return {"content": [{"type": "text", "text": text}]}
-    except Exception as exc:
-        logger.warning("Qwen fallback error: %s", exc)
-        return {"content": [{"type": "text", "text": "One moment please."}]}
-
-
-async def _ask_ai(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
-    """SambaNova primary, local Qwen fallback."""
-    result = await _ask_sambanova(messages, system_prompt)
-    if result is not None:
-        logger.info("AI response via SambaNova")
-        return result
-    logger.warning("SambaNova unavailable, falling back to local Qwen")
-    return await _ask_qwen(messages, system_prompt)
-
-
-def _parse(result: dict) -> tuple[str, dict | None]:
-    texts = []
-    tool = None
-    for block in result.get("content", []):
-        if block.get("type") == "text":
-            texts.append(block["text"])
-        elif block.get("type") == "tool_use":
-            tool = {"name": block["name"], "input": block["input"]}
-    return " ".join(texts).strip(), tool
+            if res.status_code == 200 and res.json():
+                return res.json()[0]
+    except Exception as e:
+        logger.warning("Failed to load phone config for merchant %s: %s", merchant_id, e)
+    return None
 
 
 async def _lookup_merchant_by_phone(phone_number: str) -> str | None:
@@ -444,7 +422,21 @@ async def twilio_voice(request: Request):
         except Exception as e:
             logger.warning("caller memory lookup failed: %s", e)
 
-    session_prompt = SYSTEM_PROMPT + (f"\n\n{memory_block}" if memory_block else "")
+    # Per-merchant prompt + greeting when a phone_agent_config row exists;
+    # otherwise fall back to the hardcoded DEMO_MENU / SYSTEM_PROMPT so
+    # voice keeps working before Session 2 seeds the demo merchant row.
+    config_row = await _load_merchant_phone_config(merchant_id)
+    if config_row:
+        base_prompt = _build_system_prompt_for(config_row)
+        greeting = config_row.get("greeting") or (
+            f"Thank you for calling {config_row.get('business_name', 'us')}! "
+            "What can I get for you today?"
+        )
+    else:
+        base_prompt = SYSTEM_PROMPT
+        greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
+
+    session_prompt = base_prompt + (f"\n\n{memory_block}" if memory_block else "")
     _sessions[call_sid] = {
         "messages": [],
         "ts": time.time(),
@@ -452,7 +444,6 @@ async def twilio_voice(request: Request):
         "merchant_id": merchant_id,
         "system_prompt": session_prompt,
     }
-    greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     return Response(content=_gather(greeting), media_type=TWIML)
 
 
@@ -473,26 +464,31 @@ async def twilio_gather(request: Request):
     session["ts"] = time.time()
     session["messages"].append({"role": "user", "content": speech})
 
-    result = await _ask_ai(session["messages"], session.get("system_prompt", SYSTEM_PROMPT))
-    text, tool = _parse(result)
+    result = await _voice_llm.complete(
+        session["messages"],
+        system=session.get("system_prompt", SYSTEM_PROMPT),
+        tools=VOICE_TOOLS,
+    )
+    text = result.text
+    tool = result.tool_call  # ToolCall | None
 
     if tool:
-        if tool["name"] == "end_call":
-            farewell = tool["input"].get("farewell", "Thank you for calling Meridian! Have a great day!")
+        if tool.name == "end_call":
+            farewell = tool.arguments.get("farewell", "Thank you for calling Meridian! Have a great day!")
             await _log_call_end(call_sid, "no_order")
             del _sessions[call_sid]
             return Response(content=_hangup(farewell), media_type=TWIML)
 
-        if tool["name"] == "submit_order":
-            items = tool["input"].get("items", [])
+        if tool.name == "submit_order":
+            items = tool.arguments.get("items", [])
             order_summary = ", ".join(f"{i['quantity']}x {i['name']}" for i in items)
 
-            order_result = await _dispatch_order(call_sid, session, tool["input"])
+            order_result = await _dispatch_order(call_sid, session, tool.arguments)
             order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
 
             confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
-            await _log_call_end(call_sid, "order_placed", tool["input"])
+            await _log_call_end(call_sid, "order_placed", tool.arguments)
             del _sessions[call_sid]
             return Response(content=_hangup(confirmation), media_type=TWIML)
 
@@ -660,15 +656,13 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
 
 @router.get("/health")
 async def twilio_health():
-    samba_ok = bool(SAMBANOVA_API_KEY)
     return {
         "status": "ok",
         "mode": "media-streams" if MEDIA_STREAMS_ENABLED else "twilio-gather",
         "media_streams_enabled": MEDIA_STREAMS_ENABLED,
         "media_stream_host": MEDIA_STREAM_HOST if MEDIA_STREAMS_ENABLED else None,
-        "primary_llm": "sambanova" if samba_ok else "qwen-local",
-        "fallback_llm": "qwen-local",
-        "sambanova_configured": samba_ok,
-        "qwen_url": QWEN_URL,
+        "channel": _voice_llm.channel,
+        "primary_provider": _voice_llm.primary_provider,
+        "primary_model": _voice_llm.primary_model,
         "active_sessions": len(_sessions),
     }
