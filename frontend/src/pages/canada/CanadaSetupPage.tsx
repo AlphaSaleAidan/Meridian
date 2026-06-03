@@ -54,7 +54,9 @@ export default function CanadaSetupPage() {
     if (!posProvider) { setError('Please select your POS system'); return }
     setLoading(true)
     setError(null)
-    const err = await connectPos(posProvider, '')
+    // P1: connectPos signature changed to credentials object;
+    // selection-only path uses {}.
+    const err = await connectPos(posProvider, {})
     setLoading(false)
     if (err) { setError(err); return }
     setStep('done')

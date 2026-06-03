@@ -284,8 +284,11 @@ export default function USCustomerOnboardingWizard() {
           body: JSON.stringify({ org_id: orgId, pos_system: posProvider, connection_status: 'pending' }),
         })
       } else {
-        const err = await connectPos(posProvider, '')
-        if (err && err !== 'API key is required') { setError(err); setSaving(false); return }
+        // P1: connectPos signature changed to credentials object. Pass
+        // {} for the selection-only path (credential collection lives
+        // in a later step / the rep-facing portal).
+        const err = await connectPos(posProvider, {})
+        if (err) { setError(err); setSaving(false); return }
       }
       setStep('inventory')
     } catch (err: any) { setError(err.message || 'Connection failed') }
