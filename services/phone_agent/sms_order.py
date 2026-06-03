@@ -15,7 +15,6 @@ Flow:
 
 Conversation state is stored in-memory keyed by (merchant_id, customer_phone).
 """
-import json
 import logging
 import os
 import sys
@@ -51,12 +50,16 @@ try:
 except ImportError:
     _CREDITS_AVAILABLE = False
 
+from src.services.llm_client import LLMClient
+
 logger = logging.getLogger("meridian.phone_agent.sms_order")
 
 router = APIRouter(prefix="/sms", tags=["sms-order"])
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_SMS_MODEL", os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"))
+# Provider/model is chosen by PROVIDER_CHAINS["sms"] in llm_client.py.
+# Default chain is DeepSeek primary, SambaNova fallback.
+_sms_llm = LLMClient(channel="sms", max_tokens=400)
+
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 
@@ -69,50 +72,56 @@ _sms_sessions: dict[str, dict[str, Any]] = {}
 
 SMS_ORDER_TOOLS = [
     {
-        "name": "submit_order",
-        "description": (
-            "Call ONLY after the customer has confirmed their complete order, "
-            "name, and order type (pickup/delivery). Include all items with quantities."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "customer_name": {"type": "string", "description": "Customer's name"},
-                "order_type": {
-                    "type": "string",
-                    "enum": ["pickup", "delivery"],
-                },
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "quantity": {"type": "integer"},
-                            "size": {"type": "string"},
-                            "modifications": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                        },
-                        "required": ["name", "quantity"],
+        "type": "function",
+        "function": {
+            "name": "submit_order",
+            "description": (
+                "Call ONLY after the customer has confirmed their complete order, "
+                "name, and order type (pickup/delivery). Include all items with quantities."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_name": {"type": "string", "description": "Customer's name"},
+                    "order_type": {
+                        "type": "string",
+                        "enum": ["pickup", "delivery"],
                     },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "quantity": {"type": "integer"},
+                                "size": {"type": "string"},
+                                "modifications": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                },
+                            },
+                            "required": ["name", "quantity"],
+                        },
+                    },
+                    "delivery_address": {"type": "string"},
+                    "special_requests": {"type": "string"},
                 },
-                "delivery_address": {"type": "string"},
-                "special_requests": {"type": "string"},
+                "required": ["customer_name", "order_type", "items"],
             },
-            "required": ["customer_name", "order_type", "items"],
         },
     },
     {
-        "name": "show_menu",
-        "description": "Call when the customer asks to see the menu or what's available.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "string",
-                    "description": "Optional category filter (e.g. 'drinks', 'sides')",
+        "type": "function",
+        "function": {
+            "name": "show_menu",
+            "description": "Call when the customer asks to see the menu or what's available.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "description": "Optional category filter (e.g. 'drinks', 'sides')",
+                    },
                 },
             },
         },
@@ -165,55 +174,6 @@ def _cleanup_old_sessions():
     expired = [k for k, s in _sms_sessions.items() if now - s.get("ts", 0) > SESSION_TTL]
     for k in expired:
         del _sms_sessions[k]
-
-
-async def _call_claude_sms(messages: list[dict], system: str) -> dict:
-    if not ANTHROPIC_API_KEY:
-        return {
-            "content": [{"type": "text", "text": "Ordering is being set up. Please try again shortly!"}],
-        }
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": ANTHROPIC_MODEL,
-                "max_tokens": 400,
-                "system": system,
-                "tools": SMS_ORDER_TOOLS,
-                "messages": messages,
-            },
-        )
-
-        if resp.status_code != 200:
-            logger.error("Claude API error %d: %s", resp.status_code, resp.text[:500])
-            return {
-                "content": [{"type": "text", "text": "Sorry, having a brief issue. Text back in a moment!"}],
-            }
-
-        return resp.json()
-
-
-def _extract_sms_response(api_result: dict) -> tuple[str, dict | None]:
-    text_parts = []
-    tool_call = None
-
-    for block in api_result.get("content", []):
-        if block.get("type") == "text":
-            text_parts.append(block["text"])
-        elif block.get("type") == "tool_use":
-            tool_call = {
-                "id": block["id"],
-                "name": block["name"],
-                "input": block["input"],
-            }
-
-    return " ".join(text_parts), tool_call
 
 
 def _format_menu_sms(config: MerchantPhoneConfig, category: str = "") -> str:
@@ -455,19 +415,29 @@ async def handle_inbound_sms(request: Request):
     if len(session["messages"]) > MAX_MESSAGES:
         session["messages"] = session["messages"][-MAX_MESSAGES:]
 
-    api_result = await _call_claude_sms(session["messages"], session["system"])
-    text, tool_call = _extract_sms_response(api_result)
+    result = await _sms_llm.complete(
+        session["messages"],
+        system=session["system"],
+        tools=SMS_ORDER_TOOLS,
+    )
+    text = result.text
+    tool_call = result.tool_call  # ToolCall | None
+
+    if not text and result.provider_used == "none":
+        # All providers in the chain failed — fall back to a polite ack so the
+        # session stays alive and the next inbound text can retry.
+        text = "Sorry, having a brief issue. Text back in a moment!"
 
     if tool_call:
-        if tool_call["name"] == "submit_order":
+        if tool_call.name == "submit_order":
             reply = await _handle_order_submission(
-                session, tool_call["input"], config, customer_phone, merchant_phone,
+                session, tool_call.arguments, config, customer_phone, merchant_phone,
             )
             session["messages"].append({"role": "assistant", "content": reply})
             return _twiml_sms(reply)
 
-        elif tool_call["name"] == "show_menu":
-            category = tool_call["input"].get("category", "")
+        elif tool_call.name == "show_menu":
+            category = tool_call.arguments.get("category", "")
             menu_text = _format_menu_sms(config, category)
             session["messages"].append({"role": "assistant", "content": menu_text})
             return _twiml_sms(menu_text)
@@ -499,9 +469,10 @@ async def sms_order_health():
         "status": "ok",
         "mode": "sms_order",
         "active_sessions": len(_sms_sessions),
-        "api_key_set": bool(ANTHROPIC_API_KEY),
+        "channel": _sms_llm.channel,
+        "primary_provider": _sms_llm.primary_provider,
+        "primary_model": _sms_llm.primary_model,
         "twilio_configured": bool(TWILIO_SID and TWILIO_TOKEN),
-        "model": ANTHROPIC_MODEL,
     }
 
 
