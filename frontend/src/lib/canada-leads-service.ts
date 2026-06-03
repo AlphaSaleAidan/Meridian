@@ -200,8 +200,19 @@ export const canadaLeadsService = {
     onChanged: (deals: Deal[]) => void,
   ): RealtimeChannel | null {
     if (!supabase) return null
+    // Unique channel name per subscription so concurrent subscribers
+    // (e.g. StrictMode double-mount + a tab navigation in flight)
+    // don't share a single Supabase singleton channel by name.
+    // Without this, the unmounting page's `removeChannel(...)` cleanup
+    // killed the just-mounted page's binding — the "can't open the
+    // next tab without a full refresh" symptom.
+    const name = `canada_leads_realtime_${repId || 'all'}_${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36)
+    }`
     const channel = supabase
-      .channel('canada_leads_realtime')
+      .channel(name)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'canada_leads' },
