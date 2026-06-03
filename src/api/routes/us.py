@@ -13,6 +13,7 @@ US Sales Portal Routes — rep management + customer onboarding for US market.
 import logging
 import os
 import re
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -133,7 +134,10 @@ class RepSignupRequest(BaseModel):
 
 class CreateCustomerRequest(BaseModel):
     email: EmailStr
-    password: str
+    # Optional — the sales-portal create-customer flow deliberately omits
+    # password and lets the customer set it via Supabase resetPasswordForEmail.
+    # When omitted, the route generates a high-entropy throwaway server-side.
+    password: str | None = None
     business_name: str
     contact_name: str
     phone: str | None = None
@@ -148,7 +152,9 @@ class CreateCustomerRequest(BaseModel):
 
     @field_validator("password")
     @classmethod
-    def validate_customer_password(cls, v: str) -> str:
+    def validate_customer_password(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
         if len(v) < 8:
             raise ValueError("password must be at least 8 characters")
         return v
@@ -248,13 +254,20 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
     supabase_url, service_key = _supabase_creds()
     org_id = str(uuid.uuid4())
 
+    # When the caller omits a password, generate a high-entropy throwaway. The
+    # customer never sees it — handleCreateCustomerAccount in the frontend
+    # immediately triggers Supabase resetPasswordForEmail so the user sets
+    # their own via the secure link. Supabase admin user creation still
+    # requires *some* password, so we provide one rather than leaving it null.
+    password = req.password or secrets.token_urlsafe(32)
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             f"{supabase_url}/auth/v1/admin/users",
             headers=_headers(service_key),
             json={
                 "email": req.email,
-                "password": req.password,
+                "password": password,
                 "email_confirm": True,
                 "user_metadata": {
                     "full_name": req.contact_name,
