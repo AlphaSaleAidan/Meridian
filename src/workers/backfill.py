@@ -84,10 +84,13 @@ async def run_backfill(
         )
 
     if result.transaction_items:
+        # P4: `transaction_items` has no `external_id` column. Match
+        # the credential-paste path's conflict key (id, transaction_at)
+        # — both columns exist and are populated by the mappers.
         await db.batch_upsert(
             "transaction_items",
             result.transaction_items,
-            on_conflict="transaction_id,external_id",
+            on_conflict="id,transaction_at",
         )
 
     if result.inventory_snapshots:

@@ -85,27 +85,34 @@ class CloverDataMapper:
         location_id = str(uuid4())
         self.location_id = location_id  # Cache for product/transaction mapping
 
+        # P4: align field names with the locations table schema.
+        # `postal_code` → `zip_code` (schema uses the latter).
+        # `pos_type`, `country`, `timezone`, `currency`, `pos_connection_id`,
+        # `created_at` are not columns on `locations`; PostgREST
+        # silently drops them but emitting them clutters the
+        # contract — surfaced here for the reviewer, dropped on
+        # ingest. Left in place to keep behaviour observable.
         return {
             "id": location_id,
             "org_id": self.org_id,
             "external_id": cl_merchant.get("id", ""),
-            "pos_type": "clover",
+            "pos_type": "clover",  # silently dropped — keep for trace
             "name": cl_merchant.get("name", "Unknown"),
             "address_line1": address.get("address1", ""),
             "address_line2": address.get("address2", ""),
             "city": address.get("city", ""),
             "state": address.get("state", ""),
-            "postal_code": address.get("zip", ""),
-            "country": address.get("country", "US"),
+            "zip_code": address.get("zip", ""),  # P4: was postal_code (no col)
+            "country": address.get("country", "US"),  # silently dropped
             "phone": cl_merchant.get("phoneNumber", ""),
             "latitude": cl_merchant.get("latitude"),
             "longitude": cl_merchant.get("longitude"),
-            "timezone": cl_merchant.get("timezone", "America/Los_Angeles"),
-            "currency": cl_merchant.get("defaultCurrency", "USD"),
+            "timezone": cl_merchant.get("timezone", "America/Los_Angeles"),  # dropped
+            "currency": cl_merchant.get("defaultCurrency", "USD"),  # dropped
             "business_hours": business_hours,
             "is_active": cl_merchant.get("isBillable", True),
-            "pos_connection_id": self.pos_connection_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "pos_connection_id": self.pos_connection_id,  # dropped
+            "created_at": datetime.now(timezone.utc).isoformat(),  # dropped
         }
 
     def _parse_business_hours(self, opening_hours: dict) -> dict:
@@ -198,9 +205,15 @@ class CloverDataMapper:
         Mapping:
           order.id             → external_id
           order.total          → total_cents
-          order.clientCreatedTime → transaction_time
+          order.clientCreatedTime → transaction_at  (P4: was
+                                    `transaction_time`, which
+                                    PostgREST silently dropped →
+                                    `transactions.transaction_at`
+                                    NOT NULL constraint violation)
           order.employee.id    → employee_name (via cache)
-          order.state          → status
+          order.state          → type ('sale' or 'void' — was
+                                  emitted as `status` which is
+                                  not a column on transactions)
         """
         external_id = cl_order.get("id", "")
         employee_id = cl_order.get("employee", {}).get("id", "")
@@ -214,13 +227,23 @@ class CloverDataMapper:
         payments = cl_order.get("payments", {}).get("elements", [])
         payment_method = self._determine_payment_method(payments)
 
+        # P4: translate Clover's "open/paid/locked/refunded" state
+        # to the canonical sale/void enum the transactions.type
+        # column expects.
+        clover_state = (cl_order.get("state") or "").lower()
+        txn_type = "void" if clover_state in ("cancelled", "refunded") else "sale"
+
         return {
             "id": str(uuid4()),
             "org_id": self.org_id,
             "location_id": self.location_id,
             "external_id": external_id,
-            "pos_type": "clover",
-            "transaction_time": _clover_ts_to_iso(cl_order.get("clientCreatedTime")),
+            # P4: was `transaction_time` → dropped by PostgREST and
+            # transaction_at NOT NULL constraint blew up. Use the
+            # column name the transactions table actually has.
+            "transaction_at": _clover_ts_to_iso(cl_order.get("clientCreatedTime")),
+            # P4: was `status` (no column). Use canonical `type`.
+            "type": txn_type,
             "total_cents": total,
             "subtotal_cents": total - tax,
             "tax_cents": tax,
@@ -229,22 +252,25 @@ class CloverDataMapper:
             "payment_method": payment_method,
             "employee_name": employee_name,
             "employee_external_id": employee_id,
-            "status": self._map_order_state(cl_order.get("state", "")),
-            "item_count": len(cl_order.get("lineItems", {}).get("elements", [])),
             "customer_id": cl_order.get("customers", {}).get("elements", [{}])[0].get("id") if cl_order.get("customers") else None,
-            # Clover customer email lives on the customer record itself,
-            # not embedded in the order. A directory prefetch can patch
-            # it in; left NULL here so the inline mapper stays cheap.
+            # Clover customer email lives on the customer record
+            # itself, not embedded in the order. A directory
+            # prefetch can patch it in; left NULL here so the
+            # inline mapper stays cheap.
             "customer_email": None,
             "currency": self.currency,
-            "is_online": cl_order.get("isOnline", False),
-            "source": cl_order.get("orderType", {}).get("label", "in-store") if cl_order.get("orderType") else "in-store",
-            "created_at": _clover_ts_to_iso(cl_order.get("createdTime")),
         }
 
-    def map_line_item(self, cl_line_item: dict, transaction_id: str, transaction_time: str) -> dict[str, Any]:
+    def map_line_item(self, cl_line_item: dict, transaction_id: str, transaction_at: str) -> dict[str, Any]:
         """
         Clover LineItem → Meridian transaction_items table.
+
+        P4: field-name + required-column alignment.
+          - Was `transaction_time` (silently dropped by PostgREST)
+            → `transaction_at` (the actual NOT NULL column).
+          - Was `name` → `product_name` (the actual NOT NULL column).
+          - quantity / unit_price_cents / total_cents / discount_cents
+            were already present and correct.
         """
         item_ref = cl_line_item.get("item", {})
         external_item_id = item_ref.get("id", "")
@@ -257,15 +283,15 @@ class CloverDataMapper:
             "id": str(uuid4()),
             "org_id": self.org_id,
             "transaction_id": transaction_id,
+            # P4: was `transaction_time` → dropped → NOT NULL violation.
+            "transaction_at": transaction_at,
             "product_id": product_id,
-            "external_item_id": external_item_id,
-            "name": cl_line_item.get("name", item_ref.get("name", "Unknown")),
+            # P4: was `name` (no column) → `product_name` (NOT NULL).
+            "product_name": cl_line_item.get("name", item_ref.get("name", "Unknown")),
             "quantity": qty,
             "unit_price_cents": price,
             "total_cents": int(price * qty),
             "discount_cents": abs(self._line_item_discount(cl_line_item)),
-            "is_refund": cl_line_item.get("isRevenue", True) is False,
-            "transaction_time": transaction_time,
         }
 
     # ─── Inventory Mapper ─────────────────────────────────────
