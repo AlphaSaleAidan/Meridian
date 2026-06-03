@@ -36,7 +36,7 @@ from src.db.supabase_rest import SupabaseRESTError  # noqa: E402
 def _run(coro):
     """Run an async coroutine in a fresh event loop — keeps the test suite
     pytest-asyncio-free (which isn't in requirements)."""
-    return asyncio.get_event_loop().run_until_complete(coro) if False else asyncio.run(coro)
+    return asyncio.run(coro)
 
 
 def _fake_db(side_effect):
