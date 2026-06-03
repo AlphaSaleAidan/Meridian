@@ -9,6 +9,15 @@ import asyncio
 from celery import chain, chord, group, shared_task
 from celery.utils.log import get_task_logger
 
+# Import the configured celery_app so it registers itself as the
+# current app. Without this, @shared_task tasks dispatched from
+# processes that haven't otherwise activated celery_app (e.g. the
+# meridian-api FastAPI workers) fall back to a default Celery() that
+# uses AMQP defaults, and .delay() fails with "No hostname was
+# supplied" + ConnectionRefused on RabbitMQ's port. The import is
+# enough — Celery's app registry picks it up.
+from .celery_app import celery_app  # noqa: F401
+
 logger = get_task_logger(__name__)
 
 
@@ -527,28 +536,37 @@ def backfill_pos_connection(
     )
 
     async def _run():
-        from ..api.routes.pos_connections import (
-            _run_toast_backfill,
-            _run_square_backfill,
-            _run_clover_backfill,
-            _run_generic_backfill,
-        )
-        if provider == "toast":
-            return await _run_toast_backfill(
-                org_id=org_id, connection_id=connection_id, credentials=credentials,
+        # P3: Celery worker is a separate process from the API; the
+        # API's startup event isn't run here, so the global db
+        # singleton is uninitialised by default. Existing tasks
+        # follow the same `init_db -> use -> close_db` pattern.
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from ..api.routes.pos_connections import (
+                _run_toast_backfill,
+                _run_square_backfill,
+                _run_clover_backfill,
+                _run_generic_backfill,
             )
-        if provider == "square":
-            return await _run_square_backfill(
-                org_id=org_id, connection_id=connection_id, credentials=credentials,
+            if provider == "toast":
+                return await _run_toast_backfill(
+                    org_id=org_id, connection_id=connection_id, credentials=credentials,
+                )
+            if provider == "square":
+                return await _run_square_backfill(
+                    org_id=org_id, connection_id=connection_id, credentials=credentials,
+                )
+            if provider == "clover":
+                return await _run_clover_backfill(
+                    org_id=org_id, connection_id=connection_id, credentials=credentials,
+                )
+            return await _run_generic_backfill(
+                org_id=org_id, connection_id=connection_id,
+                pos_system=provider, credentials=credentials,
             )
-        if provider == "clover":
-            return await _run_clover_backfill(
-                org_id=org_id, connection_id=connection_id, credentials=credentials,
-            )
-        return await _run_generic_backfill(
-            org_id=org_id, connection_id=connection_id,
-            pos_system=provider, credentials=credentials,
-        )
+        finally:
+            await close_db()
 
     try:
         run_async(_run())
@@ -576,9 +594,14 @@ def incremental_sync_all():
     needed, extend `run_all_incremental_syncs` to branch by provider.
     """
     async def _run():
-        from .incremental_sync import run_all_incremental_syncs
-        await run_all_incremental_syncs()
-        return {"status": "ok"}
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from .incremental_sync import run_all_incremental_syncs
+            await run_all_incremental_syncs()
+            return {"status": "ok"}
+        finally:
+            await close_db()
     try:
         result = run_async(_run())
         logger.info(f"Incremental sync sweep complete: {result}")
@@ -603,9 +626,14 @@ def refresh_pos_tokens():
     NULL `token_expires_at`), so this safely no-ops for them.
     """
     async def _run():
-        from .token_refresh import refresh_expiring_tokens
-        stats = await refresh_expiring_tokens()
-        return stats
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from .token_refresh import refresh_expiring_tokens
+            stats = await refresh_expiring_tokens()
+            return stats
+        finally:
+            await close_db()
     try:
         result = run_async(_run())
         logger.info(f"Token refresh complete: {result}")

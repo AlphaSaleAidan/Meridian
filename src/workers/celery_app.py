@@ -7,6 +7,36 @@ Backend: Redis (for result storage)
 Tasks are defined in src/workers/tasks.py.
 """
 import os
+from pathlib import Path
+
+
+def _load_env_for_workers() -> None:
+    """Load /root/Meridian/.env so tasks have SUPABASE_URL +
+    SUPABASE_SERVICE_ROLE_KEY at hand.
+
+    Why: celery-worker and celery-beat are started by pm2 in a shell
+    that does not necessarily have the project .env sourced. Without
+    these, init_db() returns None and every task that touches the DB
+    fails with 'Database not initialized'. The API process gets the
+    env from uvicorn's own startup; workers don't. Using setdefault
+    so a real shell-level env (e.g. when running tests with a
+    different DB) still wins.
+    """
+    env_path = Path(__file__).resolve().parents[2] / ".env"
+    if not env_path.exists():
+        return
+    for raw in env_path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(
+            key.strip(),
+            value.strip().strip('"').strip("'"),
+        )
+
+
+_load_env_for_workers()
 
 from celery import Celery
 from celery.schedules import crontab
@@ -58,8 +88,12 @@ celery_app.conf.update(
         "src.workers.tasks.rebuild_diff_summaries": {"queue": "bulk"},
         "src.workers.tasks.compress_sessions": {"queue": "bulk"},
         "src.workers.tasks.send_daily_burn_rate": {"queue": "default"},
-        # P3: POS pipeline on Celery
-        "src.workers.tasks.backfill_pos_connection": {"queue": "bulk"},
+        # P3: POS pipeline on Celery.
+        # Routes to `default` (not `bulk`) because the deployed worker
+        # listens on `default,sync,analysis,reports` only — the `bulk`
+        # queue defined in task_queues is dead until a worker
+        # subscribes to it. Discovered during e2e validation.
+        "src.workers.tasks.backfill_pos_connection": {"queue": "default"},
         "src.workers.tasks.incremental_sync_all": {"queue": "default"},
         "src.workers.tasks.refresh_pos_tokens": {"queue": "default"},
     },
