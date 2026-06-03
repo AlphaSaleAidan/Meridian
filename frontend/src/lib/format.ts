@@ -85,3 +85,25 @@ export function formatChartDate(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
 }
+
+// ── CAD-specific helpers (whole-dollar input) ──────────────────────────────
+// These are the canonical formatters for the Canada portal. They always
+// prefix `CA$` regardless of current path, so they're safe to use anywhere
+// the value is known to be CAD (the /canada/* portal pages).
+
+export function formatCad(amount: number | null | undefined): string {
+  if (amount == null) return 'CA$0'
+  return 'CA$' + Math.round(amount).toLocaleString('en-CA')
+}
+
+export function formatCadMo(amount: number | null | undefined): string {
+  return formatCad(amount) + '/mo'
+}
+
+// Canonical CAD pricing constants. Replaces hardcoded magic numbers across
+// the portal (was: `parseInt(prefill.price) : 250` in the onboarding wizard).
+export const PRICING = {
+  /** Default monthly plan price in CAD when a customer-specific price is not
+   *  supplied via the onboarding prefill query. */
+  DEFAULT_MONTHLY_CAD: 250,
+} as const

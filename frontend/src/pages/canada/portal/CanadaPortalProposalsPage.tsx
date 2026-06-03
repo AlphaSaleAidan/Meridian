@@ -43,11 +43,26 @@ const GROUP_ICONS: Record<GroupKey, typeof UtensilsCrossed> = {
   culture:     Palette,
 }
 
-const GROUPS: Record<GroupKey, { label: string; icon: typeof UtensilsCrossed; color: string }> =
-  CAD_GROUP_ORDER.reduce((acc, key) => {
-    acc[key] = { label: CAD_GROUPS[key].label, icon: GROUP_ICONS[key], color: CAD_GROUPS[key].color }
-    return acc
-  }, {} as Record<GroupKey, { label: string; icon: typeof UtensilsCrossed; color: string }>)
+// Per-group className bundles. textClass drives label + icon color; softBgClass
+// approximates the old `${meta.color}15` (~8% alpha → /10); borderClass approximates
+// `${meta.color}30` (~19% alpha → /20); solidBgClass is the FilterChip active fill.
+const GROUP_CLASSES: Record<GroupKey, { textClass: string; softBgClass: string; borderClass: string; solidBgClass: string }> = {
+  food:        { textClass: 'text-amber-400',     softBgClass: 'bg-amber-400/10',     borderClass: 'border-amber-400/20',     solidBgClass: 'bg-amber-400' },
+  retail:      { textClass: 'text-[#5fe7d2]',     softBgClass: 'bg-[#5fe7d2]/10',     borderClass: 'border-[#5fe7d2]/20',     solidBgClass: 'bg-[#5fe7d2]' },
+  personal:    { textClass: 'text-rose-400',      softBgClass: 'bg-rose-400/10',      borderClass: 'border-rose-400/20',      solidBgClass: 'bg-rose-400' },
+  fitness:     { textClass: 'text-lime-400',      softBgClass: 'bg-lime-400/10',      borderClass: 'border-lime-400/20',      solidBgClass: 'bg-lime-400' },
+  health:      { textClass: 'text-emerald-400',   softBgClass: 'bg-emerald-400/10',   borderClass: 'border-emerald-400/20',   solidBgClass: 'bg-emerald-400' },
+  auto:        { textClass: 'text-indigo-400',    softBgClass: 'bg-indigo-400/10',    borderClass: 'border-indigo-400/20',    solidBgClass: 'bg-indigo-400' },
+  hospitality: { textClass: 'text-sky-400',       softBgClass: 'bg-sky-400/10',       borderClass: 'border-sky-400/20',       solidBgClass: 'bg-sky-400' },
+  specialty:   { textClass: 'text-amber-300',     softBgClass: 'bg-amber-300/10',     borderClass: 'border-amber-300/20',     solidBgClass: 'bg-amber-300' },
+  culture:     { textClass: 'text-purple-300',    softBgClass: 'bg-purple-300/10',    borderClass: 'border-purple-300/20',    solidBgClass: 'bg-purple-300' },
+}
+
+type GroupMeta = { label: string; icon: typeof UtensilsCrossed; textClass: string; softBgClass: string; borderClass: string; solidBgClass: string }
+const GROUPS: Record<GroupKey, GroupMeta> = CAD_GROUP_ORDER.reduce((acc, key) => {
+  acc[key] = { label: CAD_GROUPS[key].label, icon: GROUP_ICONS[key], ...GROUP_CLASSES[key] }
+  return acc
+}, {} as Record<GroupKey, GroupMeta>)
 
 const DECKS: VerticalDeck[] = CAD_VERTICALS
 
@@ -101,12 +116,12 @@ export default function CanadaPortalProposalsPage() {
   return (
     <div className="space-y-6">
       <header className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center">
-          <Star size={18} className="text-[#00d4aa]" />
+        <div className="w-10 h-10 rounded-xl bg-pm-accent/10 border border-pm-accent/20 flex items-center justify-center">
+          <Star size={18} className="text-pm-accent" />
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold text-white">Sales Proposals</h1>
-          <p className="text-[11px] text-[#6b7a74]">
+          <p className="text-2xs text-pm-canada-text-muted">
             Industry-specific Meridian decks · CAD pricing baked in · {DECKS.length} verticals · all auto-personalize with your name + email when shared.
           </p>
         </div>
@@ -121,7 +136,7 @@ export default function CanadaPortalProposalsPage() {
           })()}`}
           target="_blank"
           rel="noopener"
-          className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#1a3a30] bg-[#00d4aa]/5 text-[#00d4aa] text-[11px] font-medium hover:bg-[#00d4aa]/10 hover:border-[#00d4aa]/40 transition-colors"
+          className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#1a3a30] bg-pm-accent/5 text-pm-accent text-2xs font-medium hover:bg-pm-accent/10 hover:border-pm-accent/40 transition-colors"
         >
           Open full portal
           <ExternalLink size={12} />
@@ -131,13 +146,13 @@ export default function CanadaPortalProposalsPage() {
       {/* Search + filter row */}
       <div className="space-y-3">
         <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a74]" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-pm-canada-text-muted" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search verticals — bar, dental, retail, pharmacy…"
-            className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-[#1f2a26] bg-[#0a0e0c] text-white text-[13px] placeholder-[#6b7a74] outline-none focus:border-[#00d4aa]/50 focus:ring-2 focus:ring-[#00d4aa]/20 transition-colors"
+            className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-pm-canada-border bg-pm-canada-bg text-white text-sm-tight placeholder-pm-canada-text-muted outline-none focus:border-pm-accent/50 focus:ring-2 focus:ring-pm-accent/20 transition-colors"
           />
         </div>
 
@@ -146,7 +161,7 @@ export default function CanadaPortalProposalsPage() {
             label="All"
             count={groupCounts.all}
             active={activeGroup === 'all'}
-            color="#00d4aa"
+            solidBgClass="bg-pm-accent"
             onClick={() => setActiveGroup('all')}
           />
           {(Object.keys(GROUPS) as GroupKey[]).map(k => {
@@ -157,7 +172,7 @@ export default function CanadaPortalProposalsPage() {
                 label={meta.label}
                 count={groupCounts[k]}
                 active={activeGroup === k}
-                color={meta.color}
+                solidBgClass={meta.solidBgClass}
                 icon={meta.icon}
                 onClick={() => setActiveGroup(k)}
               />
@@ -167,8 +182,8 @@ export default function CanadaPortalProposalsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-[#1f2a26] bg-[#0a0e0c] p-8 text-center">
-          <p className="text-[13px] text-[#6b7a74]">No verticals match "{search}". Try a broader term.</p>
+        <div className="rounded-xl border border-pm-canada-border bg-pm-canada-bg p-8 text-center">
+          <p className="text-sm-tight text-pm-canada-text-muted">No verticals match "{search}". Try a broader term.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -179,33 +194,30 @@ export default function CanadaPortalProposalsPage() {
             return (
               <article
                 key={deck.slug}
-                className="group rounded-xl border border-[#1f2a26] bg-gradient-to-b from-[#0a0e0c] to-[#070a09] p-4 flex flex-col gap-3 hover:border-[#1a3a30] transition-colors"
+                className="group rounded-xl border border-pm-canada-border bg-gradient-to-b from-pm-canada-bg to-pm-canada-bg p-4 flex flex-col gap-3 hover:border-[#1a3a30] transition-colors"
               >
                 <header className="flex items-start gap-2.5">
-                  <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${meta.color}15`, border: `1px solid ${meta.color}30` }}
-                  >
-                    <Icon size={14} style={{ color: meta.color }} />
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 border ${meta.softBgClass} ${meta.borderClass}`}>
+                    <Icon size={14} className={meta.textClass} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-[14px] font-semibold text-white leading-tight">{deck.title}</h3>
-                    <div className="text-[10px] uppercase tracking-wider mt-0.5" style={{ color: meta.color }}>
+                    <h3 className="text-sm font-semibold text-white leading-tight">{deck.title}</h3>
+                    <div className={`text-2xs uppercase tracking-wider mt-0.5 ${meta.textClass}`}>
                       {meta.label}
                     </div>
                   </div>
                 </header>
 
-                <p className="text-[12px] text-[#a0a8a4] leading-relaxed">{deck.blurb}</p>
+                <p className="text-xs text-pm-muted leading-relaxed">{deck.blurb}</p>
 
-                <dl className="grid grid-cols-2 gap-2 pt-2 border-t border-[#1a201c]">
+                <dl className="grid grid-cols-2 gap-2 pt-2 border-t border-pm-canada-border">
                   <div>
-                    <dt className="text-[9px] uppercase tracking-wider text-[#6b7a74]">Avg ticket</dt>
-                    <dd className="text-[13px] text-white font-medium">{deck.avgTicket}</dd>
+                    <dt className="text-[9px] uppercase tracking-wider text-pm-canada-text-muted">Avg ticket</dt>
+                    <dd className="text-sm-tight text-white font-medium">{deck.avgTicket}</dd>
                   </div>
                   <div>
-                    <dt className="text-[9px] uppercase tracking-wider text-[#6b7a74]">Payback</dt>
-                    <dd className="text-[12px] text-[#00d4aa] font-medium">{deck.payback}</dd>
+                    <dt className="text-[9px] uppercase tracking-wider text-pm-canada-text-muted">Payback</dt>
+                    <dd className="text-xs text-pm-accent font-medium">{deck.payback}</dd>
                   </div>
                 </dl>
 
@@ -214,7 +226,7 @@ export default function CanadaPortalProposalsPage() {
                     href={personalizedUrl(deck.slug)}
                     target="_blank"
                     rel="noopener"
-                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#00d4aa] hover:bg-[#00bd97] active:scale-[0.98] text-[#001a14] text-[12px] font-semibold transition-all"
+                    className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pm-accent hover:bg-pm-accent active:scale-[0.98] text-[#001a14] text-xs font-semibold transition-all"
                   >
                     Open
                     <ExternalLink size={11} />
@@ -222,10 +234,10 @@ export default function CanadaPortalProposalsPage() {
                   <button
                     onClick={() => copyLink(deck.slug)}
                     className={clsx(
-                      'inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-[12px] font-medium transition-all',
+                      'inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all',
                       isCopied
-                        ? 'border-[#00d4aa]/40 bg-[#00d4aa]/10 text-[#00d4aa]'
-                        : 'border-[#1f2a26] bg-[#0a0e0c] text-[#a0a8a4] hover:border-[#1a3a30] hover:text-white active:scale-[0.98]'
+                        ? 'border-pm-accent/40 bg-pm-accent/10 text-pm-accent'
+                        : 'border-pm-canada-border bg-pm-canada-bg text-pm-muted hover:border-[#1a3a30] hover:text-white active:scale-[0.98]'
                     )}
                     title="Copy personalized link"
                   >
@@ -239,9 +251,9 @@ export default function CanadaPortalProposalsPage() {
         </div>
       )}
 
-      <footer className="rounded-xl border border-[#1f2a26] bg-[#0a0e0c]/50 p-4">
-        <h2 className="text-[11px] uppercase tracking-wider text-[#6b7a74] mb-2">How this works</h2>
-        <ul className="text-[12px] text-[#a0a8a4] space-y-1.5 list-disc pl-4">
+      <footer className="rounded-xl border border-pm-canada-border bg-pm-canada-bg/50 p-4">
+        <h2 className="text-2xs uppercase tracking-wider text-pm-canada-text-muted mb-2">How this works</h2>
+        <ul className="text-xs text-pm-muted space-y-1.5 list-disc pl-4">
           <li>Every deck link auto-includes your name, email{rep?.phone ? ', and phone' : ''} as URL params.</li>
           <li>When the prospect opens it, the cover shows "Prepared by {rep?.name || '[your name]'}" and all email CTAs route to you.</li>
           <li>Add the prospect's business name during lead creation — the deck title becomes "Meridian × [business name]" on their screen.</li>
@@ -256,22 +268,21 @@ interface FilterChipProps {
   label: string
   count: number
   active: boolean
-  color: string
+  solidBgClass: string
   icon?: typeof UtensilsCrossed
   onClick: () => void
 }
 
-function FilterChip({ label, count, active, color, icon: Icon, onClick }: FilterChipProps) {
+function FilterChip({ label, count, active, solidBgClass, icon: Icon, onClick }: FilterChipProps) {
   return (
     <button
       onClick={onClick}
       className={clsx(
-        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[11px] font-medium transition-all whitespace-nowrap',
+        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-2xs font-medium transition-all whitespace-nowrap',
         active
-          ? 'text-[#001a14] border-transparent'
-          : 'border-[#1f2a26] bg-[#0a0e0c] text-[#a0a8a4] hover:border-[#1a3a30] hover:text-white'
+          ? `text-[#001a14] border-transparent ${solidBgClass}`
+          : 'border-pm-canada-border bg-pm-canada-bg text-pm-muted hover:border-[#1a3a30] hover:text-white'
       )}
-      style={active ? { background: color } : undefined}
     >
       {Icon && <Icon size={11} />}
       {label}

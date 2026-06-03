@@ -542,17 +542,26 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
   const rc = getRevenueConfig(getActiveBusinessType())
   const forecasts: Forecast[] = []
 
-  // Daily revenue forecasts for next 14 days
-  for (let i = 1; i <= 14; i++) {
+  // Daily revenue forecasts for next 90 days. Confidence and bounds widen
+  // gradually with horizon to match how real forecasters degrade further out.
+  for (let i = 1; i <= 90; i++) {
     const date = daysFromNow(i)
     const d = new Date(date)
     const dow = d.getDay()
     const isWeekend = dow === 0 || dow === 6
 
     const base = isWeekend ? rand(rc.weekendMin, rc.weekendMax) : rand(rc.weekdayMin, rc.weekdayMax)
-    const lower = Math.floor(base * 0.82)
-    const upper = Math.floor(base * 1.18)
-    const confidence = randFloat(0.72, 0.92)
+    // Bound width grows with horizon (8% → 28%) — closer days are tighter.
+    const widthPct = 0.08 + Math.min(i / 90, 1) * 0.20
+    const lower = Math.floor(base * (1 - widthPct))
+    const upper = Math.floor(base * (1 + widthPct))
+    // Confidence decays from ~0.88 to ~0.60 across the 90-day horizon.
+    const confidence = randFloat(
+      Math.max(0.55, 0.92 - i / 120),
+      Math.max(0.60, 0.97 - i / 120),
+    )
+    const horizonDays = i <= 7 ? 7 : i <= 30 ? 30 : 90
+    const errorRate = i <= 7 ? 0.10 : i <= 30 ? 0.15 : 0.22
 
     forecasts.push({
       id: uuid(),
@@ -563,8 +572,8 @@ function generateForecasts(): { forecasts: Forecast[]; total: number } {
       lower_bound_cents: cx(lower),
       upper_bound_cents: cx(upper),
       confidence,
-      horizon_days: i <= 7 ? 7 : 30,
-      error_rate: i <= 7 ? 0.10 : 0.15,
+      horizon_days: horizonDays,
+      error_rate: errorRate,
     })
   }
 

@@ -320,16 +320,17 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
   const { org } = useAuth()
   const location = useLocation()
   const isDemo = location.pathname.startsWith('/demo') || location.pathname.startsWith('/canada/demo')
-  const processing = useProcessingState()
 
-  // Demo mode always shows real content
+  // Demo mode always shows real content.
   if (isDemo) return <>{children}</>
 
-  // POS connected and analysis finished — show real content
-  if (org?.pos_connected && !processing.active) return <>{children}</>
+  // Once POS is connected, show real content. The 20-min AI analysis countdown
+  // is surfaced ONCE via a top-of-layout banner (see DashboardProcessingBanner)
+  // instead of blocking every individual page like it used to — the raw POS
+  // data is already populated, only insights are pending.
+  if (org?.pos_connected) return <>{children}</>
 
-  // Either POS not connected, or POS connected but still processing
-  const isProcessing = org?.pos_connected && processing.active
+  // POS not connected — show the empty-state skeleton + Connect CTA.
   const config = PAGE_CONFIGS[title] || PAGE_CONFIGS['Revenue']
 
   return (
@@ -337,9 +338,7 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
       <div>
         <h1 className="text-2xl font-bold text-[#F5F5F7]">{title}</h1>
         <p className="text-sm text-[#A1A1A8] mt-1">
-          {isProcessing
-            ? 'Your data is being analyzed by our AI agents'
-            : 'Connect your POS to populate this view with live data'}
+          Connect your POS to populate this view with live data
         </p>
       </div>
 
@@ -357,7 +356,46 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
         </div>
       ))}
 
-      {isProcessing ? <ProcessingCTA elapsed={processing.elapsed} /> : <ConnectCTA />}
+      <ConnectCTA />
+    </div>
+  )
+}
+
+/**
+ * Single-instance banner showing the 20-minute AI analysis countdown after
+ * onboarding completes. Mounts inside Layout so it appears once per session
+ * across every dashboard route — replacing the per-page countdown that used
+ * to show on every nav tab.
+ */
+export function DashboardProcessingBanner() {
+  const processing = useProcessingState()
+  const [dismissed, setDismissed] = useState(false)
+  if (!processing.active || dismissed) return null
+  const clamped = Math.min(processing.elapsed, PROCESSING_DURATION)
+  const pct = Math.round((clamped / PROCESSING_DURATION) * 100)
+  const remainingMin = Math.ceil(Math.max(PROCESSING_DURATION - clamped, 0) / 60)
+  return (
+    <div className="relative px-4 sm:px-6 py-2 border-b border-[#1F1F23] bg-gradient-to-r from-[#0F1419] via-[#0F1A24] to-[#0F1419]">
+      <div className="flex items-center gap-3 max-w-7xl mx-auto">
+        <MeridianEmblem size={14} animate />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-[11px] text-[#A1A1A8]">
+            <span className="font-medium text-[#F5F5F7]/90 truncate">AI analysis in progress</span>
+            <span className="text-[#A1A1A8]/50 hidden sm:inline">·</span>
+            <span className="hidden sm:inline text-[#A1A1A8]/70">~{remainingMin} min remaining</span>
+          </div>
+          <div className="mt-1 h-[3px] rounded-full bg-[#1F1F23] overflow-hidden">
+            <div className="h-full bg-[#1A8FD6] transition-all duration-1000 ease-linear" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          aria-label="Dismiss"
+          className="text-[10px] font-mono uppercase tracking-wider text-[#A1A1A8]/50 hover:text-[#F5F5F7] transition-colors px-2 py-1"
+        >
+          {pct}% · ×
+        </button>
+      </div>
     </div>
   )
 }

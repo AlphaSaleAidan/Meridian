@@ -49,12 +49,12 @@ export default function SalesPortalMobileNav() {
       {moreOpen && (
         <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm lg:hidden" onClick={() => setMoreOpen(false)}>
           <div
-            className="absolute bottom-0 left-0 right-0 bg-[#0a0f0d] border-t border-[#1a2420] rounded-t-2xl pb-[max(env(safe-area-inset-bottom),16px)]"
+            className="absolute bottom-0 left-0 right-0 bg-pm-canada-bg border-t border-pm-canada-border rounded-t-2xl pb-[max(env(safe-area-inset-bottom),16px)]"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-[#1a2420]">
+            <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-pm-canada-border">
               <span className="text-sm font-semibold text-white">More</span>
-              <button aria-label="Close menu" onClick={() => setMoreOpen(false)} className="p-2 rounded-full bg-[#1a2420] text-[#6b7a74]">
+              <button aria-label="Close menu" onClick={() => setMoreOpen(false)} className="p-2 rounded-full bg-pm-canada-border text-pm-canada-text-muted">
                 <X size={16} />
               </button>
             </div>
@@ -67,11 +67,11 @@ export default function SalesPortalMobileNav() {
                     to={item.path}
                     className={({ isActive }) => clsx(
                       'flex flex-col items-center gap-1.5 py-4 rounded-xl transition-colors min-h-[72px] justify-center',
-                      isActive ? 'bg-[#00d4aa]/10 text-[#00d4aa]' : 'text-[#6b7a74] active:bg-[#1a2420]',
+                      isActive ? 'bg-pm-accent/10 text-pm-accent' : 'text-pm-canada-text-muted active:bg-pm-canada-border',
                     )}
                   >
                     <Icon size={22} />
-                    <span className="text-[10px] font-medium">{item.label}</span>
+                    <span className="text-2xs font-medium">{item.label}</span>
                   </NavLink>
                 )
               })}
@@ -80,7 +80,7 @@ export default function SalesPortalMobileNav() {
         </div>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0a0f0d]/95 backdrop-blur-lg border-t border-[#1a2420]">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-pm-canada-bg/95 backdrop-blur-lg border-t border-pm-canada-border">
         <div className="flex items-stretch justify-around px-2 pb-[max(env(safe-area-inset-bottom),4px)]">
           {PRIMARY_TABS.map(item => {
             const Icon = item.icon
@@ -90,11 +90,11 @@ export default function SalesPortalMobileNav() {
                 to={item.path}
                 className={({ isActive }) => clsx(
                   'flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-[64px] min-h-[50px] transition-colors',
-                  isActive ? 'text-[#00d4aa]' : 'text-[#6b7a74]/60',
+                  isActive ? 'text-pm-accent' : 'text-pm-canada-text-muted/60',
                 )}
               >
                 <Icon size={20} strokeWidth={1.8} />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <span className="text-2xs font-medium">{item.label}</span>
               </NavLink>
             )
           })}
@@ -102,11 +102,11 @@ export default function SalesPortalMobileNav() {
             onClick={() => setMoreOpen(true)}
             className={clsx(
               'flex flex-col items-center justify-center gap-0.5 py-2 px-3 min-w-[64px] min-h-[50px] transition-colors',
-              isMoreActive ? 'text-[#00d4aa]' : 'text-[#6b7a74]/60',
+              isMoreActive ? 'text-pm-accent' : 'text-pm-canada-text-muted/60',
             )}
           >
             <MoreHorizontal size={20} strokeWidth={1.8} />
-            <span className="text-[10px] font-medium">More</span>
+            <span className="text-2xs font-medium">More</span>
           </button>
         </div>
       </nav>

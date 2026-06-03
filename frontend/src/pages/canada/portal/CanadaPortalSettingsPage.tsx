@@ -72,49 +72,49 @@ export default function CanadaPortalSettingsPage() {
     }
   }
 
-  const inputClass = 'w-full px-3 py-2.5 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74]/40 focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
+  const inputClass = 'w-full px-3 py-2.5 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white placeholder-pm-canada-text-muted/40 focus:outline-none focus:border-pm-accent/50 focus:ring-1 focus:ring-pm-accent/20 transition-colors'
 
   return (
     <div className="space-y-6 max-w-2xl">
       {isPasswordReset && (
-        <div className="p-4 rounded-xl bg-[#f59e0b]/10 border border-[#f59e0b]/20">
-          <p className="text-sm font-semibold text-[#f59e0b]">Set your new password</p>
-          <p className="text-xs text-[#f59e0b]/70 mt-0.5">Enter a new password below to complete your password reset.</p>
+        <div className="p-4 rounded-xl bg-pm-amber-orange/10 border border-pm-amber-orange/20">
+          <p className="text-sm font-semibold text-pm-amber-orange">Set your new password</p>
+          <p className="text-xs text-pm-amber-orange/70 mt-0.5">Enter a new password below to complete your password reset.</p>
         </div>
       )}
       <div>
         <h1 className="text-xl font-bold text-white">Settings</h1>
-        <p className="text-sm text-[#6b7a74] mt-0.5">Manage your account preferences.</p>
+        <p className="text-sm text-pm-canada-text-muted mt-0.5">Manage your account preferences.</p>
       </div>
 
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <User size={16} className="text-[#00d4aa]" />
+          <User size={16} className="text-pm-accent" />
           <h2 className="text-sm font-semibold text-white">Profile</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Name</label>
+            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Name</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Email <span className="text-[#4a5550] font-normal">(locked)</span></label>
+            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Email <span className="text-pm-canada-text-faint font-normal">(locked)</span></label>
             <input type="email" defaultValue={rep?.email || ''} className={`${inputClass} opacity-60 cursor-not-allowed`} readOnly title="Email cannot be changed. Contact your admin." />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Phone</label>
+            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Phone</label>
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={inputClass} />
           </div>
           <div>
-            <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Commission Rate <span className="text-[#4a5550] font-normal">(locked)</span></label>
+            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Commission Rate <span className="text-pm-canada-text-faint font-normal">(locked)</span></label>
             <input type="text" value={rep ? `${rep.commission_rate}%` : ''} className={`${inputClass} opacity-60 cursor-not-allowed`} readOnly title="Commission rate is set by your admin." />
           </div>
         </div>
       </div>
 
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Bell size={16} className="text-[#7C5CFF]" />
+          <Bell size={16} className="text-pm-indigo" />
           <h2 className="text-sm font-semibold text-white">Notifications</h2>
         </div>
         <div className="space-y-3">
@@ -126,12 +126,12 @@ export default function CanadaPortalSettingsPage() {
           ].map(item => (
             <label key={item.key} className="flex items-center justify-between py-2 cursor-pointer">
               <div>
-                <p className="text-[11px] font-medium text-white">{item.label}</p>
-                <p className="text-[10px] text-[#6b7a74]/40">{item.desc}</p>
+                <p className="text-2xs font-medium text-white">{item.label}</p>
+                <p className="text-2xs text-pm-canada-text-muted/40">{item.desc}</p>
               </div>
               <button
                 onClick={() => setNotifications((prev: Record<string, boolean>) => { const next = { ...prev, [item.key]: !prev[item.key] }; localStorage.setItem('meridian_notification_prefs', JSON.stringify(next)); return next })}
-                className={`w-9 h-5 rounded-full transition-colors relative ${notifications[item.key] ? 'bg-[#00d4aa]' : 'bg-[#1a2420]'}`}
+                className={`w-9 h-5 rounded-full transition-colors relative ${notifications[item.key] ? 'bg-pm-accent' : 'bg-pm-canada-border'}`}
               >
                 <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${notifications[item.key] ? 'left-[18px]' : 'left-0.5'}`} />
               </button>
@@ -140,22 +140,22 @@ export default function CanadaPortalSettingsPage() {
         </div>
       </div>
 
-      <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-5">
+      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5">
         <div className="flex items-center gap-2 mb-4">
-          <Shield size={16} className="text-[#F59E0B]" />
+          <Shield size={16} className="text-pm-amber-orange" />
           <h2 className="text-sm font-semibold text-white">Security</h2>
         </div>
         {!showPwSection ? (
           <button
             onClick={() => setShowPwSection(true)}
-            className="px-4 py-2 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-[#6b7a74] hover:text-white hover:border-[#2a3a34] transition-colors"
+            className="px-4 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-pm-canada-text-muted hover:text-white hover:border-[#2a3a34] transition-colors"
           >
             Change Password
           </button>
         ) : (
           <div className="space-y-3">
             <div className="relative">
-              <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">New Password</label>
+              <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">New Password</label>
               <input
                 type={showPw ? 'text' : 'password'}
                 value={pw}
@@ -163,12 +163,12 @@ export default function CanadaPortalSettingsPage() {
                 className={inputClass}
                 placeholder="At least 8 characters"
               />
-              <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-3 top-[30px] text-[#6b7a74]">
+              <button type="button" onClick={() => setShowPw(p => !p)} className="absolute right-3 top-[30px] text-pm-canada-text-muted">
                 {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
             <div>
-              <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Confirm Password</label>
+              <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Confirm Password</label>
               <input
                 type={showPw ? 'text' : 'password'}
                 value={pwConfirm}
@@ -182,14 +182,14 @@ export default function CanadaPortalSettingsPage() {
               <button
                 onClick={handlePasswordChange}
                 disabled={pwSaving}
-                className="flex items-center gap-2 px-4 py-2 bg-[#F59E0B] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#F59E0B]/90 disabled:opacity-50 transition-all"
+                className="flex items-center gap-2 px-4 py-2 bg-pm-amber-orange text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-amber-orange/90 disabled:opacity-50 transition-all"
               >
                 {pwSaving ? <Loader2 size={14} className="animate-spin" /> : pwDone ? <Check size={14} /> : null}
                 {pwDone ? 'Updated' : 'Update Password'}
               </button>
               <button
                 onClick={() => { setShowPwSection(false); setPw(''); setPwConfirm(''); setPwError('') }}
-                className="px-4 py-2 border border-[#1a2420] rounded-lg text-sm text-[#6b7a74] hover:text-white transition-colors"
+                className="px-4 py-2 border border-pm-canada-border rounded-lg text-sm text-pm-canada-text-muted hover:text-white transition-colors"
               >
                 Cancel
               </button>
@@ -207,7 +207,7 @@ export default function CanadaPortalSettingsPage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+          className="flex items-center gap-2 px-5 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
         >
           {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <><Check size={16} /> Saved</> : 'Save Changes'}
         </button>
