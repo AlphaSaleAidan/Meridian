@@ -14,12 +14,14 @@
 #   scripts/session-worktree.sh list                                # list
 #   scripts/session-worktree.sh rm <session-name>                   # remove
 #   scripts/session-worktree.sh path <session-name>                 # print path
+#   scripts/session-worktree.sh check                               # is THIS worktree safe to npm-install?
 #
 # Examples:
 #   scripts/session-worktree.sh new my-feature              # off origin/main
 #   scripts/session-worktree.sh new pos-fix swarm-upgrade   # off local swarm-upgrade
 #   scripts/session-worktree.sh list
 #   scripts/session-worktree.sh rm my-feature
+#   cd /tmp/meridian-my-feature && scripts/session-worktree.sh check
 
 set -e
 
@@ -33,6 +35,7 @@ Usage:
   session-worktree.sh list
   session-worktree.sh rm <session-name>
   session-worktree.sh path <session-name>
+  session-worktree.sh check       # run inside a worktree: is npm-install safe here?
 
 Env vars:
   REPO_ROOT     (default: /root/Meridian)
@@ -79,32 +82,141 @@ cmd_new() {
 
     # Symlink node_modules so the pre-commit tsc hook can resolve the TypeScript
     # compiler without running `npm install` (which would race or duplicate).
+    #
+    # IMPORTANT: the symlink is a soft symlink, so any WRITE through
+    # $path/frontend/node_modules/... lands in $REPO_ROOT/frontend/node_modules/...
+    # That's fine for `npm ci` (which removes node_modules first, then creates a
+    # fresh real dir), but UNSAFE for `npm install`, `npm uninstall`, `npm update`
+    # — they mutate the shared store in place.
+    #
+    # Drift-at-birth check: if the base branch's frontend/package-lock.json
+    # doesn't match /root/Meridian's, an `npm install` here would silently
+    # propagate THIS worktree's lock state into the shared store, breaking
+    # every other worktree. In that case we refuse to symlink and tell the
+    # user to either `npm ci` here (isolated install) or rebase to a base
+    # whose lockfile matches.
+    local symlink_ok=1
     if [ -d "$REPO_ROOT/frontend/node_modules" ]; then
-        echo "→ symlinking frontend/node_modules → $REPO_ROOT/frontend/node_modules"
-        rm -rf "$path/frontend/node_modules" 2>/dev/null
-        ln -s "$REPO_ROOT/frontend/node_modules" "$path/frontend/node_modules"
+        local shared_lock="$REPO_ROOT/frontend/package-lock.json"
+        local new_lock="$path/frontend/package-lock.json"
+        if [ -f "$shared_lock" ] && [ -f "$new_lock" ]; then
+            local shared_hash new_hash
+            shared_hash=$(sha256sum "$shared_lock" | cut -d' ' -f1)
+            new_hash=$(sha256sum "$new_lock" | cut -d' ' -f1)
+            if [ "$shared_hash" != "$new_hash" ]; then
+                symlink_ok=0
+                cat >&2 <<EOF
+⚠ DRIFT-AT-BIRTH: '$base' has a different frontend/package-lock.json than $REPO_ROOT.
+  NOT symlinking node_modules — a symlink here would corrupt the shared store
+  the moment anything runs 'npm install'.
+
+  Choose one before running anything that touches node_modules:
+    (a) isolated install (slow, ~500MB, safe):
+          cd $path/frontend && npm ci
+    (b) rebase this branch onto a base whose lockfile matches $REPO_ROOT/frontend/package-lock.json
+
+  To re-check drift at any point from inside this worktree:
+    cd $path && $0 check
+EOF
+            fi
+        fi
+
+        if [ "$symlink_ok" = "1" ]; then
+            echo "→ symlinking frontend/node_modules → $REPO_ROOT/frontend/node_modules"
+            rm -rf "$path/frontend/node_modules" 2>/dev/null
+            ln -s "$REPO_ROOT/frontend/node_modules" "$path/frontend/node_modules"
+        fi
     else
         echo "⚠ no $REPO_ROOT/frontend/node_modules to symlink — run 'cd frontend && npm install' in the worktree if you need tsc/lint."
     fi
 
     cat <<EOF
 
-✓ Session worktree ready.
+✓ Session worktree ready at $path
 
+⚠ DEP-MUTATION RULE — load-bearing, read every time:
+  frontend/node_modules is (or was) symlinked to $REPO_ROOT's store.
+  READING it is safe (tsc, vite build, eslint).
+  WRITING through it via 'npm install' / 'npm install <pkg>' / 'npm uninstall' /
+  'npm update' corrupts the shared store for every other session.
+
+  Safe options when you need to change deps in this worktree:
+    ✓ cd frontend && npm ci          # removes symlink, installs fresh (~500MB, slow, isolated)
+    ✗ npm install / npm install <pkg>  — DO NOT run; corrupts shared store
+    ✗ npm uninstall / npm update       — same
+
+  Verify safety before any npm command:
+    cd $path && $0 check
+  Prints '✓ safe' or '✗ DRIFT' with the recovery command.
+
+Workflow:
   cd $path
-  # work here — your HEAD, your dirty files, isolated from other sessions
-  # the pre-commit tsc hook will work because node_modules is symlinked
-  # if you change frontend deps, run 'cd frontend && npm install' in THIS worktree
-  # (it'll resolve against the symlink — installing inside a symlinked node_modules
-  # is unusual; safer is 'cd frontend && rm node_modules && npm install' locally)
+  # work — your HEAD, your dirty files, isolated from other sessions
+  # tsc pre-commit hook works because node_modules is symlinked
 
   git add <paths> && git commit -m "..."
   git push -u origin $branch
   gh pr create --base main --head $branch
 
-  # When done:
+When done:
   $0 rm $safe
 EOF
+}
+
+cmd_check() {
+    # Run from inside a worktree. Compares this worktree's frontend/package-lock.json
+    # to $REPO_ROOT's; tells you whether 'npm install' / 'npm update' / 'npm uninstall'
+    # would corrupt the shared store.
+    local shared_lock="$REPO_ROOT/frontend/package-lock.json"
+    local here_lock="frontend/package-lock.json"
+
+    if [ ! -f "$here_lock" ]; then
+        echo "⚠ no $here_lock in CWD — run this from a worktree's repo root (the dir that contains frontend/)." >&2
+        return 2
+    fi
+    if [ ! -f "$shared_lock" ]; then
+        echo "⚠ no $shared_lock — is REPO_ROOT correct? (current: $REPO_ROOT)" >&2
+        return 2
+    fi
+
+    local shared_hash here_hash
+    shared_hash=$(sha256sum "$shared_lock" | cut -d' ' -f1)
+    here_hash=$(sha256sum "$here_lock"   | cut -d' ' -f1)
+
+    # Also check whether node_modules is actually still a symlink (it could have
+    # been replaced by a real directory if someone already ran `npm ci` here).
+    local nm_state="(no node_modules)"
+    if [ -L "frontend/node_modules" ]; then
+        nm_state="symlink → $(readlink frontend/node_modules)"
+    elif [ -d "frontend/node_modules" ]; then
+        nm_state="real directory (isolated — npm install safe here)"
+    fi
+
+    if [ "$shared_hash" = "$here_hash" ]; then
+        cat <<EOF
+✓ SAFE — frontend/package-lock.json matches $REPO_ROOT.
+  node_modules: $nm_state
+  npm install / uninstall / update would mutate the shared store, but lock state
+  is identical so the shared store stays internally consistent. Still: prefer
+  'npm ci' if you're about to change deps (it converts node_modules from symlink
+  to real dir, isolating any further mutations).
+EOF
+        return 0
+    else
+        cat <<EOF
+✗ DRIFT — frontend/package-lock.json differs from $REPO_ROOT.
+  node_modules: $nm_state
+  this worktree:    $here_hash
+  $REPO_ROOT: $shared_hash
+  Running 'npm install' / 'npm update' here would silently propagate THIS
+  worktree's lock state into the shared store. Do NOT run them.
+
+  Safe options:
+    (a) cd frontend && rm node_modules && npm ci   # isolated install (~500MB, slow)
+    (b) rebase this branch onto a base whose lockfile matches $REPO_ROOT
+EOF
+        return 1
+    fi
 }
 
 cmd_list() {
@@ -169,10 +281,11 @@ cmd_path() {
 }
 
 case "${1:-}" in
-    new)  shift; cmd_new "$@" ;;
-    list) cmd_list ;;
-    rm)   shift; cmd_rm "$@" ;;
-    path) shift; cmd_path "$@" ;;
+    new)   shift; cmd_new "$@" ;;
+    list)  cmd_list ;;
+    rm)    shift; cmd_rm "$@" ;;
+    path)  shift; cmd_path "$@" ;;
+    check) cmd_check ;;
     -h|--help|help|"") usage; exit 0 ;;
     *) echo "unknown command: $1" >&2; usage; exit 2 ;;
 esac
