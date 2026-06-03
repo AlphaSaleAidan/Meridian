@@ -52,6 +52,20 @@ except ImportError:
 
 from src.services.llm_client import LLMClient
 
+from casl_compliance import (
+    classify_keyword,
+    is_canadian_number,
+    fetch_optout_status,
+    record_optout,
+    record_optin,
+    stamp_last_inbound,
+    prepend_sender_id,
+    help_reply,
+    stop_ack_reply,
+    start_ack_reply,
+    non_canadian_reply,
+)
+
 logger = logging.getLogger("meridian.phone_agent.sms_order")
 
 router = APIRouter(prefix="/sms", tags=["sms-order"])
@@ -350,6 +364,37 @@ async def handle_inbound_sms(request: Request):
             f"Please call {config.phone_number} to place an order."
         )
 
+    # ─── CASL: reserved-keyword handling ────────────────────────────────
+    # STOP / HELP / START / UNSTOP must be honoured regardless of caller
+    # country (so US numbers texting our Canadian DID can still opt out).
+    # These bypass the LLM entirely and don't burn credits.
+    keyword = classify_keyword(body)
+    if keyword == "stop":
+        # Marketing opt-out only. The split is deliberate: a STOP from a
+        # customer mid-order should NOT strand the transactional payment
+        # link they're about to receive. See casl_compliance.py.
+        await record_optout(merchant_id, customer_phone, marketing=True, transactional=False, notes="STOP keyword")
+        # Drop any in-progress session so they can restart fresh later.
+        _sms_sessions.pop(_session_key(merchant_phone, customer_phone), None)
+        return _twiml_sms(stop_ack_reply(config.business_name))
+    if keyword == "help":
+        return _twiml_sms(help_reply(config.business_name))
+    if keyword == "start":
+        await record_optin(merchant_id, customer_phone)
+        return _twiml_sms(start_ack_reply(config.business_name))
+
+    # ─── CASL: Canada-only inbound guard ────────────────────────────────
+    # Reserved keywords above are exempt; everything else must come from
+    # a Canadian NANP number for now. When the DID is US-based (current
+    # prod), this guard is a no-op for any inbound (all 11-digit +1
+    # numbers fall back to allowed by area-code allowlist if Canadian).
+    if not is_canadian_number(customer_phone):
+        logger.info("Refusing non-Canadian SMS from %s", customer_phone)
+        return _twiml_sms(non_canadian_reply())
+
+    # Best-effort touch of last_inbound_at for compliance audit trail.
+    await stamp_last_inbound(merchant_id, customer_phone)
+
     # Credit metering: one deduction per exchange (1 inbound processed +
     # 1 outbound reply). Multi-segment replies eat the extra cost — fine
     # at our margins, and keeps the merchant's mental model simple.
@@ -434,20 +479,20 @@ async def handle_inbound_sms(request: Request):
                 session, tool_call.arguments, config, customer_phone, merchant_phone,
             )
             session["messages"].append({"role": "assistant", "content": reply})
-            return _twiml_sms(reply)
+            return _twiml_sms(prepend_sender_id(config.business_name, reply))
 
         elif tool_call.name == "show_menu":
             category = tool_call.arguments.get("category", "")
             menu_text = _format_menu_sms(config, category)
             session["messages"].append({"role": "assistant", "content": menu_text})
-            return _twiml_sms(menu_text)
+            return _twiml_sms(prepend_sender_id(config.business_name, menu_text))
 
     if not text:
         text = f"Welcome to {config.business_name}! Text 'menu' to see what we have, or just tell me what you'd like to order."
 
     session["messages"].append({"role": "assistant", "content": text})
 
-    return _twiml_sms(text)
+    return _twiml_sms(prepend_sender_id(config.business_name, text))
 
 
 @router.post("/status")
