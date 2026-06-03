@@ -94,10 +94,15 @@ async def run_backfill(
         )
 
     if result.inventory_snapshots:
+        # Sweep §3.2: the inventory_snapshots column is `snapshot_at`,
+        # not `snapshot_date`. The Square mapper already emits
+        # `snapshot_at` (src/square/mappers.py:415); only the on_conflict
+        # spec was stale, which would raise PG 42P10 on first OAuth-path
+        # inventory upsert.
         await db.batch_upsert(
             "inventory_snapshots",
             result.inventory_snapshots,
-            on_conflict="org_id,product_id,location_id,snapshot_date",
+            on_conflict="org_id,product_id,location_id,snapshot_at",
         )
 
     logger.info(f"Backfill persisted for org={org_id}: {result.summary}")
