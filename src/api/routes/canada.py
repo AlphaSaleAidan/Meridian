@@ -372,8 +372,6 @@ async def approve_rep(req: RepActionRequest, request: Request, admin: dict = Dep
     # require_admin_jwt (ADMIN_EMAILS allowlist), not in PostgREST policies.
     # The Supabase /auth/v1/admin/users call further down also requires the
     # service key.
-    _user_token_unused = _user_token(request)  # noqa: F841 — kept for audit logging hooks if added later
-    _anon_key_unused = _get_anon_key()  # noqa: F841
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         # 1. PATCH is_active = true and verify row was updated
