@@ -1,0 +1,18 @@
+# Pre-commit hooks for Meridian. Install with:
+#   pre-commit install --install-hooks
+#
+# The gitleaks hook is a local-language entry so it uses the system-installed
+# gitleaks binary (/usr/local/bin/gitleaks) and the project ruleset at
+# .gitleaks.toml — no network round-trip per commit, works offline.
+
+repos:
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks (secrets scan, staged files only)
+        language: system
+        # `gitleaks protect --staged` only scans the diff currently in the
+        # index — much faster than a full repo scan and the same protection.
+        entry: gitleaks protect --staged --no-banner --redact --config .gitleaks.toml
+        pass_filenames: false
+        stages: [pre-commit]
