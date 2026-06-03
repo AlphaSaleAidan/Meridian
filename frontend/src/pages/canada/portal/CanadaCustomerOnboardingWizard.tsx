@@ -272,7 +272,11 @@ export default function CanadaCustomerOnboardingWizard() {
         // P1: connectPos signature changed to credentials object. Pass
         // {} for the selection-only path (credential collection lives
         // in a later step / the rep-facing portal).
-        const err = await connectPos(posProvider, {})
+        // P2: forward the rep_id from the URL when the rep onboarded
+        // the merchant via a `?rep=…` referral link, so future
+        // credential connects pick it up for attribution.
+        const repId = searchParams.get('rep') || null
+        const err = await connectPos(posProvider, {}, repId)
         if (err) { setError(err); setSaving(false); return }
       }
       setStep('inventory')
@@ -778,6 +782,38 @@ export default function CanadaCustomerOnboardingWizard() {
               portalContext="canada"
               currency="CAD"
             />
+            {/* P2: real OAuth UX for Square and Clover. When the rep
+                selects one of these providers, surface a "Connect with
+                <Provider>" button that redirects to the backend
+                authorize endpoint. The state token signs org_id +
+                rep_id (when present in the URL `?rep=…` param) so the
+                callback can write pos_connections.connected_by_rep_id
+                without trusting an unsigned channel.
+
+                The merchant ends the round-trip back at
+                /app/settings?oauth=success — fine for the demo flow;
+                a richer post-OAuth landing for the wizard is a P3
+                follow-up. */}
+            {posProvider === 'square' && org?.org_id && (
+              <a
+                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                className={btnPrimary + ' justify-center w-full'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Connect with Square (OAuth)
+              </a>
+            )}
+            {posProvider === 'clover' && org?.org_id && (
+              <a
+                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                className={btnPrimary + ' justify-center w-full'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Connect with Clover (OAuth)
+              </a>
+            )}
             <div className="flex justify-between">
               <button onClick={() => setStep('account')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <button onClick={handlePosNext} disabled={saving || !posProvider} className={btnPrimary}>
