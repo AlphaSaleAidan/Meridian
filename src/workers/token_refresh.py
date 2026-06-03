@@ -40,7 +40,7 @@ async def refresh_expiring_tokens() -> dict:
         org_id = conn.get("org_id", "unknown")
 
         try:
-            refresh_token = decrypt_token(conn.get("refresh_token_encrypted", ""))
+            refresh_token = decrypt_token(conn.get("refresh_token_enc", ""))
 
             if not refresh_token:
                 logger.warning(f"No refresh token for connection {connection_id}")
@@ -53,8 +53,8 @@ async def refresh_expiring_tokens() -> dict:
             await db.update(
                 "pos_connections",
                 {
-                    "access_token_encrypted": encrypt_token(tokens["access_token"]),
-                    "refresh_token_encrypted": encrypt_token(tokens.get("refresh_token", "")),
+                    "access_token_enc": encrypt_token(tokens["access_token"]),
+                    "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
                     "token_expires_at": tokens.get("expires_at"),
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 },
