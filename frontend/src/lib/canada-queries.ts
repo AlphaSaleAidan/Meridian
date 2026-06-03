@@ -138,6 +138,11 @@ export function useDeleteCanadaLead() {
 export function useCanadaLeadsRealtime(repId: string | undefined) {
   const qc = useQueryClient()
   useEffect(() => {
+    // Mirror the `enabled` gate on useCanadaLeads. Without this, a
+    // brief rep-undefined render at cold login opens a websocket with
+    // no rep filter; harmless after the unique-channel-name fix but
+    // still wasted work.
+    if (!repId) return
     const channel = canadaLeadsService.subscribe(repId, (deals) => {
       qc.setQueryData(canadaKeys.leads(repId), deals)
     })
