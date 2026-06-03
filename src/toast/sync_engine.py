@@ -33,7 +33,30 @@ class ToastSyncEngine:
         self.pos_connection_id = pos_connection_id
         self.on_progress = on_progress
         self._progress = SyncProgress(pos_connection_id)
+        # ISO 4217 currency, populated in _ensure_currency() before the
+        # first map_order call. Toast orders don't carry currency
+        # inline, so we pin it from restaurant info once.
         self.mapper = ToastDataMapper(org_id, pos_connection_id)
+
+    async def _ensure_currency(self) -> None:
+        """Fetch the restaurant's currency from Toast once and inject
+        it into the mapper. Called at the start of every sync path
+        (backfill + incremental). Cheap — single API call, cached on
+        the mapper afterwards."""
+        if self.mapper.currency:
+            return
+        try:
+            info = await self.client.get_restaurant_info()
+            currency = (info or {}).get("general", {}).get("currency")
+            if currency:
+                self.mapper.currency = currency
+        except Exception as exc:
+            # Currency is best-effort; absence is a data-quality issue
+            # but should not block the sync.
+            from logging import getLogger
+            getLogger("meridian.toast.sync_engine").warning(
+                "Failed to fetch Toast restaurant currency: %s", exc,
+            )
 
     def _update_progress(self, phase: str, detail: str, pct: float):
         self._progress.update(phase, detail, pct)
@@ -45,6 +68,7 @@ class ToastSyncEngine:
         result = SyncResult()
 
         try:
+            await self._ensure_currency()
             self._update_progress("menu", "Syncing menu items...", 0)
             menu_items = await self.client.get_menu_items()
             for item in menu_items:
@@ -115,6 +139,8 @@ class ToastSyncEngine:
     ) -> SyncResult:
         """Incremental sync — fetch orders since last sync."""
         result = SyncResult()
+
+        await self._ensure_currency()
 
         if isinstance(since, str):
             since = datetime.fromisoformat(since.replace("Z", "+00:00"))
