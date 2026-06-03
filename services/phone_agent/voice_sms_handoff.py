@@ -17,8 +17,14 @@ DRAFT — drafted in this session but NOT integrated into phone.py yet,
 per the gate: the SMS path it composes against is itself being
 CASL-modified in the same branch (sms_order.py). Integrating against a
 moving target risks wiring to an unstable base. Once the CASL changes
-settle (this branch merged + soaked), uncomment the call site marked
-PAYMENT_LINK_HANDOFF in phone.py's /gather handler.
+settle (this branch merged + soaked) AND the Canadian DID is
+provisioned, wire the call site marked PAYMENT_LINK_HANDOFF in
+phone.py's /gather handler.
+
+Square credentials: uses live production OAuth, not sandbox. Demo
+merchant completes Square OAuth via the onboarding wizard like any
+other merchant; pos_access_token NULL → logs-only fallback (order in
+Supabase, no Square call). Sandbox-CAD-check detour dropped 2026-06-04.
 
 Integration call site (when ready):
 

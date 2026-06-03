@@ -12,10 +12,13 @@
 --      Canadian DID and update phone_agent_config.phone_number from
 --      NULL to that DID. (The provisioning script can do this for you.)
 --
--- This file is also where Square sandbox creds get wired once the
--- "does Square sandbox accept CAD?" check passes. Until then, the
--- pos_access_token field stays NULL and create_pos_order falls through
--- to logs-only — order persists in Supabase, no Square call attempted.
+-- Square OAuth is the normal flow (live production credentials, not
+-- sandbox — sandbox-CAD detour dropped 2026-06-04). Demo merchant will
+-- complete Square OAuth via the merchant onboarding wizard like any
+-- other merchant; until then pos_access_token stays NULL and
+-- create_pos_order falls through to logs-only (order persists in
+-- Supabase, no Square call attempted). That fallback is what makes the
+-- demo non-breaking before OAuth completes.
 
 INSERT INTO phone_agent_config (
     merchant_id,
