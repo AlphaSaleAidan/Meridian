@@ -170,7 +170,8 @@ class CloverSyncEngine:
                             li_row = mapper.map_line_item(
                                 li,
                                 transaction_id=txn["id"],
-                                transaction_time=txn["transaction_time"],
+                                # P4: mapper now uses transaction_at.
+                                transaction_at=txn["transaction_at"],
                             )
                             result.transaction_items.append(li_row)
 
@@ -277,7 +278,8 @@ class CloverSyncEngine:
                     li_row = mapper.map_line_item(
                         li,
                         transaction_id=txn["id"],
-                        transaction_time=txn["transaction_time"],
+                        # P4: mapper now uses transaction_at.
+                        transaction_at=txn["transaction_at"],
                     )
                     result.transaction_items.append(li_row)
 

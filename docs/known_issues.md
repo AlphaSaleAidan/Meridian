@@ -285,3 +285,62 @@ Until that happens, treat P0+P1 as "code is in place, contract
 not yet observed in production".
 
 ---
+
+## 5. P4 — Clover mapper fixes (FIXED-BUT-UNVERIFIED)
+
+**Discovered:** 2026-06-03, during the P4 mapper-vs-schema audit
+triggered by the e2e Square backfill test.
+**Fixed in commit:** the P4 mapper-fix commit (`src/clover/mappers.py`
++ `src/clover/sync_engine.py`).
+**Severity:** Code is now correct. Live verification still pending
+the first real Clover merchant connection — no Clover token exists
+on this VPS so end-to-end exercise is not yet possible.
+
+### What was wrong
+
+The Clover sync engine's mapper output had several column-name and
+required-field mismatches against the destination tables. Every
+mismatch was silent — PostgREST drops unknown columns and only
+fails when a NOT NULL column ends up NULL after the drop. Net
+effect: a real Clover merchant connecting today would have hit
+NOT NULL violations on `transactions.transaction_at` and
+`transaction_items.{transaction_at, product_name}` on the first
+batch upsert, and the backfill would have aborted with zero rows
+landed (same failure shape Square hit before P4).
+
+Specifically:
+
+| Mapper | Bug | Fix |
+|---|---|---|
+| `map_merchant_to_location` | `postal_code` → silent drop | renamed to `zip_code` (the actual column) |
+| `map_order_to_transaction` | `transaction_time` → silent drop → `transactions.transaction_at NOT NULL` violation | renamed to `transaction_at` |
+| `map_order_to_transaction` | `status` → silent drop (not a column) | replaced with `type` (`sale` / `void`, derived from Clover's `state`) |
+| `map_line_item` | `transaction_time` → silent drop → `transaction_items.transaction_at NOT NULL` violation | renamed to `transaction_at`; sync engine call sites updated to pass the new kwarg name |
+| `map_line_item` | `name` → silent drop → `transaction_items.product_name NOT NULL` violation | renamed to `product_name` |
+
+A few decorative fields (`pos_type`, `country`, `timezone`,
+`currency` on locations; `is_online`, `source`, `created_at` on
+transactions) are still emitted by the mapper and still silently
+dropped by PostgREST. They're harmless — kept so a trace of the
+upstream-Clover shape is observable in the raw mapper output. The
+real upsert payload that PostgREST writes is now schema-compatible.
+
+### What's still pending
+
+End-to-end run against a real Clover merchant — the same
+contract awaiting a real Square merchant for `customer_id`
+persistence verification.
+
+Until a Clover token is on this box, treat the fix as "code is
+correct, contract not yet observed in production." Once a Clover
+beta merchant connects:
+
+1. Confirm the full `locations → products → transactions → items`
+   chain lands rows for them, parallel to the Square e2e run.
+2. Confirm `customer_id` populates from
+   `order.customers.elements[0].id` (verified inline in the mapper
+   but the e2e contract still awaits real data).
+3. Confirm `currency` populates from `merchant.defaultCurrency` (also
+   verified inline; awaits a real account where Clover sets it).
+
+---
