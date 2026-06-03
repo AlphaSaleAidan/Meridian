@@ -13,7 +13,13 @@ export function useOrgId(): string {
 
   if (isDemoPath(location.pathname)) return 'demo'
 
-  return org?.org_id || import.meta.env.VITE_ORG_ID || ''
+  // Intentionally no VITE_ORG_ID fallback. A baked-in dev org_id leaked into
+  // prod builds — any route that mounts the global Layout (admin dashboards,
+  // etc.) would fire api.notifications with the stale id and the backend
+  // would 500 because no such org exists. Without a real auth context,
+  // return '' and let callers skip the call (useUnreadNotifications already
+  // guards with `if (!orgId) return`).
+  return org?.org_id || ''
 }
 
 export function useTier(): Tier {
