@@ -310,43 +310,26 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
     await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
 
     # P0/P1: auto-trigger initial backfill for every provider that
-    # has an API path. Previously Square + Clover were skipped here on
-    # the theory that "OAuth paths run their own backfill from the
-    # callback" — true for Square OAuth, but the wizard's
-    # credential-paste path (which is what the UI actually exercises
-    # today) never goes through the callback and so left the
-    # connection idle until a manual /api/pos/sync trigger.
-    if req.pos_system == "toast":
-        background_tasks.add_task(
-            _run_toast_backfill,
-            org_id=req.org_id,
-            connection_id=connection_id,
-            credentials=req.credentials,
+    # has an API path. Previously Square + Clover were skipped here
+    # on the theory that "OAuth paths run their own backfill from
+    # the callback" — true for Square OAuth, but the wizard's
+    # credential-paste path never went through the callback and so
+    # left the connection idle until a manual /api/pos/sync trigger.
+    #
+    # P3: dispatch onto Celery instead of FastAPI background_tasks
+    # so a large merchant's initial backfill no longer pins an API
+    # worker for the duration. Route → `bulk` queue. Credentials
+    # travel inline on the task; they're already encrypted at rest
+    # on pos_connections by the time .delay() is called, so the
+    # inline copy only exists for the time the task sits in Redis.
+    api_config = get_connector_config(req.pos_system)
+    if req.pos_system in ("toast", "square", "clover") or (
+        api_config and api_config.get("auth_type") != "csv_only"
+    ):
+        from ...workers.tasks import backfill_pos_connection
+        backfill_pos_connection.delay(
+            req.pos_system, req.org_id, connection_id, req.credentials,
         )
-    elif req.pos_system == "square":
-        background_tasks.add_task(
-            _run_square_backfill,
-            org_id=req.org_id,
-            connection_id=connection_id,
-            credentials=req.credentials,
-        )
-    elif req.pos_system == "clover":
-        background_tasks.add_task(
-            _run_clover_backfill,
-            org_id=req.org_id,
-            connection_id=connection_id,
-            credentials=req.credentials,
-        )
-    else:
-        api_config = get_connector_config(req.pos_system)
-        if api_config and api_config.get("auth_type") != "csv_only":
-            background_tasks.add_task(
-                _run_generic_backfill,
-                org_id=req.org_id,
-                connection_id=connection_id,
-                pos_system=req.pos_system,
-                credentials=req.credentials,
-            )
 
     return {
         "success": True,

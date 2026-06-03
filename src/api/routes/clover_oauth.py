@@ -262,14 +262,12 @@ async def callback(
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
-            # Kick off backfill using the same path the credential-paste
-            # surface uses (auto-backfill added in P1).
-            from .pos_connections import _run_clover_backfill
-            background_tasks.add_task(
-                _run_clover_backfill,
-                org_id=org_id,
-                connection_id=conn_id,
-                credentials={
+            # P3: dispatch backfill onto Celery (same path the
+            # credential-paste and Square OAuth surfaces use).
+            from ...workers.tasks import backfill_pos_connection
+            backfill_pos_connection.delay(
+                "clover", org_id, conn_id,
+                {
                     "access_token": tokens["access_token"],
                     "merchant_id": tokens["merchant_id"],
                 },
