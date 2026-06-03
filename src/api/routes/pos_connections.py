@@ -259,7 +259,7 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             "provider": req.pos_system,
             "status": "connected",
             "credentials_encrypted": encrypted_creds,
-            "merchant_id": req.restaurant_guid or req.credentials.get("merchant_id", ""),
+            "external_merchant_id": req.restaurant_guid or req.credentials.get("merchant_id", ""),
             "historical_import_complete": False,
             "created_at": now,
             "updated_at": now,
@@ -500,7 +500,7 @@ async def upload_csv(
             "org_id": org_id,
             "provider": pos_system,
             "status": "connected",
-            "merchant_id": "",
+            "external_merchant_id": "",
             "historical_import_complete": True,
             "last_sync_at": now,
             "created_at": now,
@@ -535,7 +535,7 @@ async def get_connections(org_id: str):
             "id": conn["id"],
             "provider": conn.get("provider"),
             "status": conn.get("status"),
-            "merchant_id": conn.get("merchant_id"),
+            "merchant_id": conn.get("external_merchant_id"),
             "last_sync_at": conn.get("last_sync_at"),
             "historical_import_complete": conn.get("historical_import_complete", False),
             "last_error": conn.get("last_error"),
@@ -568,9 +568,9 @@ async def disconnect_pos(req: DisconnectRequest):
 
     conn = connections[0]
 
-    if req.pos_system == "square" and conn.get("access_token_encrypted"):
+    if req.pos_system == "square" and conn.get("access_token_enc"):
         try:
-            token = decrypt_token(conn["access_token_encrypted"])
+            token = decrypt_token(conn["access_token_enc"])
             from ...square.oauth import OAuthManager
             await OAuthManager().revoke_token(token)
         except Exception as e:
@@ -676,7 +676,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
                 auth_method=api_config.get("auth_type", "bearer"),
                 base_url=api_config.get("base_url", ""),
                 credentials=decrypted,
-                merchant_id=connection.get("merchant_id", ""),
+                merchant_id=connection.get("external_merchant_id", ""),
             )
             connector = GenericRESTConnector(conn_config, api_config)
             sync_result = await connector.run_sync(since=since)

@@ -173,11 +173,10 @@ async def callback(
                 "org_id": org_id,
                 "provider": "square",
                 "status": "connected",
-                "merchant_id": tokens["merchant_id"],
-                "access_token_encrypted": encrypt_token(tokens["access_token"]),
-                "refresh_token_encrypted": encrypt_token(tokens.get("refresh_token", "")),
+                "external_merchant_id": tokens["merchant_id"],
+                "access_token_enc": encrypt_token(tokens["access_token"]),
+                "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
                 "token_expires_at": tokens.get("expires_at"),
-                "location_ids": [],
                 "historical_import_complete": False,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -188,7 +187,7 @@ async def callback(
                 "pos_connections",
                 filters={
                     "org_id": f"eq.{org_id}",
-                    "merchant_id": f"eq.{tokens['merchant_id']}",
+                    "external_merchant_id": f"eq.{tokens['merchant_id']}",
                 },
                 limit=1,
             )
@@ -199,8 +198,8 @@ async def callback(
                     "pos_connections",
                     {
                         "status": "connected",
-                        "access_token_encrypted": encrypt_token(tokens["access_token"]),
-                        "refresh_token_encrypted": encrypt_token(tokens.get("refresh_token", "")),
+                        "access_token_enc": encrypt_token(tokens["access_token"]),
+                        "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
                         "token_expires_at": tokens.get("expires_at"),
                         "last_error": None,
                         "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -268,7 +267,7 @@ async def connection_status(org_id: str):
     if conn:
         return {
             "connected": True,
-            "merchant_id": conn.get("merchant_id"),
+            "merchant_id": conn.get("external_merchant_id"),
             "status": conn.get("status"),
             "last_sync_at": conn.get("last_sync_at"),
         }

@@ -72,7 +72,7 @@ async def _sync_square(org_id, conn_id, connection, since):
 
 async def _sync_clover(org_id, conn_id, connection, since):
     token = decrypt_token(connection.get("access_token_enc", ""))
-    merchant_id = connection.get("merchant_id", "")
+    merchant_id = connection.get("external_merchant_id", "")
     from ..clover.client import CloverClient
     from ..clover.sync_engine import CloverSyncEngine
 
@@ -118,7 +118,7 @@ async def _sync_generic(org_id, conn_id, connection, provider, since):
         auth_method=api_config.get("auth_type", "bearer"),
         base_url=api_config.get("base_url", ""),
         credentials=decrypted,
-        merchant_id=connection.get("merchant_id", ""),
+        merchant_id=connection.get("external_merchant_id", ""),
         org_id=org_id,
     )
     connector = GenericRESTConnector(conn_config, api_config)
