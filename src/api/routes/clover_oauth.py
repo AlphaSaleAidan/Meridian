@@ -201,16 +201,21 @@ async def callback(
                 })
                 logger.info(f"Created organization: {org_id}")
 
+            # P6: schema-aligned columns. See pos_connections.py /
+            # oauth.py notes — the schema uses external_merchant_id +
+            # access_token_enc (not merchant_id + access_token_encrypted).
+            # Without this fix the OAuth-saved token couldn't be
+            # decrypted by any downstream sync because the column it
+            # was written to didn't exist.
             connection_data = {
                 "id": str(uuid4()),
                 "org_id": org_id,
                 "provider": "clover",
                 "status": "connected",
-                "merchant_id": tokens["merchant_id"],
-                "access_token_encrypted": encrypt_token(tokens["access_token"]),
+                "external_merchant_id": tokens["merchant_id"],
+                "access_token_enc": encrypt_token(tokens["access_token"]),
                 # Clover tokens don't auto-expire — leave refresh +
                 # expires_at NULL so the token_refresh worker skips them.
-                "location_ids": [],
                 "historical_import_complete": False,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -222,7 +227,7 @@ async def callback(
                 "pos_connections",
                 filters={
                     "org_id": f"eq.{org_id}",
-                    "merchant_id": f"eq.{tokens['merchant_id']}",
+                    "external_merchant_id": f"eq.{tokens['merchant_id']}",
                 },
                 limit=1,
             )
@@ -230,7 +235,7 @@ async def callback(
             if existing:
                 update_fields = {
                     "status": "connected",
-                    "access_token_encrypted": encrypt_token(tokens["access_token"]),
+                    "access_token_enc": encrypt_token(tokens["access_token"]),
                     "last_error": None,
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 }
@@ -309,7 +314,8 @@ async def connection_status(org_id: str):
         c = conns[0]
         return {
             "connected": True,
-            "merchant_id": c.get("merchant_id"),
+            # P6: schema column is external_merchant_id.
+            "merchant_id": c.get("external_merchant_id"),
             "status": c.get("status"),
             "last_sync_at": c.get("last_sync_at"),
         }
