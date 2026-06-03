@@ -50,6 +50,20 @@ This is potentially a compliance issue. The ca-central-1 project looks deliberat
 
 If branching is enabled later (paid feature), the workflow changes substantially — preview environments would get their own DB branch and "apply to preview first" becomes viable. Until then: rollback-in-hand discipline is the only safety net.
 
+### Tracked vs applied migrations — known asymmetries (verified 2026-06-03 evening)
+
+The "tracked migration in repo" set and the "DDL actually applied to prod" set have drifted in both directions. Current state:
+
+| Migration | In repo? | Applied to prod? | Reconciliation PR |
+|---|---|---|---|
+| `20260603_p6_pos_connections_rename.sql` (rename to `*_enc` / `external_*`) | ✗ on `main`, ✓ on PR #38 branch | ✓ (applied off-track via Mgmt API at original P6 authoring time — verified via live `information_schema.columns`) | **PR #38** captures the DDL as a tracked, idempotent migration |
+| `20260603_drop_wideopen_policies_subgroup_a.sql` (drop 3 "Service role full access" policies on `merchant_credits` / `credit_purchases` / `credit_ledger`) | ✗ on `main`, ✓ on PR #27 branch | ✓ (applied via dashboard SQL editor — verified by `pg_policies` query showing those 3 tables now have no `Service role full access` policy) | **PR #27 is still OPEN on GitHub** — git-side loop not closed even though the DB-side work is done |
+| `20260603_fix_us_leads_grants.sql` | ✗ on `main` (was bundled in closed PR #34) | ✓ (applied via Mgmt API earlier) | Not currently in any open PR — file would need to be re-extracted from `reconcile/contabo-prod-tree` history if a tracked record is desired |
+| Subgroup B RLS — `sales_reps`, `canada_leads`, `us_leads` rep-scoped policies | ✗ (staged in `/tmp/meridian-overnight-wt/migrations-staged/`) | ✗ (NOT applied — blocked on task #18 `admin_users` reconcile) | Will land via a future PR once #18 is resolved |
+| `admin_users_reconcile.sql` (3 INSERTs for missing humans) | ✗ (staged in same place) | ✗ (NOT applied) | Task #18 — needs Aidan decision before any SQL runs |
+
+**Implication for new work:** the Mgmt API still WAF-blocks writes (so the dashboard SQL editor remains the only working path for DDL), but a PR pipeline that records the DDL post-hoc is what closes the audit-trail gap. PR #38's idempotent-with-`information_schema`-guards pattern is reusable for future schema changes.
+
 ---
 
 ## Environment variables
@@ -295,9 +309,13 @@ The Supabase Management API personal access token (`sbp_...`) is at Account → 
 | — (new) | Verify Vercel/CI build command is `npm run build` not bare `vite build` | Aidan |
 | — (new) | CLAUDE.md says `pm2 meridian-api`; live header says `railway-edge` — reconcile | Aidan / docs sweep |
 
-Backups in `/tmp/` from the 2026-06-03 work — keep until #25/#27/#32 land:
+Backups in `/tmp/` from the 2026-06-03 work — each has its own retention condition:
 
-- `/tmp/meridian-canada-layer-backup-2026-06-03/` (6-file backup of canada data layer, pre-PR-32)
-- `/tmp/meridian-frontend-FULL-backup-2026-06-03.tar` (full frontend tar, 5.2MB)
-- `/tmp/meridian-us-feature-wip-2026-06-03/` (the 4 US-portal files extracted from PR #32)
-- `/tmp/meridian-git-status-2026-06-03-snapshot.txt` (git status snapshot at the start of the work)
+| Path | Keep until | Notes |
+|---|---|---|
+| `/tmp/meridian-canada-layer-backup-2026-06-03/` (6-file backup of canada data layer, pre-PR-32) | PR #32 merges | Insurance against a Phase 2 rollback |
+| `/tmp/meridian-frontend-FULL-backup-2026-06-03.tar` (5.2MB full frontend tar) | PR #32 merges | Same, broader scope |
+| `/tmp/meridian-us-feature-wip-2026-06-03/` (4 US-portal WIP files) | Task #26 lands by its owner | Orphaned from a different session's feature work; not part of any current PR |
+| `/tmp/meridian-git-status-2026-06-03-snapshot.txt` | anytime | Forensic only |
+| `/tmp/session-19cc09b8-backup-20260603-203301/` (ISSUE-37-AUDIT.md + contabo snapshot) | PR #39 merges | Same content now also lives in `docs/audits/` — the `/tmp/` copy becomes redundant once #39 lands |
+| `/tmp/contabo-prod-state-snapshot-20260603-073945/` (forensic snapshot, 2.2MB) | PR #39 merges | Now also archived inside PR #39 as `docs/audits/2026-06-03-contabo-prod-state-snapshot.tar.gz` |
