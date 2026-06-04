@@ -44,5 +44,5 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
 
-      - name: TypeScript check
-        run: cd frontend && npx tsc --noEmit
+      - name: Build (runs prebuild → tsc → vite build, matches prod deploy)
+        run: cd frontend && npm run build
