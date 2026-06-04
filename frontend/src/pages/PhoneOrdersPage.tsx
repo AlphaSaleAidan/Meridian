@@ -9,6 +9,7 @@ import {
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
+import { useModuleFlags } from '@/config/moduleFlags'
 import {
   getPhoneDemoData, getPhoneStats, VOICE_OPTIONS,
   type PhoneCallEntry, type PhoneBizConfig, type CallStatus, type PaymentStatus,
@@ -374,6 +375,7 @@ export default function PhoneOrdersPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
   const { org } = useAuth()
+  const flags = useModuleFlags()
   const [tab, setTab] = useState<Tab>('overview')
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d'>('30d')
   const [selectedCall, setSelectedCall] = useState<PhoneCallEntry | null>(null)
@@ -435,13 +437,13 @@ export default function PhoneOrdersPage() {
         </div>
       </div>
       <div className="period-toggle">
-        {([{ key: 'overview' as const, label: 'Overview' }, { key: 'calls' as const, label: 'Call Log' }, { key: 'text_orders' as const, label: 'Text Orders' }, { key: 'settings' as const, label: 'Settings' }]).map(t => (
+        {([{ key: 'overview' as const, label: 'Overview' }, { key: 'calls' as const, label: 'Call Log' }, ...(flags.textToOrder ? [{ key: 'text_orders' as const, label: 'Text Orders' }] : []), { key: 'settings' as const, label: 'Settings' }]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} className={tab === t.key ? 'period-btn-active' : 'period-btn-inactive'}>{t.label}</button>
         ))}
       </div>
       {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
-      {tab === 'text_orders' && <TextOrderingTab biz={business} isDemo={isDemo} />}
+      {tab === 'text_orders' && flags.textToOrder && <TextOrderingTab biz={business} isDemo={isDemo} />}
       {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} orgId={orgId} />}
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}
       {showConnect && <ConnectPhoneModal biz={business} onClose={() => setShowConnect(false)} />}

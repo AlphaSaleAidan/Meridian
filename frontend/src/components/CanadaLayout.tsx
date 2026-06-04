@@ -14,22 +14,25 @@ import { RadarLoadingState } from './LoadingState'
 import { useAuth } from '@/lib/auth'
 import { useMobile } from '@/hooks/useMobile'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
+import { canadaModuleFlags, type ModuleFlags } from '@/config/moduleFlags'
 
 interface NavItem {
   path: string
   icon: typeof LayoutDashboard
   label: string
   desktopOnly?: boolean
+  /** Module flag gating visibility. Omitted items are always shown. */
+  flag?: keyof ModuleFlags
 }
 
 const navItems: NavItem[] = [
   { path: '', icon: LayoutDashboard, label: 'Overview' },
   { path: 'revenue', icon: TrendingUp, label: 'Revenue' },
-  { path: 'insights', icon: Lightbulb, label: 'Insights' },
-  { path: 'actions', icon: Target, label: 'Top Actions' },
-  { path: 'agents', icon: Bot, label: 'Agents' },
-  { path: 'camera-intelligence', icon: Video, label: 'Camera Intel' },
-  { path: 'customers', icon: Users, label: 'Customers' },
+  { path: 'insights', icon: Lightbulb, label: 'Insights', flag: 'insights' },
+  { path: 'actions', icon: Target, label: 'Top Actions', flag: 'topActions' },
+  { path: 'agents', icon: Bot, label: 'Agents', flag: 'agents' },
+  { path: 'camera-intelligence', icon: Video, label: 'Camera Intel', flag: 'camera' },
+  { path: 'customers', icon: Users, label: 'Customers', flag: 'customers' },
   { path: 'products', icon: Package, label: 'Products' },
   { path: 'margins', icon: DollarSign, label: 'Margins' },
   { path: 'forecasts', icon: LineChart, label: 'Forecasts' },
@@ -39,9 +42,9 @@ const navItems: NavItem[] = [
   { path: 'inventory', icon: Layers, label: 'Inventory' },
   { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
   { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix', desktopOnly: true },
-  { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
-  { path: 'my-website', icon: Globe, label: 'My Website' },
-  { path: 'space', icon: Box, label: '3D Space' },
+  { path: 'phone-orders', icon: Phone, label: 'Phone Orders', flag: 'phoneCalls' },
+  { path: 'my-website', icon: Globe, label: 'My Website', flag: 'myWebsite' },
+  { path: 'space', icon: Box, label: '3D Space', flag: 'spaces3D' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },
 ]
@@ -74,9 +77,10 @@ export default function CanadaLayout() {
     if (desktopOnlyItem) navigate(basePath, { replace: true })
   }, [isMobile, location.pathname, navigate])
 
+  const enabledNavItems = navItems.filter(i => !i.flag || canadaModuleFlags[i.flag])
   const visibleNavItems = isMobile
-    ? navItems.filter(i => !i.desktopOnly)
-    : navItems
+    ? enabledNavItems.filter(i => !i.desktopOnly)
+    : enabledNavItems
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">
