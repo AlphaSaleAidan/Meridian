@@ -7,6 +7,8 @@ import ErrorBoundary, { lazyRetry } from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import DemoLayout from '@/components/DemoLayout'
+import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
+import { merchantPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 
@@ -43,6 +45,7 @@ const ContentSettingsPage = lazyRetry(() => import('@/pages/ContentSettingsPage'
 
 const LandingPage = lazyRetry(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazyRetry(() => import('@/components/CanadaLayout'))
+const MerchantLayout = lazyRetry(() => import('@/components/MerchantLayout'))
 const CustomerOnboardingWizard = lazyRetry(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazyRetry(() => import('@/pages/CareersPage'))
 const AdminPage = lazyRetry(() => import('@/pages/AdminPage'))
@@ -420,6 +423,26 @@ export default function App() {
                 </CanadaProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}
+              </Route>
+
+              {/* ══════════════════════════════════════════════
+                  CANADA — merchant portal (trimmed 3-pillar product)
+                  ══════════════════════════════════════════════ */}
+              <Route path="/canada/merchant" element={
+                <CanadaProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <MerchantLayout />
+                  </Suspense>
+                </CanadaProtectedRoute>
+              }>
+                {merchantPillars.map(pillar => (
+                  <Route
+                    key={pillar.path || '_home'}
+                    index={pillar.path === ''}
+                    path={pillar.path || undefined}
+                    element={<MerchantPillarPage pillar={pillar} />}
+                  />
+                ))}
               </Route>
 
               {/* ══════════════════════════════════════════════
