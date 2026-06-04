@@ -89,7 +89,16 @@ litellm_settings:
 general_settings:
   store_model_in_db: false
   disable_spend_logs: false
-  # Slack alerting deferred — needs SLACK_WEBHOOK_URL. Add the alerting block
-  # back when the webhook is provisioned. Until then, spend tracking happens
-  # via the proxy's built-in spend log (queryable at /global/spend with the
-  # master key) so we don't lose visibility.
+  # Alerts route through the local Garry → Telegram bridge (PM2 entry
+  # garry-litellm-alerts on 127.0.0.1:8005). Budget alerts fire at the
+  # 50%/75%/90%/95%/99% thresholds against max_budget. llm_exceptions
+  # catches upstream auth/quota failures so you find out about a key
+  # rotation before the swarm wedges.
+  alerting: ["webhook"]
+  alert_to_webhook_url:
+    budget_alerts: "http://127.0.0.1:8005/alert"
+    llm_exceptions: "http://127.0.0.1:8005/alert"
+    spend_reports: "http://127.0.0.1:8005/alert"
+  alert_types:
+    - "budget_alerts"
+    - "llm_exceptions"

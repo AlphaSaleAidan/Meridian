@@ -64,6 +64,11 @@ module.exports = {
       env: { ...GATEWAY_ENV },
     },
     {
+      // Gateway env intentionally omitted: pm2 reload with --update-env breaks
+      // `uv run` module discovery inside this entry (was working before, now
+      // throws "Could not import module 'app.api'"). DeerFlow has its own LLM
+      // config so it doesn't depend on the gateway. Reinstate the gateway env
+      // once we've isolated whether it's a uv-cache or PATH issue.
       name: "deerflow",
       script: "/usr/bin/bash",
       args: "-c 'cd /root/Meridian/services/deerflow/backend && /root/.local/bin/uv run uvicorn app.api:app --host 0.0.0.0 --port 8004'",
@@ -71,7 +76,6 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "200M",
-      env: { ...GATEWAY_ENV },
     },
     {
       name: "scraper",
@@ -128,6 +132,21 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "512M",
+      restart_delay: 5000,
+      max_restarts: 10,
+    },
+    {
+      // LiteLLM → Telegram alert bridge. Listens on 127.0.0.1:8005/alert and
+      // forwards budget / exception alerts to AIDAN_TELEGRAM_ID via Garry's
+      // bot token. Standalone process so the gateway never loses alerting if
+      // Garry's main bot restarts. Audit log: /var/lib/garry/litellm-alerts.log.
+      name: "garry-litellm-alerts",
+      script: "/root/garry/services/start-litellm-alerts.sh",
+      interpreter: "none",
+      cwd: "/root/garry",
+      exec_mode: "fork",
+      instances: 1,
+      max_memory_restart: "100M",
       restart_delay: 5000,
       max_restarts: 10,
     },
