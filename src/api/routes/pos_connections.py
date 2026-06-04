@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 
 from ..auth import require_org_access
+from ...config import clover as clover_config
 from ...security.encryption import encrypt_token, decrypt_token
 from ...services.pos_connectors import (
     GenericRESTConnector,
@@ -194,6 +195,13 @@ def _detect_business_type_from_square(merchant: dict) -> str:
 
 
 async def _test_clover(credentials: dict) -> dict:
+    if not clover_config.enabled:
+        return {
+            "success": False,
+            "valid": False,
+            "status": "coming_soon",
+            "message": "Clover support is coming soon — we'll let you know when it's ready.",
+        }
     access_token = credentials.get("access_token", "")
     merchant_id = credentials.get("merchant_id", "")
     if not all([access_token, merchant_id]):
@@ -215,6 +223,9 @@ async def _test_clover(credentials: dict) -> dict:
 @router.post("/connect")
 async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
     """Encrypt and store POS credentials, then trigger initial backfill."""
+    if req.pos_system == "clover" and not clover_config.enabled:
+        raise HTTPException(409, "Clover support is coming soon — we'll let you know when it's ready.")
+
     from ...db import _db_instance as db
     if not db:
         raise HTTPException(503, "Database not available")

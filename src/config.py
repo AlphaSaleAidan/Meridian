@@ -71,6 +71,9 @@ class CloverConfig:
     access_token: str = os.getenv("CLOVER_ACCESS_TOKEN", "")
     merchant_id: str = os.getenv("CLOVER_MERCHANT_ID", "")
     environment: str = os.getenv("CLOVER_ENVIRONMENT", "sandbox")
+    # Built but gated: connector exists, but new connect/test attempts return
+    # "coming soon" until POS_CLOVER_ENABLED=true. Square is the live provider.
+    enabled: bool = os.getenv("POS_CLOVER_ENABLED", "false").lower() == "true"
 
     @property
     def base_url(self) -> str:

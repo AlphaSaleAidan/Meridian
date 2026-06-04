@@ -230,7 +230,9 @@ export const posSystems: POSSystem[] = [
     brandColor: '#1DC167',
     logoInitials: 'CL',
     website: 'https://www.clover.com',
-    status: 'integrated',
+    // Gated: connector is built but new connect/test attempts return "coming soon"
+    // until POS_CLOVER_ENABLED=true server-side. Square is the live provider.
+    status: 'coming_soon',
     tier: 1,
     integrationStatus: {
       apiAvailable: true,
