@@ -18,7 +18,7 @@ import { lazyRetry } from '@/components/ErrorBoundary'
 
 type PageComponent = LazyExoticComponent<ComponentType>
 
-const OverviewPage = lazyRetry(() => import('@/pages/OverviewPage'))
+const MerchantHomePage = lazyRetry(() => import('@/pages/canada/merchant/MerchantHomePage'))
 const InventoryPage = lazyRetry(() => import('@/pages/InventoryPage'))
 const ProductsPage = lazyRetry(() => import('@/pages/ProductsPage'))
 const MarginsPage = lazyRetry(() => import('@/pages/MarginsPage'))
@@ -55,7 +55,7 @@ export const merchantPillars: Pillar[] = [
     path: '',
     label: 'Home',
     icon: LayoutDashboard,
-    segments: [{ view: 'home', label: 'Home', Component: OverviewPage }],
+    segments: [{ view: 'home', label: 'Home', Component: MerchantHomePage }],
   },
   {
     path: 'inventory',

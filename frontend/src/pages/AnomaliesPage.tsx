@@ -6,6 +6,7 @@ import { formatRelative } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
@@ -106,10 +107,15 @@ function AnomalyCard({ anomaly, isFirst }: { anomaly: Anomaly; isFirst?: boolean
 export default function AnomaliesPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const apiData = useApi(() => api.anomalies(orgId), [orgId])
 
   const anomalies: Anomaly[] = isDemo ? generateAnomalies() : (apiData.data?.anomalies ?? [])
 
+  // Before a POS is connected, the analytics endpoint isn't reachable for this
+  // org — show the data-destination scaffold instead of a raw auth error.
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Anomalies"><div /></DataPageSkeleton>
   if (!isDemo && apiData.loading) return <LoadingPage />
   if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 

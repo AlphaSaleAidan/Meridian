@@ -2,11 +2,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Loader2, Wifi, Store,
-  AlertCircle, Clock, Sparkles,
+  AlertCircle, Sparkles, KeyRound,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
-import { supabase, getAuthHeaders } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 // ── Canada theme (mirrors CanadaCustomerOnboardingWizard) ──
 const T = {
@@ -47,12 +47,15 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 const RETURN_TO = '/canada/merchant/onboard'
 const MERCHANT_HOME = '/canada/merchant'
 
-interface SquareStatus {
+type Provider = 'square' | 'clover'
+
+interface PosStatus {
   connected: boolean
   merchant_id?: string
   status?: string
   last_sync_at?: string | null
   historical_import_complete?: boolean
+  oauth_available?: boolean
 }
 
 export default function MerchantOnboardingWizard() {
@@ -67,8 +70,17 @@ export default function MerchantOnboardingWizard() {
   const [bootstrapped, setBootstrapped] = useState(false)
 
   // Sync status (server ground truth — never faked)
-  const [status, setStatus] = useState<SquareStatus | null>(null)
+  const [status, setStatus] = useState<PosStatus | null>(null)
+  // Which provider the merchant is connecting/connected with. Drives status polling.
+  const [provider, setProvider] = useState<Provider>('square')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Clover manual key/ID paste form
+  const [cloverOpen, setCloverOpen] = useState(false)
+  const [cloverOAuthAvailable, setCloverOAuthAvailable] = useState(false)
+  const [cloverMerchantId, setCloverMerchantId] = useState('')
+  const [cloverApiToken, setCloverApiToken] = useState('')
+  const [cloverConnecting, setCloverConnecting] = useState(false)
 
   // Confirm basics
   const [businessName, setBusinessName] = useState(org?.business_name || '')
@@ -76,16 +88,31 @@ export default function MerchantOnboardingWizard() {
 
   const progressKey = orgId ? `meridian_merchant_onboard_step_${orgId}` : ''
 
-  const fetchStatus = useCallback(async (): Promise<SquareStatus | null> => {
+  const fetchProviderStatus = useCallback(async (p: Provider): Promise<PosStatus | null> => {
     if (!orgId) return null
     try {
-      const res = await fetch(`${API_BASE}/api/square/status?org_id=${encodeURIComponent(orgId)}`)
+      const res = await fetch(`${API_BASE}/api/${p}/status?org_id=${encodeURIComponent(orgId)}`)
       if (!res.ok) return null
-      return (await res.json()) as SquareStatus
+      return (await res.json()) as PosStatus
     } catch {
       return null
     }
   }, [orgId])
+
+  const fetchStatus = useCallback(async (): Promise<PosStatus | null> => {
+    return fetchProviderStatus(provider)
+  }, [fetchProviderStatus, provider])
+
+  // Ground truth across both live providers — whichever is connected wins.
+  const detectConnected = useCallback(async (): Promise<{ status: PosStatus; provider: Provider } | null> => {
+    const [sq, cl] = await Promise.all([
+      fetchProviderStatus('square'),
+      fetchProviderStatus('clover'),
+    ])
+    if (sq?.connected) return { status: sq, provider: 'square' }
+    if (cl?.connected) return { status: cl, provider: 'clover' }
+    return null
+  }, [fetchProviderStatus])
 
   // ── Bootstrap: derive resume point from server truth + OAuth return param ──
   useEffect(() => {
@@ -100,16 +127,27 @@ export default function MerchantOnboardingWizard() {
       }
       if (oauth === 'denied' || oauth === 'error') {
         if (!cancelled) {
-          setError(searchParams.get('error') || 'Square authorization did not complete. You can try again.')
+          setError(searchParams.get('error') || 'POS authorization did not complete. You can try again.')
           setStep('connect')
           setBootstrapped(true)
         }
         return
       }
 
-      const st = await fetchStatus()
+      // Probe both live providers so we resume correctly regardless of which one
+      // (Square OAuth, Clover OAuth, or Clover manual paste) was used.
+      const detected = await detectConnected()
       if (cancelled) return
-      setStatus(st)
+      if (detected) {
+        setProvider(detected.provider)
+        setStatus(detected.status)
+      }
+      const st = detected?.status ?? null
+
+      // Surface whether Clover 1-click is configured server-side (CLOVER_APP_ID/SECRET).
+      fetchProviderStatus('clover').then((cl) => {
+        if (!cancelled && cl) setCloverOAuthAvailable(!!cl.oauth_available)
+      })
 
       // OAuth just returned successfully, or a connection already exists → resume at sync.
       if (oauth === 'success' || st?.connected) {
@@ -159,6 +197,54 @@ export default function MerchantOnboardingWizard() {
     window.location.href = url
   }
 
+  function startCloverConnect() {
+    if (!orgId) { setError('Your account is still being set up — please refresh and try again.'); return }
+    setError(null)
+    const url = `${API_BASE}/api/clover/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(RETURN_TO)}`
+    window.location.href = url
+  }
+
+  async function connectCloverManual() {
+    if (!orgId) { setError('Your account is still being set up — please refresh and try again.'); return }
+    const merchantId = cloverMerchantId.trim()
+    const apiToken = cloverApiToken.trim()
+    if (!merchantId || !apiToken) {
+      setError('Enter both your Clover Merchant ID and API Token.')
+      return
+    }
+    setCloverConnecting(true); setError(null)
+    try {
+      // org_id travels in the BODY, so require_org_access is a no-op here — no auth
+      // header needed. Backend normalizes clover_* field IDs to access_token/merchant_id.
+      const res = await fetch(`${API_BASE}/api/pos/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: orgId,
+          pos_system: 'clover',
+          credentials: {
+            clover_merchant_id: merchantId,
+            clover_api_token: apiToken,
+          },
+          restaurant_guid: merchantId,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success === false) {
+        setError(data?.detail || data?.message || 'Could not connect to Clover — double-check your Merchant ID and API Token.')
+        return
+      }
+      setProvider('clover')
+      const st = await fetchProviderStatus('clover')
+      if (st) setStatus(st)
+      setStep('sync')
+    } catch {
+      setError('Could not reach the server — please try again.')
+    } finally {
+      setCloverConnecting(false)
+    }
+  }
+
   function skipToPortal() {
     // Honest empty portal — no demo or seed data is written.
     navigate(MERCHANT_HOME)
@@ -203,6 +289,7 @@ export default function MerchantOnboardingWizard() {
 
   const currentStepIdx = STEPS.findIndex(s => s.key === step)
   const syncStarted = !!(status?.last_sync_at) || !!status?.historical_import_complete
+  const providerLabel = provider === 'clover' ? 'Clover' : 'Square'
 
   return (
     <div className={`min-h-screen ${T.pageBg} flex flex-col items-center px-4 py-8`}>
@@ -306,18 +393,85 @@ export default function MerchantOnboardingWizard() {
                   <ArrowRight size={16} className={T.accentTxt} />
                 </button>
 
-                {/* Clover — gated, coming soon */}
-                <div className={`w-full ${cardCls} flex items-center gap-4 opacity-60`}>
-                  <div className="w-11 h-11 rounded-lg bg-[#1DC167]/10 flex items-center justify-center flex-shrink-0">
-                    <Store size={20} className="text-[#1DC167]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[14px] font-semibold ${T.text}`}>Clover</p>
-                    <p className={`text-[11px] ${T.muted}`}>We'll let you know when it's ready</p>
-                  </div>
-                  <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#1a2420] text-[#6b7a74] font-medium flex items-center gap-1">
-                    <Clock size={10} /> Coming soon
-                  </span>
+                {/* Clover — live: 1-click OAuth (if configured) + manual key/ID paste */}
+                {cloverOAuthAvailable && (
+                  <button
+                    onClick={startCloverConnect}
+                    className={`w-full ${cardCls} flex items-center gap-4 text-left hover:border-[#00d4aa]/40 transition-colors`}
+                  >
+                    <div className="w-11 h-11 rounded-lg bg-[#1DC167]/10 flex items-center justify-center flex-shrink-0">
+                      <Store size={20} className="text-[#1DC167]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[14px] font-semibold ${T.text}`}>Connect Clover</p>
+                      <p className={`text-[11px] ${T.muted}`}>One-click secure authorization — no API keys needed</p>
+                    </div>
+                    <ArrowRight size={16} className={T.accentTxt} />
+                  </button>
+                )}
+
+                {/* Clover manual key/ID paste */}
+                <div className={`w-full ${cardCls}`}>
+                  <button
+                    onClick={() => setCloverOpen(o => !o)}
+                    className="w-full flex items-center gap-4 text-left"
+                  >
+                    <div className="w-11 h-11 rounded-lg bg-[#1DC167]/10 flex items-center justify-center flex-shrink-0">
+                      {cloverOAuthAvailable
+                        ? <KeyRound size={20} className="text-[#1DC167]" />
+                        : <Store size={20} className="text-[#1DC167]" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[14px] font-semibold ${T.text}`}>
+                        {cloverOAuthAvailable ? 'Connect Clover with API keys' : 'Connect Clover'}
+                      </p>
+                      <p className={`text-[11px] ${T.muted}`}>
+                        Paste your Merchant ID and API Token
+                      </p>
+                    </div>
+                    <ArrowRight size={16} className={`${T.accentTxt} transition-transform ${cloverOpen ? 'rotate-90' : ''}`} />
+                  </button>
+
+                  {cloverOpen && (
+                    <div className="mt-4 space-y-3 pt-4 border-t border-[#1a2420]">
+                      <div>
+                        <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Merchant ID</label>
+                        <input
+                          type="text"
+                          value={cloverMerchantId}
+                          onChange={e => setCloverMerchantId(e.target.value)}
+                          placeholder="e.g. ABCDE1234567"
+                          autoComplete="off"
+                          spellCheck={false}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>API Token</label>
+                        <input
+                          type="password"
+                          value={cloverApiToken}
+                          onChange={e => setCloverApiToken(e.target.value)}
+                          placeholder="Your Clover API token"
+                          autoComplete="off"
+                          spellCheck={false}
+                          className={inputCls}
+                        />
+                      </div>
+                      <p className={`text-[10px] ${T.muted}`}>
+                        Find these in your Clover Dashboard under Account &amp; Setup → API Tokens.
+                        Your token is encrypted before it's stored — we never display it again.
+                      </p>
+                      <button
+                        onClick={connectCloverManual}
+                        disabled={cloverConnecting}
+                        className={`${btnPrimary} w-full justify-center`}
+                      >
+                        {cloverConnecting ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
+                        {cloverConnecting ? 'Connecting…' : 'Connect Clover'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center pt-1">
@@ -340,8 +494,8 @@ export default function MerchantOnboardingWizard() {
                   </h1>
                   <p className={`text-[13px] ${T.muted} mt-1`}>
                     {status?.connected
-                      ? 'Square is connected. We\'re pulling in your sales history now.'
-                      : 'Waiting for Square to confirm the connection…'}
+                      ? `${providerLabel} is connected. We're pulling in your sales history now.`
+                      : `Waiting for ${providerLabel} to confirm the connection…`}
                   </p>
                 </div>
 
@@ -353,7 +507,7 @@ export default function MerchantOnboardingWizard() {
                         : <Loader2 size={18} className="text-[#6b7a74] animate-spin" />}
                     </div>
                     <div>
-                      <p className={`text-[13px] font-medium ${T.text}`}>Square connection</p>
+                      <p className={`text-[13px] font-medium ${T.text}`}>{providerLabel} connection</p>
                       <p className={`text-[11px] ${T.muted}`}>
                         {status?.connected
                           ? `Connected${status.merchant_id ? ` · ${status.merchant_id}` : ''}`

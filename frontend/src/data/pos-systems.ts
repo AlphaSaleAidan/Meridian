@@ -230,9 +230,9 @@ export const posSystems: POSSystem[] = [
     brandColor: '#1DC167',
     logoInitials: 'CL',
     website: 'https://www.clover.com',
-    // Gated: connector is built but new connect/test attempts return "coming soon"
-    // until POS_CLOVER_ENABLED=true server-side. Square is the live provider.
-    status: 'coming_soon',
+    // Live: 1-click OAuth (when CLOVER_APP_ID/SECRET configured server-side) and
+    // manual Merchant ID + API Token paste both supported via /api/pos/connect.
+    status: 'integrated',
     tier: 1,
     integrationStatus: {
       apiAvailable: true,

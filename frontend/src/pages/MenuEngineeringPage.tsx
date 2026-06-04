@@ -6,6 +6,7 @@ import { formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
@@ -60,6 +61,8 @@ function QuadrantCard({ quadrant, items }: { quadrant: MenuQuadrant; items: Menu
 export default function MenuEngineeringPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const apiData = useApi(() => api.menuEngineering(orgId), [orgId])
 
   const [activeTab, setActiveTab] = useState<MenuTab>('matrix')
@@ -77,6 +80,9 @@ export default function MenuEngineeringPage() {
 
   const items: MenuEngItem[] = isDemo ? generateMenuEngineering() : (apiData.data?.items ?? [])
 
+  // Before a POS is connected, the analytics endpoint isn't reachable for this
+  // org — show the data-destination scaffold instead of a raw auth error.
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Menu Matrix"><div /></DataPageSkeleton>
   if (!isDemo && apiData.loading) return <LoadingPage />
   if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 
