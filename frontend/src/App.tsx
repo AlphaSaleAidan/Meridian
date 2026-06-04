@@ -72,6 +72,7 @@ const CanadaPortalSettingsPage = lazyRetry(() => import('@/pages/canada/portal/C
 const CanadaPortalCreateCustomerPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
 const CanadaPortalOnboardingPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
 const CanadaCustomerOnboardingWizard = lazyRetry(() => import('@/pages/canada/portal/CanadaCustomerOnboardingWizard'))
+const MerchantOnboardingWizard = lazyRetry(() => import('@/pages/canada/merchant/MerchantOnboardingWizard'))
 const CanadaInvoicePage = lazyRetry(() => import('@/pages/canada/CanadaInvoicePage'))
 const CanadaSetupPage = lazyRetry(() => import('@/pages/canada/CanadaSetupPage'))
 
@@ -428,6 +429,13 @@ export default function App() {
               {/* ══════════════════════════════════════════════
                   CANADA — merchant portal (trimmed 3-pillar product)
                   ══════════════════════════════════════════════ */}
+              <Route path="/canada/merchant/onboard" element={
+                <CanadaProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <MerchantOnboardingWizard />
+                  </Suspense>
+                </CanadaProtectedRoute>
+              } />
               <Route path="/canada/merchant" element={
                 <CanadaProtectedRoute>
                   <Suspense fallback={<LazyFallback />}>

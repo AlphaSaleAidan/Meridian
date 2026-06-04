@@ -4,6 +4,7 @@ OAuth Routes — Square authorization endpoints.
   GET  /api/square/authorize  → Redirect merchant to Square
   GET  /api/square/callback   → Handle callback from Square
 """
+import base64
 import hashlib
 import hmac
 import logging
@@ -45,24 +46,52 @@ _FRONTEND_URL = os.environ.get(
 
 oauth_manager = OAuthManager()
 
+# Post-callback redirect must stay on-site and on an allowlisted path. Empty/
+# unknown return_to falls back to the legacy /app/settings target so existing
+# (US) flows are byte-identical.
+_DEFAULT_RETURN_TO = "/app/settings"
 
-def _sign_state(org_id: str) -> str:
-    """Create a self-contained HMAC-signed state token: org_id:nonce:expires:sig."""
+
+def _safe_return_to(return_to: str | None) -> str:
+    """Allowlist the post-OAuth redirect path. Only Canada merchant routes pass."""
+    if return_to and return_to.startswith("/canada/merchant"):
+        return return_to
+    return ""
+
+
+def _redirect_to(return_to: str, params: dict) -> RedirectResponse:
+    """Build a same-origin redirect to the wizard (or legacy settings)."""
+    path = return_to or _DEFAULT_RETURN_TO
+    return RedirectResponse(url=f"{_FRONTEND_URL}{path}?{urlencode(params)}")
+
+
+def _sign_state(org_id: str, return_to: str = "") -> str:
+    """Create a self-contained HMAC-signed state token.
+
+    Format: org_id:nonce:expires:rt_b64:sig (rt_b64 is '_' when no return_to,
+    keeping legacy 4-part tokens verifiable for in-flight flows)."""
     nonce = uuid4().hex[:16]
     expires = int(time.time()) + _STATE_TTL_SECONDS
-    payload = f"{org_id}:{nonce}:{expires}"
+    rt_b64 = base64.urlsafe_b64encode(return_to.encode()).decode().rstrip("=") if return_to else "_"
+    payload = f"{org_id}:{nonce}:{expires}:{rt_b64}"
     sig = hmac.new(
         _STATE_SECRET.encode(), payload.encode(), hashlib.sha256
     ).hexdigest()[:32]
     return f"{payload}:{sig}"
 
 
-def _verify_state(state: str) -> str | None:
-    """Verify HMAC-signed state token. Returns org_id or None."""
+def _verify_state(state: str) -> tuple[str, str] | None:
+    """Verify HMAC-signed state token. Returns (org_id, return_to) or None."""
     parts = state.split(":")
-    if len(parts) != 4:
+    if len(parts) == 4:
+        org_id, nonce, expires_str, sig = parts
+        rt_b64 = "_"
+        payload = f"{org_id}:{nonce}:{expires_str}"
+    elif len(parts) == 5:
+        org_id, nonce, expires_str, rt_b64, sig = parts
+        payload = f"{org_id}:{nonce}:{expires_str}:{rt_b64}"
+    else:
         return None
-    org_id, nonce, expires_str, sig = parts
     try:
         expires = int(expires_str)
     except ValueError:
@@ -70,29 +99,39 @@ def _verify_state(state: str) -> str | None:
     if time.time() > expires:
         logger.warning("OAuth state expired")
         return None
-    payload = f"{org_id}:{nonce}:{expires_str}"
     expected_sig = hmac.new(
         _STATE_SECRET.encode(), payload.encode(), hashlib.sha256
     ).hexdigest()[:32]
     if not hmac.compare_digest(sig, expected_sig):
         return None
-    return org_id
+    if rt_b64 == "_":
+        return_to = ""
+    else:
+        try:
+            pad = "=" * (-len(rt_b64) % 4)
+            return_to = base64.urlsafe_b64decode(rt_b64 + pad).decode()
+        except Exception:
+            return_to = ""
+    return org_id, _safe_return_to(return_to)
 
 
 @router.get("/authorize")
-async def authorize(request: Request, org_id: str | None = None):
+async def authorize(request: Request, org_id: str | None = None, return_to: str | None = None):
     """
     Step 1: Redirect merchant to Square's authorization page.
-    
+
     Query params:
       org_id — the merchant's org ID (to link after callback)
+      return_to — optional on-site path to land on after callback (allowlisted
+        to /canada/merchant*; anything else is ignored and the legacy
+        /app/settings target is used).
     """
     if not org_id:
         raise HTTPException(400, "org_id is required")
 
-    state = _sign_state(org_id)
+    state = _sign_state(org_id, _safe_return_to(return_to))
     url, _ = oauth_manager.get_authorize_url(org_id=org_id, state=state)
-    
+
     logger.info(f"OAuth: redirecting org {org_id} to Square authorize")
     return RedirectResponse(url=url)
 
@@ -112,33 +151,35 @@ async def callback(
     On success: exchange code for tokens, store in DB, redirect to dashboard.
     On denial: redirect to settings with error.
     """
-    # Handle merchant denial
+    # Handle merchant denial — recover return_to from state when present so the
+    # Canada wizard can surface the denial in-place.
     if error:
         logger.warning(f"OAuth denied: {error} — {error_description}")
-        params = urlencode({
+        verified = _verify_state(state) if state else None
+        denied_return_to = verified[1] if verified else ""
+        return _redirect_to(denied_return_to, {
             "oauth": "denied",
             "error": error_description or "Authorization was denied.",
         })
-        return RedirectResponse(url=f"{_FRONTEND_URL}/app/settings?{params}")
 
     if not code or not state:
         raise HTTPException(400, "Missing code or state parameter")
 
     # Verify HMAC-signed state
-    org_id = _verify_state(state)
-    if org_id is None:
+    verified = _verify_state(state)
+    if verified is None:
         raise HTTPException(403, "Invalid or expired state — possible CSRF attack")
+    org_id, return_to = verified
 
     # Exchange code for tokens
     try:
         tokens = await oauth_manager.exchange_code(code)
     except OAuthError as e:
         logger.error(f"OAuth token exchange failed for org {org_id}: {e}")
-        params = urlencode({
+        return _redirect_to(return_to, {
             "oauth": "error",
             "error": str(e),
         })
-        return RedirectResponse(url=f"{_FRONTEND_URL}/app/settings?{params}")
 
     logger.info(
         f"OAuth success for org {org_id}: "
@@ -241,19 +282,17 @@ async def callback(
     except Exception as e:
         logger.error(f"Failed to store OAuth tokens: {e}", exc_info=True)
         # Don't fail the callback — redirect with warning
-        params = urlencode({
+        return _redirect_to(return_to, {
             "oauth": "partial",
             "merchant_id": tokens["merchant_id"],
             "warning": "Connected but failed to save — please retry.",
         })
-        return RedirectResponse(url=f"{_FRONTEND_URL}/app/settings?{params}")
 
-    # ── Redirect to dashboard ────────────────────────────
-    params = urlencode({
+    # ── Redirect back to the originating surface ──────────
+    return _redirect_to(return_to, {
         "oauth": "success",
         "merchant_id": tokens["merchant_id"],
     })
-    return RedirectResponse(url=f"{_FRONTEND_URL}/app/settings?{params}")
 
 
 @router.get("/status")
@@ -270,5 +309,6 @@ async def connection_status(org_id: str):
             "merchant_id": conn.get("external_merchant_id"),
             "status": conn.get("status"),
             "last_sync_at": conn.get("last_sync_at"),
+            "historical_import_complete": conn.get("historical_import_complete", False),
         }
     return {"connected": False}
