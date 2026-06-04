@@ -47,17 +47,24 @@ All NEW agentic work (Ruflo swarm, the fixer, ad-hoc Claude Code sessions) route
 | `meridian-fast` | Groq / Cerebras / SambaNova / DeepSeek (round-robin) | High-volume mechanical worker subtasks |
 | `meridian-local` | `qwen-server` on :8002 (llama-cpp Qwen2.5-7B) | Truly free fallback, no API keys |
 
-**Fallback chain (router-level):** `architect` / `fixer` → `fast` → `local`. The gateway answers even with zero upstream keys.
+**Fallback chain (router-level):** `architect` / `fixer` → `fast` → `local`. The gateway answers even with zero upstream keys. Fully verified end-to-end on 2026-06-04 by invalidating OpenRouter + DeepSeek together — request landed on `Qwen2.5-7B-Instruct` via the local llama-cpp server at $0 cost.
+
+**Single point of failure** — `litellm-gateway` now carries the spend cap, the fallback chain, the budget alerting, and is in every downstream PM2 service's env (`OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL`). Anyone restarting it casually is also momentarily killing every model call on the box. Two consequences worth knowing before touching it:
+- A clean restart is ~6 seconds of unavailability. Use `pm2 restart litellm-gateway --update-env` and verify `/health/liveness 200` before moving on.
+- The gateway is the only thing reading `.env.litellm`. Edit that file, then `pm2 restart litellm-gateway --update-env` — no other service needs reloading for credit / fast-tier key changes to take effect.
 
 **Files:**
-- `litellm.config.yaml` — model + router config (canonical source for swapping providers)
-- `.env.litellm` — secrets (0600, `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY`, master key)
-- `scripts/start-litellm.sh` — PM2 launcher
-- Budget cap: `max_budget: $25/30d` on K2.6 (`litellm.config.yaml`); raise after first real workload sized.
+- `litellm.config.yaml` — model + router config (canonical source for swapping providers); the `max_budget` line uses a `__LITELLM_MAX_BUDGET__` placeholder substituted by the launcher.
+- `.env.litellm` — secrets (0600). Holds `LITELLM_MASTER_KEY`, `LITELLM_MAX_BUDGET`, `OPENROUTER_API_KEY`, fast-tier keys.
+- `scripts/start-litellm.sh` — PM2 launcher; substitutes `__LITELLM_MAX_BUDGET__` and `unset`s the var before exec so LiteLLM's internal env-reader can't reintroduce it as a string.
+- Budget cap: pegged to actual OpenRouter credit via `.env.litellm:LITELLM_MAX_BUDGET` (currently $9 / 30d on a $10 credit). Edit `.env.litellm` + restart to change; no committed-config change needed.
+- Budget alerts → Telegram via the Garry → LiteLLM bridge (PM2 `garry-litellm-alerts` listening on `127.0.0.1:8005`), audit log at `/var/lib/garry/litellm-alerts.log`.
 
 **Swap to self-hosted K2.6 (when GPUs land):** edit only `meridian-architect` and `meridian-fixer` entries in `litellm.config.yaml` — change `model:` to `openai/Kimi-K2.6-AWQ` and `api_base: http://gpu-host:8000/v1`. Nothing downstream changes; the aliases stay the same.
 
 **Cline IDE decommissioned same day** — Aidan's ad-hoc fix-it tool now is `/fix <description>` in Telegram (Garry relays to the K2.6 fixer; diff comes back for `/approve <task_id>` or `/reject`). The merchant-facing `src/cline/` Karpathy-reasoning health agent is unrelated and untouched.
+
+**Secret scanning** — `.gitleaks.toml` + `.pre-commit-config.yaml` ship a project-specific gitleaks ruleset (sk-or-v1-, sk-lite-, gsk_, csk-, sk-ant-, TG bot tokens, gh*_ PATs, Supabase service JWTs). The pre-commit hook blocks at commit-time; the GitHub Action at `.github/workflows/gitleaks.yml` is the CI-side backstop for clones that skip `pre-commit install --install-hooks`.
 
 **Grafana dashboard for per-model spend/latency**: deferred — see `docs/litellm-grafana-future.md` for the deployment sketch when traffic justifies it.
 

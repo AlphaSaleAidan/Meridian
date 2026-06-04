@@ -64,11 +64,17 @@ module.exports = {
       env: { ...GATEWAY_ENV },
     },
     {
-      // Gateway env intentionally omitted: pm2 reload with --update-env breaks
-      // `uv run` module discovery inside this entry (was working before, now
-      // throws "Could not import module 'app.api'"). DeerFlow has its own LLM
-      // config so it doesn't depend on the gateway. Reinstate the gateway env
-      // once we've isolated whether it's a uv-cache or PATH issue.
+      // 2026-06-04 — deerflow is currently failing to start with
+      // "Could not import module 'app.api'". services/deerflow/backend/app/
+      // only contains __init__.py, channels/, gateway/ — the app.api entry
+      // point referenced in args is GONE. Root cause is the missing module
+      // (an upstream change to deerflow), not the gateway env. The error
+      // surfaced at 01:42:18 when the process was restarted for the first
+      // time since the module was removed; before that the in-memory code
+      // kept serving fine. Whoever owns deerflow needs to update args to
+      // the current entry point (probably app.gateway.app:app given the
+      // remaining structure) or restore app.api. Gateway env intentionally
+      // omitted until that's fixed; reinstate once the import is healthy.
       name: "deerflow",
       script: "/usr/bin/bash",
       args: "-c 'cd /root/Meridian/services/deerflow/backend && /root/.local/bin/uv run uvicorn app.api:app --host 0.0.0.0 --port 8004'",
