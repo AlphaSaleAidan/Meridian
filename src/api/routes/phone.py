@@ -193,18 +193,22 @@ def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = ""
     # Telnyx TeXML requires speechTimeout as an INTEGER (seconds of silence after
     # speech ends). The Twilio-ism speechTimeout="auto" is rejected by Telnyx and
     # makes Gather fire its action with an empty SpeechResult -> the reprompt loop.
+    # transcriptionEngine only accepts "A" (Google, default) or "B" (Telnyx in-house);
+    # the literal "Telnyx" is invalid and silently disables transcription, so the
+    # action fires with an empty SpeechResult -> same reprompt loop. "A" works on any
+    # Telnyx account with no extra provisioning.
     hints_attr = f' hints="{_escape(hints)}"' if hints else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
-    transcriptionEngine="Telnyx"{hints_attr}>
+    transcriptionEngine="A"{hints_attr}>
     <Say voice="Polly.Joanna">{_escape(say)}</Say>
   </Gather>
   <Say voice="Polly.Joanna">I didn't catch that. Could you say that again?</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
-    transcriptionEngine="Telnyx"{hints_attr} />
+    transcriptionEngine="A"{hints_attr} />
 </Response>"""
 
 
@@ -624,10 +628,22 @@ async def twilio_gather(request: Request):
     """Process caller speech and return AI response."""
     form = await request.form()
     call_sid = form.get("CallSid", "unknown")
-    speech = (form.get("SpeechResult") or "").strip()
+    # Telnyx posts the transcript as SpeechResult (Twilio-compatible). Keep a couple
+    # of fallbacks in case a transcriptionEngine variant labels it differently.
+    speech = (
+        form.get("SpeechResult")
+        or form.get("UnstableSpeechResult")
+        or form.get("TranscriptionText")
+        or ""
+    ).strip()
     hints = _sessions.get(call_sid, {}).get("hints", "")
 
     if not speech:
+        logger.warning(
+            "phone gather: empty speech for call %s; form keys=%s",
+            call_sid,
+            sorted(form.keys()),
+        )
         return Response(
             content=_gather("Sorry, I didn't catch that. What can I get for you?", hints=hints),
             media_type=TWIML,
