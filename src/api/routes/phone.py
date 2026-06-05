@@ -151,16 +151,49 @@ def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def _gather(say: str, timeout: int = 5) -> str:
+# Common ordering phrases that bias speech recognition on every call.
+_BASE_HINTS = [
+    "yes", "no", "no thanks", "that's it", "that's all", "that's everything",
+    "pickup", "delivery", "dine in", "add", "remove", "cancel",
+    "small", "medium", "large", "one", "two", "three",
+]
+
+
+def _menu_hints(menu_items: list[dict]) -> str:
+    """Comma-separated speech-recognition hints from the menu + common phrases.
+
+    Telnyx biases its transcriber toward these phrases, so menu-specific terms
+    ('milkshake', 'fish tacos', 'extra cheese') are recognized far more
+    reliably than with a generic model. Caps the list — hints have practical
+    limits and a huge list dilutes the bias.
+    """
+    terms: list[str] = list(_BASE_HINTS)
+    for item in menu_items or []:
+        if item.get("name"):
+            terms.append(item["name"])
+        terms.extend(item.get("sizes") or [])
+        terms.extend(item.get("options") or item.get("modifications") or [])
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for t in terms:
+        key = str(t).lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            uniq.append(str(t))
+    return ", ".join(uniq[:100])
+
+
+def _gather(say: str, timeout: int = 5, hints: str = "") -> str:
+    hints_attr = f' hints="{_escape(hints)}"' if hints else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="/twilio/gather" method="POST"
-    speechTimeout="auto" timeout="{timeout}" language="en-US">
+    speechTimeout="auto" timeout="{timeout}" language="en-US"{hints_attr}>
     <Say voice="Polly.Joanna">{_escape(say)}</Say>
   </Gather>
   <Say voice="Polly.Joanna">I didn't catch that. Could you say that again?</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
-    speechTimeout="auto" timeout="{timeout}" language="en-US" />
+    speechTimeout="auto" timeout="{timeout}" language="en-US"{hints_attr} />
 </Response>"""
 
 
@@ -508,6 +541,8 @@ async def twilio_voice(request: Request):
 
     base_prompt = _build_merchant_prompt(config_row) if config_row else SYSTEM_PROMPT
     session_prompt = base_prompt + (f"\n\n{memory_block}" if memory_block else "")
+    menu_items = (config_row or {}).get("menu_items") or DEMO_MENU
+    hints = _menu_hints(menu_items)
     _sessions[call_sid] = {
         "messages": [],
         "ts": time.time(),
@@ -515,12 +550,13 @@ async def twilio_voice(request: Request):
         "merchant_id": merchant_id,
         "merchant_name": (config_row or {}).get("business_name", ""),
         "system_prompt": session_prompt,
+        "hints": hints,
     }
     greeting = (
         (config_row or {}).get("greeting")
         or "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     )
-    return Response(content=_gather(greeting), media_type=TWIML)
+    return Response(content=_gather(greeting, hints=hints), media_type=TWIML)
 
 
 @router.post("/gather")
@@ -529,10 +565,11 @@ async def twilio_gather(request: Request):
     form = await request.form()
     call_sid = form.get("CallSid", "unknown")
     speech = (form.get("SpeechResult") or "").strip()
+    hints = _sessions.get(call_sid, {}).get("hints", "")
 
     if not speech:
         return Response(
-            content=_gather("Sorry, I didn't catch that. What can I get for you?"),
+            content=_gather("Sorry, I didn't catch that. What can I get for you?", hints=hints),
             media_type=TWIML,
         )
 
@@ -565,7 +602,7 @@ async def twilio_gather(request: Request):
 
     reply = text or "Could you repeat that please?"
     session["messages"].append({"role": "assistant", "content": reply})
-    return Response(content=_gather(reply), media_type=TWIML)
+    return Response(content=_gather(reply, hints=session.get("hints", "")), media_type=TWIML)
 
 
 async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> OrderResult:
