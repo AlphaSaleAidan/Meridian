@@ -79,7 +79,7 @@ async def generate_token(req: GenerateTokenRequest):
 
     if not token:
         token = _generate_token()
-        await db.update("businesses", {"access_token": token, "token_status": "active"}, filters={"id": f"eq.{req.org_id}"})
+        await db.update("businesses", {"access_token": token, "token_status": "pending"}, filters={"id": f"eq.{req.org_id}"})
 
     portal_url = f"https://canada.meridian.tips/c/{token}"
 

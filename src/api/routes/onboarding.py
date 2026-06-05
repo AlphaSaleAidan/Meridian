@@ -361,7 +361,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                 "status": "active",
                 "created_at": now,
                 "access_token": portal_token,
-                "token_status": "active",
+                "token_status": "pending",
             }
             await db.upsert("businesses", biz_data, on_conflict="id")
         except Exception as e:
