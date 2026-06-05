@@ -554,80 +554,6 @@ export default function SchedulePage() {
     )
   }
 
-  // Live merchant portal with no staff yet — walk them through setup instead of
-  // dropping them into an empty grid. (Demo routes seed sample staff, so this
-  // only fires for real /canada/merchant orgs starting from scratch.)
-  if (liveMode && staff.length === 0) {
-    return (
-      <div className="space-y-6">
-        <ScrollReveal variant="fadeUp">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#1A8FD6]/10 flex items-center justify-center">
-              <Calendar size={20} className="text-[#1A8FD6]" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-[#F5F5F7]">Schedule</h1>
-              <p className="text-[12px] text-[#A1A1A8] mt-0.5">Build your team and let AI optimize the week</p>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        {toast && (
-          <div className="animate-in fade-in slide-in-from-top-2 duration-300 flex items-center justify-between gap-3 px-4 py-2.5 rounded-lg bg-[#111113] border-t-2 border-[#17C5B0] shadow-lg text-sm text-[#F5F5F7]">
-            <span>{toast}</span>
-            <button onClick={() => setToast(null)} className="text-[#A1A1A8] hover:text-[#F5F5F7]"><X size={14} /></button>
-          </div>
-        )}
-
-        <ScrollReveal variant="fadeUp" delay={0.04}>
-          <div className="card p-6 sm:p-8 max-w-2xl">
-            <h2 className="text-lg font-semibold text-[#F5F5F7]">Let's set up your schedule</h2>
-            <p className="text-sm text-[#A1A1A8] mt-1.5">
-              Two quick steps and your weekly schedule builds itself around your busiest hours.
-            </p>
-
-            <div className="mt-6 space-y-4">
-              {/* Step 1 — add staff */}
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 shrink-0 rounded-full bg-[#1A8FD6] text-white text-sm font-bold flex items-center justify-center">1</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <Users size={15} className="text-[#1A8FD6]" />
-                    <h3 className="text-sm font-semibold text-[#F5F5F7]">Add your staff</h3>
-                  </div>
-                  <p className="text-[12px] text-[#A1A1A8] mt-1">
-                    Enter each team member's name, role, and pay rate. You can add the whole crew now or one at a time.
-                  </p>
-                  <button onClick={() => setShowAddStaff(true)}
-                    className="mt-3 flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#17C5B0]/20 hover:brightness-110 transition-all">
-                    <Plus size={14} /> Add staff member
-                  </button>
-                </div>
-              </div>
-
-              {/* Step 2 — generate */}
-              <div className="flex items-start gap-4 opacity-60">
-                <div className="w-8 h-8 shrink-0 rounded-full border border-[#1F1F23] text-[#A1A1A8] text-sm font-bold flex items-center justify-center">2</div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={15} className="text-[#17C5B0]" />
-                    <h3 className="text-sm font-semibold text-[#F5F5F7]">Generate the schedule</h3>
-                  </div>
-                  <p className="text-[12px] text-[#A1A1A8] mt-1">
-                    Once your staff are in, we'll auto-build shifts around your peak hours — or you can drag them in yourself. Then publish to share with the team.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </ScrollReveal>
-
-        <AddStaffModal open={showAddStaff} onClose={() => setShowAddStaff(false)}
-          onSave={handleAddStaff} businessType={businessType} />
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -766,6 +692,26 @@ export default function SchedulePage() {
           })}
         </div>
       </ScrollReveal>
+
+      {/* Empty-state hint — empty calendar still renders below */}
+      {!isGenerating && staff.length === 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.045}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-lg bg-[#111113] border border-[#1F1F23]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center shrink-0">
+                <Users size={14} className="text-[#1A8FD6]" />
+              </div>
+              <p className="text-[12px] text-[#A1A1A8]">
+                Your calendar is empty. Add staff to start building this week&apos;s schedule.
+              </p>
+            </div>
+            <button onClick={() => setShowAddStaff(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors self-start sm:self-auto shrink-0">
+              <Plus size={13} /> Add Staff
+            </button>
+          </div>
+        </ScrollReveal>
+      )}
 
       {/* Generating state */}
       {isGenerating && (

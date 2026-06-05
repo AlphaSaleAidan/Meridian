@@ -4,6 +4,7 @@ import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
@@ -81,8 +82,13 @@ function HeatmapGrid({ cells }: { cells: PeakHourCell[] }) {
 export default function PeakHoursPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const hourlyData = useApi(() => api.hourlyRevenue(orgId), [orgId])
 
+  // Before a POS is connected, the analytics endpoint isn't reachable for this
+  // org — show the data-destination scaffold instead of a stuck spinner / 401.
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Peak Hours"><div /></DataPageSkeleton>
   if (!isDemo && hourlyData.loading) return <LoadingPage />
   if (!isDemo && hourlyData.error) return <ErrorState message={hourlyData.error} onRetry={hourlyData.refetch} />
 
