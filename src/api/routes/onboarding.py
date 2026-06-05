@@ -310,6 +310,9 @@ async def provision_customer(req: ProvisionCustomerRequest):
                     "business_name": req.business_name,
                     "org_id": req.org_id,
                     "role": "owner",
+                    # Forces the set-your-own-password screen on first login;
+                    # the customer clears it by choosing a real password.
+                    "must_reset_password": True,
                 },
             },
         )
@@ -332,7 +335,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                 pw_resp = await client.put(
                     f"{supabase_url}/auth/v1/admin/users/{auth_user_id}",
                     headers={"Authorization": f"Bearer {service_key}", "apikey": service_key, "Content-Type": "application/json"},
-                    json={"password": temp_password, "user_metadata": {"full_name": req.owner_name, "business_name": req.business_name, "org_id": req.org_id, "role": "owner"}},
+                    json={"password": temp_password, "user_metadata": {"full_name": req.owner_name, "business_name": req.business_name, "org_id": req.org_id, "role": "owner", "must_reset_password": True}},
                 )
                 if pw_resp.status_code == 200:
                     logger.info(f"Updated password and metadata for existing user {auth_user_id}")
