@@ -152,9 +152,6 @@ export default function CanadaSetupPage() {
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all">
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <><ArrowRight size={16} /> Save & Continue</>}
               </button>
-              <button onClick={() => setStep('pos')} className="w-full text-center text-[11px] text-[#A1A1A8] hover:text-white transition-colors">
-                Skip for now
-              </button>
             </div>
           </div>
         )}
