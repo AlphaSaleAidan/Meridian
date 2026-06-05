@@ -189,17 +189,22 @@ def _menu_hints(menu_items: list[dict]) -> str:
     return ", ".join(uniq[:100])
 
 
-def _gather(say: str, timeout: int = 5, hints: str = "") -> str:
+def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = "") -> str:
+    # Telnyx TeXML requires speechTimeout as an INTEGER (seconds of silence after
+    # speech ends). The Twilio-ism speechTimeout="auto" is rejected by Telnyx and
+    # makes Gather fire its action with an empty SpeechResult -> the reprompt loop.
     hints_attr = f' hints="{_escape(hints)}"' if hints else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="/twilio/gather" method="POST"
-    speechTimeout="auto" timeout="{timeout}" language="en-US"{hints_attr}>
+    speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
+    transcriptionEngine="Telnyx"{hints_attr}>
     <Say voice="Polly.Joanna">{_escape(say)}</Say>
   </Gather>
   <Say voice="Polly.Joanna">I didn't catch that. Could you say that again?</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
-    speechTimeout="auto" timeout="{timeout}" language="en-US"{hints_attr} />
+    speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
+    transcriptionEngine="Telnyx"{hints_attr} />
 </Response>"""
 
 
