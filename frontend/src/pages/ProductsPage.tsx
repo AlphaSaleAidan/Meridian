@@ -9,7 +9,7 @@ import { formatCents, formatCentsCompact, formatNumber, formatChartTick } from '
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import ScrollReveal from '@/components/ScrollReveal'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
-import DataPageSkeleton from '@/components/DataPageSkeleton'
+import AwaitingDataBanner from '@/components/AwaitingDataBanner'
 import { useAuth } from '@/lib/auth'
 
 const tooltipStyle = {
@@ -33,12 +33,15 @@ export default function ProductsPage() {
   const posConnected = !!org?.pos_connected
   const products = useApi(() => api.products(orgId, days), [orgId, days])
 
-  if (!isDemo && !posConnected) return <DataPageSkeleton title="Products"><div /></DataPageSkeleton>
-  if (products.loading) return <LoadingPage />
-  if (products.error) return <ErrorState message={products.error} onRetry={products.refetch} />
-  if (!products.data) return <LoadingPage />
+  // Only surface loading / error once a POS is connected (or in demo). Before
+  // that the analytics endpoint 401s — instead of a scaffold we render the real
+  // (empty) chart + table shell so the merchant sees exactly what fills in.
+  if ((isDemo || posConnected) && products.loading) return <LoadingPage />
+  if ((isDemo || posConnected) && products.error) return <ErrorState message={products.error} onRetry={products.refetch} />
+  if ((isDemo || posConnected) && !products.data) return <LoadingPage />
 
-  const data = products.data
+  const data = products.data ?? { products: [], total_products: 0 }
+  const awaitingData = !isDemo && data.products.length === 0
   const totalRevenue = data.products.reduce((s, p) => s + p.total_revenue_cents, 0)
 
   let filtered = data.products.filter(p =>
@@ -57,7 +60,6 @@ export default function ProductsPage() {
   }))
 
   return (
-    <DataPageSkeleton title="Products" layout="table">
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
@@ -82,8 +84,10 @@ export default function ProductsPage() {
         </div>
       </ScrollReveal>
 
+      {awaitingData && <AwaitingDataBanner posConnected={posConnected} label="top products chart" />}
+
       {/* Top Products Chart */}
-      {chartData.length > 0 && (
+      {(chartData.length > 0 || awaitingData) && (
         <ScrollReveal variant="fadeUp" delay={0.1}>
           <div className="card p-4 sm:p-5">
             <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Top Products by Revenue</h3>
@@ -231,6 +235,5 @@ export default function ProductsPage() {
         />
       )}
     </div>
-    </DataPageSkeleton>
   )
 }

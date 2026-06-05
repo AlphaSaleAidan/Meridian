@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
-import DataPageSkeleton from '@/components/DataPageSkeleton'
+import AwaitingDataBanner from '@/components/AwaitingDataBanner'
 import MenuPriceBuilder from '@/components/menu/MenuPriceBuilder'
 
 type MenuTab = 'matrix' | 'priceBuilder'
@@ -80,19 +80,19 @@ export default function MenuEngineeringPage() {
 
   const items: MenuEngItem[] = isDemo ? generateMenuEngineering() : (apiData.data?.items ?? [])
 
-  // Before a POS is connected, the analytics endpoint isn't reachable for this
-  // org — show the data-destination scaffold instead of a raw auth error.
-  if (!isDemo && !posConnected) return <DataPageSkeleton title="Menu Matrix"><div /></DataPageSkeleton>
-  if (!isDemo && apiData.loading) return <LoadingPage />
-  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+  // Only surface loading / error once a POS is actually connected. Before that
+  // the analytics endpoint 401s — instead of a scaffold we render the real
+  // (empty) matrix shell so the merchant sees exactly what fills in.
+  if (!isDemo && posConnected && apiData.loading) return <LoadingPage />
+  if (!isDemo && posConnected && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 
   const stars = items.filter(i => i.quadrant === 'star')
   const puzzles = items.filter(i => i.quadrant === 'puzzle')
   const plowhorses = items.filter(i => i.quadrant === 'plowhorse')
   const dogs = items.filter(i => i.quadrant === 'dog')
+  const awaitingData = !isDemo && items.length === 0
 
   return (
-    <DataPageSkeleton title="Menu Matrix" layout="table">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -102,6 +102,8 @@ export default function MenuEngineeringPage() {
           </p>
         </div>
       </ScrollReveal>
+
+      {awaitingData && <AwaitingDataBanner posConnected={posConnected} label="menu matrix" />}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-[#1F1F23]">
@@ -220,6 +222,5 @@ export default function MenuEngineeringPage() {
         </div>
       )}
     </div>
-    </DataPageSkeleton>
   )
 }

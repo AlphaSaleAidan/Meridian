@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
-import DataPageSkeleton from '@/components/DataPageSkeleton'
+import AwaitingDataBanner from '@/components/AwaitingDataBanner'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -80,11 +80,12 @@ export default function MarginsPage() {
 
   const items: MarginItem[] = isDemo ? generateMarginWaterfall() : (apiData.data?.items ?? [])
 
-  // Before a POS is connected, the analytics endpoint isn't reachable for this
-  // org — show the data-destination scaffold instead of a raw auth error.
-  if (!isDemo && !posConnected) return <DataPageSkeleton title="Margins"><div /></DataPageSkeleton>
-  if (!isDemo && apiData.loading) return <LoadingPage />
-  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+  // Only surface loading / error once a POS is actually connected. Before that
+  // the analytics endpoint 401s — instead of a scaffold we render the real
+  // (empty) margin chart shell so the merchant sees exactly what fills in.
+  if (!isDemo && posConnected && apiData.loading) return <LoadingPage />
+  if (!isDemo && posConnected && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+  const awaitingData = !isDemo && items.length === 0
 
   const totalRevenue = items.reduce((s, i) => s + i.revenueCents, 0)
   const totalCost = items.reduce((s, i) => s + i.costCents, 0)
@@ -102,7 +103,6 @@ export default function MarginsPage() {
 
 
   return (
-    <DataPageSkeleton title="Margins" layout="chart">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -112,6 +112,8 @@ export default function MarginsPage() {
           </p>
         </div>
       </ScrollReveal>
+
+      {awaitingData && <AwaitingDataBanner posConnected={posConnected} label="margin analysis" />}
 
       <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-walkthrough="margin-stats">
         <StaggerItem>
@@ -310,6 +312,5 @@ export default function MarginsPage() {
         </div>
       </ScrollReveal>
     </div>
-    </DataPageSkeleton>
   )
 }

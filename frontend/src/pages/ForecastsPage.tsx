@@ -14,7 +14,7 @@ import { generateForecastPeriods, generateDailyForecast } from '@/lib/agent-data
 import { useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { TrendingUp, TrendingDown, Minus, Target, BarChart3 } from 'lucide-react'
-import DataPageSkeleton from '@/components/DataPageSkeleton'
+import AwaitingDataBanner from '@/components/AwaitingDataBanner'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -35,18 +35,21 @@ export default function ForecastsPage() {
   const forecasts = useApi(() => api.forecasts(orgId), [orgId])
   const revenue = useApi(() => api.revenue(orgId, 30), [orgId])
 
-  if (!isDemo && !posConnected) return <DataPageSkeleton title="Forecasts"><div /></DataPageSkeleton>
-  if (forecasts.loading) return <LoadingPage />
-  if (forecasts.error) return <ErrorState message={forecasts.error} onRetry={forecasts.refetch} />
-  if (!forecasts.data) return <LoadingPage />
+  // Only surface loading / error once a POS is connected (or in demo). Before
+  // that the analytics endpoint 401s — instead of a scaffold we render the real
+  // (empty) forecast chart shell so the merchant sees exactly what fills in.
+  if ((isDemo || posConnected) && forecasts.loading) return <LoadingPage />
+  if ((isDemo || posConnected) && forecasts.error) return <ErrorState message={forecasts.error} onRetry={forecasts.refetch} />
+  if ((isDemo || posConnected) && !forecasts.data) return <LoadingPage />
 
-  const raw = forecasts.data
+  const raw = forecasts.data ?? ({ forecasts: [], total: 0 } as NonNullable<typeof forecasts.data>)
   const cutoff = new Date()
   cutoff.setDate(cutoff.getDate() + limits.forecastDays)
   const gatedForecasts = limits.forecastDays >= 999
     ? raw.forecasts
     : raw.forecasts.filter(f => new Date(f.period_start) <= cutoff)
   const data = { ...raw, forecasts: gatedForecasts, total: gatedForecasts.length }
+  const awaitingData = !isDemo && data.forecasts.length === 0
 
   const historicalData = (revenue.data?.daily || []).map(d => ({
     date: d.date.slice(0, 10),
@@ -73,7 +76,6 @@ export default function ForecastsPage() {
     .reduce((s, f) => s + f.predicted_cents, 0)
 
   return (
-    <DataPageSkeleton title="Forecasts" layout="chart">
     <div className="space-y-6">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
@@ -84,6 +86,8 @@ export default function ForecastsPage() {
           </p>
         </div>
       </ScrollReveal>
+
+      {awaitingData && <AwaitingDataBanner posConnected={posConnected} label="revenue forecast" />}
 
       {/* Summary */}
       <StaggerContainer className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -210,7 +214,7 @@ export default function ForecastsPage() {
       })()}
 
       {/* Chart: Historical + Forecast */}
-      {chartData.length > 0 && (
+      {(chartData.length > 0 || awaitingData) && (
         <ScrollReveal variant="fadeUp" delay={0.1}>
           <div className="card p-4 sm:p-5" data-walkthrough="revenue-forecast-chart">
             <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Revenue: Actual vs Forecast</h3>
@@ -322,6 +326,5 @@ export default function ForecastsPage() {
         />
       )}
     </div>
-    </DataPageSkeleton>
   )
 }
