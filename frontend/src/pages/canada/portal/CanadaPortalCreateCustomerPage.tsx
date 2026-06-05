@@ -636,39 +636,58 @@ export default function CanadaPortalCreateCustomerPage() {
       const token = generateToken()
       const apiUrl = import.meta.env.VITE_API_URL || ''
 
-      const authHeaders = await getAuthHeaders()
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 30000)
+      const provisionBody = JSON.stringify({
+        org_id: businessId,
+        email: form.email,
+        phone: form.phone || null,
+        owner_name: form.ownerName,
+        business_name: form.businessName,
+        plan: form.plan,
+        monthly_price: price,
+        setup_fee: setupFee,
+        first_month_free: form.firstMonthFree,
+        business_type: form.vertical || null,
+        pos_provider: form.pos || null,
+        rep_id: rep?.rep_id || null,
+        rep_name: rep?.name || null,
+      })
+
+      const postProvision = async () => {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 30000)
+        try {
+          return await fetch(`${apiUrl}/api/onboarding/provision-customer`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            signal: controller.signal,
+            body: provisionBody,
+          })
+        } finally {
+          clearTimeout(timeout)
+        }
+      }
 
       let provRes: Response
       try {
-        provRes = await fetch(`${apiUrl}/api/onboarding/provision-customer`, {
-          method: 'POST',
-          headers: authHeaders,
-          signal: controller.signal,
-          body: JSON.stringify({
-            org_id: businessId,
-            email: form.email,
-            phone: form.phone || null,
-            owner_name: form.ownerName,
-            business_name: form.businessName,
-            plan: form.plan,
-            monthly_price: price,
-            setup_fee: setupFee,
-            first_month_free: form.firstMonthFree,
-            business_type: form.vertical || null,
-            pos_provider: form.pos || null,
-            rep_id: rep?.rep_id || null,
-            rep_name: rep?.name || null,
-          }),
-        })
+        provRes = await postProvision()
+        // A stale rep session is the #1 cause of a confusing "Invalid or
+        // expired token" at this step. Force a token refresh and retry once
+        // before surfacing anything to the rep.
+        if ((provRes.status === 401 || provRes.status === 403) && supabase) {
+          await supabase.auth.refreshSession()
+          provRes = await postProvision()
+        }
       } catch (fetchErr: any) {
         if (fetchErr.name === 'AbortError') {
           throw new Error('Request timed out. The server may be busy — please try again.')
         }
         throw new Error('Unable to reach the server. Check your connection and try again.')
-      } finally {
-        clearTimeout(timeout)
+      }
+
+      if (provRes.status === 401 || provRes.status === 403) {
+        // Refresh didn't recover the session — the rep is signed out. Tell
+        // them plainly instead of leaking a raw "Invalid or expired token".
+        throw new Error('Your session expired. Please sign in again, then re-create the customer login.')
       }
 
       if (!provRes.ok) {
