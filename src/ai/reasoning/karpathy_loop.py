@@ -414,9 +414,10 @@ class KarpathyReasoning:
                         min_day = min(day_avgs.values())
                         spread = (max_day - min_day) / max(min_day, 1) * 100
                         has_pattern = spread > 15
+                        day_avg_str = ", ".join(f"{k}: {v:.0f}" for k, v in day_avgs.items())
                         result_entry.update({
                             "test_description": "Day-of-week grouping to detect weekly patterns",
-                            "data_used": f"day_averages={{{k}: {v:.0f} for k, v in day_avgs.items()}}",
+                            "data_used": f"day_averages={{{day_avg_str}}}",
                             "result": "CONFIRMED" if has_pattern else "REJECTED",
                             "posterior_probability": round(0.7 if has_pattern else 0.1, 2),
                             "evidence_strength": "MODERATE",
