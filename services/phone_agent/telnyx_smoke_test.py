@@ -2,48 +2,45 @@
 Standalone smoke test for Telnyx hosted STT/TTS — no pipecat required.
 
 Mirrors exactly what TelnyxTTSService / TelnyxSTTService do (same endpoints,
-request shapes, voice/model defaults, and 24 kHz -> 8 kHz resample), so a PASS
+request shapes, voice/model defaults, and MP3 -> 8 kHz ffmpeg decode), so a PASS
 here means the service contracts are correct before we flip the live pipeline.
 
 Round trip:
-  1. TTS: POST text -> 24 kHz S16LE mono PCM (output_type=binary_output)
-  2. resample 24k -> 8k (the telephony rate), wrap as WAV
+  1. TTS: POST text -> MP3 (audio/mpeg, output_type=binary_output)
+  2. ffmpeg-decode MP3 -> 8 kHz S16LE mono PCM (the telephony rate), wrap as WAV
   3. STT: POST that 8 kHz WAV -> transcript, compare to the input text
 
 Run (the key never appears in output or argv):
   ! cd /root/canada-trim/services/phone_agent && TELNYX_API_KEY=sk_... python3 telnyx_smoke_test.py
 Optional:
-  --text "..."  --voice Telnyx.NaturalHD.astra  --model deepgram/nova-3  --keep
+  --text "..."  --voice Telnyx.KokoroTTS.af_bella  --model deepgram/nova-3  --keep
 """
 import argparse
 import io
 import os
+import subprocess
 import sys
 import wave
 
 import httpx
-import numpy as np
-from scipy.signal import resample_poly
 
-TELNYX_TTS_URL = "https://api.telnyx.com/v2/text-to-speech"
+TELNYX_TTS_URL = "https://api.telnyx.com/v2/text-to-speech/speech"
 TELNYX_STT_URL = "https://api.telnyx.com/v2/ai/audio/transcriptions"
-DEFAULT_VOICE = os.getenv("TELNYX_TTS_VOICE", "Telnyx.NaturalHD.astra")
-TTS_NATIVE_RATE = 24000
+DEFAULT_VOICE = os.getenv("TELNYX_TTS_VOICE", "Telnyx.KokoroTTS.af_bella")
 TELEPHONY_RATE = 8000
 
 
-def _resample_24k_to_8k(audio: np.ndarray) -> np.ndarray:
-    return resample_poly(audio, 1, TTS_NATIVE_RATE // TELEPHONY_RATE)
-
-
-def _pcm16_to_float(b: bytes) -> np.ndarray:
-    if len(b) % 2:
-        b = b[:-1]
-    return np.frombuffer(b, dtype=np.int16).astype(np.float32) / 32768.0
-
-
-def _float_to_pcm16(audio: np.ndarray) -> bytes:
-    return (np.clip(audio, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+def _ffmpeg_mp3_to_pcm8k(mp3: bytes) -> bytes:
+    """Decode MP3 -> 8 kHz signed-16-bit LE mono PCM via ffmpeg (mirrors the service)."""
+    proc = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error",
+         "-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", str(TELEPHONY_RATE), "pipe:1"],
+        input=mp3, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        print(f"[mix] FAIL ffmpeg rc={proc.returncode}: {proc.stderr.decode()[:400]}")
+        sys.exit(1)
+    return proc.stdout
 
 
 def _wav_bytes(pcm16: bytes, rate: int) -> bytes:
@@ -67,12 +64,12 @@ def run_tts(key: str, text: str, voice: str) -> bytes:
     if res.status_code != 200:
         print(f"[TTS] FAIL {res.status_code}: {res.text[:400]}")
         sys.exit(1)
-    pcm = res.content
-    secs = (len(pcm) / 2) / TTS_NATIVE_RATE
-    print(f"[TTS] OK  {len(pcm)} bytes  ~{secs:.2f}s @ {TTS_NATIVE_RATE} Hz S16LE mono")
-    if secs < 0.2:
-        print("[TTS] WARN: response shorter than 0.2s — voice id may be invalid (check dashboard)")
-    return pcm
+    mp3 = res.content
+    ctype = res.headers.get("content-type", "?")
+    print(f"[TTS] OK  {len(mp3)} bytes  content-type={ctype}")
+    if len(mp3) < 500:
+        print("[TTS] WARN: response very short — voice id may be invalid (check dashboard)")
+    return mp3
 
 
 def run_stt(key: str, wav: bytes, model: str) -> str:
@@ -111,19 +108,20 @@ def main():
 
     print(f"Round-trip text: {args.text!r}\n")
 
-    pcm24 = run_tts(key, args.text, args.voice)
-    audio8 = _resample_24k_to_8k(_pcm16_to_float(pcm24))
-    wav8 = _wav_bytes(_float_to_pcm16(audio8), TELEPHONY_RATE)
-    print(f"[mix] resampled 24k->8k, wrapped WAV ({len(wav8)} bytes @ {TELEPHONY_RATE} Hz)\n")
+    mp3 = run_tts(key, args.text, args.voice)
+    pcm8 = _ffmpeg_mp3_to_pcm8k(mp3)
+    wav8 = _wav_bytes(pcm8, TELEPHONY_RATE)
+    secs = (len(pcm8) / 2) / TELEPHONY_RATE
+    print(f"[mix] ffmpeg MP3->8k mono, wrapped WAV ({len(wav8)} bytes ~{secs:.2f}s @ {TELEPHONY_RATE} Hz)\n")
 
     transcript = run_stt(key, wav8, args.model)
 
     if args.keep:
-        with open("/tmp/telnyx_tts_24k.wav", "wb") as f:
-            f.write(_wav_bytes(pcm24, TTS_NATIVE_RATE))
+        with open("/tmp/telnyx_tts.mp3", "wb") as f:
+            f.write(mp3)
         with open("/tmp/telnyx_8k.wav", "wb") as f:
             f.write(wav8)
-        print("\n[keep] wrote /tmp/telnyx_tts_24k.wav and /tmp/telnyx_8k.wav")
+        print("\n[keep] wrote /tmp/telnyx_tts.mp3 and /tmp/telnyx_8k.wav")
 
     print()
     src = {w.lower().strip(".,!?") for w in args.text.split()}
