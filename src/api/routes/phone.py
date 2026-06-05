@@ -217,7 +217,7 @@ def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = ""
 </Response>"""
 
 
-def _listen(say: str, max_length: int = 15, timeout: int = 3, hints: str = "") -> str:
+def _listen(say: str, max_length: int = 15, timeout: int = 2, hints: str = "") -> str:
     # Per-turn capture via <Record> instead of <Gather input="speech">.
     # <Gather input="speech"> reads the default *inbound* track, which on these
     # Telnyx calls carries the bot's own Polly playback — so the caller is never
@@ -225,13 +225,22 @@ def _listen(say: str, max_length: int = 15, timeout: int = 3, hints: str = "") -
     # track selector, so no Gather config fixes it. <Record> captures only the
     # audio that arrives while the bot is silent (the caller), then the /gather
     # action handler downloads it and transcribes it synchronously via the
-    # Telnyx STT endpoint. timeout = seconds of trailing silence that ends the
-    # turn; maxLength caps a runaway turn; finishOnKey lets a caller end early.
+    # Telnyx STT endpoint.
+    #
+    # CRITICAL for latency: Telnyx ends the recording on `timeout` seconds of
+    # silence ONLY when transcription="true" — it uses the transcription engine
+    # to detect silence. Without transcription enabled the timeout is ignored and
+    # every turn runs the full maxLength (~15s of dead air). So we enable
+    # transcription here purely for silence detection (the async transcription
+    # callback is unused — we transcribe the recording synchronously in /gather).
+    # timeout=2: end ~2s after the caller stops; maxLength caps a runaway turn;
+    # finishOnKey lets a caller end early.
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="Polly.Joanna">{_escape(say)}</Say>
   <Record action="/twilio/gather" method="POST" playBeep="false"
     maxLength="{max_length}" timeout="{timeout}" trim="trim-silence"
+    transcription="true" transcriptionEngine="A" transcriptionLanguage="en-US"
     finishOnKey="#" channels="single" format="mp3" />
 </Response>"""
 
