@@ -4,23 +4,46 @@ import { Play, Square } from 'lucide-react'
 import WaveformVisualizer from './WaveformVisualizer'
 import { VOICE_OPTIONS, type VoiceSettings } from '@/lib/phone-orders-demo-data'
 
-/** Pitch / rate overrides per voice ID for SpeechSynthesis. */
+/** Pitch / rate overrides per voice ID for SpeechSynthesis. Spread wide so each
+ *  voice is audibly distinct even when the browser only exposes one voice per
+ *  gender (the preview falls back to pitch/rate to differentiate). */
 export const VOICE_SAMPLES: Record<string, { pitch: number; rate: number }> = {
-  af_bella: { pitch: 1.1, rate: 0.95 },
-  af_sarah: { pitch: 1.2, rate: 1.05 },
-  am_adam:  { pitch: 0.8, rate: 0.9 },
-  am_michael: { pitch: 0.95, rate: 1.0 },
+  af_bella:   { pitch: 1.05, rate: 0.95 },
+  af_sarah:   { pitch: 1.4,  rate: 1.12 },
+  af_nicole:  { pitch: 0.9,  rate: 0.88 },
+  bf_emma:    { pitch: 1.2,  rate: 1.0  },
+  am_adam:    { pitch: 0.65, rate: 0.88 },
+  am_michael: { pitch: 1.0,  rate: 1.03 },
+  am_echo:    { pitch: 0.85, rate: 0.98 },
+  bm_george:  { pitch: 0.75, rate: 0.92 },
 }
 
-/** Resolve a browser SpeechSynthesisVoice matching the voice ID gender. */
+const FEMALE_RE = /samantha|karen|victoria|zira|tessa|moira|fiona|serena|female|woman|google uk english female|google us english/i
+const MALE_RE = /daniel|alex|david|mark|fred|rishi|oliver|arthur|male|man|google uk english male/i
+
+function isFemaleVoice(id: string) { return /^[ab]f_/.test(id) }
+function isBritishVoice(id: string) { return id.startsWith('bf_') || id.startsWith('bm_') }
+
+/** Resolve a browser SpeechSynthesisVoice for a voice ID. Different IDs of the
+ *  same gender map to *different* browser voices (by stable index) so previews
+ *  don't all collapse onto the first matching voice. */
 function pickBrowserVoice(voiceId: string): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices()
-  const isFemale = voiceId.startsWith('af_')
-  return voices.find(v =>
-    isFemale
-      ? /samantha|karen|victoria|zira|female/i.test(v.name)
-      : /daniel|alex|david|male|mark/i.test(v.name),
-  )
+  if (!voices.length) return undefined
+
+  const female = isFemaleVoice(voiceId)
+  const langRe = isBritishVoice(voiceId) ? /^en-GB/i : /^en/i
+  const nameRe = female ? FEMALE_RE : MALE_RE
+
+  let pool = voices.filter(v => langRe.test(v.lang) && nameRe.test(v.name))
+  if (!pool.length) pool = voices.filter(v => /^en/i.test(v.lang) && nameRe.test(v.name))
+  if (!pool.length) pool = voices.filter(v => /^en/i.test(v.lang))
+  if (!pool.length) pool = voices
+
+  // Stable, per-gender index so each same-gender voice lands on a distinct entry.
+  const sameGenderIds = VOICE_OPTIONS.filter(o => isFemaleVoice(o.id) === female).map(o => o.id)
+  const idx = Math.max(0, sameGenderIds.indexOf(voiceId))
+  return pool[idx % pool.length]
 }
 
 /* ---------- Compact play button (for voice grid cards) ---------- */

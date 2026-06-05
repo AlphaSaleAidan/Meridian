@@ -313,9 +313,13 @@ export function getPhoneDemoData(bizId?: string) {
 
 export const VOICE_OPTIONS = [
   { id: 'af_bella', label: 'Bella', desc: 'Warm, professional (female)', sampleText: "Thank you for calling! I'd be happy to help you place an order today." },
-  { id: 'af_sarah', label: 'Sarah', desc: 'Friendly, casual (female)', sampleText: "Hey there! Welcome in -- what can I get started for you?" },
-  { id: 'am_adam', label: 'Adam', desc: 'Authoritative (male)', sampleText: "Good evening. I'll take your order whenever you're ready." },
+  { id: 'af_sarah', label: 'Sarah', desc: 'Bright, casual (female)', sampleText: "Hey there! Welcome in -- what can I get started for you?" },
+  { id: 'af_nicole', label: 'Nicole', desc: 'Calm, soothing (female)', sampleText: "Hi, you've reached us -- take your time, I'm here whenever you're ready." },
+  { id: 'bf_emma', label: 'Emma', desc: 'Refined British (female)', sampleText: "Good day, thank you for ringing -- how may I help with your order?" },
+  { id: 'am_adam', label: 'Adam', desc: 'Deep, authoritative (male)', sampleText: "Good evening. I'll take your order whenever you're ready." },
   { id: 'am_michael', label: 'Michael', desc: 'Conversational (male)', sampleText: "Hi! Thanks for calling -- let me know what sounds good to you." },
+  { id: 'am_echo', label: 'Echo', desc: 'Smooth, upbeat (male)', sampleText: "Hey, great to hear from you -- what can I grab for you tonight?" },
+  { id: 'bm_george', label: 'George', desc: 'Distinguished British (male)', sampleText: "Hello there, lovely to hear from you -- what shall I put together?" },
 ]
 
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
