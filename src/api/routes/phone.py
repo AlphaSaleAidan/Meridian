@@ -217,7 +217,7 @@ def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = ""
 </Response>"""
 
 
-def _listen(say: str, max_length: int = 15, timeout: int = 2, hints: str = "") -> str:
+def _listen(say: str, max_length: int = 15, timeout: int = 1, hints: str = "") -> str:
     # Per-turn capture via <Record> instead of <Gather input="speech">.
     # <Gather input="speech"> reads the default *inbound* track, which on these
     # Telnyx calls carries the bot's own Polly playback — so the caller is never
@@ -233,13 +233,19 @@ def _listen(say: str, max_length: int = 15, timeout: int = 2, hints: str = "") -
     # every turn runs the full maxLength (~15s of dead air). So we enable
     # transcription here purely for silence detection (the async transcription
     # callback is unused — we transcribe the recording synchronously in /gather).
-    # timeout=2: end ~2s after the caller stops; maxLength caps a runaway turn;
-    # finishOnKey lets a caller end early.
+    # timeout=1: end ~1s after the caller stops talking (snappy turn-taking for
+    # a live demo). maxLength caps a runaway turn; finishOnKey lets a caller end
+    # early.
+    #
+    # No trim="trim-silence": trimming makes Telnyx post-process the whole file
+    # before delivering the recording, adding finalization latency. The STT
+    # endpoint handles leading/trailing silence fine, so we skip it to get the
+    # recording (and therefore the response) out faster.
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="Polly.Joanna">{_escape(say)}</Say>
   <Record action="/twilio/gather" method="POST" playBeep="false"
-    maxLength="{max_length}" timeout="{timeout}" trim="trim-silence"
+    maxLength="{max_length}" timeout="{timeout}"
     transcription="true" transcriptionEngine="A" transcriptionLanguage="en-US"
     finishOnKey="#" channels="single" format="mp3" />
 </Response>"""
