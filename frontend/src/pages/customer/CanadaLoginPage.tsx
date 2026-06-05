@@ -23,8 +23,12 @@ export default function CanadaLoginPage() {
 
   useEffect(() => {
     if (!ready) return
-    if (authenticated && !justLoggedIn && !cleared) {
-      logout().then(() => setCleared(true))
+    // Clear a stale session on arrival, but never while a sign-in is in flight —
+    // an async logout that resolves after signInWithPassword would wipe the fresh
+    // session and force the user to click "Sign In" a second time.
+    if (authenticated && !justLoggedIn && !cleared && !loading) {
+      setCleared(true)
+      logout()
       return
     }
     if (!justLoggedIn || !authenticated || !org) return
@@ -33,7 +37,7 @@ export default function CanadaLoginPage() {
       return
     }
     navigate(from, { replace: true })
-  }, [ready, authenticated, org, from, navigate, justLoggedIn, cleared, logout])
+  }, [ready, authenticated, org, from, navigate, justLoggedIn, cleared, loading, logout])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -44,6 +48,12 @@ export default function CanadaLoginPage() {
       setError('Authentication service unavailable')
       setLoading(false)
       return
+    }
+
+    // Tear down any stale session first, awaited, so it can't race with this sign-in.
+    if (authenticated) {
+      setCleared(true)
+      await logout()
     }
 
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
