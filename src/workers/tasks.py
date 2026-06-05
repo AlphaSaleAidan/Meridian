@@ -403,7 +403,6 @@ def run_cold_storage_archive():
 def offload_warm_to_r2():
     """Upload all WARM archives older than 30 days to R2, then delete local copies."""
     from datetime import datetime, timedelta, timezone
-    from pathlib import Path
     from .cold_storage import ARCHIVE_DIR
 
     if not ARCHIVE_DIR.exists():
@@ -411,7 +410,6 @@ def offload_warm_to_r2():
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     uploaded = 0
-    cleaned = 0
 
     for manifest_path in ARCHIVE_DIR.rglob("manifest.json"):
         try:
