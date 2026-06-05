@@ -190,7 +190,7 @@ def _menu_hints(menu_items: list[dict]) -> str:
     return ", ".join(uniq[:100])
 
 
-def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = "") -> str:
+def _gather(say: str, timeout: int = 5, speech_timeout: int = 1, hints: str = "") -> str:
     # Telnyx TeXML requires speechTimeout as an INTEGER (seconds of silence after
     # speech ends). The Twilio-ism speechTimeout="auto" is rejected by Telnyx and
     # makes Gather fire its action with an empty SpeechResult -> the reprompt loop.
@@ -293,6 +293,24 @@ async def _transcribe_recording(recording_url: str) -> str:
     except Exception as e:
         logger.error("phone listen: transcription failed: %s", e)
         return ""
+
+
+def _prompt(say: str, session: dict | None) -> str:
+    """Render the next caller-capture turn, picking the capture method per call.
+
+    Default is <Gather input="speech"> — Telnyx's real-time recognizer returns
+    the transcript inline in the action POST, so it's the lowest-latency path
+    (no recording finalize, no file download, no separate STT call) and it
+    honors `hints` for menu-term accuracy. BUT the real-time recognizer may not
+    be provisioned on every connection; when it isn't, Gather posts empty
+    SpeechResults. twilio_gather detects repeated empties and flips
+    session["capture"] to "record", after which we use the slower-but-reliable
+    <Record> + synchronous Telnyx STT path. So a call self-heals to a working
+    capture method instead of looping on "I didn't catch that"."""
+    hints = (session or {}).get("hints", "")
+    if session and session.get("capture") == "record":
+        return _listen(say, hints=hints)
+    return _gather(say, hints=hints)
 
 
 def _hangup(say: str) -> str:
@@ -722,12 +740,14 @@ async def twilio_voice(request: Request):
         "merchant_name": (config_row or {}).get("business_name", ""),
         "system_prompt": session_prompt,
         "hints": hints,
+        "capture": "gather",  # start on the fast real-time path; auto-falls back to record
+        "empty_count": 0,
     }
     greeting = (
         (config_row or {}).get("greeting")
         or "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     )
-    return Response(content=_listen(greeting, hints=hints), media_type=TWIML)
+    return Response(content=_prompt(greeting, _sessions[call_sid]), media_type=TWIML)
 
 
 @router.post("/gather")
@@ -737,36 +757,45 @@ async def twilio_gather(request: Request):
     call_sid = form.get("CallSid", "unknown")
     # Telnyx posts the transcript as SpeechResult (Twilio-compatible). Keep a couple
     # of fallbacks in case a transcriptionEngine variant labels it differently.
+    session = _sessions.setdefault(
+        call_sid, {"messages": [], "ts": time.time(), "capture": "gather", "empty_count": 0}
+    )
+
+    # <Gather> posts the transcript inline as SpeechResult. <Record> (the fallback
+    # capture) posts a RecordingUrl instead, which we transcribe synchronously.
     speech = (
         form.get("SpeechResult")
         or form.get("UnstableSpeechResult")
         or form.get("TranscriptionText")
         or ""
     ).strip()
-    hints = _sessions.get(call_sid, {}).get("hints", "")
-
-    # Primary capture path: the turn loop uses <Record>, so the caller's audio
-    # arrives as a RecordingUrl. Transcribe it synchronously here (the inline
-    # SpeechResult fields stay as a fallback for any legacy <Gather> turn).
     if not speech:
         recording_url = form.get("RecordingUrl") or form.get("RecordingUrls") or ""
         if recording_url:
             speech = await _transcribe_recording(recording_url)
 
     if not speech:
-        logger.warning(
-            "phone gather: empty speech for call %s; SpeechResult=%r RecordingUrl=%r keys=%s",
-            call_sid,
-            form.get("SpeechResult"),
-            bool(form.get("RecordingUrl") or form.get("RecordingUrls")),
-            sorted(form.keys()),
-        )
+        session["empty_count"] = session.get("empty_count", 0) + 1
+        # If the real-time recognizer keeps coming back empty, it's likely not
+        # provisioned on this connection — switch this call to the reliable
+        # <Record> + STT path so it stops looping.
+        if session.get("capture") == "gather" and session["empty_count"] >= 2:
+            session["capture"] = "record"
+            logger.warning(
+                "phone gather: %d empty results for %s — falling back to record capture",
+                session["empty_count"], call_sid,
+            )
+        else:
+            logger.warning(
+                "phone gather: empty speech for call %s (capture=%s count=%d); keys=%s",
+                call_sid, session.get("capture"), session["empty_count"], sorted(form.keys()),
+            )
         return Response(
-            content=_listen("Sorry, I didn't catch that. What can I get for you?", hints=hints),
+            content=_prompt("Sorry, I didn't catch that. What can I get for you?", session),
             media_type=TWIML,
         )
 
-    session = _sessions.setdefault(call_sid, {"messages": [], "ts": time.time()})
+    session["empty_count"] = 0
     session["ts"] = time.time()
     session["messages"].append({"role": "user", "content": speech})
 
@@ -795,7 +824,7 @@ async def twilio_gather(request: Request):
 
     reply = text or "Could you repeat that please?"
     session["messages"].append({"role": "assistant", "content": reply})
-    return Response(content=_listen(reply, hints=session.get("hints", "")), media_type=TWIML)
+    return Response(content=_prompt(reply, session), media_type=TWIML)
 
 
 async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> OrderResult:
