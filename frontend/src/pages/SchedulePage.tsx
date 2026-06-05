@@ -539,7 +539,10 @@ export default function SchedulePage() {
     URL.revokeObjectURL(url)
   }, [shifts, staff, weekStartDate])
 
-  if (!showDemoSchedule && !liveMode) {
+  // Canada always renders a ready-to-use (empty) schedule — no radar loader.
+  // Staff sync from the POS lands in the calendar; otherwise the merchant adds
+  // them manually. US keeps the connect-your-POS scaffold unchanged.
+  if (!showDemoSchedule && !liveMode && portalContext !== 'ca') {
     return (
       <div className="space-y-6">
         <ScrollReveal variant="fadeUp">

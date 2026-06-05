@@ -387,6 +387,8 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
 
+        await _import_pos_staff(db, org_id, result.employee_cache)
+
         await db.update(
             "pos_connections",
             {
@@ -422,6 +424,43 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         )
 
 
+async def _import_pos_staff(db, org_id: str, employee_cache: dict[str, str]) -> int:
+    """Best-effort: seed the schedule roster from the POS employee list.
+
+    Idempotent by name — a re-sync skips employees already on the roster, so the
+    merchant never gets duplicates. Never raises: the manual add-staff path in the
+    Schedule tab is always available even if the POS has no employees or this fails.
+    """
+    if not employee_cache:
+        return 0
+    try:
+        existing = await db.select("schedule_staff", filters={"merchant_id": f"eq.{org_id}"})
+        have = {(r.get("name") or "").strip().lower() for r in existing}
+        rows = []
+        for name in employee_cache.values():
+            clean = (name or "").strip()
+            if not clean or clean.lower() in have:
+                continue
+            have.add(clean.lower())
+            rows.append({
+                "id": str(uuid4()),
+                "merchant_id": org_id,
+                "name": clean,
+                "role": "any",
+                "color": "#17C5B0",
+                "hourly_rate": 0,
+                "availability": {},
+                "active": True,
+            })
+        if rows:
+            await db.insert("schedule_staff", rows, return_data=False)
+        logger.info(f"POS staff import for org={org_id}: {len(rows)} new of {len(employee_cache)} POS employees")
+        return len(rows)
+    except Exception as e:
+        logger.warning(f"POS staff import failed for org={org_id}: {e}")
+        return 0
+
+
 async def _run_clover_backfill(org_id: str, connection_id: str, access_token: str, merchant_id: str):
     """Background task: run Clover initial backfill (manual-paste and OAuth share this)."""
     from ...clover.client import CloverClient
@@ -448,6 +487,8 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
             await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+
+        await _import_pos_staff(db, org_id, result.employee_cache)
 
         await db.update(
             "pos_connections",
