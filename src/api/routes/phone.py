@@ -52,7 +52,13 @@ if _PHONE_AGENT_DIR not in sys.path:
     sys.path.insert(0, _PHONE_AGENT_DIR)
 
 # --- AI Provider config ---
-# Primary: SambaNova (OpenAI-compatible endpoint)
+# Primary: DeepSeek (OpenAI-compatible, cheap + good at multi-turn dialogue).
+# Falls through to SambaNova then local Qwen if its key is unset or it errors.
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+# Secondary: SambaNova (OpenAI-compatible endpoint)
 SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY", "")
 SAMBANOVA_BASE_URL = "https://api.sambanova.ai/v1"
 SAMBANOVA_MODEL = os.getenv("SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct")
@@ -212,9 +218,23 @@ def _cleanup():
         del _sessions[sid]
 
 
-async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict | None:
-    """Call SambaNova via OpenAI-compatible API. Returns None on failure."""
-    if not SAMBANOVA_API_KEY:
+async def _ask_openai_tools(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    label: str,
+    messages: list[dict],
+    system_prompt: str,
+    timeout: float = 20.0,
+    temperature: float | None = None,
+) -> dict | None:
+    """Call an OpenAI-compatible chat endpoint with tool-calling.
+
+    Returns Anthropic-style content blocks, or None on any failure so the
+    caller can fall through to the next provider.
+    """
+    if not api_key:
         return None
     openai_tools = [
         {
@@ -228,24 +248,27 @@ async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMP
         for t in TOOLS
     ]
     openai_messages = [{"role": "system", "content": system_prompt}] + messages
+    payload: dict[str, Any] = {
+        "model": model,
+        "max_tokens": 300,
+        "messages": openai_messages,
+        "tools": openai_tools,
+        "tool_choice": "auto",
+    }
+    if temperature is not None:
+        payload["temperature"] = temperature
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
-                f"{SAMBANOVA_BASE_URL}/chat/completions",
+                f"{base_url}/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {SAMBANOVA_API_KEY}",
+                    "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
-                json={
-                    "model": SAMBANOVA_MODEL,
-                    "max_tokens": 300,
-                    "messages": openai_messages,
-                    "tools": openai_tools,
-                    "tool_choice": "auto",
-                },
+                json=payload,
             )
             if resp.status_code != 200:
-                logger.warning("SambaNova API %d: %s", resp.status_code, resp.text[:200])
+                logger.warning("%s API %d: %s", label, resp.status_code, resp.text[:200])
                 return None
             data = resp.json()
             choice = data["choices"][0]["message"]
@@ -260,8 +283,36 @@ async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMP
                 })
             return {"content": content}
     except Exception as exc:
-        logger.warning("SambaNova error: %s", exc)
+        logger.warning("%s error: %s", label, exc)
         return None
+
+
+async def _ask_deepseek(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict | None:
+    """Call DeepSeek (OpenAI-compatible). Low temperature keeps order-taking
+    focused and reduces misheard-item drift. Returns None on failure."""
+    return await _ask_openai_tools(
+        base_url=DEEPSEEK_BASE_URL,
+        api_key=DEEPSEEK_API_KEY,
+        model=DEEPSEEK_MODEL,
+        label="DeepSeek",
+        messages=messages,
+        system_prompt=system_prompt,
+        timeout=15.0,
+        temperature=0.3,
+    )
+
+
+async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict | None:
+    """Call SambaNova (OpenAI-compatible). Returns None on failure."""
+    return await _ask_openai_tools(
+        base_url=SAMBANOVA_BASE_URL,
+        api_key=SAMBANOVA_API_KEY,
+        model=SAMBANOVA_MODEL,
+        label="SambaNova",
+        messages=messages,
+        system_prompt=system_prompt,
+        timeout=20.0,
+    )
 
 
 async def _ask_qwen(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
@@ -289,12 +340,16 @@ async def _ask_qwen(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) ->
 
 
 async def _ask_ai(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
-    """SambaNova primary, local Qwen fallback."""
+    """DeepSeek primary, SambaNova secondary, local Qwen fallback."""
+    result = await _ask_deepseek(messages, system_prompt)
+    if result is not None:
+        logger.info("AI response via DeepSeek")
+        return result
     result = await _ask_sambanova(messages, system_prompt)
     if result is not None:
         logger.info("AI response via SambaNova")
         return result
-    logger.warning("SambaNova unavailable, falling back to local Qwen")
+    logger.warning("DeepSeek + SambaNova unavailable, falling back to local Qwen")
     return await _ask_qwen(messages, system_prompt)
 
 
@@ -784,6 +839,7 @@ async def twilio_health():
     import importlib.util
 
     samba_ok = bool(SAMBANOVA_API_KEY)
+    deepseek_ok = bool(DEEPSEEK_API_KEY)
 
     # Probe the media-stream import chain without executing heavy modules. These
     # install best-effort from requirements-ml.txt (torch deps can OOM-skip on
@@ -818,8 +874,14 @@ async def twilio_health():
             "tts": os.getenv("TTS_PROVIDER", "local").lower(),
         },
         "telnyx_speech_configured": bool(os.getenv("TELNYX_API_KEY", "")),
-        "primary_llm": "sambanova" if samba_ok else "qwen-local",
-        "fallback_llm": "qwen-local",
+        "primary_llm": "deepseek" if deepseek_ok else "sambanova" if samba_ok else "qwen-local",
+        "llm_chain": [
+            *(["deepseek"] if deepseek_ok else []),
+            *(["sambanova"] if samba_ok else []),
+            "qwen-local",
+        ],
+        "deepseek_configured": deepseek_ok,
+        "deepseek_model": DEEPSEEK_MODEL,
         "sambanova_configured": samba_ok,
         "qwen_url": QWEN_URL,
         "active_sessions": len(_sessions),
