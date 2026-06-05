@@ -21,9 +21,8 @@ import {
   canadaKeys,
 } from '@/lib/canada-queries'
 import { PortalPage, PortalLoadingSkeleton } from './PortalPage'
-import { getPlan } from '@/lib/canada-proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
-import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
+import QRCode from 'qrcode'
 import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type InvoiceInput } from '@/lib/generate-invoice-pdf'
 import { generateSlaDocument, type SlaInput } from '@/lib/generate-sla-pdf'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -55,6 +54,10 @@ const STEPS = [
   { num: 2, label: 'Customer Checkout' },
   { num: 3, label: 'Customer Walkthrough' },
 ]
+
+// Stable id for the generated SLA so it upserts (replaces) rather than
+// stacking a new files row each time it's regenerated or signed.
+const SLA_FILE_ID = 'sla-doc'
 
 const DEMO_FILES = [
   { id: '1', name: 'proposal_v2.pdf', description: 'Monthly pricing proposal', tag: 'Proposal' },
@@ -119,6 +122,13 @@ export default function CanadaPortalLeadDetailPage() {
     qc.setQueryData<Deal | null>(canadaKeys.lead(id), (prev) => updater(prev ?? null))
   }, [id, qc])
   const dealRef = useRef<Deal | null>(null)
+  // Records the stage we just wrote locally (optimistic advance / proposal
+  // auto-advance) and when. The realtime subscription re-fetches the whole
+  // list on any change; that re-fetch can race a read replica and echo back
+  // the PRE-update row, clobbering our optimistic stage and making the button
+  // look like it "did nothing until refresh." While this window is open we
+  // keep our local stage instead of letting a staler echo regress it.
+  const localStageRef = useRef<{ stage: DealStage; at: number } | null>(null)
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '' })
   const [editSaving, setEditSaving] = useState(false)
@@ -129,7 +139,6 @@ export default function CanadaPortalLeadDetailPage() {
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
   // Proposal state
-  const [proposalBlob, setProposalBlob] = useState<Blob | null>(null)
   const [proposalGenerating, setProposalGenerating] = useState(false)
   const [proposalEmailing, setProposalEmailing] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
@@ -144,6 +153,12 @@ export default function CanadaPortalLeadDetailPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceEmailing, setInvoiceEmailing] = useState(false)
   const [invoiceEmailed, setInvoiceEmailed] = useState(false)
+  // Square checkout link + an on-screen QR the customer scans to pay. QR is
+  // rendered client-side (qrcode lib) so it can't fail to appear when an
+  // external QR image service is blocked.
+  const [checkoutUrl, setCheckoutUrl] = useState('')
+  const [checkoutQr, setCheckoutQr] = useState('')
+  const [checkoutCopied, setCheckoutCopied] = useState(false)
 
   // SLA state
   const [slaBlob, setSlaBlob] = useState<Blob | null>(null)
@@ -460,6 +475,20 @@ export default function CanadaPortalLeadDetailPage() {
         // Square checkout unavailable — fall back to local invoice URL
       }
 
+      // Surface the checkout link + an on-screen QR so the customer can scan
+      // to pay right at the checkout step (not only inside the emailed PDF).
+      setCheckoutUrl(checkoutUrl)
+      try {
+        const qr = await QRCode.toDataURL(checkoutUrl, {
+          width: 240,
+          margin: 1,
+          color: { dark: '#00d4aa', light: '#0a0f0d' },
+        })
+        setCheckoutQr(qr)
+      } catch {
+        setCheckoutQr('')
+      }
+
       const input: InvoiceInput = {
         invoiceNumber: invNum,
         businessName: deal.business_name,
@@ -552,11 +581,28 @@ export default function CanadaPortalLeadDetailPage() {
       }
       const blob = await generateSlaDocument(slaInput)
       setSlaBlob(blob)
+      upsertSlaFile(deal.business_name, false)
     } catch (err) {
       console.error('[SLA] Generation failed:', err)
     } finally {
       setSlaGenerating(false)
     }
+  }
+
+  // Surface the generated SLA in the Project Files list (clicking it opens the
+  // in-memory slaBlob via the files row handler, which keys off tag === 'Contract').
+  function upsertSlaFile(businessName: string, signed: boolean) {
+    const entry = {
+      id: SLA_FILE_ID,
+      name: `SLA_${businessName.replace(/\s+/g, '_')}.pdf`,
+      description: signed ? 'Service Level Agreement — signed' : 'Service Level Agreement',
+      tag: 'Contract',
+    }
+    setFiles(prev =>
+      prev.some(f => f.id === SLA_FILE_ID)
+        ? prev.map(f => (f.id === SLA_FILE_ID ? entry : f))
+        : [...prev, entry],
+    )
   }
 
   function handleDownloadSla() {
@@ -584,6 +630,7 @@ export default function CanadaPortalLeadDetailPage() {
       const signedBlob = await generateSlaDocument(slaInput)
       setSlaBlob(signedBlob)
       setSlaSigned(true)
+      upsertSlaFile(deal.business_name, true)
       setShowSlaSign(false)
 
       const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -649,35 +696,37 @@ export default function CanadaPortalLeadDetailPage() {
     }
   }
 
-  const buildProposalInput = useCallback(() => {
+  // Opens the lead's industry-specific proposal deck (the live hosted deck on
+  // meridian-decks.vercel.app, personalized with rep + business name) — the
+  // current proposal format. Falls back to prompting the rep to tag the
+  // business type, since the deck is selected from deal.vertical.
+  function openProposalDeck(): string | null {
     if (!deal || !rep) return null
-    const closestPlan = monthlyPrice >= 1000 ? 'command' : monthlyPrice >= 500 ? 'premium' : 'standard'
-    const plan = getPlan(closestPlan)
-    return {
-      businessName: deal.business_name,
-      ownerName: deal.contact_name,
-      email: deal.contact_email,
-      phone: deal.contact_phone || '',
-      plan,
-      customPrice: monthlyPrice,
-      setupFee: Number(setupFee) || 0,
-      firstMonthFree,
-      rep,
+    const deck = findVerticalByValue(deal.vertical)
+    if (!deck) {
+      toast("Tag this lead's business type first — the proposal is built from its industry deck.", 'info')
+      return null
     }
-  }, [deal, rep, monthlyPrice, setupFee, firstMonthFree])
+    const url = buildPersonalizedDeckUrl(deck.slug, rep, deal.business_name, {
+      monthly: monthlyPrice,
+      setup: Number(setupFee) || 0,
+      currency: 'CAD',
+      firstMonthFree,
+    })
+    window.open(url, '_blank')
+    return url
+  }
 
   async function handleGenerateProposal() {
-    const input = buildProposalInput()
-    if (!input) return
+    if (!deal) return
     setProposalGenerating(true)
     try {
-      const blob = await generateProposalPdf(input)
-      setProposalBlob(blob)
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-      if (deal && (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted')) {
-        await updateStage.mutateAsync({ id: deal.id, stage: 'proposal_shown' })
+      const url = openProposalDeck()
+      if (!url) return
+      if (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted') {
+        localStageRef.current = { stage: 'proposal_shown', at: Date.now() }
         patchDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
+        await updateStage.mutateAsync({ id: deal.id, stage: 'proposal_shown' })
       }
     } catch (err) {
       console.error('[Proposal] Generation failed:', err)
@@ -686,29 +735,12 @@ export default function CanadaPortalLeadDetailPage() {
     }
   }
 
-  async function handleViewProposal() {
-    const input = buildProposalInput()
-    if (!input) return
-    setProposalGenerating(true)
-    try {
-      const blob = await generateProposalPdf(input)
-      setProposalBlob(blob)
-      const url = URL.createObjectURL(blob)
-      window.open(url, '_blank')
-    } catch (err) {
-      console.error('[Proposal] Generation failed:', err)
-    } finally {
-      setProposalGenerating(false)
-    }
-  }
-
-  function handleDownloadProposal() {
-    handleViewProposal()
+  function handleViewProposal() {
+    openProposalDeck()
   }
 
   async function handleEmailProposal() {
     if (!deal) return
-    if (!proposalBlob) await handleGenerateProposal()
     setProposalEmailing(true)
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -750,9 +782,18 @@ export default function CanadaPortalLeadDetailPage() {
 
   useEffect(() => { dealRef.current = deal }, [deal])
 
-  // Keep monthlyPrice in sync with the loaded/refreshed deal.
+  // Seed monthlyPrice from the lead's stored value ONCE per lead. Keying on
+  // deal.id (not the whole deal object) is deliberate: the realtime
+  // subscription and optimistic patches hand back a fresh `deal` reference on
+  // every change, and re-running this on each one would snap the rep's
+  // hand-tuned slider back to the stored value mid-edit — the price the
+  // proposal/deck then used wouldn't match what the rep selected.
+  const pricedForIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (deal) setMonthlyPrice(deal.monthly_value || 500)
+    if (deal && deal.id !== pricedForIdRef.current) {
+      pricedForIdRef.current = deal.id
+      setMonthlyPrice(deal.monthly_value || 500)
+    }
   }, [deal])
 
   // Bridge the realtime subscription into the query cache, but keep the
@@ -768,11 +809,20 @@ export default function CanadaPortalLeadDetailPage() {
       const updated = deals.find(d => d.id === id)
       if (updated) {
         const current = dealRef.current
-        if (current && updated.stage !== current.stage) {
-          notifyStageChange(updated.business_name, updated.stage)
-          toast(`${updated.business_name} moved to ${updated.stage.replace(/_/g, ' ')}`, 'info')
+        // Guard against a stale realtime echo regressing our optimistic stage:
+        // if we advanced locally within the last few seconds and the echo
+        // carries the OLD stage, keep ours. A genuinely newer stage (matches or
+        // moves past our local one) is allowed through.
+        const local = localStageRef.current
+        const withinWindow = local && Date.now() - local.at < 8000
+        const echoIsStale =
+          withinWindow && updated.stage !== local!.stage && current?.stage === local!.stage
+        const resolved = echoIsStale ? { ...updated, stage: local!.stage } : updated
+        if (current && resolved.stage !== current.stage) {
+          notifyStageChange(resolved.business_name, resolved.stage)
+          toast(`${resolved.business_name} moved to ${resolved.stage.replace(/_/g, ' ')}`, 'info')
         }
-        qc.setQueryData(canadaKeys.lead(id), updated)
+        qc.setQueryData(canadaKeys.lead(id), resolved)
         qc.setQueryData(canadaKeys.leads(rep?.rep_id), deals)
       }
     })
@@ -850,12 +900,27 @@ export default function CanadaPortalLeadDetailPage() {
           <button
             disabled={editSaving}
             onClick={async () => {
+              // Snapshot the fields we're about to overwrite so we can roll
+              // back if the write fails. Optimistic-first: update the displayed
+              // deal and close the editor immediately so a stalled Supabase
+              // write can't trap the UI on an infinite spinner.
+              const snapshot = {
+                business_name: deal.business_name,
+                contact_name: deal.contact_name,
+                contact_email: deal.contact_email,
+                contact_phone: deal.contact_phone,
+                notes: deal.notes,
+              }
+              const next = { ...editForm }
               setEditSaving(true)
+              patchDeal(prev => prev ? { ...prev, ...next } : prev)
+              setEditing(false)
               try {
-                await updateLead.mutateAsync({ id: deal.id, updates: editForm })
-                patchDeal(prev => prev ? { ...prev, ...editForm } : prev)
-                setEditing(false)
+                await updateLead.mutateAsync({ id: deal.id, updates: next })
               } catch (err) {
+                patchDeal(prev => prev ? { ...prev, ...snapshot } : prev)
+                setEditForm(next)
+                setEditing(true)
                 setPosError(err instanceof Error ? `Save failed: ${err.message}` : 'Failed to save changes. Please try again.')
               } finally {
                 setEditSaving(false)
@@ -897,6 +962,8 @@ export default function CanadaPortalLeadDetailPage() {
       <LeadDeckCard
         deal={deal}
         rep={rep}
+        monthly={monthlyPrice}
+        setup={Number(setupFee) || 0}
         copied={deckLinkCopied}
         tagging={deckTagging}
         onCopy={async (url) => {
@@ -980,19 +1047,9 @@ export default function CanadaPortalLeadDetailPage() {
           {proposalGenerating ? (
             <><Loader2 size={16} className="animate-spin" /> Generating…</>
           ) : (
-            <><Sparkles size={16} /> {proposalBlob ? 'Regenerate Proposal' : 'Generate Proposal'}</>
+            <><Sparkles size={16} /> Generate Proposal</>
           )}
         </button>
-
-        {proposalBlob && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
-            <CheckCircle2 size={16} className="text-pm-accent" />
-            <span className="text-xs text-pm-accent font-medium">Proposal ready — 9 slides, PDF generated.</span>
-            <button onClick={handleDownloadProposal} className="ml-auto text-pm-accent hover:text-white transition-colors">
-              <Download size={14} />
-            </button>
-          </div>
-        )}
 
         <div className="flex gap-3">
           <button
@@ -1074,6 +1131,46 @@ export default function CanadaPortalLeadDetailPage() {
                 )}
               </button>
             </div>
+            {checkoutQr && (
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-lg bg-pm-canada-bg border border-pm-accent/20">
+                <img src={checkoutQr} alt="Checkout QR code" className="w-28 h-28 rounded-lg shrink-0" />
+                <div className="min-w-0 flex-1 text-center sm:text-left">
+                  <p className="text-sm font-semibold text-white mb-0.5">Scan to pay</p>
+                  <p className="text-2xs text-pm-canada-text-muted mb-2.5">
+                    Customer scans this to open the secure CAD checkout — or tap the link below.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pm-accent text-pm-canada-bg text-xs font-semibold hover:bg-pm-accent/90 active:scale-[0.98] transition-all"
+                    >
+                      Open checkout <ExternalLink size={11} />
+                    </a>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(checkoutUrl)
+                          setCheckoutCopied(true)
+                          setTimeout(() => setCheckoutCopied(false), 1800)
+                        } catch {
+                          toast('Could not copy — long-press the Open button instead.', 'error')
+                        }
+                      }}
+                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                        checkoutCopied
+                          ? 'border-pm-accent/40 bg-pm-accent/10 text-pm-accent'
+                          : 'border-pm-canada-border bg-pm-canada-surface text-pm-muted hover:border-[#1a3a30] hover:text-white active:scale-[0.98]'
+                      }`}
+                    >
+                      {checkoutCopied ? <Check size={11} /> : <Copy size={11} />}
+                      {checkoutCopied ? 'Copied' : 'Copy link'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <p className="text-2xs text-pm-canada-text-faint">
               Recurring monthly — customer will be billed CA${monthlyPrice.toLocaleString()}/mo automatically.
             </p>
@@ -1403,7 +1500,7 @@ export default function CanadaPortalLeadDetailPage() {
           {files.map(file => (
             <div key={file.id} className="flex items-center gap-3 p-3 bg-pm-canada-bg border border-pm-canada-border rounded-lg hover:border-pm-accent/20 transition-colors cursor-pointer group"
               onClick={() => {
-                if (file.tag === 'Proposal' && proposalBlob) { const u = URL.createObjectURL(proposalBlob); window.open(u, '_blank') }
+                if (file.tag === 'Proposal') { openProposalDeck() }
                 else if (file.tag === 'Contract' && slaBlob) { const u = URL.createObjectURL(slaBlob); window.open(u, '_blank') }
               }}
             >
@@ -1436,6 +1533,7 @@ export default function CanadaPortalLeadDetailPage() {
           <h2 className="text-sm font-semibold text-white">Advance Deal</h2>
           <button
             data-testid="advance-stage-button"
+            disabled={updateStage.isPending}
             onClick={async () => {
               const pipeline: DealStage[] = ['proposal_shown', 'customer_checkout', 'customer_walkthrough']
               const currentIdx = pipeline.findIndex(s => STAGE_TO_STEP[s] === currentStep)
@@ -1445,13 +1543,19 @@ export default function CanadaPortalLeadDetailPage() {
                 return
               }
               const nextStage = pipeline[nextIdx]
+              // Mark the optimistic stage BEFORE awaiting so a realtime echo
+              // that lands mid-flight can't regress it (see localStageRef).
+              localStageRef.current = { stage: nextStage, at: Date.now() }
+              patchDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
               try {
                 await updateStage.mutateAsync({ id: deal.id, stage: nextStage })
-                patchDeal(prev => prev ? { ...prev, stage: nextStage } : prev)
                 toast(`Advanced to ${nextStage.replace(/_/g, ' ')}`, 'success')
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err)
                 console.error('Stage advance failed:', err)
+                // Roll back the optimistic patch so the UI matches reality.
+                localStageRef.current = null
+                patchDeal(prev => prev ? { ...prev, stage: deal.stage } : prev)
                 // Most common silent-fail causes: stale Supabase JWT (RLS denies
                 // auth.role() = 'authenticated'), or the new stage value isn't
                 // in canada_leads_stage_check. Surface to the rep so they can
@@ -1459,9 +1563,11 @@ export default function CanadaPortalLeadDetailPage() {
                 toast(`Couldn't advance: ${msg}. Try refreshing the page.`, 'error')
               }
             }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-accent/30 text-pm-accent text-sm font-medium rounded-lg hover:bg-pm-accent/10 transition-all"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-accent/30 text-pm-accent text-sm font-medium rounded-lg hover:bg-pm-accent/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
-            <ChevronRight size={16} /> Advance to Next Stage
+            {updateStage.isPending
+              ? <><Loader2 size={16} className="animate-spin" /> Advancing…</>
+              : <><ChevronRight size={16} /> Advance to Next Stage</>}
           </button>
         </div>
       )}
@@ -1564,17 +1670,19 @@ export default function CanadaPortalLeadDetailPage() {
 interface LeadDeckCardProps {
   deal: Deal
   rep: { name?: string | null; email?: string | null; phone?: string | null } | null
+  monthly: number
+  setup: number
   copied: boolean
   tagging: boolean
   onCopy: (url: string) => void | Promise<void>
   onTagVertical: (slug: string) => void | Promise<void>
 }
 
-function LeadDeckCard({ deal, rep, copied, tagging, onCopy, onTagVertical }: LeadDeckCardProps) {
+function LeadDeckCard({ deal, rep, monthly, setup, copied, tagging, onCopy, onTagVertical }: LeadDeckCardProps) {
   const deck = useMemo(() => findVerticalByValue(deal.vertical), [deal.vertical])
   const personalizedUrl = useMemo(
-    () => (deck ? buildPersonalizedDeckUrl(deck.slug, rep, deal.business_name) : ''),
-    [deck, rep, deal.business_name],
+    () => (deck ? buildPersonalizedDeckUrl(deck.slug, rep, deal.business_name, { monthly, setup, currency: 'CAD' }) : ''),
+    [deck, rep, deal.business_name, monthly, setup],
   )
 
   // Quick-tag chip selection — 6 most common CAD verticals for fast tagging.
@@ -1614,46 +1722,11 @@ function LeadDeckCard({ deal, rep, copied, tagging, onCopy, onTagVertical }: Lea
     )
   }
 
-  return (
-    <div className="bg-pm-canada-surface border border-pm-accent/20 rounded-xl p-5 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles size={14} className="text-pm-accent" />
-            <h2 className="text-sm font-semibold text-white">Proposal for this lead</h2>
-          </div>
-          <h3 className="text-sm font-semibold text-white leading-tight">{deck.title}</h3>
-          <p className="text-xs text-pm-muted mt-1 leading-relaxed">{deck.blurb}</p>
-          <p className="text-2xs text-pm-canada-text-muted mt-2">
-            Avg ticket <span className="text-white">{deck.avgTicket}</span> · Payback{' '}
-            <span className="text-pm-accent">{deck.payback}</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-2 pt-1">
-        <a
-          href={personalizedUrl}
-          target="_blank"
-          rel="noopener"
-          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pm-accent text-[#001a14] text-xs font-semibold hover:bg-pm-accent active:scale-[0.98] transition-all"
-        >
-          Open personalized deck
-          <ExternalLink size={11} />
-        </a>
-        <button
-          onClick={() => onCopy(personalizedUrl)}
-          className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
-            copied
-              ? 'border-pm-accent/40 bg-pm-accent/10 text-pm-accent'
-              : 'border-pm-canada-border bg-pm-canada-bg text-pm-muted hover:border-[#1a3a30] hover:text-white active:scale-[0.98]'
-          }`}
-          title="Copy personalized link"
-        >
-          {copied ? <Check size={11} /> : <Copy size={11} />}
-          {copied ? 'Copied' : 'Copy link'}
-        </button>
-      </div>
-    </div>
-  )
+  // Once a vertical is tagged, the proposal entry point lives in the Step 1
+  // "Proposal" section below (price slider + Generate/View/Email), so the
+  // redundant top-of-page "Open personalized deck" card is intentionally not
+  // rendered. `personalizedUrl`/`onCopy`/`copied` remain wired for the
+  // untagged tagging flow and any future reuse.
+  void personalizedUrl
+  return null
 }

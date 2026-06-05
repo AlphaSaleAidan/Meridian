@@ -14,6 +14,20 @@ function normalizeRate(v: number): number {
   return v <= 1 ? Math.round(v * 100) : v
 }
 
+/** Reject a pending Supabase request after `ms` so the UI can't spin forever
+ *  on a stalled connection or a wedged auth refresh. */
+async function withTimeout<T>(p: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new LeadsServiceError(message)), ms)
+  })
+  try {
+    return await Promise.race([p, timeout])
+  } finally {
+    clearTimeout(timer!)
+  }
+}
+
 const DEAL_STAGES = [
   'proposal_shown',
   'customer_checkout',
@@ -85,7 +99,17 @@ function rowToDeal(row: unknown): Deal {
 // `list()` revalidates in the background. The realtime subscription also
 // writes through this cache.
 const _listCache = new Map<string, Deal[]>()
-const _listInflight = new Map<string, Promise<Deal[]>>()
+
+// Fix #2: track inflight with a timestamp so stuck promises don't get
+// re-attached to every new mount. If an inflight call is older than
+// `_INFLIGHT_REUSE_MS`, the next caller starts a fresh request instead
+// of awaiting the (likely dead) one. A 15s timeout on the underlying
+// query also rejects the inflight promise so its `finally` clears the
+// map entry.
+type Inflight = { promise: Promise<Deal[]>; startedAt: number }
+const _listInflight = new Map<string, Inflight>()
+const _INFLIGHT_REUSE_MS = 1_000
+const _LIST_TIMEOUT_MS = 15_000
 const _cacheKey = (repId?: string) => repId || '__all__'
 
 function _invalidateCaches() {
@@ -99,18 +123,45 @@ export const canadaLeadsService = {
     return _listCache.has(key) ? _listCache.get(key)! : null
   },
 
+  /** Drops the module-level list cache. Call on logout / rep switch so a
+   * second rep on the same browser doesn't see the previous rep's deals
+   * via `initialData` until staleTime expires. */
+  invalidateCaches(): void {
+    _invalidateCaches()
+  },
+
   async list(repId?: string): Promise<Deal[]> {
     if (!supabase) return []
     const key = _cacheKey(repId)
-    // De-dupe concurrent calls so rapid tab navigation doesn't spam the API.
-    const inflight = _listInflight.get(key)
-    if (inflight) return inflight
-    const promise = (async () => {
+    // De-dupe concurrent calls so rapid tab navigation doesn't spam the
+    // API — but only reuse an inflight promise that's <1s old. A stuck
+    // request (dropped TCP, slow network, paused JS context after a
+    // background tab) used to attach every subsequent mount to a dead
+    // promise, leaving every tab on the "loading" skeleton until the
+    // user did a full page refresh.
+    const existing = _listInflight.get(key)
+    const now = Date.now()
+    if (existing && now - existing.startedAt < _INFLIGHT_REUSE_MS) {
+      return existing.promise
+    }
+    // Either no inflight, or the inflight is old enough to be suspect —
+    // start fresh. The old promise (if any) continues running in the
+    // background; its `finally` will only clear the map entry if its
+    // key still points at it, so it can't evict our new entry.
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), _LIST_TIMEOUT_MS)
+    const startedAt = Date.now()
+    // Hoist the holder so the inner finally can compare against `holder.promise`
+    // after it's assigned — the previous shape tripped TS2454 because the
+    // closure referenced `promise` before it was bound.
+    const holder: { promise: Promise<Deal[]> } = { promise: undefined as unknown as Promise<Deal[]> }
+    holder.promise = (async () => {
       try {
         let query = supabase!
           .from('canada_leads')
           .select('*')
           .order('created_at', { ascending: false })
+          .abortSignal(controller.signal)
         if (repId) query = query.eq('rep_id', repId)
         const { data, error } = await query
         if (error) throw new LeadsServiceError(error.message)
@@ -118,11 +169,18 @@ export const canadaLeadsService = {
         _listCache.set(key, deals)
         return deals
       } finally {
-        _listInflight.delete(key)
+        clearTimeout(timeoutId)
+        const current = _listInflight.get(key)
+        // Only clear if we're still the current entry — a fresher
+        // request may have replaced us in the meantime, in which case
+        // we must not evict it.
+        if (current && current.promise === holder.promise) {
+          _listInflight.delete(key)
+        }
       }
     })()
-    _listInflight.set(key, promise)
-    return promise
+    _listInflight.set(key, { promise: holder.promise, startedAt })
+    return holder.promise
   },
 
   async getById(id: string): Promise<Deal | null> {
@@ -139,27 +197,31 @@ export const canadaLeadsService = {
 
   async create(deal: Deal, repId?: string): Promise<Deal> {
     if (!supabase) return deal
-    const { data, error } = await supabase
-      .from('canada_leads')
-      .insert({
-        id: deal.id,
-        business_name: deal.business_name,
-        contact_name: deal.contact_name,
-        contact_email: deal.contact_email,
-        contact_phone: deal.contact_phone,
-        vertical: deal.vertical,
-        stage: deal.stage,
-        monthly_value: deal.monthly_value,
-        commission_rate: deal.commission_rate,
-        expected_close_date: deal.expected_close_date,
-        notes: deal.notes,
-        source: deal.source || '',
-        city: deal.city || '',
-        province: deal.province || '',
-        rep_id: repId || null,
-      })
-      .select()
-      .single()
+    const { data, error } = await withTimeout(
+      supabase
+        .from('canada_leads')
+        .insert({
+          id: deal.id,
+          business_name: deal.business_name,
+          contact_name: deal.contact_name,
+          contact_email: deal.contact_email,
+          contact_phone: deal.contact_phone,
+          vertical: deal.vertical,
+          stage: deal.stage,
+          monthly_value: deal.monthly_value,
+          commission_rate: deal.commission_rate,
+          expected_close_date: deal.expected_close_date,
+          notes: deal.notes,
+          source: deal.source || '',
+          city: deal.city || '',
+          province: deal.province || '',
+          rep_id: repId || null,
+        })
+        .select()
+        .single(),
+      15_000,
+      'Saving the lead timed out — check your connection and try again.',
+    )
     if (error) throw new Error(error.message)
     _invalidateCaches()
     if (data) return rowToDeal(data)
@@ -169,10 +231,14 @@ export const canadaLeadsService = {
   async updateStage(id: string, stage: DealStage): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('canada_leads')
-      .update({ stage, updated_at: now })
-      .eq('id', id)
+    const { error } = await withTimeout(
+      supabase
+        .from('canada_leads')
+        .update({ stage, updated_at: now })
+        .eq('id', id),
+      15_000,
+      'Updating the stage timed out — check your connection and try again.',
+    )
     if (error) throw new LeadsServiceError(error.message)
     _invalidateCaches()
   },
@@ -180,17 +246,25 @@ export const canadaLeadsService = {
   async update(id: string, updates: Partial<Deal>): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('canada_leads')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
+    const { error } = await withTimeout(
+      supabase
+        .from('canada_leads')
+        .update({ ...updates, updated_at: now })
+        .eq('id', id),
+      15_000,
+      'Saving the changes timed out — check your connection and try again.',
+    )
     if (error) throw new LeadsServiceError(error.message)
     _invalidateCaches()
   },
 
   async delete(id: string): Promise<void> {
     if (!supabase) return
-    const { error } = await supabase.from('canada_leads').delete().eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('canada_leads').delete().eq('id', id),
+      15_000,
+      'Deleting the lead timed out — check your connection and try again.',
+    )
     if (error) throw new LeadsServiceError(error.message)
     _invalidateCaches()
   },
@@ -200,8 +274,19 @@ export const canadaLeadsService = {
     onChanged: (deals: Deal[]) => void,
   ): RealtimeChannel | null {
     if (!supabase) return null
+    // Unique channel name per subscription so concurrent subscribers
+    // (e.g. StrictMode double-mount + a tab navigation in flight)
+    // don't share a single Supabase singleton channel by name.
+    // Without this, the unmounting page's `removeChannel(...)` cleanup
+    // killed the just-mounted page's binding — the "can't open the
+    // next tab without a full refresh" symptom.
+    const name = `canada_leads_realtime_${repId || 'all'}_${
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36)
+    }`
     const channel = supabase
-      .channel('canada_leads_realtime')
+      .channel(name)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'canada_leads' },
