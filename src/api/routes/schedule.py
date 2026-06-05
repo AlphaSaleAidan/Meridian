@@ -714,7 +714,11 @@ async def recommend_shifts(
         from ...ai.scheduling.staffing_recommender import build_recommendations
 
         holidays_by_dow = await _gather_holidays_by_dow(country, week_start)
-        weather_by_dow, rain_impact_pct = await _gather_weather_by_dow(lat, lon, week_start)
+        # No per-merchant coords yet — default CA to Toronto so the forecast is
+        # at least Canadian rather than the Miami service default.
+        w_lat = lat if lat is not None else 43.6532
+        w_lon = lon if lon is not None else -79.3832
+        weather_by_dow, rain_impact_pct = await _gather_weather_by_dow(w_lat, w_lon, week_start)
         result = build_recommendations(
             peaks=peaks,
             coverage=coverage,

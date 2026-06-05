@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Sparkles, Plus, AlertTriangle, TrendingUp, Check, CalendarDays, CloudRain, Activity } from 'lucide-react'
 import { api } from '@/lib/api'
-import type { ScheduleShift } from '@/lib/agent-data'
+import type { ScheduleShift, Holiday } from '@/lib/agent-data'
 import { fmtTime } from './schedule-helpers'
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -41,13 +41,72 @@ interface Props {
   onAccept: (rec: { dayOfWeek: number; startTime: string; endTime: string; role: string }) => void
   /** 'CA' enables the weather + holiday agent on the backend; defaults to 'US' (peaks only) */
   country?: string
+  /** Demo route — show the full synthesized data set (peaks included) */
+  isDemo?: boolean
+  /** Real POS connection. When false we can't predict peak demand, so we limit
+   *  recommendations to holidays + weather only (never synthesized peaks). */
+  posConnected?: boolean
+  /** This week's holidays — used to build holiday recs client-side when there's
+   *  no live backend connection (non-UUID merchant, POS not yet connected). */
+  holidays?: Holiday[]
+}
+
+const HOLIDAY_DEFAULT_START = 11
+const HOLIDAY_DEFAULT_END = 15
+
+/** Date 'YYYY-MM-DD' → day-of-week with Monday = 0 (matches DAY_LABELS). */
+function dowFromISO(iso: string): number {
+  const d = new Date(`${iso}T00:00:00`)
+  return (d.getDay() + 6) % 7
+}
+
+/** Build holiday-only recommendations client-side (no POS, no backend).
+ *  Higher-traffic holidays (Boxing Day, Mother's Day) read as critical;
+ *  low-traffic federal closures stay optional. */
+function holidayRecsClient(holidays: Holiday[], currentShifts: ScheduleShift[]): Recommendation[] {
+  if (holidays.length === 0) return []
+  const coverage = new Map<string, number>()
+  for (const s of currentShifts) {
+    if (s.isRecommended) continue
+    const sh = parseInt(s.startTime)
+    const eh = parseInt(s.endTime)
+    for (let h = sh; h < eh; h++) coverage.set(`${s.dayOfWeek}-${h}`, (coverage.get(`${s.dayOfWeek}-${h}`) || 0) + 1)
+  }
+  const recs: Recommendation[] = []
+  for (const h of holidays) {
+    const day = dowFromISO(h.date)
+    const uncovered = Array.from({ length: HOLIDAY_DEFAULT_END - HOLIDAY_DEFAULT_START }, (_, i) => HOLIDAY_DEFAULT_START + i)
+      .some(hr => (coverage.get(`${day}-${hr}`) || 0) < 1)
+    if (!uncovered) continue
+    const mult = h.trafficMultiplier
+    const priority: Recommendation['priority'] = mult >= 1.5 ? 'critical' : mult >= 0.9 ? 'recommended' : 'optional'
+    const label = mult >= 1.5 ? `${h.name} surge` : `${h.name} holiday`
+    recs.push({
+      id: `holiday-${h.date}`,
+      day_of_week: day,
+      start_time: `${String(HOLIDAY_DEFAULT_START).padStart(2, '0')}:00`,
+      end_time: `${String(HOLIDAY_DEFAULT_END).padStart(2, '0')}:00`,
+      role: 'any',
+      reason: label,
+      priority,
+      factors: [{ kind: 'holiday', label }],
+    })
+  }
+  const rank: Record<string, number> = { critical: 0, recommended: 1, optional: 2 }
+  recs.sort((a, b) => rank[a.priority] - rank[b.priority] || a.day_of_week - b.day_of_week)
+  return recs
 }
 
 function synthFromPeaks(
-  peaks: { day: number; hour: number; intensity: number }[],
+  rawPeaks: { day: number; hour: number; intensity: number }[],
   currentShifts: ScheduleShift[],
 ): Recommendation[] {
-  if (peaks.length === 0) return []
+  if (rawPeaks.length === 0) return []
+  // The demo heatmap emits raw transaction counts (~0–100); the backend emits
+  // normalized 0–1. Normalize by the max so thresholds + % labels are sane.
+  const maxI = rawPeaks.reduce((m, p) => Math.max(m, p.intensity), 0) || 1
+  const scale = maxI > 1.5 ? 1 / maxI : 1
+  const peaks = scale === 1 ? rawPeaks : rawPeaks.map(p => ({ ...p, intensity: p.intensity * scale }))
   // Coverage map from existing shifts
   const coverage = new Map<string, number>()
   for (const s of currentShifts) {
@@ -120,6 +179,7 @@ const PRIORITY_STYLE: Record<Recommendation['priority'], { fg: string; bg: strin
 
 export default function RecommendationsPanel({
   merchantId, weekStart, liveMode, peakHoursFallback, currentShifts, onAccept, country,
+  isDemo = false, posConnected = false, holidays = [],
 }: Props) {
   const [recs, setRecs] = useState<Recommendation[] | null>(null)
   const [signals, setSignals] = useState<Signal[]>([])
@@ -127,26 +187,36 @@ export default function RecommendationsPanel({
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    if (!liveMode) {
+    // Live merchant: the backend decides what to include. It only emits peak
+    // windows when there's real POS history, otherwise holidays + weather only.
+    if (liveMode) {
+      let cancelled = false
+      setLoading(true)
+      api.scheduleRecommend(merchantId, weekStart, 8, country ? { country } : {})
+        .then(res => {
+          if (cancelled) return
+          setRecs(res.recommendations)
+          setSignals(res.signals ?? [])
+        })
+        .catch(e => {
+          console.warn('scheduleRecommend failed:', e)
+          if (!cancelled) { setRecs([]); setSignals([]) }
+        })
+        .finally(() => { if (!cancelled) setLoading(false) })
+      return () => { cancelled = true }
+    }
+    // Demo route: show the full synthesized data set (peaks included).
+    if (isDemo) {
       setRecs(synthFromPeaks(peakHoursFallback, currentShifts))
       setSignals([])
       return
     }
-    let cancelled = false
-    setLoading(true)
-    api.scheduleRecommend(merchantId, weekStart, 8, country ? { country } : {})
-      .then(res => {
-        if (cancelled) return
-        setRecs(res.recommendations)
-        setSignals(res.signals ?? [])
-      })
-      .catch(e => {
-        console.warn('scheduleRecommend failed:', e)
-        if (!cancelled) { setRecs([]); setSignals([]) }
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [liveMode, merchantId, weekStart, peakHoursFallback, currentShifts, country])
+    // Real merchant, no live connection. Without POS history we can't predict
+    // peak demand — limit recommendations to holidays (client-side) only.
+    const hRecs = holidayRecsClient(holidays, currentShifts)
+    setRecs(hRecs)
+    setSignals(holidays.map(h => ({ kind: 'holiday' as const, label: `${h.name} (${DAY_LABELS[dowFromISO(h.date)]})` })))
+  }, [liveMode, isDemo, posConnected, merchantId, weekStart, peakHoursFallback, currentShifts, country, holidays])
 
   const handleAccept = useCallback((rec: Recommendation) => {
     setAcceptedIds(prev => new Set(prev).add(rec.id))
@@ -201,10 +271,17 @@ export default function RecommendationsPanel({
         </div>
       )}
       {recs.length === 0 ? (
-        <p className="text-[12px] text-[#A1A1A8]">
-          <Check size={11} className="inline text-[#17C5B0] mr-1" />
-          Your schedule covers every detected peak window.
-        </p>
+        !liveMode && !isDemo && !posConnected ? (
+          <p className="text-[12px] text-[#A1A1A8] leading-relaxed">
+            Connect your POS to unlock peak-demand staffing recommendations.
+            Until then, holiday &amp; weather tips will appear here automatically.
+          </p>
+        ) : (
+          <p className="text-[12px] text-[#A1A1A8]">
+            <Check size={11} className="inline text-[#17C5B0] mr-1" />
+            Your schedule covers every detected peak window.
+          </p>
+        )
       ) : visible.length === 0 ? (
         <p className="text-[12px] text-[#A1A1A8]">Nice — every recommendation is on the schedule.</p>
       ) : (

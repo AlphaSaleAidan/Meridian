@@ -762,6 +762,9 @@ export default function SchedulePage() {
             currentShifts={shifts}
             onAccept={handleAcceptRecommendation}
             country={country}
+            isDemo={isDemo}
+            posConnected={!!org?.pos_connected}
+            holidays={holidays}
           />
         </ScrollReveal>
       )}
