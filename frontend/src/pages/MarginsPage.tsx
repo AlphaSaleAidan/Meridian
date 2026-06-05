@@ -9,10 +9,11 @@ import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
-import DataPageSkeleton from '@/components/DataPageSkeleton'
+import AwaitingDataBanner from '@/components/AwaitingDataBanner'
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -73,12 +74,18 @@ function FormulaBreakdown({ item }: { item: MarginItem }) {
 export default function MarginsPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const apiData = useApi(() => api.margins(orgId), [orgId])
 
   const items: MarginItem[] = isDemo ? generateMarginWaterfall() : (apiData.data?.items ?? [])
 
-  if (!isDemo && apiData.loading) return <LoadingPage />
-  if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+  // Only surface loading / error once a POS is actually connected. Before that
+  // the analytics endpoint 401s — instead of a scaffold we render the real
+  // (empty) margin chart shell so the merchant sees exactly what fills in.
+  if (!isDemo && posConnected && apiData.loading) return <LoadingPage />
+  if (!isDemo && posConnected && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+  const awaitingData = !isDemo && items.length === 0
 
   const totalRevenue = items.reduce((s, i) => s + i.revenueCents, 0)
   const totalCost = items.reduce((s, i) => s + i.costCents, 0)
@@ -96,7 +103,6 @@ export default function MarginsPage() {
 
 
   return (
-    <DataPageSkeleton title="Margins" layout="chart">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -106,6 +112,8 @@ export default function MarginsPage() {
           </p>
         </div>
       </ScrollReveal>
+
+      {awaitingData && <AwaitingDataBanner posConnected={posConnected} label="margin analysis" />}
 
       <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-walkthrough="margin-stats">
         <StaggerItem>
@@ -196,7 +204,8 @@ export default function MarginsPage() {
               <XAxis type="number" tick={{ fill: '#F5F5F7', fontSize: 10, fontFamily: 'Geist Mono, monospace' }} axisLine={false} tickLine={false}
                 tickFormatter={v => `${v}%`} domain={[0, 100]} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#F5F5F7', fontSize: 10, fontFamily: 'Geist Mono, monospace' }} axisLine={false} tickLine={false} width={90} />
-              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number) => [`${v}%`, 'Margin']} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number) => [`${v}%`, 'Margin']}
+                cursor={{ fill: 'rgba(26, 143, 214, 0.04)' }} />
               <Bar dataKey="margin" radius={[0, 4, 4, 0]} fillOpacity={0.85}>
                 {chartData.map((entry, i) => (
                   <Cell key={i} fill={entry.margin >= 70 ? '#17C5B0' : entry.margin >= 60 ? '#1A8FD6' : '#F97316'} />
@@ -304,6 +313,5 @@ export default function MarginsPage() {
         </div>
       </ScrollReveal>
     </div>
-    </DataPageSkeleton>
   )
 }

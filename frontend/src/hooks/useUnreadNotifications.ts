@@ -53,25 +53,42 @@ export function useUnreadNotifications(): UseUnreadNotifications {
     if (!supabase || isDemo || !orgId || skipForAdmin) return
 
     const client = supabase
+    const topic = `notifications-badge-${orgId}`
 
-    const channel = client
-      .channel(`notifications-badge-${orgId}`)
-      .on(
-        'postgres_changes' as any,
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `org_id=eq.${orgId}`,
-        },
-        (_payload: any) => {
-          setUnreadCount((c) => c + 1)
-        },
-      )
-      .subscribe()
+    // The Supabase client caches channels by topic on a module-level singleton.
+    // A stale channel for this topic (left by a fast remount, StrictMode double-
+    // mount, or HMR) is still subscribed, so client.channel(topic) would return
+    // it and the chained .on() throws "cannot add callbacks after subscribe()".
+    // Remove any existing one first, and never let a realtime hiccup crash the
+    // dashboard — the badge degrades to its polled count.
+    let channel: ReturnType<typeof client.channel> | null = null
+    try {
+      client
+        .getChannels()
+        .filter((ch) => ch.topic === `realtime:${topic}`)
+        .forEach((ch) => client.removeChannel(ch))
+
+      channel = client
+        .channel(topic)
+        .on(
+          'postgres_changes' as any,
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `org_id=eq.${orgId}`,
+          },
+          (_payload: any) => {
+            setUnreadCount((c) => c + 1)
+          },
+        )
+        .subscribe()
+    } catch {
+      channel = null
+    }
 
     return () => {
-      client.removeChannel(channel)
+      if (channel) client.removeChannel(channel)
     }
   }, [orgId, isDemo, skipForAdmin])
 

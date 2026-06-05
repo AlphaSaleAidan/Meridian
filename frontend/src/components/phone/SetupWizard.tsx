@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { clsx } from 'clsx'
 import {
   Store, Mic, ListOrdered, Route, Zap, Volume2,
-  CheckCircle2, ArrowRight, ArrowLeft, Phone,
+  CheckCircle2, ArrowRight, ArrowLeft, Phone, Loader2,
 } from 'lucide-react'
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import TestCallModal from './TestCallModal'
@@ -48,6 +48,26 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
     routing: (connectedPos ? 'pos' : 'sms') as 'pos' | 'webhook' | 'sms' | 'email',
   })
 
+  // Auto-provision a dedicated Twilio number on first mount when the merchant
+  // has none yet. Backend is idempotent; the ref guards React's double-mount.
+  const [provisioning, setProvisioning] = useState(false)
+  const [provisionError, setProvisionError] = useState<string | null>(null)
+  const provisionStarted = useRef(false)
+
+  useEffect(() => {
+    if (provisionStarted.current) return
+    if (cfg.phone && cfg.phone.trim()) return
+    provisionStarted.current = true
+    setProvisioning(true)
+    setProvisionError(null)
+    phoneService
+      .provisionNumber({ merchant_id: orgId, country: 'CA', business_name: cfg.businessName })
+      .then(res => setCfg(p => ({ ...p, phone: res.phone_number })))
+      .catch((e: unknown) => setProvisionError(e instanceof Error ? e.message : 'Could not provision a number'))
+      .finally(() => setProvisioning(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const inputCls = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50'
 
   return (
@@ -91,8 +111,23 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
               </div>
               <div>
                 <label className="text-xs text-[#A1A1A8] block mb-1">Phone Number</label>
-                <input className={inputCls} value={cfg.phone} readOnly />
-                <p className="text-[9px] text-[#A1A1A8]/50 mt-1">Auto-provisioned for your business</p>
+                <div className="relative">
+                  <input
+                    className={inputCls}
+                    value={provisioning ? 'Provisioning your number…' : cfg.phone}
+                    readOnly
+                  />
+                  {provisioning && (
+                    <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#1A8FD6] animate-spin" />
+                  )}
+                </div>
+                {provisionError ? (
+                  <p className="text-[9px] text-red-400/80 mt-1">{provisionError}</p>
+                ) : (
+                  <p className="text-[9px] text-[#A1A1A8]/50 mt-1">
+                    {cfg.phone && !provisioning ? 'Dedicated number assigned to your business' : 'Auto-provisioned for your business'}
+                  </p>
+                )}
               </div>
             </div>
           </>
@@ -263,7 +298,7 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
         )}
       </div>
 
-      {showTestCall && <TestCallModal biz={biz} onClose={() => setShowTestCall(false)} />}
+      {showTestCall && <TestCallModal biz={biz} orgId={orgId} onClose={() => setShowTestCall(false)} />}
 
       {/* Navigation */}
       <div className="flex justify-between">

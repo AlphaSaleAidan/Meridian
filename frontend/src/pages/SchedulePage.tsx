@@ -154,7 +154,10 @@ export default function SchedulePage() {
   const [toast, setToast] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [roleFilter, setRoleFilter] = useState('all')
-  const showDemoSchedule = isDemo || isCanadaPath()
+  // Only seed synthetic staff/shifts on explicit demo routes (/demo, /canada/demo).
+  // The real Canada merchant portal (/canada/merchant) must start empty and pull
+  // live data — never the old generated fake schedule.
+  const showDemoSchedule = isDemo
 
   const [staff, setStaff] = useState<ScheduleStaffMember[]>(() =>
     showDemoSchedule ? generateScheduleStaff() : [])
@@ -536,7 +539,10 @@ export default function SchedulePage() {
     URL.revokeObjectURL(url)
   }, [shifts, staff, weekStartDate])
 
-  if (!showDemoSchedule && !liveMode) {
+  // Canada always renders a ready-to-use (empty) schedule — no radar loader.
+  // Staff sync from the POS lands in the calendar; otherwise the merchant adds
+  // them manually. US keeps the connect-your-POS scaffold unchanged.
+  if (!showDemoSchedule && !liveMode && portalContext !== 'ca') {
     return (
       <div className="space-y-6">
         <ScrollReveal variant="fadeUp">
@@ -690,6 +696,26 @@ export default function SchedulePage() {
         </div>
       </ScrollReveal>
 
+      {/* Empty-state hint — empty calendar still renders below */}
+      {!isGenerating && staff.length === 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.045}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-lg bg-[#111113] border border-[#1F1F23]">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center shrink-0">
+                <Users size={14} className="text-[#1A8FD6]" />
+              </div>
+              <p className="text-[12px] text-[#A1A1A8]">
+                Your calendar is empty. Add staff to start building this week&apos;s schedule.
+              </p>
+            </div>
+            <button onClick={() => setShowAddStaff(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors self-start sm:self-auto shrink-0">
+              <Plus size={13} /> Add Staff
+            </button>
+          </div>
+        </ScrollReveal>
+      )}
+
       {/* Generating state */}
       {isGenerating && (
         <div className="flex items-center justify-center gap-3 py-8">
@@ -735,6 +761,10 @@ export default function SchedulePage() {
             peakHoursFallback={peakHours}
             currentShifts={shifts}
             onAccept={handleAcceptRecommendation}
+            country={country}
+            isDemo={isDemo}
+            posConnected={!!org?.pos_connected}
+            holidays={holidays}
           />
         </ScrollReveal>
       )}

@@ -7,9 +7,14 @@ Primary: Moonshine (Useful Sensors, MIT) — English-only, ~107 ms CPU latency,
 Fallback: WhisperLiveKit (faster-whisper backend) for non-English calls.
 """
 import asyncio
+import io
+import json
 import logging
+import os
+import wave
 from typing import Optional
 
+import httpx
 import numpy as np
 
 from pipecat.services.ai_services import STTService
@@ -169,8 +174,84 @@ class WhisperLiveKitSTT(STTService):
         await super().stop(frame)
 
 
+# --- Telnyx hosted STT ---
+
+TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
+TELNYX_STT_URL = "https://api.telnyx.com/v2/ai/audio/transcriptions"
+# nova-3 (Deepgram, via Telnyx) is English-only and best quality; multilingual
+# calls fall back to Whisper large-v3-turbo.
+_TELNYX_STT_EN_MODEL = os.getenv("TELNYX_STT_MODEL", "deepgram/nova-3")
+_TELNYX_STT_MULTILINGUAL_MODEL = "openai/whisper-large-v3-turbo"
+
+
+class TelnyxSTTService(STTService):
+    """Hosted STT via Telnyx (proxies Deepgram nova-3 for English, Whisper
+    large-v3-turbo otherwise).
+
+    Sample rate: the call delivers one VAD-released utterance per AudioRawFrame
+    as int16 mono PCM at audio.sample_rate. We wrap it as a WAV in memory and
+    POST one transcription per turn (no streaming needed). On any API error we
+    return None so the call continues.
+    """
+
+    def __init__(self, language: str = "en", api_key: str = ""):
+        super().__init__()
+        self._language = (language or "en").lower()
+        self._api_key = api_key or TELNYX_API_KEY
+        self._english = self._language.startswith("en")
+
+    def _wav_bytes(self, audio: AudioRawFrame) -> bytes:
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(getattr(audio, "num_channels", 1) or 1)
+            w.setsampwidth(2)
+            w.setframerate(audio.sample_rate or 8000)
+            w.writeframes(audio.audio)
+        return buf.getvalue()
+
+    async def run_stt(self, audio: AudioRawFrame) -> Optional[str]:
+        if not self._api_key:
+            logger.error("Telnyx STT: TELNYX_API_KEY not set")
+            return None
+        if not audio.audio:
+            return None
+        model = _TELNYX_STT_EN_MODEL if self._english else _TELNYX_STT_MULTILINGUAL_MODEL
+        data = {"model": model, "response_format": "json"}
+        if self._english:
+            data["language"] = "en"
+            # model_config is only accepted for the deepgram model.
+            data["model_config"] = json.dumps({"smart_format": True, "punctuate": True})
+        files = {"file": ("utterance.wav", self._wav_bytes(audio), "audio/wav")}
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.post(
+                    TELNYX_STT_URL,
+                    data=data,
+                    files=files,
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                )
+            if res.status_code != 200:
+                logger.error("Telnyx STT %d: %s", res.status_code, res.text[:300])
+                return None
+            text = (res.json().get("text") or "").strip()
+            return text or None
+        except Exception as e:
+            logger.error("Telnyx STT request failed: %s", e)
+            return None
+
+    async def process_audio(self, frame: AudioRawFrame):
+        text = await self.run_stt(frame)
+        if text:
+            await self.push_frame(
+                TranscriptionFrame(text=text, user_id="caller", timestamp=0)
+            )
+
+
 def build_stt(language: str = "en") -> STTService:
-    """Factory: Moonshine for English, WhisperLiveKit for anything else."""
+    """Factory: Telnyx hosted STT when STT_PROVIDER=telnyx, otherwise local
+    (Moonshine for English, WhisperLiveKit for anything else)."""
+    if os.getenv("STT_PROVIDER", "local").lower() == "telnyx":
+        return TelnyxSTTService(language=language)
     if language.lower().startswith("en"):
         return MoonshineSTT()
     return WhisperLiveKitSTT(language=language)

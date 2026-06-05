@@ -230,6 +230,8 @@ export const posSystems: POSSystem[] = [
     brandColor: '#1DC167',
     logoInitials: 'CL',
     website: 'https://www.clover.com',
+    // Live: 1-click OAuth (when CLOVER_APP_ID/SECRET configured server-side) and
+    // manual Merchant ID + API Token paste both supported via /api/pos/connect.
     status: 'integrated',
     tier: 1,
     integrationStatus: {

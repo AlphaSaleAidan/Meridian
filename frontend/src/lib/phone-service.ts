@@ -75,6 +75,54 @@ export const phoneService = {
     if (!res.ok) return null
     return res.json()
   },
+
+  async testChat(req: {
+    merchant_id: string
+    messages: { role: 'user' | 'assistant'; content: string }[]
+    business_name?: string
+    greeting?: string
+    menu_items?: { name: string; price: number; category?: string }[]
+    order_types?: string[]
+  }): Promise<TestChatResponse> {
+    const res = await fetch(`${API_BASE}/api/phone/test-chat`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!res.ok) throw new Error(`test-chat failed: ${res.status}`)
+    return res.json()
+  },
+
+  async provisionNumber(req: {
+    merchant_id: string
+    country?: string
+    area_code?: string
+    business_name?: string
+  }): Promise<ProvisionNumberResponse> {
+    const res = await fetch(`${API_BASE}/api/phone/provision-number`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!res.ok) {
+      let detail = `provision failed: ${res.status}`
+      try { detail = (await res.json()).detail || detail } catch { /* noop */ }
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+}
+
+export interface ProvisionNumberResponse {
+  phone_number: string
+  provisioned: boolean
+  already_existed: boolean
+}
+
+export interface TestChatResponse {
+  reply: string
+  ended: boolean
+  order: Record<string, unknown> | null
 }
 
 function mapCallRow(row: any): PhoneCallEntry {

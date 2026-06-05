@@ -1,8 +1,12 @@
 """
-OAuth Routes — Square authorization endpoints.
+Clover OAuth Routes — 1-click Square-style authorization for Clover.
 
-  GET  /api/square/authorize  → Redirect merchant to Square
-  GET  /api/square/callback   → Handle callback from Square
+  GET  /api/clover/authorize  → Redirect merchant to Clover
+  GET  /api/clover/callback   → Handle callback from Clover
+
+Manual key/ID paste is handled by /api/pos/connect; this module covers the
+1-click OAuth path only. Mirrors src/api/routes/oauth.py (Square) — same
+HMAC-signed state, same return_to allowlist, same encrypted-token storage.
 """
 import base64
 import hashlib
@@ -17,14 +21,16 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Request, HTTPException
 from fastapi.responses import RedirectResponse
 
-from ...square.oauth import OAuthManager, OAuthError
+from ...clover.oauth import CloverOAuthManager, CloverOAuthError
+from ...config import clover as clover_config
 from ...security.encryption import encrypt_token
 
-logger = logging.getLogger("meridian.api.oauth")
+logger = logging.getLogger("meridian.api.clover_oauth")
 
-router = APIRouter(prefix="/api/square", tags=["square-oauth"])
+router = APIRouter(prefix="/api/clover", tags=["clover-oauth"])
 
-# HMAC signing secret — REQUIRED in all environments.
+# HMAC signing secret — reuse the same OAuth state secret as Square so a single
+# env var governs all OAuth CSRF protection.
 _STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET", "")
 if not _STATE_SECRET:
     if os.environ.get("TESTING", "").lower() in ("1", "true"):
@@ -38,18 +44,14 @@ if not _STATE_SECRET:
 
 _STATE_TTL_SECONDS = 600  # 10 minutes
 
-# Frontend URL for redirects after OAuth
 _FRONTEND_URL = os.environ.get(
     "FRONTEND_URL",
     os.environ.get("FRONTEND_ORIGIN", "https://meridian.tips")
 )
 
-oauth_manager = OAuthManager()
-
-# Post-callback redirect must stay on-site and on an allowlisted path. Empty/
-# unknown return_to falls back to the legacy /app/settings target so existing
-# (US) flows are byte-identical.
 _DEFAULT_RETURN_TO = "/app/settings"
+
+oauth_manager = CloverOAuthManager()
 
 
 def _safe_return_to(return_to: str | None) -> str:
@@ -60,16 +62,12 @@ def _safe_return_to(return_to: str | None) -> str:
 
 
 def _redirect_to(return_to: str, params: dict) -> RedirectResponse:
-    """Build a same-origin redirect to the wizard (or legacy settings)."""
     path = return_to or _DEFAULT_RETURN_TO
     return RedirectResponse(url=f"{_FRONTEND_URL}{path}?{urlencode(params)}")
 
 
 def _sign_state(org_id: str, return_to: str = "") -> str:
-    """Create a self-contained HMAC-signed state token.
-
-    Format: org_id:nonce:expires:rt_b64:sig (rt_b64 is '_' when no return_to,
-    keeping legacy 4-part tokens verifiable for in-flight flows)."""
+    """Self-contained HMAC-signed state token: org_id:nonce:expires:rt_b64:sig."""
     nonce = uuid4().hex[:16]
     expires = int(time.time()) + _STATE_TTL_SECONDS
     rt_b64 = base64.urlsafe_b64encode(return_to.encode()).decode().rstrip("=") if return_to else "_"
@@ -83,11 +81,7 @@ def _sign_state(org_id: str, return_to: str = "") -> str:
 def _verify_state(state: str) -> tuple[str, str] | None:
     """Verify HMAC-signed state token. Returns (org_id, return_to) or None."""
     parts = state.split(":")
-    if len(parts) == 4:
-        org_id, nonce, expires_str, sig = parts
-        rt_b64 = "_"
-        payload = f"{org_id}:{nonce}:{expires_str}"
-    elif len(parts) == 5:
+    if len(parts) == 5:
         org_id, nonce, expires_str, rt_b64, sig = parts
         payload = f"{org_id}:{nonce}:{expires_str}:{rt_b64}"
     else:
@@ -97,7 +91,7 @@ def _verify_state(state: str) -> tuple[str, str] | None:
     except ValueError:
         return None
     if time.time() > expires:
-        logger.warning("OAuth state expired")
+        logger.warning("Clover OAuth state expired")
         return None
     expected_sig = hmac.new(
         _STATE_SECRET.encode(), payload.encode(), hashlib.sha256
@@ -118,21 +112,24 @@ def _verify_state(state: str) -> tuple[str, str] | None:
 @router.get("/authorize")
 async def authorize(request: Request, org_id: str | None = None, return_to: str | None = None):
     """
-    Step 1: Redirect merchant to Square's authorization page.
+    Step 1: Redirect merchant to Clover's authorization page.
 
-    Query params:
-      org_id — the merchant's org ID (to link after callback)
-      return_to — optional on-site path to land on after callback (allowlisted
-        to /canada/merchant*; anything else is ignored and the legacy
-        /app/settings target is used).
+    Requires CLOVER_APP_ID / CLOVER_APP_SECRET to be configured server-side. If
+    they are not, the merchant should use the manual key/ID paste flow instead.
     """
     if not org_id:
         raise HTTPException(400, "org_id is required")
+    if not (clover_config.app_id and clover_config.app_secret):
+        raise HTTPException(
+            503,
+            "Clover 1-click connect isn't configured on this server yet — "
+            "use the manual API token + Merchant ID option instead.",
+        )
 
     state = _sign_state(org_id, _safe_return_to(return_to))
     url, _ = oauth_manager.get_authorize_url(org_id=org_id, state=state)
 
-    logger.info(f"OAuth: redirecting org {org_id} to Square authorize")
+    logger.info(f"Clover OAuth: redirecting org {org_id} to Clover authorize")
     return RedirectResponse(url=url)
 
 
@@ -142,19 +139,19 @@ async def callback(
     background_tasks: BackgroundTasks,
     code: str | None = None,
     state: str | None = None,
+    merchant_id: str | None = None,
+    employee_id: str | None = None,
     error: str | None = None,
     error_description: str | None = None,
 ):
     """
-    Step 2: Handle Square's OAuth callback.
-    
-    On success: exchange code for tokens, store in DB, redirect to dashboard.
-    On denial: redirect to settings with error.
+    Step 2: Handle Clover's OAuth callback.
+
+    Clover sends code + merchant_id (and employee_id) plus our signed state.
+    On success: exchange code for a token, store it encrypted, kick backfill.
     """
-    # Handle merchant denial — recover return_to from state when present so the
-    # Canada wizard can surface the denial in-place.
     if error:
-        logger.warning(f"OAuth denied: {error} — {error_description}")
+        logger.warning(f"Clover OAuth denied: {error} — {error_description}")
         verified = _verify_state(state) if state else None
         denied_return_to = verified[1] if verified else ""
         return _redirect_to(denied_return_to, {
@@ -165,33 +162,24 @@ async def callback(
     if not code or not state:
         raise HTTPException(400, "Missing code or state parameter")
 
-    # Verify HMAC-signed state
     verified = _verify_state(state)
     if verified is None:
         raise HTTPException(403, "Invalid or expired state — possible CSRF attack")
     org_id, return_to = verified
 
-    # Exchange code for tokens
     try:
-        tokens = await oauth_manager.exchange_code(code)
-    except OAuthError as e:
-        logger.error(f"OAuth token exchange failed for org {org_id}: {e}")
-        return _redirect_to(return_to, {
-            "oauth": "error",
-            "error": str(e),
-        })
+        tokens = await oauth_manager.exchange_code(code, merchant_id=merchant_id)
+    except CloverOAuthError as e:
+        logger.error(f"Clover token exchange failed for org {org_id}: {e}")
+        return _redirect_to(return_to, {"oauth": "error", "error": str(e)})
 
-    logger.info(
-        f"OAuth success for org {org_id}: "
-        f"merchant_id={tokens['merchant_id']}, "
-        f"expires_at={tokens['expires_at']}"
-    )
+    resolved_merchant_id = tokens.get("merchant_id") or merchant_id or ""
+    logger.info(f"Clover OAuth success for org {org_id}: merchant_id={resolved_merchant_id}")
 
-    # ── Store tokens in Supabase ──────────────────────────
+    # ── Store tokens in Supabase (mirror Square's storage shape) ──
     try:
         from ...db import _db_instance
         if _db_instance:
-            # Ensure organization exists
             existing_orgs = await _db_instance.select(
                 "organizations",
                 filters={"id": f"eq.{org_id}"},
@@ -206,109 +194,117 @@ async def callback(
                     "is_active": True,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                 })
-                logger.info(f"Created organization: {org_id}")
 
-            # Upsert POS connection
+            token_enc = encrypt_token(tokens["access_token"])
+            # Clover tokens don't expire, so no refresh/expiry fields. Mirror the
+            # token into both columns the two sync paths read from.
             connection_data = {
                 "id": str(uuid4()),
                 "org_id": org_id,
-                "provider": "square",
+                "provider": "clover",
                 "status": "connected",
-                "external_merchant_id": tokens["merchant_id"],
-                "access_token_enc": encrypt_token(tokens["access_token"]),
-                "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
-                "token_expires_at": tokens.get("expires_at"),
+                "external_merchant_id": resolved_merchant_id,
+                "access_token_enc": token_enc,
+                "credentials_encrypted": {
+                    "access_token": token_enc,
+                    "merchant_id": resolved_merchant_id,
+                },
                 "historical_import_complete": False,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
 
-            # Check if connection already exists for this org + merchant
             existing = await _db_instance.select(
                 "pos_connections",
                 filters={
                     "org_id": f"eq.{org_id}",
-                    "external_merchant_id": f"eq.{tokens['merchant_id']}",
+                    "provider": "eq.clover",
                 },
                 limit=1,
             )
 
             if existing:
-                # Update existing connection
+                conn_id = existing[0]["id"]
                 await _db_instance.update(
                     "pos_connections",
                     {
                         "status": "connected",
-                        "access_token_enc": encrypt_token(tokens["access_token"]),
-                        "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
-                        "token_expires_at": tokens.get("expires_at"),
+                        "external_merchant_id": resolved_merchant_id,
+                        "access_token_enc": token_enc,
+                        "credentials_encrypted": connection_data["credentials_encrypted"],
                         "last_error": None,
                         "updated_at": datetime.now(timezone.utc).isoformat(),
                     },
-                    filters={"id": f"eq.{existing[0]['id']}"},
+                    filters={"id": f"eq.{conn_id}"},
                 )
-                logger.info(f"Updated existing connection for org {org_id}")
             else:
-                # Insert new connection
+                conn_id = connection_data["id"]
                 await _db_instance.insert("pos_connections", connection_data)
-                logger.info(f"Created new connection for org {org_id}")
 
-            # Create a notification
+            await _db_instance.update(
+                "organizations",
+                {"pos_system": "clover", "pos_connection_status": "connected"},
+                filters={"id": f"eq.{org_id}"},
+            )
+
             await _db_instance.insert("notifications", {
                 "id": str(uuid4()),
                 "org_id": org_id,
-                "title": "Square Connected!",
-                "body": f"Successfully connected to Square merchant {tokens['merchant_id']}. Starting initial data sync...",
+                "title": "Clover Connected!",
+                "body": f"Successfully connected to Clover merchant {resolved_merchant_id}. Starting initial data sync...",
                 "priority": "normal",
                 "source_type": "event",
                 "status": "active",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
 
-            # Kick off historical backfill in background
-            conn_id = existing[0]["id"] if existing else connection_data["id"]
-            from ...workers.backfill import run_backfill
+            from .pos_connections import _run_clover_backfill
             background_tasks.add_task(
-                run_backfill,
-                access_token=tokens["access_token"],
+                _run_clover_backfill,
                 org_id=org_id,
                 connection_id=conn_id,
+                access_token=tokens["access_token"],
+                merchant_id=resolved_merchant_id,
             )
-            logger.info(f"Queued backfill task for org={org_id}, connection={conn_id}")
-
+            logger.info(f"Queued Clover backfill for org={org_id}, connection={conn_id}")
         else:
-            logger.warning("DB not initialized — tokens returned but not persisted")
+            logger.warning("DB not initialized — Clover tokens returned but not persisted")
 
     except Exception as e:
-        logger.error(f"Failed to store OAuth tokens: {e}", exc_info=True)
-        # Don't fail the callback — redirect with warning
+        logger.error(f"Failed to store Clover OAuth tokens: {e}", exc_info=True)
         return _redirect_to(return_to, {
             "oauth": "partial",
-            "merchant_id": tokens["merchant_id"],
+            "merchant_id": resolved_merchant_id,
             "warning": "Connected but failed to save — please retry.",
         })
 
-    # ── Redirect back to the originating surface ──────────
     return _redirect_to(return_to, {
         "oauth": "success",
-        "merchant_id": tokens["merchant_id"],
+        "merchant_id": resolved_merchant_id,
     })
 
 
 @router.get("/status")
 async def connection_status(org_id: str):
-    """Quick check if org has an active Square connection."""
+    """Quick check if org has an active Clover connection + whether 1-click is available."""
     from ...db import _db_instance
+    oauth_available = bool(clover_config.app_id and clover_config.app_secret)
     if not _db_instance:
-        return {"connected": False, "reason": "db_unavailable"}
+        return {"connected": False, "reason": "db_unavailable", "oauth_available": oauth_available}
 
-    conn = await _db_instance.get_pos_connection(org_id)
-    if conn:
+    conns = await _db_instance.select(
+        "pos_connections",
+        filters={"org_id": f"eq.{org_id}", "provider": "eq.clover"},
+        limit=1,
+    )
+    if conns:
+        conn = conns[0]
         return {
-            "connected": True,
+            "connected": conn.get("status") == "connected",
             "merchant_id": conn.get("external_merchant_id"),
             "status": conn.get("status"),
             "last_sync_at": conn.get("last_sync_at"),
             "historical_import_complete": conn.get("historical_import_complete", False),
+            "oauth_available": oauth_available,
         }
-    return {"connected": False}
+    return {"connected": False, "oauth_available": oauth_available}

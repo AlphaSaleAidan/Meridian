@@ -193,7 +193,26 @@ def _detect_business_type_from_square(merchant: dict) -> str:
     return "restaurant"
 
 
+def _canonical_clover_creds(credentials: dict) -> dict:
+    """Map UI field IDs (clover_api_token, clover_merchant_id) to the canonical
+    access_token / merchant_id keys the Clover client + sync engine expect.
+
+    The OAuth path already supplies canonical keys; this only fills the gaps for
+    the manual key/ID paste form, whose fields are namespaced (clover_*)."""
+    creds = dict(credentials)
+    if not creds.get("access_token"):
+        token = creds.get("clover_api_token") or creds.get("clover_access_token")
+        if token:
+            creds["access_token"] = token
+    if not creds.get("merchant_id"):
+        mid = creds.get("clover_merchant_id")
+        if mid:
+            creds["merchant_id"] = mid
+    return creds
+
+
 async def _test_clover(credentials: dict) -> dict:
+    credentials = _canonical_clover_creds(credentials)
     access_token = credentials.get("access_token", "")
     merchant_id = credentials.get("merchant_id", "")
     if not all([access_token, merchant_id]):
@@ -219,6 +238,9 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
     if not db:
         raise HTTPException(503, "Database not available")
 
+    if req.pos_system == "clover":
+        req.credentials = _canonical_clover_creds(req.credentials)
+
     encrypted_creds = {}
     for key, value in req.credentials.items():
         if not value:
@@ -230,6 +252,13 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
 
     connection_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
+
+    # Clover (like Square) is read by both sync paths from the dedicated
+    # access_token_enc column AND credentials_encrypted — mirror the token into
+    # both so the scheduler and the manual sync endpoint resolve it identically.
+    token_column: dict = {}
+    if req.pos_system == "clover" and encrypted_creds.get("access_token"):
+        token_column["access_token_enc"] = encrypted_creds["access_token"]
 
     existing = await db.select(
         "pos_connections",
@@ -249,6 +278,7 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
                 "credentials_encrypted": encrypted_creds,
                 "last_error": None,
                 "updated_at": now,
+                **token_column,
             },
             filters={"id": f"eq.{connection_id}"},
         )
@@ -263,6 +293,7 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             "historical_import_complete": False,
             "created_at": now,
             "updated_at": now,
+            **token_column,
         })
 
     org_update = {
@@ -300,6 +331,14 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             org_id=req.org_id,
             connection_id=connection_id,
             credentials=req.credentials,
+        )
+    elif req.pos_system == "clover":
+        background_tasks.add_task(
+            _run_clover_backfill,
+            org_id=req.org_id,
+            connection_id=connection_id,
+            access_token=req.credentials.get("access_token", ""),
+            merchant_id=(req.credentials.get("merchant_id", "") or req.restaurant_guid or ""),
         )
     elif req.pos_system not in ("square", "clover"):
         api_config = get_connector_config(req.pos_system)
@@ -348,6 +387,8 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
 
+        await _import_pos_staff(db, org_id, result.employee_cache)
+
         await db.update(
             "pos_connections",
             {
@@ -376,6 +417,107 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
 
     except Exception as e:
         logger.error(f"Toast backfill failed for org={org_id}: {e}", exc_info=True)
+        await db.update(
+            "pos_connections",
+            {"status": "error", "last_error": str(e)[:500]},
+            filters={"id": f"eq.{connection_id}"},
+        )
+
+
+async def _import_pos_staff(db, org_id: str, employee_cache: dict[str, str]) -> int:
+    """Best-effort: seed the schedule roster from the POS employee list.
+
+    Idempotent by name — a re-sync skips employees already on the roster, so the
+    merchant never gets duplicates. Never raises: the manual add-staff path in the
+    Schedule tab is always available even if the POS has no employees or this fails.
+    """
+    if not employee_cache:
+        return 0
+    try:
+        existing = await db.select("schedule_staff", filters={"merchant_id": f"eq.{org_id}"})
+        have = {(r.get("name") or "").strip().lower() for r in existing}
+        rows = []
+        for name in employee_cache.values():
+            clean = (name or "").strip()
+            if not clean or clean.lower() in have:
+                continue
+            have.add(clean.lower())
+            rows.append({
+                "id": str(uuid4()),
+                "merchant_id": org_id,
+                "name": clean,
+                "role": "any",
+                "color": "#17C5B0",
+                "hourly_rate": 0,
+                "availability": {},
+                "active": True,
+            })
+        if rows:
+            await db.insert("schedule_staff", rows, return_data=False)
+        logger.info(f"POS staff import for org={org_id}: {len(rows)} new of {len(employee_cache)} POS employees")
+        return len(rows)
+    except Exception as e:
+        logger.warning(f"POS staff import failed for org={org_id}: {e}")
+        return 0
+
+
+async def _run_clover_backfill(org_id: str, connection_id: str, access_token: str, merchant_id: str):
+    """Background task: run Clover initial backfill (manual-paste and OAuth share this)."""
+    from ...clover.client import CloverClient
+    from ...clover.sync_engine import CloverSyncEngine
+    from ...db import get_db
+
+    db = get_db()
+
+    try:
+        client = CloverClient(access_token=access_token, merchant_id=merchant_id)
+        try:
+            engine = CloverSyncEngine(
+                client=client,
+                org_id=org_id,
+                pos_connection_id=connection_id,
+            )
+            result = await engine.run_initial_backfill()
+        finally:
+            await client.close()
+
+        if result.products:
+            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
+        if result.transactions:
+            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
+        if result.transaction_items:
+            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+
+        await _import_pos_staff(db, org_id, result.employee_cache)
+
+        await db.update(
+            "pos_connections",
+            {
+                "historical_import_complete": True,
+                "last_sync_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            filters={"id": f"eq.{connection_id}"},
+        )
+        logger.info(f"Clover backfill complete for org={org_id}: {result.summary}")
+
+        try:
+            from ...pipeline import MeridianPipeline
+            import os
+            pipeline = MeridianPipeline(
+                org_id=org_id,
+                square_token="",
+                supabase_url=os.environ.get("SUPABASE_URL", ""),
+                supabase_key=os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+                    or os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                pos_connection_id=connection_id,
+            )
+            await pipeline.run_full_sync()
+        except Exception as e:
+            logger.warning(f"AI pipeline after Clover backfill failed: {e}")
+
+    except Exception as e:
+        logger.error(f"Clover backfill failed for org={org_id}: {e}", exc_info=True)
         await db.update(
             "pos_connections",
             {"status": "error", "last_error": str(e)[:500]},

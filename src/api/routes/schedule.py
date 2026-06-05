@@ -587,30 +587,8 @@ def _merge_contiguous(hours: list[int], min_run: int = 2) -> list[tuple[int, int
     return runs
 
 
-@router.post("/recommend/{merchant_id}")
-async def recommend_shifts(
-    merchant_id: str,
-    _auth=Depends(require_service_auth),
-    week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
-    weeks_back: int = Query(8, ge=1, le=26),
-):
-    """Recommend shifts to add by comparing peak hours from POS history to
-    the currently-scheduled shifts for the given week.
-    """
-    _validate_uuid(merchant_id, "merchant_id")
-    peaks = await _fetch_peak_hours(merchant_id, weeks_back)
-    if not peaks:
-        return {
-            "recommendations": [],
-            "merchant_id": merchant_id,
-            "reason": "no_transaction_history",
-        }
-
-    db = get_db()
-    shift_filters: dict = {"merchant_id": f"eq.{merchant_id}"}
-    if week_start:
-        shift_filters["week_start_date"] = f"eq.{week_start}"
-    existing = await db.select("schedule_shifts", filters=shift_filters)
+def _build_coverage(existing: list[dict]) -> dict[tuple[int, int], int]:
+    """Map (day_of_week, hour) -> number of staff already scheduled."""
 
     def _hours_in_shift(s: dict) -> list[int]:
         try:
@@ -628,7 +606,141 @@ async def recommend_shifts(
             continue
         for h in _hours_in_shift(sh):
             coverage[(day, h)] = coverage.get((day, h), 0) + 1
+    return coverage
 
+
+async def _gather_holidays_by_dow(country: str, week_start: str) -> dict[int, str]:
+    """day_of_week -> holiday name for holidays falling inside the planning week."""
+    if not week_start:
+        return {}
+    try:
+        ws = date.fromisoformat(week_start)
+    except ValueError:
+        return {}
+    we = ws + timedelta(days=6)
+    holidays = _compute_holidays(ws.year, country)
+    if we.year != ws.year:
+        holidays += _compute_holidays(we.year, country)
+    out: dict[int, str] = {}
+    for h in holidays:
+        try:
+            d = date.fromisoformat(h["date"])
+        except ValueError:
+            continue
+        if ws <= d <= we:
+            out[d.weekday()] = h["name"]
+    return out
+
+
+async def _gather_weather_by_dow(
+    lat: float | None, lon: float | None, week_start: str,
+) -> tuple[dict, float | None]:
+    """Best-effort forecast keyed by day_of_week + the merchant's rain impact.
+
+    Returns ``({}, None)`` on any failure — weather is an optional signal and
+    must never break recommendations.
+    """
+    from ...services.weather_service import WeatherService, WMO_WEATHER_CODES
+    from ...ai.scheduling.staffing_recommender import WeatherDay
+
+    if not week_start:
+        return {}, None
+    try:
+        ws = date.fromisoformat(week_start)
+    except ValueError:
+        return {}, None
+
+    try:
+        svc = WeatherService(lat=lat, lon=lon) if lat is not None and lon is not None else WeatherService()
+        forecast = await svc.fetch_forecast(lat=lat, lon=lon, days=16)
+    except Exception as e:  # pragma: no cover - network best-effort
+        logger.warning("weather forecast unavailable: %s", e)
+        return {}, None
+
+    we = ws + timedelta(days=6)
+    by_dow: dict[int, WeatherDay] = {}
+    for day in forecast:
+        try:
+            d = date.fromisoformat(day["date"])
+        except (KeyError, ValueError):
+            continue
+        if not (ws <= d <= we):
+            continue
+        code = int(day.get("weathercode") or 0)
+        by_dow[d.weekday()] = WeatherDay(
+            weathercode=code,
+            precipitation=float(day.get("precipitation") or 0.0),
+            label=WMO_WEATHER_CODES.get(code, ""),
+        )
+    return by_dow, None
+
+
+@router.post("/recommend/{merchant_id}")
+async def recommend_shifts(
+    merchant_id: str,
+    _auth=Depends(require_service_auth),
+    week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
+    weeks_back: int = Query(8, ge=1, le=26),
+    country: str = Query(default="US", description="US or CA — CA enables weather + holiday agent"),
+    lat: Optional[float] = Query(default=None, description="Merchant latitude for weather"),
+    lon: Optional[float] = Query(default=None, description="Merchant longitude for weather"),
+):
+    """Recommend shifts to add by comparing peak hours from POS history to
+    the currently-scheduled shifts for the given week.
+
+    For ``country=CA`` the agentic engine additionally folds in holidays and
+    a best-effort weather forecast. The US path is unchanged: peaks only.
+    """
+    _validate_uuid(merchant_id, "merchant_id")
+    peaks = await _fetch_peak_hours(merchant_id, weeks_back)
+
+    is_ca = country.upper() == "CA"
+    if not peaks and not is_ca:
+        return {
+            "recommendations": [],
+            "merchant_id": merchant_id,
+            "reason": "no_transaction_history",
+        }
+
+    db = get_db()
+    shift_filters: dict = {"merchant_id": f"eq.{merchant_id}"}
+    if week_start:
+        shift_filters["week_start_date"] = f"eq.{week_start}"
+    existing = await db.select("schedule_shifts", filters=shift_filters)
+    coverage = _build_coverage(existing)
+
+    # ── CA: agentic engine (peaks + holidays + weather) ────────────
+    if is_ca:
+        from ...ai.scheduling.staffing_recommender import build_recommendations
+
+        holidays_by_dow = await _gather_holidays_by_dow(country, week_start)
+        # No per-merchant coords yet — default CA to Toronto so the forecast is
+        # at least Canadian rather than the Miami service default.
+        w_lat = lat if lat is not None else 43.6532
+        w_lon = lon if lon is not None else -79.3832
+        weather_by_dow, rain_impact_pct = await _gather_weather_by_dow(w_lat, w_lon, week_start)
+        result = build_recommendations(
+            peaks=peaks,
+            coverage=coverage,
+            holidays_by_dow=holidays_by_dow,
+            weather_by_dow=weather_by_dow,
+            rain_impact_pct=rain_impact_pct,
+        )
+        if not result["recommendations"] and not peaks and not holidays_by_dow:
+            return {
+                "recommendations": [],
+                "signals": [],
+                "merchant_id": merchant_id,
+                "reason": "no_transaction_history",
+            }
+        return {
+            "recommendations": result["recommendations"],
+            "signals": result["signals"],
+            "merchant_id": merchant_id,
+            "weeks_analyzed": weeks_back,
+        }
+
+    # ── US: peaks-only (unchanged) ─────────────────────────────────
     # Identify uncovered peak hours, grouped by day.
     by_day: dict[int, list[tuple[int, float]]] = {}
     for p in peaks:

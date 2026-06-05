@@ -44,5 +44,11 @@ jobs:
       - name: Install dependencies
         run: cd frontend && npm ci
 
+      # Generate the gitignored playbook bundle that PlaybookViewer imports.
+      # The frontend build does this via the prebuild hook; `tsc --noEmit`
+      # bypasses it, so generate explicitly or the typecheck fails TS2307.
+      - name: Generate playbook data
+        run: node scripts/build-playbook-data.mjs
+
       - name: TypeScript check
         run: cd frontend && npx tsc --noEmit

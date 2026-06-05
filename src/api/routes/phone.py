@@ -43,6 +43,10 @@ DEMO_MERCHANT_ID = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
 MEDIA_STREAMS_ENABLED = os.getenv("MEDIA_STREAMS_ENABLED", "0") == "1"
 MEDIA_STREAM_HOST = os.getenv("MEDIA_STREAM_HOST", "api.meridian.tips")
 
+# Telephony provider for the media-stream path. Telnyx and Twilio send
+# different WS handshake envelopes, so the serializer + drain branch on this.
+PHONE_PROVIDER = os.getenv("PHONE_PROVIDER", "twilio").lower()
+
 _PHONE_AGENT_DIR = str(Path(__file__).resolve().parents[3] / "services" / "phone_agent")
 if _PHONE_AGENT_DIR not in sys.path:
     sys.path.insert(0, _PHONE_AGENT_DIR)
@@ -604,29 +608,43 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
             await websocket.close(code=1008, reason="Insufficient credits")
             return
 
-    # Drain Twilio's prelude (connected → start) to capture streamSid + callSid.
-    # The serializer needs streamSid to address outbound media frames.
+    # Drain the provider's prelude (connected → start) to capture the stream id
+    # plus the id the serializer needs to address outbound media frames. Twilio
+    # and Telnyx use different envelopes, so branch on PHONE_PROVIDER.
     stream_sid: str | None = None
     call_sid: str = ""
     caller_phone: str = ""
+    call_control_id: str = ""
+    outbound_encoding: str = "PCMU"
     try:
         for _ in range(5):
             msg = await websocket.receive_json()
-            if msg.get("event") == "start":
-                start = msg.get("start", {})
+            if msg.get("event") != "start":
+                continue
+            start = msg.get("start", {})
+            if PHONE_PROVIDER == "telnyx":
+                # Telnyx: stream_id + call_control_id; encoding under media_format.
+                stream_sid = start.get("stream_id") or msg.get("stream_id")
+                call_control_id = start.get("call_control_id", "")
+                call_sid = call_control_id
+                fmt = start.get("media_format", {}) or {}
+                outbound_encoding = (fmt.get("encoding") or "PCMU").upper()
+                params = start.get("custom_parameters", {}) or start.get("customParameters", {}) or {}
+                caller_phone = params.get("caller_phone", "") or start.get("from", "")
+            else:
                 stream_sid = start.get("streamSid")
                 call_sid = start.get("callSid", "")
                 params = start.get("customParameters", {}) or {}
                 caller_phone = params.get("caller_phone", "")
-                break
+            break
     except Exception as e:
-        logger.error("Failed to read Twilio start event: %s", e)
-        await websocket.close(code=1011, reason="Bad Twilio handshake")
+        logger.error("Failed to read %s start event: %s", PHONE_PROVIDER, e)
+        await websocket.close(code=1011, reason="Bad media handshake")
         return
 
     if not stream_sid:
-        logger.error("No streamSid in Twilio handshake — aborting")
-        await websocket.close(code=1011, reason="Missing streamSid")
+        logger.error("No stream id in %s handshake — aborting", PHONE_PROVIDER)
+        await websocket.close(code=1011, reason="Missing stream id")
         return
 
     session_ref = call_sid or f"mstream-{int(time.time() * 1000)}"
@@ -651,6 +669,9 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
             caller_info=caller_info,
             stream_sid=stream_sid,
             call_sid=call_sid,
+            provider=PHONE_PROVIDER,
+            call_control_id=call_control_id,
+            outbound_encoding=outbound_encoding,
         )
     except Exception as e:
         logger.error("Media stream pipeline error: %s", e, exc_info=True)
@@ -660,12 +681,43 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
 
 @router.get("/health")
 async def twilio_health():
+    import importlib.util
+
     samba_ok = bool(SAMBANOVA_API_KEY)
+
+    # Probe the media-stream import chain without executing heavy modules. These
+    # install best-effort from requirements-ml.txt (torch deps can OOM-skip on
+    # Railway), so this is the one-curl post-deploy check that the Pipecat path
+    # will actually come up.
+    def _have(mod: str) -> bool:
+        try:
+            return importlib.util.find_spec(mod) is not None
+        except Exception:
+            return False
+
+    pipecat_ok = _have("pipecat")
+    media_stream_ready = pipecat_ok and _have("silero_vad")
+
     return {
         "status": "ok",
         "mode": "media-streams" if MEDIA_STREAMS_ENABLED else "twilio-gather",
         "media_streams_enabled": MEDIA_STREAMS_ENABLED,
         "media_stream_host": MEDIA_STREAM_HOST if MEDIA_STREAMS_ENABLED else None,
+        "media_stream_ready": media_stream_ready,
+        "deps": {
+            "pipecat": pipecat_ok,
+            "silero_vad": _have("silero_vad"),
+            "telnyx_serializer": _have("pipecat.serializers.telnyx"),
+            "numpy": _have("numpy"),
+            "scipy": _have("scipy"),
+            "httpx": _have("httpx"),
+        },
+        "providers": {
+            "phone": PHONE_PROVIDER,
+            "stt": os.getenv("STT_PROVIDER", "local").lower(),
+            "tts": os.getenv("TTS_PROVIDER", "local").lower(),
+        },
+        "telnyx_speech_configured": bool(os.getenv("TELNYX_API_KEY", "")),
         "primary_llm": "sambanova" if samba_ok else "qwen-local",
         "fallback_llm": "qwen-local",
         "sambanova_configured": samba_ok,
