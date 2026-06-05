@@ -10,9 +10,11 @@ Endpoints for the frontend phone orders page:
 """
 
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
@@ -277,3 +279,110 @@ async def phone_test_chat(req: TestChatRequest, _auth=Depends(require_service_au
         reply = "Sorry, could you say that again?"
 
     return {"reply": reply, "ended": ended, "order": order}
+
+
+# ---------------------------------------------------------------------------
+# Number provisioning — buys a dedicated Twilio number per merchant and wires
+# its voice webhook so inbound calls resolve to this business.
+# ---------------------------------------------------------------------------
+
+TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_API = "https://api.twilio.com/2010-04-01"
+
+
+def _webhook_base() -> str:
+    host = os.getenv("MEDIA_STREAM_HOST", "api.meridian.tips")
+    return f"https://{host}"
+
+
+class ProvisionNumberRequest(BaseModel):
+    merchant_id: str
+    country: str = "CA"
+    area_code: str | None = None
+    business_name: str | None = None
+
+
+async def _twilio_search(country: str, area_code: str | None) -> str | None:
+    """Return one available voice+SMS local number for the country, or None."""
+    params: dict[str, str] = {"VoiceEnabled": "true", "SmsEnabled": "true", "Limit": "5"}
+    if area_code:
+        params["AreaCode"] = area_code
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        res = await client.get(
+            f"{TWILIO_API}/Accounts/{TWILIO_SID}/AvailablePhoneNumbers/{country}/Local.json",
+            params=params,
+            auth=(TWILIO_SID, TWILIO_TOKEN),
+        )
+        if res.status_code != 200:
+            logger.error("Twilio number search %d: %s", res.status_code, res.text[:300])
+            return None
+        nums = res.json().get("available_phone_numbers", [])
+        return nums[0]["phone_number"] if nums else None
+
+
+async def _twilio_purchase(phone_number: str, friendly_name: str) -> dict:
+    """Buy the number and point its voice/status webhooks at our backend."""
+    base = _webhook_base()
+    data = {
+        "PhoneNumber": phone_number,
+        "FriendlyName": friendly_name,
+        "VoiceUrl": f"{base}/twilio/voice",
+        "VoiceMethod": "POST",
+        "StatusCallback": f"{base}/twilio/status",
+        "StatusCallbackMethod": "POST",
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        res = await client.post(
+            f"{TWILIO_API}/Accounts/{TWILIO_SID}/IncomingPhoneNumbers.json",
+            data=data,
+            auth=(TWILIO_SID, TWILIO_TOKEN),
+        )
+        if res.status_code not in (200, 201):
+            logger.error("Twilio purchase %d: %s", res.status_code, res.text[:400])
+            # Surface Twilio's own message (e.g. regulatory bundle / no funds).
+            try:
+                msg = res.json().get("message", res.text[:200])
+            except Exception:
+                msg = res.text[:200]
+            raise HTTPException(502, f"Twilio could not provision a number: {msg}")
+        body = res.json()
+        return {"phone_number": body.get("phone_number"), "sid": body.get("sid")}
+
+
+@router.post("/provision-number")
+async def provision_number(req: ProvisionNumberRequest, _auth=Depends(require_service_auth)):
+    """Provision a dedicated phone number for a merchant. Idempotent: if the
+    merchant already has a number it is returned unchanged (never double-buys)."""
+    _validate_merchant_id(req.merchant_id)
+
+    if not TWILIO_SID or not TWILIO_TOKEN:
+        raise HTTPException(503, "Twilio is not configured")
+
+    db = get_db()
+    rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{req.merchant_id}"},
+        limit=1,
+    )
+    existing = rows[0].get("phone_number") if rows else None
+    if existing:
+        return {"phone_number": existing, "provisioned": False, "already_existed": True}
+
+    country = (req.country or "CA").upper()
+    available = await _twilio_search(country, req.area_code)
+    if not available:
+        raise HTTPException(404, f"No available {country} numbers found")
+
+    purchased = await _twilio_purchase(available, req.business_name or f"Meridian {req.merchant_id[:8]}")
+    number = purchased["phone_number"]
+
+    payload = {"phone_number": number, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if rows:
+        await db.update("phone_agent_config", payload, filters={"merchant_id": f"eq.{req.merchant_id}"})
+    else:
+        payload["merchant_id"] = req.merchant_id
+        await db.insert("phone_agent_config", payload)
+    logger.info("Provisioned %s for merchant %s", number, req.merchant_id)
+
+    return {"phone_number": number, "provisioned": True, "already_existed": False}
