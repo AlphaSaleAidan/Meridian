@@ -278,25 +278,79 @@ def _parse(result: dict) -> tuple[str, dict | None]:
 
 async def _lookup_merchant_by_phone(phone_number: str) -> str | None:
     """Look up merchant_id by the Twilio phone number (To field) from Supabase."""
+    config = await _fetch_merchant_config(phone_number)
+    return config.get("merchant_id") if config else None
+
+
+async def _fetch_merchant_config(phone_number: str) -> dict | None:
+    """Fetch the full phone_agent_config row for the dialed number from Supabase.
+
+    Returns the row (incl. menu_items, greeting, order_types, business_name) so
+    the live turn-based path can take orders against the merchant's own menu
+    instead of the hardcoded demo menu. Returns None if not found / not configured.
+    """
     supabase_url = os.getenv("SUPABASE_URL", "")
     supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
-    if not supabase_url or not supabase_key:
+    if not supabase_url or not supabase_key or not phone_number:
         return None
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             res = await client.get(
                 f"{supabase_url}/rest/v1/phone_agent_config"
-                f"?phone_number=eq.{phone_number}&select=merchant_id",
+                f"?phone_number=eq.{phone_number}&select=*",
                 headers={
                     "apikey": supabase_key,
                     "Authorization": f"Bearer {supabase_key}",
                 },
             )
             if res.status_code == 200 and res.json():
-                return res.json()[0]["merchant_id"]
+                return res.json()[0]
     except Exception as e:
-        logger.warning("Failed to lookup merchant by phone %s: %s", phone_number, e)
+        logger.warning("Failed to fetch merchant config for %s: %s", phone_number, e)
     return None
+
+
+def _menu_text_from(menu_items: list[dict]) -> str:
+    lines = []
+    for item in menu_items:
+        try:
+            line = f" - {item['name']}: ${float(item.get('price', 0)):.2f}"
+        except (TypeError, ValueError, KeyError):
+            line = f" - {item.get('name', 'item')}"
+        sizes = item.get("sizes") or []
+        if sizes:
+            line += f" (sizes: {', '.join(sizes)})"
+        opts = item.get("options") or item.get("modifications") or []
+        if opts:
+            line += f" (options: {', '.join(opts)})"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _build_merchant_prompt(config: dict) -> str:
+    """Build a system prompt from a merchant's phone_agent_config row.
+
+    Falls back to the demo menu text when the merchant has no menu_items yet so
+    the agent always has something to work with.
+    """
+    business = config.get("business_name") or "our restaurant"
+    menu_items = config.get("menu_items") or []
+    order_types = config.get("order_types") or ["pickup", "delivery"]
+    menu = _menu_text_from(menu_items) if menu_items else _menu_text()
+    return f"""You are a friendly AI phone ordering assistant for {business}.
+Keep responses SHORT - 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
+
+MENU:
+{menu}
+
+RULES:
+- Help the customer build their order item by item.
+- Suggest sizes or options when relevant.
+- When done, read back the order with total price, ask for their name and order type ({', '.join(order_types)}).
+- If delivery, ask for their address.
+- Once confirmed, call submit_order.
+- For items not on the menu, let them know politely.
+- Keep it brief - phone conversations should be quick."""
 
 
 async def _log_call_start(call_sid: str, caller_phone: str, merchant_id: str = ""):
@@ -414,10 +468,14 @@ async def twilio_voice(request: Request):
     twilio_number = form.get("To", "")
     _cleanup()
 
-    # Try to resolve merchant from the Twilio number the caller dialed
+    # Resolve the merchant + its phone-agent config from the dialed number, so
+    # the live path takes orders against the merchant's own menu/greeting.
+    config_row = None
     merchant_id = None
     if twilio_number:
-        merchant_id = await _lookup_merchant_by_phone(twilio_number)
+        config_row = await _fetch_merchant_config(twilio_number)
+    if config_row:
+        merchant_id = config_row.get("merchant_id")
     if not merchant_id:
         merchant_id = DEMO_MERCHANT_ID
         logger.info("No merchant found for %s — using demo merchant %s", twilio_number, DEMO_MERCHANT_ID)
@@ -448,15 +506,20 @@ async def twilio_voice(request: Request):
         except Exception as e:
             logger.warning("caller memory lookup failed: %s", e)
 
-    session_prompt = SYSTEM_PROMPT + (f"\n\n{memory_block}" if memory_block else "")
+    base_prompt = _build_merchant_prompt(config_row) if config_row else SYSTEM_PROMPT
+    session_prompt = base_prompt + (f"\n\n{memory_block}" if memory_block else "")
     _sessions[call_sid] = {
         "messages": [],
         "ts": time.time(),
         "caller_phone": caller_phone,
         "merchant_id": merchant_id,
+        "merchant_name": (config_row or {}).get("business_name", ""),
         "system_prompt": session_prompt,
     }
-    greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
+    greeting = (
+        (config_row or {}).get("greeting")
+        or "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
+    )
     return Response(content=_gather(greeting), media_type=TWIML)
 
 
