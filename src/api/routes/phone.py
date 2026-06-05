@@ -194,19 +194,21 @@ def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = ""
     # speech ends). The Twilio-ism speechTimeout="auto" is rejected by Telnyx and
     # makes Gather fire its action with an empty SpeechResult -> the reprompt loop.
     # transcriptionEngine only accepts "A" (Google, default) or "B" (Telnyx in-house);
-    # the literal "Telnyx" is invalid. Observed on this account: "B" makes Gather stop
-    # posting its action entirely (0 callbacks), while "A" posts back but with an empty
-    # SpeechResult + a Confidence field (recognizer ran, produced no text). Use "A" so
-    # the action fires; the empty-speech log captures SpeechResult/Confidence values to
-    # determine no-audio vs recognized-empty.
+    # the literal "Telnyx" is invalid. "B" stops Gather posting its action; use "A".
+    #
+    # The prompt <Say> is kept OUTSIDE <Gather>. When it is nested inside, the gather's
+    # transcription window opens while the Polly greeting is still playing, and the
+    # playback bleeds onto the inbound track -> the recognizer finalizes on the bot's
+    # own words (e.g. " Thank you for calling.") instead of the caller. Playing <Say>
+    # first means the gather only listens after the prompt finishes, so the inbound
+    # track carries caller audio alone. (Trade-off: no barge-in, which we want here.)
     hints_attr = f' hints="{_escape(hints)}"' if hints else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+  <Say voice="Polly.Joanna">{_escape(say)}</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
-    transcriptionEngine="A"{hints_attr}>
-    <Say voice="Polly.Joanna">{_escape(say)}</Say>
-  </Gather>
+    transcriptionEngine="A"{hints_attr} />
   <Say voice="Polly.Joanna">I didn't catch that. Could you say that again?</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
