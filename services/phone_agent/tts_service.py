@@ -182,27 +182,42 @@ class CosyVoiceTTS(TTSService):
 # --- Telnyx hosted TTS ---
 
 TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
-TELNYX_TTS_URL = "https://api.telnyx.com/v2/text-to-speech"
-# binary_output returns raw PCM: 24 kHz, signed 16-bit LE, mono.
-_TELNYX_NATIVE_RATE = 24000
-# Voice id format is Provider.Model.VoiceId (e.g. "Telnyx.NaturalHD.astra").
-_DEFAULT_TELNYX_VOICE = os.getenv("TELNYX_TTS_VOICE", "Telnyx.NaturalHD.astra")
+# The synthesis endpoint is /v2/text-to-speech/speech (the bare /v2/text-to-speech
+# path 404s — the public website docs are wrong; the telnyx-python SDK is right).
+TELNYX_TTS_URL = "https://api.telnyx.com/v2/text-to-speech/speech"
+# Telnyx hosts Kokoro with the SAME voice ids as our local Kokoro, so the mapping
+# is just "Telnyx.KokoroTTS.{kokoro_voice}". There is no "NaturalHD" model.
+_DEFAULT_TELNYX_VOICE = os.getenv("TELNYX_TTS_VOICE", "Telnyx.KokoroTTS.af_bella")
 
-# Map our Kokoro voice ids to Telnyx NaturalHD voices. Until the real NaturalHD
-# voice ids from the Telnyx dashboard are filled in, every voice falls back to
-# the default, so calls still work — they just won't differ per merchant.
-_KOKORO_TO_TELNYX = {
-    "af_bella": "Telnyx.NaturalHD.astra",
-}
+
+async def _ffmpeg_mp3_to_pcm8k(mp3_bytes: bytes) -> bytes:
+    """Decode Telnyx's MP3 response to 8 kHz signed-16-bit LE mono PCM.
+
+    binary_output returns audio/mpeg (not raw PCM), so we shell out to ffmpeg to
+    decode + downmix + resample in one pass. ffmpeg is installed in the container
+    image (see Dockerfile). Returns b"" on any failure so the call continues.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", str(_TWILIO_RATE), "pipe:1",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await proc.communicate(mp3_bytes)
+    if proc.returncode != 0:
+        logger.error("ffmpeg MP3 decode failed (rc=%s): %s", proc.returncode, err[:300])
+        return b""
+    return out
 
 
 class TelnyxTTSService(TTSService):
-    """Hosted TTS via Telnyx (POST /v2/text-to-speech, binary_output).
+    """Hosted TTS via Telnyx (POST /v2/text-to-speech/speech, binary_output).
 
     Splits text on sentence boundaries and POSTs one request per sentence so the
     caller hears the first words while later sentences are still rendering. Telnyx
-    returns 24 kHz S16LE mono PCM; we resample to 8 kHz for the call transport.
-    On any API error we yield nothing so the call continues.
+    returns MP3 (audio/mpeg); we decode + downmix + resample to 8 kHz mono PCM via
+    ffmpeg for the call transport. On any error we yield nothing so the call continues.
     """
 
     def __init__(
@@ -238,12 +253,11 @@ class TelnyxTTSService(TTSService):
                     if res.status_code != 200:
                         logger.error("Telnyx TTS %d: %s", res.status_code, res.text[:300])
                         continue
-                    audio_float = _pcm16_to_float(res.content)
-                    if audio_float.size == 0:
+                    pcm8k = await _ffmpeg_mp3_to_pcm8k(res.content)
+                    if not pcm8k:
                         continue
-                    resampled = _resample_to_8khz(audio_float, _TELNYX_NATIVE_RATE)
                     yield AudioRawFrame(
-                        audio=_to_int16_bytes(resampled),
+                        audio=pcm8k,
                         sample_rate=self._output_sample_rate,
                         num_channels=1,
                     )
@@ -253,7 +267,7 @@ class TelnyxTTSService(TTSService):
 
     def set_merchant_voice(self, merchant_config):
         kokoro_voice = resolve_kokoro_voice(merchant_config)
-        self._voice = _KOKORO_TO_TELNYX.get(kokoro_voice, _DEFAULT_TELNYX_VOICE)
+        self._voice = f"Telnyx.KokoroTTS.{kokoro_voice}"
 
 
 def build_tts(merchant_config) -> TTSService:
