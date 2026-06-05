@@ -1,10 +1,14 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Sparkles, Plus, AlertTriangle, TrendingUp, Check } from 'lucide-react'
+import { Sparkles, Plus, AlertTriangle, TrendingUp, Check, CalendarDays, CloudRain, Activity } from 'lucide-react'
 import { api } from '@/lib/api'
 import type { ScheduleShift } from '@/lib/agent-data'
 import { fmtTime } from './schedule-helpers'
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+type FactorKind = 'peak' | 'holiday' | 'weather'
+interface Factor { kind: FactorKind; label: string }
+interface Signal { kind: 'holiday' | 'weather'; label: string }
 
 interface Recommendation {
   id: string
@@ -15,6 +19,13 @@ interface Recommendation {
   reason: string
   priority: 'critical' | 'recommended' | 'optional'
   peak_intensity?: number
+  factors?: Factor[]
+}
+
+const FACTOR_STYLE: Record<FactorKind, { fg: string; Icon: typeof Activity }> = {
+  peak: { fg: '#17C5B0', Icon: Activity },
+  holiday: { fg: '#7C5CFF', Icon: CalendarDays },
+  weather: { fg: '#1A8FD6', Icon: CloudRain },
 }
 
 interface Props {
@@ -28,6 +39,8 @@ interface Props {
   currentShifts: ScheduleShift[]
   /** Called when user accepts a recommendation. Parent creates the shift. */
   onAccept: (rec: { dayOfWeek: number; startTime: string; endTime: string; role: string }) => void
+  /** 'CA' enables the weather + holiday agent on the backend; defaults to 'US' (peaks only) */
+  country?: string
 }
 
 function synthFromPeaks(
@@ -106,28 +119,34 @@ const PRIORITY_STYLE: Record<Recommendation['priority'], { fg: string; bg: strin
 }
 
 export default function RecommendationsPanel({
-  merchantId, weekStart, liveMode, peakHoursFallback, currentShifts, onAccept,
+  merchantId, weekStart, liveMode, peakHoursFallback, currentShifts, onAccept, country,
 }: Props) {
   const [recs, setRecs] = useState<Recommendation[] | null>(null)
+  const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(false)
   const [acceptedIds, setAcceptedIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     if (!liveMode) {
       setRecs(synthFromPeaks(peakHoursFallback, currentShifts))
+      setSignals([])
       return
     }
     let cancelled = false
     setLoading(true)
-    api.scheduleRecommend(merchantId, weekStart, 8)
-      .then(res => { if (!cancelled) setRecs(res.recommendations) })
+    api.scheduleRecommend(merchantId, weekStart, 8, country ? { country } : {})
+      .then(res => {
+        if (cancelled) return
+        setRecs(res.recommendations)
+        setSignals(res.signals ?? [])
+      })
       .catch(e => {
         console.warn('scheduleRecommend failed:', e)
-        if (!cancelled) setRecs([])
+        if (!cancelled) { setRecs([]); setSignals([]) }
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [liveMode, merchantId, weekStart, peakHoursFallback, currentShifts])
+  }, [liveMode, merchantId, weekStart, peakHoursFallback, currentShifts, country])
 
   const handleAccept = useCallback((rec: Recommendation) => {
     setAcceptedIds(prev => new Set(prev).add(rec.id))
@@ -163,6 +182,24 @@ export default function RecommendationsPanel({
           </span>
         )}
       </div>
+      {signals.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {signals.map((s, i) => {
+            const fs = FACTOR_STYLE[s.kind]
+            const Icon = fs.Icon
+            return (
+              <span
+                key={i}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                style={{ backgroundColor: `${fs.fg}12`, color: fs.fg, border: `1px solid ${fs.fg}30` }}
+              >
+                <Icon size={10} />
+                {s.label}
+              </span>
+            )
+          })}
+        </div>
+      )}
       {recs.length === 0 ? (
         <p className="text-[12px] text-[#A1A1A8]">
           <Check size={11} className="inline text-[#17C5B0] mr-1" />
@@ -192,7 +229,22 @@ export default function RecommendationsPanel({
                     <div className="text-[12px] font-medium text-[#F5F5F7]">
                       {DAY_LABELS[rec.day_of_week] || '?'} · {fmtTime(rec.start_time)}–{fmtTime(rec.end_time)}
                     </div>
-                    <div className="text-[10px] text-[#A1A1A8]/70 truncate">{rec.reason}</div>
+                    {rec.factors && rec.factors.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                        {rec.factors.map((f, i) => {
+                          const fs = FACTOR_STYLE[f.kind]
+                          const Icon = fs.Icon
+                          return (
+                            <span key={i} className="flex items-center gap-0.5 text-[10px]" style={{ color: fs.fg }}>
+                              <Icon size={9} />
+                              {f.label}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-[#A1A1A8]/70 truncate">{rec.reason}</div>
+                    )}
                   </div>
                 </div>
                 <button

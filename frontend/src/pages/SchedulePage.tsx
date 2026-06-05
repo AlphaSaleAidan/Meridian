@@ -761,6 +761,7 @@ export default function SchedulePage() {
             peakHoursFallback={peakHours}
             currentShifts={shifts}
             onAccept={handleAcceptRecommendation}
+            country={country}
           />
         </ScrollReveal>
       )}
