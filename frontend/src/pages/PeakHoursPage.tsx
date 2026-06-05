@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
-import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const hourLabels = Array.from({ length: 24 }, (_, i) => {
@@ -126,7 +125,6 @@ export default function PeakHoursPage() {
   const awaitingData = !isDemo && cells.length === 0
 
   return (
-    <DataPageSkeleton title="Peak Hours" layout="chart">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -233,6 +231,5 @@ export default function PeakHoursPage() {
       </ScrollReveal>
       )}
     </div>
-    </DataPageSkeleton>
   )
 }
