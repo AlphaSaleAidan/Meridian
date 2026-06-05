@@ -29,6 +29,11 @@ from pipecat.transports.network.fastapi_websocket import (
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.serializers.twilio import TwilioFrameSerializer
 
+try:
+    from pipecat.serializers.telnyx import TelnyxFrameSerializer
+except ImportError:  # older pipecat without the Telnyx serializer
+    TelnyxFrameSerializer = None  # type: ignore[assignment, misc]
+
 from stt_service import build_stt
 from tts_service import build_tts
 from llm_service import build_llm, LLMContext, ORDER_TOOLS
@@ -133,12 +138,25 @@ async def run_call_bot(
     caller_info: dict,
     stream_sid: str | None = None,
     call_sid: str | None = None,
+    provider: str = "twilio",
+    call_control_id: str | None = None,
+    outbound_encoding: str | None = None,
 ):
     serializer = None
     if stream_sid:
-        # Twilio mu-law 8 kHz frame envelope: decoded to 16-bit linear inbound,
-        # re-encoded to mu-law on the way out. Without this the audio is unintelligible.
-        serializer = TwilioFrameSerializer(stream_sid=stream_sid, call_sid=call_sid or "")
+        # Decode the provider's mu-law 8 kHz frame envelope to 16-bit linear
+        # inbound and re-encode outbound. Without this the audio is unintelligible.
+        if provider == "telnyx":
+            if TelnyxFrameSerializer is None:
+                raise RuntimeError("pipecat Telnyx serializer not installed")
+            serializer = TelnyxFrameSerializer(
+                stream_id=stream_sid,
+                call_control_id=call_control_id or "",
+                outbound_encoding=outbound_encoding or "PCMU",
+                api_key=os.getenv("TELNYX_API_KEY", ""),
+            )
+        else:
+            serializer = TwilioFrameSerializer(stream_sid=stream_sid, call_sid=call_sid or "")
 
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
