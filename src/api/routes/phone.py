@@ -7,6 +7,7 @@ Webhook URL to configure in Twilio Console:
     Voice: https://api.meridian.tips/twilio/voice
         Status: https://api.meridian.tips/twilio/status
         """
+import asyncio
 import json
 import logging
 import os
@@ -214,6 +215,69 @@ def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = ""
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
     transcriptionEngine="A"{hints_attr} />
 </Response>"""
+
+
+def _listen(say: str, max_length: int = 15, timeout: int = 3, hints: str = "") -> str:
+    # Per-turn capture via <Record> instead of <Gather input="speech">.
+    # <Gather input="speech"> reads the default *inbound* track, which on these
+    # Telnyx calls carries the bot's own Polly playback — so the caller is never
+    # transcribed and the call loops on "I didn't catch that". <Gather> has no
+    # track selector, so no Gather config fixes it. <Record> captures only the
+    # audio that arrives while the bot is silent (the caller), then the /gather
+    # action handler downloads it and transcribes it synchronously via the
+    # Telnyx STT endpoint. timeout = seconds of trailing silence that ends the
+    # turn; maxLength caps a runaway turn; finishOnKey lets a caller end early.
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Record action="/twilio/gather" method="POST" playBeep="false"
+    maxLength="{max_length}" timeout="{timeout}" trim="trim-silence"
+    finishOnKey="#" channels="single" format="mp3" />
+</Response>"""
+
+
+async def _transcribe_recording(recording_url: str) -> str:
+    """Download a Telnyx call recording and transcribe it synchronously via the
+    Telnyx STT endpoint (deepgram/nova-3). Returns the caller's text, or "" on
+    any failure so the turn loop reprompts instead of crashing. The recording
+    can lag the <Record> action callback by a moment, so the fetch is retried.
+    """
+    api_key = os.getenv("TELNYX_API_KEY", "")
+    if not api_key or not recording_url:
+        return ""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            audio = b""
+            for _ in range(6):
+                r = await client.get(recording_url)
+                if r.status_code in (401, 403):
+                    r = await client.get(
+                        recording_url, headers={"Authorization": f"Bearer {api_key}"}
+                    )
+                if r.status_code == 200 and r.content:
+                    audio = r.content
+                    break
+                await asyncio.sleep(0.4)
+            if not audio:
+                logger.warning("phone listen: recording not ready url=%s", recording_url)
+                return ""
+            res = await client.post(
+                "https://api.telnyx.com/v2/ai/audio/transcriptions",
+                data={
+                    "model": "deepgram/nova-3",
+                    "language": "en",
+                    "response_format": "json",
+                },
+                files={"file": ("turn.mp3", audio, "audio/mpeg")},
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        if res.status_code != 200:
+            logger.error("phone listen: Telnyx STT %d: %s", res.status_code, res.text[:200])
+            return ""
+        return (res.json().get("text") or "").strip()
+    except Exception as e:
+        logger.error("phone listen: transcription failed: %s", e)
+        return ""
 
 
 def _hangup(say: str) -> str:
@@ -618,10 +682,6 @@ async def twilio_voice(request: Request):
             await _log_call_end(call_sid, "credits_paused")
             return Response(content=_credits_paused_twiml(), media_type=TWIML)
 
-    if os.getenv("PHONE_RECORD_DIAG") == "1":
-        logger.warning("phone record-diag: serving dual-channel <Record> diagnostic for call %s", call_sid)
-        return Response(content=_record_diag_twiml(), media_type=TWIML)
-
     if MEDIA_STREAMS_ENABLED:
         logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
         return Response(content=_media_stream_twiml(merchant_id, caller_phone), media_type=TWIML)
@@ -652,7 +712,7 @@ async def twilio_voice(request: Request):
         (config_row or {}).get("greeting")
         or "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     )
-    return Response(content=_gather(greeting, hints=hints), media_type=TWIML)
+    return Response(content=_listen(greeting, hints=hints), media_type=TWIML)
 
 
 @router.post("/gather")
@@ -670,16 +730,24 @@ async def twilio_gather(request: Request):
     ).strip()
     hints = _sessions.get(call_sid, {}).get("hints", "")
 
+    # Primary capture path: the turn loop uses <Record>, so the caller's audio
+    # arrives as a RecordingUrl. Transcribe it synchronously here (the inline
+    # SpeechResult fields stay as a fallback for any legacy <Gather> turn).
+    if not speech:
+        recording_url = form.get("RecordingUrl") or form.get("RecordingUrls") or ""
+        if recording_url:
+            speech = await _transcribe_recording(recording_url)
+
     if not speech:
         logger.warning(
-            "phone gather: empty speech for call %s; SpeechResult=%r Confidence=%r keys=%s",
+            "phone gather: empty speech for call %s; SpeechResult=%r RecordingUrl=%r keys=%s",
             call_sid,
             form.get("SpeechResult"),
-            form.get("Confidence"),
+            bool(form.get("RecordingUrl") or form.get("RecordingUrls")),
             sorted(form.keys()),
         )
         return Response(
-            content=_gather("Sorry, I didn't catch that. What can I get for you?", hints=hints),
+            content=_listen("Sorry, I didn't catch that. What can I get for you?", hints=hints),
             media_type=TWIML,
         )
 
@@ -712,7 +780,7 @@ async def twilio_gather(request: Request):
 
     reply = text or "Could you repeat that please?"
     session["messages"].append({"role": "assistant", "content": reply})
-    return Response(content=_gather(reply, hints=session.get("hints", "")), media_type=TWIML)
+    return Response(content=_listen(reply, hints=session.get("hints", "")), media_type=TWIML)
 
 
 async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> OrderResult:
