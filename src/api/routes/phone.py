@@ -226,20 +226,23 @@ def _hangup(say: str) -> str:
 
 def _record_diag_twiml() -> str:
     # Flag-gated (PHONE_RECORD_DIAG=1) one-shot media diagnostic. Records the
-    # caller on a SEPARATE channel from the bot (recordingChannels="dual") and
-    # asks Telnyx to transcribe the recording. Lets us prove whether the
-    # caller's audio reaches Telnyx at all (silent caller channel = one-way
-    # audio on the DID) vs. reaches Telnyx but the <Gather input="speech">
-    # recognizer is bound to the wrong leg (caller channel has voice + the
-    # Record transcription captures it). Revert by unsetting the env var.
+    # caller (channels="dual": caller on channel A, bot on B) and asks Telnyx to
+    # transcribe the recording. The bot is silent during the record window, so a
+    # populated transcript proves the caller's audio reaches Telnyx and a Record-
+    # based capture works -> we then rebuild the turn loop on <Record> instead of
+    # <Gather input="speech"> (which has no track selector and reads the wrong
+    # leg). NOTE: Telnyx TeXML <Record> uses transcription=/transcriptionCallback/
+    # channels (NOT Twilio's transcribe/transcribeCallback/recordingChannels) and
+    # trim only accepts "trim-silence" — the prior diagnostic used the Twilio
+    # names + an invalid trim, so the verb never executed (no beep, no callback).
+    # Revert by unsetting the env var.
     return """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">Diagnostic mode. After the beep, please say: testing one two three. I am the caller.</Say>
-  <Record maxLength="8" playBeep="true" trim="do-not-trim"
-    recordingChannels="dual" transcribe="true"
-    action="/twilio/record_diag" method="POST"
-    recordingStatusCallback="/twilio/record_diag"
-    transcribeCallback="/twilio/transcribe_diag" />
+  <Say voice="Polly.Joanna">Diagnostic mode. After the beep, please say: testing one two three, I am the caller. Then wait.</Say>
+  <Record maxLength="8" playBeep="true" trim="trim-silence" channels="dual"
+    transcription="true" transcriptionEngine="A" transcriptionLanguage="en-US"
+    recordingStatusCallback="/twilio/record_diag" recordingStatusCallbackMethod="POST"
+    transcriptionCallback="/twilio/transcribe_diag" />
   <Say voice="Polly.Joanna">Thanks. Diagnostic complete. Goodbye.</Say>
   <Hangup />
 </Response>"""
@@ -799,10 +802,12 @@ async def twilio_transcribe_diag(request: Request):
     fault is the Gather speech path, not the audio reaching Telnyx."""
     form = await request.form()
     logger.warning(
-        "phone record-diag TRANSCRIPT: call=%s status=%r text=%r keys=%s",
+        "phone record-diag TRANSCRIPT: call=%s status=%r transcript=%r confidence=%r track=%r keys=%s",
         form.get("CallSid"),
-        form.get("TranscriptionStatus"),
-        form.get("TranscriptionText"),
+        form.get("TranscriptionStatus") or form.get("Status"),
+        form.get("Transcript") or form.get("TranscriptionText"),
+        form.get("Confidence"),
+        form.get("TranscriptionTrack") or form.get("Track"),
         sorted(form.keys()),
     )
     return Response(content="", status_code=204)
