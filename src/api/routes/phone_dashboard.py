@@ -282,13 +282,25 @@ async def phone_test_chat(req: TestChatRequest, _auth=Depends(require_service_au
 
 
 # ---------------------------------------------------------------------------
-# Number provisioning — buys a dedicated Twilio number per merchant and wires
-# its voice webhook so inbound calls resolve to this business.
+# Number provisioning — buys a dedicated number per merchant and wires its
+# voice webhook so inbound calls resolve to this business.
+#
+# Provider is selected by PHONE_PROVIDER (default "twilio"). Telnyx is the
+# preferred provider (cheaper, and SMS already runs on it); a Telnyx number is
+# attached to the TELNYX_VOICE_CONNECTION_ID app, whose voice webhook points at
+# our backend, so inbound calls route through the same agent.
 # ---------------------------------------------------------------------------
+
+PHONE_PROVIDER = os.getenv("PHONE_PROVIDER", "twilio").lower()
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
 TWILIO_API = "https://api.twilio.com/2010-04-01"
+
+TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
+TELNYX_API = "https://api.telnyx.com/v2"
+TELNYX_VOICE_CONNECTION_ID = os.getenv("TELNYX_VOICE_CONNECTION_ID", "")
+TELNYX_MESSAGING_PROFILE_ID = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
 
 
 def _webhook_base() -> str:
@@ -302,6 +314,8 @@ class ProvisionNumberRequest(BaseModel):
     area_code: str | None = None
     business_name: str | None = None
 
+
+# --- Twilio provider ---
 
 async def _twilio_search(country: str, area_code: str | None) -> str | None:
     """Return one available voice+SMS local number for the country, or None."""
@@ -350,13 +364,76 @@ async def _twilio_purchase(phone_number: str, friendly_name: str) -> dict:
         return {"phone_number": body.get("phone_number"), "sid": body.get("sid")}
 
 
+# --- Telnyx provider ---
+
+async def _telnyx_search(country: str, area_code: str | None) -> str | None:
+    """Return one available voice+SMS number for the country, or None."""
+    params: list[tuple[str, str]] = [
+        ("filter[country_code]", country),
+        ("filter[features][]", "voice"),
+        ("filter[features][]", "sms"),
+        ("filter[limit]", "5"),
+        ("filter[best_effort]", "true"),
+    ]
+    if area_code:
+        params.append(("filter[national_destination_code]", area_code))
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        res = await client.get(
+            f"{TELNYX_API}/available_phone_numbers",
+            params=params,
+            headers={"Authorization": f"Bearer {TELNYX_API_KEY}"},
+        )
+        if res.status_code != 200:
+            logger.error("Telnyx number search %d: %s", res.status_code, res.text[:300])
+            return None
+        nums = res.json().get("data", [])
+        return nums[0]["phone_number"] if nums else None
+
+
+async def _telnyx_purchase(phone_number: str) -> dict:
+    """Order the number and attach it to our voice connection + messaging
+    profile. The connection's voice webhook (set once on the TeXML/Call-Control
+    app) routes inbound calls to our backend."""
+    body: dict = {"phone_numbers": [{"phone_number": phone_number}]}
+    if TELNYX_VOICE_CONNECTION_ID:
+        body["connection_id"] = TELNYX_VOICE_CONNECTION_ID
+    if TELNYX_MESSAGING_PROFILE_ID:
+        body["messaging_profile_id"] = TELNYX_MESSAGING_PROFILE_ID
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        res = await client.post(
+            f"{TELNYX_API}/number_orders",
+            json=body,
+            headers={"Authorization": f"Bearer {TELNYX_API_KEY}", "Content-Type": "application/json"},
+        )
+        if res.status_code not in (200, 201):
+            logger.error("Telnyx order %d: %s", res.status_code, res.text[:400])
+            # Surface Telnyx's own error (e.g. no funds / regulatory requirement).
+            try:
+                errs = res.json().get("errors", [])
+                msg = errs[0].get("detail") if errs else res.text[:200]
+            except Exception:
+                msg = res.text[:200]
+            raise HTTPException(502, f"Telnyx could not provision a number: {msg}")
+        data = res.json().get("data", {})
+        order_id = data.get("id")
+        nums = data.get("phone_numbers", [])
+        bought = nums[0].get("phone_number") if nums else phone_number
+        return {"phone_number": bought, "sid": order_id}
+
+
 @router.post("/provision-number")
 async def provision_number(req: ProvisionNumberRequest, _auth=Depends(require_service_auth)):
     """Provision a dedicated phone number for a merchant. Idempotent: if the
-    merchant already has a number it is returned unchanged (never double-buys)."""
+    merchant already has a number it is returned unchanged (never double-buys).
+    Provider is chosen by PHONE_PROVIDER (telnyx | twilio)."""
     _validate_merchant_id(req.merchant_id)
 
-    if not TWILIO_SID or not TWILIO_TOKEN:
+    if PHONE_PROVIDER == "telnyx":
+        if not TELNYX_API_KEY:
+            raise HTTPException(503, "Telnyx is not configured")
+        if not TELNYX_VOICE_CONNECTION_ID:
+            raise HTTPException(503, "Telnyx voice connection is not configured (TELNYX_VOICE_CONNECTION_ID)")
+    elif not TWILIO_SID or not TWILIO_TOKEN:
         raise HTTPException(503, "Twilio is not configured")
 
     db = get_db()
@@ -370,11 +447,15 @@ async def provision_number(req: ProvisionNumberRequest, _auth=Depends(require_se
         return {"phone_number": existing, "provisioned": False, "already_existed": True}
 
     country = (req.country or "CA").upper()
-    available = await _twilio_search(country, req.area_code)
+    available = await _telnyx_search(country, req.area_code) if PHONE_PROVIDER == "telnyx" \
+        else await _twilio_search(country, req.area_code)
     if not available:
         raise HTTPException(404, f"No available {country} numbers found")
 
-    purchased = await _twilio_purchase(available, req.business_name or f"Meridian {req.merchant_id[:8]}")
+    if PHONE_PROVIDER == "telnyx":
+        purchased = await _telnyx_purchase(available)
+    else:
+        purchased = await _twilio_purchase(available, req.business_name or f"Meridian {req.merchant_id[:8]}")
     number = purchased["phone_number"]
 
     payload = {"phone_number": number, "updated_at": datetime.now(timezone.utc).isoformat()}
@@ -383,6 +464,6 @@ async def provision_number(req: ProvisionNumberRequest, _auth=Depends(require_se
     else:
         payload["merchant_id"] = req.merchant_id
         await db.insert("phone_agent_config", payload)
-    logger.info("Provisioned %s for merchant %s", number, req.merchant_id)
+    logger.info("Provisioned %s for merchant %s via %s", number, req.merchant_id, PHONE_PROVIDER)
 
-    return {"phone_number": number, "provisioned": True, "already_existed": False}
+    return {"phone_number": number, "provisioned": True, "already_existed": False, "provider": PHONE_PROVIDER}
