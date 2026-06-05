@@ -75,6 +75,29 @@ export const phoneService = {
     if (!res.ok) return null
     return res.json()
   },
+
+  async testChat(req: {
+    merchant_id: string
+    messages: { role: 'user' | 'assistant'; content: string }[]
+    business_name?: string
+    greeting?: string
+    menu_items?: { name: string; price: number; category?: string }[]
+    order_types?: string[]
+  }): Promise<TestChatResponse> {
+    const res = await fetch(`${API_BASE}/api/phone/test-chat`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!res.ok) throw new Error(`test-chat failed: ${res.status}`)
+    return res.json()
+  },
+}
+
+export interface TestChatResponse {
+  reply: string
+  ended: boolean
+  order: Record<string, unknown> | null
 }
 
 function mapCallRow(row: any): PhoneCallEntry {

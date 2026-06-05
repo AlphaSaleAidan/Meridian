@@ -46,6 +46,30 @@ function pickBrowserVoice(voiceId: string): SpeechSynthesisVoice | undefined {
   return pool[idx % pool.length]
 }
 
+/** Speak text in the given voice ID, applying the per-voice pitch/rate and a
+ *  distinct browser voice. Shared by the voice previews and the test call. */
+export function speakWithVoice(
+  text: string,
+  voiceId: string,
+  opts?: { onEnd?: () => void; speed?: number; pitch?: number },
+): void {
+  if (!text.trim()) { opts?.onEnd?.(); return }
+  window.speechSynthesis.cancel()
+  const utter = new SpeechSynthesisUtterance(text)
+  const sample = VOICE_SAMPLES[voiceId]
+  if (sample) {
+    utter.pitch = sample.pitch * (opts?.pitch ?? 1)
+    utter.rate = sample.rate * (opts?.speed ?? 1)
+  }
+  const preferred = pickBrowserVoice(voiceId)
+  if (preferred) utter.voice = preferred
+  if (opts?.onEnd) {
+    utter.onend = opts.onEnd
+    utter.onerror = opts.onEnd
+  }
+  window.speechSynthesis.speak(utter)
+}
+
 /* ---------- Compact play button (for voice grid cards) ---------- */
 export function VoicePlayButton({ voiceId, isSelected }: { voiceId: string; isSelected: boolean }) {
   const [playing, setPlaying] = useState(false)

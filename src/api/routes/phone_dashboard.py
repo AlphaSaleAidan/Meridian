@@ -202,3 +202,78 @@ async def get_phone_stats(
         "total_revenue": round(total_revenue, 2),
         "avg_duration_seconds": avg_duration,
     }
+
+
+class TestChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class TestChatRequest(BaseModel):
+    merchant_id: str
+    messages: list[TestChatMessage]
+    business_name: str | None = None
+    greeting: str | None = None
+    menu_items: list | None = None
+    order_types: list | None = None
+
+
+def _build_test_prompt(req: TestChatRequest) -> str:
+    """System prompt scoped to the merchant's own menu/greeting so the in-app
+    test call behaves like the live agent for this specific business."""
+    name = (req.business_name or "this restaurant").strip()
+    lines = []
+    for item in req.menu_items or []:
+        try:
+            price = float(item.get("price", 0))
+        except (TypeError, ValueError):
+            price = 0.0
+        nm = (item.get("name") or "").strip()
+        if not nm:
+            continue
+        cat = item.get("category")
+        line = f" - {nm}: ${price:.2f}"
+        if cat:
+            line += f" ({cat})"
+        lines.append(line)
+    menu_text = "\n".join(lines) if lines else " (menu not configured yet — take the order generally)"
+    order_types = ", ".join(req.order_types or ["pickup", "delivery"])
+    greeting = (req.greeting or "").strip()
+    greeting_line = f'\nOpen with a greeting like: "{greeting}"' if greeting else ""
+    return (
+        f"You are a friendly AI phone ordering assistant for {name}. "
+        "Keep responses SHORT — 1-2 sentences. Sound warm and natural, not robotic. "
+        f"This is a phone call.{greeting_line}\n\n"
+        f"MENU:\n{menu_text}\n\n"
+        f"Available order types: {order_types}.\n\n"
+        "RULES:\n"
+        "- Help the customer build their order item by item.\n"
+        "- When done, read back the order with total price and ask for their name.\n"
+        "- For items not on the menu, let them know politely.\n"
+        "- Keep it brief — phone conversations should be quick."
+    )
+
+
+@router.post("/test-chat")
+async def phone_test_chat(req: TestChatRequest, _auth=Depends(require_service_auth)):
+    """Interactive in-app test call. Runs the real agent brain (SambaNova →
+    Qwen fallback) against the merchant's own menu so the wizard's test call
+    responds to live speech instead of replaying a canned script."""
+    _validate_merchant_id(req.merchant_id)
+
+    # Reuse the production agent brain + parser from the Twilio route module.
+    from .phone import _ask_ai, _parse
+
+    convo = [{"role": m.role, "content": m.content} for m in req.messages if m.content.strip()]
+    if not convo:
+        raise HTTPException(400, "messages cannot be empty")
+
+    result = await _ask_ai(convo, _build_test_prompt(req))
+    reply, tool = _parse(result)
+    ended = bool(tool and tool.get("name") in ("end_call", "submit_order"))
+    order = tool.get("input") if (tool and tool.get("name") == "submit_order") else None
+
+    if not reply:
+        reply = "Sorry, could you say that again?"
+
+    return {"reply": reply, "ended": ended, "order": order}

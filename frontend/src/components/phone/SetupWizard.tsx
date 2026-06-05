@@ -263,7 +263,7 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
         )}
       </div>
 
-      {showTestCall && <TestCallModal biz={biz} onClose={() => setShowTestCall(false)} />}
+      {showTestCall && <TestCallModal biz={biz} orgId={orgId} onClose={() => setShowTestCall(false)} />}
 
       {/* Navigation */}
       <div className="flex justify-between">
