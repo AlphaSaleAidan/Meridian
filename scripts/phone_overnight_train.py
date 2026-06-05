@@ -522,6 +522,9 @@ async def main() -> int:
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--max-calls", type=int, default=6000, help="hard cap on DeepSeek calls (cost guard)")
     ap.add_argument("--ab-count", type=int, default=12, help="hardest scenarios to A/B re-test")
+    ap.add_argument("--candidate-prompt", default="", help="path to a candidate prompt; skips auto-distill")
+    ap.add_argument("--ab-only", action="store_true",
+                    help="with --candidate-prompt: run baseline vs candidate on a fresh scenario set, no distill")
     ap.add_argument("--out", default="/tmp/phone-training-out")
     args = ap.parse_args()
 
@@ -537,6 +540,36 @@ async def main() -> int:
     t0 = time.time()
 
     async with httpx.AsyncClient(timeout=60.0) as client:
+        if args.ab_only:
+            if not args.candidate_prompt:
+                print("ERROR: --ab-only requires --candidate-prompt", file=sys.stderr)
+                return 2
+            candidate = Path(args.candidate_prompt).read_text()
+            print(f"[A/B] generating {args.scenarios} fresh scenarios ...")
+            scenarios = await gen_scenarios(ds, client, args.scenarios)
+            print(f"      got {len(scenarios)} scenarios")
+            base = await run_batch(ds, client, scenarios, BASELINE_PROMPT, args.max_turns, args.concurrency, "base")
+            cand = await run_batch(ds, client, scenarios, candidate, args.max_turns, args.concurrency, "cand")
+            bm, cm = mean_score(base), mean_score(cand)
+            by_id = {r["scenario"]["id"]: r for r in cand}
+            rows = []
+            for r in sorted(base, key=lambda r: r["scenario"]["id"]):
+                sid = r["scenario"]["id"]
+                o, n = r["judgment"]["score"], by_id[sid]["judgment"]["score"]
+                rows.append(f"- {sid} {r['scenario']['category'][:34]:34} old={o:2d} new={n:2d} ({'+' if n>=o else ''}{n-o})")
+            report = [
+                "# A/B: baseline vs candidate prompt",
+                f"\nScenarios: {len(scenarios)} | DeepSeek calls: {usage.calls} | est. cost: ${usage.est_cost_usd():.2f}",
+                f"\n**baseline mean = {bm:.2f}  |  candidate mean = {cm:.2f}  |  delta = {'+' if cm>=bm else ''}{cm-bm:.2f}**",
+                f"\nVerdict: {'ADOPT candidate' if cm > bm else 'KEEP baseline'}",
+                "\n## Per-scenario", *rows,
+            ]
+            (out / "ab_report.md").write_text("\n".join(report))
+            print(f"\n[A/B] baseline={bm:.2f}  candidate={cm:.2f}  delta={cm-bm:+.2f} -> "
+                  f"{'ADOPT' if cm>bm else 'KEEP BASELINE'}")
+            print(f"Done. {usage.calls} calls, ~${usage.est_cost_usd():.2f}. Report: {out/'ab_report.md'}")
+            return 0
+
         print(f"[1/5] generating {args.scenarios} scenarios ...")
         scenarios = await gen_scenarios(ds, client, args.scenarios)
         print(f"      got {len(scenarios)} scenarios")
