@@ -85,3 +85,15 @@ export function formatChartDate(iso: string): string {
   const d = new Date(iso)
   return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
 }
+
+// Whole-dollar CAD amount (MRR, commissions, plan prices).
+export function formatCad(amount: number | null | undefined): string {
+  if (amount == null) return 'CA$0'
+  return amount.toLocaleString('en-CA', {
+    style: 'currency', currency: 'CAD', minimumFractionDigits: 0, maximumFractionDigits: 0,
+  })
+}
+
+export const PRICING = {
+  DEFAULT_MONTHLY_CAD: 49,
+} as const
