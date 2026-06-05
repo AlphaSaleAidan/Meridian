@@ -9,6 +9,7 @@ import Layout from '@/components/Layout'
 import DemoLayout from '@/components/DemoLayout'
 import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
 import { merchantPillars } from '@/config/merchantPillars'
+import CanadaDemoLayout from '@/components/CanadaDemoLayout'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 
@@ -396,8 +397,8 @@ export default function App() {
               <Route path="/canada/landing" element={<CanadaLandingPage />} />
               <Route path="/canada/careers" element={<CanadaCareersPage />} />
 
-              {/* Canada Demo — same dashboard with CAD currency */}
-              <Route path="/canada/demo" element={<DemoLayout />}>
+              {/* Canada Demo — new-portal shell (CanadaLayout look) + CAD currency + Canada tour */}
+              <Route path="/canada/demo" element={<CanadaDemoLayout />}>
                 {CustomerDashboardRoutes()}
                 <Route path="camera-analytics" element={
                   <Suspense fallback={<LazyFallback />}>
