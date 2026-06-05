@@ -224,6 +224,27 @@ def _hangup(say: str) -> str:
 </Response>"""
 
 
+def _record_diag_twiml() -> str:
+    # Flag-gated (PHONE_RECORD_DIAG=1) one-shot media diagnostic. Records the
+    # caller on a SEPARATE channel from the bot (recordingChannels="dual") and
+    # asks Telnyx to transcribe the recording. Lets us prove whether the
+    # caller's audio reaches Telnyx at all (silent caller channel = one-way
+    # audio on the DID) vs. reaches Telnyx but the <Gather input="speech">
+    # recognizer is bound to the wrong leg (caller channel has voice + the
+    # Record transcription captures it). Revert by unsetting the env var.
+    return """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">Diagnostic mode. After the beep, please say: testing one two three. I am the caller.</Say>
+  <Record maxLength="8" playBeep="true" trim="do-not-trim"
+    recordingChannels="dual" transcribe="true"
+    action="/twilio/record_diag" method="POST"
+    recordingStatusCallback="/twilio/record_diag"
+    transcribeCallback="/twilio/transcribe_diag" />
+  <Say voice="Polly.Joanna">Thanks. Diagnostic complete. Goodbye.</Say>
+  <Hangup />
+</Response>"""
+
+
 def _cleanup():
     now = time.time()
     expired = [sid for sid, s in _sessions.items() if now - s.get("ts", 0) > SESSION_TTL]
@@ -594,6 +615,10 @@ async def twilio_voice(request: Request):
             await _log_call_end(call_sid, "credits_paused")
             return Response(content=_credits_paused_twiml(), media_type=TWIML)
 
+    if os.getenv("PHONE_RECORD_DIAG") == "1":
+        logger.warning("phone record-diag: serving dual-channel <Record> diagnostic for call %s", call_sid)
+        return Response(content=_record_diag_twiml(), media_type=TWIML)
+
     if MEDIA_STREAMS_ENABLED:
         logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
         return Response(content=_media_stream_twiml(merchant_id, caller_phone), media_type=TWIML)
@@ -748,6 +773,38 @@ async def twilio_status(request: Request):
             await _charge_for_call(merchant_id, call_sid, duration_seconds)
 
         _sessions.pop(call_sid, None)
+    return Response(content="", status_code=204)
+
+
+@router.post("/record_diag")
+async def twilio_record_diag(request: Request):
+    """Flag-gated diagnostic: log the dual-channel recording URL + metadata so
+    we can listen to whether the caller's channel actually carries audio."""
+    form = await request.form()
+    logger.warning(
+        "phone record-diag RECORDING: call=%s url=%r duration=%r channels=%r keys=%s",
+        form.get("CallSid"),
+        form.get("RecordingUrl") or form.get("RecordingUrls"),
+        form.get("RecordingDuration"),
+        form.get("RecordingChannels"),
+        sorted(form.keys()),
+    )
+    return Response(content="<Response/>", media_type=TWIML)
+
+
+@router.post("/transcribe_diag")
+async def twilio_transcribe_diag(request: Request):
+    """Flag-gated diagnostic: log Telnyx's transcription of the recording. If
+    this captures the caller's words but <Gather input=speech> does not, the
+    fault is the Gather speech path, not the audio reaching Telnyx."""
+    form = await request.form()
+    logger.warning(
+        "phone record-diag TRANSCRIPT: call=%s status=%r text=%r keys=%s",
+        form.get("CallSid"),
+        form.get("TranscriptionStatus"),
+        form.get("TranscriptionText"),
+        sorted(form.keys()),
+    )
     return Response(content="", status_code=204)
 
 
