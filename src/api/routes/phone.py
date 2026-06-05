@@ -194,21 +194,21 @@ def _gather(say: str, timeout: int = 8, speech_timeout: int = 3, hints: str = ""
     # speech ends). The Twilio-ism speechTimeout="auto" is rejected by Telnyx and
     # makes Gather fire its action with an empty SpeechResult -> the reprompt loop.
     # transcriptionEngine only accepts "A" (Google, default) or "B" (Telnyx in-house);
-    # the literal "Telnyx" is invalid and silently disables transcription, so the
-    # action fires with an empty SpeechResult -> same reprompt loop. "A" works on any
-    # Telnyx account with no extra provisioning.
+    # the literal "Telnyx" is invalid and silently disables transcription. On this
+    # account Google ("A") returns an empty SpeechResult (Google STT not provisioned),
+    # so use "B" (Telnyx in-house) to match the account's configured STT provider.
     hints_attr = f' hints="{_escape(hints)}"' if hints else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
-    transcriptionEngine="A"{hints_attr}>
+    transcriptionEngine="B"{hints_attr}>
     <Say voice="Polly.Joanna">{_escape(say)}</Say>
   </Gather>
   <Say voice="Polly.Joanna">I didn't catch that. Could you say that again?</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
-    transcriptionEngine="A"{hints_attr} />
+    transcriptionEngine="B"{hints_attr} />
 </Response>"""
 
 
@@ -640,8 +640,10 @@ async def twilio_gather(request: Request):
 
     if not speech:
         logger.warning(
-            "phone gather: empty speech for call %s; form keys=%s",
+            "phone gather: empty speech for call %s; SpeechResult=%r Confidence=%r keys=%s",
             call_sid,
+            form.get("SpeechResult"),
+            form.get("Confidence"),
             sorted(form.keys()),
         )
         return Response(
