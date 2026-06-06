@@ -1,14 +1,24 @@
 #!/bin/sh
 set -e
 # RUN_CELERY is set only on the Railway "worker" service, so web/Meridian keep
-# serving the API alone. The worker runs the Celery consumer in the background
-# and uvicorn in the foreground (same image, so the platform healthcheck on
-# /health keeps passing).
+# serving the API alone. On the worker we must load the heavy ML app exactly
+# ONCE (it OOMs the instance otherwise), so we run Celery with --pool=solo (no
+# prefork children = one app copy) and answer the platform /health probe from a
+# tiny stdlib HTTP server that imports nothing from the app.
 if [ "$RUN_CELERY" = "1" ]; then
-  celery -A src.workers.celery_app:celery_app worker \
+  python -c "
+import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.send_header('Content-Type','application/json')
+        self.end_headers(); self.wfile.write(b'{\"status\":\"healthy\",\"role\":\"worker\"}')
+    def log_message(self, *a): pass
+ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('PORT', 8000))), H).serve_forever()
+" &
+  exec celery -A src.workers.celery_app:celery_app worker \
+    --pool=solo \
     --loglevel="${CELERY_LOG_LEVEL:-info}" \
-    -Q "${CELERY_QUEUES:-critical,default,analysis,reports,sync}" \
-    --concurrency="${CELERY_CONCURRENCY:-2}" \
-    --max-tasks-per-child=200 &
+    -Q "${CELERY_QUEUES:-critical,default,analysis,reports,sync}"
 fi
 exec uvicorn src.api.app:app --host 0.0.0.0 --port "${PORT:-8000}"
