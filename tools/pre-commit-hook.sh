@@ -62,5 +62,20 @@ if git diff --cached --name-only | grep -q '^frontend/src/'; then
     echo "Frontend type check passed"
 fi
 
+if git diff --cached --name-only | grep -qE '^(agents/registry\.yaml|scripts/validate_agents\.py|src/ai/agents/|src/ai/routing/)'; then
+    echo "Running agent registry validation..."
+    python3 scripts/validate_agents.py 2>&1
+    if [ $? -ne 0 ]; then
+        echo ""
+        echo "================================================================="
+        echo "  COMMIT BLOCKED -- agent registry invalid or drifted"
+        echo "  Update agents/registry.yaml (new BaseAgent subclasses need a"
+        echo "  row) and re-run git commit."
+        echo "================================================================="
+        exit 1
+    fi
+    echo "Agent registry validation passed"
+fi
+
 echo "All pre-commit checks passed"
 exit 0
