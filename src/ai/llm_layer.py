@@ -27,6 +27,15 @@ from .routing import (
 
 logger = logging.getLogger("meridian.ai.llm_layer")
 
+# Apply agents/registry.yaml model-tier assignments over the in-code seed map
+# once at import. Fail-soft: a missing/malformed registry leaves the seed map
+# intact (load_registry_tiers + load_agent_tiers both no-op on bad input).
+try:
+    from .routing.registry_loader import load_registry_tiers as _load_registry_tiers
+    _load_registry_tiers()
+except Exception:  # pragma: no cover - defensive only
+    pass
+
 
 def _caller_agent_name(default: str = "llm_layer") -> str:
     """Best-effort: walk the stack for a frame whose ``self`` looks like a
