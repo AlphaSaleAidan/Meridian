@@ -10,10 +10,7 @@ import sys
 from datetime import datetime, date, timedelta, timezone
 from uuid import uuid4
 
-# Fix path
-sys.path.insert(0, "/work/meridian/src")
-
-from ai.engine import MeridianAI, AnalysisContext
+from src.ai.engine import MeridianAI, AnalysisContext
 
 
 # ─── Realistic Test Data Generator ───────────────────────────
