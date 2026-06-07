@@ -7,7 +7,6 @@ from Supabase or user input before including it in a prompt.
 """
 import re
 import logging
-from typing import Any
 
 _log = logging.getLogger("meridian.security.sanitizer")
 

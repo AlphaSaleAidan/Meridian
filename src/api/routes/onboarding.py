@@ -623,7 +623,6 @@ async def connect_pos_onboarding(req: ConnectPosRequest):
 @router.post("/verify-pos")
 async def verify_pos_onboarding(req: VerifyPosRequest):
     """Quick verify that POS connection is still live."""
-    from .pos_connections import test_connection, TestConnectionRequest
 
     if req.deal_id:
         db = get_db()

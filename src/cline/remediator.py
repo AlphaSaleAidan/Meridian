@@ -11,6 +11,10 @@ import logging
 import time
 from dataclasses import dataclass, field
 from enum import IntEnum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .agent import RemediationResult
 
 logger = logging.getLogger("meridian.cline.remediator")
 

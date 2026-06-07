@@ -4,7 +4,6 @@ Weather correlation service — Open-Meteo (free, no API key).
 Fetches historical + forecast weather, correlates with daily revenue,
 and produces weather-aware insights for the AI engine.
 """
-import asyncio
 import json
 import logging
 import os

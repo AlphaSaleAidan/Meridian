@@ -362,7 +362,7 @@ async def stripe_webhook(request: Request):
                 except Exception as e:
                     logger.error(f"Webhook processing error: {e}")
 
-    except Exception as e:
+    except Exception:
         logger.exception(f"Webhook processing error for {event_type}")
 
     return {"status": "ok"}

@@ -3,7 +3,6 @@ Worker entrypoint — starts the Celery worker with beat scheduler.
 
 Usage: python3 -m src.worker
 """
-import sys
 import os
 
 from src.workers.celery_app import celery_app

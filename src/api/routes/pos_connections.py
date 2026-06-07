@@ -8,7 +8,6 @@ OAuth-based systems (Square, Clover) use their own /api/square/ and
 /api/clover/ routes for the authorization flow, then share the same
 connection status and sync infrastructure here.
 """
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional

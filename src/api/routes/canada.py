@@ -4,7 +4,6 @@ Canada-specific Routes — Careers applications and Canada portal endpoints.
   POST /api/canada/careers/apply    → Submit a Canadian sales application
   POST /api/canada/create-customer  → Create Supabase Auth user for a Canada customer
 """
-import asyncio
 import logging
 import os
 import re
@@ -13,7 +12,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_admin, require_jwt, require_admin_jwt, rate_limit_signup
+from ..auth import require_jwt, require_admin_jwt, rate_limit_signup
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
