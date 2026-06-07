@@ -205,6 +205,9 @@ export default function MerchantHomePage() {
           ))}
         </div>
 
+        {/* Top 3 Actions — pre-connection teaser (standby agents + locked state) */}
+        <Top3ActionsPanel connected={false} />
+
         {/* Pillar quick links — already navigable */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[

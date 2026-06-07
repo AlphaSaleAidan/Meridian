@@ -490,6 +490,116 @@ export function generateTopActions(): TopAction[] {
   ]
 }
 
+// ─── Real-insight → TopAction adapter ───────────────────────────────────
+//
+// The backend (`GET /api/dashboard/actions`) returns flat rows derived from the
+// `insights` table — `{ id, type, title, summary, impact_cents, confidence,
+// action_status, priority, valid_until, created_at }`. That shape is NOT a
+// TopAction: it has no `effort`, no `agentSource`, no `reasoning` chain, uses a
+// snake_case `impact_cents`, and a 0–1 `confidence`. Feeding it straight into
+// the panel produced NaN impacts, pushed every action into the weekly/strategic
+// bucket (because `effort` was undefined ≠ 'Low'), and crashed the "Why" panel
+// on expand (it reads `reasoning.agentName`).
+//
+// This adapter is the post-connection counterpart to the demo's
+// `generateTopActions()` — it assigns each insight `type` to the proper model
+// agent from `generateAgents()` and synthesizes the same reasoning structure the
+// demo uses, so a real connected merchant sees identical fidelity.
+
+interface InsightAgentMapping {
+  agentId: string
+  agentName: string
+  effort: 'Low' | 'Medium' | 'High'
+  whyMovesMoney: string
+}
+
+// Each backend insight `type` → the model agent that owns it + the cadence it
+// belongs to. `effort: 'Low'` routes to the daily "instant win" lane; Medium/High
+// route to the weekly "strategic" lane. The mapping mirrors how the demo splits
+// quick pricing/inventory tweaks (daily) from structural staffing/strategy moves
+// (weekly).
+const INSIGHT_AGENT_MAP: Record<string, InsightAgentMapping> = {
+  pricing: { agentId: 'pricing-power', agentName: 'Pricing Power', effort: 'Low', whyMovesMoney: 'A price change is a same-day lever — it lifts margin on every future unit without adding cost.' },
+  product_recommendation: { agentId: 'product-intelligence', agentName: 'Product Intelligence', effort: 'Low', whyMovesMoney: 'Surfacing the right SKU mix and bundles raises average ticket on traffic you already have.' },
+  inventory: { agentId: 'inventory-intelligence', agentName: 'Inventory Intelligence', effort: 'Low', whyMovesMoney: 'Avoiding a stockout protects sales you would otherwise lose to an empty shelf.' },
+  anomaly: { agentId: 'transaction-analyst', agentName: 'Transaction Analyst', effort: 'Low', whyMovesMoney: 'An unexplained void/refund/revenue swing is usually leakage — catching it early stops the bleed.' },
+  staffing: { agentId: 'staffing', agentName: 'Staffing', effort: 'Medium', whyMovesMoney: 'Matching headcount to demand cuts both idle labor cost and walkout losses during peaks.' },
+  money_left: { agentId: 'money-left', agentName: 'Money Left on Table', effort: 'High', whyMovesMoney: 'This is the aggregate gap between current and optimal — the headline strategic opportunity.' },
+  general: { agentId: 'insight-narrator', agentName: 'Insight Narrator', effort: 'Medium', whyMovesMoney: 'A synthesized cross-agent finding — it connects several signals into one move worth making.' },
+}
+
+const FALLBACK_MAPPING: InsightAgentMapping = {
+  agentId: 'action-prioritizer',
+  agentName: 'Action Prioritizer',
+  effort: 'Medium',
+  whyMovesMoney: 'Ranked by projected ROI against effort across every agent finding.',
+}
+
+function normalizeConfidencePct(v: unknown): number {
+  const n = Number(v) || 0
+  return n <= 1 ? Math.round(n * 100) : Math.round(n)
+}
+
+function capitalizePriority(v: unknown): 'Critical' | 'High' | 'Medium' | 'Low' {
+  const s = String(v || '').toLowerCase()
+  if (s === 'critical') return 'Critical'
+  if (s === 'high') return 'High'
+  if (s === 'low') return 'Low'
+  return 'Medium'
+}
+
+/** Convert one backend action/insight row into a fully-formed TopAction with an
+ * assigned model agent and a synthesized reasoning chain. */
+export function actionFromInsight(raw: Record<string, unknown>, rank = 1): TopAction {
+  const type = String(raw.type || 'general')
+  const map = INSIGHT_AGENT_MAP[type] || FALLBACK_MAPPING
+  const impactCents = Number(raw.impact_cents ?? raw.impactCents ?? 0) || 0
+  const confidence = normalizeConfidencePct(raw.confidence)
+  const priority = capitalizePriority(raw.priority)
+  const title = String(raw.title || 'Recommended action')
+  const description = String(raw.summary || raw.description || '')
+  const impactStr = `+${formatCentsLocal(impactCents)}/month`
+
+  return {
+    rank,
+    title,
+    description,
+    expectedImpact: impactStr,
+    impactCents,
+    effort: map.effort,
+    confidence,
+    priority,
+    agentSource: map.agentId,
+    reasoning: {
+      observation: description || title,
+      reasoning: map.whyMovesMoney,
+      conclusion: title,
+      impact: impactStr,
+      confidence,
+      priority,
+      rawData: {
+        monthly_impact: formatCentsLocal(impactCents),
+        confidence: `${confidence}%`,
+        category: type.replace(/_/g, ' '),
+        status: String(raw.action_status || 'pending'),
+      },
+      agentId: map.agentId,
+      agentName: map.agentName,
+    },
+  }
+}
+
+/** Map the raw `/api/dashboard/actions` payload into TopActions for the panel. */
+export function actionsFromInsights(rawActions: Array<Record<string, unknown>>): TopAction[] {
+  return (rawActions || []).map((a, i) => actionFromInsight(a, i + 1))
+}
+
+// Minimal cents formatter local to this module (the panel uses its own
+// `formatCents`; we only need a string for the synthesized reasoning rawData).
+function formatCentsLocal(cents: number): string {
+  return `$${Math.round(cents / 100).toLocaleString()}`
+}
+
 export function generateRFMSegments(): RFMSegment[] {
   return [
     { name: 'Champions', count: 23, percentage: 8, avgSpendCents: 284000, avgFrequency: 18, retentionScore: 96, color: '#17C5B0', description: 'Best customers. High spend, frequent visits, recent activity.' },
