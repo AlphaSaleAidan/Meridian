@@ -545,7 +545,7 @@ async def director_preview(req: DirectorPreviewRequest):
         raise HTTPException(status_code=400, detail="Brand profile required for Director preview")
 
     try:
-        from ...ai.commercial_director import direct_video, direct_image, STYLE_PROFILES, PLATFORM_CONFIG
+        from ...ai.commercial_director import direct_video, direct_image
         brand_dict = {
             "business_name": req.brand.business_name,
             "business_type": req.brand.business_type,
@@ -873,7 +873,7 @@ RULES:
 
         user_msg = f"Create a {req.platform} post about: {req.prompt}"
         if req.referenceImageUrl:
-            user_msg += f"\n\nReference image provided — the post should complement this visual."
+            user_msg += "\n\nReference image provided — the post should complement this visual."
 
         messages = [
             {"role": "system", "content": system_prompt},

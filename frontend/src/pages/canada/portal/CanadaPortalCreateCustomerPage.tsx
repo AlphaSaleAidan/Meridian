@@ -622,6 +622,8 @@ export default function CanadaPortalCreateCustomerPage() {
 
   const [customerLoginUrl, setCustomerLoginUrl] = useState('')
   const [customerPortalUrl, setCustomerPortalUrl] = useState('')
+  const [customerTempPassword, setCustomerTempPassword] = useState('')
+  const [copiedPassword, setCopiedPassword] = useState(false)
   const [autoSendStatus, setAutoSendStatus] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false })
 
   async function handleCreateCustomer() {
@@ -636,39 +638,58 @@ export default function CanadaPortalCreateCustomerPage() {
       const token = generateToken()
       const apiUrl = import.meta.env.VITE_API_URL || ''
 
-      const authHeaders = await getAuthHeaders()
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 30000)
+      const provisionBody = JSON.stringify({
+        org_id: businessId,
+        email: form.email,
+        phone: form.phone || null,
+        owner_name: form.ownerName,
+        business_name: form.businessName,
+        plan: form.plan,
+        monthly_price: price,
+        setup_fee: setupFee,
+        first_month_free: form.firstMonthFree,
+        business_type: form.vertical || null,
+        pos_provider: form.pos || null,
+        rep_id: rep?.rep_id || null,
+        rep_name: rep?.name || null,
+      })
+
+      const postProvision = async () => {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 30000)
+        try {
+          return await fetch(`${apiUrl}/api/onboarding/provision-customer`, {
+            method: 'POST',
+            headers: await getAuthHeaders(),
+            signal: controller.signal,
+            body: provisionBody,
+          })
+        } finally {
+          clearTimeout(timeout)
+        }
+      }
 
       let provRes: Response
       try {
-        provRes = await fetch(`${apiUrl}/api/onboarding/provision-customer`, {
-          method: 'POST',
-          headers: authHeaders,
-          signal: controller.signal,
-          body: JSON.stringify({
-            org_id: businessId,
-            email: form.email,
-            phone: form.phone || null,
-            owner_name: form.ownerName,
-            business_name: form.businessName,
-            plan: form.plan,
-            monthly_price: price,
-            setup_fee: setupFee,
-            first_month_free: form.firstMonthFree,
-            business_type: form.vertical || null,
-            pos_provider: form.pos || null,
-            rep_id: rep?.rep_id || null,
-            rep_name: rep?.name || null,
-          }),
-        })
+        provRes = await postProvision()
+        // A stale rep session is the #1 cause of a confusing "Invalid or
+        // expired token" at this step. Force a token refresh and retry once
+        // before surfacing anything to the rep.
+        if ((provRes.status === 401 || provRes.status === 403) && supabase) {
+          await supabase.auth.refreshSession()
+          provRes = await postProvision()
+        }
       } catch (fetchErr: any) {
         if (fetchErr.name === 'AbortError') {
           throw new Error('Request timed out. The server may be busy — please try again.')
         }
         throw new Error('Unable to reach the server. Check your connection and try again.')
-      } finally {
-        clearTimeout(timeout)
+      }
+
+      if (provRes.status === 401 || provRes.status === 403) {
+        // Refresh didn't recover the session — the rep is signed out. Tell
+        // them plainly instead of leaking a raw "Invalid or expired token".
+        throw new Error('Your session expired. Please sign in again, then re-create the customer login.')
       }
 
       if (!provRes.ok) {
@@ -687,6 +708,7 @@ export default function CanadaPortalCreateCustomerPage() {
       }
       setCustomerLoginUrl(provData.login_url || `${window.location.origin}/canada/login`)
       setCustomerPortalUrl(provData.portal_url || '')
+      setCustomerTempPassword(provData.temporary_password || '')
 
       if (supabase) {
         try {
@@ -1235,8 +1257,20 @@ export default function CanadaPortalCreateCustomerPage() {
                     <span className="text-white font-medium font-mono">{form.email}</span>
                     <span className="text-pm-canada-text-muted">Login:</span>
                     <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-pm-accent font-mono hover:underline truncate">{customerLoginUrl}</a>
+                    {customerTempPassword && <>
+                      <span className="text-pm-canada-text-muted">Temp password:</span>
+                      <span className="flex items-center gap-2 min-w-0">
+                        <code className="text-white font-mono truncate">{customerTempPassword}</code>
+                        <button type="button" onClick={async () => { await navigator.clipboard.writeText(customerTempPassword); setCopiedPassword(true); setTimeout(() => setCopiedPassword(false), 1500) }}
+                          className="shrink-0 inline-flex items-center gap-1 text-2xs text-pm-accent hover:underline">
+                          {copiedPassword ? <Check size={12} /> : <Copy size={12} />}{copiedPassword ? 'Copied' : 'Copy'}
+                        </button>
+                      </span>
+                    </>}
                   </div>
-                  <p className="text-2xs text-pm-canada-text-muted mt-2">A secure setup email has been sent. The customer will click the link to set their own password — no credentials need to be shared.</p>
+                  <p className="text-2xs text-pm-canada-text-muted mt-2">{customerTempPassword
+                    ? 'These credentials were emailed to the customer. They sign in with this temporary password and set their own on first login.'
+                    : 'A setup email has been sent to the customer with their login details.'}</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -1260,7 +1294,7 @@ export default function CanadaPortalCreateCustomerPage() {
                   </button>
                   <button onClick={() => {
                     const subject = `Your Meridian Account is Ready!`
-                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up!\n\nEmail: ${form.email}\nLogin: ${customerLoginUrl}\n\nWe've sent you a separate setup email with a secure link to set your password. Check your inbox (and spam folder) for "Reset your password" from Meridian.\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in CAD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
+                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up!\n\nEmail: ${form.email}\nLogin: ${customerLoginUrl}${customerTempPassword ? `\nTemporary password: ${customerTempPassword}` : ''}\n\nSign in with the temporary password above${customerTempPassword ? " — you'll be prompted to set your own password on first login" : ' (check your inbox and spam folder for your setup email from Meridian)'}.\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in CAD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
                     window.open(`mailto:${form.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-4 py-3 text-sm-tight font-medium text-white bg-pm-canada-border rounded-lg hover:bg-pm-canada-surface border border-pm-canada-border transition-colors">
@@ -1282,6 +1316,7 @@ export default function CanadaPortalCreateCustomerPage() {
               setOnboardingLink('')
               setCustomerLoginUrl('')
               setCustomerPortalUrl('')
+              setCustomerTempPassword('')
               setAutoSendStatus({ sms: false, email: false })
               setProposalGenerated(false)
               setShowProposal(false)
@@ -1415,6 +1450,7 @@ export default function CanadaPortalCreateCustomerPage() {
               setOnboardingLink('')
               setCustomerLoginUrl('')
               setCustomerPortalUrl('')
+              setCustomerTempPassword('')
               setProposalGenerated(false)
               setShowProposal(false)
               setCheckoutUrl('')

@@ -8,7 +8,6 @@ CrossRefContext with correlated journey + transaction data.
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
 
 from ..base import BaseAgent
 

@@ -11,7 +11,6 @@ import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
 
 logger = logging.getLogger("meridian.api.inventory_docs")
 

@@ -361,7 +361,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                 "status": "active",
                 "created_at": now,
                 "access_token": portal_token,
-                "token_status": "active",
+                "token_status": "pending",
             }
             await db.upsert("businesses", biz_data, on_conflict="id")
         except Exception as e:
@@ -623,7 +623,6 @@ async def connect_pos_onboarding(req: ConnectPosRequest):
 @router.post("/verify-pos")
 async def verify_pos_onboarding(req: VerifyPosRequest):
     """Quick verify that POS connection is still live."""
-    from .pos_connections import test_connection, TestConnectionRequest
 
     if req.deal_id:
         db = get_db()

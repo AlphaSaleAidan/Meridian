@@ -7,6 +7,7 @@ since Supabase handles JWT issuance and password hashing.
 import logging
 import os
 from typing import Optional
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -25,6 +26,11 @@ SUPABASE_SERVICE_KEY = (
     os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     or os.environ.get("SUPABASE_SERVICE_KEY", "")
 )
+# Where the password-reset email link should land. Supabase otherwise uses its
+# configured site_url (currently a stale Vercel URL), which produces broken
+# reset links for meridian.tips customers. Must also be in Supabase's redirect
+# allow-list. Empty = fall back to Supabase's site_url (current behaviour).
+PASSWORD_RESET_REDIRECT_URL = os.environ.get("PASSWORD_RESET_REDIRECT_URL", "")
 
 
 class RegisterRequest(BaseModel):
@@ -130,15 +136,47 @@ async def login(body: LoginRequest):
 
 @router.post("/forgot-password")
 async def forgot_password(body: ForgotPasswordRequest):
-    """Send password reset email via Supabase."""
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{SUPABASE_URL}/auth/v1/recover",
-            json={"email": body.email},
-            headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+    """Send password reset email via Supabase.
+
+    Always returns a generic success to prevent email enumeration. But we no
+    longer swallow *infrastructure* failures: a 429 (Supabase's built-in SMTP
+    is capped at 2 emails/hour) or a 5xx means recovery email is actually
+    broken, and that must be visible to ops rather than masked behind the
+    generic response. Unknown-email 4xx stays quiet (debug only) so logs don't
+    become an enumeration oracle.
+    """
+    url = f"{SUPABASE_URL}/auth/v1/recover"
+    if PASSWORD_RESET_REDIRECT_URL:
+        url += f"?redirect_to={quote(PASSWORD_RESET_REDIRECT_URL, safe='')}"
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                url,
+                json={"email": body.email},
+                headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+            )
+    except httpx.HTTPError as e:
+        logger.error("forgot-password: transport error reaching Supabase recover: %s", e)
+        return {"status": "ok", "message": "If the email exists, a reset link has been sent"}
+
+    if resp.status_code == 429:
+        logger.error(
+            "forgot-password: Supabase recover rate-limited (429) — built-in SMTP "
+            "2/hr cap likely hit; configure custom SMTP. resp=%s",
+            resp.text[:200],
+        )
+    elif resp.status_code >= 500:
+        logger.error(
+            "forgot-password: Supabase recover %s: %s", resp.status_code, resp.text[:200]
+        )
+    elif resp.status_code not in (200, 201):
+        # Typically an unknown/invalid email — expected; keep it out of warn-level
+        # logs to avoid an enumeration signal.
+        logger.debug(
+            "forgot-password: Supabase recover %s: %s", resp.status_code, resp.text[:200]
         )
 
-    # Always return success to prevent email enumeration
     return {"status": "ok", "message": "If the email exists, a reset link has been sent"}
 
 
@@ -178,12 +216,30 @@ async def get_me(user: UserDB = Depends(get_current_user)):
 
 @router.post("/verify")
 async def request_verification(user: UserDB = Depends(get_current_user)):
-    """Request email verification resend."""
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            f"{SUPABASE_URL}/auth/v1/resend",
-            json={"type": "signup", "email": user.email},
-            headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+    """Request email verification resend.
+
+    Like forgot-password, this goes through Supabase's email sender, so a 429
+    (built-in SMTP 2/hr cap) or 5xx means the verification email silently never
+    arrives. Surface those to ops instead of always reporting success.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{SUPABASE_URL}/auth/v1/resend",
+                json={"type": "signup", "email": user.email},
+                headers={"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"},
+            )
+    except httpx.HTTPError as e:
+        logger.error("verify: transport error reaching Supabase resend: %s", e)
+        return {"status": "ok", "message": "Verification email sent"}
+
+    if resp.status_code == 429:
+        logger.error(
+            "verify: Supabase resend rate-limited (429) — built-in SMTP 2/hr cap "
+            "likely hit; configure custom SMTP. resp=%s",
+            resp.text[:200],
         )
+    elif resp.status_code >= 500:
+        logger.error("verify: Supabase resend %s: %s", resp.status_code, resp.text[:200])
 
     return {"status": "ok", "message": "Verification email sent"}

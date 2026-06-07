@@ -177,7 +177,7 @@ class CloverDataMapper:
             "cost_cents": cost_cents,
             "margin_cents": price_cents - cost_cents if cost_cents else None,
             "is_active": not cl_item.get("hidden", False),
-            "is_revenue": not cl_item.get("isRevenue", True) is False,
+            "is_revenue": cl_item.get("isRevenue", True) is not False,
             "tags": [t.get("name", "") for t in cl_item.get("tags", {}).get("elements", [])],
             "raw_data": cl_item,  # Store original for debugging
             "created_at": _clover_ts_to_iso(cl_item.get("createdTime")),

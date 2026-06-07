@@ -7,7 +7,7 @@ canada_insights sections of the overlay.
 import logging
 from datetime import date
 
-from .benchmarks import CANADIAN_TIP_RATES, LABOR_COST_PREMIUM_PCT
+from .benchmarks import CANADIAN_TIP_RATES
 from .provincial import MINIMUM_WAGE_CENTS, PROVINCE_PROFILES, PROVINCIAL_TAX
 
 logger = logging.getLogger("meridian.ai.canada.insights")

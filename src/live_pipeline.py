@@ -225,7 +225,69 @@ class MeridianPipeline:
             await self.close()
         
         return result
-    
+
+    async def run_analysis_only(self) -> PipelineResult:
+        """
+        Run ONLY the analytics + customer-portal phases on data that has
+        already been ingested into the DB by a non-Square sync engine
+        (Clover, Toast, …).
+
+        MeridianPipeline's full sync re-fetches from Square, so it can't be
+        used after a Clover/Toast backfill (there is no Square token). This
+        path skips every Square fetch phase and runs the POS-agnostic
+        analytics directly against the common DB schema:
+
+          5. analytics          — refresh views + AI engine
+          6. customer_app_sync  — push insights/forecasts to the portal
+        """
+        result = PipelineResult()
+
+        try:
+            logger.info(f"🧠 Starting analysis-only run for {self.org_name} ({self.org_id})")
+
+            # Locations are already in the DB; load count for portal metadata.
+            try:
+                locations = await self.db.select(
+                    "locations", filters={"org_id": f"eq.{self.org_id}"}
+                )
+                self._location_lookup = {
+                    str(loc.get("id", i)): str(loc.get("id", i))
+                    for i, loc in enumerate(locations or [])
+                }
+            except Exception as e:
+                logger.warning(f"Could not load location count (non-fatal): {e}")
+
+            # Phase 5: Analytics
+            await self.db.refresh_views()
+            ai_result = await self._run_ai_analysis()
+            result.record_phase("analytics", {
+                "insights": ai_result.get("insights", 0),
+                "forecasts": ai_result.get("forecasts", 0),
+                "money_left_score": ai_result.get("money_left_cents", 0),
+                "anomalies": ai_result.get("anomalies", 0),
+            })
+
+            # Phase 6: Sync to customer portal
+            try:
+                customer_sync = await self._sync_to_customer_app(ai_result)
+                result.record_phase("customer_app_sync", customer_sync)
+            except Exception as e:
+                logger.warning(f"Customer app sync failed (non-fatal): {e}")
+                result.record_phase("customer_app_sync", {"status": "failed", "error": str(e)})
+
+            result.completed_at = datetime.now(timezone.utc)
+            logger.info(f"✅ Analysis-only run complete: {result.summary}")
+
+        except Exception as e:
+            result.errors.append(str(e))
+            result.completed_at = datetime.now(timezone.utc)
+            logger.error(f"❌ Analysis-only run failed: {e}", exc_info=True)
+
+        finally:
+            await self.close()
+
+        return result
+
     # ─── Phase Implementations ────────────────────────────────
 
     async def _setup_org(self):

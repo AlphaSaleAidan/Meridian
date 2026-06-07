@@ -437,7 +437,7 @@ class BillingService:
 
             logger.info(f"Cancelled subscription for org {org_id}: {reason}")
             return True
-        except Exception as e:
+        except Exception:
             logger.exception(f"Cancel failed for org {org_id}")
             return False
 
@@ -591,7 +591,7 @@ class BillingService:
                         }),
                     }, filters={"id": f"eq.{sub['id']}"})
 
-        except Exception as e:
+        except Exception:
             logger.exception("Renewal processing failed")
 
     # ── Private helpers ──

@@ -1,0 +1,83 @@
+# Meridian Agent Registry (masterplan Phase 4)
+#
+# Machine-readable source of truth for the agent fleet. Two jobs:
+#   1. Feed model-tier assignments into the tiered router
+#      (src/ai/routing/registry_loader.load_registry_tiers → load_agent_tiers).
+#      Only `calls_llm: true` rows carry a routing `model_tier`.
+#   2. Gate drift: scripts/validate_agents.py asserts every concrete
+#      BaseAgent subclass in the code has a row here, and that every row
+#      with a class+module resolves and is internally consistent.
+#
+# Field reference
+#   name        recorded agent_name (BaseAgent.name, class name, or the
+#               llm_layer call-path function name). MUST be unique.
+#   class       Python class name (optional for functional call paths).
+#   module      import path of `class` (optional with class omitted).
+#   category    analytics_ml | cross_reference | generation | orchestration
+#               | voice_realtime | integration
+#   exec_tier   BaseAgent execution tier (1..6); ordering only, NOT the model
+#               tier. null for non-BaseAgent agents.
+#   calls_llm   true if the agent routes through llm_layer.
+#   model_tier  lightweight | standard | heavy_reasoning. MUST be set iff
+#               calls_llm is true; MUST be null otherwise.
+version: 1
+
+agents:
+  # ── Tier 1–5 POS agents (src/ai/agents/*.py, extend BaseAgent) ──
+  - {name: action_prioritizer,   class: ActionPrioritizerAgent,   module: src.ai.agents.action_prioritizer,   category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: basket_analysis,      class: BasketAnalysisAgent,      module: src.ai.agents.basket_analysis,      category: analytics_ml, exec_tier: 2, calls_llm: false, model_tier: null}
+  - {name: benchmark,            class: BenchmarkAgent,           module: src.ai.agents.benchmark,            category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: cash_flow,            class: CashFlowAgent,            module: src.ai.agents.cash_flow,            category: analytics_ml, exec_tier: 1, calls_llm: false, model_tier: null}
+  - {name: cashflow_forecast,    class: CashFlowForecastAgent,    module: src.ai.agents.cashflow_forecast,    category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: category_mix,         class: CategoryMixAgent,         module: src.ai.agents.category_mix,         category: analytics_ml, exec_tier: 2, calls_llm: false, model_tier: null}
+  - {name: customer_ltv,         class: CustomerLTVAgent,         module: src.ai.agents.customer_ltv,         category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: customer_recognizer,  class: CustomerRecognizerAgent,  module: src.ai.agents.customer_recognizer,  category: analytics_ml, exec_tier: 2, calls_llm: false, model_tier: null}
+  - {name: day_of_week,          class: DayOfWeekAgent,           module: src.ai.agents.day_of_week,          category: analytics_ml, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: demographic_profiler, class: DemographicProfilerAgent, module: src.ai.agents.demographic_profiler, category: analytics_ml, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: discount_analyzer,    class: DiscountAnalyzerAgent,    module: src.ai.agents.discount_analyzer,    category: analytics_ml, exec_tier: 1, calls_llm: false, model_tier: null}
+  - {name: dwell_time,           class: DwellTimeAgent,           module: src.ai.agents.dwell_time,           category: analytics_ml, exec_tier: 2, calls_llm: false, model_tier: null}
+  - {name: employee_performance, class: EmployeePerformanceAgent, module: src.ai.agents.employee_perf,        category: analytics_ml, exec_tier: 4, calls_llm: false, model_tier: null}
+  - {name: feature_engineer,     class: FeatureEngineerAgent,     module: src.ai.agents.feature_engineer,     category: analytics_ml, exec_tier: 6, calls_llm: false, model_tier: null}
+  - {name: foot_traffic,         class: FootTrafficAgent,         module: src.ai.agents.foot_traffic,         category: analytics_ml, exec_tier: 1, calls_llm: false, model_tier: null}
+  - {name: forecaster,           class: ForecasterAgent,          module: src.ai.agents.forecaster,           category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: growth_score,         class: GrowthScoreAgent,         module: src.ai.agents.growth_score,         category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: inventory_intel,      class: InventoryIntelAgent,      module: src.ai.agents.inventory_intel,      category: analytics_ml, exec_tier: 2, calls_llm: false, model_tier: null}
+  - {name: location_analyst,     class: LocationAnalystAgent,     module: src.ai.agents.location_analyst,     category: analytics_ml, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: loyalty_architect,    class: LoyaltyArchitectAgent,    module: src.ai.agents.loyalty_architect,    category: analytics_ml, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: money_left_on_table,  class: MoneyLeftAgent,           module: src.ai.agents.money_left,           category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: payment_optimizer,    class: PaymentOptimizerAgent,    module: src.ai.agents.payment_optimizer,    category: analytics_ml, exec_tier: 4, calls_llm: false, model_tier: null}
+  - {name: peak_hours,           class: PeakHoursAgent,           module: src.ai.agents.peak_hours,           category: analytics_ml, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: pricing_power,        class: PricingPowerAgent,        module: src.ai.agents.pricing_power,        category: analytics_ml, exec_tier: 1, calls_llm: false, model_tier: null}
+  - {name: product_velocity,     class: ProductVelocityAgent,     module: src.ai.agents.product_velocity,     category: analytics_ml, exec_tier: 2, calls_llm: false, model_tier: null}
+  - {name: promo_roi,            class: PromoROIAgent,            module: src.ai.agents.promo_roi,            category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: queue_monitor,        class: QueueMonitorAgent,        module: src.ai.agents.queue_monitor,        category: analytics_ml, exec_tier: 1, calls_llm: false, model_tier: null}
+  - {name: revenue_trend,        class: RevenueTrendAgent,        module: src.ai.agents.revenue_trend,        category: analytics_ml, exec_tier: 1, calls_llm: false, model_tier: null}
+  - {name: seasonality,          class: SeasonalityAgent,         module: src.ai.agents.seasonality,          category: analytics_ml, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: staffing,             class: StaffingAgent,            module: src.ai.agents.staffing,             category: analytics_ml, exec_tier: 4, calls_llm: false, model_tier: null}
+  - {name: waste_shrinkage,      class: WasteShrinkageAgent,      module: src.ai.agents.waste_shrinkage,      category: analytics_ml, exec_tier: 4, calls_llm: false, model_tier: null}
+
+  # ── Cross-reference camera×POS (src/ai/agents/cross_ref/*.py) ──
+  - {name: influence_zone,   class: InfluenceZoneAgent,   module: src.ai.agents.cross_ref.influence_zone_agent,   category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: lost_sale,        class: LostSaleAgent,        module: src.ai.agents.cross_ref.lost_sale_agent,        category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: path_to_purchase, class: PathToPurchaseAgent,  module: src.ai.agents.cross_ref.path_to_purchase_agent, category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: peak_basket,      class: PeakBasketAgent,      module: src.ai.agents.cross_ref.peak_basket_agent,      category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: posture_purchase, class: PosturePurchaseAgent, module: src.ai.agents.cross_ref.posture_purchase_agent, category: cross_reference, exec_tier: 4, calls_llm: false, model_tier: null}
+  - {name: product_placement, class: ProductPlacementAgent, module: src.ai.agents.cross_ref.product_placement_agent, category: cross_reference, exec_tier: 4, calls_llm: false, model_tier: null}
+  - {name: queue_basket,     class: QueueBasketAgent,     module: src.ai.agents.cross_ref.queue_basket_agent,     category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: return_customer,  class: ReturnCustomerAgent,  module: src.ai.agents.cross_ref.return_customer_agent,  category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: staff_effect,     class: StaffEffectAgent,     module: src.ai.agents.cross_ref.staff_effect_agent,     category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+  - {name: zone_conversion,  class: ZoneConversionAgent,  module: src.ai.agents.cross_ref.zone_conversion_agent,  category: cross_reference, exec_tier: 3, calls_llm: false, model_tier: null}
+
+  # ── LLM-calling agents (model_tier is load-bearing for routing) ──
+  # Generation agents → standard (Groq 70b is fast and coherent enough).
+  - {name: enhance_insights,  class: null,                        module: null,                              category: generation,    exec_tier: null, calls_llm: true, model_tier: standard}
+  - {name: InsightGenerator,  class: InsightGenerator,            module: src.ai.generators.insights,        category: generation,    exec_tier: null, calls_llm: true, model_tier: standard}
+  - {name: ForecastGenerator, class: ForecastGenerator,           module: src.ai.generators.forecasts,       category: generation,    exec_tier: null, calls_llm: true, model_tier: standard}
+  - {name: ReportGenerator,   class: ReportGenerator,             module: src.ai.generators.reports,         category: generation,    exec_tier: null, calls_llm: true, model_tier: standard}
+  # Self-healing IT orchestration → standard.
+  - {name: ClineAgent,        class: ClineAgent,                  module: src.cline.agent,                   category: orchestration, exec_tier: null, calls_llm: true, model_tier: standard}
+  # Camera×POS synthesis orchestrator → heavy reasoning (multi-signal join).
+  - {name: CrossReferenceOrchestrator, class: CrossReferenceOrchestrator, module: src.ai.cross_reference_orchestrator, category: orchestration, exec_tier: null, calls_llm: true, model_tier: heavy_reasoning}
+  # Live phone-order loop → standard, NEVER heavy (latency-critical). Declared
+  # only; the bot lives under services/postal-pipecat (verified Phase 1).
+  - {name: PipecatVoiceBot,   class: null,                        module: null,                              category: voice_realtime, exec_tier: null, calls_llm: true, model_tier: standard}
