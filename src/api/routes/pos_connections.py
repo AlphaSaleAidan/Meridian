@@ -401,7 +401,7 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         logger.info(f"Toast backfill complete for org={org_id}: {result.summary}")
 
         try:
-            from ...pipeline import MeridianPipeline
+            from ...live_pipeline import MeridianPipeline
             import os
             pipeline = MeridianPipeline(
                 org_id=org_id,
@@ -411,7 +411,10 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
                     or os.environ.get("SUPABASE_SERVICE_KEY", ""),
                 pos_connection_id=connection_id,
             )
-            await pipeline.run_full_sync()
+            # Toast data is already in the DB via the sync engine above.
+            # run_full_sync() would re-fetch from Square (no token here), so
+            # run only the POS-agnostic analytics + portal phases.
+            await pipeline.run_analysis_only()
         except Exception as e:
             logger.warning(f"AI pipeline after Toast backfill failed: {e}")
 
@@ -502,7 +505,7 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
         logger.info(f"Clover backfill complete for org={org_id}: {result.summary}")
 
         try:
-            from ...pipeline import MeridianPipeline
+            from ...live_pipeline import MeridianPipeline
             import os
             pipeline = MeridianPipeline(
                 org_id=org_id,
@@ -512,7 +515,10 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
                     or os.environ.get("SUPABASE_SERVICE_KEY", ""),
                 pos_connection_id=connection_id,
             )
-            await pipeline.run_full_sync()
+            # Clover data is already in the DB via the sync engine above.
+            # run_full_sync() would re-fetch from Square (no token here), so
+            # run only the POS-agnostic analytics + portal phases.
+            await pipeline.run_analysis_only()
         except Exception as e:
             logger.warning(f"AI pipeline after Clover backfill failed: {e}")
 
