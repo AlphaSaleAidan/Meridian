@@ -16,9 +16,16 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('PORT', 8000))), H).serve_forever()
 " &
+  # --beat embeds the scheduler in this single worker so the periodic tasks in
+  # celery_app.beat_schedule (billing renewals, daily burn rate, nightly
+  # analysis, weekly reports, etc.) actually enqueue. Embedded (not a separate
+  # process) keeps the one-app-copy / OOM-safe invariant. Schedule db goes to
+  # /tmp because /app is not writable by appuser.
   exec celery -A src.workers.celery_app:celery_app worker \
     --pool=solo \
+    --beat \
+    --schedule=/tmp/celerybeat-schedule \
     --loglevel="${CELERY_LOG_LEVEL:-info}" \
-    -Q "${CELERY_QUEUES:-critical,default,analysis,reports,sync}"
+    -Q "${CELERY_QUEUES:-critical,default,bulk}"
 fi
 exec uvicorn src.api.app:app --host 0.0.0.0 --port "${PORT:-8000}"
