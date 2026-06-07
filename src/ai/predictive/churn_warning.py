@@ -7,6 +7,7 @@ revenue at risk.
 """
 import logging
 import math
+import os
 from datetime import datetime, timezone
 
 logger = logging.getLogger("meridian.ai.predictive.churn")
@@ -17,6 +18,40 @@ try:
     HAS_SHAP = True
 except ImportError:
     HAS_SHAP = False
+
+# Wave 1D: XGBoost / LightGBM + CalibratedClassifierCV replace
+# GradientBoostingClassifier as the SHAP-explainable churn model. Both
+# new deps are optional — when neither is present, the incumbent path
+# stays the default (see _select_churn_classifier_backend).
+try:
+    import xgboost as _xgb  # type: ignore[import-not-found]  # noqa: F401
+    HAS_XGBOOST = True
+except Exception:  # noqa: BLE001
+    HAS_XGBOOST = False
+try:
+    import lightgbm as _lgb  # type: ignore[import-not-found]  # noqa: F401
+    HAS_LIGHTGBM = True
+except Exception:  # noqa: BLE001
+    HAS_LIGHTGBM = False
+
+
+def _select_churn_classifier_backend() -> str:
+    """Resolve which classifier backs the SHAP explanation.
+
+    ``MERIDIAN_CHURN_CLASSIFIER`` recognised values:
+      * ``gradient_boosting`` — incumbent sklearn GBM (default,
+        kept reachable for one reporting cycle).
+      * ``xgboost``           — XGBClassifier + CalibratedClassifierCV.
+      * ``lightgbm``          — LGBMClassifier + CalibratedClassifierCV.
+    Unknown / unavailable selections collapse to gradient_boosting so
+    a typo never silently disables churn explanations.
+    """
+    backend = os.environ.get("MERIDIAN_CHURN_CLASSIFIER", "gradient_boosting").lower()
+    if backend == "xgboost" and HAS_XGBOOST:
+        return "xgboost"
+    if backend == "lightgbm" and HAS_LIGHTGBM:
+        return "lightgbm"
+    return "gradient_boosting"
 
 
 class ChurnWarningAgent:
@@ -289,10 +324,56 @@ class ChurnWarningAgent:
             at_risk_ids = {c["customer_id"] for c in at_risk}
             y = np.array([1 if cid in at_risk_ids else 0 for cid in cids])
 
-            # Train a lightweight model for SHAP to explain
-            from sklearn.ensemble import GradientBoostingClassifier
-            model = GradientBoostingClassifier(n_estimators=50, max_depth=3, random_state=42)
-            model.fit(X, y)
+            # Train a lightweight tree model for SHAP. Wave 1D adds two
+            # tree-based alternatives + isotonic calibration; SHAP runs on
+            # the standalone tree model (CalibratedClassifierCV's wrapper
+            # is opaque to TreeExplainer), while the calibrated wrapper
+            # supplies the per-customer probability surfaced in the
+            # explanation output.
+            backend = _select_churn_classifier_backend()
+            calibrated_model = None
+            if backend == "xgboost":
+                from xgboost import XGBClassifier
+                from sklearn.calibration import CalibratedClassifierCV
+                model = XGBClassifier(
+                    n_estimators=50, max_depth=3, random_state=42,
+                    eval_metric="logloss", verbosity=0,
+                )
+                model.fit(X, y)
+                calibrated_model = CalibratedClassifierCV(
+                    XGBClassifier(
+                        n_estimators=50, max_depth=3, random_state=42,
+                        eval_metric="logloss", verbosity=0,
+                    ),
+                    method="sigmoid",
+                    cv=3,
+                )
+                calibrated_model.fit(X, y)
+                explanation_method = "shap_xgboost_calibrated"
+            elif backend == "lightgbm":
+                from lightgbm import LGBMClassifier
+                from sklearn.calibration import CalibratedClassifierCV
+                model = LGBMClassifier(
+                    n_estimators=50, max_depth=3, random_state=42, verbosity=-1,
+                )
+                model.fit(X, y)
+                calibrated_model = CalibratedClassifierCV(
+                    LGBMClassifier(
+                        n_estimators=50, max_depth=3, random_state=42,
+                        verbosity=-1,
+                    ),
+                    method="sigmoid",
+                    cv=3,
+                )
+                calibrated_model.fit(X, y)
+                explanation_method = "shap_lightgbm_calibrated"
+            else:
+                from sklearn.ensemble import GradientBoostingClassifier
+                model = GradientBoostingClassifier(
+                    n_estimators=50, max_depth=3, random_state=42,
+                )
+                model.fit(X, y)
+                explanation_method = "shap"
 
             explainer = shap.TreeExplainer(model)
             shap_values = explainer.shap_values(X)
@@ -311,11 +392,20 @@ class ChurnWarningAgent:
                     fname = feature_names[fi]
                     direction = "increases" if sv[fi] > 0 else "decreases"
                     factors.append(f"{fname} ({direction} churn risk)")
-                explanations.append({
+                explanation: dict = {
                     "customer_id": cid,
                     "top_factors": factors,
-                    "method": "shap",
-                })
+                    "method": explanation_method,
+                }
+                if calibrated_model is not None:
+                    try:
+                        proba = float(
+                            calibrated_model.predict_proba(X[idx:idx + 1])[0, 1]
+                        )
+                        explanation["calibrated_churn_prob"] = round(proba, 4)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug("calibrated_model proba failed: %s", exc)
+                explanations.append(explanation)
             return explanations
         except Exception as e:
             logger.warning(f"SHAP churn explanation failed: {e}")
