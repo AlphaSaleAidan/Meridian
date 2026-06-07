@@ -124,6 +124,25 @@ TOOLS = [
     },
 ]
 
+# Offered only when the merchant has configured a transfer number (see the
+# session build in the call handler). Appended to TOOLS per-call so the demo
+# and merchants without a transfer number keep the exact same tool set.
+TRANSFER_TOOL = {
+    "name": "transfer_call",
+    "description": (
+        "Hand the call off to a human. Call this when the caller asks for a "
+        "person/manager, has a complaint or question you cannot answer, or "
+        "explicitly asks to be transferred."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "handoff": {"type": "string", "description": "Short line to say before transferring, e.g. 'Sure, connecting you now.'"},
+        },
+        "required": ["handoff"],
+    },
+}
+
 
 def _menu_text() -> str:
     lines = []
@@ -250,6 +269,20 @@ def _listen(say: str, max_length: int = 15, timeout: int = 1, hints: str = "") -
 </Response>"""
 
 
+def _dial(say: str, number: str) -> str:
+    """TeXML to speak a handoff line then bridge the caller to a human.
+
+    Telnyx <Dial> connects the inbound caller to the destination number; when
+    that leg ends, the call hangs up. Used by the transfer_call tool so the
+    agent can escalate to a person when the merchant has a transfer number set.
+    """
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Dial>{_escape(number)}</Dial>
+</Response>"""
+
+
 async def _transcribe_recording(recording_url: str) -> str:
     """Download a Telnyx call recording and transcribe it synchronously via the
     Telnyx STT endpoint (deepgram/nova-3). Returns the caller's text, or "" on
@@ -361,6 +394,7 @@ async def _ask_openai_tools(
     system_prompt: str,
     timeout: float = 20.0,
     temperature: float | None = None,
+    tools: list[dict] = TOOLS,
 ) -> dict | None:
     """Call an OpenAI-compatible chat endpoint with tool-calling.
 
@@ -378,7 +412,7 @@ async def _ask_openai_tools(
                 "parameters": t["input_schema"],
             },
         }
-        for t in TOOLS
+        for t in tools
     ]
     openai_messages = [{"role": "system", "content": system_prompt}] + messages
     payload: dict[str, Any] = {
@@ -420,7 +454,9 @@ async def _ask_openai_tools(
         return None
 
 
-async def _ask_deepseek(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict | None:
+async def _ask_deepseek(
+    messages: list[dict], system_prompt: str = SYSTEM_PROMPT, tools: list[dict] = TOOLS
+) -> dict | None:
     """Call DeepSeek (OpenAI-compatible). Low temperature keeps order-taking
     focused and reduces misheard-item drift. Returns None on failure."""
     return await _ask_openai_tools(
@@ -432,10 +468,13 @@ async def _ask_deepseek(messages: list[dict], system_prompt: str = SYSTEM_PROMPT
         system_prompt=system_prompt,
         timeout=15.0,
         temperature=0.3,
+        tools=tools,
     )
 
 
-async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict | None:
+async def _ask_sambanova(
+    messages: list[dict], system_prompt: str = SYSTEM_PROMPT, tools: list[dict] = TOOLS
+) -> dict | None:
     """Call SambaNova (OpenAI-compatible). Returns None on failure."""
     return await _ask_openai_tools(
         base_url=SAMBANOVA_BASE_URL,
@@ -445,6 +484,7 @@ async def _ask_sambanova(messages: list[dict], system_prompt: str = SYSTEM_PROMP
         messages=messages,
         system_prompt=system_prompt,
         timeout=20.0,
+        tools=tools,
     )
 
 
@@ -472,13 +512,15 @@ async def _ask_qwen(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) ->
         return {"content": [{"type": "text", "text": "One moment please."}]}
 
 
-async def _ask_ai(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
+async def _ask_ai(
+    messages: list[dict], system_prompt: str = SYSTEM_PROMPT, tools: list[dict] = TOOLS
+) -> dict:
     """DeepSeek primary, SambaNova secondary, local Qwen fallback."""
-    result = await _ask_deepseek(messages, system_prompt)
+    result = await _ask_deepseek(messages, system_prompt, tools)
     if result is not None:
         logger.info("AI response via DeepSeek")
         return result
-    result = await _ask_sambanova(messages, system_prompt)
+    result = await _ask_sambanova(messages, system_prompt, tools)
     if result is not None:
         logger.info("AI response via SambaNova")
         return result
@@ -535,9 +577,14 @@ def _menu_text_from(menu_items: list[dict]) -> str:
     lines = []
     for item in menu_items:
         try:
-            line = f" - {item['name']}: ${float(item.get('price', 0)):.2f}"
-        except (TypeError, ValueError, KeyError):
-            line = f" - {item.get('name', 'item')}"
+            price = float(item.get("price", 0))
+        except (TypeError, ValueError):
+            price = 0.0
+        # Extracted POS catalogs may not expose a price; render the name alone
+        # rather than telling callers an item costs $0.00.
+        line = f" - {item.get('name', 'item')}"
+        if price > 0:
+            line += f": ${price:.2f}"
         sizes = item.get("sizes") or []
         if sizes:
             line += f" (sizes: {', '.join(sizes)})"
@@ -741,6 +788,9 @@ async def twilio_voice(request: Request):
         "hints": hints,
         "capture": "gather",  # start on the fast real-time path; auto-falls back to record
         "empty_count": 0,
+        # Only set when the merchant configured a transfer number; gates the
+        # transfer_call tool so the demo and unconfigured merchants are unchanged.
+        "transfer_number": ((config_row or {}).get("transfer_number") or "").strip(),
     }
     greeting = (
         (config_row or {}).get("greeting")
@@ -798,10 +848,23 @@ async def twilio_gather(request: Request):
     session["ts"] = time.time()
     session["messages"].append({"role": "user", "content": speech})
 
-    result = await _ask_ai(session["messages"], session.get("system_prompt", SYSTEM_PROMPT))
+    # Offer the human-handoff tool only when this merchant has a transfer number.
+    transfer_number = (session.get("transfer_number") or "").strip()
+    tools = TOOLS + [TRANSFER_TOOL] if transfer_number else TOOLS
+    result = await _ask_ai(session["messages"], session.get("system_prompt", SYSTEM_PROMPT), tools)
     text, tool = _parse(result)
 
     if tool:
+        if tool["name"] == "transfer_call":
+            handoff = tool["input"].get("handoff", "One moment, connecting you now.")
+            if transfer_number:
+                await _log_call_end(call_sid, "transferred")
+                del _sessions[call_sid]
+                return Response(content=_dial(handoff, transfer_number), media_type=TWIML)
+            # No number on file: don't drop the call — keep the conversation going.
+            session["messages"].append({"role": "assistant", "content": handoff})
+            return Response(content=_prompt(handoff, session), media_type=TWIML)
+
         if tool["name"] == "end_call":
             farewell = tool["input"].get("farewell", "Thank you for calling Meridian! Have a great day!")
             await _log_call_end(call_sid, "no_order")

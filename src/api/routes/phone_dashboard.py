@@ -109,6 +109,120 @@ async def save_phone_config(req: PhoneConfigRequest, _auth=Depends(require_servi
     return {"ok": True, "merchant_id": req.merchant_id}
 
 
+def _decrypt_connection_token(conn: dict) -> str:
+    """Pull a usable access token out of a pos_connections row.
+
+    Two storage shapes exist in the wild: the OAuth callbacks
+    (clover_oauth.py, oauth.py) write a single `access_token_enc`; the generic
+    connect endpoint (pos_connections.py) writes a `credentials_encrypted` JSONB
+    dict of encrypted values. Both are AES-GCM via security.encryption. Returns
+    "" if nothing decryptable is present.
+    """
+    from ...security.encryption import decrypt_token
+
+    enc = conn.get("access_token_enc")
+    if enc:
+        try:
+            return decrypt_token(enc)
+        except Exception:  # noqa: BLE001 — tampered/legacy ciphertext, treat as absent
+            logger.warning("Could not decrypt access_token_enc for connection")
+
+    creds = conn.get("credentials_encrypted")
+    if isinstance(creds, dict):
+        for key in ("access_token", "api_key", "token"):
+            val = creds.get(key)
+            if val:
+                try:
+                    return decrypt_token(val)
+                except Exception:  # noqa: BLE001
+                    logger.warning("Could not decrypt credentials_encrypted[%s]", key)
+    return ""
+
+
+@router.post("/menu/sync/{merchant_id}")
+async def sync_menu_from_pos(merchant_id: str, _auth=Depends(require_service_auth)):
+    """Pull the merchant's menu from their connected POS (read-only) and store it.
+
+    Credential resolution, in order:
+      1. Manual creds on the phone_agent_config row (pos_system + pos_access_token)
+         — honoured first so a hand-entered token wins.
+      2. The OAuth-connected POS in pos_connections. In this system merchant_id
+         IS the org_id (see spaces.py / camera/pipeline.py), so we read
+         pos_connections by org_id, take `provider` as the system and decrypt the
+         stored token. `external_merchant_id` fills the catalog URL's {merchant_id}
+         slot (Clover needs it).
+
+    The catalog is fetched read-only, coerced into the agent's menu_items shape,
+    and persisted onto phone_agent_config so the phone prompt picks it up with no
+    data entry and no per-call latency. The POS token is never returned.
+    """
+    from ...services.pos_connectors.menu_extractor import extract_menu_items
+
+    _validate_merchant_id(merchant_id)
+    db = get_db()
+
+    config_rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{merchant_id}"},
+        limit=1,
+    )
+    config_row = config_rows[0] if config_rows else {}
+
+    system = (config_row.get("pos_system") or "").strip()
+    token = (config_row.get("pos_access_token") or "").strip()
+    location_id = (config_row.get("pos_location_id") or "").strip()
+    external_merchant_id = ""
+    source = "phone_config"
+
+    if not (system and token):
+        conns = await db.select(
+            "pos_connections",
+            filters={"org_id": f"eq.{merchant_id}", "status": "eq.connected"},
+            order="updated_at.desc",
+            limit=1,
+        )
+        if conns:
+            conn = conns[0]
+            system = system or (conn.get("provider") or "").strip()
+            external_merchant_id = (conn.get("external_merchant_id") or "").strip()
+            token = token or _decrypt_connection_token(conn)
+            source = "pos_connections"
+
+    if not system or not token:
+        return {
+            "synced": False,
+            "reason": "no POS credentials on file (neither manual config nor an OAuth connection)",
+            "item_count": 0,
+        }
+
+    items = await extract_menu_items(
+        system,
+        token,
+        merchant_id=external_merchant_id,
+        location_id=location_id,
+    )
+    if not items:
+        return {
+            "synced": False,
+            "reason": "POS returned no catalog items (empty menu or auth failed)",
+            "item_count": 0,
+            "source": source,
+        }
+
+    payload = {"menu_items": items, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if config_rows:
+        await db.update(
+            "phone_agent_config",
+            payload,
+            filters={"merchant_id": f"eq.{merchant_id}"},
+        )
+    else:
+        await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
+
+    logger.info("Synced %d menu items from %s (%s) for %s", len(items), system, source, merchant_id)
+    return {"synced": True, "item_count": len(items), "source": source, "sample": items[:5]}
+
+
 @router.get("/calls/{merchant_id}")
 async def get_phone_calls(
     merchant_id: str,
