@@ -135,6 +135,17 @@ class ChurnWarningAgent:
         # SHAP: explain why each at-risk customer is flagged
         shap_explanations = self._explain_churn(customers, at_risk) if at_risk else []
 
+        # Wave 2B (opt-in): survival-analysis timing + hazard ratios.
+        # Additive only — when MERIDIAN_CHURN_SURVIVAL is unset or the dep
+        # is missing this stays None and the result is unchanged.
+        survival = None
+        if os.environ.get("MERIDIAN_CHURN_SURVIVAL", "0").lower() in ("1", "true", "yes"):
+            try:
+                from ..ml.survival_churn import survival_churn
+                survival = survival_churn(customers)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("survival churn backend errored: %s", exc)
+
         win_back_entries = []
         for c in win_back[:5]:
             entry = {
@@ -150,6 +161,11 @@ class ChurnWarningAgent:
                 if expl["customer_id"] == cid:
                     entry["why"] = expl["top_factors"]
                     break
+            # Attach survival timing when the Wave 2B backend ran.
+            if survival:
+                sv = survival.get("per_customer", {}).get(cid)
+                if sv and sv.get("median_days_to_churn") is not None:
+                    entry["median_days_to_churn"] = sv["median_days_to_churn"]
             win_back_entries.append(entry)
 
         return {
@@ -167,6 +183,7 @@ class ChurnWarningAgent:
             },
             "churn_revenue_at_risk_cents": churn_revenue,
             "win_back_priority": win_back_entries,
+            "survival": survival,
             "total_customers_tracked": len(customers),
             "data_quality": 0.6 if len(customers) >= 20 else 0.4,
             "insights": [

@@ -143,8 +143,28 @@ class BaseAgent(ABC):
     # ─── ML Engine Methods (lazy-loaded, graceful fallback) ──
 
     def forecast(self, series: list[dict], periods: int = 30) -> list[dict]:
-        """Forecast using statsforecast ensemble (preferred), Prophet, or manual fallback."""
+        """Forecast using AutoGluon (opt-in), statsforecast ensemble
+        (default), Prophet, or manual fallback.
+
+        Backend is chosen by ``MERIDIAN_FORECAST_BACKEND``:
+          "statsforecast" (default) — the AutoARIMA/ETS/Theta/MSTL ensemble
+                                       below.
+          "autogluon"               — Wave 2A AutoGluon-TimeSeries; falls
+                                       through to statsforecast on any failure.
+        AutoGluon is heavy (torch) and not in the Railway image, so the
+        opt-in degrades safely when the dep is absent.
+        """
+        import os as _os
+
         n = len(series)
+        if _os.environ.get("MERIDIAN_FORECAST_BACKEND", "statsforecast").lower() == "autogluon":
+            try:
+                from ..ml.autogluon_forecast import autogluon_forecast
+                ag = autogluon_forecast(series, periods)
+                if ag:
+                    return ag
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"autogluon backend errored: {e} — using statsforecast")
         if n >= 7:
             try:
                 import pandas as pd

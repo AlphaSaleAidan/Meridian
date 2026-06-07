@@ -43,6 +43,19 @@ xgboost>=2.0
 # SHAP — explainability layer used by the churn classifier (Wave 1D + 2B).
 shap>=0.45
 
+# Wave 2A — AutoGluon-TimeSeries forecast backend (opt-in via
+# MERIDIAN_FORECAST_BACKEND=autogluon). Lazy-imported in
+# src/ai/ml/autogluon_forecast.py; falls back to statsforecast when
+# absent. Pulls torch (~2GB) → OOM on Railway, so it is left COMMENTED
+# OUT of the deployed image and installed only in the offline eval venv.
+# autogluon.timeseries>=1.4,<1.6
+
+# Wave 2B — scikit-survival CoxPH / Random Survival Forest churn timing
+# (opt-in via MERIDIAN_CHURN_SURVIVAL=1). Lazy-imported in
+# src/ai/ml/survival_churn.py; light enough to ship, but kept opt-in so
+# default churn behaviour is unchanged.
+scikit-survival>=0.23
+
 # Basket Analysis (lazy import in src/ai/agents/base.py)
 mlxtend>=0.23
 
