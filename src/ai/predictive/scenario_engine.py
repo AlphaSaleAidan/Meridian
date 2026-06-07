@@ -235,7 +235,7 @@ class ScenarioEngine:
             "net_impact_monthly_cents": net_impact,
             "confidence": 0.55,
             "assumptions": [
-                f"30% substitution rate to remaining products",
+                "30% substitution rate to remaining products",
                 f"${labor_savings_monthly/100:.0f}/month labor savings from simplification",
                 "No menu redesign costs included",
             ],

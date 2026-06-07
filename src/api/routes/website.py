@@ -20,7 +20,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from ..auth import rate_limit_scrape, require_service_auth
 from pydantic import BaseModel
 

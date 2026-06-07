@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Meridian pre-push hook — diff-scoped.
+#
+# Lints ONLY the Python files included in the push (not the whole tree), so a
+# pre-existing backlog in untouched files never blocks an unrelated push. New
+# code you introduce is still held to ruff (config: ruff.toml). The unit suite
+# runs as before. On failure, optionally hand the diff to the K2.6 fixer
+# (Telegram-gated) when a TTY is available; CI/non-interactive pushes abort.
+#
+# Install:  cp scripts/git-hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#   (or)    git config core.hooksPath scripts/git-hooks
+#
+# Skip with: MERIDIAN_SKIP_FIXER=1 git push   (bypasses the fixer prompt only;
+#            checks still run unless you also export MERIDIAN_SKIP_CHECKS=1)
+
+set -uo pipefail
+
+REPO="$(git rev-parse --show-toplevel)"
+FIXER_CLI="/usr/local/bin/meridian-fixer-cli"
+cd "$REPO"
+
+if [ "${MERIDIAN_SKIP_CHECKS:-0}" = "1" ]; then
+  exit 0
+fi
+
+ZERO="0000000000000000000000000000000000000000"
+
+# Collect the Python files in this push from the ref updates on stdin. For a
+# brand-new branch (remote sha is zero) we scope against origin/main's merge
+# base so we lint only what this branch adds, not the entire history.
+changed_py() {
+  local local_ref local_sha remote_ref remote_sha range
+  while read -r local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$ZERO" ] && continue  # branch deletion, nothing to lint
+    if [ "$remote_sha" = "$ZERO" ]; then
+      local base
+      base="$(git merge-base "$local_sha" origin/main 2>/dev/null || true)"
+      range="${base:+$base..}$local_sha"
+    else
+      range="$remote_sha..$local_sha"
+    fi
+    git diff --name-only --diff-filter=ACM "$range" -- '*.py' 2>/dev/null
+  done | sort -u
+}
+
+mapfile -t PY_FILES < <(changed_py)
+# Drop files deleted between commit and now.
+EXISTING=()
+for f in "${PY_FILES[@]}"; do [ -f "$f" ] && EXISTING+=("$f"); done
+
+if [ ${#EXISTING[@]} -eq 0 ]; then
+  echo "[pre-push] no Python changes to lint"
+else
+  echo "[pre-push] ruff (changed files: ${#EXISTING[@]}) …"
+fi
+
+failures=()
+
+if [ ${#EXISTING[@]} -gt 0 ]; then
+  if ! ruff check "${EXISTING[@]}" >/tmp/pre-push-ruff.log 2>&1; then
+    failures+=("ruff")
+    echo "[pre-push] ruff FAILED"
+    tail -40 /tmp/pre-push-ruff.log
+  fi
+fi
+
+echo "[pre-push] pytest-unit …"
+if ! pytest tests/unit -q -x --timeout=20 >/tmp/pre-push-pytest-unit.log 2>&1; then
+  failures+=("pytest-unit")
+  echo "[pre-push] pytest-unit FAILED"
+  tail -30 /tmp/pre-push-pytest-unit.log
+fi
+
+if [ ${#failures[@]} -eq 0 ]; then
+  exit 0
+fi
+
+# Only offer the fixer interactively, when it's reachable and not skipped.
+if [ "${MERIDIAN_SKIP_FIXER:-0}" = "1" ]; then
+  echo "[pre-push] failed: ${failures[*]} — MERIDIAN_SKIP_FIXER=1, aborting"
+  exit 1
+fi
+if [ ! -t 0 ] || [ ! -S /run/meridian-fixer/sock ]; then
+  echo "[pre-push] failed: ${failures[*]} — aborting (no TTY or fixer socket)"
+  exit 1
+fi
+
+echo
+read -r -p "[pre-push] hand failures to the K2.6 fixer? [y/N] " yn
+[[ "$yn" != "y" && "$yn" != "Y" ]] && exit 1
+
+instructions="Fix the following pre-push check failures in $REPO. Keep the change minimal — only what's needed to make the checks pass.\n\n"
+for label in "${failures[@]}"; do
+  instructions+="### $label ###\n$(tail -50 /tmp/pre-push-$label.log)\n\n"
+done
+"$FIXER_CLI" diagnose --by "git:$(whoami)" --budget-usd 4 "$instructions"
+echo
+echo "[pre-push] proposed fix awaiting /approve in Telegram. Re-run \`git push\` after"
+echo "[pre-push] applying it, or pass MERIDIAN_SKIP_FIXER=1 to push anyway."
+exit 1

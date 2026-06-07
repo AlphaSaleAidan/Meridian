@@ -22,7 +22,6 @@ Usage:
 
 import json
 import logging
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -155,7 +154,7 @@ async def _enhance_with_llm(
     duration: int | None = None,
 ) -> dict | None:
     try:
-        from .llm_layer import _call_llm, _extract_json
+        from .llm_layer import _call_llm
     except ImportError:
         logger.warning("llm_layer not available for prompt enhancement")
         return None

@@ -5,7 +5,6 @@ Toast uses client_id + client_secret (OAuth2 client_credentials grant)
 to get a short-lived access token, then uses that token for API calls.
 """
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -103,7 +102,7 @@ class ToastClient:
         page_size: int = 100,
     ) -> list[dict]:
         result = await self._get(
-            f"/orders/v2/orders",
+            "/orders/v2/orders",
             params={
                 "businessDate": start_date,
                 "endDate": end_date,
@@ -114,7 +113,7 @@ class ToastClient:
         return result if isinstance(result, list) else []
 
     async def get_menu_items(self) -> list[dict]:
-        result = await self._get(f"/menus/v2/menus")
+        result = await self._get("/menus/v2/menus")
         if not result:
             return []
         items = []
@@ -126,9 +125,9 @@ class ToastClient:
         return items
 
     async def get_employees(self) -> list[dict]:
-        result = await self._get(f"/labor/v1/employees")
+        result = await self._get("/labor/v1/employees")
         return result if isinstance(result, list) else []
 
     async def get_revenue_centers(self) -> list[dict]:
-        result = await self._get(f"/config/v2/revenueCenters")
+        result = await self._get("/config/v2/revenueCenters")
         return result if isinstance(result, list) else []

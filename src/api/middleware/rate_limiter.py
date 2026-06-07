@@ -7,7 +7,6 @@ which breaks slowapi's decorator approach.
 
 Limits by IP address, with tighter limits on sensitive paths.
 """
-import os
 import time
 from collections import defaultdict
 from starlette.middleware.base import BaseHTTPMiddleware

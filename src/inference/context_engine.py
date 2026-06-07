@@ -11,12 +11,10 @@ This eliminates the 10-20K tokens Claude burns per session re-exploring
 the codebase. The local LLM does the grunt work at $0.
 """
 
-import json
 import logging
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger("meridian.inference.context_engine")
 
@@ -59,7 +57,7 @@ def _run_git(args: list[str], max_lines: int = 100) -> str:
 
 
 def get_recent_commits(count: int = 15) -> str:
-    return _run_git(["log", f"--oneline", f"-{count}", "--no-decorate"])
+    return _run_git(["log", "--oneline", f"-{count}", "--no-decorate"])
 
 
 def get_changed_files(commits_back: int = 5) -> str:
@@ -332,13 +330,13 @@ def _update_memory_index():
     }
 
     lines = current.strip().split("\n")
-    existing_auto = {l for l in lines if "auto_" in l or "Auto-rebuilt" in l}
+    existing_auto = {ln for ln in lines if "auto_" in ln or "Auto-rebuilt" in ln}
 
     for filename, entry in auto_entries.items():
         file_path = MEMORY_DIR / filename
         if not file_path.exists():
             continue
-        already_listed = any(filename in l for l in lines)
+        already_listed = any(filename in ln for ln in lines)
         if not already_listed:
             lines.append(entry)
 

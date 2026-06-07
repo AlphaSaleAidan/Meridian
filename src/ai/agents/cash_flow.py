@@ -19,7 +19,7 @@ class CashFlowAgent(BaseAgent):
             bench_fee = fee_range.mid if fee_range else 2.6
             return self._benchmark_fallback(
                 "processing_fee_pct",
-                f"Insufficient data for cash flow forecast (need 14+ days)",
+                "Insufficient data for cash flow forecast (need 14+ days)",
                 {"days_available": len(daily), "benchmark_fee_pct": bench_fee},
             )
 

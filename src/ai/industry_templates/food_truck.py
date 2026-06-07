@@ -73,14 +73,14 @@ class FoodTruckAnalyzer(IndustryAnalyzer):
         # Location performance
         locations = data.get("locations", [])
         if len(locations) > 1:
-            rev_by_loc = sorted(locations, key=lambda l: l.get("avg_revenue_cents", 0), reverse=True)
+            rev_by_loc = sorted(locations, key=lambda loc: loc.get("avg_revenue_cents", 0), reverse=True)
             best = rev_by_loc[0].get("avg_revenue_cents", 0)
             worst = rev_by_loc[-1].get("avg_revenue_cents", 0)
             if best > 0 and worst < best * 0.4:
                 adjustments.append({
                     "type": "location_variance",
                     "detail": f"Best location ${best/100:.0f} vs worst ${worst/100:.0f} — 60%+ variance",
-                    "recommendation": f"Drop underperforming spots — double down on top locations or find similar ones nearby",
+                    "recommendation": "Drop underperforming spots — double down on top locations or find similar ones nearby",
                 })
 
         weather_impact = data.get("rain_day_revenue_drop_pct", 0)

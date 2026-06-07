@@ -24,7 +24,6 @@ from ...services.pos_connectors.order_dispatcher import create_pos_order
 from ...services.pos_connectors.base import OrderResult
 from ...db import get_db
 from ...credits import (
-    COSTS,
     PHONE_CALL_PER_MIN,
     cost_for_phone_call,
     deduct,

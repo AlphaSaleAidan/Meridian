@@ -8,7 +8,7 @@ Extracted costs are wired into the inventory agent for cost tracking.
 """
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger("meridian.documents.ocr")
 
