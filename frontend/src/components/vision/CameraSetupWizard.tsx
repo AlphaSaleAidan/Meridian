@@ -1,15 +1,22 @@
-import { useState } from 'react'
-import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react'
 import { clsx } from 'clsx'
 
 type ComplianceMode = 'anonymous' | 'opt_in_identity' | 'disabled'
+
+interface ZoneDef {
+  key: string
+  label: string
+  color: string
+  enabled: boolean
+}
 
 interface CameraConfig {
   name: string
   rtsp_url: string
   compliance_mode: ComplianceMode
   active_hours: { start: string; end: string }
-  zone_config: Record<string, unknown>
+  zone_config: { zones: ZoneDef[] }
 }
 
 interface CameraSetupWizardProps {
@@ -21,28 +28,113 @@ interface CameraSetupWizardProps {
 const STEPS = ['Device', 'Camera', 'Zones', 'Privacy', 'Confirm'] as const
 type Step = (typeof STEPS)[number]
 
+const DEVICES = [
+  { id: 'jetson-nano', name: 'Jetson Nano', cameras: '2-3', price: '$149', recommended: false },
+  { id: 'jetson-orin-nano', name: 'Jetson Orin Nano', cameras: '4-6', price: '$249', recommended: true },
+  { id: 'jetson-orin-nx', name: 'Jetson Orin NX', cameras: '8-12', price: '$499', recommended: false },
+  { id: 'custom', name: 'Custom Linux + GPU', cameras: 'Varies', price: 'BYO', recommended: false },
+] as const
+
+const DEFAULT_ZONES: ZoneDef[] = [
+  { key: 'entry', label: 'Entry', color: '#17C5B0', enabled: true },
+  { key: 'browse', label: 'Browse', color: '#1A8FD6', enabled: true },
+  { key: 'checkout', label: 'Checkout', color: '#7C5CFF', enabled: true },
+]
+
+type UrlCheck = { ok: boolean; message: string; level: 'error' | 'warn' | 'ok' }
+
+// The cloud API can't reach a camera on the merchant LAN, so this validates the
+// URL shape and gives honest, specific feedback. The edge agent confirms the
+// live feed after install (see the heartbeat poll on the Confirm step).
+function checkRtspUrl(raw: string): UrlCheck {
+  const url = raw.trim()
+  if (!url) return { ok: false, message: 'Enter the RTSP URL from your camera.', level: 'error' }
+  if (!/^rtsp:\/\//i.test(url)) {
+    return { ok: false, message: 'URL must start with rtsp:// — e.g. rtsp://user:pass@192.168.1.100:554/stream1', level: 'error' }
+  }
+  const m = url.match(/^rtsp:\/\/(?:([^@/]+)@)?([^:/?#]+)(?::(\d+))?(\/[^?#]*)?/i)
+  if (!m || !m[2]) {
+    return { ok: false, message: "Couldn't find a host in that URL. Check the camera IP or hostname.", level: 'error' }
+  }
+  const [, creds, , port, path] = m
+  if (port && !/^\d+$/.test(port)) {
+    return { ok: false, message: 'Port must be numeric (RTSP is usually 554).', level: 'error' }
+  }
+  if (!creds) {
+    return { ok: true, message: 'Valid format. Most IP cameras require credentials — rtsp://user:pass@host. The edge device confirms the live feed after install.', level: 'warn' }
+  }
+  if (!path || path === '/') {
+    return { ok: true, message: 'Valid format, but no stream path (e.g. /stream1 or /h264). The edge device confirms the live feed after install.', level: 'warn' }
+  }
+  return { ok: true, message: 'Valid RTSP format. The edge device confirms the live feed once the agent is running.', level: 'ok' }
+}
+
 export default function CameraSetupWizard({ orgId, onComplete, onClose }: CameraSetupWizardProps) {
+  const storageKey = `meridian-camera-wizard-${orgId || 'default'}`
+
   const [step, setStep] = useState(0)
+  const [selectedDevice, setSelectedDevice] = useState<string | null>(null)
   const [config, setConfig] = useState<CameraConfig>({
     name: '',
     rtsp_url: '',
     compliance_mode: 'anonymous',
     active_hours: { start: '07:00', end: '22:00' },
-    zone_config: {},
+    zone_config: { zones: DEFAULT_ZONES },
   })
-  const [edgeDetected, setEdgeDetected] = useState(false)
-  const [connectionTested, setConnectionTested] = useState(false)
-  const [testing, setTesting] = useState(false)
+  const [urlCheck, setUrlCheck] = useState<UrlCheck | null>(null)
+  const [validating, setValidating] = useState(false)
   const [error, setError] = useState('')
   const [consentConfirmed, setConsentConfirmed] = useState(false)
 
+  // Provisioning / heartbeat state (after Activate)
+  const [registering, setRegistering] = useState(false)
+  const [registeredCameraId, setRegisteredCameraId] = useState<string | null>(null)
+  const [cameraStatus, setCameraStatus] = useState<'waiting' | 'online' | 'timeout' | null>(null)
+
+  const mountedRef = useRef(true)
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hydratedRef = useRef(false)
+
   const currentStep = STEPS[step]
+  const provisioning = registeredCameraId !== null
+  const zones = config.zone_config.zones
+  const urlValidated = urlCheck?.ok === true
+
+  // ─── Persist / restore in-progress wizard state ───────────────
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const p = JSON.parse(saved)
+        if (p.config) setConfig((c) => ({ ...c, ...p.config }))
+        if (typeof p.step === 'number') setStep(Math.min(p.step, STEPS.length - 1))
+        if (p.selectedDevice) setSelectedDevice(p.selectedDevice)
+      }
+    } catch { /* ignore corrupt state */ }
+    hydratedRef.current = true
+    return () => {
+      mountedRef.current = false
+      if (pollTimerRef.current) clearTimeout(pollTimerRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (!hydratedRef.current || provisioning) return
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ config, step, selectedDevice }))
+    } catch { /* quota — non-fatal */ }
+  }, [config, step, selectedDevice, provisioning, storageKey])
+
+  const clearProgress = () => {
+    try { localStorage.removeItem(storageKey) } catch { /* ignore */ }
+  }
 
   const canAdvance = (): boolean => {
     switch (currentStep) {
-      case 'Device': return true
-      case 'Camera': return config.name.length > 0 && config.rtsp_url.length > 0
-      case 'Zones': return true
+      case 'Device': return selectedDevice !== null
+      case 'Camera': return config.name.trim().length > 0 && urlValidated
+      case 'Zones': return zones.some((z) => z.enabled)
       case 'Privacy': return consentConfirmed || config.compliance_mode === 'disabled'
       case 'Confirm': return true
       default: return false
@@ -51,37 +143,67 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
 
   const apiBase = (import.meta.env.VITE_API_URL || '') as string
 
-  const testConnection = async () => {
-    setTesting(true)
+  const validateUrl = () => {
+    setValidating(true)
     setError('')
-    try {
-      const urlPattern = /^rtsp:\/\/.+/i
-      if (!urlPattern.test(config.rtsp_url)) {
-        setError('Enter a valid RTSP URL (e.g., rtsp://192.168.1.100:554/stream1)')
-        return
+    const result = checkRtspUrl(config.rtsp_url)
+    setUrlCheck(result)
+    setValidating(false)
+  }
+
+  const setZone = (key: string, patch: Partial<ZoneDef>) => {
+    setConfig((c) => ({
+      ...c,
+      zone_config: { zones: c.zone_config.zones.map((z) => (z.key === key ? { ...z, ...patch } : z)) },
+    }))
+  }
+
+  const pollHeartbeat = (camId: string) => {
+    setCameraStatus('waiting')
+    const deadline = Date.now() + 30_000
+    const tick = async () => {
+      try {
+        const r = await fetch(`${apiBase}/api/vision/cameras/${encodeURIComponent(orgId)}`)
+        if (r.ok) {
+          const d = await r.json()
+          const cam = (d.cameras || []).find((c: { id?: string }) => c.id === camId)
+          if (cam && cam.status === 'online') {
+            if (mountedRef.current) setCameraStatus('online')
+            return
+          }
+        }
+      } catch { /* keep polling */ }
+      if (!mountedRef.current) return
+      if (Date.now() < deadline) {
+        pollTimerRef.current = setTimeout(tick, 3000)
+      } else {
+        setCameraStatus('timeout')
       }
-      await new Promise(r => setTimeout(r, 1500))
-      setConnectionTested(true)
-    } catch {
-      setError('Could not connect to camera. Check the RTSP URL and network.')
-    } finally {
-      setTesting(false)
     }
+    tick()
   }
 
   const handleSubmit = async () => {
     setError('')
+    if (!orgId) {
+      // No org context (e.g. preview surfaces) — nothing to register against.
+      clearProgress()
+      onComplete(config)
+      return
+    }
+    setRegistering(true)
     try {
       const res = await fetch(`${apiBase}/api/vision/cameras`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           org_id: orgId,
-          name: config.name,
-          rtsp_url: config.rtsp_url,
+          name: config.name.trim(),
+          rtsp_url: config.rtsp_url.trim(),
           compliance_mode: config.compliance_mode,
           active_hours: config.active_hours,
           zone_config: config.zone_config,
+          edge_device_id: selectedDevice || undefined,
         }),
       })
       if (!res.ok) {
@@ -89,11 +211,23 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
         setError(data.detail || 'Failed to register camera')
         return
       }
-      onComplete(config)
+      const created = await res.json().catch(() => null)
+      const camId = created?.id ?? null
+      clearProgress()
+      if (camId) {
+        setRegisteredCameraId(camId)
+        pollHeartbeat(camId)
+      } else {
+        onComplete(config)
+      }
     } catch {
       setError('Could not reach the server. Please try again.')
+    } finally {
+      if (mountedRef.current) setRegistering(false)
     }
   }
+
+  const enabledZoneCount = zones.filter((z) => z.enabled).length
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -110,37 +244,82 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
         </div>
 
         {/* Progress */}
-        <div className="px-5 py-3 border-b border-[#1F1F23]">
-          <div className="flex items-center gap-1">
-            {STEPS.map((s, i) => (
-              <div key={s} className="flex items-center gap-1 flex-1">
-                <div className={clsx(
-                  'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold transition-colors',
-                  i < step ? 'bg-[#17C5B0] text-white' :
-                  i === step ? 'bg-[#1A8FD6] text-white' :
-                  'bg-[#1F1F23] text-[#A1A1A8]/40'
-                )}>
-                  {i < step ? <CheckCircle size={12} /> : i + 1}
-                </div>
-                <span className={clsx(
-                  'text-[9px] hidden sm:inline',
-                  i === step ? 'text-[#F5F5F7] font-medium' : 'text-[#A1A1A8]/40'
-                )}>{s}</span>
-                {i < STEPS.length - 1 && (
+        {!provisioning && (
+          <div className="px-5 py-3 border-b border-[#1F1F23]">
+            <div className="flex items-center gap-1">
+              {STEPS.map((s, i) => (
+                <div key={s} className="flex items-center gap-1 flex-1">
                   <div className={clsx(
-                    'flex-1 h-px mx-1',
-                    i < step ? 'bg-[#17C5B0]/40' : 'bg-[#1F1F23]'
-                  )} />
-                )}
-              </div>
-            ))}
+                    'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold transition-colors',
+                    i < step ? 'bg-[#17C5B0] text-white' :
+                    i === step ? 'bg-[#1A8FD6] text-white' :
+                    'bg-[#1F1F23] text-[#A1A1A8]/40'
+                  )}>
+                    {i < step ? <CheckCircle size={12} /> : i + 1}
+                  </div>
+                  <span className={clsx(
+                    'text-[9px] hidden sm:inline',
+                    i === step ? 'text-[#F5F5F7] font-medium' : 'text-[#A1A1A8]/40'
+                  )}>{s}</span>
+                  {i < STEPS.length - 1 && (
+                    <div className={clsx(
+                      'flex-1 h-px mx-1',
+                      i < step ? 'bg-[#17C5B0]/40' : 'bg-[#1F1F23]'
+                    )} />
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Step Content */}
         <div className="px-5 py-5 space-y-4">
+          {/* Provisioning: waiting for the edge agent heartbeat */}
+          {provisioning && (
+            <div className="py-4 text-center space-y-4">
+              {cameraStatus === 'online' ? (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-[#17C5B0]/10 flex items-center justify-center mx-auto">
+                    <CheckCircle size={24} className="text-[#17C5B0]" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#F5F5F7]">{config.name} is online</h3>
+                    <p className="text-[11px] text-[#A1A1A8] mt-1">The edge agent connected to the camera and is reporting.</p>
+                  </div>
+                </>
+              ) : cameraStatus === 'timeout' ? (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-amber-400/10 flex items-center justify-center mx-auto">
+                    <AlertTriangle size={24} className="text-amber-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#F5F5F7]">Camera registered — waiting on the edge device</h3>
+                    <p className="text-[11px] text-[#A1A1A8] mt-1">
+                      {config.name} is saved, but the edge agent hasn't reported in yet. Make sure the agent
+                      is running on your device, then check its status anytime in Settings → Cameras.
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-12 h-12 rounded-full bg-[#1A8FD6]/10 flex items-center justify-center mx-auto">
+                    <Loader2 size={24} className="text-[#1A8FD6] animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#F5F5F7]">Waiting for the edge agent…</h3>
+                    <p className="text-[11px] text-[#A1A1A8] mt-1">
+                      {config.name} is registered. Start the edge agent on your device — it will connect to the
+                      camera and report online here.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Step 1: Device */}
-          {currentStep === 'Device' && (
+          {!provisioning && currentStep === 'Device' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Edge Device</h3>
@@ -149,18 +328,13 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-3">
-                {[
-                  { name: 'Jetson Nano', cameras: '2-3', price: '$149', recommended: false },
-                  { name: 'Jetson Orin Nano', cameras: '4-6', price: '$249', recommended: true },
-                  { name: 'Jetson Orin NX', cameras: '8-12', price: '$499', recommended: false },
-                  { name: 'Custom Linux + GPU', cameras: 'Varies', price: 'BYO', recommended: false },
-                ].map(device => (
+                {DEVICES.map(device => (
                   <button
-                    key={device.name}
-                    onClick={() => setEdgeDetected(true)}
+                    key={device.id}
+                    onClick={() => setSelectedDevice(device.id)}
                     className={clsx(
                       'p-3 rounded-lg border text-left transition-all',
-                      edgeDetected && device.recommended
+                      selectedDevice === device.id
                         ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
                         : 'border-[#1F1F23] hover:border-[#A1A1A8]/20 bg-[#0A0A0B]'
                     )}
@@ -184,7 +358,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           )}
 
           {/* Step 2: Camera */}
-          {currentStep === 'Camera' && (
+          {!provisioning && currentStep === 'Camera' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Camera Connection</h3>
@@ -209,34 +383,47 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                     type="text"
                     value={config.rtsp_url}
                     onChange={e => {
-                      setConfig(c => ({ ...c, rtsp_url: e.target.value }))
-                      setConnectionTested(false)
+                      const v = e.target.value
+                      setConfig(c => ({ ...c, rtsp_url: v }))
+                      setUrlCheck(null)
                     }}
-                    placeholder="rtsp://192.168.1.100:554/stream1"
+                    placeholder="rtsp://user:pass@192.168.1.100:554/stream1"
                     className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
                   />
+                  <p className="text-[9px] text-[#A1A1A8]/40 mt-1">
+                    Find this in your camera's app under "RTSP" or "ONVIF". Most need a username and password.
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
-                    onClick={testConnection}
-                    disabled={testing || !config.rtsp_url}
+                    onClick={validateUrl}
+                    disabled={validating || !config.rtsp_url}
                     className={clsx(
-                      'px-3 py-1.5 text-[11px] rounded-lg font-medium transition-colors',
-                      connectionTested
+                      'px-3 py-1.5 text-[11px] rounded-lg font-medium transition-colors disabled:opacity-40',
+                      urlValidated
                         ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
                         : 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/20 hover:bg-[#1A8FD6]/20'
                     )}
                   >
-                    {testing ? (
-                      <span className="flex items-center gap-1.5"><Wifi size={11} className="animate-pulse" /> Testing...</span>
-                    ) : connectionTested ? (
-                      <span className="flex items-center gap-1.5"><CheckCircle size={11} /> Connected</span>
+                    {validating ? (
+                      <span className="flex items-center gap-1.5"><Wifi size={11} className="animate-pulse" /> Checking…</span>
+                    ) : urlValidated ? (
+                      <span className="flex items-center gap-1.5"><CheckCircle size={11} /> URL Validated</span>
                     ) : (
-                      <span className="flex items-center gap-1.5"><Wifi size={11} /> Test Connection</span>
+                      <span className="flex items-center gap-1.5"><Wifi size={11} /> Validate URL</span>
                     )}
                   </button>
-                  {error && <span className="text-[10px] text-red-400">{error}</span>}
                 </div>
+                {urlCheck && (
+                  <p className={clsx(
+                    'text-[10px]',
+                    urlCheck.level === 'error' ? 'text-red-400' :
+                    urlCheck.level === 'warn' ? 'text-amber-400' :
+                    'text-[#17C5B0]'
+                  )}>
+                    {urlCheck.message}
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Active From</label>
@@ -262,42 +449,58 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           )}
 
           {/* Step 3: Zones */}
-          {currentStep === 'Zones' && (
+          {!provisioning && currentStep === 'Zones' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Detection Zones</h3>
                 <p className="text-[11px] text-[#A1A1A8]">
-                  Define areas in the camera view for tracking. Zone drawing will be available once the camera is connected.
+                  Choose which areas to track. You'll draw the exact boundaries on the live image in the camera
+                  management panel once the edge device is online.
                 </p>
               </div>
-              <div className="aspect-video bg-[#0A0A0B] border border-[#1F1F23] rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <Camera size={32} className="text-[#A1A1A8]/20 mx-auto mb-2" />
-                  <p className="text-[11px] text-[#A1A1A8]/40">Camera preview will appear here</p>
-                  <p className="text-[9px] text-[#A1A1A8]/20 mt-1">Draw entry, browse, and checkout zones</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {['Entry', 'Browse', 'Checkout'].map(zone => (
-                  <div key={zone} className="p-2 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] text-center">
-                    <div className={clsx(
-                      'w-3 h-3 rounded-full mx-auto mb-1',
-                      zone === 'Entry' ? 'bg-[#17C5B0]' :
-                      zone === 'Browse' ? 'bg-[#1A8FD6]' :
-                      'bg-[#7C5CFF]'
-                    )} />
-                    <span className="text-[10px] text-[#A1A1A8]">{zone} Zone</span>
+              <div className="space-y-2">
+                {zones.map(zone => (
+                  <div
+                    key={zone.key}
+                    className={clsx(
+                      'flex items-center gap-3 p-3 rounded-lg border transition-all',
+                      zone.enabled ? 'border-[#1F1F23] bg-[#0A0A0B]' : 'border-[#1F1F23]/50 bg-[#0A0A0B]/50 opacity-60'
+                    )}
+                  >
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: zone.color }} />
+                    <input
+                      type="text"
+                      value={zone.label}
+                      onChange={e => setZone(zone.key, { label: e.target.value })}
+                      className="flex-1 px-2 py-1 text-[11px] bg-transparent border border-transparent rounded text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/40 focus:bg-[#111113]"
+                    />
+                    <button
+                      onClick={() => setZone(zone.key, { enabled: !zone.enabled })}
+                      aria-label={`${zone.enabled ? 'Disable' : 'Enable'} ${zone.label} zone`}
+                      className={clsx(
+                        'relative w-9 h-5 rounded-full transition-colors flex-shrink-0',
+                        zone.enabled ? 'bg-[#1A8FD6]' : 'bg-[#1F1F23]'
+                      )}
+                    >
+                      <span className={clsx(
+                        'absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all',
+                        zone.enabled ? 'left-[18px]' : 'left-0.5'
+                      )} />
+                    </button>
                   </div>
                 ))}
               </div>
+              {enabledZoneCount === 0 && (
+                <p className="text-[10px] text-amber-400">Enable at least one zone to continue.</p>
+              )}
               <p className="text-[9px] text-[#A1A1A8]/40">
-                Zones can be configured after setup via the camera management panel.
+                Zones map raw foot traffic into entry, browse, and checkout funnels for conversion analytics.
               </p>
             </>
           )}
 
           {/* Step 4: Privacy */}
-          {currentStep === 'Privacy' && (
+          {!provisioning && currentStep === 'Privacy' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Privacy & Compliance</h3>
@@ -388,7 +591,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           )}
 
           {/* Step 5: Confirm */}
-          {currentStep === 'Confirm' && (
+          {!provisioning && currentStep === 'Confirm' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Review & Activate</h3>
@@ -398,17 +601,22 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
               </div>
               <div className="space-y-2">
                 {[
+                  { label: 'Edge Device', value: DEVICES.find(d => d.id === selectedDevice)?.name || '—' },
                   { label: 'Camera Name', value: config.name },
                   { label: 'RTSP URL', value: config.rtsp_url },
                   { label: 'Active Hours', value: `${config.active_hours.start} - ${config.active_hours.end}` },
+                  { label: 'Zones', value: zones.filter(z => z.enabled).map(z => z.label).join(', ') || 'None' },
                   { label: 'Privacy Mode', value: config.compliance_mode.replace('_', ' ') },
                 ].map(item => (
-                  <div key={item.label} className="flex justify-between py-2 border-b border-[#1F1F23]/50">
-                    <span className="text-[11px] text-[#A1A1A8]">{item.label}</span>
-                    <span className="text-[11px] text-[#F5F5F7] font-medium font-mono">{item.value}</span>
+                  <div key={item.label} className="flex justify-between gap-3 py-2 border-b border-[#1F1F23]/50">
+                    <span className="text-[11px] text-[#A1A1A8] flex-shrink-0">{item.label}</span>
+                    <span className="text-[11px] text-[#F5F5F7] font-medium font-mono text-right break-all">{item.value}</span>
                   </div>
                 ))}
               </div>
+              {error && (
+                <p className="text-[10px] text-red-400">{error}</p>
+              )}
               <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-400/20 bg-amber-400/5">
                 <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
                 <p className="text-[10px] text-[#A1A1A8]">
@@ -422,33 +630,45 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-[#1F1F23]">
-          <button
-            onClick={() => step > 0 ? setStep(s => s - 1) : onClose()}
-            className="flex items-center gap-1 text-[11px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors"
-          >
-            <ChevronLeft size={12} />
-            {step > 0 ? 'Back' : 'Cancel'}
-          </button>
-          {currentStep === 'Confirm' ? (
+          {provisioning ? (
             <button
-              onClick={handleSubmit}
-              className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors"
+              onClick={() => onComplete(config)}
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors"
             >
-              <CheckCircle size={12} /> Activate Camera
+              {cameraStatus === 'online' ? (<><CheckCircle size={12} /> Done</>) : 'Finish — I\'ll check status later'}
             </button>
           ) : (
-            <button
-              onClick={() => setStep(s => s + 1)}
-              disabled={!canAdvance()}
-              className={clsx(
-                'flex items-center gap-1 px-4 py-2 text-[11px] font-semibold rounded-lg transition-colors',
-                canAdvance()
-                  ? 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90'
-                  : 'bg-[#1F1F23] text-[#A1A1A8]/40 cursor-not-allowed'
+            <>
+              <button
+                onClick={() => step > 0 ? setStep(s => s - 1) : onClose()}
+                className="flex items-center gap-1 text-[11px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors"
+              >
+                <ChevronLeft size={12} />
+                {step > 0 ? 'Back' : 'Cancel'}
+              </button>
+              {currentStep === 'Confirm' ? (
+                <button
+                  onClick={handleSubmit}
+                  disabled={registering}
+                  className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors disabled:opacity-50"
+                >
+                  {registering ? (<><Loader2 size={12} className="animate-spin" /> Activating…</>) : (<><CheckCircle size={12} /> Activate Camera</>)}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setStep(s => s + 1)}
+                  disabled={!canAdvance()}
+                  className={clsx(
+                    'flex items-center gap-1 px-4 py-2 text-[11px] font-semibold rounded-lg transition-colors',
+                    canAdvance()
+                      ? 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90'
+                      : 'bg-[#1F1F23] text-[#A1A1A8]/40 cursor-not-allowed'
+                  )}
+                >
+                  Next <ChevronRight size={12} />
+                </button>
               )}
-            >
-              Next <ChevronRight size={12} />
-            </button>
+            </>
           )}
         </div>
       </div>
