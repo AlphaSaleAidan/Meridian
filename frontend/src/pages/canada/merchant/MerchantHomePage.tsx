@@ -9,7 +9,8 @@ import { api } from '@/lib/api'
 import { formatCad, formatCadMo, formatNumber, formatPercent } from '@/lib/format'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
-import { MERCHANT_BASE_PATH } from '@/config/merchantPillars'
+import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
+import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 
 /**
  * Canada-merchant home — the payable hero surface.
@@ -128,6 +129,7 @@ export default function MerchantHomePage() {
   const { org } = useAuth()
   const posConnected = !!org?.pos_connected
   const skip = !isDemo && !posConnected
+  const basePath = useMerchantBasePath()
 
   const overview = useApi(() => (skip ? api.overview('') : api.overview(orgId)), [orgId, skip])
   const revenue = useApi(() => (skip ? api.revenue('', 30) : api.revenue(orgId, 30)), [orgId, skip])
@@ -168,7 +170,7 @@ export default function MerchantHomePage() {
             </p>
           </div>
           <Link
-            to={`${MERCHANT_BASE_PATH}/onboard`}
+            to={`${basePath}/onboard`}
             className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-pm-teal text-pm-bg font-bold text-sm hover:bg-pm-teal/90 transition-colors flex-shrink-0"
           >
             Connect your POS
@@ -212,7 +214,7 @@ export default function MerchantHomePage() {
           ].map(p => (
             <Link
               key={p.to}
-              to={`${MERCHANT_BASE_PATH}/${p.to}`}
+              to={`${basePath}/${p.to}`}
               className="group flex items-center justify-between rounded-xl bg-pm-surface border border-pm-border p-4 hover:border-pm-blue/40 transition-colors"
             >
               <div>
@@ -292,7 +294,7 @@ export default function MerchantHomePage() {
           </div>
           {recoverableCents > 0 && (
             <Link
-              to={`${MERCHANT_BASE_PATH}/inventory`}
+              to={`${basePath}/inventory`}
               className="group rounded-xl border border-pm-amber-gold/25 bg-pm-amber-gold/5 p-4 hover:bg-pm-amber-gold/10 transition-colors"
             >
               <div className="flex items-center gap-1.5 text-pm-amber-gold">
@@ -348,6 +350,9 @@ export default function MerchantHomePage() {
         />
       </div>
 
+      {/* Top 3 Actions */}
+      <Top3ActionsPanel />
+
       {/* Pillar quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {[
@@ -357,7 +362,7 @@ export default function MerchantHomePage() {
         ].map(p => (
           <Link
             key={p.to}
-            to={`${MERCHANT_BASE_PATH}/${p.to}`}
+            to={`${basePath}/${p.to}`}
             className="group flex items-center justify-between rounded-xl bg-pm-surface border border-pm-border p-4 hover:border-pm-blue/40 transition-colors"
           >
             <div>
