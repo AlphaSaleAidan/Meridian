@@ -88,3 +88,25 @@ Save outputs + traces to `tests/swarm_eval/baseline_2026-06.json`.
 **Phase 1 cannot pass acceptance until this baseline exists.** Recommend the user choose Option A (Langfuse) or Option B (SQLite) before any routing changes land. Estimated effort: <1 day either way, mostly env-var + decorator wiring.
 
 The eval harness skeleton can be built in parallel with the baseline run — tests/swarm_eval/ already has a `test_swarm_upgrades.py` that we can extend.
+
+## 6. Implementation status (2026-06-07)
+
+Option B (SQLite tee) was implemented and **proven working**. Remaining blocker is gateway-side, not instrumentation-side.
+
+**Done and verified:**
+- `src/ai/trace_recorder.py` — non-blocking queue-based SQLite tee (stdlib only). Captures `tier / provider / model / prompt_tokens / completion_tokens / latency_ms / task_kind` per call. DB path via `MERIDIAN_SWARM_TRACE_DB` (default `data/swarm_traces.sqlite`, gitignored).
+- In-memory smoke test recorded **383 real tokens** across calls — the recorder, schema, and queue flush all work end to end.
+- `scripts/run_baseline_seed.py` drives the 25 seed tasks; `scripts/dump_baseline.py` materializes the trace DB to JSON.
+- Router model-name fix (this branch): `tiered_router._provider_params()` now registers the gateway's real deployment names (`openai/meridian-local`, `openai/meridian-fast`) with an explicit `api_base` when `OPENAI_BASE_URL`/`OPENAI_API_BASE` is set — previously it registered `gpt-4o-mini`/`gpt-4o`, which the local LiteLLM gateway 400s as unknown models, so calls silently never landed. Gated/additive: no behaviour change when the base-url env is unset.
+
+**Genuine blocker (gateway, not swarm):**
+The full seed run still records **0 LLM-call tokens** because every JSON-mode call through the swarm's LiteLLM **Router** fails with:
+`litellm.BadRequestError: DeepseekException - {"error":{"message":"This response_format type is unavailable now"...}}  (Model Group=meridian-t2)`
+The gateway's `meridian-local` / `meridian-fast` deployments are DeepSeek-upstream and reject the Router's `response_format={"type":"json_object"}` requests. **Direct OpenAI-client JSON calls to the same models succeed** (verified: meridian-fast 1849ms 78/90 tok; meridian-local 41771ms 70/83 tok), which isolates the failure to the Router→gateway JSON path, not the recorder or the models themselves.
+
+**To unblock (one of):**
+1. Gateway serves a JSON-capable upstream for the `meridian-*` deployments (part of the Kimi K2.6 gateway migration, currently on the unmerged `kimi-k2.6-gateway` branch), or
+2. `enhance_insights` / the affected agents drop `response_format=json_object` and parse free-form JSON, or
+3. Run the baseline against a non-gateway provider key (DeepSeek/Groq/Cerebras direct) that honours `response_format`.
+
+Once any of those lands, `run_baseline_seed.py` → `dump_baseline.py` produces `tests/swarm_eval/baseline_2026-06.json` with real token/latency numbers — no further instrumentation work needed.
