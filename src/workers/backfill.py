@@ -132,7 +132,7 @@ async def run_backfill(
 
     # ── Trigger AI pipeline ──────────────────────────────
     try:
-        from ..pipeline import MeridianPipeline
+        from ..live_pipeline import MeridianPipeline
 
         pipeline = MeridianPipeline(
             org_id=org_id,

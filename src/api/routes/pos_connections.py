@@ -401,7 +401,7 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         logger.info(f"Toast backfill complete for org={org_id}: {result.summary}")
 
         try:
-            from ...pipeline import MeridianPipeline
+            from ...live_pipeline import MeridianPipeline
             import os
             pipeline = MeridianPipeline(
                 org_id=org_id,
@@ -505,7 +505,7 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
         logger.info(f"Clover backfill complete for org={org_id}: {result.summary}")
 
         try:
-            from ...pipeline import MeridianPipeline
+            from ...live_pipeline import MeridianPipeline
             import os
             pipeline = MeridianPipeline(
                 org_id=org_id,
