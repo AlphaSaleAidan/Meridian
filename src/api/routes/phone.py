@@ -43,6 +43,15 @@ DEMO_MERCHANT_ID = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
 MEDIA_STREAMS_ENABLED = os.getenv("MEDIA_STREAMS_ENABLED", "0") == "1"
 MEDIA_STREAM_HOST = os.getenv("MEDIA_STREAM_HOST", "api.meridian.tips")
 
+# Default per-turn capture method. Telnyx's real-time <Gather input="speech">
+# recognizer reads the inbound track that carries the bot's own Polly playback
+# on these connections, so it returns empty SpeechResults and the call wastes
+# two turns on "I didn't catch that" before self-healing to the <Record>+STT
+# path. Default to "record" to skip that and capture the caller from turn one.
+# Override to "gather" via env on any connection where the real-time recognizer
+# is provisioned (lower latency). The empty-result self-heal still applies.
+DEFAULT_CAPTURE = os.getenv("PHONE_CAPTURE_DEFAULT", "record")
+
 # Telephony provider for the media-stream path. Telnyx and Twilio send
 # different WS handshake envelopes, so the serializer + drain branch on this.
 PHONE_PROVIDER = os.getenv("PHONE_PROVIDER", "twilio").lower()
@@ -786,7 +795,7 @@ async def twilio_voice(request: Request):
         "merchant_name": (config_row or {}).get("business_name", ""),
         "system_prompt": session_prompt,
         "hints": hints,
-        "capture": "gather",  # start on the fast real-time path; auto-falls back to record
+        "capture": DEFAULT_CAPTURE,  # record by default; auto-falls back from gather on empties
         "empty_count": 0,
         # Only set when the merchant configured a transfer number; gates the
         # transfer_call tool so the demo and unconfigured merchants are unchanged.
@@ -807,7 +816,7 @@ async def twilio_gather(request: Request):
     # Telnyx posts the transcript as SpeechResult (Twilio-compatible). Keep a couple
     # of fallbacks in case a transcriptionEngine variant labels it differently.
     session = _sessions.setdefault(
-        call_sid, {"messages": [], "ts": time.time(), "capture": "gather", "empty_count": 0}
+        call_sid, {"messages": [], "ts": time.time(), "capture": DEFAULT_CAPTURE, "empty_count": 0}
     )
 
     # <Gather> posts the transcript inline as SpeechResult. <Record> (the fallback
