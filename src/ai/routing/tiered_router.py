@@ -153,14 +153,33 @@ def _provider_params() -> dict[str, dict]:
             "api_base": "https://api.cerebras.ai/v1",
         }
     if os.environ.get("OPENAI_API_KEY"):
-        p["openai_mini"] = {
-            "model": "gpt-4o-mini",
-            "api_key": os.environ["OPENAI_API_KEY"],
-        }
-        p["openai"] = {
-            "model": "gpt-4o",
-            "api_key": os.environ["OPENAI_API_KEY"],
-        }
+        _openai_base = os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE")
+        if _openai_base:
+            # Local LiteLLM gateway (e.g. the Kimi K2.6 proxy on :4000) serves
+            # its own deployment names, not OpenAI's. Sending "gpt-4o-mini" there
+            # 400s on an unknown model, so the call silently never lands and no
+            # tokens are recorded. Target the gateway's real models with an
+            # explicit api_base. meridian-local = cheap/cached fast tier;
+            # meridian-fast = standard cloud model.
+            p["openai_mini"] = {
+                "model": "openai/meridian-local",
+                "api_key": os.environ["OPENAI_API_KEY"],
+                "api_base": _openai_base,
+            }
+            p["openai"] = {
+                "model": "openai/meridian-fast",
+                "api_key": os.environ["OPENAI_API_KEY"],
+                "api_base": _openai_base,
+            }
+        else:
+            p["openai_mini"] = {
+                "model": "gpt-4o-mini",
+                "api_key": os.environ["OPENAI_API_KEY"],
+            }
+            p["openai"] = {
+                "model": "gpt-4o",
+                "api_key": os.environ["OPENAI_API_KEY"],
+            }
     return p
 
 
