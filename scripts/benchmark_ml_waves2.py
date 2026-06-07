@@ -74,7 +74,8 @@ def benchmark_forecast(n_days=120, horizon=28):
         from statsforecast import StatsForecast
         from statsforecast.models import AutoARIMA, AutoETS, AutoTheta
         df = pd.DataFrame(train).rename(columns={"date": "ds", "revenue_cents": "y"})
-        df["ds"] = pd.to_datetime(df["ds"]); df["unique_id"] = "rev"
+        df["ds"] = pd.to_datetime(df["ds"])
+        df["unique_id"] = "rev"
         df = df[["unique_id", "ds", "y"]]
         sf = StatsForecast(
             models=[AutoARIMA(season_length=7), AutoETS(season_length=7), AutoTheta(season_length=7)],
@@ -84,7 +85,8 @@ def benchmark_forecast(n_days=120, horizon=28):
         fc = sf.predict(h=horizon)
         cols = [c for c in fc.columns if c in ("AutoARIMA", "AutoETS", "AutoTheta")]
         pred = fc[cols].mean(axis=1).tolist()
-        sf_mae = _mae(actual, pred); sf_mase = sf_mae / snaive_mae
+        sf_mae = _mae(actual, pred)
+        sf_mase = sf_mae / snaive_mae
         print(f"statsforecast  MAE={sf_mae:,.0f}  MASE={sf_mase:.3f}")
     except Exception as e:
         print(f"statsforecast  UNAVAILABLE: {e!r}")
@@ -96,7 +98,8 @@ def benchmark_forecast(n_days=120, horizon=28):
         fc = autogluon_forecast(train, horizon)
         if fc:
             pred = [r["predicted"] for r in fc][:horizon]
-            ag_mae = _mae(actual, pred); ag_mase = ag_mae / snaive_mae
+            ag_mae = _mae(actual, pred)
+            ag_mase = ag_mae / snaive_mae
             print(f"autogluon      MAE={ag_mae:,.0f}  MASE={ag_mase:.3f}")
         else:
             print("autogluon      returned None (unavailable or too short)")
@@ -166,7 +169,8 @@ def benchmark_churn(n=200):
         days_since_last = (now - p["last_visit"]).days
         churned = days_since_last > avg_interval * 4
         duration = (p["span_days"] + avg_interval) if churned else (now - p["first_visit"]).days
-        events.append(bool(churned)); times.append(max(1.0, float(duration)))
+        events.append(bool(churned))
+        times.append(max(1.0, float(duration)))
         # incumbent sigmoid heuristic risk
         x = days_since_last / avg_interval - 2 if avg_interval else 0
         risk = 1 / (1 + math.exp(-x))
@@ -187,7 +191,8 @@ def benchmark_churn(n=200):
         )[0]
         print(f"incumbent sigmoid  concordance={inc_c:.4f}")
     except Exception as e:
-        print(f"incumbent sigmoid  UNAVAILABLE: {e!r}"); inc_c = None
+        print(f"incumbent sigmoid  UNAVAILABLE: {e!r}")
+        inc_c = None
 
     try:
         from src.ai.ml.survival_churn import survival_churn
