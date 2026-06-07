@@ -2,9 +2,9 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { clsx } from 'clsx'
 import {
   CheckCircle2, X, Zap, CalendarClock, ChevronDown, ChevronRight,
-  Bot, Clock, TrendingUp, Sparkles,
+  Bot, Clock, TrendingUp, Sparkles, Lock,
 } from 'lucide-react'
-import { generateTopActions, type TopAction, type ReasoningChain } from '@/lib/agent-data'
+import { generateTopActions, actionsFromInsights, type TopAction, type ReasoningChain } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { api } from '@/lib/api'
@@ -247,11 +247,99 @@ function EmptySlot({ cadence }: { cadence: Cadence }) {
   )
 }
 
-export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: boolean }) {
+// The standby agents we name in the pre-connection teaser, so the merchant sees
+// that real model agents are assigned to the work before any POS is wired up.
+const STANDBY_AGENTS: { name: string; covers: string }[] = [
+  { name: 'Pricing Power', covers: 'safe price increases' },
+  { name: 'Inventory Intelligence', covers: 'stockout & reorder timing' },
+  { name: 'Staffing', covers: 'peak-hour coverage' },
+  { name: 'Money Left on Table', covers: 'your biggest weekly lever' },
+]
+
+// Pre-connection state: no POS is wired up yet, so there's no transaction data to
+// reason over. Show the merchant exactly what's coming and which model agents are
+// assigned, with a locked treatment instead of a fake/empty action.
+function PreConnectionState() {
+  return (
+    <div className="card p-5 border border-[#1F1F23] space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center justify-center flex-shrink-0">
+          <Lock size={18} className="text-[#7C5CFF]" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Your daily actions unlock at connection</h3>
+          <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+            Once your POS is connected, these agents start analyzing your real sales and post
+            two fresh instant wins each day plus one strategic move each week — each with the
+            exact dollar impact and the reasoning behind it.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {STANDBY_AGENTS.map(a => (
+          <div key={a.name} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[#0A0A0B] border border-dashed border-[#1F1F23]">
+            <Bot size={14} className="text-[#7C5CFF] flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#F5F5F7] truncate">{a.name}</p>
+              <p className="text-[10px] text-[#A1A1A8]/70 truncate">Watching {a.covers}</p>
+            </div>
+            <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-[#A1A1A8]/50 flex items-center gap-1 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#A1A1A8]/40" /> Standby
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Connected, but no insights have been generated yet (POS just wired up; agents
+// haven't completed their first pass). An honest "analyzing" state — NOT the
+// "all caught up" empty slot, which would falsely imply work was already done.
+function WarmingState() {
+  return (
+    <div className="card p-5 border border-[#1F1F23] flex items-start gap-3">
+      <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 border border-[#17C5B0]/20 flex items-center justify-center flex-shrink-0 animate-pulse">
+        <Sparkles size={18} className="text-[#17C5B0]" />
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-[#F5F5F7]">Your agents are analyzing your sales</h3>
+        <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+          We're crunching your transactions now. Your first prioritized actions — each with a
+          dollar impact and the model agent behind it — appear here within 24 hours of your
+          first sync.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// Minimal header (title + subtitle only) for the pre-connection and warming
+// states, where the live ResetTimer / pipeline / captured figures don't apply.
+function SimpleHeader({ subtitle }: { subtitle: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center">
+        <Sparkles size={16} className="text-[#17C5B0]" />
+      </div>
+      <div>
+        <h2 className="text-sm font-bold text-[#F5F5F7]">Your Top 3 Actions</h2>
+        <p className="text-[11px] text-[#A1A1A8]">{subtitle}</p>
+      </div>
+    </div>
+  )
+}
+
+export default function Top3ActionsPanel({ showHeader = true, connected = true }: { showHeader?: boolean; connected?: boolean }) {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
-  const apiData = useApi(() => api.actions(orgId), [orgId])
-  const pool: TopAction[] = isDemo ? generateTopActions() : (apiData.data?.actions ?? [])
+  // Skip the API call entirely when we know there's no POS connection — there
+  // would be no data to score and the panel renders the pre-connection teaser.
+  const apiData = useApi(() => (isDemo || connected ? api.actions(orgId) : Promise.resolve({ actions: [] })), [orgId, isDemo, connected])
+  const pool: TopAction[] = isDemo
+    ? generateTopActions()
+    : actionsFromInsights(apiData.data?.actions ?? [])
 
   const [state, setState] = useState<ActionState>(() => loadState(orgId))
 
@@ -302,6 +390,17 @@ export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: b
     }
   }, [pool, state, today, week])
 
+  // Pre-connection: no POS wired up — show the locked teaser + standby agents.
+  // (No data dependency, so this takes precedence over the loading skeleton.)
+  if (!isDemo && !connected) {
+    return (
+      <div className="space-y-3">
+        {showHeader && <SimpleHeader subtitle="Unlock two fresh wins daily and one strategic move each week" />}
+        <PreConnectionState />
+      </div>
+    )
+  }
+
   if (!isDemo && apiData.loading) {
     return (
       <div className="card p-6 animate-pulse">
@@ -310,6 +409,17 @@ export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: b
           <div className="h-20 bg-[#1F1F23]/60 rounded-xl" />
           <div className="h-20 bg-[#1F1F23]/60 rounded-xl" />
         </div>
+      </div>
+    )
+  }
+
+  // Connected, but the agents haven't produced any insights yet — honest
+  // "analyzing" state rather than the misleading "all caught up" empty slots.
+  if (!isDemo && connected && pool.length === 0) {
+    return (
+      <div className="space-y-3">
+        {showHeader && <SimpleHeader subtitle="Two fresh wins daily, one strategic move each week" />}
+        <WarmingState />
       </div>
     )
   }
