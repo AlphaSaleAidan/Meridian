@@ -41,6 +41,53 @@ const DEFAULT_ZONES: ZoneDef[] = [
   { key: 'checkout', label: 'Checkout', color: '#7C5CFF', enabled: true },
 ]
 
+// Per-brand RTSP main-stream path templates. The path is the part merchants
+// almost never know, so picking a brand fills it in; it stays editable for
+// odd firmware. "Other" defaults to a generic ONVIF-ish path.
+const CAMERA_BRANDS = [
+  { id: 'hikvision', label: 'Hikvision', path: '/Streaming/Channels/101' },
+  { id: 'dahua', label: 'Dahua', path: '/cam/realmonitor?channel=1&subtype=0' },
+  { id: 'amcrest', label: 'Amcrest', path: '/cam/realmonitor?channel=1&subtype=0' },
+  { id: 'reolink', label: 'Reolink', path: '/h264Preview_01_main' },
+  { id: 'axis', label: 'Axis', path: '/axis-media/media.amp' },
+  { id: 'unifi', label: 'Ubiquiti UniFi', path: '/s0' },
+  { id: 'generic', label: 'Other / ONVIF', path: '/stream1' },
+] as const
+
+type ConnMode = 'guided' | 'advanced'
+
+interface RtspParts {
+  brand: string
+  ip: string
+  port: string
+  username: string
+  password: string
+  path: string
+}
+
+const DEFAULT_PARTS: RtspParts = {
+  brand: 'hikvision',
+  ip: '',
+  port: '554',
+  username: '',
+  password: '',
+  path: '/Streaming/Channels/101',
+}
+
+// Assemble an RTSP URL from guided fields. Credentials are percent-encoded so a
+// password containing @ or : doesn't corrupt the host/port parsing.
+function buildRtsp({ ip, port, username, password, path }: RtspParts): string {
+  const host = ip.trim()
+  if (!host) return ''
+  const creds = username
+    ? `${encodeURIComponent(username)}${password ? `:${encodeURIComponent(password)}` : ''}@`
+    : ''
+  const p = (port || '554').trim()
+  const rawPath = path.trim()
+  const finalPath = rawPath && !rawPath.startsWith('/') && !rawPath.startsWith('?') ? `/${rawPath}` : rawPath
+  return `rtsp://${creds}${host}:${p}${finalPath}`
+}
+
 type UrlCheck = { ok: boolean; message: string; level: 'error' | 'warn' | 'ok' }
 
 // The cloud API can't reach a camera on the merchant LAN, so this validates the
@@ -81,6 +128,8 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     active_hours: { start: '07:00', end: '22:00' },
     zone_config: { zones: DEFAULT_ZONES },
   })
+  const [connMode, setConnMode] = useState<ConnMode>('guided')
+  const [parts, setParts] = useState<RtspParts>(DEFAULT_PARTS)
   const [urlCheck, setUrlCheck] = useState<UrlCheck | null>(null)
   const [validating, setValidating] = useState(false)
   const [error, setError] = useState('')
@@ -109,6 +158,8 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
         if (p.config) setConfig((c) => ({ ...c, ...p.config }))
         if (typeof p.step === 'number') setStep(Math.min(p.step, STEPS.length - 1))
         if (p.selectedDevice) setSelectedDevice(p.selectedDevice)
+        if (p.connMode === 'guided' || p.connMode === 'advanced') setConnMode(p.connMode)
+        if (p.parts) setParts((pt) => ({ ...pt, ...p.parts }))
       }
     } catch { /* ignore corrupt state */ }
     hydratedRef.current = true
@@ -122,7 +173,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
   useEffect(() => {
     if (!hydratedRef.current || provisioning) return
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ config, step, selectedDevice }))
+      localStorage.setItem(storageKey, JSON.stringify({ config, step, selectedDevice, connMode, parts }))
     } catch { /* quota — non-fatal */ }
   }, [config, step, selectedDevice, provisioning, storageKey])
 
@@ -149,6 +200,21 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     const result = checkRtspUrl(config.rtsp_url)
     setUrlCheck(result)
     setValidating(false)
+  }
+
+  // Guided builder: merge a field change, rebuild the RTSP URL, and validate live
+  // so the merchant never has to assemble or hand-check the URL themselves.
+  const applyParts = (patch: Partial<RtspParts>) => {
+    const next = { ...parts, ...patch }
+    setParts(next)
+    const url = buildRtsp(next)
+    setConfig((c) => ({ ...c, rtsp_url: url }))
+    setUrlCheck(url ? checkRtspUrl(url) : null)
+  }
+
+  const selectBrand = (id: string) => {
+    const b = CAMERA_BRANDS.find((x) => x.id === id)
+    applyParts({ brand: id, path: b ? b.path : parts.path })
   }
 
   const setZone = (key: string, patch: Partial<ZoneDef>) => {
@@ -377,43 +443,153 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                     className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40"
                   />
                 </div>
-                <div>
-                  <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">RTSP URL</label>
-                  <input
-                    type="text"
-                    value={config.rtsp_url}
-                    onChange={e => {
-                      const v = e.target.value
-                      setConfig(c => ({ ...c, rtsp_url: v }))
-                      setUrlCheck(null)
-                    }}
-                    placeholder="rtsp://user:pass@192.168.1.100:554/stream1"
-                    className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
-                  />
-                  <p className="text-[9px] text-[#A1A1A8]/40 mt-1">
-                    Find this in your camera's app under "RTSP" or "ONVIF". Most need a username and password.
-                  </p>
+                {/* Connection mode toggle */}
+                <div className="flex items-center gap-1 p-0.5 bg-[#0A0A0B] border border-[#1F1F23] rounded-lg w-fit">
+                  {([
+                    { id: 'guided' as ConnMode, label: 'Guided' },
+                    { id: 'advanced' as ConnMode, label: 'Paste URL' },
+                  ]).map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => setConnMode(m.id)}
+                      className={clsx(
+                        'px-3 py-1 text-[10px] font-medium rounded-md transition-colors',
+                        connMode === m.id ? 'bg-[#1A8FD6] text-white' : 'text-[#A1A1A8] hover:text-[#F5F5F7]'
+                      )}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={validateUrl}
-                    disabled={validating || !config.rtsp_url}
-                    className={clsx(
-                      'px-3 py-1.5 text-[11px] rounded-lg font-medium transition-colors disabled:opacity-40',
-                      urlValidated
-                        ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
-                        : 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/20 hover:bg-[#1A8FD6]/20'
+
+                {connMode === 'guided' ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Camera Brand</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {CAMERA_BRANDS.map(b => (
+                          <button
+                            key={b.id}
+                            onClick={() => selectBrand(b.id)}
+                            className={clsx(
+                              'px-2.5 py-1 text-[10px] rounded-md border transition-colors',
+                              parts.brand === b.id
+                                ? 'border-[#1A8FD6] bg-[#1A8FD6]/10 text-[#F5F5F7]'
+                                : 'border-[#1F1F23] bg-[#0A0A0B] text-[#A1A1A8] hover:border-[#A1A1A8]/20'
+                            )}
+                          >
+                            {b.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Camera IP</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          value={parts.ip}
+                          onChange={e => applyParts({ ip: e.target.value })}
+                          placeholder="192.168.1.100"
+                          className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Port</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={parts.port}
+                          onChange={e => applyParts({ port: e.target.value })}
+                          placeholder="554"
+                          className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Username</label>
+                        <input
+                          type="text"
+                          autoComplete="off"
+                          value={parts.username}
+                          onChange={e => applyParts({ username: e.target.value })}
+                          placeholder="admin"
+                          className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Password</label>
+                        <input
+                          type="password"
+                          autoComplete="off"
+                          value={parts.password}
+                          onChange={e => applyParts({ password: e.target.value })}
+                          placeholder="••••••••"
+                          className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Stream Path</label>
+                      <input
+                        type="text"
+                        value={parts.path}
+                        onChange={e => applyParts({ path: e.target.value })}
+                        placeholder="/stream1"
+                        className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
+                      />
+                      <p className="text-[9px] text-[#A1A1A8]/40 mt-1">
+                        Auto-filled from your camera brand. Most setups can leave this as-is.
+                      </p>
+                    </div>
+                    {config.rtsp_url && (
+                      <div className="px-3 py-2 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
+                        <p className="text-[8px] uppercase tracking-wide text-[#A1A1A8]/40 mb-0.5">Connection URL</p>
+                        <p className="text-[10px] text-[#A1A1A8] font-mono break-all">
+                          rtsp://{parts.username ? `${parts.username}:••••@` : ''}{parts.ip || '…'}:{parts.port || '554'}{parts.path}
+                        </p>
+                      </div>
                     )}
-                  >
-                    {validating ? (
-                      <span className="flex items-center gap-1.5"><Wifi size={11} className="animate-pulse" /> Checking…</span>
-                    ) : urlValidated ? (
-                      <span className="flex items-center gap-1.5"><CheckCircle size={11} /> URL Validated</span>
-                    ) : (
-                      <span className="flex items-center gap-1.5"><Wifi size={11} /> Validate URL</span>
-                    )}
-                  </button>
-                </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">RTSP URL</label>
+                    <input
+                      type="text"
+                      value={config.rtsp_url}
+                      onChange={e => {
+                        const v = e.target.value
+                        setConfig(c => ({ ...c, rtsp_url: v }))
+                        setUrlCheck(null)
+                      }}
+                      placeholder="rtsp://user:pass@192.168.1.100:554/stream1"
+                      className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
+                    />
+                    <p className="text-[9px] text-[#A1A1A8]/40 mt-1">
+                      Find this in your camera's app under "RTSP" or "ONVIF". Most need a username and password.
+                    </p>
+                    <button
+                      onClick={validateUrl}
+                      disabled={validating || !config.rtsp_url}
+                      className={clsx(
+                        'mt-2 px-3 py-1.5 text-[11px] rounded-lg font-medium transition-colors disabled:opacity-40',
+                        urlValidated
+                          ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
+                          : 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/20 hover:bg-[#1A8FD6]/20'
+                      )}
+                    >
+                      {validating ? (
+                        <span className="flex items-center gap-1.5"><Wifi size={11} className="animate-pulse" /> Checking…</span>
+                      ) : urlValidated ? (
+                        <span className="flex items-center gap-1.5"><CheckCircle size={11} /> URL Validated</span>
+                      ) : (
+                        <span className="flex items-center gap-1.5"><Wifi size={11} /> Validate URL</span>
+                      )}
+                    </button>
+                  </div>
+                )}
                 {urlCheck && (
                   <p className={clsx(
                     'text-[10px]',
