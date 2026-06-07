@@ -9,7 +9,6 @@ import Layout from '@/components/Layout'
 import DemoLayout from '@/components/DemoLayout'
 import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
 import { merchantPillars } from '@/config/merchantPillars'
-import CanadaDemoLayout from '@/components/CanadaDemoLayout'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 
@@ -47,6 +46,7 @@ const ContentSettingsPage = lazyRetry(() => import('@/pages/ContentSettingsPage'
 const LandingPage = lazyRetry(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazyRetry(() => import('@/components/CanadaLayout'))
 const MerchantLayout = lazyRetry(() => import('@/components/MerchantLayout'))
+const MerchantDemoLayout = lazyRetry(() => import('@/components/MerchantDemoLayout'))
 const CustomerOnboardingWizard = lazyRetry(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazyRetry(() => import('@/pages/CareersPage'))
 const AdminPage = lazyRetry(() => import('@/pages/AdminPage'))
@@ -397,14 +397,20 @@ export default function App() {
               <Route path="/canada/landing" element={<CanadaLandingPage />} />
               <Route path="/canada/careers" element={<CanadaCareersPage />} />
 
-              {/* Canada Demo — new-portal shell (CanadaLayout look) + CAD currency + Canada tour */}
-              <Route path="/canada/demo" element={<CanadaDemoLayout />}>
-                {CustomerDashboardRoutes()}
-                <Route path="camera-analytics" element={
-                  <Suspense fallback={<LazyFallback />}>
-                    <CameraAnalyticsDemoPage />
-                  </Suspense>
-                } />
+              {/* Canada Demo — public merchant portal with synthetic CAD data (no auth, no tour) */}
+              <Route path="/canada/demo" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <MerchantDemoLayout />
+                </Suspense>
+              }>
+                {merchantPillars.map(pillar => (
+                  <Route
+                    key={pillar.path || '_home'}
+                    index={pillar.path === ''}
+                    path={pillar.path || undefined}
+                    element={<MerchantPillarPage pillar={pillar} />}
+                  />
+                ))}
               </Route>
 
               {/* ══════════════════════════════════════════════

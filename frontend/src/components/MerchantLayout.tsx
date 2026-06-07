@@ -4,14 +4,14 @@ import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
-import { merchantPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
+import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
+import { merchantPillars, type Pillar } from '@/config/merchantPillars'
 
-const basePath = MERCHANT_BASE_PATH
 const moneyPillars = merchantPillars.filter(p => !p.secondary && p.path !== 'settings')
 const secondaryPillars = merchantPillars.filter(p => p.secondary)
 const settingsPillar = merchantPillars.find(p => p.path === 'settings')
 
-function PillarLink({ pillar, onNavigate }: { pillar: Pillar; onNavigate: () => void }) {
+function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
   const Icon = pillar.icon
   const { unreadCount } = useUnreadNotifications()
   const to = pillar.path ? `${basePath}/${pillar.path}` : basePath
@@ -43,6 +43,7 @@ function PillarLink({ pillar, onNavigate }: { pillar: Pillar; onNavigate: () => 
 export default function MerchantLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const closeSidebar = () => setSidebarOpen(false)
+  const basePath = useMerchantBasePath()
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">
@@ -65,12 +66,12 @@ export default function MerchantLayout() {
 
         <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 no-scrollbar">
           {moneyPillars.map(p => (
-            <PillarLink key={p.path || '_home'} pillar={p} onNavigate={closeSidebar} />
+            <PillarLink key={p.path || '_home'} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
           ))}
           {secondaryPillars.length > 0 && (
             <div className="pt-2 mt-2 border-t border-[#1F1F23] space-y-0.5">
               {secondaryPillars.map(p => (
-                <PillarLink key={p.path} pillar={p} onNavigate={closeSidebar} />
+                <PillarLink key={p.path} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
               ))}
             </div>
           )}
@@ -78,7 +79,7 @@ export default function MerchantLayout() {
 
         {settingsPillar && (
           <div className="px-2 py-2 border-t border-[#1F1F23] flex-shrink-0">
-            <PillarLink pillar={settingsPillar} onNavigate={closeSidebar} />
+            <PillarLink pillar={settingsPillar} basePath={basePath} onNavigate={closeSidebar} />
           </div>
         )}
 
