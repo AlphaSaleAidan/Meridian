@@ -9,6 +9,8 @@ import sys
 import os
 import traceback
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 PASS = 0
@@ -209,6 +211,9 @@ def test_anomaly_detection():
            f"{outlier_caught}/5 outliers flagged by majority vote")
 
     # Luminol time-series (patch numpy.asscalar removed in numpy>=1.23)
+    # luminol is an optional dep; skip this section if it is not installed
+    # rather than crashing the whole anomaly-detection test.
+    pytest.importorskip("luminol")
     if not hasattr(np, "asscalar"):
         np.asscalar = lambda a: a.item()
     from luminol.anomaly_detector import AnomalyDetector
