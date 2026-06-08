@@ -567,9 +567,14 @@ async def _fetch_merchant_config(phone_number: str) -> dict | None:
         return None
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
+            # Pass the filter via params so httpx percent-encodes the leading
+            # "+" of E.164 numbers (+1782... -> %2B1782...). Interpolating it
+            # raw into the query string lets PostgREST decode "+" as a space,
+            # so the eq. filter never matches and every call falls through to
+            # the demo merchant (wrong greeting/menu/transfer_number).
             res = await client.get(
-                f"{supabase_url}/rest/v1/phone_agent_config"
-                f"?phone_number=eq.{phone_number}&select=*",
+                f"{supabase_url}/rest/v1/phone_agent_config",
+                params={"phone_number": f"eq.{phone_number}", "select": "*"},
                 headers={
                     "apikey": supabase_key,
                     "Authorization": f"Bearer {supabase_key}",
