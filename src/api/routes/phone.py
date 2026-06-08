@@ -805,6 +805,17 @@ async def twilio_voice(request: Request):
         # Only set when the merchant configured a transfer number; gates the
         # transfer_call tool so the demo and unconfigured merchants are unchanged.
         "transfer_number": ((config_row or {}).get("transfer_number") or "").strip(),
+        # POS fields stashed from the config row now (already fetched) so the
+        # order dispatch can resolve a connection without re-reading config. The
+        # pos_connections fallback lookup is done lazily at order time, not here,
+        # to keep the greeting off the POS lookup's latency.
+        "pos_system_manual": ((config_row or {}).get("pos_system") or "").strip(),
+        "pos_token_manual": ((config_row or {}).get("pos_access_token") or "").strip(),
+        "pos_location_id": ((config_row or {}).get("pos_location_id") or "").strip(),
+        # Owner's cell (their human-handoff number) doubles as the destination for
+        # the SMS/email order ticket when a POS push falls back.
+        "merchant_phone": ((config_row or {}).get("transfer_number") or "").strip(),
+        "merchant_email": ((config_row or {}).get("merchant_email") or "").strip(),
     }
     greeting = (
         (config_row or {}).get("greeting")
@@ -903,8 +914,94 @@ async def twilio_gather(request: Request):
     return Response(content=_prompt(reply, session), media_type=TWIML)
 
 
+async def _resolve_pos_for_session(session: dict) -> dict:
+    """Resolve the merchant's POS at order time so submit_order can push the
+    order into their POS (or fall back to SMS/email).
+
+    Resolved lazily here, not at call start, so the greeting and ordering turns
+    aren't slowed by a POS lookup — it runs once, only when an order is actually
+    placed (the last turn). Resolution mirrors phone_dashboard.sync_menu_from_pos:
+    manual creds stashed on the session from phone_agent_config win; otherwise the
+    OAuth connection in pos_connections (decrypted) is used. In this system
+    merchant_id IS the org_id.
+
+    Returns pos_system (""=nothing connected -> demo path), pos_config for the
+    REST connector, and the merchant contact for the SMS/email fallback. A POS is
+    only reported when we hold a usable token, so submit_order never claims a POS
+    it cannot authenticate to.
+    """
+    system = (session.get("pos_system_manual") or "").strip()
+    token = (session.get("pos_token_manual") or "").strip()
+    location_id = (session.get("pos_location_id") or "").strip()
+    external_merchant_id = ""
+    merchant_id = (session.get("merchant_id") or "").strip()
+    fallback = {
+        "pos_system": "",
+        "pos_config": None,
+        "merchant_phone": (session.get("merchant_phone") or "").strip(),
+        "merchant_email": (session.get("merchant_email") or "").strip(),
+    }
+
+    if not (system and token) and merchant_id and merchant_id != DEMO_MERCHANT_ID:
+        try:
+            db = get_db()
+            conns = await db.select(
+                "pos_connections",
+                filters={"org_id": f"eq.{merchant_id}", "status": "eq.connected"},
+                order="updated_at.desc",
+                limit=1,
+            )
+            if conns:
+                from .phone_dashboard import _decrypt_connection_token
+                conn = conns[0]
+                system = system or (conn.get("provider") or "").strip()
+                external_merchant_id = (conn.get("external_merchant_id") or "").strip()
+                location_id = location_id or (conn.get("external_location_id") or "").strip()
+                token = token or _decrypt_connection_token(conn)
+        except Exception as e:
+            logger.warning("phone: POS resolution failed for %s: %s", merchant_id, e)
+
+    if not (system and token):
+        return fallback
+
+    try:
+        from ...services.pos_connectors.base import POSConnectionConfig
+        from ...services.pos_connectors.registry import get_connector_config
+        api_config = get_connector_config(system) or {}
+        pos_config = POSConnectionConfig(
+            system_key=system,
+            system_name=api_config.get("system_name") or system,
+            tier=api_config.get("tier", 1),
+            auth_method=api_config.get("auth_type", "bearer"),
+            base_url=api_config.get("base_url", ""),
+            # merchant_id/location_id fill {merchant_id}/{location_id} URL
+            # templates (Clover's base_url needs the merchant id).
+            credentials={
+                "access_token": token,
+                "merchant_id": external_merchant_id,
+                "location_id": location_id,
+            },
+            merchant_id=external_merchant_id,
+            org_id=merchant_id,
+            category=api_config.get("category", "restaurant"),
+            supports_order_creation=bool(api_config.get("supports_orders")),
+            order_creation_endpoint=api_config.get("order_create_endpoint", ""),
+        )
+    except Exception as e:
+        logger.warning("phone: building POS config failed for %s: %s", system, e)
+        return fallback
+
+    return {
+        "pos_system": system,
+        "pos_config": pos_config,
+        "merchant_phone": fallback["merchant_phone"],
+        "merchant_email": fallback["merchant_email"],
+    }
+
+
 async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> OrderResult:
-    system_key = session.get("pos_system", os.getenv("DEFAULT_POS_SYSTEM", ""))
+    pos = await _resolve_pos_for_session(session)
+    system_key = pos["pos_system"]
     if not system_key:
         return OrderResult(
             success=True,
@@ -917,13 +1014,13 @@ async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> Or
         "order_type": order_input.get("order_type", "pickup"),
         "items": order_input.get("items", []),
         "special_instructions": order_input.get("special_requests", ""),
-        "merchant_phone": session.get("merchant_phone"),
-        "merchant_email": session.get("merchant_email"),
-        "merchant_name": session.get("merchant_name", system_key),
+        "merchant_phone": pos["merchant_phone"],
+        "merchant_email": pos["merchant_email"],
+        "merchant_name": session.get("merchant_name") or system_key,
     }
 
     try:
-        return await create_pos_order(system_key, order_data, config=session.get("pos_config"))
+        return await create_pos_order(system_key, order_data, config=pos["pos_config"])
     except Exception as e:
         logger.error(f"Order dispatch failed for {system_key}: {e}")
         return OrderResult(
