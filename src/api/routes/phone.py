@@ -304,7 +304,10 @@ async def _transcribe_recording(recording_url: str) -> str:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             audio = b""
+            _t_dl = time.perf_counter()
+            attempts = 0
             for _ in range(6):
+                attempts += 1
                 r = await client.get(recording_url)
                 if r.status_code in (401, 403):
                     r = await client.get(
@@ -314,9 +317,14 @@ async def _transcribe_recording(recording_url: str) -> str:
                     audio = r.content
                     break
                 await asyncio.sleep(0.4)
+            logger.info(
+                "phone listen timing: download=%dms attempts=%d bytes=%d",
+                int((time.perf_counter() - _t_dl) * 1000), attempts, len(audio),
+            )
             if not audio:
                 logger.warning("phone listen: recording not ready url=%s", recording_url)
                 return ""
+            _t_stt = time.perf_counter()
             res = await client.post(
                 "https://api.telnyx.com/v2/ai/audio/transcriptions",
                 data={
@@ -327,6 +335,10 @@ async def _transcribe_recording(recording_url: str) -> str:
                 files={"file": ("turn.mp3", audio, "audio/mpeg")},
                 headers={"Authorization": f"Bearer {api_key}"},
             )
+        logger.info(
+            "phone listen timing: stt=%dms status=%d",
+            int((time.perf_counter() - _t_stt) * 1000), res.status_code,
+        )
         if res.status_code != 200:
             logger.error("phone listen: Telnyx STT %d: %s", res.status_code, res.text[:200])
             return ""
@@ -475,7 +487,10 @@ async def _ask_deepseek(
         label="DeepSeek",
         messages=messages,
         system_prompt=system_prompt,
-        timeout=15.0,
+        # 8s, not 15s: a healthy DeepSeek turn returns in ~2s, so an 8s ceiling
+        # still covers normal latency while halving the worst-case stall before
+        # we fail over to SambaNova. The caller hears dead air during this wait.
+        timeout=8.0,
         temperature=0.3,
         tools=tools,
     )
@@ -835,7 +850,12 @@ async def twilio_gather(request: Request):
     if not speech:
         recording_url = form.get("RecordingUrl") or form.get("RecordingUrls") or ""
         if recording_url:
+            _t_stt = time.perf_counter()
             speech = await _transcribe_recording(recording_url)
+            logger.info(
+                "phone turn timing: transcribe=%dms call=%s",
+                int((time.perf_counter() - _t_stt) * 1000), call_sid,
+            )
 
     if not speech:
         session["empty_count"] = session.get("empty_count", 0) + 1
@@ -865,7 +885,12 @@ async def twilio_gather(request: Request):
     # Offer the human-handoff tool only when this merchant has a transfer number.
     transfer_number = (session.get("transfer_number") or "").strip()
     tools = TOOLS + [TRANSFER_TOOL] if transfer_number else TOOLS
+    _t_brain = time.perf_counter()
     result = await _ask_ai(session["messages"], session.get("system_prompt", SYSTEM_PROMPT), tools)
+    logger.info(
+        "phone turn timing: brain=%dms call=%s",
+        int((time.perf_counter() - _t_brain) * 1000), call_sid,
+    )
     text, tool = _parse(result)
 
     if tool:
