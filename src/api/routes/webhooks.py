@@ -165,14 +165,22 @@ async def square_webhook(
     # ── Step 1: Verify signature ──────────────────────────
     signature = request.headers.get("x-square-hmacsha256-signature", "")
     
-    if not sq_config.webhook_signature_key:
-        logger.error("SQUARE_WEBHOOK_SIGNATURE_KEY not configured — refusing to process")
+    # The POS webhook subscription has its own Square signature key;
+    # fall back to the shared SQUARE_WEBHOOK_SIGNATURE_KEY (used by the
+    # billing subscription) for single-subscription setups. Same pattern
+    # as the credits webhook.
+    signature_key = (
+        os.environ.get("POS_SQUARE_WEBHOOK_SIGNATURE_KEY")
+        or sq_config.webhook_signature_key
+    )
+    if not signature_key:
+        logger.error("POS_SQUARE_WEBHOOK_SIGNATURE_KEY / SQUARE_WEBHOOK_SIGNATURE_KEY not configured — refusing to process")
         return Response(status_code=503)
 
     if not verify_webhook_signature(
         body=body,
         signature=signature,
-        signature_key=sq_config.webhook_signature_key,
+        signature_key=signature_key,
         notification_url=app_config.webhook_url,
     ):
         logger.warning("Webhook signature verification failed")
