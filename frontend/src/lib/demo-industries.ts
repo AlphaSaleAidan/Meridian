@@ -345,6 +345,7 @@ function coffeeShopTopActions(): TopAction[] {
       expectedImpact: '+$840/month revenue',
       impactCents: 84000, effort: 'Low', confidence: 82, priority: 'Critical',
       agentSource: 'margin-optimizer',
+      model: 'Log-log OLS elasticity regression',
       reasoning: makeReasoning({
         observation: 'Matcha Latte $6.25, competitor avg $7.50, elasticity -0.3',
         reasoning: '12% price increase causes only 3.6% volume decline. Net revenue lift far exceeds volume loss.',
@@ -362,6 +363,7 @@ function coffeeShopTopActions(): TopAction[] {
       expectedImpact: '+$520/month from reduced walkouts',
       impactCents: 52000, effort: 'Medium', confidence: 88, priority: 'Critical',
       agentSource: 'peak-hour-optimizer',
+      model: 'Queue-to-staffing correlation model',
       reasoning: makeReasoning({
         observation: '47% of revenue in 7-9AM, 4 walkouts/day at $7.50 avg ticket',
         reasoning: '4 lost customers x $7.50 = $30/day. Staff cost $18/hr x 2hr = $36/day. Net gain from reduced queue time and upsell opportunity.',
@@ -379,6 +381,7 @@ function coffeeShopTopActions(): TopAction[] {
       expectedImpact: '+$380/month from increased attachment',
       impactCents: 38000, effort: 'Low', confidence: 78, priority: 'High',
       agentSource: 'product-intelligence',
+      model: 'Apriori association rules',
       reasoning: makeReasoning({
         observation: '34% of Cappuccino orders include Croissant, separately $9.50',
         reasoning: 'Bundle at $8.50 gives $1.00 savings. Projected attachment lift from 34% to 52% = 32 additional sales/week.',
@@ -624,6 +627,7 @@ function restaurantTopActions(): TopAction[] {
       expectedImpact: '+$2,200/month from additional seatings',
       impactCents: 220000, effort: 'Medium', confidence: 85, priority: 'Critical',
       agentSource: 'peak-hour-optimizer',
+      model: 'Queue-to-staffing correlation model',
       reasoning: makeReasoning({
         observation: 'Table turn 94 min avg, benchmark 75 min, 42 seats',
         reasoning: 'Reducing turn time by 14 min yields 0.4 additional turns/table/night. At $42/cover, that is $2,200/month.',
@@ -641,6 +645,7 @@ function restaurantTopActions(): TopAction[] {
       expectedImpact: '+$540/month margin improvement',
       impactCents: 54000, effort: 'Low', confidence: 80, priority: 'High',
       agentSource: 'margin-optimizer',
+      model: 'Log-log OLS elasticity regression',
       reasoning: makeReasoning({
         observation: 'Ribeye food cost 38%, benchmark 30%, beef up 12% YoY',
         reasoning: '$3 increase on ~180 monthly units = $540/month. Elasticity -0.2 means <4% volume decline.',
@@ -658,6 +663,7 @@ function restaurantTopActions(): TopAction[] {
       expectedImpact: '+$480/month from lunch bar revenue',
       impactCents: 48000, effort: 'Low', confidence: 74, priority: 'High',
       agentSource: 'product-intelligence',
+      model: 'Apriori association rules',
       reasoning: makeReasoning({
         observation: 'Lunch bar drink attachment 12% vs. 58% at dinner',
         reasoning: 'Targeting 25% attachment on ~90 lunch covers/day = 11 additional drinks at $12 avg = $132/day = $3,960/month. Conservative: $480/month accounting for ramp.',
@@ -896,6 +902,7 @@ function fastFoodTopActions(): TopAction[] {
       expectedImpact: '+$2,640/month from reduced drive-through abandonment',
       impactCents: 264000, effort: 'Medium', confidence: 86, priority: 'Critical',
       agentSource: 'queue-monitor',
+      model: 'Queue-abandonment vision model',
       reasoning: makeReasoning({
         observation: '8 cars abandon drive-through daily, avg wait 6.5 min at peak',
         reasoning: '8 cars x $11 avg tx x 30 days = $2,640/month. Mobile order-taker cost: $18/hr x 2hr = $36/day. Net gain significant.',
@@ -913,6 +920,7 @@ function fastFoodTopActions(): TopAction[] {
       expectedImpact: '+$680/month from higher combo attachment',
       impactCents: 68000, effort: 'Low', confidence: 78, priority: 'High',
       agentSource: 'product-intelligence',
+      model: 'Apriori association rules',
       reasoning: makeReasoning({
         observation: 'Combo attachment 62% vs. 75% QSR benchmark',
         reasoning: 'Lifting from 62% to 70% on ~520 daily orders adds ~42 combo upgrades/day. $5 avg upsell = $210/day gross, conservative net $680/month.',
@@ -930,6 +938,7 @@ function fastFoodTopActions(): TopAction[] {
       expectedImpact: '+$360/month from Friday premium uplift',
       impactCents: 36000, effort: 'Low', confidence: 65, priority: 'Medium',
       agentSource: 'margin-optimizer',
+      model: 'Log-log OLS elasticity regression',
       reasoning: makeReasoning({
         observation: 'Friday avg ticket $10.40 vs. Saturday $12.80 during 5-7PM',
         reasoning: 'If Friday ticket lifts $1.10 to $11.50 on ~100 dinner orders = $110/Friday = $440/month. Conservative: $360/month.',
@@ -1178,6 +1187,7 @@ function autoShopTopActions(): TopAction[] {
       expectedImpact: '+$6,200/month from waiting area upsells',
       impactCents: 620000, effort: 'Medium', confidence: 78, priority: 'Critical',
       agentSource: 'dwell-time-analyzer',
+      model: 'Dwell-time computer-vision model',
       reasoning: makeReasoning({
         observation: 'Waiting area dwell 95 min, add-on rate 8%, avg add-on $55',
         reasoning: '28 daily customers x (22% - 8%) add-on lift x $55 avg = $21.56/day = $647/month per percentage point. Total lift: $6,200/month.',
@@ -1195,6 +1205,7 @@ function autoShopTopActions(): TopAction[] {
       expectedImpact: '+$1,800/month from inspection upsell',
       impactCents: 180000, effort: 'Low', confidence: 76, priority: 'High',
       agentSource: 'product-intelligence',
+      model: 'Apriori association rules',
       reasoning: makeReasoning({
         observation: 'Oil Change → Inspection upsell at 14% vs. 28% benchmark',
         reasoning: '~20 oil changes/day x 8% lift x $89.99 = $144/day = $4,320/month. Conservative: $1,800/month.',
@@ -1212,6 +1223,7 @@ function autoShopTopActions(): TopAction[] {
       expectedImpact: '+$1,110/month from reduced drive-aways',
       impactCents: 111000, effort: 'Medium', confidence: 82, priority: 'High',
       agentSource: 'peak-hour-optimizer',
+      model: 'Queue-to-staffing correlation model',
       reasoning: makeReasoning({
         observation: '65% of drop-offs in 7-10AM, 1 advisor, 12-min avg check-in, 2 drive-aways/day',
         reasoning: '2 drive-aways x $185 avg ticket x 30 days = $11,100/month. Second advisor cost ~$54/day x 22 workdays = $1,188/month. Net: ~$1,110/month.',
@@ -1450,6 +1462,7 @@ function smokeShopTopActions(): TopAction[] {
       expectedImpact: '+$1,850/month from accessory wall conversion lift',
       impactCents: 185000, effort: 'Medium', confidence: 74, priority: 'Critical',
       agentSource: 'heatmap-generator',
+      model: 'Spatial heatmap clustering model',
       reasoning: makeReasoning({
         observation: 'Accessory wall: 3.2x dwell, 8% purchase conversion, $8-$45 range',
         reasoning: 'With 95 daily customers and ~60% browsing the wall (57 browsers), lifting conversion from 8% to 18% adds 5.7 purchases/day at $25 avg = $142/day = $4,260/month. Conservative: $1,850/month.',
@@ -1467,6 +1480,7 @@ function smokeShopTopActions(): TopAction[] {
       expectedImpact: '+$620/month from E-Liquid cross-sell',
       impactCents: 62000, effort: 'Low', confidence: 76, priority: 'High',
       agentSource: 'product-intelligence',
+      model: 'Apriori association rules',
       reasoning: makeReasoning({
         observation: 'Vape Pod + E-Liquid cross-sell at 22% vs. 40% industry benchmark',
         reasoning: '~80 Vape Pod sales/month x 10% lift x $22 E-Liquid = $176/month. Conservative accounting for POS prompt fatigue: $620/month.',
@@ -1484,6 +1498,7 @@ function smokeShopTopActions(): TopAction[] {
       expectedImpact: '+$252/month from reduced walkouts',
       impactCents: 25200, effort: 'Medium', confidence: 82, priority: 'High',
       agentSource: 'peak-hour-optimizer',
+      model: 'Queue-to-staffing correlation model',
       reasoning: makeReasoning({
         observation: '4-7PM: 55% of revenue, 4.8 min queue wait, 3 walkouts/day',
         reasoning: '3 walkouts x $28 x 30 days = $2,520/month. Staff cost ~$16/hr x 3hr = $48/day x 22 days = $1,056/month. Net: ~$252/month.',

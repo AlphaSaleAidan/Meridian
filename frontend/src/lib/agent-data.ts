@@ -41,6 +41,8 @@ export interface TopAction {
   confidence: number
   priority: 'Critical' | 'High' | 'Medium' | 'Low'
   agentSource: string
+  /** Analytical model the agent used to derive this action's reasoning. */
+  model: string
   reasoning: ReasoningChain
 }
 
@@ -277,6 +279,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 82,
       priority: 'Critical',
       agentSource: 'margin-optimizer',
+      model: 'Log-log OLS elasticity regression (R²=0.91)',
       reasoning: {
         observation: `${p4.name} priced at ${p4cur}, competitor avg ${p4comp}, demand elasticity -0.3`,
         reasoning: `Pricing-power agent ran price-elasticity regression on 90 days of transaction data. Elasticity coefficient -0.3 means a 12% price increase causes only 3.6% volume decline. Net revenue lift at scale = ${$s(840)}/mo.`,
@@ -299,6 +302,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 88,
       priority: 'Critical',
       agentSource: 'peak-hour-optimizer',
+      model: 'Queue-to-staffing correlation model',
       reasoning: {
         observation: `47% of revenue in ${peak}, avg queue time 4.2 min, queue-monitor counted 6 walkouts/day via camera feed exit events`,
         reasoning: `Peak-hour-optimizer correlated staffing levels with queue-monitor walkout data. 6 lost customers/day x ${avgTicket} avg ticket. Adding 1 staff member costs $18/hr. Net gain ${$s(520)}/mo accounting for weekends at lower volume.`,
@@ -321,6 +325,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 78,
       priority: 'High',
       agentSource: 'product-intelligence',
+      model: 'Apriori association rules (lift 1.8)',
       reasoning: {
         observation: `Basket-analysis found ${bundleA} + ${bundleB} co-purchase rate 34% (support: 0.12, confidence: 0.34, lift: 1.8) from Apriori association rules on 12K transactions`,
         reasoning: `Product-intelligence ran what-if simulation: at ${bBundle} bundle (10% discount), projected attachment rate rises from 34% to 52% based on price-sensitivity curves. Conservative estimate: +${$s(380)}/mo.`,
@@ -343,6 +348,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 91,
       priority: 'Critical',
       agentSource: 'transaction-analyst',
+      model: 'PyOD ensemble (IForest+LOF+KNN) + Luminol',
       reasoning: {
         observation: '14 void transactions Tuesday evening on Register 2 vs 4.6 trailing average. Z-score: -3.8 (>3σ threshold).',
         reasoning: 'Transaction-analyst ran 3-model ensemble: IsolationForest anomaly score 0.82 (threshold 0.65), LocalOutlierFactor score 0.91 (threshold 0.70), KNN distance score 0.78 (threshold 0.60). All 3 models flagged → majority vote = confirmed anomaly. Luminol time-series detector scored 142 vs 80 threshold, confirming temporal anomaly.',
@@ -365,6 +371,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 79,
       priority: 'High',
       agentSource: 'retention-strategist',
+      model: 'BG/NBD + Gamma-Gamma (lifetimes)',
       reasoning: {
         observation: `12 At-Risk customers: avg LTV ${$s(2840)}, avg 28 days since last visit, avg historical spend ${$s(156)}/mo. BG/NBD p(alive) range: 0.25-0.40.`,
         reasoning: `Retention-strategist consumed customer-segmentor RFM output + customer-ltv BG/NBD scores. BG/NBD model estimates these customers have 25-40% probability of still being active. A 15% discount offer recovers ${$s(140)} avg spend. Expected: 6 of 12 reactivate (50% response rate) x ${$s(140)}/mo = ${$s(840)}/mo.`,
@@ -387,6 +394,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 85,
       priority: 'Critical',
       agentSource: 'inventory-intelligence',
+      model: 'Consumption-velocity stockout forecast',
       reasoning: {
         observation: `${p0.name} stock critically low. 7-day avg consumption exceeds current supply. Supplier lead time: 3 business days.`,
         reasoning: `Inventory-intelligence calculated 2.0 days until stockout. Stock is 33% below reorder point. ${p0.name} supply feeds 8 of 14 offerings. Historical stockout cost: avg ${$s(155)}/day in lost sales.`,
@@ -409,6 +417,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 84,
       priority: 'High',
       agentSource: 'discount-analyzer',
+      model: 'Diff-in-diff + diminishing-returns fit',
       reasoning: {
         observation: `Tuesday 20%-off promo: ${$s(680)} in promo sales, but Tuesday baseline without promo was ${$s(560)}. Incremental revenue: ${$s(120)}. Discount cost: ${$s(136)} (20% of ${$s(680)}). Net: -${$s(16)}/week.`,
         reasoning: 'Discount-analyzer decomposed Tuesday sales into baseline + incremental using diff-in-diff method. Only 17.6% of promo revenue was truly incremental — 82.4% would have happened at full price. Promo-roi agent confirmed: ROI was 1.4x on first run but declined to 0.88x by run #5 (diminishing returns curve fitted R²=0.94).',
@@ -431,6 +440,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 80,
       priority: 'High',
       agentSource: 'waste-shrinkage',
+      model: 'Multi-stream leakage correlation',
       reasoning: {
         observation: 'Shrinkage rate 3.1% (target 2.0%). Register 2 accounts for 68% of all voids. Inventory-intelligence reports supply usage 40% above expected without matching sales increase.',
         reasoning: `Waste-shrinkage agent correlated three data streams: (1) transaction-analyst void spike data, (2) inventory-intelligence usage anomaly, (3) daily cash reconciliation reports. Register 2 void-to-sale ratio is 2.4x other registers. Over-consumption maps to same Tuesday PM shift — likely over-portioning, not theft. Total monthly leakage: ${$s(220)} void-related + ${$s(160)} over-portioning = ${$s(380)}.`,
@@ -453,6 +463,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 84,
       priority: 'Medium',
       agentSource: 'revenue-forecaster',
+      model: 'statsforecast ensemble (AutoARIMA+AutoETS+AutoTheta)',
       reasoning: {
         observation: 'Current 90-day forecast uses single AutoETS model. Backtest MAPE: 14.2%. Confidence interval: ±14%. Inventory-intelligence over-ordered twice last month based on wide forecast bands.',
         reasoning: 'Revenue-forecaster ran statsforecast adaptive ensemble selection: AutoARIMA (MAPE 11.3%), AutoETS (MAPE 14.2%), AutoTheta (MAPE 12.8%), CES (MAPE 16.1%), MSTL (MAPE 13.5%). Top-3 ensemble weighted by inverse MAPE. Ensemble MAPE: 8.7%. Cross-validation on 12 rolling windows confirmed improvement is statistically significant (p < 0.05, Diebold-Mariano test).',
@@ -475,6 +486,7 @@ export function generateTopActions(): TopAction[] {
       confidence: 76,
       priority: 'Medium',
       agentSource: 'customer-segmentor',
+      model: 'BG/NBD + Gamma-Gamma + RFM',
       reasoning: {
         observation: bizSub('23 Champion customers: RFM score 5/5/5, avg 18 visits/mo, avg spend $15.80/visit, LTV $4,200+. BG/NBD p(alive): 0.95-0.98. 4 of 23 showing early frequency decline (18 → 14 visits/mo).'),
         reasoning: bizSub('Customer-segmentor RFM analysis assigned segment via recency (days since last visit), frequency (visits/90d), monetary (avg order value). Customer-ltv ran BG/NBD model (lifetimes library) for p(alive) and Gamma-Gamma for expected monetary value. 4 Champions showing 22% frequency decline — early churn signal. Loyalty-architect recommends exclusive preview (cost: ~$0/marginal cost for existing inventory) to arrest decline. If it recovers 2 of 4 declining Champions: 2 x 4 extra visits/mo x $15.80 = $126/mo. Plus word-of-mouth from 23 Champions driving 1 new referral/mo at $140 LTV = $280/mo total.'),
@@ -488,6 +500,16 @@ export function generateTopActions(): TopAction[] {
       },
     },
   ]
+}
+
+/**
+ * Total recoverable revenue capturable via the Top Actions pool — the
+ * single source of truth behind the home "Money left on the table" figure.
+ * Keeps that hero number directly correlated to the sum of every action's
+ * monthly impact, so each dollar shown maps to a concrete action.
+ */
+export function totalRecoverableCents(): number {
+  return generateTopActions().reduce((sum, a) => sum + a.impactCents, 0)
 }
 
 export function generateRFMSegments(): RFMSegment[] {
