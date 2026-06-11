@@ -543,7 +543,13 @@ async def handle_billing_webhook(request: Request):
 
             if order_id:
                 try:
-                    subs = await db.select("subscriptions")
+                    # Server-side narrowing: only statuses the activation logic
+                    # acts on. Matching still scans metadata.square_order_id in
+                    # Python — filtering that server-side needs a verified jsonb
+                    # column + index (follow-up).
+                    subs = await db.select("subscriptions", filters={
+                        "status": "in.(active,trialing,pending_payment,past_due)",
+                    })
                 except Exception:
                     subs = []
                 for sub in subs:
@@ -610,7 +616,10 @@ async def handle_billing_webhook(request: Request):
 
             if invoice_id:
                 try:
-                    subs = await db.select("subscriptions")
+                    # Server-side narrowing (see payment.completed branch above).
+                    subs = await db.select("subscriptions", filters={
+                        "status": "in.(active,trialing,pending_payment,past_due)",
+                    })
                 except Exception:
                     subs = []
                 for sub in subs:
@@ -680,8 +689,9 @@ async def handle_billing_webhook(request: Request):
         return {"status": "ok"}
 
     except RuntimeError:
+        # Return 5xx so Square retries the event instead of dropping it.
         logger.error("Database not available for billing webhook")
-        return {"status": "error", "detail": "Database unavailable"}
+        return Response(status_code=500)
     except Exception:
         logger.exception("Billing webhook processing failed")
-        return {"status": "error", "detail": "Webhook processing failed"}
+        return Response(status_code=500)

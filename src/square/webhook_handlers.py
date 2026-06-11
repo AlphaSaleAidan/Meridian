@@ -14,11 +14,11 @@ import base64
 import hashlib
 import hmac
 import logging
+import time
 from typing import Any, Callable
 
 from .client import SquareClient
 from .mappers import DataMapper
-from src.payouts.webhook_hook import on_payment_received
 from src.security.encryption import decrypt_token
 
 logger = logging.getLogger("meridian.square.webhooks")
@@ -60,6 +60,13 @@ class WebhookProcessor:
         await processor.handle(event_type, event_data, merchant_id)
     """
 
+    # In-process webhook dedupe window. NOTE: this only dedupes within a
+    # single process — a DB-backed `webhook_events` table (insert-or-conflict
+    # on event_id) is needed for dedupe across restarts/workers; no such
+    # table exists yet (requires a migration).
+    DEDUPE_TTL_SECONDS = 24 * 60 * 60
+    DEDUPE_MAX_ENTRIES = 50_000
+
     def __init__(
         self,
         get_connection: Callable | None = None,
@@ -80,6 +87,9 @@ class WebhookProcessor:
         self._disconnect_merchant = disconnect_merchant
         self._send_notification = send_notification
 
+        # event_id → first-seen unix timestamp (insertion-ordered, oldest first)
+        self._seen_events: dict[str, float] = {}
+
         self._handlers: dict[str, Callable] = {
             "order.created": self._handle_order_created,
             "order.updated": self._handle_order_updated,
@@ -89,6 +99,32 @@ class WebhookProcessor:
             "inventory.count.updated": self._handle_inventory_updated,
             "oauth.authorization.revoked": self._handle_auth_revoked,
         }
+
+    async def is_duplicate(self, event_id: str) -> bool:
+        """
+        Check whether this webhook event_id was already seen, and mark it seen.
+
+        In-process bounded TTL set: entries expire after DEDUPE_TTL_SECONDS
+        and the set is capped at DEDUPE_MAX_ENTRIES (oldest evicted first).
+        """
+        now = time.time()
+
+        # Prune expired entries from the front (insertion order == time order)
+        while self._seen_events:
+            oldest_id = next(iter(self._seen_events))
+            if now - self._seen_events[oldest_id] <= self.DEDUPE_TTL_SECONDS:
+                break
+            del self._seen_events[oldest_id]
+
+        if event_id in self._seen_events:
+            return True
+
+        # Enforce size cap — evict oldest
+        while len(self._seen_events) >= self.DEDUPE_MAX_ENTRIES:
+            del self._seen_events[next(iter(self._seen_events))]
+
+        self._seen_events[event_id] = now
+        return False
 
     async def handle(
         self,
@@ -162,23 +198,15 @@ class WebhookProcessor:
     async def _handle_payment_created(
         self, event: dict, connection: dict | None
     ) -> dict:
-        """Payment created â enrich corresponding transaction with card details."""
-        result = await self._enrich_payment(event, connection)
+        """Payment created â enrich corresponding transaction with card details.
 
-        # Auto-track commission via webhook hook
-        if connection:
-            payment_id = (event.get("data", {}).get("object", {})
-                          .get("payment", {}).get("id"))
-            payment_data = event.get("data", {}).get("object", {}).get("payment", {})
-            amount_cents = payment_data.get("total_money", {}).get("amount", 0)
-            await on_payment_received(
-                org_id=connection.get("org_id", ""),
-                amount=amount_cents / 100,
-                payment_id=payment_id,
-                source="square",
-            )
-
-        return result
+        NOTE: this webhook fires for every customer purchase on a connected
+        merchant's POS. Rep commissions accrue on Meridian SUBSCRIPTION
+        payments only, so the commission hook (on_payment_received) must NOT
+        be triggered here â it belongs in the billing-side payment
+        confirmation flow.
+        """
+        return await self._enrich_payment(event, connection)
 
     async def _handle_payment_updated(
         self, event: dict, connection: dict | None
