@@ -13,7 +13,6 @@ import { DemoContextProvider } from '@/lib/demo-context'
 import { useMobile } from '@/hooks/useMobile'
 import BusinessTypeSelector from './BusinessTypeSelector'
 import DemoHeaderBadge from './DemoHeaderBadge'
-import CanadaDemoTour from './demo/CanadaDemoTour'
 import SEO from './SEO'
 
 interface NavItem {
@@ -156,7 +155,6 @@ export default function CanadaDemoLayout() {
       <BusinessTypeSelector />
       <DemoHeaderBadge />
       <CanadaDemoShell />
-      <CanadaDemoTour />
     </DemoContextProvider>
   )
 }

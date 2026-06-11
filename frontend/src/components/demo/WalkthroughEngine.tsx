@@ -884,26 +884,6 @@ export default function WalkthroughEngine() {
 
   return (
     <>
-      {/* Tour banner — only on overview page, prepended into main content */}
-      {isOverview && !active && bannerMounted && bannerContainerRef.current && createPortal(
-        <div className="tour-banner">
-          <button onClick={() => handleStart(true)} className="tour-glow-btn-wrapper">
-            <span className="tour-glow-btn-bg" />
-            <span className="tour-glow-btn-content">
-              <span className="tour-glow-sparkle">
-                <span className="tour-glow-sparkle-ping" />
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="tour-glow-sparkle-icon">
-                  <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
-                </svg>
-              </span>
-              <span className="tour-glow-text">Take a Tour</span>
-              <span className="tour-glow-hint">Interactive walkthrough of all features</span>
-            </span>
-          </button>
-        </div>,
-        bannerContainerRef.current,
-      )}
-
       {/* Floating step counter — only when tour is active */}
       {active && !showCheckout && createPortal(
         <div style={{
