@@ -510,7 +510,11 @@ async def handle_billing_webhook(request: Request):
             logger.warning("SQUARE_WEBHOOK_SIGNATURE_KEY not configured — rejecting webhook")
             return Response(status_code=503)
         signature = request.headers.get("x-square-hmacsha256-signature", "")
-        notification_url = str(request.url)
+        # Must be the exact URL Square signs against; str(request.url)
+        # reconstructs the internal/http URL behind the Railway proxy and
+        # always mismatches.
+        from ...config import app as _app_config
+        notification_url = _app_config.billing_webhook_url
         combined = notification_url.encode("utf-8") + raw_body
         expected = hmac.new(
             key=sig_key.encode("utf-8"),

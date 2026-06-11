@@ -253,7 +253,10 @@ def _verify_square_signature(request: Request, raw_body: bytes) -> bool:
     signature = request.headers.get("x-square-hmacsha256-signature", "")
     if not signature:
         return False
-    notification_url = str(request.url)
+    # Exact URL Square signs against (str(request.url) mismatches behind
+    # the Railway proxy — see billing webhook).
+    from ...config import app as _app_config
+    notification_url = _app_config.credits_webhook_url
     combined = notification_url.encode("utf-8") + raw_body
     digest = hmac.new(
         key=sig_key.encode("utf-8"),
