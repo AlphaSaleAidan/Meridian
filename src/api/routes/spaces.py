@@ -15,12 +15,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
+
+from ..auth import require_org_access
 
 logger = logging.getLogger("meridian.spaces")
 
-router = APIRouter(prefix="/api/spaces", tags=["spaces"])
+router = APIRouter(prefix="/api/spaces", tags=["spaces"], dependencies=[Depends(require_org_access)])
 
 
 class ScanUploadRequest(BaseModel):

@@ -643,15 +643,18 @@ async def get_day_transactions(
     line_items_by_tx: dict[str, list] = {}
 
     if tx_ids:
-        # Batch fetch line items
-        for tx_id in tx_ids:
+        # Batch fetch line items with one in.() query per chunk
+        # (chunked to keep the PostgREST query string a safe length)
+        for i in range(0, len(tx_ids), 100):
+            chunk = tx_ids[i : i + 100]
             items = await db.select(
                 "transaction_line_items",
                 filters={
-                    "transaction_id": f"eq.{tx_id}",
+                    "transaction_id": f"in.({','.join(chunk)})",
                 },
             )
-            line_items_by_tx[tx_id] = items
+            for item in items:
+                line_items_by_tx.setdefault(item.get("transaction_id"), []).append(item)
 
     # Build response
     result_txns = []

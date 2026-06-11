@@ -183,6 +183,34 @@ async def require_org_access(
     raise HTTPException(403, "Access denied: you are not a member of this organization")
 
 
+async def require_org_member(user: dict, org_id: str) -> None:
+    """Explicit org-membership check for endpoints that carry the org id in the
+    request body or under a different param name (require_org_access only sees
+    `org_id` in query/path params). Call inside the endpoint after require_jwt:
+
+        user: dict = Depends(require_jwt)
+        await require_org_member(user, req.merchant_id)
+
+    Honors the same TENANCY_ENFORCEMENT_DISABLED rollback knob as require_org_access.
+    """
+    if await _check_org_membership(user, org_id):
+        return
+
+    disabled = os.environ.get("TENANCY_ENFORCEMENT_DISABLED", "").lower() in ("true", "1", "yes")
+    if disabled:
+        logger.warning(
+            "TENANCY_WARN (enforcement disabled) user=%s email=%s tried org=%s",
+            user.get("id"), user.get("email"), org_id,
+        )
+        return
+
+    logger.warning(
+        "TENANCY_DENY user=%s email=%s tried org=%s",
+        user.get("id"), user.get("email"), org_id,
+    )
+    raise HTTPException(403, "Access denied: you are not a member of this organization")
+
+
 async def require_service_auth(
     admin_key: str = Depends(_admin_key_header),
     auth_header: str = Depends(_auth_header),
@@ -288,7 +316,8 @@ _signup_limiter = HourRateLimiter(requests_per_hour=5)
 def _client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        # Last hop is appended by our own proxy; earlier hops are client-controlled.
+        return forwarded.split(",")[-1].strip()
     return request.client.host if request.client else "unknown"
 
 
