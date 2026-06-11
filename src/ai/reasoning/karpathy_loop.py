@@ -127,6 +127,8 @@ class ReasoningChain:
         return None
 
     def to_dict(self) -> dict:
+        experiment = self.get_phase(ReasoningPhase.EXPERIMENT)
+        experiments = experiment.content.get("experiments", []) if experiment else []
         return {
             "id": self.id,
             "agent_name": self.agent_name,
@@ -137,6 +139,10 @@ class ReasoningChain:
             "findings": self.findings,
             "caveats": self.caveats,
             "thinking": self.thinking,
+            "experiments_total": len(experiments),
+            "experiments_confirmed": sum(
+                1 for e in experiments if e.get("result") == "CONFIRMED"
+            ),
             "total_duration_ms": self.total_duration_ms,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
