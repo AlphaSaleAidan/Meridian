@@ -15,6 +15,7 @@ import {
 import { useDemoContext, getActiveBusinessType } from '@/lib/demo-context'
 import { generateScheduleShifts, generateScheduleStaff } from '@/lib/agent-data'
 import MoneyLeftCard from '@/components/MoneyLeftCard'
+import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 import RevenueChart from '@/components/RevenueChart'
 import InsightCard from '@/components/InsightCard'
 import ConnectionBadge from '@/components/ConnectionBadge'
@@ -170,39 +171,7 @@ export default function OverviewPage() {
             Details →
           </Link>
         </div>
-        {topActions.length > 0 ? (
-          <div className="space-y-2">
-            {topActions.map(action => (
-              <DashboardTiltCard
-                key={action.rank}
-                className={clsx(
-                  'card p-4 flex items-center gap-3',
-                  action.priority === 'Critical' && 'border-red-500/10'
-                )}
-              >
-                <div className={clsx(
-                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-sm font-mono',
-                  action.rank === 1 ? 'bg-red-500/10 text-red-400' : action.rank === 2 ? 'bg-amber-400/10 text-amber-400' : 'bg-[#1A8FD6]/10 text-[#1A8FD6]'
-                )}>
-                  {action.rank}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#F5F5F7] truncate">{action.title}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className={clsx(
-                      'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
-                      action.priority === 'Critical' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                    )}>{action.priority}</span>
-                    <span className="text-[10px] text-[#A1A1A8]/50 font-mono">{action.confidence}% conf</span>
-                  </div>
-                </div>
-                <span className="text-sm font-bold font-mono text-[#17C5B0] flex-shrink-0">+{formatCents(action.impactCents)}/mo</span>
-              </DashboardTiltCard>
-            ))}
-          </div>
-        ) : (
-          <AnalyzingSection title="Identifying your top actions..." description="Actions will appear once enough data is analyzed by our AI agents." />
-        )}
+        <Top3ActionsPanel showHeader={false} />
       </ScrollReveal>
 
       {/* Revenue Forecast Widget + Money Left */}
@@ -219,37 +188,79 @@ export default function OverviewPage() {
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Revenue Forecast</h3>
             </div>
             {forecastData.data && forecastData.data.forecasts.length > 0 ? (() => {
-              const fc = forecastData.data!.forecasts.filter(f => f.type === 'daily_revenue')
+              const fc = forecastData.data!.forecasts
+                .filter(f => f.type === 'daily_revenue')
+                .sort((a, b) => a.period_start.localeCompare(b.period_start))
               const now = new Date()
-              const buckets = [
+              const BUCKETS = [
                 { label: '7-Day', days: 7 },
-                ...(limits.forecastDays >= 30 ? [{ label: '30-Day', days: 30 }] : []),
-                ...(limits.forecastDays >= 90 ? [{ label: '90-Day', days: 90 }] : []),
+                { label: '30-Day', days: 30 },
+                { label: '90-Day', days: 90 },
               ]
+              // Build chart data over up to 90 days (or whatever exists)
+              const chartPts = fc.slice(0, 90).map((f, i) => ({
+                i,
+                pred: f.predicted_cents,
+                lo: f.lower_bound_cents || f.predicted_cents * 0.85,
+                hi: f.upper_bound_cents || f.predicted_cents * 1.15,
+              }))
+              const W = 100, H = 32
+              const maxY = chartPts.length > 0 ? Math.max(...chartPts.map(p => p.hi)) : 1
+              const minY = chartPts.length > 0 ? Math.min(...chartPts.map(p => p.lo)) : 0
+              const yRange = maxY - minY || 1
+              const x = (i: number) => chartPts.length <= 1 ? 0 : (i / (chartPts.length - 1)) * W
+              const y = (v: number) => H - ((v - minY) / yRange) * H
+              const bandPath = chartPts.length > 1
+                ? `M ${chartPts.map(p => `${x(p.i).toFixed(2)},${y(p.hi).toFixed(2)}`).join(' L ')} L ${[...chartPts].reverse().map(p => `${x(p.i).toFixed(2)},${y(p.lo).toFixed(2)}`).join(' L ')} Z`
+                : ''
+              const linePath = chartPts.length > 1
+                ? `M ${chartPts.map(p => `${x(p.i).toFixed(2)},${y(p.pred).toFixed(2)}`).join(' L ')}`
+                : ''
               return (
-                <div className={clsx('grid gap-3', `grid-cols-${buckets.length}`)}>
-                  {buckets.map(b => {
-                    const cutoff = new Date(now)
-                    cutoff.setDate(cutoff.getDate() + b.days)
-                    const inRange = fc.filter(f => new Date(f.period_start) <= cutoff)
-                    const total = inRange.reduce((s, f) => s + f.predicted_cents, 0)
-                    const lower = inRange.reduce((s, f) => s + (f.lower_bound_cents || f.predicted_cents * 0.85), 0)
-                    const upper = inRange.reduce((s, f) => s + (f.upper_bound_cents || f.predicted_cents * 1.15), 0)
-                    const avgConf = inRange.length > 0
-                      ? Math.round(inRange.reduce((s, f) => s + (f.confidence || 0.7) * 100, 0) / inRange.length)
-                      : 0
-                    return (
-                      <div key={b.label} className="text-center">
-                        <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{b.label}</p>
-                        <p className="text-lg sm:text-xl font-bold font-mono text-[#F5F5F7] mt-1">{formatCentsCompact(total)}</p>
-                        <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">{avgConf}% conf</p>
-                        <p className="text-[9px] text-[#A1A1A8]/30 font-mono">
-                          {formatCentsCompact(lower)} – {formatCentsCompact(upper)}
-                        </p>
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    {BUCKETS.map(b => {
+                      const cutoff = new Date(now)
+                      cutoff.setDate(cutoff.getDate() + b.days)
+                      const inRange = fc.filter(f => new Date(f.period_start) <= cutoff)
+                      if (inRange.length === 0) {
+                        return (
+                          <div key={b.label} className="text-center opacity-60">
+                            <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{b.label}</p>
+                            <p className="text-lg sm:text-xl font-bold font-mono text-[#A1A1A8]/40 mt-1">—</p>
+                            <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">not enough data</p>
+                          </div>
+                        )
+                      }
+                      const total = inRange.reduce((s, f) => s + f.predicted_cents, 0)
+                      const lower = inRange.reduce((s, f) => s + (f.lower_bound_cents || f.predicted_cents * 0.85), 0)
+                      const upper = inRange.reduce((s, f) => s + (f.upper_bound_cents || f.predicted_cents * 1.15), 0)
+                      const avgConf = Math.round(inRange.reduce((s, f) => s + (f.confidence || 0.7) * 100, 0) / inRange.length)
+                      return (
+                        <div key={b.label} className="text-center">
+                          <p className="text-[10px] font-medium text-[#A1A1A8] uppercase tracking-wider">{b.label}</p>
+                          <p className="text-lg sm:text-xl font-bold font-mono text-[#F5F5F7] mt-1">{formatCentsCompact(total)}</p>
+                          <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">{avgConf}% conf</p>
+                          <p className="text-[9px] text-[#A1A1A8]/30 font-mono">
+                            {formatCentsCompact(lower)} – {formatCentsCompact(upper)}
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {chartPts.length > 1 && (
+                    <div className="mt-4 pt-3 border-t border-[#1F1F23]">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] uppercase tracking-wider text-[#A1A1A8]/60">Forecast curve</span>
+                        <span className="text-[9px] text-[#A1A1A8]/40 font-mono">predicted · 85–115% band</span>
                       </div>
-                    )
-                  })}
-                </div>
+                      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-12 sm:h-16">
+                        <path d={bandPath} fill="#1A8FD6" fillOpacity="0.14" />
+                        <path d={linePath} stroke="#1A8FD6" strokeWidth="0.7" fill="none" vectorEffect="non-scaling-stroke" />
+                      </svg>
+                    </div>
+                  )}
+                </>
               )
             })() : (
               <p className="text-sm text-[#A1A1A8]/50">Forecasts will appear after enough data is analyzed.</p>
