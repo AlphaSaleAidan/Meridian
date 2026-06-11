@@ -11,11 +11,14 @@ import {
 } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
+import { getAuthHeaders } from '@/lib/supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
 async function fetchITDashboard() {
-  const res = await fetch(`${API_BASE}/api/admin/it-dashboard`)
+  const res = await fetch(`${API_BASE}/api/admin/it-dashboard`, {
+    headers: await getAuthHeaders(),
+  })
   if (!res.ok) throw new Error(`Failed: ${res.status}`)
   return res.json()
 }
