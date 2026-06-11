@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import {
   Package, AlertTriangle, TrendingUp, TrendingDown, Minus,
   Upload, Search, ArrowUpDown, Box, Layers, CheckCircle2, Download,
@@ -129,7 +129,7 @@ export default function InventoryPage() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const exportCsv = useCallback(() => {
+  const exportCsv = () => {
     const esc = (v: string | number) => {
       const s = String(v)
       return s.includes(',') || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s
@@ -148,7 +148,7 @@ export default function InventoryPage() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [items])
+  }
 
   return (
     <DataPageSkeleton title="Inventory" layout="table">

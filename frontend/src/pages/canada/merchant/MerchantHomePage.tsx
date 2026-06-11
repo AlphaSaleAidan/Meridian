@@ -10,6 +10,7 @@ import { formatCad, formatCadMo, formatNumber, formatPercent } from '@/lib/forma
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { MERCHANT_BASE_PATH } from '@/config/merchantPillars'
+import { totalRecoverableCents } from '@/lib/agent-data'
 
 /**
  * Canada-merchant home — the payable hero surface.
@@ -128,11 +129,16 @@ export default function MerchantHomePage() {
   const { org } = useAuth()
   const posConnected = !!org?.pos_connected
   const skip = !isDemo && !posConnected
+  const linkBase = isDemo ? '/canada/demo' : MERCHANT_BASE_PATH
 
   const overview = useApi(() => (skip ? api.overview('') : api.overview(orgId)), [orgId, skip])
   const revenue = useApi(() => (skip ? api.revenue('', 30) : api.revenue(orgId, 30)), [orgId, skip])
   const margins = useApi<{ items: Array<{ revenueCents: number; marginCents: number }> }>(
     () => (skip ? Promise.resolve({ items: [] }) : api.margins(orgId)),
+    [orgId, skip],
+  )
+  const actions = useApi<{ total_impact_cents?: number }>(
+    () => (skip ? Promise.resolve({ total_impact_cents: 0 }) : api.actions(orgId)),
     [orgId, skip],
   )
 
@@ -168,7 +174,7 @@ export default function MerchantHomePage() {
             </p>
           </div>
           <Link
-            to={`${MERCHANT_BASE_PATH}/onboard`}
+            to={`${linkBase}/onboard`}
             className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-pm-teal text-pm-bg font-bold text-sm hover:bg-pm-teal/90 transition-colors flex-shrink-0"
           >
             Connect your POS
@@ -212,7 +218,7 @@ export default function MerchantHomePage() {
           ].map(p => (
             <Link
               key={p.to}
-              to={`${MERCHANT_BASE_PATH}/${p.to}`}
+              to={`${linkBase}/${p.to}`}
               className="group flex items-center justify-between rounded-xl bg-pm-surface border border-pm-border p-4 hover:border-pm-blue/40 transition-colors"
             >
               <div>
@@ -249,7 +255,12 @@ export default function MerchantHomePage() {
   const totalMargin = marginItems.reduce((s, m) => s + (m.marginCents || 0), 0)
   const marginPct = totalRev > 0 ? (totalMargin / totalRev) * 100 : null
 
-  const recoverableCents = data.money_left_score?.total_score_cents ?? 0
+  // Money left on the table = the sum of every Top Action's monthly impact, so
+  // the hero number stays in lockstep with the actions a merchant can take.
+  // Falls back to the money-left score if the actions endpoint has nothing yet.
+  const recoverableCents = isDemo
+    ? totalRecoverableCents()
+    : (actions.data?.total_impact_cents || data.money_left_score?.total_score_cents || 0)
   const changeType = data.revenue_change_pct >= 0 ? 'positive' : 'negative'
 
   return (
@@ -292,7 +303,7 @@ export default function MerchantHomePage() {
           </div>
           {recoverableCents > 0 && (
             <Link
-              to={`${MERCHANT_BASE_PATH}/inventory`}
+              to={`${linkBase}/actions`}
               className="group rounded-xl border border-pm-amber-gold/25 bg-pm-amber-gold/5 p-4 hover:bg-pm-amber-gold/10 transition-colors"
             >
               <div className="flex items-center gap-1.5 text-pm-amber-gold">
@@ -357,7 +368,7 @@ export default function MerchantHomePage() {
         ].map(p => (
           <Link
             key={p.to}
-            to={`${MERCHANT_BASE_PATH}/${p.to}`}
+            to={`${linkBase}/${p.to}`}
             className="group flex items-center justify-between rounded-xl bg-pm-surface border border-pm-border p-4 hover:border-pm-blue/40 transition-colors"
           >
             <div>
