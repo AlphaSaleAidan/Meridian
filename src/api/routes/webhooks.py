@@ -8,12 +8,13 @@ We acknowledge immediately and process async.
 """
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Request, Response, BackgroundTasks
 
-from ...config import square as sq_config, app as app_config
+from ...config import square as sq_config, clover as cl_config, app as app_config
 from ...square.webhook_handlers import WebhookProcessor, verify_webhook_signature
 
 logger = logging.getLogger("meridian.api.webhooks")
@@ -266,11 +267,18 @@ async def clover_webhook(
     Clover payload: {appId, merchants: {MERCHANT_ID: [{type, objectId, ts}]}}
     Must respond 200 within 5 seconds.
     """
-    # TODO: Implement Clover webhook signature verification
-    # See: https://docs.clover.com/docs/webhooks
-    logger.warning("Clover webhook received without signature verification")
-
     body = await request.body()
+
+    # ── Signature verification (HMAC-SHA256 with app secret) ──
+    if not cl_config.app_secret:
+        logger.error("CLOVER_APP_SECRET not configured — refusing to process Clover webhook (fail closed)")
+        return Response(status_code=503)
+
+    from ...clover.oauth import CloverOAuthManager
+    signature = request.headers.get("x-clover-auth", "")
+    if not CloverOAuthManager().verify_webhook_signature(payload=body, signature=signature):
+        logger.warning("Clover webhook signature verification failed")
+        return Response(status_code=403)
 
     try:
         event = json.loads(body)
@@ -327,11 +335,20 @@ async def toast_webhook(
     Toast sends: {eventType, restaurantGuid, webhookId, data: {...}}
     Must respond 200 quickly.
     """
-    # TODO: Implement Toast webhook signature verification
-    # See: https://doc.toasttab.com/openapi/webhooks/
-    logger.warning("Toast webhook received without signature verification")
-
     body = await request.body()
+
+    # ── Fail closed: require the webhook secret to be configured ──
+    # No verification helper exists in src/toast/ yet, so the actual
+    # signature check is a marked follow-up — but we no longer process
+    # arbitrary unsigned payloads when the secret isn't even set.
+    toast_secret = os.environ.get("TOAST_WEBHOOK_SECRET", "")
+    if not toast_secret:
+        logger.error("TOAST_WEBHOOK_SECRET not configured — refusing to process Toast webhook (fail closed)")
+        return Response(status_code=503)
+
+    # TODO(follow-up): verify the Toast webhook signature against
+    # toast_secret. See: https://doc.toasttab.com/openapi/webhooks/
+    logger.warning("Toast webhook accepted WITHOUT signature verification — helper pending in src/toast/")
 
     try:
         event = json.loads(body)

@@ -250,20 +250,25 @@ class BillingService:
         due_days: int = 3,
         store_card: bool = False,
         currency: str = "USD",
+        idempotency_key: Optional[str] = None,
     ) -> InvoiceResult:
         """
         Create a Square Invoice. When store_card=True, the customer's payment
         method is saved on file for future automatic charges.
+
+        Pass a deterministic idempotency_key (e.g. "renewal-{sub_id}-{period_end}")
+        when retries must NOT create a second invoice; defaults to a random key.
         """
         try:
-            idempotency_key = str(uuid4())
+            if idempotency_key is None:
+                idempotency_key = str(uuid4())
 
             customer_id = await self._get_or_create_customer(
                 customer_email, customer_email.split("@")[0], ""
             )
 
             order_resp = await self.http.post("/v2/orders", json={
-                "idempotency_key": str(uuid4()),
+                "idempotency_key": f"{idempotency_key}-order",
                 "order": {
                     "location_id": SQUARE_LOCATION_ID,
                     "line_items": [{
@@ -320,7 +325,7 @@ class BillingService:
             if invoice.get("id"):
                 pub_resp = await self.http.post(f"/v2/invoices/{invoice['id']}/publish", json={
                     "version": invoice.get("version", 0),
-                    "idempotency_key": str(uuid4()),
+                    "idempotency_key": f"{idempotency_key}-publish",
                 })
                 pub_data = pub_resp.json()
                 published = pub_data.get("invoice", invoice)
@@ -349,6 +354,8 @@ class BillingService:
         business_name: str,
         plan: str = "starter",
         currency: str = "USD",
+        start_date: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> SubscriptionResult:
         """
         Create a Square Subscription for automatic monthly billing.
@@ -356,6 +363,14 @@ class BillingService:
         initial invoice payment).
 
         Square handles all recurring charges, retries, and dunning from here.
+
+        Args:
+            start_date: First billing date ("YYYY-MM-DD"). Defaults to 30 days
+                from now (correct after an initial month was just paid). Pass
+                today's date when the period being billed starts immediately
+                (e.g. renewals).
+            idempotency_key: Deterministic key for retry safety; defaults to
+                a random key.
         """
         try:
             customer_id = await self._get_or_create_customer(
@@ -372,10 +387,11 @@ class BillingService:
             if not plan_variation_id:
                 return SubscriptionResult(error="Could not create subscription plan in Square catalog")
 
-            start_date = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%d")
+            if start_date is None:
+                start_date = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%d")
 
             resp = await self.http.post("/v2/subscriptions", json={
-                "idempotency_key": str(uuid4()),
+                "idempotency_key": idempotency_key or str(uuid4()),
                 "location_id": SQUARE_LOCATION_ID,
                 "plan_variation_id": plan_variation_id,
                 "customer_id": customer_id,
@@ -415,6 +431,7 @@ class BillingService:
                 "org_id": f"eq.{org_id}", "status": "eq.active",
             }, limit=1)
 
+            square_cancel_ok = True  # nothing to cancel at Square by default
             if rows:
                 sub = rows[0]
                 meta = sub.get("metadata") or {}
@@ -427,7 +444,20 @@ class BillingService:
                     if resp.status_code in (200, 404):
                         logger.info(f"Cancelled Square subscription {square_sub_id}")
                     else:
-                        logger.warning(f"Square subscription cancel returned {resp.status_code}")
+                        square_cancel_ok = False
+                        logger.error(
+                            f"Square subscription cancel returned {resp.status_code} "
+                            f"for {square_sub_id} — NOT marking canceled locally "
+                            f"(Square will keep billing until resolved)"
+                        )
+
+            if not square_cancel_ok:
+                await self.db.update("subscriptions", {
+                    "status": "cancel_pending",
+                    "cancel_reason": reason,
+                }, filters={"org_id": f"eq.{org_id}", "status": "eq.active"})
+                logger.error(f"Subscription for org {org_id} marked cancel_pending — needs operator follow-up")
+                return False
 
             await self.db.update("subscriptions", {
                 "status": "canceled",
@@ -473,6 +503,11 @@ class BillingService:
                 meta = sub.get("metadata") or {}
                 is_trial_conversion = sub.get("status") == "trialing"
 
+                # Deterministic idempotency key: a retried renewal run for the
+                # same subscription/period must not double-invoice.
+                period_end_date = (sub.get("current_period_end") or now.isoformat())[:10]
+                renewal_key = f"renewal-{sub['id']}-{period_end_date}"
+
                 if meta.get("square_subscription_id"):
                     new_end = now + timedelta(days=30)
                     update_data = {
@@ -513,6 +548,10 @@ class BillingService:
                             business_name=business_name,
                             plan=sub.get("tier", "starter"),
                             currency=sub_currency,
+                            # The period being billed starts now — the default
+                            # (+30d) would skip a month for renewals.
+                            start_date=now.strftime("%Y-%m-%d"),
+                            idempotency_key=renewal_key,
                         )
                         if sub_result.success:
                             import json as json_mod
@@ -536,6 +575,7 @@ class BillingService:
                     description=description,
                     store_card=True,
                     currency=sub_currency,
+                    idempotency_key=renewal_key,
                 )
 
                 if inv_result.success:

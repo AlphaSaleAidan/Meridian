@@ -194,10 +194,19 @@ class MeridianPipeline:
                 since=since or conn.get("last_sync_at"),
             )
             
-            # Store new transactions
+            # Store new transactions (upsert — webhook/backfill paths may have
+            # already ingested overlapping orders; same conflict target as
+            # webhooks.py and backfill.py)
             if sync_result.transactions:
-                await self.db.batch_insert("transactions", sync_result.transactions)
+                await self.db.batch_upsert(
+                    "transactions", sync_result.transactions,
+                    on_conflict="org_id,external_id",
+                )
             if sync_result.transaction_items:
+                # NOTE: kept as insert — the conflict target for
+                # transaction_items differs between webhooks.py
+                # ("org_id,external_id") and backfill.py
+                # ("transaction_id,external_id"); unverifiable from the repo.
                 await self.db.batch_insert("transaction_items", sync_result.transaction_items)
             
             # Refresh views + quick AI check
@@ -443,12 +452,15 @@ class MeridianPipeline:
         # Use public backfill method
         sync_result = await sync_engine.run_initial_backfill()
         
-        # Store transactions in batches
+        # Store transactions in batches (upsert — re-runs and webhook overlap
+        # must not fail on duplicates; same conflict target as webhooks.py
+        # and backfill.py)
         txn_count = 0
         if sync_result.transactions:
-            txn_count = await self.db.batch_insert(
+            txn_count = await self.db.batch_upsert(
                 "transactions",
                 sync_result.transactions,
+                on_conflict="org_id,external_id",
                 chunk_size=200,
             )
         

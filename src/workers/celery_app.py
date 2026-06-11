@@ -40,6 +40,7 @@ celery_app.conf.update(
         "src.workers.tasks.sync_pos_data": {"queue": "default"},
         "src.workers.tasks.run_analysis": {"queue": "default"},
         "src.workers.tasks.process_billing_renewals": {"queue": "critical"},
+        "src.workers.tasks.refresh_square_tokens": {"queue": "critical"},
         "src.workers.tasks.run_nightly_analysis": {"queue": "bulk"},
         "src.workers.tasks.run_nightly_analysis_complete": {"queue": "bulk"},
         "src.workers.tasks.generate_weekly_reports": {"queue": "bulk"},
@@ -80,6 +81,11 @@ celery_app.conf.update(
         "billing-renewals": {
             "task": "src.workers.tasks.process_billing_renewals",
             "schedule": crontab(hour=6, minute=0),  # 6 AM UTC daily
+            "options": {"queue": "critical"},
+        },
+        "square-token-refresh": {
+            "task": "src.workers.tasks.refresh_square_tokens",
+            "schedule": crontab(hour=7, minute=0),  # 7 AM UTC daily
             "options": {"queue": "critical"},
         },
         "daily-burn-rate": {

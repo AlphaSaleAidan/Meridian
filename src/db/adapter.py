@@ -130,3 +130,41 @@ class AIAdapter:
             )
         except Exception as e:
             logger.error(f"Failed to save agent outputs for {org_id}: {e}")
+
+    async def get_latest_agent_outputs(self, org_id: str | None = None) -> dict | None:
+        """Read-back counterpart of save_agent_outputs.
+
+        Returns the most recent snapshot (for ``org_id`` when given,
+        otherwise the newest snapshot overall) in the {agent_name: output}
+        shape SwarmTrainer.run_training_cycle expects, or None.
+        """
+        try:
+            if org_id:
+                row = await self._db.fetchrow(
+                    """
+                    SELECT outputs
+                    FROM agent_outputs
+                    WHERE org_id = $1
+                    ORDER BY generated_at DESC
+                    LIMIT 1
+                    """,
+                    org_id,
+                )
+            else:
+                row = await self._db.fetchrow(
+                    """
+                    SELECT outputs
+                    FROM agent_outputs
+                    ORDER BY generated_at DESC
+                    LIMIT 1
+                    """,
+                )
+            if not row:
+                return None
+            outputs = row["outputs"]
+            if isinstance(outputs, str):
+                outputs = json.loads(outputs)
+            return outputs if isinstance(outputs, dict) else None
+        except Exception as e:
+            logger.warning(f"Failed to fetch latest agent outputs: {e}")
+            return None

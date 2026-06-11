@@ -86,6 +86,8 @@ def log_security_event(
                 )
 
     except Exception as log_err:
+        # Deliberate raw stderr write: this branch means the security logger
+        # itself failed, so logging here could recurse or vanish.
         import sys
         print(
             f"SECURITY LOG FAILURE: {event_type} — {log_err}",

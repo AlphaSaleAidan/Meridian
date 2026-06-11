@@ -256,6 +256,30 @@ def process_billing_renewals():
     return run_async(_renewals())
 
 
+@shared_task(name="src.workers.tasks.refresh_square_tokens", rate_limit="2/m")
+def refresh_square_tokens():
+    """Daily: refresh Square OAuth tokens expiring within 7 days (30-day expiry)."""
+    logger.info("Refreshing expiring Square tokens")
+
+    async def _refresh():
+        from ..db import init_db, close_db
+        from .token_refresh import refresh_expiring_tokens
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            stats = await refresh_expiring_tokens()
+            return {"status": "complete", **stats}
+        finally:
+            await close_db()
+
+    result = run_async(_refresh())
+    logger.info(f"Token refresh task complete: {result}")
+    return result
+
+
 @shared_task(name="src.workers.tasks.train_swarm_batch")
 def train_swarm_batch():
     """Train swarm on all active merchants' latest outputs."""

@@ -299,6 +299,10 @@ class CustomerLTVAgent(BaseAgent):
             lifetimes_used = model_used is not None
 
             if not lifetimes_used:
+                # A partially-failed model fit above may have populated
+                # churn_risk — reset so heuristic IDs don't mix with
+                # model-derived ones.
+                churn_risk = []
                 if retention_rate > 0 and retention_rate < 1:
                     monthly_value = avg_basket * avg_visit_freq
                     annual_value = monthly_value * 12
@@ -394,8 +398,8 @@ class CustomerLTVAgent(BaseAgent):
             "churn_risk_pct": round(churn_pct, 1),
             "churn_risk_count": len(churn_risk),
         }
-        if path == "full" and locals().get("lifetimes_used"):
-            model_name = locals().get("model_used") or "lifetimes"
+        if path == "full" and lifetimes_used:
+            model_name = model_used or "lifetimes"
             data["model"] = (
                 "BG/NBD + Gamma-Gamma (pymc-marketing, Bayesian)"
                 if model_name == "pymc_marketing"

@@ -14,10 +14,11 @@ import time
 import uuid
 import httpx
 from collections import defaultdict
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 
+from ..auth import is_private_url, require_jwt, require_org_member
 from ...credits import COSTS, InsufficientCredits, deduct
 
 router = APIRouter(prefix="/api/content", tags=["content"])
@@ -246,7 +247,8 @@ async def _poll_fal_job(job_id: str, status_url: str, result_url: str):
 # ── Video endpoints (async submit + poll) ────────────────────────────────────
 
 @router.post("/video/generate")
-async def generate_video(req: VideoGenRequest):
+async def generate_video(req: VideoGenRequest, user: dict = Depends(require_jwt)):
+    await require_org_member(user, req.merchantId)
     _check_daily_cap(req.merchantId, "video")
     endpoint = VIDEO_MODELS.get(req.model)
     if not endpoint:
@@ -463,7 +465,8 @@ async def _fal_submit_sync(endpoint: str, payload: dict) -> dict:
 
 
 @router.post("/image/generate")
-async def generate_image(req: ImageGenRequest):
+async def generate_image(req: ImageGenRequest, user: dict = Depends(require_jwt)):
+    await require_org_member(user, req.merchantId)
     await _charge_credits(req.merchantId, "content_image_regen")
     _check_daily_cap(req.merchantId, "image")
     logger.info(f"Image gen: merchant={req.merchantId} {req.width}x{req.height}")
@@ -539,8 +542,9 @@ class DirectorPreviewRequest(BaseModel):
 
 
 @router.post("/director/preview")
-async def director_preview(req: DirectorPreviewRequest):
+async def director_preview(req: DirectorPreviewRequest, user: dict = Depends(require_jwt)):
     """Preview Director-enhanced prompt without generating media."""
+    await require_org_member(user, req.merchantId)
     if not req.brand:
         raise HTTPException(status_code=400, detail="Brand profile required for Director preview")
 
@@ -616,12 +620,24 @@ async def scrape_website(req: ScrapeRequest):
 
     logger.info(f"Scraping website: {req.url} for merchant={req.merchantId}")
 
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+    if is_private_url(req.url):
+        raise HTTPException(status_code=400, detail="URL targets a private or internal network — blocked")
+
+    # Follow redirects manually so every hop is checked against private ranges (SSRF guard).
+    async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
         try:
-            resp = await client.get(req.url, headers={
-                "User-Agent": "MeridianBot/1.0 (content optimization)",
-                "Accept": "text/html,application/xhtml+xml",
-            })
+            url = req.url
+            for _ in range(5):
+                resp = await client.get(url, headers={
+                    "User-Agent": "MeridianBot/1.0 (content optimization)",
+                    "Accept": "text/html,application/xhtml+xml",
+                })
+                if resp.status_code in (301, 302, 303, 307, 308) and resp.headers.get("location"):
+                    url = str(httpx.URL(url).join(resp.headers["location"]))
+                    if is_private_url(url):
+                        raise HTTPException(status_code=400, detail="URL targets a private or internal network — blocked")
+                    continue
+                break
             if resp.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"Website returned {resp.status_code}")
         except httpx.TimeoutException:
@@ -750,8 +766,9 @@ SEO_CONTENT_TYPES = {
 
 
 @router.post("/seo/generate")
-async def generate_seo(req: SeoGenRequest):
+async def generate_seo(req: SeoGenRequest, user: dict = Depends(require_jwt)):
     """Generate SEO content using LLM with optional website context."""
+    await require_org_member(user, req.merchantId)
     await _charge_credits(req.merchantId, "content_seo_article")
     _check_daily_cap(req.merchantId, "image")  # reuse image cap for text gen
 
@@ -831,8 +848,9 @@ class PostGenRequest(BaseModel):
 
 
 @router.post("/post/generate")
-async def generate_post(req: PostGenRequest):
+async def generate_post(req: PostGenRequest, user: dict = Depends(require_jwt)):
     """Generate a social media post with AI."""
+    await require_org_member(user, req.merchantId)
     await _charge_credits(req.merchantId, "content_social_post")
     platform_specs = {
         "instagram": "Instagram (2200 char cap, 30 hashtags max, visual-first)",

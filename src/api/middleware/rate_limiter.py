@@ -52,7 +52,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         forwarded = request.headers.get("x-forwarded-for")
-        ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
+        # Last hop is appended by our own proxy; earlier hops are client-controlled.
+        ip = forwarded.split(",")[-1].strip() if forwarded else (request.client.host if request.client else "unknown")
         path = request.url.path
         max_requests, window_seconds = _get_limit(path)
 

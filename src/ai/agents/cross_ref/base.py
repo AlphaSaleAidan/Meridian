@@ -13,8 +13,6 @@ from ..base import BaseAgent
 
 logger = logging.getLogger("meridian.ai.agents.cross_ref")
 
-_shared_findings: list[dict] = []
-
 
 @dataclass
 class CrossRefContext:
@@ -30,6 +28,9 @@ class CrossRefContext:
     analysis_days: int = 30
     business_vertical: str = "other"
     agent_outputs: dict = field(default_factory=dict)
+    # Findings shared between agents of THIS analysis run only — instance
+    # scoped so concurrently-analyzed orgs never see each other's findings.
+    findings: list[dict] = field(default_factory=list)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -68,21 +69,17 @@ class BaseCrossRefAgent(BaseAgent):
             "data": data or {},
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        _shared_findings.append(finding)
+        self.ctx.findings.append(finding)
         self._json_logger.info(
             f"Finding: {finding_type}",
             extra={"event": "finding_emitted", "context": finding},
         )
 
     def get_findings(self, source: str | None = None) -> list[dict]:
-        """Read findings from other agents."""
+        """Read findings from other agents in this analysis run."""
         if source:
-            return [f for f in _shared_findings if f["source_agent"] == source]
-        return list(_shared_findings)
-
-    @staticmethod
-    def clear_findings():
-        _shared_findings.clear()
+            return [f for f in self.ctx.findings if f["source_agent"] == source]
+        return list(self.ctx.findings)
 
     def _zone_dwell_avg(self, zone_name: str) -> float:
         """Average dwell time in a specific zone across all journeys."""

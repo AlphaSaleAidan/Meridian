@@ -52,7 +52,7 @@ async def list_reps():
     return {"reps": reps}
 
 
-@router.get("/reps/{rep_id}/commissions")
+@router.get("/reps/{rep_id}/commissions", dependencies=[Depends(require_service_auth)])
 async def rep_commissions(rep_id: str, limit: int = 50):
     """Get commission history for a rep."""
     db = _get_db()
