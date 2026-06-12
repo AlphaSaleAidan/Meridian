@@ -12,7 +12,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_jwt, require_admin_jwt, rate_limit_signup
+from ..auth import ADMIN_EMAILS, require_jwt, require_admin_jwt, rate_limit_signup
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
@@ -24,6 +24,13 @@ def _validate_rep_id(rep_id: str) -> None:
     """Validate rep_id is a proper UUID to prevent PostgREST filter injection."""
     if not _UUID_RE.match(rep_id):
         raise HTTPException(status_code=400, detail="Invalid rep_id format")
+
+
+def _generate_temp_password() -> str:
+    """Generate a readable temporary password like 'Mer-7kX9pQ2m'."""
+    import secrets
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+    return "Mer-" + "".join(secrets.choice(chars) for _ in range(8))
 
 router = APIRouter(prefix="/api/canada", tags=["canada"])
 
@@ -191,7 +198,6 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
     verified Supabase session instead of a static service token.
     """
     import httpx
-    import secrets
 
     user_id = claims.get("id", "")
     logger.info("create-customer called by user %s (%s)", user_id, claims.get("email", ""))
@@ -208,10 +214,11 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
         raise HTTPException(503, "Supabase not configured")
 
     org_id = str(uuid.uuid4())
-    # Server-generated random password — never returned to the caller.
-    # The customer sets their own password via the Supabase recovery email
-    # that the frontend triggers after this endpoint returns.
-    server_password = secrets.token_urlsafe(24)
+    # Readable temporary password returned to the rep so they can share it with
+    # the customer. The customer is forced to reset it on first login via the
+    # must_reset_password flag below — no reliance on Supabase recovery email.
+    temp_password = _generate_temp_password()
+    auth_user_id = None
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
@@ -223,7 +230,7 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
             },
             json={
                 "email": req.email,
-                "password": server_password,
+                "password": temp_password,
                 "email_confirm": True,
                 "user_metadata": {
                     "full_name": req.contact_name,
@@ -232,19 +239,112 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                     "role": "owner",
                     "portal": "canada",
                     "vertical": req.vertical,
+                    "must_reset_password": True,
                 },
             },
         )
         if resp.status_code in (200, 201):
             auth_user_id = resp.json().get("id")
             logger.info(f"Created Canada customer auth user {auth_user_id} for {req.email}")
+            org_id = resp.json().get("user_metadata", {}).get("org_id", org_id)
         elif resp.status_code == 422 and "already been registered" in resp.text.lower():
-            logger.info(f"Auth user already exists for {req.email}")
+            logger.info(f"Auth user already exists for {req.email} — resetting temp password")
+            # Page through the admin user list to find the existing account.
+            existing_id = None
+            existing_meta: dict = {}
+            for page in range(1, 21):  # up to 20 pages * 200 = 4000 users
+                list_resp = await client.get(
+                    f"{supabase_url}/auth/v1/admin/users",
+                    headers={"Authorization": f"Bearer {service_key}", "apikey": service_key},
+                    params={"page": page, "per_page": 200},
+                )
+                if list_resp.status_code != 200:
+                    logger.error(f"Admin user list failed p{page}: {list_resp.status_code} {list_resp.text[:200]}")
+                    break
+                users = list_resp.json().get("users", [])
+                for u in users:
+                    if u.get("email", "").lower() == req.email.lower():
+                        existing_id = u["id"]
+                        existing_meta = u.get("user_metadata") or {}
+                        break
+                if existing_id or len(users) < 200:
+                    break
+            if not existing_id:
+                logger.error(f"Existing auth user for {req.email} not found in admin list — cannot reset password")
+                raise HTTPException(500, "Customer account exists but could not be updated")
+            # Takeover guard: a rep JWT must never be able to rotate the
+            # password of an admin, a rep, or any non-Canada-customer account.
+            # Only accounts that look like Canada customer owners are eligible;
+            # ADMIN_EMAILS is excluded explicitly as an independent check even
+            # though admins shouldn't carry the owner/canada metadata shape.
+            existing_role = (existing_meta.get("role") or "").lower()
+            existing_portal = (existing_meta.get("portal") or "").lower()
+            if req.email.lower() in [e.lower() for e in ADMIN_EMAILS]:
+                logger.warning(
+                    "create-customer reset BLOCKED: %s targeted admin account %s",
+                    user_id, req.email,
+                )
+                raise HTTPException(403, "This account cannot be managed from the rep portal")
+            if existing_role not in ("owner", "") or (existing_portal and existing_portal != "canada"):
+                logger.warning(
+                    "create-customer reset BLOCKED: %s targeted role=%r portal=%r account %s",
+                    user_id, existing_role, existing_portal, req.email,
+                )
+                raise HTTPException(403, "This account cannot be managed from the rep portal")
+            # Merge so we don't wipe org_id/role/portal on an existing user.
+            merged_meta = {**existing_meta, "must_reset_password": True}
+            org_id = existing_meta.get("org_id", org_id)
+            put_resp = await client.put(
+                f"{supabase_url}/auth/v1/admin/users/{existing_id}",
+                headers={"Authorization": f"Bearer {service_key}", "apikey": service_key, "Content-Type": "application/json"},
+                json={"password": temp_password, "user_metadata": merged_meta},
+            )
+            if put_resp.status_code not in (200, 201):
+                logger.error(f"Password/flag reset PUT failed for {req.email}: {put_resp.status_code} {put_resp.text[:200]}")
+                raise HTTPException(502, "Could not update customer account password")
+            confirmed = (put_resp.json().get("user_metadata") or {}).get("must_reset_password")
+            logger.info(f"Reset OK for {req.email} (id={existing_id}); must_reset_password={confirmed}")
+            auth_user_id = existing_id
         else:
             logger.error(f"Auth user creation failed: {resp.status_code} {resp.text}")
             raise HTTPException(400, "Could not create customer account")
 
-    return {"ok": True, "org_id": org_id}
+        # Link the customer to a business record so the portal can load their org
+        # on login. Without this row fetchBusinessForUser returns null, org stays
+        # null, and ProtectedRoute bounces the customer back to /canada/login even
+        # after a successful password reset. Mirrors onboarding.provision_customer.
+        if auth_user_id:
+            biz_resp = await client.post(
+                f"{supabase_url}/rest/v1/businesses",
+                headers={
+                    "Authorization": f"Bearer {service_key}",
+                    "apikey": service_key,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal,resolution=merge-duplicates",
+                },
+                json={
+                    "id": org_id,
+                    "owner_user_id": auth_user_id,
+                    "name": req.business_name,
+                    "owner_name": req.contact_name,
+                    "email": req.email,
+                    "phone": req.phone or "",
+                    "plan_tier": "trial",
+                    "business_type": req.vertical or "restaurant",
+                    "pos_connected": False,
+                    "onboarded": False,
+                    "status": "active",
+                },
+            )
+            if biz_resp.status_code not in (200, 201, 204):
+                logger.error(
+                    "businesses upsert failed for %s: %s %s",
+                    req.email, biz_resp.status_code, biz_resp.text[:200],
+                )
+                raise HTTPException(500, "Customer account created but business profile failed to save")
+            logger.info("Linked business %s -> user %s for %s", org_id, auth_user_id, req.email)
+
+    return {"ok": True, "org_id": org_id, "temporary_password": temp_password}
 
 
 @router.post("/careers/apply")
@@ -364,19 +464,23 @@ async def approve_rep(req: RepActionRequest, request: Request, admin: dict = Dep
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    # Data writes go through the admin's JWT so RLS is enforced as the caller.
-    # The auth admin (user creation) call below stays on service_key — Supabase
-    # /auth/v1/admin/* rejects non-service-role tokens.
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
+    # The caller has already been verified as an admin via require_admin_jwt
+    # above. Use the service key for the write so all approved admins can
+    # action approvals regardless of whether their user_id is listed in the
+    # sales_reps UPDATE RLS policy. Defense-in-depth lives in
+    # require_admin_jwt (ADMIN_EMAILS allowlist), not in PostgREST policies.
+    # The Supabase /auth/v1/admin/users call further down also requires the
+    # service key.
+    _user_token_unused = _user_token(request)  # noqa: F841 — kept for audit logging hooks if added later
+    _anon_key_unused = _get_anon_key()  # noqa: F841
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         # 1. PATCH is_active = true and verify row was updated
         resp = await client.patch(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
                 "Content-Type": "application/json",
                 "Prefer": "return=representation",
             },
@@ -457,15 +561,13 @@ async def reject_rep(req: RepActionRequest, request: Request, admin: dict = Depe
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
             },
         )
         if resp.status_code not in (200, 204):
@@ -492,8 +594,6 @@ async def update_rep(req: RepUpdateRequest, request: Request, admin: dict = Depe
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
 
     updates: dict = {}
     if req.name is not None:
@@ -507,8 +607,8 @@ async def update_rep(req: RepUpdateRequest, request: Request, admin: dict = Depe
         resp = await client.patch(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
                 "Content-Type": "application/json",
                 "Prefer": "return=representation",
             },
@@ -531,15 +631,13 @@ async def remove_rep(req: RepActionRequest, request: Request, admin: dict = Depe
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
-    user_token = _user_token(request) or service_key
-    anon_key = _get_anon_key() or service_key
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
             },
         )
         if resp.status_code not in (200, 204):

@@ -8,7 +8,7 @@ import { MapPin } from 'lucide-react'
 export default function CanadaLoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { ready, authenticated, org } = useAuth()
+  const { ready, authenticated, org, logout } = useAuth()
 
   const from = (location.state as { from?: string })?.from || '/canada/dashboard'
 
@@ -18,28 +18,91 @@ export default function CanadaLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForgot, setShowForgot] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
+  const [cleared, setCleared] = useState(false)
+  const [justLoggedIn, setJustLoggedIn] = useState(false)
+  const [loggingIn, setLoggingIn] = useState(false)
+  const [mustReset, setMustReset] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
 
   useEffect(() => {
-    if (!ready || !authenticated || !org) return
-    navigate(org.onboarded ? from : '/canada/setup', { replace: true })
-  }, [ready, authenticated, org, from, navigate])
+    if (!ready) return
+    // A sign-in is in flight: signInWithPassword fires onAuthStateChange (which
+    // flips `authenticated` true) before handleLogin can set mustReset/justLoggedIn.
+    // Without this guard the auto-logout branch below would race in and kill the
+    // fresh session mid-login — the "spinner then nothing loads" symptom.
+    if (loggingIn) return
+    // Hold on the page while the customer sets a new password on first login —
+    // don't auto-logout (the session is valid) and don't navigate away yet.
+    if (mustReset) return
+    if (authenticated && !justLoggedIn && !cleared) {
+      logout().then(() => setCleared(true))
+      return
+    }
+    if (!justLoggedIn || !authenticated || !org) return
+    if (!org.onboarded) {
+      navigate('/canada/setup', { replace: true })
+      return
+    }
+    navigate(from, { replace: true })
+  }, [ready, authenticated, org, from, navigate, justLoggedIn, cleared, logout, mustReset, loggingIn])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
+    setLoggingIn(true)
 
     if (!supabase) {
       setError('Authentication service unavailable')
       setLoading(false)
+      setLoggingIn(false)
       return
     }
 
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
     setLoading(false)
     if (authError) {
       setError(authError.message)
+      setLoggingIn(false)
+      return
     }
+    // First login with a rep-issued temporary password — force a reset before
+    // letting the customer into the portal.
+    if (data.user?.user_metadata?.must_reset_password) {
+      setCleared(true)
+      setMustReset(true)
+      setLoggingIn(false)
+      return
+    }
+    setJustLoggedIn(true)
+    setLoggingIn(false)
+  }
+
+  async function handleSetNewPassword(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!supabase) { setError('Authentication service unavailable'); return }
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+    setLoading(true)
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+      data: { must_reset_password: false },
+    })
+    setLoading(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    setMustReset(false)
+    setJustLoggedIn(true)
   }
 
   async function handleForgot(e: React.FormEvent) {
@@ -84,10 +147,14 @@ export default function CanadaLoginPage() {
 
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
           <h2 className="text-lg font-bold text-[#F5F5F7] text-center mb-1">
-            {showForgot ? 'Reset password' : 'Sign in to your account'}
+            {mustReset ? 'Set your password' : showForgot ? 'Reset password' : 'Sign in to your account'}
           </h2>
           <p className="text-xs text-[#A1A1A8] text-center mb-6">
-            {showForgot ? "We'll send a reset link to your email" : 'Enter the credentials provided by your Meridian rep'}
+            {mustReset
+              ? 'Choose a new password to finish setting up your account'
+              : showForgot
+                ? "We'll send a reset link to your email"
+                : 'Enter the credentials provided by your Meridian rep'}
           </p>
 
           {error && (
@@ -97,7 +164,21 @@ export default function CanadaLoginPage() {
             <div className="mb-4 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-xs text-[#17C5B0]">{success}</div>
           )}
 
-          {!showForgot ? (
+          {mustReset ? (
+            <form onSubmit={handleSetNewPassword} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">New password</label>
+                <input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" autoFocus />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Confirm password</label>
+                <input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Re-enter your password" />
+              </div>
+              <button type="submit" disabled={loading} className={btnClass}>
+                {loading ? 'Saving...' : 'Set password & continue'}
+              </button>
+            </form>
+          ) : !showForgot ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>

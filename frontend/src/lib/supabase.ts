@@ -16,9 +16,19 @@ export const supabase = supabaseUrl && supabaseAnonKey
   : null
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
-  if (!supabase) return { 'Content-Type': 'application/json' }
-  const { data } = await supabase.auth.getSession()
-  const token = data?.session?.access_token
-  if (!token) return { 'Content-Type': 'application/json' }
-  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+  const base = { 'Content-Type': 'application/json' }
+  if (!supabase) return base
+  let session = (await supabase.auth.getSession()).data?.session ?? null
+  // Refresh proactively when the access token is missing or within 30s of
+  // expiry. getSession() returns the stored (possibly stale) session without
+  // blocking on a refresh, so backend calls that forward this token would
+  // otherwise hit `Invalid or expired token` (401).
+  const expiresAtMs = (session?.expires_at ?? 0) * 1000
+  const expiringSoon = expiresAtMs > 0 && expiresAtMs < Date.now() + 30_000
+  if (!session?.access_token || expiringSoon) {
+    session = (await supabase.auth.refreshSession()).data?.session ?? session
+  }
+  const token = session?.access_token
+  if (!token) return base
+  return { ...base, 'Authorization': `Bearer ${token}` }
 }
