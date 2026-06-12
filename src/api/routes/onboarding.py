@@ -13,7 +13,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_service_auth
+from ..auth import require_jwt, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.onboarding")
@@ -585,9 +585,10 @@ class VerifyPosRequest(BaseModel):
     provider: str
 
 
-@router.post("/connect-pos")
+@router.post("/connect-pos", dependencies=[Depends(require_jwt)])
 async def connect_pos_onboarding(req: ConnectPosRequest):
-    """Test POS credentials then save if valid. Called from lead detail page."""
+    """Test POS credentials then save if valid. Called from the US lead detail
+    page (Canada reps have no POS UI — customers self-connect via /api/pos)."""
     from .pos_connections import test_connection, TestConnectionRequest
 
     test_result = await test_connection(TestConnectionRequest(
@@ -619,7 +620,7 @@ async def connect_pos_onboarding(req: ConnectPosRequest):
     }
 
 
-@router.post("/verify-pos")
+@router.post("/verify-pos", dependencies=[Depends(require_jwt)])
 async def verify_pos_onboarding(req: VerifyPosRequest):
     """Quick verify that POS connection is still live."""
 
