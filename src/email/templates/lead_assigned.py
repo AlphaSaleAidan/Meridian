@@ -10,7 +10,7 @@ def render(
 ) -> str:
     first = rep_name.split(" ")[0]
     return base_template(
-        f"""{heading(f"New Lead Assigned")}
+        f"""{heading("New Lead Assigned")}
 {paragraph(f"Hey {first}, a new lead has been assigned to you.")}
 {info_box(f'''
 <p style="color:#A1A1A8;font-size:12px;margin:0 0 4px;">CONTACT</p>

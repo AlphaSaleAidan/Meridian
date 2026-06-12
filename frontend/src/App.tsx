@@ -397,8 +397,12 @@ export default function App() {
               <Route path="/canada/landing" element={<CanadaLandingPage />} />
               <Route path="/canada/careers" element={<CanadaCareersPage />} />
 
-              {/* Canada Demo — new 3-pillar merchant portal, CAD, unauthenticated */}
-              <Route path="/canada/demo" element={<Suspense fallback={<LazyFallback />}><MerchantDemoLayout /></Suspense>}>
+              {/* Canada Demo — public merchant portal with synthetic CAD data (no auth, no tour) */}
+              <Route path="/canada/demo" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <MerchantDemoLayout />
+                </Suspense>
+              }>
                 {merchantPillars.map(pillar => (
                   <Route
                     key={pillar.path || '_home'}

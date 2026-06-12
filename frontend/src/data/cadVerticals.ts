@@ -159,17 +159,26 @@ export function verticalsByGroup(): Array<{ group: CadGroupMeta; items: CadVerti
 /**
  * Build a personalized deck URL for sharing with a prospect.
  * Includes the rep's name/email/phone and the prospect's business name.
+ *
+ * When `pricing` is supplied, the deck overrides its hardcoded headline price
+ * (and ROI-calculator monthly rate) with the figure the rep quoted on this
+ * lead — so the proposal the prospect opens matches the number in the portal.
  */
 export function buildPersonalizedDeckUrl(
   slug: string,
   rep?: { name?: string | null; email?: string | null; phone?: string | null } | null,
   businessName?: string | null,
+  pricing?: { monthly?: number | null; setup?: number | null; currency?: 'CAD' | 'USD'; firstMonthFree?: boolean | null } | null,
 ): string {
   const params = new URLSearchParams()
   if (rep?.name) params.set('rep', rep.name)
   if (rep?.email) params.set('email', rep.email)
   if (rep?.phone) params.set('phone', rep.phone)
   if (businessName) params.set('business', businessName)
+  if (pricing?.monthly && pricing.monthly > 0) params.set('price', String(Math.round(pricing.monthly)))
+  if (pricing?.setup && pricing.setup > 0) params.set('setup', String(Math.round(pricing.setup)))
+  if (pricing?.currency) params.set('currency', pricing.currency)
+  if (pricing?.firstMonthFree) params.set('freemonth', '1')
   const q = params.toString()
   return `${DECK_BASE_URL}/${slug}${q ? `?${q}` : ''}`
 }

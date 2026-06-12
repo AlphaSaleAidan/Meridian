@@ -10,7 +10,6 @@ POST /api/intelligence/train                -> Trigger manual training cycle
 import logging
 import os
 import re
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel

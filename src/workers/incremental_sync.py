@@ -108,7 +108,7 @@ async def run_all_incremental_syncs():
             )
 
             import os
-            from ..pipeline import MeridianPipeline
+            from ..live_pipeline import MeridianPipeline
             pipeline = MeridianPipeline(
                 org_id=org_id,
                 square_token=access_token,

@@ -21,10 +21,14 @@ class ActionPrioritizerAgent(BaseAgent):
                 continue
             recs = output.get("recommendations", [])
             for rec in recs:
+                impact_cents = rec.get("impact_cents", 0)
+                if not isinstance(impact_cents, (int, float)):
+                    impact_cents = 0
                 all_recs.append({
                     "source_agent": agent_name,
                     "action": rec.get("action", ""),
                     "impact_estimate": rec.get("impact_estimate", ""),
+                    "impact_cents": impact_cents,
                     "urgency": rec.get("urgency", "MEDIUM"),
                     "confidence": rec.get("confidence", 0.5),
                 })
@@ -39,17 +43,20 @@ class ActionPrioritizerAgent(BaseAgent):
                     "severity": "info",
                 }],
                 recommendations=[],
+                data={"total_recommendations": 0},
             )
 
-        # Score each recommendation
+        # Score each recommendation. Most agents emit neither urgency nor
+        # confidence, so priority_score alone is a constant — impact_cents
+        # (which agents DO emit) is the primary key, priority the tiebreak.
         urgency_weights = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
         for rec in all_recs:
             urgency_score = urgency_weights.get(rec.get("urgency", "MEDIUM"), 2)
             confidence = rec.get("confidence", 0.5)
             rec["priority_score"] = round(urgency_score * confidence * 25, 1)
 
-        # Sort by priority score
-        all_recs.sort(key=lambda r: r["priority_score"], reverse=True)
+        # Sort by dollar impact, then priority score
+        all_recs.sort(key=lambda r: (r["impact_cents"], r["priority_score"]), reverse=True)
 
         # Top 3 actions
         top_3 = all_recs[:3]
@@ -69,6 +76,7 @@ class ActionPrioritizerAgent(BaseAgent):
             {
                 "action": action["action"],
                 "impact_estimate": action["impact_estimate"],
+                "impact_cents": action["impact_cents"],
                 "source": action["source_agent"],
                 "priority_score": action["priority_score"],
             }

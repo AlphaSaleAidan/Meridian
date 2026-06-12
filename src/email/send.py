@@ -392,7 +392,10 @@ async def send_customer_credentials(
         rep_name=rep_name,
     )
     subject = f"Your Meridian Login — {business_name}"
-    result = await _client.send(to, subject, html, tag="customer_credentials")
+    # Login credentials must land reliably, so send straight through Resend
+    # rather than Postal-first (the self-hosted Postal host is unreachable in
+    # several environments, which silently delayed or dropped these emails).
+    result = await _client.send(to, subject, html, tag="customer_credentials", prefer_resend=True)
     await _log_send(to, "customer_credentials", subject, result, org_id=org_id, tag="customer_credentials")
     return result
 

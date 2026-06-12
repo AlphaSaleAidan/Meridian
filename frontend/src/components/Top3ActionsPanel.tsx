@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { clsx } from 'clsx'
 import {
   CheckCircle2, X, Zap, CalendarClock, ChevronDown, ChevronRight,
-  Bot, Clock, TrendingUp, Sparkles,
+  Bot, Clock, TrendingUp, Sparkles, Lock,
 } from 'lucide-react'
-import { generateTopActions, type TopAction, type ReasoningChain } from '@/lib/agent-data'
+import { generateTopActions, actionsFromInsights, type TopAction, type ReasoningChain } from '@/lib/agent-data'
 import { formatCents } from '@/lib/format'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { api } from '@/lib/api'
@@ -14,6 +14,22 @@ type ActionStatus = 'completed' | 'rejected'
 type ActionState = Record<string, { status: ActionStatus; at: string }>
 
 const DAY_MS = 86_400_000
+
+// Pacific (America/Los_Angeles) offset for an instant, in ms. Negative, since
+// Pacific is behind UTC; handles PST/PDT automatically. The server timezone
+// cancels out because both sides are parsed in it.
+function pacificOffsetMs(now: number): number {
+  const d = new Date(now)
+  const utc = new Date(d.toLocaleString('en-US', { timeZone: 'UTC' })).getTime()
+  const pac = new Date(d.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' })).getTime()
+  return pac - utc
+}
+
+// Wall-clock ms in Pacific time. Daily/weekly resets land on Pacific midnight
+// (matching the "Resets in" countdown) rather than UTC midnight.
+function pacificNow(now: number): number {
+  return now + pacificOffsetMs(now)
+}
 
 function actionKey(a: TopAction): string {
   return `${a.agentSource}|${a.title}`
@@ -49,6 +65,14 @@ function rotate<T>(arr: T[], offset: number): T[] {
   if (arr.length === 0) return arr
   const o = ((offset % arr.length) + arr.length) % arr.length
   return [...arr.slice(o), ...arr.slice(0, o)]
+}
+
+// A done/rejected mark only counts within its action's current period: daily
+// actions (Low effort) reset every 24h, strategic actions reset each week.
+// Once the period rolls over the mark is stale and the action is fresh again.
+function inPeriod(a: TopAction, entry: { at: string }, today: number, week: number): boolean {
+  const entryDay = Math.floor(pacificNow(new Date(entry.at).getTime()) / DAY_MS)
+  return a.effort === 'Low' ? entryDay === today : Math.floor(entryDay / 7) === week
 }
 
 const cadenceStyles = {
@@ -100,11 +124,13 @@ function WhyPanel({ reasoning }: { reasoning: ReasoningChain }) {
 function ActionItem({
   action,
   cadence,
+  done = false,
   onComplete,
   onReject,
 }: {
   action: TopAction
   cadence: Cadence
+  done?: boolean
   onComplete: (a: TopAction) => void
   onReject: (a: TopAction) => void
 }) {
@@ -113,11 +139,14 @@ function ActionItem({
   const CadenceIcon = s.icon
 
   return (
-    <div className={clsx('card-hover overflow-hidden transition-all duration-300', expanded && s.ring)}>
-      <div className="p-4">
+    <div className={clsx('card-hover overflow-hidden transition-all duration-300', expanded && s.ring, done && 'opacity-80')}>
+      <div className={clsx('p-4', done && 'bg-[#17C5B0]/[0.04]')}>
         <div className="flex items-start gap-3">
-          <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0', s.chip)}>
-            <CadenceIcon size={18} />
+          <div className={clsx(
+            'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
+            done ? 'bg-[#17C5B0]/15 text-[#17C5B0]' : s.chip,
+          )}>
+            {done ? <CheckCircle2 size={18} /> : <CadenceIcon size={18} />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
@@ -129,7 +158,10 @@ function ActionItem({
               </span>
             </div>
             <div className="flex items-start justify-between gap-2">
-              <h3 className="text-sm font-semibold text-[#F5F5F7] leading-tight">{action.title}</h3>
+              <h3 className={clsx(
+                'text-sm font-semibold leading-tight',
+                done ? 'text-[#A1A1A8] line-through decoration-[#17C5B0]/40' : 'text-[#F5F5F7]',
+              )}>{action.title}</h3>
               <span className={clsx('text-sm font-bold font-mono flex-shrink-0 whitespace-nowrap', s.accent)}>
                 +{formatCents(action.impactCents)}/mo
               </span>
@@ -137,18 +169,26 @@ function ActionItem({
             <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">{action.description}</p>
 
             <div className="flex items-center gap-2 mt-3">
-              <button
-                onClick={() => onComplete(action)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-xs font-semibold hover:bg-[#17C5B0]/90 transition-colors"
-              >
-                <CheckCircle2 size={14} /> Mark done
-              </button>
-              <button
-                onClick={() => onReject(action)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1F1F23] text-[#A1A1A8] text-xs font-medium hover:bg-[#2A2A2F] hover:text-[#F5F5F7] transition-colors"
-              >
-                <X size={14} /> Reject
-              </button>
+              {done ? (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0]/10 text-[#17C5B0] text-xs font-semibold">
+                  <CheckCircle2 size={14} /> Done · captured {cadence === 'daily' ? 'today' : 'this week'}
+                </span>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onComplete(action)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-xs font-semibold hover:bg-[#17C5B0]/90 transition-colors"
+                  >
+                    <CheckCircle2 size={14} /> Mark done
+                  </button>
+                  <button
+                    onClick={() => onReject(action)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1F1F23] text-[#A1A1A8] text-xs font-medium hover:bg-[#2A2A2F] hover:text-[#F5F5F7] transition-colors"
+                  >
+                    <X size={14} /> Reject
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setExpanded(v => !v)}
                 className="ml-auto flex items-center gap-1 text-[10px] text-[#A1A1A8]/60 hover:text-[#A1A1A8] transition-colors"
@@ -161,6 +201,32 @@ function ActionItem({
         </div>
         {expanded && <WhyPanel reasoning={action.reasoning} />}
       </div>
+    </div>
+  )
+}
+
+// Counts down to the next daily reset (the UTC-day boundary that reseeds the
+// `today` rotation). Self-contained so the 1s tick only re-renders the timer,
+// not the whole panel.
+function ResetTimer() {
+  const msUntilReset = () => DAY_MS - (pacificNow(Date.now()) % DAY_MS)
+  const [msLeft, setMsLeft] = useState(msUntilReset)
+  useEffect(() => {
+    const id = setInterval(() => setMsLeft(msUntilReset()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const total = Math.max(0, Math.floor(msLeft / 1000))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const sec = total % 60
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return (
+    <div className="text-right">
+      <p className="text-[10px] text-[#A1A1A8]/60 uppercase tracking-wider">Resets in · PT</p>
+      <p className="text-sm font-bold font-mono text-[#A1A1A8] flex items-center gap-1 justify-end tabular-nums">
+        <Clock size={12} className="text-[#A1A1A8]/60" />
+        {pad(h)}h {pad(m)}m {pad(sec)}s
+      </p>
     </div>
   )
 }
@@ -181,11 +247,99 @@ function EmptySlot({ cadence }: { cadence: Cadence }) {
   )
 }
 
-export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: boolean }) {
+// The standby agents we name in the pre-connection teaser, so the merchant sees
+// that real model agents are assigned to the work before any POS is wired up.
+const STANDBY_AGENTS: { name: string; covers: string }[] = [
+  { name: 'Pricing Power', covers: 'safe price increases' },
+  { name: 'Inventory Intelligence', covers: 'stockout & reorder timing' },
+  { name: 'Staffing', covers: 'peak-hour coverage' },
+  { name: 'Money Left on Table', covers: 'your biggest weekly lever' },
+]
+
+// Pre-connection state: no POS is wired up yet, so there's no transaction data to
+// reason over. Show the merchant exactly what's coming and which model agents are
+// assigned, with a locked treatment instead of a fake/empty action.
+function PreConnectionState() {
+  return (
+    <div className="card p-5 border border-[#1F1F23] space-y-4">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-[#7C5CFF]/10 border border-[#7C5CFF]/20 flex items-center justify-center flex-shrink-0">
+          <Lock size={18} className="text-[#7C5CFF]" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-[#F5F5F7]">Your daily actions unlock at connection</h3>
+          <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+            Once your POS is connected, these agents start analyzing your real sales and post
+            two fresh instant wins each day plus one strategic move each week — each with the
+            exact dollar impact and the reasoning behind it.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {STANDBY_AGENTS.map(a => (
+          <div key={a.name} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-[#0A0A0B] border border-dashed border-[#1F1F23]">
+            <Bot size={14} className="text-[#7C5CFF] flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-[#F5F5F7] truncate">{a.name}</p>
+              <p className="text-[10px] text-[#A1A1A8]/70 truncate">Watching {a.covers}</p>
+            </div>
+            <span className="ml-auto text-[9px] font-semibold uppercase tracking-wider text-[#A1A1A8]/50 flex items-center gap-1 flex-shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#A1A1A8]/40" /> Standby
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Connected, but no insights have been generated yet (POS just wired up; agents
+// haven't completed their first pass). An honest "analyzing" state — NOT the
+// "all caught up" empty slot, which would falsely imply work was already done.
+function WarmingState() {
+  return (
+    <div className="card p-5 border border-[#1F1F23] flex items-start gap-3">
+      <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 border border-[#17C5B0]/20 flex items-center justify-center flex-shrink-0 animate-pulse">
+        <Sparkles size={18} className="text-[#17C5B0]" />
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold text-[#F5F5F7]">Your agents are analyzing your sales</h3>
+        <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+          We're crunching your transactions now. Your first prioritized actions — each with a
+          dollar impact and the model agent behind it — appear here within 24 hours of your
+          first sync.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// Minimal header (title + subtitle only) for the pre-connection and warming
+// states, where the live ResetTimer / pipeline / captured figures don't apply.
+function SimpleHeader({ subtitle }: { subtitle: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/10 flex items-center justify-center">
+        <Sparkles size={16} className="text-[#17C5B0]" />
+      </div>
+      <div>
+        <h2 className="text-sm font-bold text-[#F5F5F7]">Your Top 3 Actions</h2>
+        <p className="text-[11px] text-[#A1A1A8]">{subtitle}</p>
+      </div>
+    </div>
+  )
+}
+
+export default function Top3ActionsPanel({ showHeader = true, connected = true }: { showHeader?: boolean; connected?: boolean }) {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
-  const apiData = useApi(() => api.actions(orgId), [orgId])
-  const pool: TopAction[] = isDemo ? generateTopActions() : (apiData.data?.actions ?? [])
+  // Skip the API call entirely when we know there's no POS connection — there
+  // would be no data to score and the panel renders the pre-connection teaser.
+  const apiData = useApi(() => (isDemo || connected ? api.actions(orgId) : Promise.resolve({ actions: [] })), [orgId, isDemo, connected])
+  const pool: TopAction[] = isDemo
+    ? generateTopActions()
+    : actionsFromInsights(apiData.data?.actions ?? [])
 
   const [state, setState] = useState<ActionState>(() => loadState(orgId))
 
@@ -203,25 +357,49 @@ export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: b
   const onComplete = useCallback((a: TopAction) => act(a, 'completed'), [act])
   const onReject = useCallback((a: TopAction) => act(a, 'rejected'), [act])
 
-  const today = Math.floor(Date.now() / DAY_MS)
+  const today = Math.floor(pacificNow(Date.now()) / DAY_MS)
   const week = Math.floor(today / 7)
 
-  const { daily, weekly, capturedCents, completedCount } = useMemo(() => {
-    const acted = (a: TopAction) => state[actionKey(a)]
+  const { daily, weekly, doneKeys, capturedCents, completedCount } = useMemo(() => {
+    // Mark for this action, but only if it's still within the current period.
+    const entryOf = (a: TopAction) => {
+      const e = state[actionKey(a)]
+      return e && inPeriod(a, e, today, week) ? e : undefined
+    }
     const instant = pool.filter(a => a.effort === 'Low')
     const strategic = pool.filter(a => a.effort !== 'Low')
 
-    const daily = rotate(instant, today).filter(a => !acted(a)).slice(0, 2)
-    const weekly = rotate(strategic, week).filter(a => !acted(a)).slice(0, 1)
+    // Rejected (this period) drops out so a fresh action rotates into its slot.
+    // Completed stays put — it holds its slot in a done state until the reset.
+    const notRejected = (a: TopAction) => entryOf(a)?.status !== 'rejected'
+    const daily = rotate(instant, today).filter(notRejected).slice(0, 2)
+    const weekly = rotate(strategic, week).filter(notRejected).slice(0, 1)
 
-    const completed = pool.filter(a => acted(a)?.status === 'completed')
+    const doneKeys = new Set<string>()
+    for (const a of [...daily, ...weekly]) {
+      if (entryOf(a)?.status === 'completed') doneKeys.add(actionKey(a))
+    }
+
+    const completed = [...daily, ...weekly].filter(a => doneKeys.has(actionKey(a)))
     return {
       daily,
       weekly,
+      doneKeys,
       capturedCents: completed.reduce((sum, a) => sum + a.impactCents, 0),
       completedCount: completed.length,
     }
   }, [pool, state, today, week])
+
+  // Pre-connection: no POS wired up — show the locked teaser + standby agents.
+  // (No data dependency, so this takes precedence over the loading skeleton.)
+  if (!isDemo && !connected) {
+    return (
+      <div className="space-y-3">
+        {showHeader && <SimpleHeader subtitle="Unlock two fresh wins daily and one strategic move each week" />}
+        <PreConnectionState />
+      </div>
+    )
+  }
 
   if (!isDemo && apiData.loading) {
     return (
@@ -235,7 +413,20 @@ export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: b
     )
   }
 
-  const pipelineCents = [...daily, ...weekly].reduce((sum, a) => sum + a.impactCents, 0)
+  // Connected, but the agents haven't produced any insights yet — honest
+  // "analyzing" state rather than the misleading "all caught up" empty slots.
+  if (!isDemo && connected && pool.length === 0) {
+    return (
+      <div className="space-y-3">
+        {showHeader && <SimpleHeader subtitle="Two fresh wins daily, one strategic move each week" />}
+        <WarmingState />
+      </div>
+    )
+  }
+
+  const pipelineCents = [...daily, ...weekly]
+    .filter(a => !doneKeys.has(actionKey(a)))
+    .reduce((sum, a) => sum + a.impactCents, 0)
 
   return (
     <div className="space-y-3">
@@ -251,6 +442,7 @@ export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: b
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <ResetTimer />
             {pipelineCents > 0 && (
               <div className="text-right">
                 <p className="text-[10px] text-[#A1A1A8]/60 uppercase tracking-wider">On the table</p>
@@ -272,13 +464,13 @@ export default function Top3ActionsPanel({ showHeader = true }: { showHeader?: b
 
       {daily.length > 0
         ? daily.map(a => (
-            <ActionItem key={actionKey(a)} action={a} cadence="daily" onComplete={onComplete} onReject={onReject} />
+            <ActionItem key={actionKey(a)} action={a} cadence="daily" done={doneKeys.has(actionKey(a))} onComplete={onComplete} onReject={onReject} />
           ))
         : <EmptySlot cadence="daily" />}
 
       {weekly.length > 0
         ? weekly.map(a => (
-            <ActionItem key={actionKey(a)} action={a} cadence="weekly" onComplete={onComplete} onReject={onReject} />
+            <ActionItem key={actionKey(a)} action={a} cadence="weekly" done={doneKeys.has(actionKey(a))} onComplete={onComplete} onReject={onReject} />
           ))
         : <EmptySlot cadence="weekly" />}
     </div>

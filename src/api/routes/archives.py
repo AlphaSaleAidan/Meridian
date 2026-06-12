@@ -12,11 +12,13 @@ Endpoints:
 """
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from ..auth import require_admin_jwt, require_org_access
 
 logger = logging.getLogger("meridian.api.archives")
 
-router = APIRouter(prefix="/api/archives", tags=["archives"])
+router = APIRouter(prefix="/api/archives", tags=["archives"], dependencies=[Depends(require_org_access)])
 
 
 @router.get("/tiers")
@@ -42,7 +44,7 @@ async def archive_stats():
     return get_archive_stats()
 
 
-@router.get("/")
+@router.get("/", dependencies=[Depends(require_admin_jwt)])
 async def list_all_archives():
     from ...workers.cold_storage import list_archives
     return {"archives": list_archives()}

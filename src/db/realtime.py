@@ -5,7 +5,6 @@ Uses Supabase's Realtime channels to push INSERT/UPDATE events to connected
 clients via the EventBus (Redis pub/sub). Falls back gracefully when
 supabase-py or the Realtime server is unavailable.
 """
-import asyncio
 import logging
 import os
 from typing import Callable

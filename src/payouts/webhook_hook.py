@@ -41,11 +41,17 @@ async def on_payment_received(
     source: str = "square",
 ) -> Optional[str]:
     """
-    Called when an inbound payment is received via webhook.
-    
+    Called when a Meridian SUBSCRIPTION payment is confirmed.
+
+    IMPORTANT: this must be invoked from a billing-side payment confirmation
+    (e.g. the Square billing webhook for Meridian invoices/checkouts), NOT
+    from POS payment webhooks — those fire for every customer purchase on a
+    connected merchant's POS, and commissions accrue on Meridian subscription
+    revenue, not merchant sales volume.
+
     Auto-calculates commission for the assigned rep (if any).
     Returns commission_id or None if no rep is assigned.
-    
+
     Args:
         org_id: The merchant organization UUID
         amount: Payment amount in dollars

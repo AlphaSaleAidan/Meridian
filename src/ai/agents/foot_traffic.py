@@ -54,12 +54,8 @@ class FootTrafficAgent(BaseAgent):
 
         if conversion_rate < 0.3:
             missed = int(total_entries * (0.3 - conversion_rate))
-            avg_ticket = 0
-            for t in transactions[:100]:
-                if t.get("total_cents"):
-                    avg_ticket = t["total_cents"]
-                    break
-            avg_ticket = avg_ticket or 800
+            totals = [t["total_cents"] for t in transactions[:500] if t.get("total_cents")]
+            avg_ticket = int(sum(totals) / len(totals)) if totals else 800
             opportunity_cents = missed * avg_ticket
             insights.append({
                 "type": "low_conversion",

@@ -10,10 +10,7 @@ import sys
 from datetime import datetime, date, timedelta, timezone
 from uuid import uuid4
 
-# Fix path
-sys.path.insert(0, "/work/meridian/src")
-
-from ai.engine import MeridianAI, AnalysisContext
+from src.ai.engine import MeridianAI, AnalysisContext
 
 
 # ─── Realistic Test Data Generator ───────────────────────────
@@ -402,7 +399,7 @@ async def run_tests():
     check(
         f"Dead stock: {tiers.get('dead_count', 0)}",
         tiers.get("dead_count", 0) == 3,
-        f"Expected 3 dead stock items",
+        "Expected 3 dead stock items",
     )
     
     # Check star product is Artisan Latte (highest weighted)
@@ -454,7 +451,7 @@ async def run_tests():
         check(
             f"Golden window starts at hour {golden['start_hour']}",
             golden["start_hour"] in range(6, 10),
-            f"Expected morning peak for coffee shop",
+            "Expected morning peak for coffee shop",
         )
     
     dow = pat.get("day_of_week", {})

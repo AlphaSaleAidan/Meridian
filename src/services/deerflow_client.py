@@ -5,7 +5,6 @@ DeerFlow runs as a FastAPI service at services/deerflow/backend/ on port 8001.
 This client provides async methods for creating research threads, running
 queries, and retrieving artifacts from the LangGraph-powered super-agent.
 """
-import asyncio
 import logging
 import os
 from typing import Any

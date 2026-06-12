@@ -4,7 +4,7 @@ Lost Sale Agent — Identifies revenue lost from walkaway customers.
 Analyzes unconverted journeys to find where and why customers leave
 without buying. Estimates recoverable revenue.
 """
-from collections import Counter, defaultdict
+from collections import Counter
 from .base import BaseCrossRefAgent
 
 

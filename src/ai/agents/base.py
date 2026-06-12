@@ -15,15 +15,42 @@ Agents are organized in tiers (1-5) that determine execution order:
   Provides auditable reasoning chains, null hypothesis testing, and
   confidence-calibrated outputs. Chain stored under result["_reasoning"].
 """
+import functools
+import inspect
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-from ..agent_logger import get_agent_logger
+from ..agent_logger import agent_run_tracer, get_agent_logger
 
 logger = logging.getLogger("meridian.ai.agents")
+
+
+def _wrap_analyze_with_tracer(fn):
+    """Wrap an agent's ``analyze`` coroutine so each call records a
+    swarm_traces row. The wrapper is idempotent — wrapping an already
+    wrapped function is a no-op (we tag it with ``_swarm_traced``)."""
+    if getattr(fn, "_swarm_traced", False):
+        return fn
+
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def _async_wrapped(self, *args, **kwargs):
+            agent_name = getattr(self, "name", None) or type(self).__name__
+            with agent_run_tracer(agent_name, task_kind="agent_run"):
+                return await fn(self, *args, **kwargs)
+        _async_wrapped._swarm_traced = True  # type: ignore[attr-defined]
+        return _async_wrapped
+
+    @functools.wraps(fn)
+    def _sync_wrapped(self, *args, **kwargs):
+        agent_name = getattr(self, "name", None) or type(self).__name__
+        with agent_run_tracer(agent_name, task_kind="agent_run"):
+            return fn(self, *args, **kwargs)
+    _sync_wrapped._swarm_traced = True  # type: ignore[attr-defined]
+    return _sync_wrapped
 
 
 @dataclass
@@ -65,6 +92,16 @@ class BaseAgent(ABC):
         self._data_avail: DataAvailability | None = None
         self._chain = None
         self._json_logger = get_agent_logger(self.__class__.__name__)
+
+    def __init_subclass__(cls, **kwargs):
+        """Auto-tee every subclass ``analyze`` invocation into swarm_traces.
+        Statistical agents that never touch an LLM are still recorded with
+        name + latency + success, which is the baseline view the masterplan
+        requires (docs/swarm_baseline.md §3)."""
+        super().__init_subclass__(**kwargs)
+        own_analyze = cls.__dict__.get("analyze")
+        if own_analyze is not None and callable(own_analyze):
+            setattr(cls, "analyze", _wrap_analyze_with_tracer(own_analyze))
 
     @abstractmethod
     async def analyze(self) -> dict:
@@ -300,20 +337,46 @@ class BaseAgent(ABC):
     def find_associations(
         self, baskets: list[list[str]], min_support: float = 0.01, min_lift: float = 1.2
     ) -> list[dict]:
-        """Basket analysis: mlxtend Apriori or manual pair counting."""
+        """Basket analysis: mlxtend FP-Growth (default) / Apriori / manual pair counting.
+
+        Backend is selected by MERIDIAN_BASKET_BACKEND env var:
+          "fpgrowth" (default) — faster, same API + output as Apriori
+          "apriori"            — legacy backend, kept for one reporting cycle
+        Unknown values fall back to "fpgrowth".
+        """
         if len(baskets) >= 50:
             try:
+                import os
                 import pandas as pd
-                from mlxtend.frequent_patterns import apriori, association_rules
+                from mlxtend.frequent_patterns import (
+                    apriori,
+                    association_rules,
+                    fpgrowth,
+                )
                 from mlxtend.preprocessing import TransactionEncoder
+
+                backend = os.environ.get("MERIDIAN_BASKET_BACKEND", "fpgrowth").lower()
+                freq_algo = apriori if backend == "apriori" else fpgrowth
 
                 te = TransactionEncoder()
                 te_arr = te.fit(baskets).transform(baskets)
                 df = pd.DataFrame(te_arr, columns=te.columns_)
-                freq = apriori(df, min_support=min_support, use_colnames=True)
+                freq = freq_algo(df, min_support=min_support, use_colnames=True)
                 if freq.empty:
                     return []
                 rules = association_rules(freq, metric="lift", min_threshold=min_lift)
+                # Deterministic top-N across backends: highest-lift first,
+                # then support (prefer more frequent), then confidence, then
+                # the rule itself. Without this, head(20) returns different
+                # subsets under Apriori vs FP-Growth because the underlying
+                # algorithms enumerate itemsets in different orders.
+                rules = rules.assign(
+                    _ante=rules["antecedents"].map(lambda s: tuple(sorted(s))),
+                    _cons=rules["consequents"].map(lambda s: tuple(sorted(s))),
+                ).sort_values(
+                    ["lift", "support", "confidence", "_ante", "_cons"],
+                    ascending=[False, False, False, True, True],
+                ).drop(columns=["_ante", "_cons"])
                 return [
                     {
                         "antecedents": list(row["antecedents"]),

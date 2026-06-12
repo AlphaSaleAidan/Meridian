@@ -11,6 +11,7 @@ class StaffingAgent(BaseAgent):
     async def analyze(self) -> dict:
         path, confidence = self._select_path()
         hourly = self.ctx.hourly_revenue
+        avail = self.get_data_availability()
 
         # --- MINIMAL path: skip, not enough data ---
         if path == "minimal" or len(hourly) < 24:

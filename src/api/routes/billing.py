@@ -155,7 +155,7 @@ async def create_checkout(req: CheckoutRequest, _user: dict = Depends(require_jw
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Checkout creation failed")
         raise HTTPException(status_code=500, detail="Checkout creation failed")
 
@@ -192,7 +192,7 @@ async def create_invoice(req: InvoiceRequest):
         raise HTTPException(status_code=501, detail="Billing service not yet configured.")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Invoice creation failed")
         raise HTTPException(status_code=500, detail="Invoice creation failed")
 
@@ -217,7 +217,7 @@ async def cancel_subscription(req: CancelRequest):
         raise HTTPException(status_code=501, detail="Billing service not yet configured.")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Cancellation failed")
         raise HTTPException(status_code=500, detail="Cancellation failed")
 
@@ -258,7 +258,7 @@ async def get_billing_status(org_id: str, _user: dict = Depends(require_jwt)):
 
     except RuntimeError:
         return {"status": "unavailable", "tier": None}
-    except Exception as e:
+    except Exception:
         logger.exception(f"Status check failed for org {org_id}")
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
 
@@ -317,7 +317,7 @@ async def update_payment_method(req: UpdatePaymentMethodRequest):
         raise HTTPException(501, "Billing service not configured")
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Payment method update failed")
         raise HTTPException(500, "Could not create payment update link")
 
@@ -355,7 +355,7 @@ async def notify_payment_failed(req: PaymentNotifyRequest):
                 pass
 
         if not update_url:
-            update_url = f"https://meridian.tips/canada/login"
+            update_url = "https://meridian.tips/canada/login"
 
         from ...email.send import send_payment_failed
         amount_display = f"${amount_cents / 100:.2f}"
@@ -374,7 +374,7 @@ async def notify_payment_failed(req: PaymentNotifyRequest):
 
     except RuntimeError:
         raise HTTPException(503, "Database not available")
-    except Exception as e:
+    except Exception:
         logger.exception("Payment failed notification error")
         raise HTTPException(500, "Could not send payment notification")
 
@@ -395,7 +395,7 @@ async def process_renewals():
         return {"status": "ok"}
     except ImportError:
         raise HTTPException(status_code=501, detail="Billing service not configured.")
-    except Exception as e:
+    except Exception:
         logger.exception("Manual renewal processing failed")
         raise HTTPException(status_code=500, detail="Renewal processing failed")
 
@@ -438,7 +438,7 @@ async def get_invoice_url(org_id: str, _user: dict = Depends(require_jwt)):
         }
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception(f"Invoice URL lookup failed for {org_id}")
         raise HTTPException(500, "Could not retrieve invoice URL")
 
@@ -488,7 +488,7 @@ async def check_expiring_trials():
                     logger.warning(f"Trial expiring email failed for {email}: {e}")
 
         return {"status": "ok"}
-    except Exception as e:
+    except Exception:
         logger.exception("Trial check failed")
         raise HTTPException(status_code=500, detail="Trial check failed")
 
@@ -510,7 +510,11 @@ async def handle_billing_webhook(request: Request):
             logger.warning("SQUARE_WEBHOOK_SIGNATURE_KEY not configured — rejecting webhook")
             return Response(status_code=503)
         signature = request.headers.get("x-square-hmacsha256-signature", "")
-        notification_url = str(request.url)
+        # Must be the exact URL Square signs against; str(request.url)
+        # reconstructs the internal/http URL behind the Railway proxy and
+        # always mismatches.
+        from ...config import app as _app_config
+        notification_url = _app_config.billing_webhook_url
         combined = notification_url.encode("utf-8") + raw_body
         expected = hmac.new(
             key=sig_key.encode("utf-8"),
@@ -543,7 +547,13 @@ async def handle_billing_webhook(request: Request):
 
             if order_id:
                 try:
-                    subs = await db.select("subscriptions")
+                    # Server-side narrowing: only statuses the activation logic
+                    # acts on. Matching still scans metadata.square_order_id in
+                    # Python — filtering that server-side needs a verified jsonb
+                    # column + index (follow-up).
+                    subs = await db.select("subscriptions", filters={
+                        "status": "in.(active,trialing,pending_payment,past_due)",
+                    })
                 except Exception:
                     subs = []
                 for sub in subs:
@@ -610,7 +620,10 @@ async def handle_billing_webhook(request: Request):
 
             if invoice_id:
                 try:
-                    subs = await db.select("subscriptions")
+                    # Server-side narrowing (see payment.completed branch above).
+                    subs = await db.select("subscriptions", filters={
+                        "status": "in.(active,trialing,pending_payment,past_due)",
+                    })
                 except Exception:
                     subs = []
                 for sub in subs:
@@ -680,8 +693,9 @@ async def handle_billing_webhook(request: Request):
         return {"status": "ok"}
 
     except RuntimeError:
+        # Return 5xx so Square retries the event instead of dropping it.
         logger.error("Database not available for billing webhook")
-        return {"status": "error", "detail": "Database unavailable"}
-    except Exception as e:
+        return Response(status_code=500)
+    except Exception:
         logger.exception("Billing webhook processing failed")
-        return {"status": "error", "detail": "Webhook processing failed"}
+        return Response(status_code=500)

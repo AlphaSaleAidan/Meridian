@@ -8,7 +8,7 @@ skeletal pose moments (when FreeMoCap is available).
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger("meridian.ai.reid.journey")

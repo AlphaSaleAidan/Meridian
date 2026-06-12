@@ -59,7 +59,7 @@ class CommissionService:
         try:
             commission_id = await self.db.rpc("calculate_commission", {
                 "p_org_id": org_id,
-                "p_gross_amount": float(gross_amount),
+                "p_gross_amount": str(gross_amount),
                 "p_source_type": source_type,
                 "p_source_reference": source_reference,
                 "p_period_start": period_start,
@@ -73,6 +73,19 @@ class CommissionService:
                     error="No active rep assignment for this organization"
                 )
 
+        except Exception as e:
+            logger.error(f"Commission processing failed for org {org_id}: {e}")
+            return CommissionResult(success=False, error=str(e))
+
+        # The RPC returned an id — the commission IS recorded. Anything that
+        # fails past this point is enrichment-only and must not report failure.
+        result = CommissionResult(
+            commission_id=commission_id,
+            gross_amount=gross_amount,
+            success=True,
+        )
+
+        try:
             # Fetch the commission details
             rows = await self.db.select(
                 "commissions",
@@ -82,24 +95,22 @@ class CommissionService:
             )
 
             data = rows[0] if rows else None
-            logger.info(
-                f"Commission recorded: ${data['commission_amount']} for rep "
-                f"{data['sales_reps']['name']} on ${gross_amount} from org {org_id}"
-            )
-
-            return CommissionResult(
-                commission_id=commission_id,
-                rep_id=data["rep_id"],
-                rep_name=data["sales_reps"]["name"],
-                gross_amount=gross_amount,
-                commission_rate=Decimal(str(data["commission_rate"])),
-                commission_amount=Decimal(str(data["commission_amount"])),
-                success=True,
-            )
-
+            if data:
+                result.rep_id = data["rep_id"]
+                result.rep_name = (data.get("sales_reps") or {}).get("name")
+                result.commission_rate = Decimal(str(data["commission_rate"]))
+                result.commission_amount = Decimal(str(data["commission_amount"]))
+                logger.info(
+                    f"Commission recorded: ${data['commission_amount']} for rep "
+                    f"{result.rep_name} on ${gross_amount} from org {org_id}"
+                )
         except Exception as e:
-            logger.error(f"Commission processing failed for org {org_id}: {e}")
-            return CommissionResult(success=False, error=str(e))
+            logger.warning(
+                f"Commission {commission_id} recorded for org {org_id}, "
+                f"but enrichment lookup failed: {e}"
+            )
+
+        return result
 
     async def get_rep_earnings(self, rep_id: str) -> dict:
         """Get earnings summary for a rep."""
@@ -110,6 +121,8 @@ class CommissionService:
             limit=1,
         )
         rep = reps[0] if reps else None
+        if rep is None:
+            return {"error": "Rep not found", "rep_id": rep_id}
 
         pending = await self.db.select(
             "commissions",

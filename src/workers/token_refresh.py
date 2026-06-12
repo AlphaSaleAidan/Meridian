@@ -50,14 +50,21 @@ async def refresh_expiring_tokens() -> dict:
 
             tokens = await oauth.refresh_token(refresh_token)
 
+            update_data = {
+                "access_token_enc": encrypt_token(tokens["access_token"]),
+                "token_expires_at": tokens.get("expires_at"),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+            # Square may omit refresh_token in the refresh response.
+            # Only overwrite when a non-empty new value is returned —
+            # encrypting an empty string would brick future refreshes.
+            new_refresh_token = tokens.get("refresh_token")
+            if new_refresh_token:
+                update_data["refresh_token_enc"] = encrypt_token(new_refresh_token)
+
             await db.update(
                 "pos_connections",
-                {
-                    "access_token_enc": encrypt_token(tokens["access_token"]),
-                    "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
-                    "token_expires_at": tokens.get("expires_at"),
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                },
+                update_data,
                 filters={"id": f"eq.{connection_id}"},
             )
 

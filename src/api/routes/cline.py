@@ -11,9 +11,11 @@ Endpoints:
 import logging
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
+
+from ..auth import require_admin_jwt, require_org_access
 
 logger = logging.getLogger("meridian.api.cline")
 
@@ -147,7 +149,7 @@ async def report_error(req: ErrorReport):
 
 # ── GET /api/cline/conversations/{org_id} ─────────────────
 
-@router.get("/api/cline/conversations/{org_id}")
+@router.get("/api/cline/conversations/{org_id}", dependencies=[Depends(require_org_access)])
 async def get_conversations(org_id: str, limit: int = 20):
     """Get recent Cline conversations for an organization."""
     from ...db import get_db
@@ -183,7 +185,7 @@ async def get_conversations(org_id: str, limit: int = 20):
 
 # ── GET /api/cline/health/{org_id} ────────────────────────
 
-@router.get("/api/cline/health/{org_id}")
+@router.get("/api/cline/health/{org_id}", dependencies=[Depends(require_org_access)])
 async def get_health(org_id: str):
     """Get system health summary for an organization."""
     cline = _get_cline_sync()
@@ -212,7 +214,7 @@ async def get_health(org_id: str):
 
 # ── GET /api/cline/errors/{org_id} ────────────────────────
 
-@router.get("/api/cline/errors/{org_id}")
+@router.get("/api/cline/errors/{org_id}", dependencies=[Depends(require_org_access)])
 async def get_errors(org_id: str, limit: int = 25):
     """Get recent Cline errors for an organization."""
     from ...db import get_db
@@ -237,7 +239,7 @@ async def get_errors(org_id: str, limit: int = 25):
 
 # ── GET /api/admin/it-dashboard ───────────────────────────
 
-@router.get("/api/admin/it-dashboard")
+@router.get("/api/admin/it-dashboard", dependencies=[Depends(require_admin_jwt)])
 async def it_dashboard():
     """IT dashboard — aggregated system health across all organizations.
 

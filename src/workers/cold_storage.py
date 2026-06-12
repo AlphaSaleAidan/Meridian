@@ -207,7 +207,7 @@ def _write_archive(org_id: str, year: int, month: int, tier_name: str, table_nam
 
     ext = ".jsonl.zst"
     try:
-        import zstandard
+        import zstandard  # noqa: F401  optional-dependency probe
     except ImportError:
         ext = ".jsonl.gz"
 

@@ -16,6 +16,8 @@ Training signals:
 import asyncio
 import json
 import logging
+import os
+import shutil
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -86,7 +88,11 @@ class SwarmTrainer:
                         pattern_count=raw.get("pattern_count", 0),
                     )
             except Exception as e:
-                logger.warning(f"Failed to load scores: {e}")
+                logger.error(f"Failed to load scores: {e}")
+                try:
+                    shutil.copy(SCORES_FILE, SCORES_FILE.with_suffix(".json.bak"))
+                except OSError:
+                    pass
 
     def _save_scores(self):
         TRAINING_DIR.mkdir(parents=True, exist_ok=True)
@@ -102,7 +108,11 @@ class SwarmTrainer:
                 "last_trained": card.last_trained,
                 "pattern_count": card.pattern_count,
             }
-        SCORES_FILE.write_text(json.dumps(data, indent=2))
+        # Atomic write — multiple processes (API, scheduler, nightly engine)
+        # save this file; a torn write corrupts every other reader.
+        tmp = SCORES_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, indent=2))
+        os.replace(tmp, SCORES_FILE)
 
     def _log_training(self, event: dict):
         TRAINING_DIR.mkdir(parents=True, exist_ok=True)
@@ -124,7 +134,9 @@ class SwarmTrainer:
             signal.agent_name,
             AgentScorecard(agent_name=signal.agent_name),
         )
-        card.total_runs += 1
+        # total_runs is incremented once per agent per cycle in
+        # run_training_cycle Phase 1 — not here, where multiple signals
+        # per run (quality + agreement) would inflate the count.
 
         if signal.signal_type == "accuracy":
             alpha = 0.1
@@ -181,6 +193,9 @@ class SwarmTrainer:
 
         # Phase 1: Grade reasoning quality
         for name, output in completed.items():
+            card = self._scores.setdefault(name, AgentScorecard(agent_name=name))
+            card.total_runs += 1
+
             reasoning = output.get("_reasoning", {})
             confidence = output.get("reasoning_confidence", 0.5)
             insights_count = len(output.get("insights", []))
@@ -203,7 +218,10 @@ class SwarmTrainer:
         patterns_stored = 0
         for name, output in completed.items():
             card = self._scores.get(name, AgentScorecard(agent_name=name))
-            if card.accuracy_score > 0.6 and output.get("insights"):
+            # accuracy_score sits at its 0.5 cold-start value until a real
+            # accuracy-signal producer exists (TODO) — accept it so the
+            # pattern store isn't permanently gated shut.
+            if card.accuracy_score >= 0.5 and output.get("insights"):
                 self._store_pattern({
                     "agent": name,
                     "org_id": ctx_org_id,
@@ -221,6 +239,9 @@ class SwarmTrainer:
         # Phase 5: Build DSPy training examples from high-quality outputs
         dspy_examples = self._build_dspy_examples(completed)
         self._training_examples.extend(dspy_examples)
+        # Cap unconditionally — _compile_dspy only truncates when the
+        # optimizer is available, so the queue would otherwise grow forever.
+        self._training_examples = self._training_examples[-100:]
 
         # Phase 6: Trigger DSPy compilation if enough examples
         if len(self._training_examples) >= 10:
@@ -256,19 +277,18 @@ class SwarmTrainer:
         }
 
     def _grade_reasoning(self, reasoning: dict, confidence: float, insights_count: int) -> float:
+        # Schema is ReasoningChain.to_dict(): per-phase summaries live in
+        # "thinking", experiment tallies in "experiments_confirmed"/"_total".
         score = 0.3
-        steps = reasoning.get("steps", [])
-        if len(steps) >= 4:
+        thinking = reasoning.get("thinking", [])
+        if len(thinking) >= 4:
             score += 0.15
-        if len(steps) >= 5:
+        if len(thinking) >= 5:
             score += 0.1
-        experiments = [s for s in steps if s.get("phase") == "experiment"]
-        if experiments:
-            exp_content = experiments[0].get("content", {})
-            exps = exp_content.get("experiments", [])
-            confirmed = sum(1 for e in exps if e.get("result") == "CONFIRMED")
-            if exps:
-                score += 0.15 * (confirmed / len(exps))
+        experiments_total = reasoning.get("experiments_total", 0)
+        if experiments_total:
+            confirmed = reasoning.get("experiments_confirmed", 0)
+            score += 0.15 * (confirmed / experiments_total)
         if 0.4 <= confidence <= 0.9:
             score += 0.15
         elif confidence > 0.9:
@@ -326,7 +346,9 @@ class SwarmTrainer:
         examples = []
         for name, output in completed.items():
             card = self._scores.get(name, AgentScorecard(agent_name=name))
-            if card.accuracy_score < 0.55:
+            # Accept the 0.5 cold-start accuracy until a real accuracy-signal
+            # producer exists (TODO) — otherwise no examples are ever built.
+            if card.accuracy_score < 0.5:
                 continue
             for insight in output.get("insights", []):
                 detail = insight.get("detail", "")
@@ -349,11 +371,12 @@ class SwarmTrainer:
             from .dspy_optimizer import MeridianOptimizer
             optimizer = MeridianOptimizer()
             if optimizer.is_available:
+                examples_used = min(50, len(self._training_examples))
                 optimizer.compile_with_examples(self._training_examples[-50:])
                 self._training_examples = self._training_examples[-20:]
                 self._log_training({
                     "event": "dspy_compiled",
-                    "examples_used": min(50, len(self._training_examples)),
+                    "examples_used": examples_used,
                 })
                 logger.info("DSPy optimizer recompiled with new training data")
         except Exception as e:
@@ -420,9 +443,17 @@ class SwarmTrainer:
 
         pending = TRAINING_DIR / "pending-insights.jsonl"
         if pending.exists():
-            lines = pending.read_text().strip().split("\n")
+            # Claim the file with an atomic rename before reading — a plain
+            # read-then-truncate races with concurrent trainers and with
+            # writers appending between the read and the truncate.
+            processing = pending.with_suffix(".jsonl.processing")
+            try:
+                pending.rename(processing)
+            except OSError:
+                return None  # another process claimed it first
+            lines = processing.read_text().strip().split("\n")
+            outputs = {}
             if lines and lines[0]:
-                outputs = {}
                 for line in lines:
                     try:
                         data = json.loads(line)
@@ -436,9 +467,9 @@ class SwarmTrainer:
                         outputs[agent]["insights"].append(data)
                     except json.JSONDecodeError:
                         continue
-                if outputs:
-                    pending.write_text("")
-                    return outputs
+            processing.unlink(missing_ok=True)
+            if outputs:
+                return outputs
         return None
 
     # ─── Status / Reporting ────────────────────────────────
@@ -481,4 +512,8 @@ def get_swarm_trainer(db=None) -> SwarmTrainer:
     global _shared_trainer
     if _shared_trainer is None:
         _shared_trainer = SwarmTrainer(db=db)
+    elif db is not None and _shared_trainer.db is None:
+        # First construction may have happened without a DB (e.g. API route
+        # before the engine wires one in) — attach it instead of dropping it.
+        _shared_trainer.db = db
     return _shared_trainer

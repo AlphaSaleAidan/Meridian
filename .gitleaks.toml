@@ -1,0 +1,91 @@
+# Meridian gitleaks ruleset. Used by the pre-commit hook (.pre-commit-config.yaml)
+# and any manual `gitleaks detect --config .gitleaks.toml .` invocation.
+#
+# Extends gitleaks' built-in defaults; adds rules for the specific token formats
+# this repo's services produce or consume.
+
+title = "Meridian gitleaks ruleset"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API key (sk-or-v1-...)"
+regex = '''sk-or-v1-[A-Za-z0-9]{32,}'''
+keywords = ["sk-or-v1-"]
+
+[[rules]]
+id = "litellm-master-key"
+description = "LiteLLM gateway master key (sk-lite-...)"
+regex = '''sk-lite-[A-Za-z0-9]{32,}'''
+keywords = ["sk-lite-"]
+
+[[rules]]
+id = "groq-api-key"
+description = "Groq API key (gsk_...)"
+regex = '''gsk_[A-Za-z0-9]{40,}'''
+keywords = ["gsk_"]
+
+[[rules]]
+id = "cerebras-api-key"
+description = "Cerebras API key (csk-...)"
+regex = '''csk-[A-Za-z0-9_-]{32,}'''
+keywords = ["csk-"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key (sk-ant-...)"
+regex = '''sk-ant-[A-Za-z0-9_-]{40,}'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "deepseek-api-key"
+description = "DeepSeek API key (sk-...)"
+regex = '''sk-[a-f0-9]{32}'''
+keywords = ["DEEPSEEK_API_KEY", "deepseek"]
+
+[[rules]]
+id = "telegram-bot-token"
+description = "Telegram bot token"
+regex = '''[0-9]{8,12}:[A-Za-z0-9_-]{35}'''
+keywords = ["TELEGRAM_BOT_TOKEN", "telegram"]
+
+[[rules]]
+id = "github-pat-classic"
+description = "GitHub Personal Access Token (classic ghp_...)"
+regex = '''gh[pousr]_[A-Za-z0-9]{36}'''
+keywords = ["ghp_", "ghs_", "gho_", "ghu_", "ghr_"]
+
+[[rules]]
+id = "github-fine-grained-pat"
+description = "GitHub Fine-grained PAT (github_pat_...)"
+regex = '''github_pat_[A-Za-z0-9_]{82}'''
+keywords = ["github_pat_"]
+
+[[rules]]
+id = "supabase-service-key"
+description = "Supabase service-role JWT (eyJ... long)"
+regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]{100,}\.[A-Za-z0-9_-]{32,}'''
+keywords = ["SUPABASE_SERVICE", "service_role"]
+
+[allowlist]
+# Don't flag placeholder strings that explicitly mark themselves as not-real keys.
+description = "Placeholders and tests"
+regexes = [
+  '''<<FILL''',
+  '''sk-or-v1-INVALID''',
+  '''sk-local-noauth''',
+  '''sk-or-v1-aaaaaaaa''',     # docstring/example strings only
+]
+paths = [
+  '''(.*?)\.lock''',
+  '''package-lock\.json''',
+  '''pnpm-lock\.yaml''',
+  '''node_modules/''',
+  '''\.venv/''',
+  '''vendor/''',
+  '''data/scraped/''',
+  '''docs/scraping-samples/''',
+  '''docs/audit2-s.*\.png''',  # audit screenshots
+]

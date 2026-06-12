@@ -16,6 +16,7 @@ data/models/
 data/vectors.db
 data/spaces/
 data/scraped/
+data/swarm_traces.sqlite
 celerybeat-schedule
 supabase/.temp/
 .claude-flow/sessions/

@@ -215,8 +215,6 @@ async def handle_subscription_payment(payment_data: dict):
     business_name = payment_data.get("note", "New Business")
     payment_id = payment_data.get("id", "")
 
-    db = get_db()
-
     try:
         req = CreateAccountRequest(
             email=customer_email,
@@ -310,6 +308,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                     "business_name": req.business_name,
                     "org_id": req.org_id,
                     "role": "owner",
+                    "must_reset_password": True,
                 },
             },
         )
@@ -332,7 +331,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                 pw_resp = await client.put(
                     f"{supabase_url}/auth/v1/admin/users/{auth_user_id}",
                     headers={"Authorization": f"Bearer {service_key}", "apikey": service_key, "Content-Type": "application/json"},
-                    json={"password": temp_password, "user_metadata": {"full_name": req.owner_name, "business_name": req.business_name, "org_id": req.org_id, "role": "owner"}},
+                    json={"password": temp_password, "user_metadata": {"full_name": req.owner_name, "business_name": req.business_name, "org_id": req.org_id, "role": "owner", "must_reset_password": True}},
                 )
                 if pw_resp.status_code == 200:
                     logger.info(f"Updated password and metadata for existing user {auth_user_id}")
@@ -623,7 +622,6 @@ async def connect_pos_onboarding(req: ConnectPosRequest):
 @router.post("/verify-pos")
 async def verify_pos_onboarding(req: VerifyPosRequest):
     """Quick verify that POS connection is still live."""
-    from .pos_connections import test_connection, TestConnectionRequest
 
     if req.deal_id:
         db = get_db()

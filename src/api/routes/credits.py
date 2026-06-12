@@ -18,9 +18,10 @@ import os
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, EmailStr, Field
 
+from ..auth import require_admin_jwt, require_jwt, require_org_member
 from ...credits import (
     COSTS,
     LOW_BALANCE_THRESHOLD,
@@ -79,8 +80,9 @@ def _serialize_costs() -> dict[str, dict[str, Any]]:
 
 
 @router.get("/balance/{merchant_id}", response_model=BalanceResponse)
-async def get_credit_balance(merchant_id: str):
+async def get_credit_balance(merchant_id: str, user: dict = Depends(require_jwt)):
     """Current balance + the price sheet. Single fetch for the dashboard header."""
+    await require_org_member(user, merchant_id)
     balance = await get_balance(merchant_id)
     return BalanceResponse(
         merchant_id=merchant_id,
@@ -122,9 +124,10 @@ async def get_credit_ledger(
         return {"entries": []}
 
 
-@router.post("/grant", status_code=200)
+@router.post("/grant", status_code=200, dependencies=[Depends(require_admin_jwt)])
 async def post_credit_grant(req: GrantRequest):
-    """Admin / Stripe-webhook entry point for adding credits."""
+    """Admin entry point for manually adding credits. Webhook-driven grants
+    go through handle_invoice_payment, not this route."""
     new_balance = await grant(
         merchant_id=req.merchant_id,
         amount=req.amount,
@@ -134,7 +137,7 @@ async def post_credit_grant(req: GrantRequest):
     return {"merchant_id": req.merchant_id, "balance": new_balance, "granted": req.amount}
 
 
-@router.post("/deduct", status_code=200)
+@router.post("/deduct", status_code=200, dependencies=[Depends(require_admin_jwt)])
 async def post_credit_deduct(req: DeductRequest):
     """Server-side deduction for content / non-phone actions that meter from
     the frontend. Phone and SMS deduct inline at the route level; this is
@@ -206,13 +209,14 @@ async def get_packs():
 
 
 @router.post("/purchase", status_code=200)
-async def post_purchase(req: PurchaseRequest):
+async def post_purchase(req: PurchaseRequest, user: dict = Depends(require_jwt)):
     """Start a credit-pack purchase. Returns the Square hosted invoice URL.
 
     The frontend should redirect the user to invoice_url; on payment the
     Square webhook will grant credits and the dashboard will reflect the
     new balance on the customer's next poll.
     """
+    await require_org_member(user, req.merchant_id)
     result = await create_purchase_invoice(
         merchant_id=req.merchant_id,
         pack_id=req.pack_id,
@@ -249,7 +253,10 @@ def _verify_square_signature(request: Request, raw_body: bytes) -> bool:
     signature = request.headers.get("x-square-hmacsha256-signature", "")
     if not signature:
         return False
-    notification_url = str(request.url)
+    # Exact URL Square signs against (str(request.url) mismatches behind
+    # the Railway proxy — see billing webhook).
+    from ...config import app as _app_config
+    notification_url = _app_config.credits_webhook_url
     combined = notification_url.encode("utf-8") + raw_body
     digest = hmac.new(
         key=sig_key.encode("utf-8"),
