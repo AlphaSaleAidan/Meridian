@@ -1,4 +1,6 @@
-const CACHE_NAME = 'meridian-v2'
+// Bump this on every manual frontend deploy — activate purges any cache whose
+// name != CACHE_NAME, so a stale name leaves old shells stranded in browsers.
+const CACHE_NAME = 'meridian-v3-20260607'
 const SHELL_URLS = ['/', '/index.html']
 
 self.addEventListener('install', (event) => {
@@ -38,19 +40,18 @@ async function networkFirst(request) {
   }
 }
 
-async function cacheFirst(request) {
-  const cached = await caches.match(request)
-  if (cached) return cached
-  try {
-    const res = await fetch(request)
-    if (res.ok) {
-      const cache = await caches.open(CACHE_NAME)
-      cache.put(request, res.clone())
-    }
-    return res
-  } catch {
-    return new Response('', { status: 503 })
-  }
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(CACHE_NAME)
+  const cached = await cache.match(request)
+  const network = fetch(request)
+    .then((res) => {
+      if (res.ok) cache.put(request, res.clone())
+      return res
+    })
+    .catch(() => null)
+  // Serve cache immediately if present; always revalidate in the background so
+  // a reused (non-hashed) asset can't be pinned to a stale copy forever.
+  return cached || (await network) || new Response('', { status: 503 })
 }
 
 async function navigationFallback(request) {
@@ -71,7 +72,7 @@ self.addEventListener('fetch', (event) => {
     return
   }
   if (isStaticAsset(url.pathname)) {
-    event.respondWith(cacheFirst(request))
+    event.respondWith(staleWhileRevalidate(request))
     return
   }
   if (request.mode === 'navigate') {

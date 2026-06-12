@@ -15,7 +15,6 @@ import {
 import { useDemoContext, getActiveBusinessType } from '@/lib/demo-context'
 import { generateScheduleShifts, generateScheduleStaff } from '@/lib/agent-data'
 import MoneyLeftCard from '@/components/MoneyLeftCard'
-import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 import RevenueChart from '@/components/RevenueChart'
 import InsightCard from '@/components/InsightCard'
 import ConnectionBadge from '@/components/ConnectionBadge'
@@ -171,7 +170,39 @@ export default function OverviewPage() {
             Details →
           </Link>
         </div>
-        <Top3ActionsPanel showHeader={false} />
+        {topActions.length > 0 ? (
+          <div className="space-y-2">
+            {topActions.map(action => (
+              <DashboardTiltCard
+                key={action.rank}
+                className={clsx(
+                  'card p-4 flex items-center gap-3',
+                  action.priority === 'Critical' && 'border-red-500/10'
+                )}
+              >
+                <div className={clsx(
+                  'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 font-bold text-sm font-mono',
+                  action.rank === 1 ? 'bg-red-500/10 text-red-400' : action.rank === 2 ? 'bg-amber-400/10 text-amber-400' : 'bg-[#1A8FD6]/10 text-[#1A8FD6]'
+                )}>
+                  {action.rank}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#F5F5F7] truncate">{action.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={clsx(
+                      'text-[10px] font-medium px-1.5 py-0.5 rounded-full border',
+                      action.priority === 'Critical' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    )}>{action.priority}</span>
+                    <span className="text-[10px] text-[#A1A1A8]/50 font-mono">{action.confidence}% conf</span>
+                  </div>
+                </div>
+                <span className="text-sm font-bold font-mono text-[#17C5B0] flex-shrink-0">+{formatCents(action.impactCents)}/mo</span>
+              </DashboardTiltCard>
+            ))}
+          </div>
+        ) : (
+          <AnalyzingSection title="Identifying your top actions..." description="Actions will appear once enough data is analyzed by our AI agents." />
+        )}
       </ScrollReveal>
 
       {/* Revenue Forecast Widget + Money Left */}
