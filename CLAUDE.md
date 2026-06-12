@@ -3,6 +3,13 @@
 > AI-powered POS analytics for independent businesses (restaurants, smoke shops, cafes, retail, auto shops, dispensaries).
 > FastAPI + React/Vite + Supabase + Square/Clover/Toast + Celery/Redis + 41-agent AI swarm.
 
+> **⚠️ Canada portal work: read [`docs/CANADA_PORTAL_TRUTH.md`](docs/CANADA_PORTAL_TRUTH.md) FIRST.**
+> It defines the canonical feature state for all three Canada surfaces (SR / customer / demo),
+> the regression history, and the branching + deploy rules. Any PR touching
+> `frontend/src/pages/canada/` must update that file in the same PR.
+> Hard doctrine: the SR portal carries ZERO POS UI — POS connection happens only in the
+> customer's own portal. US and Canada portals are intentionally different.
+
 > **Security posture (post 2026-05-31 audit merges):** All four SEV-0 customer-readiness gaps and the canada.py JWT-forwarding work are now on `main`. See [`docs/AUTH_HARDENING_PLAN.md`](docs/AUTH_HARDENING_PLAN.md) for the original findings and the resolution commits (`dbc333f`, `c9cbb07`).
 
 ## Runtime
