@@ -51,6 +51,21 @@ function clearRep() {
 async function resolveRepProfile(email: string): Promise<SalesRepProfile | null> {
   if (!supabase) return null
 
+  // 0. SECURITY GATE — a created customer account must NEVER resolve to a rep
+  // profile. Customers carry role:"owner" + org_id/business_name in their
+  // user_metadata (set by /api/{us,canada}/create-customer); reps carry
+  // role:"sales_rep". Without this check, a signed-in customer who hits a
+  // /portal route would fall through to the local-only fallback below (which
+  // sets is_active:true whenever the RLS insert is blocked — exactly a
+  // customer's case) and gain rep CRM access. Deny anyone who is not a rep.
+  const { data: userData } = await supabase.auth.getUser()
+  const meta = userData.user?.user_metadata ?? {}
+  const role = String(meta.role ?? '').toLowerCase()
+  const isCustomer = role === 'owner' || role === 'customer' || (!!meta.org_id && role !== 'sales_rep')
+  if (isCustomer) {
+    return null
+  }
+
   // 1. Try to find existing record (active or pending approval)
   const { data: repData } = await supabase
     .from('sales_reps')
@@ -59,6 +74,13 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     .maybeSingle()
 
   if (repData) return repFromRow(repData)
+
+  // Only a user explicitly tagged role:"sales_rep" may be auto-provisioned a
+  // rep row or fall back to a local profile. A logged-in user with NO sales_reps
+  // row and no sales_rep role is not a rep — deny rather than fabricate access.
+  if (role !== 'sales_rep') {
+    return null
+  }
 
   // 2. No record — try to auto-create one (pending approval)
   const { data: inserted, error: insertErr } = await supabase
@@ -74,7 +96,8 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
 
   if (inserted && !insertErr) return repFromRow(inserted)
 
-  // INSERT blocked by RLS — create a local-only profile so the CRM is usable
+  // INSERT blocked by RLS but the user IS a sales_rep — create a local-only
+  // profile so the CRM is usable (pending DB-side approval).
   const localProfile: SalesRepProfile = {
     rep_id: 'local_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
     name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
@@ -231,8 +254,15 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
 
     const profile = await resolveRepProfile(data.user.email!)
     if (!profile) {
+      // Either not a rep at all (e.g. a customer account) or rep provisioning
+      // failed. Drop the session so a customer can't sit half-authed on a rep
+      // route, and point them at the customer portal.
+      const meta = data.user.user_metadata ?? {}
+      const looksLikeCustomer = String(meta.role ?? '').toLowerCase() === 'owner' || !!meta.org_id
       await supabase.auth.signOut()
-      return 'Could not create sales rep profile'
+      return looksLikeCustomer
+        ? 'This is a customer account. Please sign in at /customer/login.'
+        : 'Could not create sales rep profile'
     }
 
     saveRep(profile)
