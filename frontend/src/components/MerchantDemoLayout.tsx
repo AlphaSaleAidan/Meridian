@@ -1,24 +1,31 @@
 import { DemoContextProvider } from '@/lib/demo-context'
-import SEO from './SEO'
 import MerchantLayout from './MerchantLayout'
+import BusinessTypeSelector from './BusinessTypeSelector'
+import DemoHeaderBadge from './DemoHeaderBadge'
+import WalkthroughEngine from './demo/WalkthroughEngine'
+import SEO from './SEO'
 
 /**
- * Public demo wrapper for the Canada merchant portal. Renders the trimmed
- * merchant UI (same layout + pillars as /canada/merchant) under /canada/demo
- * with no auth gate. Demo mode is path-driven (useOrgId → 'demo'), so all
- * pages self-serve synthetic CAD data. No WalkthroughEngine, so there is no
- * "Take a Tour" banner here.
+ * Canada interactive demo — the new 3-pillar merchant portal, unauthenticated.
+ *
+ * Mounts MerchantLayout under /canada/demo so the demo renders the exact same
+ * chrome and pages as the live /canada/merchant portal (path-based demo mode in
+ * useOrg makes the pages fetch the 'demo' org with no login). Demo chrome
+ * (business selector, CAD badge, tour) layers on top via DemoContextProvider.
  */
 export default function MerchantDemoLayout() {
   return (
     <DemoContextProvider>
       <SEO
-        title="Meridian Intelligence — Interactive Demo"
-        description="Explore Meridian's AI-powered POS intelligence with live demo data. Recoverable revenue, inventory, scheduling and phone-call insights in action."
+        title="Meridian Intelligence — Interactive Demo (Canada)"
+        description="Explore the Meridian merchant portal with live demo data in Canadian dollars."
         path="/canada/demo"
         noindex
       />
-      <MerchantLayout />
+      <BusinessTypeSelector />
+      <DemoHeaderBadge />
+      <WalkthroughEngine />
+      <MerchantLayout basePath="/canada/demo" />
     </DemoContextProvider>
   )
 }

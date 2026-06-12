@@ -884,6 +884,8 @@ export default function WalkthroughEngine() {
 
   return (
     <>
+      {/* Tour launcher banner removed 2026-06-11 (Aidan) — the walkthrough
+          engine stays intact; nothing currently triggers it. */}
 
       {/* Floating step counter — only when tour is active */}
       {active && !showCheckout && createPortal(

@@ -4,8 +4,7 @@ import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
-import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
-import { merchantPillars, type Pillar } from '@/config/merchantPillars'
+import { merchantPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
 
 const moneyPillars = merchantPillars.filter(p => !p.secondary && p.path !== 'settings')
 const secondaryPillars = merchantPillars.filter(p => p.secondary)
@@ -40,10 +39,9 @@ function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath
   )
 }
 
-export default function MerchantLayout() {
+export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { basePath?: string } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const closeSidebar = () => setSidebarOpen(false)
-  const basePath = useMerchantBasePath()
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">

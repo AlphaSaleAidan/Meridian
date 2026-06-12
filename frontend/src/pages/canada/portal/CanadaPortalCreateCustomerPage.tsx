@@ -6,7 +6,7 @@ import {
   Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
-import POSSystemPicker from '@/components/POSSystemPicker'
+import { posSystems } from '@/data/pos-systems'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
@@ -862,16 +862,20 @@ export default function CanadaPortalCreateCustomerPage() {
               </div>
             </div>
 
-            {/* POS Selector */}
+            {/* POS question — plain qualification field only. Connecting the POS
+                is done by the customer inside their own portal, never here. */}
             <div>
-              <label className="block text-2xs font-medium text-pm-canada-text-muted mb-2">Current POS System</label>
-              <POSSystemPicker
-                value={form.pos || null}
-                onChange={(key) => update('pos', key)}
-                mode="new-customer"
-                portalContext="canada"
-                vertical={form.vertical || null}
-              />
+              <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">What POS do they currently run? (optional)</label>
+              <select
+                value={form.pos || ''}
+                onChange={e => update('pos', e.target.value)}
+                className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none transition-colors"
+              >
+                <option value="">Not sure / ask later</option>
+                {posSystems.map(s => (
+                  <option key={s.key} value={s.key}>{s.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex items-center gap-2 mt-6 mb-2">
@@ -1386,14 +1390,16 @@ export default function CanadaPortalCreateCustomerPage() {
             <p className="text-2xs text-pm-canada-text-muted mt-3">A welcome email with these credentials has been sent. The customer signs in with the temp password and is prompted to set their own on first login.</p>
           </div>
 
-          {/* POS Connection Step */}
+          {/* Setup-link step — the customer completes setup (including POS
+              connection) inside their OWN portal; the rep only sends the link. */}
           <div className="bg-pm-canada-surface rounded-xl p-6 border border-pm-canada-border">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles size={16} className="text-pm-purple" />
-              <h2 className="text-sm font-semibold text-white">Next: Help Customer Connect POS</h2>
+              <h2 className="text-sm font-semibold text-white">Next: Send Their Setup Link</h2>
             </div>
             <p className="text-xs text-pm-canada-text-muted mb-4">
-              Walk the customer through connecting their {form.pos || 'POS system'} while you're with them. This is the #1 factor in activation success.
+              The customer completes setup — including connecting their POS — from their own
+              portal. Getting them to open this link the same day is the #1 factor in activation success.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
@@ -1403,7 +1409,7 @@ export default function CanadaPortalCreateCustomerPage() {
                 }}
                 className="flex items-center justify-center gap-2 px-4 py-3 text-sm-tight font-medium text-pm-canada-bg bg-pm-accent rounded-lg hover:bg-pm-accent transition-colors"
               >
-                <ExternalLink size={14} /> Open Onboarding Wizard Together
+                <ExternalLink size={14} /> Open Their Setup Wizard
               </button>
               <button
                 onClick={() => {

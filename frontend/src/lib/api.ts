@@ -10,6 +10,8 @@
 import { demoData } from './demo-data'
 import { getAuthHeaders } from './supabase'
 import type { StaffMemberDto, ShiftDto, PeakHourPoint } from './schedule-api'
+import type { TopAction, ReasoningChain } from './agent-data'
+import { formatCents } from './format'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -268,6 +270,76 @@ const EMPTY = {
   empty: {} as any,
 }
 
+const PRIORITY_CAP: Record<string, TopAction['priority']> = {
+  critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low',
+}
+
+// Humanize an insight type slug ("margin_optimizer" → "Margin Optimizer").
+function humanizeType(type: string): string {
+  return (type || 'insight')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// Map a single backend insight/action row to the TopAction shape the UI renders.
+// The backend (analytics.py get_actions) omits effort/model/reasoning, so we
+// derive what we can and synthesize a reasoning chain from the real fields —
+// no fabricated analytics. `idx` is the position in the impact-desc list:
+// the top item is the strategic (weekly) move; the rest are daily quick wins.
+function adaptAction(raw: any, idx: number): TopAction {
+  const impactCents = Number(raw.impact_cents ?? raw.impactCents ?? 0) || 0
+  const rawConf = Number(raw.confidence ?? 0) || 0
+  const confidence = Math.round(rawConf <= 1 ? rawConf * 100 : rawConf)
+  const priority = PRIORITY_CAP[String(raw.priority ?? '').toLowerCase()] ?? 'Medium'
+  const agentName = humanizeType(raw.type)
+  const description = raw.summary ?? raw.description ?? ''
+  const expectedImpact = `+${formatCents(impactCents)}/mo`
+  // Top of the impact-sorted list = strategic weekly move; rest = daily wins.
+  const effort: TopAction['effort'] = idx === 0 ? 'High' : 'Low'
+
+  const reasoning: ReasoningChain = {
+    observation: description || raw.title || 'Signal detected in your data.',
+    reasoning: `Estimated to recover ${formatCents(impactCents)}/mo at ${confidence}% confidence.`,
+    conclusion: raw.title ?? '',
+    impact: expectedImpact,
+    confidence,
+    priority,
+    rawData: {
+      'monthly impact': formatCents(impactCents),
+      confidence: `${confidence}%`,
+      priority,
+      status: String(raw.action_status ?? 'pending'),
+    },
+    agentId: String(raw.type ?? 'insight'),
+    agentName,
+  }
+
+  return {
+    rank: idx + 1,
+    title: raw.title ?? 'Recommended action',
+    description,
+    expectedImpact,
+    impactCents,
+    effort,
+    confidence,
+    priority,
+    agentSource: String(raw.type ?? 'insight'),
+    model: '',
+    reasoning,
+  }
+}
+
+// Normalize the backend actions payload into TopAction[] + a total the home
+// hero can use, so "Recoverable" stays in lockstep with the actions list.
+function adaptActionsPayload(payload: any) {
+  const rows: any[] = Array.isArray(payload?.actions) ? payload.actions : []
+  const actions = rows.map(adaptAction)
+  const total_impact_cents =
+    Number(payload?.total_impact_cents) ||
+    actions.reduce((sum, a) => sum + a.impactCents, 0)
+  return { ...payload, actions, total_impact_cents }
+}
+
 export const api = {
   overview: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.overview())
@@ -370,7 +442,7 @@ export const api = {
   actions: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.actions())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/actions', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/actions', { params: { org_id: orgId } }).then(adaptActionsPayload),
 
   squareAuthorize: (orgId: string) =>
     `${API_BASE}/api/square/authorize?org_id=${orgId}`,
