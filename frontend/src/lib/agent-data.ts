@@ -592,6 +592,9 @@ export function actionFromInsight(raw: Record<string, unknown>, rank = 1): TopAc
     confidence,
     priority,
     agentSource: map.agentId,
+    // Live insights come from the backend insights table, not a named local
+    // analytical model — attribute them to the owning agent instead.
+    model: `${map.agentName} (live insight)`,
     reasoning: {
       observation: description || title,
       reasoning: map.whyMovesMoney,
