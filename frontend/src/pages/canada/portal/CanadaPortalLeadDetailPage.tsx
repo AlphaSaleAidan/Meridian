@@ -11,7 +11,6 @@ import {
   buildPersonalizedDeckUrl,
   CAD_VERTICALS,
 } from '@/data/cadVerticals'
-import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import {
@@ -169,11 +168,6 @@ export default function CanadaPortalLeadDetailPage() {
   const [slaEmailed, setSlaEmailed] = useState(false)
   const [showSlaSign, setShowSlaSign] = useState(false)
 
-  // Step 4 state — POS connection itself is customer-self-serve (done from the
-  // customer's own portal); the rep only records which system the business runs
-  // (feeds the SLA) and sees connection status derived from the deal stage.
-  const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
-
   // Page-level action errors (payment notify, invoice/SLA/proposal email, save).
   const [pageError, setPageError] = useState<string | null>(null)
 
@@ -190,10 +184,6 @@ export default function CanadaPortalLeadDetailPage() {
   const [paymentNotified, setPaymentNotified] = useState(false)
   const [cardUpdateSending, setCardUpdateSending] = useState(false)
   const [cardUpdateUrl, setCardUpdateUrl] = useState<string | null>(null)
-
-  // POS connection happens in the customer's own portal — the deal stage flips
-  // to pos_connected via the backend webhook/verification path, never from here.
-  const posConnected = deal ? ['pos_connected', 'customer_walkthrough', 'closed_won'].includes(deal.stage) : false
 
   async function handleCreateCustomerAccount() {
     if (!deal) return
@@ -497,7 +487,7 @@ export default function CanadaPortalLeadDetailPage() {
         country: 'CA',
         clientCompanyName: deal.business_name,
         region: deal.province || 'Ontario',
-        posSystem: selectedPOS || 'Unknown',
+        posSystem: 'TBD',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
@@ -544,7 +534,7 @@ export default function CanadaPortalLeadDetailPage() {
         country: 'CA',
         clientCompanyName: deal.business_name,
         region: deal.province || 'Ontario',
-        posSystem: selectedPOS || 'Unknown',
+        posSystem: 'TBD',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
@@ -1371,40 +1361,10 @@ export default function CanadaPortalLeadDetailPage() {
       </div>
       )}
 
-      {/* Step 3 - POS connection status (visible at step 3+). The connection
-          itself is completed by the CUSTOMER inside their own portal — the rep
-          only records which system the business runs (used for the SLA) and
-          watches status here. */}
-      {currentStep >= 3 && (
-      <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white">POS System</h2>
-
-        <POSSystemPicker
-          value={selectedPOS}
-          onChange={k => setSelectedPOS(k)}
-          mode="new-customer"
-          portalContext="canada"
-        />
-
-        {posConnected ? (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
-            <CheckCircle2 size={16} className="text-pm-accent" />
-            <span className="text-xs text-pm-accent font-medium">
-              POS connected and verified — data is flowing. This deal is now active.
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-start gap-2 p-3 rounded-lg bg-pm-canada-bg border border-pm-canada-border">
-            <Clock size={16} className="text-pm-canada-text-muted flex-shrink-0 mt-0.5" />
-            <span className="text-xs text-pm-canada-text-muted">
-              The customer connects their POS themselves from their own portal after
-              signing in (their login link is sent from the customer-account step).
-              This status flips automatically once their data starts flowing.
-            </span>
-          </div>
-        )}
-      </div>
-      )}
+      {/* NO POS UI here by doctrine: POS connection is completed by the CUSTOMER
+          inside their own portal (/canada/onboard wizard or portal settings).
+          The deal stage flips to pos_connected via the backend when their data
+          starts flowing — the rep portal carries no POS card at all. */}
 
       {/* Project Files */}
       <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-3">
