@@ -12,7 +12,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_jwt, require_admin_jwt, rate_limit_signup
+from ..auth import ADMIN_EMAILS, require_jwt, require_admin_jwt, rate_limit_signup
 from .careers import submit_application, CareerApplication
 
 logger = logging.getLogger("meridian.api.canada")
@@ -272,6 +272,25 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
             if not existing_id:
                 logger.error(f"Existing auth user for {req.email} not found in admin list — cannot reset password")
                 raise HTTPException(500, "Customer account exists but could not be updated")
+            # Takeover guard: a rep JWT must never be able to rotate the
+            # password of an admin, a rep, or any non-Canada-customer account.
+            # Only accounts that look like Canada customer owners are eligible;
+            # ADMIN_EMAILS is excluded explicitly as an independent check even
+            # though admins shouldn't carry the owner/canada metadata shape.
+            existing_role = (existing_meta.get("role") or "").lower()
+            existing_portal = (existing_meta.get("portal") or "").lower()
+            if req.email.lower() in [e.lower() for e in ADMIN_EMAILS]:
+                logger.warning(
+                    "create-customer reset BLOCKED: %s targeted admin account %s",
+                    user_id, req.email,
+                )
+                raise HTTPException(403, "This account cannot be managed from the rep portal")
+            if existing_role not in ("owner", "") or (existing_portal and existing_portal != "canada"):
+                logger.warning(
+                    "create-customer reset BLOCKED: %s targeted role=%r portal=%r account %s",
+                    user_id, existing_role, existing_portal, req.email,
+                )
+                raise HTTPException(403, "This account cannot be managed from the rep portal")
             # Merge so we don't wipe org_id/role/portal on an existing user.
             merged_meta = {**existing_meta, "must_reset_password": True}
             org_id = existing_meta.get("org_id", org_id)
