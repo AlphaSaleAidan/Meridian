@@ -1,6 +1,6 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
-  LayoutDashboard, Layers, Calendar, Phone, Video, Settings,
+  LayoutDashboard, Zap, Layers, Calendar, Phone, Video, Settings,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 
@@ -19,6 +19,7 @@ import { lazyRetry } from '@/components/ErrorBoundary'
 type PageComponent = LazyExoticComponent<ComponentType>
 
 const MerchantHomePage = lazyRetry(() => import('@/pages/canada/merchant/MerchantHomePage'))
+const ActionsPage = lazyRetry(() => import('@/pages/ActionsPage'))
 const InventoryPage = lazyRetry(() => import('@/pages/InventoryPage'))
 const ProductsPage = lazyRetry(() => import('@/pages/ProductsPage'))
 const MarginsPage = lazyRetry(() => import('@/pages/MarginsPage'))
@@ -56,6 +57,12 @@ export const merchantPillars: Pillar[] = [
     label: 'Home',
     icon: LayoutDashboard,
     segments: [{ view: 'home', label: 'Home', Component: MerchantHomePage }],
+  },
+  {
+    path: 'actions',
+    label: 'Top Actions',
+    icon: Zap,
+    segments: [{ view: 'top', label: 'Top Actions', Component: ActionsPage }],
   },
   {
     path: 'inventory',
