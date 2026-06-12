@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
+import { supabase } from '@/lib/supabase'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 
 export default function CustomerLoginPage() {
@@ -17,18 +18,63 @@ export default function CustomerLoginPage() {
   const [showForgot, setShowForgot] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
 
+  // Rep-issued temp password flow: force a reset before entering the portal.
+  const [mustReset, setMustReset] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+
   useEffect(() => {
-    if (authenticated) navigate(from, { replace: true })
-  }, [authenticated, from, navigate])
+    if (authenticated && !mustReset) navigate(from, { replace: true })
+  }, [authenticated, mustReset, from, navigate])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
     const err = await login(email, password)
+    if (err) {
+      setLoading(false)
+      setError(err)
+      return
+    }
+    // First login with a rep-issued temporary password — force a reset before
+    // letting the customer into the portal.
+    if (supabase) {
+      const { data } = await supabase.auth.getUser()
+      if (data.user?.user_metadata?.must_reset_password) {
+        setMustReset(true)
+        setLoading(false)
+        return
+      }
+    }
     setLoading(false)
-    if (err) setError(err)
-    else navigate(from, { replace: true })
+    navigate(from, { replace: true })
+  }
+
+  async function handleSetNewPassword(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!supabase) { setError('Authentication service unavailable'); return }
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+    setLoading(true)
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+      data: { must_reset_password: false },
+    })
+    setLoading(false)
+    if (updateError) {
+      setError(updateError.message)
+      return
+    }
+    setMustReset(false)
+    navigate(from, { replace: true })
   }
 
   async function handleForgot(e: React.FormEvent) {
@@ -54,10 +100,12 @@ export default function CustomerLoginPage() {
 
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
           <h2 className="text-lg font-bold text-[#F5F5F7] text-center mb-1">
-            {showForgot ? 'Reset password' : 'Welcome back'}
+            {mustReset ? 'Set your password' : showForgot ? 'Reset password' : 'Welcome back'}
           </h2>
           <p className="text-xs text-[#A1A1A8] text-center mb-6">
-            {showForgot ? "We'll send a reset link to your email" : 'Sign in to your Meridian dashboard'}
+            {mustReset
+              ? 'Your temporary password worked — now choose your own to finish setup'
+              : showForgot ? "We'll send a reset link to your email" : 'Sign in to your Meridian dashboard'}
           </p>
 
           {error && (
@@ -67,7 +115,21 @@ export default function CustomerLoginPage() {
             <div className="mb-4 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-xs text-[#17C5B0]">{success}</div>
           )}
 
-          {!showForgot ? (
+          {mustReset ? (
+            <form onSubmit={handleSetNewPassword} className="space-y-4">
+              <div>
+                <label htmlFor="new-password" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">New password</label>
+                <input id="new-password" type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" />
+              </div>
+              <div>
+                <label htmlFor="confirm-password" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Confirm password</label>
+                <input id="confirm-password" type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Repeat your new password" />
+              </div>
+              <button type="submit" disabled={loading} className={btnClass}>
+                {loading ? 'Saving...' : 'Save & Continue'}
+              </button>
+            </form>
+          ) : !showForgot ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label htmlFor="login-email" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
@@ -103,7 +165,7 @@ export default function CustomerLoginPage() {
             </form>
           )}
 
-          {!showForgot && (
+          {!showForgot && !mustReset && (
             <p className="text-center text-[11px] text-[#A1A1A8] mt-5">
               Don't have an account?{' '}
               <Link to="/customer/signup" className="text-[#1A8FD6] hover:text-[#17C5B0] transition-colors font-medium">
