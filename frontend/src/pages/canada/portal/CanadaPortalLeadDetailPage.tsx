@@ -181,7 +181,7 @@ export default function CanadaPortalLeadDetailPage() {
 
   // Customer account creation state
   const [customerCreating, setCustomerCreating] = useState(false)
-  const [customerCredentials, setCustomerCredentials] = useState<{ email: string } | null>(null)
+  const [customerCredentials, setCustomerCredentials] = useState<{ email: string; tempPassword?: string } | null>(null)
   const [customerError, setCustomerError] = useState<string | null>(null)
   const [credentialEmailing, setCredentialEmailing] = useState(false)
   const [credentialEmailed, setCredentialEmailed] = useState(false)
@@ -304,13 +304,10 @@ export default function CanadaPortalLeadDetailPage() {
         throw new Error(body.detail || 'Failed to create customer account')
       }
 
-      // Trigger Supabase password-setup email — customer sets their own password via secure link.
-      // No password ever leaves the server, no plaintext credentials in transit.
-      await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/canada/login`,
-      })
-
-      setCustomerCredentials({ email })
+      // Backend returns a readable temp password and flags the account for a
+      // forced reset on first login. Surface it so the rep can share it directly.
+      const data = await res.json().catch(() => ({}))
+      setCustomerCredentials({ email, tempPassword: data.temporary_password || '' })
       await updateStage.mutateAsync({ id: deal.id, stage: 'customer_walkthrough' })
       patchDeal(prev => prev ? { ...prev, stage: 'customer_walkthrough' } : prev)
     } catch (err) {
@@ -1590,7 +1587,17 @@ export default function CanadaPortalLeadDetailPage() {
                   <span className="text-xs text-pm-canada-text-muted">Email</span>
                   <span className="text-sm text-white font-mono">{customerCredentials.email}</span>
                 </div>
-                <p className="text-2xs text-pm-canada-text-faint mt-1">A secure setup email has been sent to the customer. They&apos;ll click the link to set their own password — no credentials need to be shared manually.</p>
+                {customerCredentials.tempPassword && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-pm-canada-text-muted">Temp password</span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-sm text-white font-mono">{customerCredentials.tempPassword}</span>
+                      <button type="button" onClick={() => navigator.clipboard.writeText(customerCredentials.tempPassword || '')}
+                        className="text-2xs text-pm-accent hover:underline">Copy</button>
+                    </span>
+                  </div>
+                )}
+                <p className="text-2xs text-pm-canada-text-faint mt-1">Share the temp password with the customer (a welcome email is also sent). They&apos;ll be prompted to set their own password on first login.</p>
               </div>
               <button
                 onClick={handleEmailCredentials}

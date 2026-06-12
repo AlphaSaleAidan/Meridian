@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { supabase } from './supabase'
+import { canadaLeadsService } from './canada-leads-service'
 
 export type PortalContext = 'us' | 'canada' | 'all'
 
@@ -135,6 +136,15 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
             saveRep(profile)
             setRep(profile)
           }
+        } else if (!session && hasCachedRep && onSalesPortalRoute) {
+          // Cached rep profile but no live Supabase session — the session
+          // expired or was lost. Running the portal in this half-authed state
+          // causes 401s on backend calls (e.g. /api/canada/team) and silently
+          // dropped/orphaned writes (new leads that vanish on refresh). Clear
+          // the stale profile so the protected route bounces to login and the
+          // rep re-authenticates with a fresh session.
+          setRep(null)
+          clearRep()
         }
         setReady(true)
       }
@@ -147,23 +157,35 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
+      // Must NOT be async / must NOT await a Supabase call inline. GoTrue runs
+      // updateUser/signIn's subscriber notification *inside* its reentrant lock;
+      // awaiting resolveRepProfile here (which calls getSession() to attach a
+      // token) queues behind the in-flight auth op and deadlocks it — a customer
+      // setting their first password would hang on "Saving…" forever. Defer with
+      // setTimeout(0) so the auth op completes and releases the lock first.
       if (event === 'PASSWORD_RECOVERY' && session?.user?.email) {
-        const profile = await resolveRepProfile(session.user.email)
-        if (profile) {
-          saveRep(profile)
-          setRep(profile)
-        }
-        const portalPrefix = window.location.pathname.startsWith('/us/portal') ? '/us/portal' : '/canada/portal'
-        window.location.replace(portalPrefix + '/settings?reset=1')
+        const email = session.user.email
+        setTimeout(async () => {
+          const profile = await resolveRepProfile(email)
+          if (profile) {
+            saveRep(profile)
+            setRep(profile)
+          }
+          const portalPrefix = window.location.pathname.startsWith('/us/portal') ? '/us/portal' : '/canada/portal'
+          window.location.replace(portalPrefix + '/settings?reset=1')
+        }, 0)
         return
       }
       if (session?.user?.email && shouldResolveRep) {
-        const profile = await resolveRepProfile(session.user.email)
-        if (profile) {
-          saveRep(profile)
-          setRep(profile)
-        }
+        const email = session.user.email
+        setTimeout(async () => {
+          const profile = await resolveRepProfile(email)
+          if (profile) {
+            saveRep(profile)
+            setRep(profile)
+          }
+        }, 0)
       } else if (!session) {
         setRep(null)
         clearRep()
@@ -300,6 +322,10 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
     if (supabase) supabase.auth.signOut()
     setRep(null)
     clearRep()
+    // Drop the canada_leads module-level cache so a second rep on the
+    // same browser doesn't see the previous rep's deals via React
+    // Query's `initialData` seed until staleTime expires.
+    canadaLeadsService.invalidateCaches()
   }, [])
 
   return (

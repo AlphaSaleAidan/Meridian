@@ -183,18 +183,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
-        const [o, admin, salesRep] = await Promise.all([
-          fetchBusinessForUser(u.id, u.email),
-          checkAdmin(),
-          checkIsSalesRep(u.email),
-        ])
-        if (o) setOrg(o)
-        setIsAdmin(admin)
-        setIsSalesRep(salesRep)
+        // Defer Supabase-dependent loads. signInWithPassword awaits every
+        // onAuthStateChange callback, so awaiting other Supabase/backend calls
+        // here deadlocks sign-in and hangs the UI (Supabase documents this).
+        // setTimeout(0) lets sign-in resolve first, then we hydrate org/role.
+        setTimeout(async () => {
+          const [o, admin, salesRep] = await Promise.all([
+            fetchBusinessForUser(u.id, u.email),
+            checkAdmin(),
+            checkIsSalesRep(u.email),
+          ])
+          if (o) setOrg(o)
+          setIsAdmin(admin)
+          setIsSalesRep(salesRep)
+        }, 0)
       } else {
         setUser(null)
         setOrg(null)
