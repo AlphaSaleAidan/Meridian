@@ -64,24 +64,21 @@ module.exports = {
       env: { ...GATEWAY_ENV },
     },
     {
-      // 2026-06-04 — deerflow is currently failing to start with
-      // "Could not import module 'app.api'". services/deerflow/backend/app/
-      // only contains __init__.py, channels/, gateway/ — the app.api entry
-      // point referenced in args is GONE. Root cause is the missing module
-      // (an upstream change to deerflow), not the gateway env. The error
-      // surfaced at 01:42:18 when the process was restarted for the first
-      // time since the module was removed; before that the in-memory code
-      // kept serving fine. Whoever owns deerflow needs to update args to
-      // the current entry point (probably app.gateway.app:app given the
-      // remaining structure) or restore app.api. Gateway env intentionally
-      // omitted until that's fixed; reinstate once the import is healthy.
+      // 2026-06-07 — fixed: upstream deerflow removed the app.api entry point
+      // (app/ now only has __init__.py, channels/, gateway/), so the old
+      // `app.api:app --port 8004` args failed to import after the 2026-06-04
+      // restart. Repointed at the current entry `app.gateway.app:app` on 8001
+      // (matches Makefile `run` + src/services/deerflow_client.py DEERFLOW_URL)
+      // and reinstated GATEWAY_ENV so its research agent routes LLM calls
+      // through the local LiteLLM gateway like every other service.
       name: "deerflow",
       script: "/usr/bin/bash",
-      args: "-c 'cd /root/Meridian/services/deerflow/backend && /root/.local/bin/uv run uvicorn app.api:app --host 0.0.0.0 --port 8004'",
+      args: "-c 'cd /root/Meridian/services/deerflow/backend && PYTHONPATH=. /root/.local/bin/uv run uvicorn app.gateway.app:app --host 0.0.0.0 --port 8001'",
       cwd: "/root/Meridian",
       exec_mode: "fork",
       instances: 1,
       max_memory_restart: "200M",
+      env: { ...GATEWAY_ENV },
     },
     {
       name: "scraper",
