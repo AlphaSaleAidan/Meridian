@@ -249,17 +249,21 @@ async def rep_signup(req: RepSignupRequest):
 
 @router.post("/create-customer")
 async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_service_auth)):
+    """Create (or reset) a US customer login with a rep-shareable temp password.
+
+    Mirrors /api/canada/create-customer: the temp password + must_reset_password
+    metadata flag replace the old client-side resetPasswordForEmail flow, which
+    silently never delivered (Supabase project has no custom SMTP; built-in
+    mailer is dev-only and rate-limited to 2/hour).
+    """
     import httpx
+
+    from .canada import _generate_temp_password
 
     supabase_url, service_key = _supabase_creds()
     org_id = str(uuid.uuid4())
 
-    # When the caller omits a password, generate a high-entropy throwaway. The
-    # customer never sees it — handleCreateCustomerAccount in the frontend
-    # immediately triggers Supabase resetPasswordForEmail so the user sets
-    # their own via the secure link. Supabase admin user creation still
-    # requires *some* password, so we provide one rather than leaving it null.
-    password = req.password or secrets.token_urlsafe(32)
+    temp_password = req.password or _generate_temp_password()
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
@@ -267,7 +271,7 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
             headers=_headers(service_key),
             json={
                 "email": req.email,
-                "password": password,
+                "password": temp_password,
                 "email_confirm": True,
                 "user_metadata": {
                     "full_name": req.contact_name,
@@ -276,6 +280,7 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
                     "role": "owner",
                     "portal": "us",
                     "vertical": req.vertical,
+                    "must_reset_password": True,
                 },
             },
         )
@@ -283,12 +288,60 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
             auth_user_id = resp.json().get("id")
             logger.info("Created US customer auth user %s for %s", auth_user_id, req.email)
         elif resp.status_code == 422 and "already been registered" in resp.text.lower():
-            logger.info("Auth user already exists for %s", req.email)
+            logger.info("Auth user already exists for %s — resetting temp password", req.email)
+            # Page through the admin user list to find the existing account.
+            existing_id = None
+            existing_meta: dict = {}
+            for page in range(1, 21):  # up to 20 pages * 200 = 4000 users
+                list_resp = await client.get(
+                    f"{supabase_url}/auth/v1/admin/users",
+                    headers={"Authorization": f"Bearer {service_key}", "apikey": service_key},
+                    params={"page": page, "per_page": 200},
+                )
+                if list_resp.status_code != 200:
+                    logger.error("Admin user list failed p%s: %s %s", page, list_resp.status_code, list_resp.text[:200])
+                    break
+                users = list_resp.json().get("users", [])
+                for u in users:
+                    if u.get("email", "").lower() == req.email.lower():
+                        existing_id = u["id"]
+                        existing_meta = u.get("user_metadata") or {}
+                        break
+                if existing_id or len(users) < 200:
+                    break
+            if not existing_id:
+                logger.error("Existing auth user for %s not found in admin list — cannot reset password", req.email)
+                raise HTTPException(500, "Customer account exists but could not be updated")
+            # Takeover guard (same as Canada): a rep must never be able to rotate
+            # the password of an admin, a rep, or any non-US-customer account.
+            existing_role = (existing_meta.get("role") or "").lower()
+            existing_portal = (existing_meta.get("portal") or "").lower()
+            if req.email.lower() in [e.lower() for e in ALL_ADMIN_EMAILS]:
+                logger.warning("us create-customer reset BLOCKED: targeted admin account %s", req.email)
+                raise HTTPException(403, "This account cannot be managed from the rep portal")
+            if existing_role not in ("owner", "") or (existing_portal and existing_portal != "us"):
+                logger.warning(
+                    "us create-customer reset BLOCKED: targeted role=%r portal=%r account %s",
+                    existing_role, existing_portal, req.email,
+                )
+                raise HTTPException(403, "This account cannot be managed from the rep portal")
+            # Merge so we don't wipe org_id/role/portal on an existing user.
+            merged_meta = {**existing_meta, "must_reset_password": True}
+            org_id = existing_meta.get("org_id", org_id)
+            put_resp = await client.put(
+                f"{supabase_url}/auth/v1/admin/users/{existing_id}",
+                headers={"Authorization": f"Bearer {service_key}", "apikey": service_key, "Content-Type": "application/json"},
+                json={"password": temp_password, "user_metadata": merged_meta},
+            )
+            if put_resp.status_code not in (200, 201):
+                logger.error("Password/flag reset PUT failed for %s: %s %s", req.email, put_resp.status_code, put_resp.text[:200])
+                raise HTTPException(502, "Could not update customer account password")
+            logger.info("Reset OK for %s (id=%s)", req.email, existing_id)
         else:
             logger.error("Auth user creation failed: %s %s", resp.status_code, resp.text)
             raise HTTPException(400, "Could not create customer account")
 
-    return {"ok": True, "org_id": org_id}
+    return {"ok": True, "org_id": org_id, "temp_password": temp_password}
 
 
 @router.post("/sign-sla")
