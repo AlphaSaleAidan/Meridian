@@ -21,7 +21,6 @@ import {
   canadaKeys,
 } from '@/lib/canada-queries'
 import { PortalPage, PortalLoadingSkeleton } from './PortalPage'
-import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 import QRCode from 'qrcode'
 import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type InvoiceInput } from '@/lib/generate-invoice-pdf'
 import { generateSlaDocument, type SlaInput } from '@/lib/generate-sla-pdf'
@@ -170,14 +169,13 @@ export default function CanadaPortalLeadDetailPage() {
   const [slaEmailed, setSlaEmailed] = useState(false)
   const [showSlaSign, setShowSlaSign] = useState(false)
 
-  // Step 4 state
+  // Step 4 state — POS connection itself is customer-self-serve (done from the
+  // customer's own portal); the rep only records which system the business runs
+  // (feeds the SLA) and sees connection status derived from the deal stage.
   const [selectedPOS, setSelectedPOS] = useState<string | null>(null)
-  const [posConnecting, setPosConnecting] = useState(false)
-  const [posConnected, setPosConnected] = useState(false)
-  const [posError, setPosError] = useState<string | null>(null)
 
-  const [posVerifying, setPosVerifying] = useState(false)
-  const [posPending, setPosPending] = useState<string | null>(null)
+  // Page-level action errors (payment notify, invoice/SLA/proposal email, save).
+  const [pageError, setPageError] = useState<string | null>(null)
 
   // Customer account creation state
   const [customerCreating, setCustomerCreating] = useState(false)
@@ -193,79 +191,9 @@ export default function CanadaPortalLeadDetailPage() {
   const [cardUpdateSending, setCardUpdateSending] = useState(false)
   const [cardUpdateUrl, setCardUpdateUrl] = useState<string | null>(null)
 
-  async function handleCredentialSubmit(posKey: string, credentials: Record<string, string>) {
-    const system = getPosSystem(posKey)
-    if (!system) return
-
-    const { valid, errors } = validateCredentials(system, credentials)
-    if (!valid) {
-      const allErrors = Object.values(errors)
-      setPosError(allErrors.length > 1 ? `Missing fields: ${allErrors.join(', ')}` : allErrors[0])
-      return
-    }
-
-    const filledCount = Object.values(credentials).filter(v => v.trim()).length
-    if (filledCount === 0) {
-      setPosError('Please fill in the required credential fields above.')
-      return
-    }
-
-    setPosConnecting(true)
-    setPosError(null)
-    setPosPending(null)
-
-    const { provider, credentials: creds } = serializeCredentials(system, credentials)
-
-    try {
-      const API_BASE = import.meta.env.VITE_API_URL || ''
-      const authHeaders = await getAuthHeaders()
-      const res = await fetch(`${API_BASE}/api/onboarding/connect-pos`, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({
-          deal_id: deal?.id,
-          provider,
-          credentials: creds,
-          business_name: deal?.business_name,
-        }),
-      })
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        setPosError(body.detail || `Connection failed for ${system.name}. Double-check your credentials and try again.`)
-        setPosConnecting(false)
-        return
-      }
-
-      setPosConnecting(false)
-      setPosVerifying(true)
-
-      const verifyRes = await fetch(`${API_BASE}/api/onboarding/verify-pos`, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify({ deal_id: deal?.id, provider }),
-      }).catch(() => null)
-
-      if (verifyRes && verifyRes.ok) {
-        setPosConnected(true)
-        setPosVerifying(false)
-        if (deal) {
-          await updateStage.mutateAsync({ id: deal.id, stage: 'pos_connected' })
-          patchDeal(prev => prev ? { ...prev, stage: 'pos_connected' } : prev)
-        }
-      } else {
-        setPosVerifying(false)
-        setPosPending(`${system.name} credentials saved — waiting for data verification. The swarm will confirm data is flowing and notify you.`)
-        if (deal && deal.stage !== 'pos_connected' && deal.stage !== 'customer_walkthrough') {
-          await updateStage.mutateAsync({ id: deal.id, stage: 'customer_checkout' })
-          patchDeal(prev => prev ? { ...prev, stage: 'customer_checkout' } : prev)
-        }
-      }
-    } catch {
-      setPosError(`Could not reach the server. Check your internet connection and try again.`)
-      setPosConnecting(false)
-    }
-  }
+  // POS connection happens in the customer's own portal — the deal stage flips
+  // to pos_connected via the backend webhook/verification path, never from here.
+  const posConnected = deal ? ['pos_connected', 'customer_walkthrough', 'closed_won'].includes(deal.stage) : false
 
   async function handleCreateCustomerAccount() {
     if (!deal) return
@@ -394,7 +322,7 @@ export default function CanadaPortalLeadDetailPage() {
       setPaymentNotified(true)
       if (data.update_url) setCardUpdateUrl(data.update_url)
     } catch (err) {
-      setPosError('Failed to send payment notification. Try again.')
+      setPageError('Failed to send payment notification. Try again.')
     } finally {
       setPaymentNotifying(false)
     }
@@ -420,7 +348,7 @@ export default function CanadaPortalLeadDetailPage() {
       const data = await res.json()
       setCardUpdateUrl(data.invoice_url)
     } catch (err) {
-      setPosError('Failed to create payment update link. Try again.')
+      setPageError('Failed to create payment update link. Try again.')
     } finally {
       setCardUpdateSending(false)
     }
@@ -555,7 +483,7 @@ export default function CanadaPortalLeadDetailPage() {
     } catch (err) {
       console.error('[Invoice] Email failed:', err)
       toast('Invoice email failed — try again or share the PDF directly', 'error')
-      setPosError('Invoice email failed to send. Try again or share the PDF directly.')
+      setPageError('Invoice email failed to send. Try again or share the PDF directly.')
     } finally {
       setInvoiceEmailing(false)
     }
@@ -687,7 +615,7 @@ export default function CanadaPortalLeadDetailPage() {
     } catch (err) {
       console.error('[SLA] Email failed:', err)
       toast('SLA email failed — try again or share the PDF', 'error')
-      setPosError('SLA email failed to send. Try again or download and share the PDF.')
+      setPageError('SLA email failed to send. Try again or download and share the PDF.')
     } finally {
       setSlaEmailing(false)
     }
@@ -768,7 +696,7 @@ export default function CanadaPortalLeadDetailPage() {
     } catch (err) {
       console.error('[Proposal] Email failed:', err)
       toast('Proposal email failed — try again or share the PDF', 'error')
-      setPosError('Proposal email failed to send. Try again or download and share the PDF.')
+      setPageError('Proposal email failed to send. Try again or download and share the PDF.')
     } finally {
       setProposalEmailing(false)
     }
@@ -918,7 +846,7 @@ export default function CanadaPortalLeadDetailPage() {
                 patchDeal(prev => prev ? { ...prev, ...snapshot } : prev)
                 setEditForm(next)
                 setEditing(true)
-                setPosError(err instanceof Error ? `Save failed: ${err.message}` : 'Failed to save changes. Please try again.')
+                setPageError(err instanceof Error ? `Save failed: ${err.message}` : 'Failed to save changes. Please try again.')
               } finally {
                 setEditSaving(false)
               }
@@ -990,6 +918,16 @@ export default function CanadaPortalLeadDetailPage() {
       <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
         <HorizontalStepper currentStep={currentStep} />
       </div>
+
+      {/* Page-level action errors */}
+      {pageError && (
+        <div className="flex items-center justify-between gap-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+          <span className="text-xs text-red-400">{pageError}</span>
+          <button onClick={() => setPageError(null)} className="text-2xs text-red-400/70 hover:text-red-400 font-medium flex-shrink-0">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Step 1 - Proposal (always visible) */}
       <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
@@ -1433,51 +1371,35 @@ export default function CanadaPortalLeadDetailPage() {
       </div>
       )}
 
-      {/* Step 3 - Connect POS (visible at step 3+) */}
+      {/* Step 3 - POS connection status (visible at step 3+). The connection
+          itself is completed by the CUSTOMER inside their own portal — the rep
+          only records which system the business runs (used for the SLA) and
+          watches status here. */}
       {currentStep >= 3 && (
       <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-white">Connect POS System</h2>
+        <h2 className="text-sm font-semibold text-white">POS System</h2>
 
         <POSSystemPicker
           value={selectedPOS}
-          onChange={k => { setSelectedPOS(k); setPosConnected(false); setPosError(null); setPosPending(null) }}
-          onCredentialSubmit={handleCredentialSubmit}
-          mode="lead-detail"
+          onChange={k => setSelectedPOS(k)}
+          mode="new-customer"
           portalContext="canada"
         />
 
-        {posConnecting && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
-            <Loader2 size={16} className="text-pm-amber-gold animate-spin" />
-            <span className="text-xs text-pm-amber-gold font-medium">Connecting — saving credentials...</span>
-          </div>
-        )}
-
-        {posVerifying && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
-            <Loader2 size={16} className="text-pm-amber-gold animate-spin" />
-            <span className="text-xs text-pm-amber-gold font-medium">Verifying — checking if we can pull data with these credentials...</span>
-          </div>
-        )}
-
-        {posError && (
-          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
-            {posError}
-          </div>
-        )}
-
-        {posPending && !posError && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
-            <Clock size={16} className="text-pm-amber-gold" />
-            <span className="text-xs text-pm-amber-gold font-medium">{posPending}</span>
-          </div>
-        )}
-
-        {posConnected && !posVerifying && (
+        {posConnected ? (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
             <CheckCircle2 size={16} className="text-pm-accent" />
             <span className="text-xs text-pm-accent font-medium">
               POS connected and verified — data is flowing. This deal is now active.
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 p-3 rounded-lg bg-pm-canada-bg border border-pm-canada-border">
+            <Clock size={16} className="text-pm-canada-text-muted flex-shrink-0 mt-0.5" />
+            <span className="text-xs text-pm-canada-text-muted">
+              The customer connects their POS themselves from their own portal after
+              signing in (their login link is sent from the customer-account step).
+              This status flips automatically once their data starts flowing.
             </span>
           </div>
         )}
