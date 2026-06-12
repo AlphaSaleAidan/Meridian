@@ -9,8 +9,6 @@ import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSystemPicker from '@/components/POSSystemPicker'
-import { CAD_RATE } from '@/lib/canada-proposal-plans'
-import { PRICING } from '@/lib/format'
 
 // ── Canada Theme ──
 const T = {
@@ -121,8 +119,8 @@ export default function CanadaCustomerOnboardingWizard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [paymentComplete, setPaymentComplete] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const monthlyPrice = prefill.price ? parseInt(prefill.price) : PRICING.DEFAULT_MONTHLY_CAD
-  const monthlyPriceCAD = Math.round(monthlyPrice * CAD_RATE)
+  // prefill.price comes from the rep portal link and is ALREADY in CAD — do not re-apply CAD_RATE.
+  const monthlyPriceCAD = prefill.price ? parseInt(prefill.price) : 250
 
   // Processing — 20-minute AI analysis timer (persists across page reloads)
   // Hard data (revenue, products, staff, schedules) is available immediately from POS.

@@ -11,7 +11,7 @@ logger = logging.getLogger("meridian.ai.predictive.demand")
 
 # Optional: mlforecast + LightGBM for ML-based demand forecasting
 try:
-    import mlforecast
+    import mlforecast  # noqa: F401  optional-dependency probe
     import lightgbm as lgb
     HAS_MLFORECAST = True
 except ImportError:
@@ -207,7 +207,6 @@ class DemandForecastAgent:
             import pandas as pd
             import numpy as np
             from mlforecast import MLForecast
-            from mlforecast.target_transforms import Differences
 
             today = datetime.now(timezone.utc)
 

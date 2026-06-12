@@ -13,12 +13,18 @@ US Sales Portal Routes — rep management + customer onboarding for US market.
 import logging
 import os
 import re
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_service_auth, require_jwt, require_admin_jwt
+from ..auth import (
+    ADMIN_EMAILS as ALL_ADMIN_EMAILS,
+    require_service_auth,
+    require_jwt,
+    require_admin_jwt,
+)
 
 logger = logging.getLogger("meridian.api.us")
 
@@ -34,11 +40,25 @@ router = APIRouter(prefix="/api/us", tags=["us"])
 
 US_ORG_ID = "us-org-00000000-0000-0000-0000-000000000001"
 
-ADMIN_EMAILS = [
+# US portal admin scope is INTENTIONALLY NARROWER than the canada/compliance
+# scope defined in src/api/auth.py:ADMIN_EMAILS. Per business policy, US
+# portal admin = Aidan Pierce only (across all his email addresses). Enoch
+# Cheung and Aidan Nguyen are Canada/compliance admins and must NOT be
+# granted US write access. Do NOT collapse this back to ALL_ADMIN_EMAILS —
+# if you need both lists to be the same, change US policy first.
+#
+# The intersection-with-centralized pattern means removing an admin from
+# auth.py automatically removes them here too, while the explicit allowlist
+# below controls who *can* be a US admin.
+_US_ADMIN_ALLOWLIST = {
     "apierce@alphasale.co",
     "aidanpierce72@gmail.com",
     "aidanpierce@meridian.tips",
-]
+}
+ADMIN_EMAILS = [e for e in ALL_ADMIN_EMAILS if e in _US_ADMIN_ALLOWLIST]
+# NOTE: ADMIN_EMAILS is not yet referenced elsewhere in this module — it
+# exists as the policy artifact for when US admin gating gets wired up.
+# A per-scope role-tags refactor is filed as a follow-up issue.
 
 
 def _sanitize_text(v: str) -> str:
@@ -114,7 +134,10 @@ class RepSignupRequest(BaseModel):
 
 class CreateCustomerRequest(BaseModel):
     email: EmailStr
-    password: str
+    # Optional — the sales-portal create-customer flow deliberately omits
+    # password and lets the customer set it via Supabase resetPasswordForEmail.
+    # When omitted, the route generates a high-entropy throwaway server-side.
+    password: str | None = None
     business_name: str
     contact_name: str
     phone: str | None = None
@@ -129,7 +152,9 @@ class CreateCustomerRequest(BaseModel):
 
     @field_validator("password")
     @classmethod
-    def validate_customer_password(cls, v: str) -> str:
+    def validate_customer_password(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
         if len(v) < 8:
             raise ValueError("password must be at least 8 characters")
         return v
@@ -229,13 +254,20 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
     supabase_url, service_key = _supabase_creds()
     org_id = str(uuid.uuid4())
 
+    # When the caller omits a password, generate a high-entropy throwaway. The
+    # customer never sees it — handleCreateCustomerAccount in the frontend
+    # immediately triggers Supabase resetPasswordForEmail so the user sets
+    # their own via the secure link. Supabase admin user creation still
+    # requires *some* password, so we provide one rather than leaving it null.
+    password = req.password or secrets.token_urlsafe(32)
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
             f"{supabase_url}/auth/v1/admin/users",
             headers=_headers(service_key),
             json={
                 "email": req.email,
-                "password": req.password,
+                "password": password,
                 "email_confirm": True,
                 "user_metadata": {
                     "full_name": req.contact_name,

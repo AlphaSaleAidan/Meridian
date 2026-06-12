@@ -14,6 +14,20 @@ function normalizeRate(v: number): number {
   return v <= 1 ? Math.round(v * 100) : v
 }
 
+/** Reject a pending Supabase request after `ms` so the UI can't spin forever
+ *  on a stalled connection or a wedged auth refresh. */
+async function withTimeout<T>(p: PromiseLike<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new LeadsServiceError(message)), ms)
+  })
+  try {
+    return await Promise.race([p, timeout])
+  } finally {
+    clearTimeout(timer!)
+  }
+}
+
 const DEAL_STAGES = [
   'proposal_shown',
   'customer_checkout',
@@ -183,27 +197,31 @@ export const canadaLeadsService = {
 
   async create(deal: Deal, repId?: string): Promise<Deal> {
     if (!supabase) return deal
-    const { data, error } = await supabase
-      .from('canada_leads')
-      .insert({
-        id: deal.id,
-        business_name: deal.business_name,
-        contact_name: deal.contact_name,
-        contact_email: deal.contact_email,
-        contact_phone: deal.contact_phone,
-        vertical: deal.vertical,
-        stage: deal.stage,
-        monthly_value: deal.monthly_value,
-        commission_rate: deal.commission_rate,
-        expected_close_date: deal.expected_close_date,
-        notes: deal.notes,
-        source: deal.source || '',
-        city: deal.city || '',
-        province: deal.province || '',
-        rep_id: repId || null,
-      })
-      .select()
-      .single()
+    const { data, error } = await withTimeout(
+      supabase
+        .from('canada_leads')
+        .insert({
+          id: deal.id,
+          business_name: deal.business_name,
+          contact_name: deal.contact_name,
+          contact_email: deal.contact_email,
+          contact_phone: deal.contact_phone,
+          vertical: deal.vertical,
+          stage: deal.stage,
+          monthly_value: deal.monthly_value,
+          commission_rate: deal.commission_rate,
+          expected_close_date: deal.expected_close_date,
+          notes: deal.notes,
+          source: deal.source || '',
+          city: deal.city || '',
+          province: deal.province || '',
+          rep_id: repId || null,
+        })
+        .select()
+        .single(),
+      15_000,
+      'Saving the lead timed out — check your connection and try again.',
+    )
     if (error) throw new Error(error.message)
     _invalidateCaches()
     if (data) return rowToDeal(data)
@@ -213,10 +231,14 @@ export const canadaLeadsService = {
   async updateStage(id: string, stage: DealStage): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('canada_leads')
-      .update({ stage, updated_at: now })
-      .eq('id', id)
+    const { error } = await withTimeout(
+      supabase
+        .from('canada_leads')
+        .update({ stage, updated_at: now })
+        .eq('id', id),
+      15_000,
+      'Updating the stage timed out — check your connection and try again.',
+    )
     if (error) throw new LeadsServiceError(error.message)
     _invalidateCaches()
   },
@@ -224,17 +246,25 @@ export const canadaLeadsService = {
   async update(id: string, updates: Partial<Deal>): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('canada_leads')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
+    const { error } = await withTimeout(
+      supabase
+        .from('canada_leads')
+        .update({ ...updates, updated_at: now })
+        .eq('id', id),
+      15_000,
+      'Saving the changes timed out — check your connection and try again.',
+    )
     if (error) throw new LeadsServiceError(error.message)
     _invalidateCaches()
   },
 
   async delete(id: string): Promise<void> {
     if (!supabase) return
-    const { error } = await supabase.from('canada_leads').delete().eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('canada_leads').delete().eq('id', id),
+      15_000,
+      'Deleting the lead timed out — check your connection and try again.',
+    )
     if (error) throw new LeadsServiceError(error.message)
     _invalidateCaches()
   },

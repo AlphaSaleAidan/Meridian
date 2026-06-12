@@ -1,14 +1,21 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2, WifiOff,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, WifiOff,
 } from 'lucide-react'
-import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
-import { canadaLeadsService } from '@/lib/canada-leads-service'
+import { type Deal } from '@/lib/canada-sales-demo-data'
+import {
+  useCanadaLeads,
+  useCanadaLeadsRealtime,
+  useCreateCanadaLead,
+  canadaKeys,
+} from '@/lib/canada-queries'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { useToast } from '@/components/Toast'
 import { queueIfOffline, setupOfflineSync, getPendingCount } from '@/lib/offline-queue'
 import { requestNotificationPermission } from '@/lib/notifications'
+import { PortalPage } from './PortalPage'
 
 const STAGE_TO_STEP: Record<string, number> = {
   proposal_shown: 1,
@@ -36,27 +43,27 @@ const STEP_LABELS: Record<number, string> = {
 function StepPill({ step }: { step: number }) {
   if (step <= 0) {
     return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border border-red-500/30 text-red-400">
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs font-medium border border-red-500/30 text-red-400">
         Lost
       </span>
     )
   }
   if (step === 1) {
     return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium border border-[#4a5550] text-[#6b7a74]">
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs font-medium border border-pm-canada-text-faint text-pm-canada-text-muted">
         {STEP_LABELS[step]}
       </span>
     )
   }
   if (step <= 3) {
     return (
-      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#00d4aa]/15 text-[#00d4aa]">
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs font-medium bg-pm-accent/15 text-pm-accent">
         {STEP_LABELS[step]}
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#00d4aa]/20 text-[#00d4aa] font-semibold">
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-2xs font-medium bg-pm-accent/20 text-pm-accent font-semibold">
       {STEP_LABELS[step]}
     </span>
   )
@@ -72,10 +79,10 @@ function StaleBadge({ days }: { days: number }) {
   if (days < 3) return null
   const isUrgent = days >= 7
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ${
       isUrgent
         ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-        : 'bg-[#f59e0b]/10 text-[#f59e0b] border border-[#f59e0b]/20'
+        : 'bg-pm-amber-orange/10 text-pm-amber-orange border border-pm-amber-orange/20'
     }`}>
       <AlertTriangle size={10} /> {days}d ago
     </span>
@@ -88,11 +95,11 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
       {[1, 2, 3, 4].map(seg => {
         let cls = 'h-1 flex-1 rounded-full '
         if (seg < currentStep) {
-          cls += 'bg-[#00d4aa]'
+          cls += 'bg-pm-accent'
         } else if (seg === currentStep) {
-          cls += 'bg-[#00d4aa] animate-pulse'
+          cls += 'bg-pm-accent animate-pulse'
         } else {
-          cls += 'bg-[#1a2420]'
+          cls += 'bg-pm-canada-border'
         }
         return <div key={seg} className={cls} />
       })}
@@ -104,8 +111,10 @@ export default function CanadaPortalLeadsPage() {
   const { rep } = useSalesAuth()
   const { toast } = useToast()
   const [searchParams] = useSearchParams()
-  const [deals, setDeals] = useState<Deal[]>([])
-  const [loading, setLoading] = useState(true)
+  const qc = useQueryClient()
+  const { data: deals = [], isLoading, error } = useCanadaLeads(rep?.rep_id)
+  useCanadaLeadsRealtime(rep?.rep_id)
+  const createLead = useCreateCanadaLead(rep?.rep_id)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'leads' | 'active'>('leads')
   const [showNew, setShowNew] = useState(searchParams.get('new') === 'true')
@@ -117,30 +126,21 @@ export default function CanadaPortalLeadsPage() {
     source: 'Referral', city: '', province: '', pos_system: '',
   })
   const [addError, setAddError] = useState('')
-  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') setShowNew(true)
   }, [searchParams])
 
-  const [listError, setListError] = useState('')
-
-  useEffect(() => {
-    canadaLeadsService.list(rep?.rep_id)
-      .then(d => { setDeals(d); setLoading(false) })
-      .catch(err => { setListError(err?.message || 'Could not load leads.'); setLoading(false) })
-    const channel = canadaLeadsService.subscribe(rep?.rep_id, setDeals)
-    return () => { canadaLeadsService.unsubscribe(channel) }
-  }, [rep?.rep_id])
-
   useEffect(() => {
     const cleanup = setupOfflineSync((count) => {
       toast(`${count} queued lead${count > 1 ? 's' : ''} synced`, 'success')
       setPendingSync(getPendingCount())
-      canadaLeadsService.list(rep?.rep_id).then(setDeals).catch(() => {})
+      // Offline queue just flushed pending mutations through the service —
+      // re-fetch via React Query so every page sees the result.
+      qc.invalidateQueries({ queryKey: canadaKeys.leadsRoot() })
     })
     return cleanup
-  }, [rep?.rep_id, toast])
+  }, [qc, toast])
 
   useEffect(() => { requestNotificationPermission() }, [])
 
@@ -157,7 +157,6 @@ export default function CanadaPortalLeadsPage() {
   async function handleAddDeal(e: React.FormEvent) {
     e.preventDefault()
     setAddError('')
-    setAdding(true)
     try {
       const deal: Deal = {
         id: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16) }),
@@ -171,12 +170,13 @@ export default function CanadaPortalLeadsPage() {
       }
       const queued = queueIfOffline('create', { deal, repId: rep?.rep_id })
       if (queued) {
-        setDeals(prev => [deal, ...prev])
+        // Optimistically prepend to the leads cache; the offline queue's
+        // setupOfflineSync handler above invalidates once the network returns.
+        qc.setQueryData<Deal[]>(canadaKeys.leads(rep?.rep_id), (prev = []) => [deal, ...prev])
         setPendingSync(getPendingCount())
         toast('Saved offline — will sync when back online', 'warning')
       } else {
-        const saved = await canadaLeadsService.create(deal, rep?.rep_id)
-        setDeals(prev => [saved, ...prev])
+        await createLead.mutateAsync(deal)
         toast('Lead added', 'success')
       }
       setShowNew(false)
@@ -184,22 +184,17 @@ export default function CanadaPortalLeadsPage() {
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Failed to add lead')
       toast('Failed to save lead', 'error')
-    } finally {
-      setAdding(false)
     }
   }
+  const adding = createLead.isPending
 
-  const inputClass = 'w-full px-3 py-2 bg-[#0f1512] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
+  const inputClass = 'w-full px-3 py-2 bg-pm-canada-surface border border-pm-canada-border rounded-lg text-sm text-white placeholder-pm-canada-text-muted focus:outline-none focus:border-pm-accent/50 focus:ring-1 focus:ring-pm-accent/20 transition-colors'
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">S</span>
-        </div>
-      </div>
-    )
-  }
+  const emptyState = (
+    <div className="text-center py-16 text-sm text-pm-canada-text-muted">
+      No leads found. {search ? 'Try adjusting your search.' : 'Click "New Lead" to add one.'}
+    </div>
+  )
 
   return (
     <div className="space-y-5">
@@ -207,13 +202,13 @@ export default function CanadaPortalLeadsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-white">Leads</h1>
-          <p className="text-sm text-[#6b7a74] mt-0.5">
+          <p className="text-sm text-pm-canada-text-muted mt-0.5">
             {leads.length} leads &middot; {activeDeals.length} active
           </p>
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 px-3.5 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+          className="flex items-center gap-2 px-3.5 py-2 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 transition-all"
         >
           <Plus size={16} /> New Lead
         </button>
@@ -221,20 +216,20 @@ export default function CanadaPortalLeadsPage() {
 
       {/* Offline sync banner */}
       {pendingSync > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#f0b429]/10 border border-[#f0b429]/20">
-          <WifiOff size={14} className="text-[#f0b429]" />
-          <span className="text-xs text-[#f0b429] font-medium">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pm-amber-gold/10 border border-pm-amber-gold/20">
+          <WifiOff size={14} className="text-pm-amber-gold" />
+          <span className="text-xs text-pm-amber-gold font-medium">
             {pendingSync} lead{pendingSync > 1 ? 's' : ''} waiting to sync
           </span>
         </div>
       )}
 
       {/* Tab Toggle */}
-      <div className="flex gap-1 p-1 bg-[#0f1512] border border-[#1a2420] rounded-xl w-fit">
+      <div className="flex gap-1 p-1 bg-pm-canada-surface border border-pm-canada-border rounded-xl w-fit">
         <button
           onClick={() => setTab('leads')}
           className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-            tab === 'leads' ? 'bg-[#1a2420] text-white' : 'text-[#6b7a74] hover:text-white'
+            tab === 'leads' ? 'bg-pm-canada-border text-white' : 'text-pm-canada-text-muted hover:text-white'
           }`}
         >
           Leads ({leads.length})
@@ -242,7 +237,7 @@ export default function CanadaPortalLeadsPage() {
         <button
           onClick={() => setTab('active')}
           className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
-            tab === 'active' ? 'bg-[#00d4aa]/20 text-[#00d4aa] border border-[#00d4aa]/30' : 'text-[#6b7a74] hover:text-white'
+            tab === 'active' ? 'bg-pm-accent/20 text-pm-accent border border-pm-accent/30' : 'text-pm-canada-text-muted hover:text-white'
           }`}
         >
           Active Deals ({activeDeals.length})
@@ -251,12 +246,12 @@ export default function CanadaPortalLeadsPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6b7a74]" />
+        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-pm-canada-text-muted" />
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full pl-11 pr-4 py-3 bg-[#0f1512] border border-[#1a2420] rounded-xl text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 transition-colors"
+          className="w-full pl-11 pr-4 py-3 bg-pm-canada-surface border border-pm-canada-border rounded-xl text-sm text-white placeholder-pm-canada-text-muted focus:outline-none focus:border-pm-accent/50 transition-colors"
           placeholder="Search leads..."
         />
       </div>
@@ -264,11 +259,11 @@ export default function CanadaPortalLeadsPage() {
       {/* New Lead Modal */}
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-lg bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 shadow-2xl">
+          <div className="w-full max-w-lg bg-pm-canada-surface border border-pm-canada-border rounded-xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-semibold text-white">Add New Lead</h3>
-              <button onClick={() => setShowNew(false)} className="p-1.5 rounded-lg hover:bg-[#1a2420] transition-colors">
-                <X size={18} className="text-[#6b7a74]" />
+              <button onClick={() => setShowNew(false)} className="p-1.5 rounded-lg hover:bg-pm-canada-border transition-colors">
+                <X size={18} className="text-pm-canada-text-muted" />
               </button>
             </div>
             <form onSubmit={handleAddDeal} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -302,8 +297,8 @@ export default function CanadaPortalLeadsPage() {
               <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
               {addError && <p className="sm:col-span-2 text-sm text-red-400">{addError}</p>}
               <div className="sm:col-span-2 flex justify-end gap-2 mt-2">
-                <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-[#6b7a74] hover:text-white transition-colors">Cancel</button>
-                <button type="submit" disabled={adding} className="px-4 py-2 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all disabled:opacity-50">{adding ? 'Adding...' : 'Add Lead'}</button>
+                <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 text-sm text-pm-canada-text-muted hover:text-white transition-colors">Cancel</button>
+                <button type="submit" disabled={adding} className="px-4 py-2 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 transition-all disabled:opacity-50">{adding ? 'Adding...' : 'Add Lead'}</button>
               </div>
             </form>
           </div>
@@ -311,6 +306,7 @@ export default function CanadaPortalLeadsPage() {
       )}
 
       {/* Lead Cards */}
+      <PortalPage isLoading={isLoading} error={error} isEmpty={deals.length === 0} emptyState={emptyState}>
       <div className="space-y-3">
         {displayed.map(deal => {
           const step = STAGE_TO_STEP[deal.stage]
@@ -320,15 +316,16 @@ export default function CanadaPortalLeadsPage() {
             <Link
               key={deal.id}
               to={`/canada/portal/leads/${deal.id}`}
-              className="block bg-[#0f1512] border border-[#1a2420] rounded-xl p-4 hover:border-[#00d4aa]/30 transition-all group"
+              data-testid={`lead-card-${deal.id}`}
+              className="block bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4 hover:border-pm-accent/30 transition-all group"
             >
               <div className="flex items-center gap-3">
                 {/* Icon */}
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#1a2420] flex items-center justify-center">
+                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-pm-canada-border flex items-center justify-center">
                   {isConnected ? (
-                    <Wifi size={18} className="text-[#00d4aa]" />
+                    <Wifi size={18} className="text-pm-accent" />
                   ) : (
-                    <Store size={18} className="text-[#6b7a74]" />
+                    <Store size={18} className="text-pm-canada-text-muted" />
                   )}
                 </div>
 
@@ -337,27 +334,27 @@ export default function CanadaPortalLeadsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-semibold text-white truncate">{deal.business_name}</span>
                     {deal.vertical && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1a2420] text-[#6b7a74] font-medium">
+                      <span className="text-2xs px-1.5 py-0.5 rounded bg-pm-canada-border text-pm-canada-text-muted font-medium">
                         {deal.vertical}
                       </span>
                     )}
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0b429]/10 text-[#f0b429] font-medium">
+                    <span className="text-2xs px-2 py-0.5 rounded-full bg-pm-amber-gold/10 text-pm-amber-gold font-medium">
                       CA${deal.monthly_value.toLocaleString()}/mo
                     </span>
                     {!isConnected && <StaleBadge days={daysSinceUpdate} />}
                   </div>
-                  <p className="text-xs text-[#6b7a74] mt-0.5 truncate">
+                  <p className="text-xs text-pm-canada-text-muted mt-0.5 truncate">
                     {deal.contact_name}
                     {daysSinceUpdate >= 3 && !isConnected && (
-                      <span className="text-[#f59e0b] ml-2">Follow up needed</span>
+                      <span className="text-pm-amber-orange ml-2">Follow up needed</span>
                     )}
                   </p>
                 </div>
 
                 {/* Step pill + arrow */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <StepPill step={step} />
-                  <ChevronRight size={16} className="text-[#4a5550] group-hover:text-[#6b7a74] transition-colors" />
+                  <span data-testid="lead-stage-badge"><StepPill step={step} /></span>
+                  <ChevronRight size={16} className="text-pm-canada-text-faint group-hover:text-pm-canada-text-muted transition-colors" />
                 </div>
               </div>
 
@@ -367,19 +364,16 @@ export default function CanadaPortalLeadsPage() {
           )
         })}
 
-        {listError && (
-          <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center gap-3">
-            <AlertTriangle size={16} className="text-red-400 flex-shrink-0" />
-            <p className="text-sm text-red-400">{listError}</p>
-            <button onClick={() => window.location.reload()} className="ml-auto px-3 py-1 text-xs text-white border border-red-500/30 rounded-lg hover:bg-red-500/10">Retry</button>
-          </div>
-        )}
-        {!listError && displayed.length === 0 && (
-          <div className="text-center py-16 text-sm text-[#6b7a74]">
-            No leads found. {search ? 'Try adjusting your search.' : 'Click "New Lead" to add one.'}
+        {/* Search/tab miss — rep has leads in the system, but the current
+            tab + search returns nothing. The "no leads at all" case is
+            handled by PortalPage's emptyState. */}
+        {deals.length > 0 && displayed.length === 0 && (
+          <div className="py-12 text-center text-sm text-pm-canada-text-faint">
+            No leads match your filter.
           </div>
         )}
       </div>
+      </PortalPage>
     </div>
   )
 }

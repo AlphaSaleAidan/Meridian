@@ -10,12 +10,13 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+
+from ..auth import require_org_access
 
 logger = logging.getLogger("meridian.api.inventory_docs")
 
-router = APIRouter(prefix="/api/inventory-docs", tags=["inventory-docs"])
+router = APIRouter(prefix="/api/inventory-docs", tags=["inventory-docs"], dependencies=[Depends(require_org_access)])
 
 
 @router.get("/{org_id}")

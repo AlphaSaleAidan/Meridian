@@ -71,6 +71,9 @@ class CloverConfig:
     access_token: str = os.getenv("CLOVER_ACCESS_TOKEN", "")
     merchant_id: str = os.getenv("CLOVER_MERCHANT_ID", "")
     environment: str = os.getenv("CLOVER_ENVIRONMENT", "sandbox")
+    # Built but gated: connector exists, but new connect/test attempts return
+    # "coming soon" until POS_CLOVER_ENABLED=true. Square is the live provider.
+    enabled: bool = os.getenv("POS_CLOVER_ENABLED", "false").lower() == "true"
 
     @property
     def base_url(self) -> str:
@@ -134,6 +137,11 @@ class AppConfig:
     """Application configuration."""
     redirect_uri: str = os.getenv("SQUARE_REDIRECT_URI", f"{_BASE_URL}/api/square/callback")
     webhook_url: str = os.getenv("SQUARE_WEBHOOK_URL", f"{_BASE_URL}/api/webhooks/square")
+    # Square HMAC verification must use the exact notification URL Square
+    # signs against; str(request.url) reconstructs the internal/http URL
+    # behind Railway's TLS-terminating proxy and always mismatches.
+    billing_webhook_url: str = os.getenv("BILLING_WEBHOOK_URL", f"{_BASE_URL}/api/billing/webhook")
+    credits_webhook_url: str = os.getenv("CREDITS_WEBHOOK_URL", f"{_BASE_URL}/api/credits/webhook/square")
     clover_redirect_uri: str = os.getenv("CLOVER_REDIRECT_URI", f"{_BASE_URL}/api/clover/callback")
     clover_webhook_url: str = os.getenv("CLOVER_WEBHOOK_URL", f"{_BASE_URL}/api/webhooks/clover")
     database_url: str = os.getenv("DATABASE_URL", "")

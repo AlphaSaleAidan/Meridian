@@ -116,18 +116,18 @@ export default function CanadaPortalOnboardingPage() {
     navigate('/canada/portal/dashboard')
   }
 
-  const inputClass = 'w-full px-3 py-2.5 bg-[#0a0f0d] border border-[#1a2420] rounded-lg text-sm text-white placeholder-[#6b7a74] focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
-  const btnPrimary = 'flex items-center gap-1.5 px-5 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all'
-  const btnSecondary = 'flex items-center gap-1.5 px-4 py-2.5 text-sm text-[#6b7a74] hover:text-white transition-colors'
+  const inputClass = 'w-full px-3 py-2.5 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white placeholder-pm-canada-text-muted focus:outline-none focus:border-pm-accent/50 focus:ring-1 focus:ring-pm-accent/20 transition-colors'
+  const btnPrimary = 'flex items-center gap-1.5 px-5 py-2.5 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 transition-all'
+  const btnSecondary = 'flex items-center gap-1.5 px-4 py-2.5 text-sm text-pm-canada-text-muted hover:text-white transition-colors'
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-pm-bg flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="flex flex-col items-center gap-1 mb-6">
           <MeridianEmblem size={36} />
-          <span className="text-lg font-bold text-[#F5F5F7] mt-2">Sales Onboarding</span>
-          <span className="text-[10px] font-semibold text-[#00d4aa] uppercase tracking-widest">
+          <span className="text-lg font-bold text-pm-text mt-2">Sales Onboarding</span>
+          <span className="text-2xs font-semibold text-pm-accent uppercase tracking-widest">
             Canada CRM
           </span>
         </div>
@@ -142,15 +142,15 @@ export default function CanadaPortalOnboardingPage() {
               <div key={s.id} className="flex items-center">
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                    isActive ? 'bg-[#00d4aa] text-[#0a0f0d]' :
-                    isDone ? 'bg-[#00d4aa]/20 text-[#00d4aa]' :
-                    'bg-[#1a2420] text-[#6b7a74]'
+                    isActive ? 'bg-pm-accent text-pm-canada-bg' :
+                    isDone ? 'bg-pm-accent/20 text-pm-accent' :
+                    'bg-pm-canada-border text-pm-canada-text-muted'
                   }`}
                 >
                   {isDone ? <Check size={14} /> : <Icon size={14} />}
                 </div>
                 {i < STEPS.length - 1 && (
-                  <div className={`w-6 h-0.5 mx-0.5 ${i < stepIdx ? 'bg-[#00d4aa]/40' : 'bg-[#1a2420]'}`} />
+                  <div className={`w-6 h-0.5 mx-0.5 ${i < stepIdx ? 'bg-pm-accent/40' : 'bg-pm-canada-border'}`} />
                 )}
               </div>
             )
@@ -158,22 +158,22 @@ export default function CanadaPortalOnboardingPage() {
         </div>
 
         {/* Card */}
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-6 sm:p-8">
+        <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-6 sm:p-8">
           {/* Step 1: Password */}
           {step === 'password' && (
             <div className="space-y-5">
               <div className="text-center">
-                <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                  <Lock size={22} className="text-[#00d4aa]" />
+                <div className="w-12 h-12 rounded-full bg-pm-accent/10 flex items-center justify-center mx-auto mb-3">
+                  <Lock size={22} className="text-pm-accent" />
                 </div>
                 <h2 className="text-lg font-bold text-white">Set Your Password</h2>
-                <p className="text-sm text-[#6b7a74] mt-1">Secure your account with a strong password.</p>
+                <p className="text-sm text-pm-canada-text-muted mt-1">Secure your account with a strong password.</p>
               </div>
               {passwordError && (
                 <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{passwordError}</div>
               )}
               <div>
-                <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">New Password</label>
+                <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">New Password</label>
                 <div className="relative">
                   <input
                     type={showPassword ? 'text' : 'password'}
@@ -182,13 +182,13 @@ export default function CanadaPortalOnboardingPage() {
                     className={inputClass}
                     placeholder="Min 8 characters"
                   />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6b7a74]">
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-pm-canada-text-muted">
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Confirm Password</label>
+                <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Confirm Password</label>
                 <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Confirm your password" />
               </div>
               <div className="flex justify-end">
@@ -203,13 +203,13 @@ export default function CanadaPortalOnboardingPage() {
           {step === 'welcome' && (
             <div className="space-y-5">
               <div className="text-center">
-                <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                  <Sparkles size={22} className="text-[#00d4aa]" />
+                <div className="w-12 h-12 rounded-full bg-pm-accent/10 flex items-center justify-center mx-auto mb-3">
+                  <Sparkles size={22} className="text-pm-accent" />
                 </div>
                 <h2 className="text-lg font-bold text-white">
                   Welcome to Meridian, {rep?.name?.split(' ')[0] || 'there'}
                 </h2>
-                <p className="text-sm text-[#6b7a74] mt-1">
+                <p className="text-sm text-pm-canada-text-muted mt-1">
                   You're now part of the Meridian Canada sales team.
                 </p>
               </div>
@@ -221,10 +221,10 @@ export default function CanadaPortalOnboardingPage() {
                   { label: 'Month 6', amount: 'CA$12,150', sub: '30 closes' },
                   { label: 'Month 12', amount: 'CA$24,300', sub: '60 closes' },
                 ].map(card => (
-                  <div key={card.label} className="bg-[#0a0f0d] border border-[#1a2420] rounded-xl p-4 text-center">
-                    <p className="text-[10px] font-medium text-[#6b7a74] uppercase tracking-wide">{card.label}</p>
-                    <p className="text-xl font-bold text-[#f0b429] mt-1">{card.amount}</p>
-                    <p className="text-[10px] text-[#4a5550] mt-0.5">{card.sub}</p>
+                  <div key={card.label} className="bg-pm-canada-bg border border-pm-canada-border rounded-xl p-4 text-center">
+                    <p className="text-2xs font-medium text-pm-canada-text-muted uppercase tracking-wide">{card.label}</p>
+                    <p className="text-xl font-bold text-pm-amber-gold mt-1">{card.amount}</p>
+                    <p className="text-2xs text-pm-canada-text-faint mt-0.5">{card.sub}</p>
                   </div>
                 ))}
               </div>
@@ -248,34 +248,34 @@ export default function CanadaPortalOnboardingPage() {
           {step === 'profile' && (
             <div className="space-y-5">
               <div className="text-center">
-                <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                  <User size={22} className="text-[#00d4aa]" />
+                <div className="w-12 h-12 rounded-full bg-pm-accent/10 flex items-center justify-center mx-auto mb-3">
+                  <User size={22} className="text-pm-accent" />
                 </div>
                 <h2 className="text-lg font-bold text-white">Your Profile</h2>
-                <p className="text-sm text-[#6b7a74] mt-1">Fill in your details so your team and manager can find you.</p>
+                <p className="text-sm text-pm-canada-text-muted mt-1">Fill in your details so your team and manager can find you.</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Display Name</label>
+                  <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Display Name</label>
                   <input value={profile.display_name} onChange={e => setProfile(p => ({ ...p, display_name: e.target.value }))} className={inputClass} placeholder="Your name" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Phone</label>
+                  <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Phone</label>
                   <input type="tel" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} className={inputClass} placeholder="(604) 555-1234" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">City</label>
+                  <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">City</label>
                   <input value={profile.city} onChange={e => setProfile(p => ({ ...p, city: e.target.value }))} className={inputClass} placeholder="Vancouver" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Province</label>
+                  <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Province</label>
                   <select value={profile.province} onChange={e => setProfile(p => ({ ...p, province: e.target.value }))} className={inputClass}>
                     <option value="" disabled>Choose your province...</option>
                     {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-[#6b7a74] mb-1.5">Short Bio (optional)</label>
+                  <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Short Bio (optional)</label>
                   <textarea value={profile.bio} onChange={e => setProfile(p => ({ ...p, bio: e.target.value }))} className={inputClass + ' resize-none h-16'} placeholder="A few words about yourself..." />
                 </div>
               </div>
@@ -297,41 +297,41 @@ export default function CanadaPortalOnboardingPage() {
           {step === 'manager' && (
             <div className="space-y-5">
               <div className="text-center">
-                <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                  <Users size={22} className="text-[#00d4aa]" />
+                <div className="w-12 h-12 rounded-full bg-pm-accent/10 flex items-center justify-center mx-auto mb-3">
+                  <Users size={22} className="text-pm-accent" />
                 </div>
                 <h2 className="text-lg font-bold text-white">Meet Your Managers</h2>
-                <p className="text-sm text-[#6b7a74] mt-1">Here's who you'll be working with in Canada.</p>
+                <p className="text-sm text-pm-canada-text-muted mt-1">Here's who you'll be working with in Canada.</p>
               </div>
               <div className="space-y-3">
-                <div className="bg-[#0a0f0d] border border-[#1a2420] rounded-xl p-5">
+                <div className="bg-pm-canada-bg border border-pm-canada-border rounded-xl p-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-[#00d4aa]/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-[#00d4aa]">EC</span>
+                    <div className="w-14 h-14 rounded-full bg-pm-accent/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-pm-accent">EC</span>
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-white">Enoch Cheung</p>
-                      <p className="text-xs text-[#6b7a74]">Canadian Regional Director</p>
-                      <p className="text-[10px] text-[#00d4aa] mt-0.5">Meridian AI Business Solutions — CRO</p>
+                      <p className="text-xs text-pm-canada-text-muted">Canadian Regional Director</p>
+                      <p className="text-2xs text-pm-accent mt-0.5">Meridian AI Business Solutions — CRO</p>
                     </div>
                   </div>
-                  <p className="text-xs text-[#6b7a74] mt-4 leading-relaxed">
+                  <p className="text-xs text-pm-canada-text-muted mt-4 leading-relaxed">
                     Enoch leads Meridian's Canadian expansion. He's your primary contact for pipeline strategy,
                     deal support, and regional questions. Don't hesitate to reach out.
                   </p>
                 </div>
-                <div className="bg-[#0a0f0d] border border-[#1a2420] rounded-xl p-5">
+                <div className="bg-pm-canada-bg border border-pm-canada-border rounded-xl p-5">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-[#7c3aed]/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-[#7c3aed]">AN</span>
+                    <div className="w-14 h-14 rounded-full bg-pm-purple/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-pm-purple">AN</span>
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-white">Aidan Nguyen</p>
-                      <p className="text-xs text-[#6b7a74]">Canadian Admin</p>
-                      <p className="text-[10px] text-[#00d4aa] mt-0.5">Meridian</p>
+                      <p className="text-xs text-pm-canada-text-muted">Canadian Admin</p>
+                      <p className="text-2xs text-pm-accent mt-0.5">Meridian</p>
                     </div>
                   </div>
-                  <p className="text-xs text-[#6b7a74] mt-4 leading-relaxed">
+                  <p className="text-xs text-pm-canada-text-muted mt-4 leading-relaxed">
                     Aidan handles onboarding support, training materials, and account setup.
                     Reach out for any technical or portal questions.
                   </p>
@@ -355,22 +355,22 @@ export default function CanadaPortalOnboardingPage() {
             return (
               <div className="space-y-5">
                 <div className="text-center">
-                  <div className="w-12 h-12 rounded-full bg-[#00d4aa]/10 flex items-center justify-center mx-auto mb-3">
-                    <CheckSquare size={22} className="text-[#00d4aa]" />
+                  <div className="w-12 h-12 rounded-full bg-pm-accent/10 flex items-center justify-center mx-auto mb-3">
+                    <CheckSquare size={22} className="text-pm-accent" />
                   </div>
                   <h2 className="text-lg font-bold text-white">Getting Started Checklist</h2>
-                  <p className="text-sm text-[#6b7a74] mt-1">Complete the required items to unlock your dashboard.</p>
+                  <p className="text-sm text-pm-canada-text-muted mt-1">Complete the required items to unlock your dashboard.</p>
                 </div>
 
                 {/* Progress bar */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-[#6b7a74]">Required Progress</span>
-                    <span className="text-xs font-semibold text-[#00d4aa]">{requiredDone}/{REQUIRED_ITEMS.length}</span>
+                    <span className="text-xs text-pm-canada-text-muted">Required Progress</span>
+                    <span className="text-xs font-semibold text-pm-accent">{requiredDone}/{REQUIRED_ITEMS.length}</span>
                   </div>
-                  <div className="h-2 bg-[#1a2420] rounded-full overflow-hidden">
+                  <div className="h-2 bg-pm-canada-border rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-[#00d4aa] rounded-full transition-all duration-500"
+                      className="h-full bg-pm-accent rounded-full transition-all duration-500"
                       style={{ width: `${(requiredDone / REQUIRED_ITEMS.length) * 100}%` }}
                     />
                   </div>
@@ -378,7 +378,7 @@ export default function CanadaPortalOnboardingPage() {
 
                 {/* Required items */}
                 <div>
-                  <p className="text-[10px] font-semibold text-[#6b7a74] uppercase tracking-wider mb-2">Required</p>
+                  <p className="text-2xs font-semibold text-pm-canada-text-muted uppercase tracking-wider mb-2">Required</p>
                   <div className="space-y-2">
                     {REQUIRED_ITEMS.map(item => {
                       const checked = checkedItems.has(item.id)
@@ -393,14 +393,14 @@ export default function CanadaPortalOnboardingPage() {
                               return next
                             })
                           }}
-                          className="w-full flex items-center gap-3 p-3 bg-[#0a0f0d] rounded-lg hover:bg-[#0a0f0d]/80 transition-colors text-left"
+                          className="w-full flex items-center gap-3 p-3 bg-pm-canada-bg rounded-lg hover:bg-pm-canada-bg/80 transition-colors text-left"
                         >
                           <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
-                            checked ? 'bg-[#00d4aa] text-[#0a0f0d]' : 'border border-[#1a2420]'
+                            checked ? 'bg-pm-accent text-pm-canada-bg' : 'border border-pm-canada-border'
                           }`}>
                             {checked && <Check size={12} />}
                           </div>
-                          <span className={`text-sm flex-1 ${checked ? 'text-[#6b7a74] line-through' : 'text-white'}`}>
+                          <span className={`text-sm flex-1 ${checked ? 'text-pm-canada-text-muted line-through' : 'text-white'}`}>
                             {item.label}
                           </span>
                         </button>
@@ -411,7 +411,7 @@ export default function CanadaPortalOnboardingPage() {
 
                 {/* Recommended items */}
                 <div>
-                  <p className="text-[10px] font-semibold text-[#6b7a74] uppercase tracking-wider mb-2">Recommended</p>
+                  <p className="text-2xs font-semibold text-pm-canada-text-muted uppercase tracking-wider mb-2">Recommended</p>
                   <div className="space-y-2">
                     {RECOMMENDED_ITEMS.map(item => {
                       const checked = checkedItems.has(item.id)
@@ -426,14 +426,14 @@ export default function CanadaPortalOnboardingPage() {
                               return next
                             })
                           }}
-                          className="w-full flex items-center gap-3 p-3 bg-[#0a0f0d]/50 rounded-lg hover:bg-[#0a0f0d]/80 transition-colors text-left"
+                          className="w-full flex items-center gap-3 p-3 bg-pm-canada-bg/50 rounded-lg hover:bg-pm-canada-bg/80 transition-colors text-left"
                         >
                           <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
-                            checked ? 'bg-[#00d4aa]/60 text-[#0a0f0d]' : 'border border-[#1a2420]/60'
+                            checked ? 'bg-pm-accent/60 text-pm-canada-bg' : 'border border-pm-canada-border/60'
                           }`}>
                             {checked && <Check size={12} />}
                           </div>
-                          <span className={`text-sm ${checked ? 'text-[#4a5550] line-through' : 'text-[#6b7a74]'}`}>
+                          <span className={`text-sm ${checked ? 'text-pm-canada-text-faint line-through' : 'text-pm-canada-text-muted'}`}>
                             {item.label}
                           </span>
                         </button>
@@ -447,7 +447,7 @@ export default function CanadaPortalOnboardingPage() {
                     <ChevronLeft size={16} /> Back
                   </button>
                   <div className="flex gap-2">
-                    <Link to="/canada/portal/training" className={btnSecondary + ' border border-[#1a2420] rounded-lg px-4'}>
+                    <Link to="/canada/portal/training" className={btnSecondary + ' border border-pm-canada-border rounded-lg px-4'}>
                       Go to Training
                     </Link>
                     <button
@@ -464,7 +464,7 @@ export default function CanadaPortalOnboardingPage() {
           })()}
         </div>
 
-        <p className="text-center text-[10px] text-[#4a5550] mt-4">
+        <p className="text-center text-2xs text-pm-canada-text-faint mt-4">
           Step {stepIdx + 1} of {STEPS.length}
         </p>
       </div>

@@ -4,10 +4,10 @@ import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
-import DataPageSkeleton from '@/components/DataPageSkeleton'
 
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const hourLabels = Array.from({ length: 24 }, (_, i) => {
@@ -81,15 +81,21 @@ function HeatmapGrid({ cells }: { cells: PeakHourCell[] }) {
 export default function PeakHoursPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const hourlyData = useApi(() => api.hourlyRevenue(orgId), [orgId])
 
-  if (!isDemo && hourlyData.loading) return <LoadingPage />
-  if (!isDemo && hourlyData.error) return <ErrorState message={hourlyData.error} onRetry={hourlyData.refetch} />
+  // Before a POS is connected the analytics endpoint 401s. Rather than a
+  // generic scaffold, render the heatmap *shell* (empty cells) so the merchant
+  // sees exactly what will fill in as transactions roll in. Only surface
+  // loading / error states once a POS is actually connected.
+  if (!isDemo && posConnected && hourlyData.loading) return <LoadingPage />
+  if (!isDemo && posConnected && hourlyData.error) return <ErrorState message={hourlyData.error} onRetry={hourlyData.refetch} />
 
   let cells: PeakHourCell[]
   if (isDemo) {
     cells = generatePeakHourHeatmap()
-  } else if (hourlyData.data?.hourly?.length) {
+  } else if (posConnected && hourlyData.data?.hourly?.length) {
     const hourly = hourlyData.data.hourly
     cells = []
     for (let day = 0; day < 7; day++) {
@@ -115,9 +121,10 @@ export default function PeakHoursPage() {
   const morningRevenue = cells.filter(c => c.hour >= 7 && c.hour < 10).reduce((s, c) => s + c.revenue, 0)
   const totalRevenue = cells.reduce((s, c) => s + c.revenue, 0)
   const morningPct = totalRevenue > 0 ? Math.round(morningRevenue / totalRevenue * 100) : 0
+  // Real merchant with no transaction signal yet — show the heatmap shell.
+  const awaitingData = !isDemo && cells.length === 0
 
   return (
-    <DataPageSkeleton title="Peak Hours" layout="chart">
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
         <div>
@@ -127,6 +134,21 @@ export default function PeakHoursPage() {
           </p>
         </div>
       </ScrollReveal>
+
+      {awaitingData && (
+        <ScrollReveal variant="fadeUp">
+          <div className="card p-3 border-[#1A8FD6]/15 flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0">
+              <Clock size={14} className="text-[#1A8FD6]" />
+            </div>
+            <p className="text-xs text-[#A1A1A8] leading-relaxed">
+              {posConnected
+                ? 'Collecting transactions — your heatmap will light up as sales are recorded over the coming days.'
+                : 'Connect your POS to start filling this heatmap. Each cell brightens as transactions are recorded for that day and hour.'}
+            </p>
+          </div>
+        </ScrollReveal>
+      )}
 
       <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StaggerItem>
@@ -187,6 +209,7 @@ export default function PeakHoursPage() {
         <HeatmapGrid cells={cells} />
       </ScrollReveal>
 
+      {!awaitingData && (
       <ScrollReveal variant="fadeUp" delay={0.15}>
         <div className="card p-4 border-[#17C5B0]/10">
           <div className="flex items-start gap-3">
@@ -206,7 +229,7 @@ export default function PeakHoursPage() {
           </div>
         </div>
       </ScrollReveal>
+      )}
     </div>
-    </DataPageSkeleton>
   )
 }

@@ -500,7 +500,12 @@ export const api = {
       weeks_analyzed: number
     }>(`/api/schedule/projected-revenue/${merchantId}`, { params: { weeks } }),
 
-  scheduleRecommend: (merchantId: string, weekStart: string, weeksBack = 8) =>
+  scheduleRecommend: (
+    merchantId: string,
+    weekStart: string,
+    weeksBack = 8,
+    opts: { country?: string; lat?: number; lon?: number } = {},
+  ) =>
     apiFetch<{
       recommendations: Array<{
         id: string
@@ -511,11 +516,19 @@ export const api = {
         reason: string
         priority: 'critical' | 'recommended' | 'optional'
         peak_intensity?: number
+        factors?: Array<{ kind: 'peak' | 'holiday' | 'weather'; label: string }>
       }>
+      signals?: Array<{ kind: 'holiday' | 'weather'; label: string }>
       merchant_id: string
       weeks_analyzed?: number
     }>(`/api/schedule/recommend/${merchantId}`, {
       method: 'POST',
-      params: { week_start: weekStart, weeks_back: weeksBack },
+      params: {
+        week_start: weekStart,
+        weeks_back: weeksBack,
+        ...(opts.country ? { country: opts.country } : {}),
+        ...(opts.lat != null ? { lat: opts.lat } : {}),
+        ...(opts.lon != null ? { lon: opts.lon } : {}),
+      },
     }),
 }

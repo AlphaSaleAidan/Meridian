@@ -1,14 +1,14 @@
 """
 Twilio Voice webhook routes for Meridian AI Phone Agent.
-
-Twilio handles telephony, STT, and TTS. The LLM brain is provided by
-src/services/llm_client.LLMClient(channel="voice"), which walks the voice
-provider chain (SambaNova → DeepSeek → local Qwen) defined in PROVIDER_CHAINS.
+Twilio handles telephony, STT, and TTS. SambaNova (primary) + local Qwen (fallback) provide the brain.
+No external AI APIs required — Qwen 2.5 7B runs locally on port 8002.
 
 Webhook URL to configure in Twilio Console:
-    Voice:  https://api.meridian.tips/twilio/voice
-    Status: https://api.meridian.tips/twilio/status
-"""
+    Voice: https://api.meridian.tips/twilio/voice
+        Status: https://api.meridian.tips/twilio/status
+        """
+import asyncio
+import json
 import logging
 import os
 import sys
@@ -22,10 +22,8 @@ from fastapi.responses import Response
 
 from ...services.pos_connectors.order_dispatcher import create_pos_order
 from ...services.pos_connectors.base import OrderResult
-from ...services.llm_client import LLMClient
 from ...db import get_db
 from ...credits import (
-    COSTS,
     PHONE_CALL_PER_MIN,
     cost_for_phone_call,
     deduct,
@@ -45,13 +43,37 @@ DEMO_MERCHANT_ID = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
 MEDIA_STREAMS_ENABLED = os.getenv("MEDIA_STREAMS_ENABLED", "0") == "1"
 MEDIA_STREAM_HOST = os.getenv("MEDIA_STREAM_HOST", "api.meridian.tips")
 
+# Default per-turn capture method. Telnyx's real-time <Gather input="speech">
+# recognizer reads the inbound track that carries the bot's own Polly playback
+# on these connections, so it returns empty SpeechResults and the call wastes
+# two turns on "I didn't catch that" before self-healing to the <Record>+STT
+# path. Default to "record" to skip that and capture the caller from turn one.
+# Override to "gather" via env on any connection where the real-time recognizer
+# is provisioned (lower latency). The empty-result self-heal still applies.
+DEFAULT_CAPTURE = os.getenv("PHONE_CAPTURE_DEFAULT", "record")
+
+# Telephony provider for the media-stream path. Telnyx and Twilio send
+# different WS handshake envelopes, so the serializer + drain branch on this.
+PHONE_PROVIDER = os.getenv("PHONE_PROVIDER", "twilio").lower()
+
 _PHONE_AGENT_DIR = str(Path(__file__).resolve().parents[3] / "services" / "phone_agent")
 if _PHONE_AGENT_DIR not in sys.path:
     sys.path.insert(0, _PHONE_AGENT_DIR)
 
-# One client per channel. LLMClient is stateless across calls; module-level
-# is just for readability. Provider/model is chosen by PROVIDER_CHAINS["voice"].
-_voice_llm = LLMClient(channel="voice")
+# --- AI Provider config ---
+# Primary: DeepSeek (OpenAI-compatible, cheap + good at multi-turn dialogue).
+# Falls through to SambaNova then local Qwen if its key is unset or it errors.
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+# Secondary: SambaNova (OpenAI-compatible endpoint)
+SAMBANOVA_API_KEY = os.getenv("SAMBANOVA_API_KEY", "")
+SAMBANOVA_BASE_URL = "https://api.sambanova.ai/v1"
+SAMBANOVA_MODEL = os.getenv("SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct")
+
+# Fallback: Local Qwen 2.5 7B (same server as Garry)
+QWEN_URL = os.getenv("GARRY_LLM_URL", "http://localhost:8002")
 
 _sessions: dict[str, dict[str, Any]] = {}
 SESSION_TTL = 600
@@ -70,53 +92,65 @@ DEMO_MENU = [
     {"name": "Apple Pie", "price": 4.49},
 ]
 
-# OpenAI function-tool shape (LLMClient passes through to provider unchanged).
-VOICE_TOOLS = [
+TOOLS = [
     {
-        "type": "function",
-        "function": {
-            "name": "submit_order",
-            "description": "Call ONLY after customer confirms their complete order.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "customer_name": {"type": "string"},
-                    "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in"]},
+        "name": "submit_order",
+        "description": "Call ONLY after customer confirms their complete order.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "customer_name": {"type": "string"},
+                "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in"]},
+                "items": {
+                    "type": "array",
                     "items": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string"},
-                                "quantity": {"type": "integer"},
-                                "size": {"type": "string"},
-                                "modifications": {"type": "array", "items": {"type": "string"}},
-                            },
-                            "required": ["name", "quantity"],
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "quantity": {"type": "integer"},
+                            "size": {"type": "string"},
+                            "modifications": {"type": "array", "items": {"type": "string"}},
                         },
+                        "required": ["name", "quantity"],
                     },
-                    "special_requests": {"type": "string"},
                 },
-                "required": ["customer_name", "order_type", "items"],
+                "special_requests": {"type": "string"},
             },
+            "required": ["customer_name", "order_type", "items"],
         },
     },
     {
-        "type": "function",
-        "function": {
-            "name": "end_call",
-            "description": "Call when conversation is done (no order, or after order placed).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "reason": {"type": "string", "enum": ["order_placed", "no_order", "wrong_number", "question_only"]},
-                    "farewell": {"type": "string"},
-                },
-                "required": ["reason", "farewell"],
+        "name": "end_call",
+        "description": "Call when conversation is done (no order, or after order placed).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "reason": {"type": "string", "enum": ["order_placed", "no_order", "wrong_number", "question_only"]},
+                "farewell": {"type": "string"},
             },
+            "required": ["reason", "farewell"],
         },
     },
 ]
+
+# Offered only when the merchant has configured a transfer number (see the
+# session build in the call handler). Appended to TOOLS per-call so the demo
+# and merchants without a transfer number keep the exact same tool set.
+TRANSFER_TOOL = {
+    "name": "transfer_call",
+    "description": (
+        "Hand the call off to a human. Call this when the caller asks for a "
+        "person/manager, has a complaint or question you cannot answer, or "
+        "explicitly asks to be transferred."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "handoff": {"type": "string", "description": "Short line to say before transferring, e.g. 'Sure, connecting you now.'"},
+        },
+        "required": ["handoff"],
+    },
+}
 
 
 def _menu_text() -> str:
@@ -151,23 +185,203 @@ def _escape(text: str) -> str:
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 
-def _gather(say: str, timeout: int = 5) -> str:
+# Common ordering phrases that bias speech recognition on every call.
+_BASE_HINTS = [
+    "yes", "no", "no thanks", "that's it", "that's all", "that's everything",
+    "pickup", "delivery", "dine in", "add", "remove", "cancel",
+    "small", "medium", "large", "one", "two", "three",
+]
+
+
+def _menu_hints(menu_items: list[dict]) -> str:
+    """Comma-separated speech-recognition hints from the menu + common phrases.
+
+    Telnyx biases its transcriber toward these phrases, so menu-specific terms
+    ('milkshake', 'fish tacos', 'extra cheese') are recognized far more
+    reliably than with a generic model. Caps the list — hints have practical
+    limits and a huge list dilutes the bias.
+    """
+    terms: list[str] = list(_BASE_HINTS)
+    for item in menu_items or []:
+        if item.get("name"):
+            terms.append(item["name"])
+        terms.extend(item.get("sizes") or [])
+        terms.extend(item.get("options") or item.get("modifications") or [])
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for t in terms:
+        key = str(t).lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            uniq.append(str(t))
+    return ", ".join(uniq[:100])
+
+
+def _gather(say: str, timeout: int = 5, speech_timeout: int = 1, hints: str = "") -> str:
+    # Telnyx TeXML requires speechTimeout as an INTEGER (seconds of silence after
+    # speech ends). The Twilio-ism speechTimeout="auto" is rejected by Telnyx and
+    # makes Gather fire its action with an empty SpeechResult -> the reprompt loop.
+    # transcriptionEngine only accepts "A" (Google, default) or "B" (Telnyx in-house);
+    # the literal "Telnyx" is invalid. "B" stops Gather posting its action; use "A".
+    #
+    # The prompt <Say> is kept OUTSIDE <Gather>. When it is nested inside, the gather's
+    # transcription window opens while the Polly greeting is still playing, and the
+    # playback bleeds onto the inbound track -> the recognizer finalizes on the bot's
+    # own words (e.g. " Thank you for calling.") instead of the caller. Playing <Say>
+    # first means the gather only listens after the prompt finishes, so the inbound
+    # track carries caller audio alone. (Trade-off: no barge-in, which we want here.)
+    hints_attr = f' hints="{_escape(hints)}"' if hints else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+  <Say voice="Polly.Joanna">{_escape(say)}</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
-    speechTimeout="auto" timeout="{timeout}" language="en-US">
-    <Say voice="Polly.Joanna">{_escape(say)}</Say>
-  </Gather>
+    speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
+    transcriptionEngine="A"{hints_attr} />
   <Say voice="Polly.Joanna">I didn't catch that. Could you say that again?</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
-    speechTimeout="auto" timeout="{timeout}" language="en-US" />
+    speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
+    transcriptionEngine="A"{hints_attr} />
 </Response>"""
+
+
+def _listen(say: str, max_length: int = 15, timeout: int = 1, hints: str = "") -> str:
+    # Per-turn capture via <Record> instead of <Gather input="speech">.
+    # <Gather input="speech"> reads the default *inbound* track, which on these
+    # Telnyx calls carries the bot's own Polly playback — so the caller is never
+    # transcribed and the call loops on "I didn't catch that". <Gather> has no
+    # track selector, so no Gather config fixes it. <Record> captures only the
+    # audio that arrives while the bot is silent (the caller), then the /gather
+    # action handler downloads it and transcribes it synchronously via the
+    # Telnyx STT endpoint.
+    #
+    # CRITICAL for latency: Telnyx ends the recording on `timeout` seconds of
+    # silence ONLY when transcription="true" — it uses the transcription engine
+    # to detect silence. Without transcription enabled the timeout is ignored and
+    # every turn runs the full maxLength (~15s of dead air). So we enable
+    # transcription here purely for silence detection (the async transcription
+    # callback is unused — we transcribe the recording synchronously in /gather).
+    # timeout=1: end ~1s after the caller stops talking (snappy turn-taking for
+    # a live demo). maxLength caps a runaway turn; finishOnKey lets a caller end
+    # early.
+    #
+    # No trim="trim-silence": trimming makes Telnyx post-process the whole file
+    # before delivering the recording, adding finalization latency. The STT
+    # endpoint handles leading/trailing silence fine, so we skip it to get the
+    # recording (and therefore the response) out faster.
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Record action="/twilio/gather" method="POST" playBeep="false"
+    maxLength="{max_length}" timeout="{timeout}"
+    transcription="true" transcriptionEngine="A" transcriptionLanguage="en-US"
+    finishOnKey="#" channels="single" format="mp3" />
+</Response>"""
+
+
+def _dial(say: str, number: str) -> str:
+    """TeXML to speak a handoff line then bridge the caller to a human.
+
+    Telnyx <Dial> connects the inbound caller to the destination number; when
+    that leg ends, the call hangs up. Used by the transfer_call tool so the
+    agent can escalate to a person when the merchant has a transfer number set.
+    """
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Dial>{_escape(number)}</Dial>
+</Response>"""
+
+
+async def _transcribe_recording(recording_url: str) -> str:
+    """Download a Telnyx call recording and transcribe it synchronously via the
+    Telnyx STT endpoint (deepgram/nova-3). Returns the caller's text, or "" on
+    any failure so the turn loop reprompts instead of crashing. The recording
+    can lag the <Record> action callback by a moment, so the fetch is retried.
+    """
+    api_key = os.getenv("TELNYX_API_KEY", "")
+    if not api_key or not recording_url:
+        return ""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            audio = b""
+            for _ in range(6):
+                r = await client.get(recording_url)
+                if r.status_code in (401, 403):
+                    r = await client.get(
+                        recording_url, headers={"Authorization": f"Bearer {api_key}"}
+                    )
+                if r.status_code == 200 and r.content:
+                    audio = r.content
+                    break
+                await asyncio.sleep(0.4)
+            if not audio:
+                logger.warning("phone listen: recording not ready url=%s", recording_url)
+                return ""
+            res = await client.post(
+                "https://api.telnyx.com/v2/ai/audio/transcriptions",
+                data={
+                    "model": "deepgram/nova-3",
+                    "language": "en",
+                    "response_format": "json",
+                },
+                files={"file": ("turn.mp3", audio, "audio/mpeg")},
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+        if res.status_code != 200:
+            logger.error("phone listen: Telnyx STT %d: %s", res.status_code, res.text[:200])
+            return ""
+        return (res.json().get("text") or "").strip()
+    except Exception as e:
+        logger.error("phone listen: transcription failed: %s", e)
+        return ""
+
+
+def _prompt(say: str, session: dict | None) -> str:
+    """Render the next caller-capture turn, picking the capture method per call.
+
+    Default is <Gather input="speech"> — Telnyx's real-time recognizer returns
+    the transcript inline in the action POST, so it's the lowest-latency path
+    (no recording finalize, no file download, no separate STT call) and it
+    honors `hints` for menu-term accuracy. BUT the real-time recognizer may not
+    be provisioned on every connection; when it isn't, Gather posts empty
+    SpeechResults. twilio_gather detects repeated empties and flips
+    session["capture"] to "record", after which we use the slower-but-reliable
+    <Record> + synchronous Telnyx STT path. So a call self-heals to a working
+    capture method instead of looping on "I didn't catch that"."""
+    hints = (session or {}).get("hints", "")
+    if session and session.get("capture") == "record":
+        return _listen(say, hints=hints)
+    return _gather(say, hints=hints)
 
 
 def _hangup(say: str) -> str:
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Hangup />
+</Response>"""
+
+
+def _record_diag_twiml() -> str:
+    # Flag-gated (PHONE_RECORD_DIAG=1) one-shot media diagnostic. Records the
+    # caller (channels="dual": caller on channel A, bot on B) and asks Telnyx to
+    # transcribe the recording. The bot is silent during the record window, so a
+    # populated transcript proves the caller's audio reaches Telnyx and a Record-
+    # based capture works -> we then rebuild the turn loop on <Record> instead of
+    # <Gather input="speech"> (which has no track selector and reads the wrong
+    # leg). NOTE: Telnyx TeXML <Record> uses transcription=/transcriptionCallback/
+    # channels (NOT Twilio's transcribe/transcribeCallback/recordingChannels) and
+    # trim only accepts "trim-silence" — the prior diagnostic used the Twilio
+    # names + an invalid trim, so the verb never executed (no beep, no callback).
+    # Revert by unsetting the env var.
+    return """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">Diagnostic mode. After the beep, please say: testing one two three, I am the caller. Then wait.</Say>
+  <Record maxLength="8" playBeep="true" trim="trim-silence" channels="dual"
+    transcription="true" transcriptionEngine="A" transcriptionLanguage="en-US"
+    recordingStatusCallback="/twilio/record_diag" recordingStatusCallbackMethod="POST"
+    transcriptionCallback="/twilio/transcribe_diag" />
+  <Say voice="Polly.Joanna">Thanks. Diagnostic complete. Goodbye.</Say>
   <Hangup />
 </Response>"""
 
@@ -179,65 +393,188 @@ def _cleanup():
         del _sessions[sid]
 
 
-def _build_system_prompt_for(row: dict) -> str:
-    """Build a per-merchant system prompt from a phone_agent_config row."""
-    business_name = row.get("business_name") or "this restaurant"
-    menu_items = row.get("menu_items") or []
-    order_types_list = row.get("order_types") or ["pickup", "delivery"]
-    order_types = ", ".join(order_types_list)
+async def _ask_openai_tools(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    label: str,
+    messages: list[dict],
+    system_prompt: str,
+    timeout: float = 20.0,
+    temperature: float | None = None,
+    tools: list[dict] = TOOLS,
+) -> dict | None:
+    """Call an OpenAI-compatible chat endpoint with tool-calling.
 
-    if menu_items:
-        lines = []
-        for item in menu_items:
-            try:
-                price = float(item.get("price", 0))
-            except (TypeError, ValueError):
-                price = 0.0
-            line = f" - {item.get('name', 'item')}: ${price:.2f}"
-            if item.get("sizes"):
-                line += f" (sizes: {', '.join(item['sizes'])})"
-            opts = item.get("modifications") or item.get("options")
-            if opts:
-                line += f" (options: {', '.join(opts)})"
-            lines.append(line)
-        menu_block = "\n".join(lines)
-    else:
-        menu_block = _menu_text()  # demo fallback
+    Returns Anthropic-style content blocks, or None on any failure so the
+    caller can fall through to the next provider.
+    """
+    if not api_key:
+        return None
+    openai_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            },
+        }
+        for t in tools
+    ]
+    openai_messages = [{"role": "system", "content": system_prompt}] + messages
+    payload: dict[str, Any] = {
+        "model": model,
+        "max_tokens": 300,
+        "messages": openai_messages,
+        "tools": openai_tools,
+        "tool_choice": "auto",
+    }
+    if temperature is not None:
+        payload["temperature"] = temperature
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+            if resp.status_code != 200:
+                logger.warning("%s API %d: %s", label, resp.status_code, resp.text[:200])
+                return None
+            data = resp.json()
+            choice = data["choices"][0]["message"]
+            content = []
+            if choice.get("content"):
+                content.append({"type": "text", "text": choice["content"]})
+            for tc in choice.get("tool_calls") or []:
+                content.append({
+                    "type": "tool_use",
+                    "name": tc["function"]["name"],
+                    "input": json.loads(tc["function"]["arguments"]),
+                })
+            return {"content": content}
+    except Exception as exc:
+        logger.warning("%s error: %s", label, exc)
+        return None
 
-    return f"""You are a friendly AI phone ordering assistant for {business_name}.
-Keep responses SHORT - 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
 
-MENU:
-{menu_block}
+async def _ask_deepseek(
+    messages: list[dict], system_prompt: str = SYSTEM_PROMPT, tools: list[dict] = TOOLS
+) -> dict | None:
+    """Call DeepSeek (OpenAI-compatible). Low temperature keeps order-taking
+    focused and reduces misheard-item drift. Returns None on failure."""
+    return await _ask_openai_tools(
+        base_url=DEEPSEEK_BASE_URL,
+        api_key=DEEPSEEK_API_KEY,
+        model=DEEPSEEK_MODEL,
+        label="DeepSeek",
+        messages=messages,
+        system_prompt=system_prompt,
+        timeout=15.0,
+        temperature=0.3,
+        tools=tools,
+    )
 
-ORDER TYPES: {order_types}
 
-RULES:
-- Help the customer build their order item by item.
-- Suggest sizes or options when relevant.
-- When done, read back the order with total price, ask for their name and pickup/delivery/dine-in.
-- If delivery, ask for address.
-- Once confirmed, call submit_order.
-- For items not on menu, let them know politely.
-- Keep it brief - phone conversations should be quick."""
+async def _ask_sambanova(
+    messages: list[dict], system_prompt: str = SYSTEM_PROMPT, tools: list[dict] = TOOLS
+) -> dict | None:
+    """Call SambaNova (OpenAI-compatible). Returns None on failure."""
+    return await _ask_openai_tools(
+        base_url=SAMBANOVA_BASE_URL,
+        api_key=SAMBANOVA_API_KEY,
+        model=SAMBANOVA_MODEL,
+        label="SambaNova",
+        messages=messages,
+        system_prompt=system_prompt,
+        timeout=20.0,
+        tools=tools,
+    )
 
 
-async def _load_merchant_phone_config(merchant_id: str) -> dict | None:
-    """Load the full phone_agent_config row for a merchant. None if not found.
+async def _ask_qwen(messages: list[dict], system_prompt: str = SYSTEM_PROMPT) -> dict:
+    """Call local Qwen 2.5 7B as fallback. Returns Anthropic-style content blocks."""
+    openai_messages = [{"role": "system", "content": system_prompt}] + messages
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                f"{QWEN_URL}/v1/chat/completions",
+                json={
+                    "messages": openai_messages,
+                    "max_tokens": 300,
+                    "temperature": 0.5,
+                },
+            )
+            if resp.status_code != 200:
+                logger.error("Qwen API %d: %s", resp.status_code, resp.text[:200])
+                return {"content": [{"type": "text", "text": "One moment please."}]}
+            data = resp.json()
+            text = data["choices"][0]["message"].get("content", "")
+            return {"content": [{"type": "text", "text": text}]}
+    except Exception as exc:
+        logger.warning("Qwen fallback error: %s", exc)
+        return {"content": [{"type": "text", "text": "One moment please."}]}
 
-    Used to build a per-merchant system prompt + greeting. Returning None
-    causes the caller to fall back to the hardcoded DEMO_MENU / SYSTEM_PROMPT,
-    which is how Session 1 stays non-breaking before Session 2 seeds the row.
+
+async def _ask_ai(
+    messages: list[dict], system_prompt: str = SYSTEM_PROMPT, tools: list[dict] = TOOLS
+) -> dict:
+    """DeepSeek primary, SambaNova secondary, local Qwen fallback."""
+    result = await _ask_deepseek(messages, system_prompt, tools)
+    if result is not None:
+        logger.info("AI response via DeepSeek")
+        return result
+    result = await _ask_sambanova(messages, system_prompt, tools)
+    if result is not None:
+        logger.info("AI response via SambaNova")
+        return result
+    logger.warning("DeepSeek + SambaNova unavailable, falling back to local Qwen")
+    return await _ask_qwen(messages, system_prompt)
+
+
+def _parse(result: dict) -> tuple[str, dict | None]:
+    texts = []
+    tool = None
+    for block in result.get("content", []):
+        if block.get("type") == "text":
+            texts.append(block["text"])
+        elif block.get("type") == "tool_use":
+            tool = {"name": block["name"], "input": block["input"]}
+    return " ".join(texts).strip(), tool
+
+
+async def _lookup_merchant_by_phone(phone_number: str) -> str | None:
+    """Look up merchant_id by the Twilio phone number (To field) from Supabase."""
+    config = await _fetch_merchant_config(phone_number)
+    return config.get("merchant_id") if config else None
+
+
+async def _fetch_merchant_config(phone_number: str) -> dict | None:
+    """Fetch the full phone_agent_config row for the dialed number from Supabase.
+
+    Returns the row (incl. menu_items, greeting, order_types, business_name) so
+    the live turn-based path can take orders against the merchant's own menu
+    instead of the hardcoded demo menu. Returns None if not found / not configured.
     """
     supabase_url = os.getenv("SUPABASE_URL", "")
     supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
-    if not supabase_url or not supabase_key:
+    if not supabase_url or not supabase_key or not phone_number:
         return None
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
+            # Pass the filter via params so httpx percent-encodes the leading
+            # "+" of E.164 numbers (+1782... -> %2B1782...). Interpolating it
+            # raw into the query string lets PostgREST decode "+" as a space,
+            # so the eq. filter never matches and every call falls through to
+            # the demo merchant (wrong greeting/menu/transfer_number).
             res = await client.get(
-                f"{supabase_url}/rest/v1/phone_agent_config"
-                f"?merchant_id=eq.{merchant_id}&select=*",
+                f"{supabase_url}/rest/v1/phone_agent_config",
+                params={"phone_number": f"eq.{phone_number}", "select": "*"},
                 headers={
                     "apikey": supabase_key,
                     "Authorization": f"Bearer {supabase_key}",
@@ -246,31 +583,56 @@ async def _load_merchant_phone_config(merchant_id: str) -> dict | None:
             if res.status_code == 200 and res.json():
                 return res.json()[0]
     except Exception as e:
-        logger.warning("Failed to load phone config for merchant %s: %s", merchant_id, e)
+        logger.warning("Failed to fetch merchant config for %s: %s", phone_number, e)
     return None
 
 
-async def _lookup_merchant_by_phone(phone_number: str) -> str | None:
-    """Look up merchant_id by the Twilio phone number (To field) from Supabase."""
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
-    if not supabase_url or not supabase_key:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            res = await client.get(
-                f"{supabase_url}/rest/v1/phone_agent_config"
-                f"?phone_number=eq.{phone_number}&select=merchant_id",
-                headers={
-                    "apikey": supabase_key,
-                    "Authorization": f"Bearer {supabase_key}",
-                },
-            )
-            if res.status_code == 200 and res.json():
-                return res.json()[0]["merchant_id"]
-    except Exception as e:
-        logger.warning("Failed to lookup merchant by phone %s: %s", phone_number, e)
-    return None
+def _menu_text_from(menu_items: list[dict]) -> str:
+    lines = []
+    for item in menu_items:
+        try:
+            price = float(item.get("price", 0))
+        except (TypeError, ValueError):
+            price = 0.0
+        # Extracted POS catalogs may not expose a price; render the name alone
+        # rather than telling callers an item costs $0.00.
+        line = f" - {item.get('name', 'item')}"
+        if price > 0:
+            line += f": ${price:.2f}"
+        sizes = item.get("sizes") or []
+        if sizes:
+            line += f" (sizes: {', '.join(sizes)})"
+        opts = item.get("options") or item.get("modifications") or []
+        if opts:
+            line += f" (options: {', '.join(opts)})"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _build_merchant_prompt(config: dict) -> str:
+    """Build a system prompt from a merchant's phone_agent_config row.
+
+    Falls back to the demo menu text when the merchant has no menu_items yet so
+    the agent always has something to work with.
+    """
+    business = config.get("business_name") or "our restaurant"
+    menu_items = config.get("menu_items") or []
+    order_types = config.get("order_types") or ["pickup", "delivery"]
+    menu = _menu_text_from(menu_items) if menu_items else _menu_text()
+    return f"""You are a friendly AI phone ordering assistant for {business}.
+Keep responses SHORT - 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
+
+MENU:
+{menu}
+
+RULES:
+- Help the customer build their order item by item.
+- Suggest sizes or options when relevant.
+- When done, read back the order with total price, ask for their name and order type ({', '.join(order_types)}).
+- If delivery, ask for their address.
+- Once confirmed, call submit_order.
+- For items not on the menu, let them know politely.
+- Keep it brief - phone conversations should be quick."""
 
 
 async def _log_call_start(call_sid: str, caller_phone: str, merchant_id: str = ""):
@@ -388,10 +750,14 @@ async def twilio_voice(request: Request):
     twilio_number = form.get("To", "")
     _cleanup()
 
-    # Try to resolve merchant from the Twilio number the caller dialed
+    # Resolve the merchant + its phone-agent config from the dialed number, so
+    # the live path takes orders against the merchant's own menu/greeting.
+    config_row = None
     merchant_id = None
     if twilio_number:
-        merchant_id = await _lookup_merchant_by_phone(twilio_number)
+        config_row = await _fetch_merchant_config(twilio_number)
+    if config_row:
+        merchant_id = config_row.get("merchant_id")
     if not merchant_id:
         merchant_id = DEMO_MERCHANT_ID
         logger.info("No merchant found for %s — using demo merchant %s", twilio_number, DEMO_MERCHANT_ID)
@@ -422,29 +788,40 @@ async def twilio_voice(request: Request):
         except Exception as e:
             logger.warning("caller memory lookup failed: %s", e)
 
-    # Per-merchant prompt + greeting when a phone_agent_config row exists;
-    # otherwise fall back to the hardcoded DEMO_MENU / SYSTEM_PROMPT so
-    # voice keeps working before Session 2 seeds the demo merchant row.
-    config_row = await _load_merchant_phone_config(merchant_id)
-    if config_row:
-        base_prompt = _build_system_prompt_for(config_row)
-        greeting = config_row.get("greeting") or (
-            f"Thank you for calling {config_row.get('business_name', 'us')}! "
-            "What can I get for you today?"
-        )
-    else:
-        base_prompt = SYSTEM_PROMPT
-        greeting = "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
-
+    base_prompt = _build_merchant_prompt(config_row) if config_row else SYSTEM_PROMPT
     session_prompt = base_prompt + (f"\n\n{memory_block}" if memory_block else "")
+    menu_items = (config_row or {}).get("menu_items") or DEMO_MENU
+    hints = _menu_hints(menu_items)
     _sessions[call_sid] = {
         "messages": [],
         "ts": time.time(),
         "caller_phone": caller_phone,
         "merchant_id": merchant_id,
+        "merchant_name": (config_row or {}).get("business_name", ""),
         "system_prompt": session_prompt,
+        "hints": hints,
+        "capture": DEFAULT_CAPTURE,  # record by default; auto-falls back from gather on empties
+        "empty_count": 0,
+        # Only set when the merchant configured a transfer number; gates the
+        # transfer_call tool so the demo and unconfigured merchants are unchanged.
+        "transfer_number": ((config_row or {}).get("transfer_number") or "").strip(),
+        # POS fields stashed from the config row now (already fetched) so the
+        # order dispatch can resolve a connection without re-reading config. The
+        # pos_connections fallback lookup is done lazily at order time, not here,
+        # to keep the greeting off the POS lookup's latency.
+        "pos_system_manual": ((config_row or {}).get("pos_system") or "").strip(),
+        "pos_token_manual": ((config_row or {}).get("pos_access_token") or "").strip(),
+        "pos_location_id": ((config_row or {}).get("pos_location_id") or "").strip(),
+        # Owner's cell (their human-handoff number) doubles as the destination for
+        # the SMS/email order ticket when a POS push falls back.
+        "merchant_phone": ((config_row or {}).get("transfer_number") or "").strip(),
+        "merchant_email": ((config_row or {}).get("merchant_email") or "").strip(),
     }
-    return Response(content=_gather(greeting), media_type=TWIML)
+    greeting = (
+        (config_row or {}).get("greeting")
+        or "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
+    )
+    return Response(content=_prompt(greeting, _sessions[call_sid]), media_type=TWIML)
 
 
 @router.post("/gather")
@@ -452,61 +829,179 @@ async def twilio_gather(request: Request):
     """Process caller speech and return AI response."""
     form = await request.form()
     call_sid = form.get("CallSid", "unknown")
-    speech = (form.get("SpeechResult") or "").strip()
+    # Telnyx posts the transcript as SpeechResult (Twilio-compatible). Keep a couple
+    # of fallbacks in case a transcriptionEngine variant labels it differently.
+    session = _sessions.setdefault(
+        call_sid, {"messages": [], "ts": time.time(), "capture": DEFAULT_CAPTURE, "empty_count": 0}
+    )
+
+    # <Gather> posts the transcript inline as SpeechResult. <Record> (the fallback
+    # capture) posts a RecordingUrl instead, which we transcribe synchronously.
+    speech = (
+        form.get("SpeechResult")
+        or form.get("UnstableSpeechResult")
+        or form.get("TranscriptionText")
+        or ""
+    ).strip()
+    if not speech:
+        recording_url = form.get("RecordingUrl") or form.get("RecordingUrls") or ""
+        if recording_url:
+            speech = await _transcribe_recording(recording_url)
 
     if not speech:
+        session["empty_count"] = session.get("empty_count", 0) + 1
+        # If the real-time recognizer keeps coming back empty, it's likely not
+        # provisioned on this connection — switch this call to the reliable
+        # <Record> + STT path so it stops looping.
+        if session.get("capture") == "gather" and session["empty_count"] >= 2:
+            session["capture"] = "record"
+            logger.warning(
+                "phone gather: %d empty results for %s — falling back to record capture",
+                session["empty_count"], call_sid,
+            )
+        else:
+            logger.warning(
+                "phone gather: empty speech for call %s (capture=%s count=%d); keys=%s",
+                call_sid, session.get("capture"), session["empty_count"], sorted(form.keys()),
+            )
         return Response(
-            content=_gather("Sorry, I didn't catch that. What can I get for you?"),
+            content=_prompt("Sorry, I didn't catch that. What can I get for you?", session),
             media_type=TWIML,
         )
 
-    session = _sessions.setdefault(call_sid, {"messages": [], "ts": time.time()})
+    session["empty_count"] = 0
     session["ts"] = time.time()
     session["messages"].append({"role": "user", "content": speech})
 
-    result = await _voice_llm.complete(
-        session["messages"],
-        system=session.get("system_prompt", SYSTEM_PROMPT),
-        tools=VOICE_TOOLS,
-    )
-    text = result.text
-    tool = result.tool_call  # ToolCall | None
+    # Offer the human-handoff tool only when this merchant has a transfer number.
+    transfer_number = (session.get("transfer_number") or "").strip()
+    tools = TOOLS + [TRANSFER_TOOL] if transfer_number else TOOLS
+    result = await _ask_ai(session["messages"], session.get("system_prompt", SYSTEM_PROMPT), tools)
+    text, tool = _parse(result)
 
     if tool:
-        if tool.name == "end_call":
-            farewell = tool.arguments.get("farewell", "Thank you for calling Meridian! Have a great day!")
+        if tool["name"] == "transfer_call":
+            handoff = tool["input"].get("handoff", "One moment, connecting you now.")
+            if transfer_number:
+                await _log_call_end(call_sid, "transferred")
+                del _sessions[call_sid]
+                return Response(content=_dial(handoff, transfer_number), media_type=TWIML)
+            # No number on file: don't drop the call — keep the conversation going.
+            session["messages"].append({"role": "assistant", "content": handoff})
+            return Response(content=_prompt(handoff, session), media_type=TWIML)
+
+        if tool["name"] == "end_call":
+            farewell = tool["input"].get("farewell", "Thank you for calling Meridian! Have a great day!")
             await _log_call_end(call_sid, "no_order")
             del _sessions[call_sid]
             return Response(content=_hangup(farewell), media_type=TWIML)
 
-        if tool.name == "submit_order":
-            items = tool.arguments.get("items", [])
+        if tool["name"] == "submit_order":
+            items = tool["input"].get("items", [])
             order_summary = ", ".join(f"{i['quantity']}x {i['name']}" for i in items)
 
-            order_result = await _dispatch_order(call_sid, session, tool.arguments)
+            order_result = await _dispatch_order(call_sid, session, tool["input"])
             order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
-
-            # PAYMENT_LINK_HANDOFF — Session 2 integration point.
-            # services/phone_agent/voice_sms_handoff.send_payment_link_to_caller
-            # already exists and is unit-import-safe. Wire it here ONLY
-            # after sms_order.py CASL changes have settled on prod, so we
-            # don't integrate against a moving SMS base. Confirmation
-            # text will need a "Check your phone for a payment link"
-            # tail once the call site lands.
 
             confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
-            await _log_call_end(call_sid, "order_placed", tool.arguments)
+            await _log_call_end(call_sid, "order_placed", tool["input"])
             del _sessions[call_sid]
             return Response(content=_hangup(confirmation), media_type=TWIML)
 
     reply = text or "Could you repeat that please?"
     session["messages"].append({"role": "assistant", "content": reply})
-    return Response(content=_gather(reply), media_type=TWIML)
+    return Response(content=_prompt(reply, session), media_type=TWIML)
+
+
+async def _resolve_pos_for_session(session: dict) -> dict:
+    """Resolve the merchant's POS at order time so submit_order can push the
+    order into their POS (or fall back to SMS/email).
+
+    Resolved lazily here, not at call start, so the greeting and ordering turns
+    aren't slowed by a POS lookup — it runs once, only when an order is actually
+    placed (the last turn). Resolution mirrors phone_dashboard.sync_menu_from_pos:
+    manual creds stashed on the session from phone_agent_config win; otherwise the
+    OAuth connection in pos_connections (decrypted) is used. In this system
+    merchant_id IS the org_id.
+
+    Returns pos_system (""=nothing connected -> demo path), pos_config for the
+    REST connector, and the merchant contact for the SMS/email fallback. A POS is
+    only reported when we hold a usable token, so submit_order never claims a POS
+    it cannot authenticate to.
+    """
+    system = (session.get("pos_system_manual") or "").strip()
+    token = (session.get("pos_token_manual") or "").strip()
+    location_id = (session.get("pos_location_id") or "").strip()
+    external_merchant_id = ""
+    merchant_id = (session.get("merchant_id") or "").strip()
+    fallback = {
+        "pos_system": "",
+        "pos_config": None,
+        "merchant_phone": (session.get("merchant_phone") or "").strip(),
+        "merchant_email": (session.get("merchant_email") or "").strip(),
+    }
+
+    if not (system and token) and merchant_id and merchant_id != DEMO_MERCHANT_ID:
+        try:
+            db = get_db()
+            conns = await db.select(
+                "pos_connections",
+                filters={"org_id": f"eq.{merchant_id}", "status": "eq.connected"},
+                order="updated_at.desc",
+                limit=1,
+            )
+            if conns:
+                from .phone_dashboard import _decrypt_connection_token
+                conn = conns[0]
+                system = system or (conn.get("provider") or "").strip()
+                external_merchant_id = (conn.get("external_merchant_id") or "").strip()
+                location_id = location_id or (conn.get("external_location_id") or "").strip()
+                token = token or _decrypt_connection_token(conn)
+        except Exception as e:
+            logger.warning("phone: POS resolution failed for %s: %s", merchant_id, e)
+
+    if not (system and token):
+        return fallback
+
+    try:
+        from ...services.pos_connectors.base import POSConnectionConfig
+        from ...services.pos_connectors.registry import get_connector_config
+        api_config = get_connector_config(system) or {}
+        pos_config = POSConnectionConfig(
+            system_key=system,
+            system_name=api_config.get("system_name") or system,
+            tier=api_config.get("tier", 1),
+            auth_method=api_config.get("auth_type", "bearer"),
+            base_url=api_config.get("base_url", ""),
+            # merchant_id/location_id fill {merchant_id}/{location_id} URL
+            # templates (Clover's base_url needs the merchant id).
+            credentials={
+                "access_token": token,
+                "merchant_id": external_merchant_id,
+                "location_id": location_id,
+            },
+            merchant_id=external_merchant_id,
+            org_id=merchant_id,
+            category=api_config.get("category", "restaurant"),
+            supports_order_creation=bool(api_config.get("supports_orders")),
+            order_creation_endpoint=api_config.get("order_create_endpoint", ""),
+        )
+    except Exception as e:
+        logger.warning("phone: building POS config failed for %s: %s", system, e)
+        return fallback
+
+    return {
+        "pos_system": system,
+        "pos_config": pos_config,
+        "merchant_phone": fallback["merchant_phone"],
+        "merchant_email": fallback["merchant_email"],
+    }
 
 
 async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> OrderResult:
-    system_key = session.get("pos_system", os.getenv("DEFAULT_POS_SYSTEM", ""))
+    pos = await _resolve_pos_for_session(session)
+    system_key = pos["pos_system"]
     if not system_key:
         return OrderResult(
             success=True,
@@ -519,13 +1014,13 @@ async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> Or
         "order_type": order_input.get("order_type", "pickup"),
         "items": order_input.get("items", []),
         "special_instructions": order_input.get("special_requests", ""),
-        "merchant_phone": session.get("merchant_phone"),
-        "merchant_email": session.get("merchant_email"),
-        "merchant_name": session.get("merchant_name", system_key),
+        "merchant_phone": pos["merchant_phone"],
+        "merchant_email": pos["merchant_email"],
+        "merchant_name": session.get("merchant_name") or system_key,
     }
 
     try:
-        return await create_pos_order(system_key, order_data, config=session.get("pos_config"))
+        return await create_pos_order(system_key, order_data, config=pos["pos_config"])
     except Exception as e:
         logger.error(f"Order dispatch failed for {system_key}: {e}")
         return OrderResult(
@@ -569,6 +1064,40 @@ async def twilio_status(request: Request):
     return Response(content="", status_code=204)
 
 
+@router.post("/record_diag")
+async def twilio_record_diag(request: Request):
+    """Flag-gated diagnostic: log the dual-channel recording URL + metadata so
+    we can listen to whether the caller's channel actually carries audio."""
+    form = await request.form()
+    logger.warning(
+        "phone record-diag RECORDING: call=%s url=%r duration=%r channels=%r keys=%s",
+        form.get("CallSid"),
+        form.get("RecordingUrl") or form.get("RecordingUrls"),
+        form.get("RecordingDuration"),
+        form.get("RecordingChannels"),
+        sorted(form.keys()),
+    )
+    return Response(content="<Response/>", media_type=TWIML)
+
+
+@router.post("/transcribe_diag")
+async def twilio_transcribe_diag(request: Request):
+    """Flag-gated diagnostic: log Telnyx's transcription of the recording. If
+    this captures the caller's words but <Gather input=speech> does not, the
+    fault is the Gather speech path, not the audio reaching Telnyx."""
+    form = await request.form()
+    logger.warning(
+        "phone record-diag TRANSCRIPT: call=%s status=%r transcript=%r confidence=%r track=%r keys=%s",
+        form.get("CallSid"),
+        form.get("TranscriptionStatus") or form.get("Status"),
+        form.get("Transcript") or form.get("TranscriptionText"),
+        form.get("Confidence"),
+        form.get("TranscriptionTrack") or form.get("Track"),
+        sorted(form.keys()),
+    )
+    return Response(content="", status_code=204)
+
+
 @router.websocket("/media-stream/{merchant_id}")
 async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
     """Twilio Media Streams WebSocket → Pipecat phone-agent pipeline.
@@ -608,29 +1137,43 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
             await websocket.close(code=1008, reason="Insufficient credits")
             return
 
-    # Drain Twilio's prelude (connected → start) to capture streamSid + callSid.
-    # The serializer needs streamSid to address outbound media frames.
+    # Drain the provider's prelude (connected → start) to capture the stream id
+    # plus the id the serializer needs to address outbound media frames. Twilio
+    # and Telnyx use different envelopes, so branch on PHONE_PROVIDER.
     stream_sid: str | None = None
     call_sid: str = ""
     caller_phone: str = ""
+    call_control_id: str = ""
+    outbound_encoding: str = "PCMU"
     try:
         for _ in range(5):
             msg = await websocket.receive_json()
-            if msg.get("event") == "start":
-                start = msg.get("start", {})
+            if msg.get("event") != "start":
+                continue
+            start = msg.get("start", {})
+            if PHONE_PROVIDER == "telnyx":
+                # Telnyx: stream_id + call_control_id; encoding under media_format.
+                stream_sid = start.get("stream_id") or msg.get("stream_id")
+                call_control_id = start.get("call_control_id", "")
+                call_sid = call_control_id
+                fmt = start.get("media_format", {}) or {}
+                outbound_encoding = (fmt.get("encoding") or "PCMU").upper()
+                params = start.get("custom_parameters", {}) or start.get("customParameters", {}) or {}
+                caller_phone = params.get("caller_phone", "") or start.get("from", "")
+            else:
                 stream_sid = start.get("streamSid")
                 call_sid = start.get("callSid", "")
                 params = start.get("customParameters", {}) or {}
                 caller_phone = params.get("caller_phone", "")
-                break
+            break
     except Exception as e:
-        logger.error("Failed to read Twilio start event: %s", e)
-        await websocket.close(code=1011, reason="Bad Twilio handshake")
+        logger.error("Failed to read %s start event: %s", PHONE_PROVIDER, e)
+        await websocket.close(code=1011, reason="Bad media handshake")
         return
 
     if not stream_sid:
-        logger.error("No streamSid in Twilio handshake — aborting")
-        await websocket.close(code=1011, reason="Missing streamSid")
+        logger.error("No stream id in %s handshake — aborting", PHONE_PROVIDER)
+        await websocket.close(code=1011, reason="Missing stream id")
         return
 
     session_ref = call_sid or f"mstream-{int(time.time() * 1000)}"
@@ -655,6 +1198,9 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
             caller_info=caller_info,
             stream_sid=stream_sid,
             call_sid=call_sid,
+            provider=PHONE_PROVIDER,
+            call_control_id=call_control_id,
+            outbound_encoding=outbound_encoding,
         )
     except Exception as e:
         logger.error("Media stream pipeline error: %s", e, exc_info=True)
@@ -664,13 +1210,53 @@ async def twilio_media_stream(websocket: WebSocket, merchant_id: str):
 
 @router.get("/health")
 async def twilio_health():
+    import importlib.util
+
+    samba_ok = bool(SAMBANOVA_API_KEY)
+    deepseek_ok = bool(DEEPSEEK_API_KEY)
+
+    # Probe the media-stream import chain without executing heavy modules. These
+    # install best-effort from requirements-ml.txt (torch deps can OOM-skip on
+    # Railway), so this is the one-curl post-deploy check that the Pipecat path
+    # will actually come up.
+    def _have(mod: str) -> bool:
+        try:
+            return importlib.util.find_spec(mod) is not None
+        except Exception:
+            return False
+
+    pipecat_ok = _have("pipecat")
+    media_stream_ready = pipecat_ok and _have("silero_vad")
+
     return {
         "status": "ok",
         "mode": "media-streams" if MEDIA_STREAMS_ENABLED else "twilio-gather",
         "media_streams_enabled": MEDIA_STREAMS_ENABLED,
         "media_stream_host": MEDIA_STREAM_HOST if MEDIA_STREAMS_ENABLED else None,
-        "channel": _voice_llm.channel,
-        "primary_provider": _voice_llm.primary_provider,
-        "primary_model": _voice_llm.primary_model,
+        "media_stream_ready": media_stream_ready,
+        "deps": {
+            "pipecat": pipecat_ok,
+            "silero_vad": _have("silero_vad"),
+            "telnyx_serializer": _have("pipecat.serializers.telnyx"),
+            "numpy": _have("numpy"),
+            "scipy": _have("scipy"),
+            "httpx": _have("httpx"),
+        },
+        "providers": {
+            "phone": PHONE_PROVIDER,
+            "stt": os.getenv("STT_PROVIDER", "local").lower(),
+            "tts": os.getenv("TTS_PROVIDER", "local").lower(),
+        },
+        "telnyx_speech_configured": bool(os.getenv("TELNYX_API_KEY", "")),
+        "primary_llm": "deepseek" if deepseek_ok else "sambanova" if samba_ok else "qwen-local",
+        "llm_chain": [
+            *(["deepseek"] if deepseek_ok else []),
+            *(["sambanova"] if samba_ok else []),
+            "qwen-local",
+        ],
+        "deepseek_configured": deepseek_ok,
+        "deepseek_model": DEEPSEEK_MODEL,
+        "sambanova_configured": samba_ok,
+        "qwen_url": QWEN_URL,
         "active_sessions": len(_sessions),
     }

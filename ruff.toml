@@ -1,0 +1,26 @@
+# Meridian lint config. Default rule set (E, F, W) with deliberate, documented
+# per-file exemptions for intentional patterns. The pre-push hook lints only
+# the files in a push (see scripts/git-hooks/pre-push), so this config governs
+# both local hooks and CI consistently.
+
+target-version = "py312"
+line-length = 100
+
+[lint]
+# Ruff's default selection is Pyflakes (F) + a subset of pycodestyle (E, W).
+# Keep it; it's a sensible, low-noise baseline.
+
+[lint.per-file-ignores]
+# Package __init__ files re-export their public API; "unused" imports there are
+# the intended surface, not dead code.
+"__init__.py" = ["F401"]
+
+# app.py must call load_dotenv() before importing modules that read env vars at
+# import time, so its imports are deliberately not all at the top of the file.
+"src/api/app.py" = ["E402"]
+
+# Test modules push the repo root onto sys.path before importing src.*, so their
+# imports are intentionally below executable setup lines; test bodies also use
+# compact single-line conditionals.
+"tests/**/*.py" = ["E402", "F401", "E701", "F841"]
+"src/tests/**/*.py" = ["E402", "F401", "E701", "F841"]

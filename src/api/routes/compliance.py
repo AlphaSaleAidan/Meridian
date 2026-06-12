@@ -19,10 +19,10 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from ..auth import require_admin_jwt
+from ..auth import ADMIN_EMAILS, require_admin_jwt
 
 logger = logging.getLogger("meridian.api.compliance")
 
@@ -35,14 +35,6 @@ def _validate_user_id(user_id: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid user_id format")
 
 router = APIRouter(tags=["compliance"])
-
-ADMIN_EMAILS = [
-    "apierce@alphasale.co",
-    "aidanpierce72@gmail.com",
-    "aidanpierce@meridian.tips",
-    "cheungenochmgmt@gmail.com",
-    "aidanvietnguyen@gmail.com",
-]
 
 
 def _get_supabase() -> tuple[str, str]:

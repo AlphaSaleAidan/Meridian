@@ -91,7 +91,7 @@ class AnalysisResult:
     pattern_analysis: dict = field(default_factory=dict)
     money_left_score: dict = field(default_factory=dict)
 
-    # Agent swarm outputs (37 agents: 22 POS + 5 vision + 10 cross-ref)
+    # Agent swarm outputs (41 agents: 22 tier 1-4 + 9 strategic + 10 cross-ref)
     agent_outputs: dict = field(default_factory=dict)
 
     # Alerts fired
@@ -312,7 +312,7 @@ class MeridianAI:
                 logger.error(f"Report generation failed: {e}", exc_info=True)
                 result.errors.append(f"report: {str(e)}")
 
-        # ── Phase 5b: Agent Swarm (27 agents: 22 POS + 5 vision) ──
+        # ── Phase 5b: Agent Swarm (31 agents: 22 tier 1-4 + 9 strategic) ──
         try:
             result.agent_outputs = await run_agent_swarm(ctx)
             ctx.agent_outputs = result.agent_outputs
@@ -562,37 +562,43 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
         else:
             agent_outputs[agent.name] = result
 
-    # Phase 2: Run tier 5 strategic agents (need tier 1-4 outputs)
+    # Phase 2: Run tier 5 strategic agents (need tier 1-4 outputs).
+    # Split into two sequential sub-batches: 5b agents (growth_score,
+    # cashflow_forecast) read tier-5 peers (forecaster, customer_ltv,
+    # promo_roi) from ctx.agent_outputs, so 5a must complete first.
     ctx.agent_outputs = agent_outputs
-    strategic_agents = [
-        BenchmarkAgent(ctx),
-        MoneyLeftAgent(ctx),
+    strategic_5a_agents = [
         ForecasterAgent(ctx),
         CustomerLTVAgent(ctx),
         PromoROIAgent(ctx),
-        CashFlowForecastAgent(ctx),
+        BenchmarkAgent(ctx),
+        MoneyLeftAgent(ctx),
+    ]
+    strategic_5b_agents = [
         GrowthScoreAgent(ctx),
+        CashFlowForecastAgent(ctx),
         ActionPrioritizerAgent(ctx),
         FeatureEngineerAgent(ctx),
     ]
 
-    if use_reasoning:
-        strategic_results = await asyncio.gather(
-            *[agent.analyze_with_reasoning() for agent in strategic_agents],
-            return_exceptions=True,
-        )
-    else:
-        strategic_results = await asyncio.gather(
-            *[agent.analyze() for agent in strategic_agents],
-            return_exceptions=True,
-        )
-
-    for agent, result in zip(strategic_agents, strategic_results):
-        if isinstance(result, Exception):
-            logger.error(f"Strategic agent {agent.name} failed: {result}")
-            agent_outputs[agent.name] = {"status": "error", "error": str(result)}
+    for strategic_agents in (strategic_5a_agents, strategic_5b_agents):
+        if use_reasoning:
+            strategic_results = await asyncio.gather(
+                *[agent.analyze_with_reasoning() for agent in strategic_agents],
+                return_exceptions=True,
+            )
         else:
-            agent_outputs[agent.name] = result
+            strategic_results = await asyncio.gather(
+                *[agent.analyze() for agent in strategic_agents],
+                return_exceptions=True,
+            )
+
+        for agent, result in zip(strategic_agents, strategic_results):
+            if isinstance(result, Exception):
+                logger.error(f"Strategic agent {agent.name} failed: {result}")
+                agent_outputs[agent.name] = {"status": "error", "error": str(result)}
+            else:
+                agent_outputs[agent.name] = result
 
     succeeded = sum(
         1 for v in agent_outputs.values()

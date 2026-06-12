@@ -1,14 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { clsx } from 'clsx'
 import {
   Store, Mic, ListOrdered, Route, Zap, Volume2,
-  CheckCircle2, ArrowRight, ArrowLeft, Phone,
+  CheckCircle2, ArrowRight, ArrowLeft, Phone, Loader2, Plus, Trash2,
 } from 'lucide-react'
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import TestCallModal from './TestCallModal'
 import {
   VOICE_OPTIONS, DEFAULT_VOICE_SETTINGS,
-  type PhoneBizConfig, type VoiceSettings,
+  type PhoneBizConfig, type VoiceSettings, type PhoneMenuItem,
 } from '@/lib/phone-orders-demo-data'
 import { phoneService } from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
@@ -44,9 +44,45 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
     greeting: biz.greeting,
     voice: biz.voice,
     orderTypes: [...biz.orderTypes] as string[],
-    menuPasted: false,
     routing: (connectedPos ? 'pos' : 'sms') as 'pos' | 'webhook' | 'sms' | 'email',
   })
+
+  // Editable menu the agent will read back to callers. Seeded from the POS sync
+  // / demo data, but the merchant can add, edit, and remove items here so a
+  // self-service number takes orders against their real menu.
+  const [menu, setMenu] = useState<PhoneMenuItem[]>(() => biz.menu.map(m => ({ ...m })))
+  const [newItem, setNewItem] = useState({ name: '', price: '', category: '' })
+
+  const addMenuItem = () => {
+    const name = newItem.name.trim()
+    const price = parseFloat(newItem.price)
+    if (!name || Number.isNaN(price)) return
+    setMenu(prev => [
+      ...prev,
+      { id: `m-${Date.now()}`, name, price, category: newItem.category.trim() || 'General' },
+    ])
+    setNewItem({ name: '', price: '', category: '' })
+  }
+
+  // Auto-provision a dedicated Twilio number on first mount when the merchant
+  // has none yet. Backend is idempotent; the ref guards React's double-mount.
+  const [provisioning, setProvisioning] = useState(false)
+  const [provisionError, setProvisionError] = useState<string | null>(null)
+  const provisionStarted = useRef(false)
+
+  useEffect(() => {
+    if (provisionStarted.current) return
+    if (cfg.phone && cfg.phone.trim()) return
+    provisionStarted.current = true
+    setProvisioning(true)
+    setProvisionError(null)
+    phoneService
+      .provisionNumber({ merchant_id: orgId, country: 'CA', business_name: cfg.businessName })
+      .then(res => setCfg(p => ({ ...p, phone: res.phone_number })))
+      .catch((e: unknown) => setProvisionError(e instanceof Error ? e.message : 'Could not provision a number'))
+      .finally(() => setProvisioning(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const inputCls = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50'
 
@@ -91,8 +127,23 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
               </div>
               <div>
                 <label className="text-xs text-[#A1A1A8] block mb-1">Phone Number</label>
-                <input className={inputCls} value={cfg.phone} readOnly />
-                <p className="text-[9px] text-[#A1A1A8]/50 mt-1">Auto-provisioned for your business</p>
+                <div className="relative">
+                  <input
+                    className={inputCls}
+                    value={provisioning ? 'Provisioning your number…' : cfg.phone}
+                    readOnly
+                  />
+                  {provisioning && (
+                    <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#1A8FD6] animate-spin" />
+                  )}
+                </div>
+                {provisionError ? (
+                  <p className="text-[9px] text-red-400/80 mt-1">{provisionError}</p>
+                ) : (
+                  <p className="text-[9px] text-[#A1A1A8]/50 mt-1">
+                    {cfg.phone && !provisioning ? 'Dedicated number assigned to your business' : 'Auto-provisioned for your business'}
+                  </p>
+                )}
               </div>
             </div>
           </>
@@ -157,27 +208,69 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
           <>
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Menu Items</h3>
             <p className="text-xs text-[#A1A1A8]">
-              {posInfo && hasMenuSync ? `Menu synced from ${posInfo.name}. Review below:`
-                : posInfo ? `${posInfo.name} doesn't support menu sync. Add items manually or paste below:`
-                : 'No POS connected. Add your menu items below:'}
+              {posInfo && hasMenuSync ? `Menu synced from ${posInfo.name}. Edit or add items below — this is what your agent reads to callers.`
+                : posInfo ? `${posInfo.name} doesn't support menu sync. Add the items your agent should take orders for.`
+                : 'Add the items your agent should take orders for. Callers can order anything on this list.'}
             </p>
             <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-              {biz.menu.map(item => (
-                <div key={item.id} className="flex items-center justify-between px-3 py-2 bg-[#111113] rounded-lg">
-                  <div>
-                    <p className="text-xs text-[#F5F5F7]">{item.name}</p>
-                    <p className="text-[9px] text-[#A1A1A8]">{item.category}</p>
+              {menu.length === 0 && (
+                <p className="text-[10px] text-[#A1A1A8]/60 py-3 text-center">No items yet — add your first below.</p>
+              )}
+              {menu.map((item, idx) => (
+                <div key={item.id} className="flex items-center gap-2 px-3 py-2 bg-[#111113] rounded-lg">
+                  <input
+                    className="flex-1 min-w-0 bg-transparent text-xs text-[#F5F5F7] focus:outline-none"
+                    value={item.name}
+                    aria-label="Item name"
+                    onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, name: e.target.value } : m))}
+                  />
+                  <div className="flex items-center text-xs font-mono text-[#17C5B0]">
+                    <span>{biz.currency}</span>
+                    <input
+                      className="w-14 bg-transparent text-right focus:outline-none"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.price}
+                      aria-label="Item price"
+                      onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, price: parseFloat(e.target.value) || 0 } : m))}
+                    />
                   </div>
-                  <span className="text-xs font-mono text-[#17C5B0]">{biz.currency}{item.price.toFixed(2)}</span>
+                  <button
+                    onClick={() => setMenu(prev => prev.filter((_, i) => i !== idx))}
+                    aria-label={`Remove ${item.name}`}
+                    className="text-[#A1A1A8]/50 hover:text-red-400 transition-colors flex-shrink-0">
+                    <Trash2 size={12} />
+                  </button>
                 </div>
               ))}
             </div>
-            {!cfg.menuPasted && (
-              <button onClick={() => setCfg(p => ({ ...p, menuPasted: true }))}
-                className="w-full py-2 border border-dashed border-[#1F1F23] rounded-lg text-xs text-[#A1A1A8] hover:border-[#1A8FD6]/30 hover:text-[#1A8FD6] transition-colors">
-                + Paste additional items
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                className={inputCls + ' flex-1'}
+                placeholder="Item name"
+                value={newItem.name}
+                onChange={e => setNewItem(p => ({ ...p, name: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') addMenuItem() }}
+              />
+              <input
+                className={inputCls + ' w-20'}
+                placeholder="0.00"
+                type="number"
+                step="0.01"
+                min="0"
+                value={newItem.price}
+                onChange={e => setNewItem(p => ({ ...p, price: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') addMenuItem() }}
+              />
+              <button
+                onClick={addMenuItem}
+                disabled={!newItem.name.trim() || Number.isNaN(parseFloat(newItem.price))}
+                aria-label="Add menu item"
+                className="flex-shrink-0 p-2 rounded-lg bg-[#1A8FD6]/10 text-[#1A8FD6] hover:bg-[#1A8FD6]/20 disabled:opacity-30 transition-colors">
+                <Plus size={14} />
               </button>
-            )}
+            </div>
           </>
         )}
 
@@ -236,7 +329,7 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 ['Business', cfg.businessName],
                 ['Phone', cfg.phone],
                 ['Voice', VOICE_OPTIONS.find(v => v.id === cfg.voice)?.label || ''],
-                ['Menu Items', String(biz.menu.length)],
+                ['Menu Items', String(menu.length)],
                 ['Order Routing', cfg.routing === 'pos' && posInfo ? `${posInfo.name} (Direct API)` : cfg.routing === 'webhook' && posInfo ? `${posInfo.name} (Webhook)` : cfg.routing === 'pos' ? 'POS System' : cfg.routing === 'sms' ? 'SMS Alert' : 'Email'],
                 ['Order Types', cfg.orderTypes.map(t => t.replace('_', ' ')).join(', ')],
               ].map(([label, value]) => (
@@ -263,7 +356,13 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
         )}
       </div>
 
-      {showTestCall && <TestCallModal biz={biz} onClose={() => setShowTestCall(false)} />}
+      {showTestCall && (
+        <TestCallModal
+          biz={{ ...biz, name: cfg.businessName, greeting: cfg.greeting, voice: cfg.voice, orderTypes: cfg.orderTypes as PhoneBizConfig['orderTypes'], menu }}
+          orgId={orgId}
+          onClose={() => setShowTestCall(false)}
+        />
+      )}
 
       {/* Navigation */}
       <div className="flex justify-between">
@@ -286,6 +385,7 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 greeting: cfg.greeting,
                 voice: cfg.voice,
                 order_types: cfg.orderTypes,
+                menu_items: menu.map(m => ({ name: m.name, price: m.price, category: m.category })),
                 active: true,
               })
             }

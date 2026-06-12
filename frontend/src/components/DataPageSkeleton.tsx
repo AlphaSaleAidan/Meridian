@@ -25,15 +25,6 @@ const TIPS = [
   'Set up cameras to unlock foot traffic and conversion analytics.',
 ]
 
-function MiniRadar({ size = 32, label }: { size?: number; label?: string }) {
-  return (
-    <div className="flex flex-col items-center gap-1.5">
-      <MeridianEmblem size={size} animate />
-      {label && <span className="text-[9px] text-[#A1A1A8]/40 font-mono">{label}</span>}
-    </div>
-  )
-}
-
 function ConnectCTA() {
   const location = useLocation()
   const settingsPath = location.pathname.startsWith('/canada') ? '/canada/dashboard/settings' : '/app/settings'
@@ -130,12 +121,16 @@ function ProcessingCTA({ elapsed }: { elapsed: number }) {
   )
 }
 
+// ── Data-destination placeholders ──
+// These mirror the real layout so the merchant can see exactly where each piece
+// of data will appear once their POS is connected. No spinners/radars — the view
+// is a calm scaffold that fills in with live values as data arrives.
+
 function StatCardShell({ label }: { label: string }) {
   return (
-    <div className="card p-4 flex flex-col items-center justify-center min-h-[100px] gap-2">
+    <div className="card p-4 flex flex-col justify-between min-h-[100px] gap-2">
       <p className="text-[10px] text-[#A1A1A8]/50 uppercase tracking-wider font-medium">{label}</p>
-      <MiniRadar size={28} />
-      <div className="h-5 w-16 rounded bg-[#1F1F23]/50" />
+      <p className="text-2xl font-bold text-[#F5F5F7]/15 tabular-nums">—</p>
     </div>
   )
 }
@@ -143,24 +138,28 @@ function StatCardShell({ label }: { label: string }) {
 function ChartShell({ title, height = 280 }: { title: string; height?: number }) {
   return (
     <div className="card p-4 sm:p-5" style={{ minHeight: height }}>
-      <p className="text-sm font-semibold text-[#F5F5F7]/30 mb-4">{title}</p>
+      <p className="text-sm font-semibold text-[#F5F5F7]/40 mb-4">{title}</p>
       <div className="relative" style={{ height: height - 60 }}>
-        <div className="absolute inset-0 flex items-end gap-[3px] px-2 opacity-20">
+        <div className="absolute inset-0 flex items-end gap-[3px] px-2 opacity-[0.07]">
           {[35, 50, 40, 65, 55, 75, 45, 80, 60, 70, 50, 85, 55, 68, 48, 72, 58, 78, 42, 62, 52, 74, 44, 66, 56, 76, 46, 82].map((h, i) => (
             <div key={i} className="flex-1 rounded-t bg-[#1A8FD6]" style={{ height: `${h}%` }} />
           ))}
         </div>
+        <div className="absolute inset-x-0 bottom-0 border-t border-dashed border-[#1F1F23]" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <MiniRadar size={48} label="Loading chart data..." />
+          <span className="text-[11px] text-[#A1A1A8]/35 font-medium">
+            Your {title.toLowerCase()} appears here
+          </span>
         </div>
       </div>
     </div>
   )
 }
 
-function TableShell({ columns, rows = 6 }: { columns: string[]; rows?: number }) {
+function TableShell({ columns, title }: { columns: string[]; title?: string }) {
   return (
     <div className="card p-4 sm:p-5 overflow-x-auto">
+      {title && <p className="text-sm font-semibold text-[#F5F5F7]/40 mb-3">{title}</p>}
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[#1F1F23]">
@@ -170,37 +169,31 @@ function TableShell({ columns, rows = 6 }: { columns: string[]; rows?: number })
           </tr>
         </thead>
         <tbody>
-          {Array.from({ length: rows }).map((_, i) => (
-            <tr key={i} className="border-b border-[#1F1F23]/50">
-              {columns.map((c, j) => (
-                <td key={j} className="py-3 px-2">
-                  {j === 0 && i === Math.floor(rows / 2) ? (
-                    <MiniRadar size={20} />
-                  ) : (
-                    <div className="h-3 rounded bg-[#1F1F23]/40 animate-pulse" style={{ width: `${40 + Math.random() * 40}%` }} />
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
+          <tr>
+            <td colSpan={columns.length} className="py-10 text-center">
+              <span className="text-[12px] text-[#A1A1A8]/35">
+                Rows populate here once your POS is connected
+              </span>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
   )
 }
 
-function GridShell({ count = 6 }: { count?: number }) {
+function GridShell({ count = 6, title }: { count?: number; title?: string }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="card p-4 flex flex-col items-center justify-center min-h-[140px] gap-3">
-          <MiniRadar size={i === 1 || i === 4 ? 36 : 28} />
-          <div className="space-y-1.5 w-full">
-            <div className="h-3 rounded bg-[#1F1F23]/40 animate-pulse mx-auto" style={{ width: '60%' }} />
-            <div className="h-2 rounded bg-[#1F1F23]/30 animate-pulse mx-auto" style={{ width: '40%' }} />
+    <div className="space-y-3">
+      {title && <p className="text-sm font-semibold text-[#F5F5F7]/40">{title}</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="card p-4 flex flex-col justify-center min-h-[120px] gap-2 border-dashed border-[#1F1F23]">
+            <div className="h-3 rounded bg-[#1F1F23]/40" style={{ width: '55%' }} />
+            <div className="h-2 rounded bg-[#1F1F23]/25" style={{ width: '38%' }} />
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   )
 }
@@ -320,16 +313,17 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
   const { org } = useAuth()
   const location = useLocation()
   const isDemo = location.pathname.startsWith('/demo') || location.pathname.startsWith('/canada/demo')
-  const processing = useProcessingState()
 
-  // Demo mode always shows real content
+  // Demo mode always shows real content.
   if (isDemo) return <>{children}</>
 
-  // POS connected and analysis finished — show real content
-  if (org?.pos_connected && !processing.active) return <>{children}</>
+  // Once POS is connected, show real content. The 20-min AI analysis countdown
+  // is surfaced ONCE via a top-of-layout banner (see DashboardProcessingBanner)
+  // instead of blocking every individual page like it used to — the raw POS
+  // data is already populated, only insights are pending.
+  if (org?.pos_connected) return <>{children}</>
 
-  // Either POS not connected, or POS connected but still processing
-  const isProcessing = org?.pos_connected && processing.active
+  // POS not connected — show the empty-state skeleton + Connect CTA.
   const config = PAGE_CONFIGS[title] || PAGE_CONFIGS['Revenue']
 
   return (
@@ -337,9 +331,7 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
       <div>
         <h1 className="text-2xl font-bold text-[#F5F5F7]">{title}</h1>
         <p className="text-sm text-[#A1A1A8] mt-1">
-          {isProcessing
-            ? 'Your data is being analyzed by our AI agents'
-            : 'Connect your POS to populate this view with live data'}
+          Connect your POS to populate this view with live data
         </p>
       </div>
 
@@ -352,12 +344,51 @@ export default function DataPageSkeleton({ title, children }: DataPageSkeletonPr
       {config.sections.map((section, i) => (
         <div key={i}>
           {section.type === 'chart' && <ChartShell title={section.title} height={section.height} />}
-          {section.type === 'table' && <TableShell columns={section.columns || []} rows={section.rows} />}
-          {section.type === 'grid' && <GridShell count={section.count} />}
+          {section.type === 'table' && <TableShell columns={section.columns || []} title={section.title} />}
+          {section.type === 'grid' && <GridShell count={section.count} title={section.title} />}
         </div>
       ))}
 
-      {isProcessing ? <ProcessingCTA elapsed={processing.elapsed} /> : <ConnectCTA />}
+      <ConnectCTA />
+    </div>
+  )
+}
+
+/**
+ * Single-instance banner showing the 20-minute AI analysis countdown after
+ * onboarding completes. Mounts inside Layout so it appears once per session
+ * across every dashboard route — replacing the per-page countdown that used
+ * to show on every nav tab.
+ */
+export function DashboardProcessingBanner() {
+  const processing = useProcessingState()
+  const [dismissed, setDismissed] = useState(false)
+  if (!processing.active || dismissed) return null
+  const clamped = Math.min(processing.elapsed, PROCESSING_DURATION)
+  const pct = Math.round((clamped / PROCESSING_DURATION) * 100)
+  const remainingMin = Math.ceil(Math.max(PROCESSING_DURATION - clamped, 0) / 60)
+  return (
+    <div className="relative px-4 sm:px-6 py-2 border-b border-[#1F1F23] bg-gradient-to-r from-[#0F1419] via-[#0F1A24] to-[#0F1419]">
+      <div className="flex items-center gap-3 max-w-7xl mx-auto">
+        <MeridianEmblem size={14} animate />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 text-[11px] text-[#A1A1A8]">
+            <span className="font-medium text-[#F5F5F7]/90 truncate">AI analysis in progress</span>
+            <span className="text-[#A1A1A8]/50 hidden sm:inline">·</span>
+            <span className="hidden sm:inline text-[#A1A1A8]/70">~{remainingMin} min remaining</span>
+          </div>
+          <div className="mt-1 h-[3px] rounded-full bg-[#1F1F23] overflow-hidden">
+            <div className="h-full bg-[#1A8FD6] transition-all duration-1000 ease-linear" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        <button
+          onClick={() => setDismissed(true)}
+          aria-label="Dismiss"
+          className="text-[10px] font-mono uppercase tracking-wider text-[#A1A1A8]/50 hover:text-[#F5F5F7] transition-colors px-2 py-1"
+        >
+          {pct}% · ×
+        </button>
+      </div>
     </div>
   )
 }

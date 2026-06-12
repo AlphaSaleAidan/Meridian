@@ -8,7 +8,7 @@ import { MapPin } from 'lucide-react'
 export default function CanadaLoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { ready, authenticated, org, logout } = useAuth()
+  const { ready, authenticated, org } = useAuth()
 
   const from = (location.state as { from?: string })?.from || '/canada/dashboard'
 
@@ -18,22 +18,11 @@ export default function CanadaLoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [showForgot, setShowForgot] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
-  const [cleared, setCleared] = useState(false)
-  const [justLoggedIn, setJustLoggedIn] = useState(false)
 
   useEffect(() => {
-    if (!ready) return
-    if (authenticated && !justLoggedIn && !cleared) {
-      logout().then(() => setCleared(true))
-      return
-    }
-    if (!justLoggedIn || !authenticated || !org) return
-    if (!org.onboarded) {
-      navigate('/canada/setup', { replace: true })
-      return
-    }
-    navigate(from, { replace: true })
-  }, [ready, authenticated, org, from, navigate, justLoggedIn, cleared, logout])
+    if (!ready || !authenticated || !org) return
+    navigate(org.onboarded ? from : '/canada/setup', { replace: true })
+  }, [ready, authenticated, org, from, navigate])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -50,8 +39,6 @@ export default function CanadaLoginPage() {
     setLoading(false)
     if (authError) {
       setError(authError.message)
-    } else {
-      setJustLoggedIn(true)
     }
   }
 

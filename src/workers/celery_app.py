@@ -7,36 +7,6 @@ Backend: Redis (for result storage)
 Tasks are defined in src/workers/tasks.py.
 """
 import os
-from pathlib import Path
-
-
-def _load_env_for_workers() -> None:
-    """Load /root/Meridian/.env so tasks have SUPABASE_URL +
-    SUPABASE_SERVICE_ROLE_KEY at hand.
-
-    Why: celery-worker and celery-beat are started by pm2 in a shell
-    that does not necessarily have the project .env sourced. Without
-    these, init_db() returns None and every task that touches the DB
-    fails with 'Database not initialized'. The API process gets the
-    env from uvicorn's own startup; workers don't. Using setdefault
-    so a real shell-level env (e.g. when running tests with a
-    different DB) still wins.
-    """
-    env_path = Path(__file__).resolve().parents[2] / ".env"
-    if not env_path.exists():
-        return
-    for raw in env_path.read_text().splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(
-            key.strip(),
-            value.strip().strip('"').strip("'"),
-        )
-
-
-_load_env_for_workers()
 
 from celery import Celery
 from celery.schedules import crontab
@@ -70,6 +40,7 @@ celery_app.conf.update(
         "src.workers.tasks.sync_pos_data": {"queue": "default"},
         "src.workers.tasks.run_analysis": {"queue": "default"},
         "src.workers.tasks.process_billing_renewals": {"queue": "critical"},
+        "src.workers.tasks.refresh_square_tokens": {"queue": "critical"},
         "src.workers.tasks.run_nightly_analysis": {"queue": "bulk"},
         "src.workers.tasks.run_nightly_analysis_complete": {"queue": "bulk"},
         "src.workers.tasks.generate_weekly_reports": {"queue": "bulk"},
@@ -88,85 +59,59 @@ celery_app.conf.update(
         "src.workers.tasks.rebuild_diff_summaries": {"queue": "bulk"},
         "src.workers.tasks.compress_sessions": {"queue": "bulk"},
         "src.workers.tasks.send_daily_burn_rate": {"queue": "default"},
-        # P3: POS pipeline on Celery.
-        # Routes to `default` (not `bulk`) because the deployed worker
-        # listens on `default,sync,analysis,reports` only — the `bulk`
-        # queue defined in task_queues is dead until a worker
-        # subscribes to it. Discovered during e2e validation.
-        "src.workers.tasks.backfill_pos_connection": {"queue": "default"},
-        "src.workers.tasks.incremental_sync_all": {"queue": "default"},
-        "src.workers.tasks.refresh_pos_tokens": {"queue": "default"},
     },
     result_expires=3600,
     worker_max_tasks_per_child=200,
-    # Staggered to prevent simultaneous heavy/LLM tasks. Interval schedules
-    # were converted to fixed crontabs so they don't align at beat-boot.
-    # Minimum 90-min gap between any two LLM-heavy tasks.
     beat_schedule={
         "nightly-analysis": {
             "task": "src.workers.tasks.run_nightly_analysis",
-            "schedule": crontab(hour=2, minute=0),  # 02:00 UTC daily
+            "schedule": crontab(hour=2, minute=0),  # 2 AM UTC daily
             "options": {"queue": "bulk"},
         },
         "weekly-reports": {
             "task": "src.workers.tasks.generate_weekly_reports",
-            "schedule": crontab(hour=3, minute=15, day_of_week=1),  # Mon 03:15 UTC
-            "options": {"queue": "bulk"},
-        },
-        "cold-storage-archive": {
-            "task": "src.workers.tasks.run_cold_storage_archive",
-            "schedule": crontab(hour=3, minute=30),  # 03:30 UTC daily (R2 upload, no LLM)
+            "schedule": crontab(hour=3, minute=0, day_of_week=1),  # Monday 3 AM UTC
             "options": {"queue": "bulk"},
         },
         "swarm-training": {
             "task": "src.workers.tasks.train_swarm_batch",
-            "schedule": crontab(hour=5, minute=0),  # 05:00 UTC daily
+            "schedule": crontab(hour=5, minute=0),  # 5 AM UTC daily
             "options": {"queue": "bulk"},
         },
         "billing-renewals": {
             "task": "src.workers.tasks.process_billing_renewals",
-            "schedule": crontab(hour=6, minute=30),  # 06:30 UTC daily
+            "schedule": crontab(hour=6, minute=0),  # 6 AM UTC daily
+            "options": {"queue": "critical"},
+        },
+        "square-token-refresh": {
+            "task": "src.workers.tasks.refresh_square_tokens",
+            "schedule": crontab(hour=7, minute=0),  # 7 AM UTC daily
             "options": {"queue": "critical"},
         },
         "daily-burn-rate": {
             "task": "src.workers.tasks.send_daily_burn_rate",
-            "schedule": crontab(hour=8, minute=0),  # 08:00 UTC daily
+            "schedule": crontab(hour=8, minute=0),  # 8 AM UTC daily
             "options": {"queue": "default"},
         },
-        # Periodic LLM/embedding tasks — fixed crontabs, offset from each other
         "vector-ingestion": {
             "task": "src.workers.tasks.ingest_scraped_data",
-            "schedule": crontab(minute=15, hour="0,6,12,18"),  # every 6h at :15
+            "schedule": 21600.0,  # 6 hours — after each scraper cycle
             "options": {"queue": "bulk"},
         },
         "context-rebuild": {
             "task": "src.workers.tasks.rebuild_all_context",
-            "schedule": crontab(minute=45, hour="3,9,15,21"),  # every 6h at :45, offset 3h
+            "schedule": 21600.0,  # 6 hours — full token-saving pipeline
             "options": {"queue": "bulk"},
         },
         "session-compression": {
             "task": "src.workers.tasks.compress_sessions",
-            "schedule": crontab(minute=30, hour="11,23"),  # every 12h, off-cluster
+            "schedule": 43200.0,  # 12 hours — compress completed Claude sessions
             "options": {"queue": "bulk"},
         },
-        # P3: POS pipeline periodic tasks.
-        "pos-incremental-sync": {
-            # Every 15 min on the 7s — offset from the :00/:15/:30/:45
-            # crons that align at boot, to avoid herding when the
-            # entire beat schedule fires together.
-            "task": "src.workers.tasks.incremental_sync_all",
-            "schedule": crontab(minute="7,22,37,52"),
-            "options": {"queue": "default"},
-        },
-        "pos-token-refresh": {
-            # Daily 04:45 UTC — offset from cold-storage (03:30) and
-            # billing-renewals (06:30) so token refresh doesn't
-            # collide with either. 7-day lookahead window means we
-            # have ~6 days of slack before any Square token actually
-            # expires.
-            "task": "src.workers.tasks.refresh_pos_tokens",
-            "schedule": crontab(hour=4, minute=45),
-            "options": {"queue": "default"},
+        "cold-storage-archive": {
+            "task": "src.workers.tasks.run_cold_storage_archive",
+            "schedule": crontab(hour=4, minute=0),  # 4 AM UTC daily
+            "options": {"queue": "bulk"},
         },
     },
 )

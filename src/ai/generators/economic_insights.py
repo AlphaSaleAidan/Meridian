@@ -28,7 +28,7 @@ def generate(ctx, revenue: dict, products: dict, patterns: dict, bench, models) 
                             f"  • {h['hour']}: {h['revenue_to_cost_ratio']}:1 ratio"
                             for h in best_hours[:3]
                         )
-                        + f"\n\n*Lowest-ROI hours:*\n"
+                        + "\n\n*Lowest-ROI hours:*\n"
                         + "\n".join(
                             f"  • {h['hour']}: {h['revenue_to_cost_ratio']}:1 ratio"
                             for h in worst_hours[:3]

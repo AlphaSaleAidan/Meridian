@@ -139,8 +139,10 @@ async def run_backfill(
         logger.warning(f"POS connected email failed for org={org_id}: {e}")
 
     # ── Trigger AI pipeline ──────────────────────────────
+    # Analysis only: the backfill above already pulled and persisted 18
+    # months of data — run_full_sync() would re-pull everything from Square.
     try:
-        from ..pipeline import MeridianPipeline
+        from ..live_pipeline import MeridianPipeline
 
         pipeline = MeridianPipeline(
             org_id=org_id,
@@ -150,7 +152,7 @@ async def run_backfill(
                 or os.environ.get("SUPABASE_SERVICE_KEY", ""),
             pos_connection_id=connection_id,
         )
-        await pipeline.run_full_sync()
+        await pipeline.run_analysis_only()
         logger.info(f"AI pipeline completed for org={org_id}")
     except Exception as e:
         logger.error(f"AI pipeline failed for org={org_id}: {e}", exc_info=True)

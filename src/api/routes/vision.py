@@ -13,15 +13,32 @@ Endpoints:
   GET    /api/vision/agents/{org_id}        -> Run vision agents
 """
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
+
+from ..auth import require_org_access
 
 logger = logging.getLogger("meridian.api.vision")
 
-router = APIRouter(prefix="/api/vision", tags=["vision"])
+router = APIRouter(prefix="/api/vision", tags=["vision"], dependencies=[Depends(require_org_access)])
+
+
+async def require_device_token(x_device_token: Optional[str] = Header(None)):
+    """Auth for edge-device ingest endpoints (cameras, not browsers).
+
+    Devices send X-Device-Token matching the VISION_INGEST_TOKEN env var.
+    Fails closed with 503 if the token is not configured server-side.
+    """
+    expected = os.environ.get("VISION_INGEST_TOKEN", "")
+    if not expected:
+        logger.error("VISION_INGEST_TOKEN not configured — rejecting vision ingest")
+        raise HTTPException(status_code=503, detail="Vision ingest not configured")
+    if not x_device_token or x_device_token != expected:
+        raise HTTPException(status_code=401, detail="Invalid device token")
 
 
 class CameraRegisterRequest(BaseModel):
@@ -200,7 +217,7 @@ async def camera_heartbeat(camera_id: str, req: HeartbeatRequest):
     return {"status": "ok", "camera_id": camera_id}
 
 
-@router.post("/ingest/traffic")
+@router.post("/ingest/traffic", dependencies=[Depends(require_device_token)])
 async def ingest_traffic(req: TrafficIngestRequest):
     db = _get_db()
     if not db:
@@ -233,7 +250,7 @@ async def ingest_traffic(req: TrafficIngestRequest):
     return {"status": "ok", "bucket": req.bucket}
 
 
-@router.post("/ingest/visits")
+@router.post("/ingest/visits", dependencies=[Depends(require_device_token)])
 async def ingest_visits(req: VisitIngestRequest):
     db = _get_db()
     if not db:

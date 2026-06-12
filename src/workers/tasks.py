@@ -265,6 +265,30 @@ def process_billing_renewals():
     return run_async(_renewals())
 
 
+@shared_task(name="src.workers.tasks.refresh_square_tokens", rate_limit="2/m")
+def refresh_square_tokens():
+    """Daily: refresh Square OAuth tokens expiring within 7 days (30-day expiry)."""
+    logger.info("Refreshing expiring Square tokens")
+
+    async def _refresh():
+        from ..db import init_db, close_db
+        from .token_refresh import refresh_expiring_tokens
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            stats = await refresh_expiring_tokens()
+            return {"status": "complete", **stats}
+        finally:
+            await close_db()
+
+    result = run_async(_refresh())
+    logger.info(f"Token refresh task complete: {result}")
+    return result
+
+
 @shared_task(name="src.workers.tasks.train_swarm_batch")
 def train_swarm_batch():
     """Train swarm on all active merchants' latest outputs."""
@@ -412,7 +436,6 @@ def run_cold_storage_archive():
 def offload_warm_to_r2():
     """Upload all WARM archives older than 30 days to R2, then delete local copies."""
     from datetime import datetime, timedelta, timezone
-    from pathlib import Path
     from .cold_storage import ARCHIVE_DIR
 
     if not ARCHIVE_DIR.exists():
@@ -420,7 +443,6 @@ def offload_warm_to_r2():
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=30)
     uploaded = 0
-    cleaned = 0
 
     for manifest_path in ARCHIVE_DIR.rglob("manifest.json"):
         try:

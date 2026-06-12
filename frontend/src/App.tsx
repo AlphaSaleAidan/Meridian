@@ -7,6 +7,8 @@ import ErrorBoundary, { lazyRetry } from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import DemoLayout from '@/components/DemoLayout'
+import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
+import { merchantPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 
@@ -43,6 +45,8 @@ const ContentSettingsPage = lazyRetry(() => import('@/pages/ContentSettingsPage'
 
 const LandingPage = lazyRetry(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazyRetry(() => import('@/components/CanadaLayout'))
+const MerchantLayout = lazyRetry(() => import('@/components/MerchantLayout'))
+const MerchantDemoLayout = lazyRetry(() => import('@/components/MerchantDemoLayout'))
 const CustomerOnboardingWizard = lazyRetry(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazyRetry(() => import('@/pages/CareersPage'))
 const AdminPage = lazyRetry(() => import('@/pages/AdminPage'))
@@ -69,6 +73,7 @@ const CanadaPortalSettingsPage = lazyRetry(() => import('@/pages/canada/portal/C
 const CanadaPortalCreateCustomerPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
 const CanadaPortalOnboardingPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
 const CanadaCustomerOnboardingWizard = lazyRetry(() => import('@/pages/canada/portal/CanadaCustomerOnboardingWizard'))
+const MerchantOnboardingWizard = lazyRetry(() => import('@/pages/canada/merchant/MerchantOnboardingWizard'))
 const CanadaInvoicePage = lazyRetry(() => import('@/pages/canada/CanadaInvoicePage'))
 const CanadaSetupPage = lazyRetry(() => import('@/pages/canada/CanadaSetupPage'))
 
@@ -392,14 +397,20 @@ export default function App() {
               <Route path="/canada/landing" element={<CanadaLandingPage />} />
               <Route path="/canada/careers" element={<CanadaCareersPage />} />
 
-              {/* Canada Demo — same dashboard with CAD currency */}
-              <Route path="/canada/demo" element={<DemoLayout />}>
-                {CustomerDashboardRoutes()}
-                <Route path="camera-analytics" element={
-                  <Suspense fallback={<LazyFallback />}>
-                    <CameraAnalyticsDemoPage />
-                  </Suspense>
-                } />
+              {/* Canada Demo — public merchant portal with synthetic CAD data (no auth, no tour) */}
+              <Route path="/canada/demo" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <MerchantDemoLayout />
+                </Suspense>
+              }>
+                {merchantPillars.map(pillar => (
+                  <Route
+                    key={pillar.path || '_home'}
+                    index={pillar.path === ''}
+                    path={pillar.path || undefined}
+                    element={<MerchantPillarPage pillar={pillar} />}
+                  />
+                ))}
               </Route>
 
               {/* ══════════════════════════════════════════════
@@ -420,6 +431,33 @@ export default function App() {
                 </CanadaProtectedRoute>
               }>
                 {CustomerDashboardRoutes()}
+              </Route>
+
+              {/* ══════════════════════════════════════════════
+                  CANADA — merchant portal (trimmed 3-pillar product)
+                  ══════════════════════════════════════════════ */}
+              <Route path="/canada/merchant/onboard" element={
+                <CanadaProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <MerchantOnboardingWizard />
+                  </Suspense>
+                </CanadaProtectedRoute>
+              } />
+              <Route path="/canada/merchant" element={
+                <CanadaProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <MerchantLayout />
+                  </Suspense>
+                </CanadaProtectedRoute>
+              }>
+                {merchantPillars.map(pillar => (
+                  <Route
+                    key={pillar.path || '_home'}
+                    index={pillar.path === ''}
+                    path={pillar.path || undefined}
+                    element={<MerchantPillarPage pillar={pillar} />}
+                  />
+                ))}
               </Route>
 
               {/* ══════════════════════════════════════════════

@@ -8,6 +8,7 @@ import { formatCents } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
+import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
@@ -71,10 +72,15 @@ function StaffCard({ member, rank }: { member: StaffMember; rank: number }) {
 export default function StaffPage() {
   const orgId = useOrgId()
   const isDemo = useIsDemo()
+  const { org } = useAuth()
+  const posConnected = !!org?.pos_connected
   const apiData = useApi(() => api.staff(orgId), [orgId])
 
   const staff: StaffMember[] = isDemo ? generateStaffPerformance() : (apiData.data?.staff ?? [])
 
+  // Before a POS is connected, the analytics endpoint isn't reachable for this
+  // org — show the data-destination scaffold instead of a stuck spinner / 401.
+  if (!isDemo && !posConnected) return <DataPageSkeleton title="Staff"><div /></DataPageSkeleton>
   if (!isDemo && apiData.loading) return <LoadingPage />
   if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 

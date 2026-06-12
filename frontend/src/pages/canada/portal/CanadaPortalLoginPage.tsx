@@ -46,22 +46,22 @@ export default function CanadaPortalLoginPage() {
     setSuccess('If that email is registered, a reset link has been sent. Check your inbox.')
   }
 
-  const inputClass = 'w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#17C5B0]/50 focus:ring-1 focus:ring-[#17C5B0]/20 transition-colors'
-  const btnClass = 'w-full py-2.5 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 disabled:opacity-50 transition-all'
+  const inputClass = 'w-full px-3 py-2.5 bg-pm-surface border border-pm-border rounded-lg text-sm text-pm-text placeholder-pm-muted/40 focus:outline-none focus:border-pm-teal/50 focus:ring-1 focus:ring-pm-teal/20 transition-colors'
+  const btnClass = 'w-full py-2.5 bg-pm-teal text-pm-bg text-sm font-semibold rounded-lg hover:bg-pm-teal/90 disabled:opacity-50 transition-all'
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-pm-bg flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-1 mb-8">
           <MeridianEmblem size={40} />
-          <span className="text-xl font-bold text-[#F5F5F7] mt-2">Meridian Sales</span>
-          <span className="text-[10px] font-semibold text-[#17C5B0] uppercase tracking-widest flex items-center gap-1">
+          <span className="text-xl font-bold text-pm-text mt-2">Meridian Sales</span>
+          <span className="text-2xs font-semibold text-pm-teal uppercase tracking-widest flex items-center gap-1">
             Canada CRM {'\u{1F1E8}\u{1F1E6}'}
           </span>
         </div>
 
-        <div className="card p-6 sm:p-8 border border-[#1F1F23]">
-          <p className="text-sm text-[#A1A1A8] text-center mb-6">
+        <div className="card p-6 sm:p-8 border border-pm-border">
+          <p className="text-sm text-pm-muted text-center mb-6">
             {showForgot ? "Enter your email and we'll send a reset link." : 'Sign in to access your pipeline and leads.'}
           </p>
 
@@ -69,24 +69,24 @@ export default function CanadaPortalLoginPage() {
             <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{error}</div>
           )}
           {success && (
-            <div className="mb-4 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-xs text-[#17C5B0]">{success}</div>
+            <div className="mb-4 p-3 rounded-lg bg-pm-teal/10 border border-pm-teal/20 text-xs text-pm-teal">{success}</div>
           )}
 
           {!showForgot ? (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
+                <label className="block text-xs font-medium text-pm-muted mb-1.5">Email</label>
                 <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@meridian.com" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
+                <label className="block text-xs font-medium text-pm-muted mb-1.5">Password</label>
                 <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
               <div className="text-center">
-                <button type="button" onClick={() => { setShowForgot(true); setError(null); setSuccess(null) }} className="text-[11px] text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors">
+                <button type="button" onClick={() => { setShowForgot(true); setError(null); setSuccess(null) }} className="text-2xs text-pm-teal hover:text-pm-teal/80 transition-colors">
                   Forgot password?
                 </button>
               </div>
@@ -94,36 +94,36 @@ export default function CanadaPortalLoginPage() {
           ) : (
             <form onSubmit={handleForgot} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
+                <label className="block text-xs font-medium text-pm-muted mb-1.5">Email</label>
                 <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@meridian.com" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Sending...' : 'Send Reset Link'}
               </button>
-              <p className="text-center text-[11px] text-[#A1A1A8]">
-                <button type="button" onClick={() => { setShowForgot(false); setError(null); setSuccess(null) }} className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors">
+              <p className="text-center text-2xs text-pm-muted">
+                <button type="button" onClick={() => { setShowForgot(false); setError(null); setSuccess(null) }} className="text-pm-teal hover:text-pm-teal/80 transition-colors">
                   Back to sign in
                 </button>
               </p>
             </form>
           )}
 
-          <p className="text-center text-[11px] text-[#A1A1A8] mt-5">
+          <p className="text-center text-2xs text-pm-muted mt-5">
             New sales rep?{' '}
-            <Link to="/canada/portal/signup" className="text-[#17C5B0] hover:text-[#17C5B0]/80 transition-colors font-medium">
+            <Link to="/canada/portal/signup" className="text-pm-teal hover:text-pm-teal/80 transition-colors font-medium">
               Create your account
             </Link>
           </p>
         </div>
 
-        <p className="text-center text-[11px] text-[#A1A1A8]/50 mt-5">
+        <p className="text-center text-2xs text-pm-muted/50 mt-5">
           Business owner?{' '}
-          <Link to="/canada/login" className="text-[#00d4aa] hover:text-[#00d4aa]/80 transition-colors font-medium">
+          <Link to="/canada/login" className="text-pm-accent hover:text-pm-accent/80 transition-colors font-medium">
             Sign in here
           </Link>
         </p>
 
-        <p className="text-center text-[10px] text-[#A1A1A8]/30 mt-4 font-mono">
+        <p className="text-center text-2xs text-pm-muted/30 mt-4 font-mono">
           Meridian Canada Sales CRM v0.2.0
         </p>
       </div>

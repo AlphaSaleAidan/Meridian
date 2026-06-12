@@ -26,6 +26,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 
 from ..auth import require_admin, require_org_access
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
+from ...db.supabase_rest import SupabaseRESTError
 
 logger = logging.getLogger("meridian.api.dashboard")
 
@@ -446,19 +447,54 @@ async def get_notifications(
     unread_only: bool = Query(False),
     db=Depends(_get_db),
 ):
-    """User notifications (in-app)."""
+    """User notifications (in-app).
+
+    Narrow exception handling: SupabaseRESTError with status 401/403/404 (the
+    genuine "RLS-denied / not-found / unknown-table" patterns from PostgREST)
+    is converted to a graceful HTTP 404 so the customer-Layout notifications
+    poller doesn't fill DevTools with red 500s on every admin page mount.
+
+    Any other failure (PostgREST 400 from a malformed query, 5xx upstream,
+    network timeout, unhandled bug) is re-raised so it surfaces as a real
+    500 — observability isn't laundered into a calm 404.
+    """
     filters: dict = {
         "org_id": f"eq.{org_id}",
     }
     if unread_only:
         filters["acknowledged_at"] = "is.null"
 
-    notifications = await db.select(
-        "notifications",
-        filters=filters,
-        order="created_at.desc",
-        limit=limit,
-    )
+    try:
+        notifications = await db.select(
+            "notifications",
+            filters=filters,
+            order="created_at.desc",
+            limit=limit,
+        )
+    except SupabaseRESTError as exc:
+        # Only the genuine not-found / RLS-denied PostgREST responses become
+        # graceful 404s. Validation 400s and upstream 5xx propagate.
+        if exc.status_code in (401, 403, 404):
+            logger.warning(
+                "notifications fetch denied/missing for org_id=%s: "
+                "status=%d message=%r details=%r",
+                org_id, exc.status_code, exc.message, exc.details,
+            )
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Notifications unavailable for this organization "
+                    f"(store returned {exc.status_code})"
+                ),
+            )
+        # Non-404-shaped errors: log full context, then re-raise so FastAPI
+        # converts to the appropriate 5xx and we keep observability.
+        logger.error(
+            "notifications fetch failed with unexpected store error for "
+            "org_id=%s: status=%d message=%r details=%r",
+            org_id, exc.status_code, exc.message, exc.details,
+        )
+        raise
 
     return {
         "notifications": [
@@ -531,8 +567,8 @@ async def get_connection(
                 "id": r.get("id"),
                 "provider": r.get("provider"),
                 "status": r.get("status"),
-                "merchant_id": r.get("merchant_id"),
-                "location_ids": r.get("location_ids"),
+                "external_merchant_id": r.get("external_merchant_id"),
+                "external_location_id": r.get("external_location_id"),
                 "last_sync_at": r.get("last_sync_at"),
                 "sync_cursor": r.get("sync_cursor"),
                 "historical_import_complete": r.get("historical_import_complete"),
@@ -607,15 +643,18 @@ async def get_day_transactions(
     line_items_by_tx: dict[str, list] = {}
 
     if tx_ids:
-        # Batch fetch line items
-        for tx_id in tx_ids:
+        # Batch fetch line items with one in.() query per chunk
+        # (chunked to keep the PostgREST query string a safe length)
+        for i in range(0, len(tx_ids), 100):
+            chunk = tx_ids[i : i + 100]
             items = await db.select(
                 "transaction_line_items",
                 filters={
-                    "transaction_id": f"eq.{tx_id}",
+                    "transaction_id": f"in.({','.join(chunk)})",
                 },
             )
-            line_items_by_tx[tx_id] = items
+            for item in items:
+                line_items_by_tx.setdefault(item.get("transaction_id"), []).append(item)
 
     # Build response
     result_txns = []

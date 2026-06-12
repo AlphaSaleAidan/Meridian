@@ -3,17 +3,16 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
-import POSSystemPicker from '@/components/POSSystemPicker'
 import {
-  MapPin, ArrowRight, CheckCircle2, Loader2, Lock, Wifi,
+  MapPin, ArrowRight, CheckCircle2, Loader2, Lock,
   LayoutDashboard,
 } from 'lucide-react'
 
-type Step = 'welcome' | 'password' | 'pos' | 'done'
+type Step = 'welcome' | 'password' | 'done'
 
 export default function CanadaSetupPage() {
   const navigate = useNavigate()
-  const { user, org, connectPos, logout, markOnboarded } = useAuth()
+  const { user, org, markOnboarded } = useAuth()
 
   const [step, setStep] = useState<Step>('welcome')
   const [loading, setLoading] = useState(false)
@@ -21,7 +20,6 @@ export default function CanadaSetupPage() {
 
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [posProvider, setPosProvider] = useState<string | null>(null)
 
   if (!user || !org) {
     navigate('/canada/login', { replace: true })
@@ -34,7 +32,7 @@ export default function CanadaSetupPage() {
     setLoading(true)
     setError(null)
     try {
-      if (!supabase) { setStep('pos'); return }
+      if (!supabase) { setStep('done'); return }
       const result = await Promise.race([
         supabase.auth.updateUser({ password: newPassword }),
         new Promise<{ error: { message: string } }>(resolve =>
@@ -42,24 +40,12 @@ export default function CanadaSetupPage() {
         ),
       ])
       if (result.error?.message) { setError(result.error.message); return }
-      setStep('pos')
+      setStep('done')
     } catch {
-      setStep('pos')
+      setStep('done')
     } finally {
       setLoading(false)
     }
-  }
-
-  async function handleConnectPos() {
-    if (!posProvider) { setError('Please select your POS system'); return }
-    setLoading(true)
-    setError(null)
-    // P1: connectPos signature changed to credentials object;
-    // selection-only path uses {}.
-    const err = await connectPos(posProvider, {})
-    setLoading(false)
-    if (err) { setError(err); return }
-    setStep('done')
   }
 
   function goToDashboard() {
@@ -67,7 +53,6 @@ export default function CanadaSetupPage() {
     navigate('/canada/dashboard', { replace: true })
   }
 
-  function handleSkipPos() { goToDashboard() }
   function handleFinish() { goToDashboard() }
 
   const firstName = org.owner_name?.split(' ')[0] || 'there'
@@ -89,12 +74,12 @@ export default function CanadaSetupPage() {
 
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          {(['welcome', 'password', 'pos', 'done'] as Step[]).map((s, i) => (
+          {(['welcome', 'password', 'done'] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center">
               <div className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                step === s ? 'bg-[#00d4aa]' : i < ['welcome', 'password', 'pos', 'done'].indexOf(step) ? 'bg-[#00d4aa]/50' : 'bg-[#1F1F23]'
+                step === s ? 'bg-[#00d4aa]' : i < ['welcome', 'password', 'done'].indexOf(step) ? 'bg-[#00d4aa]/50' : 'bg-[#1F1F23]'
               }`} />
-              {i < 3 && <div className="w-8 h-[1px] bg-[#1F1F23]" />}
+              {i < 2 && <div className="w-8 h-[1px] bg-[#1F1F23]" />}
             </div>
           ))}
         </div>
@@ -154,40 +139,7 @@ export default function CanadaSetupPage() {
                 className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all">
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <><ArrowRight size={16} /> Save & Continue</>}
               </button>
-              <button onClick={() => setStep('pos')} className="w-full text-center text-[11px] text-[#A1A1A8] hover:text-white transition-colors">
-                Skip for now
-              </button>
             </div>
-          </div>
-        )}
-
-        {/* CONNECT POS */}
-        {step === 'pos' && (
-          <div className="card p-6 sm:p-8 border border-[#1F1F23]">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center">
-                <Wifi size={18} className="text-[#00d4aa]" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-[#F5F5F7]">Connect Your POS</h2>
-                <p className="text-[11px] text-[#A1A1A8]">Link your point-of-sale system to start receiving insights</p>
-              </div>
-            </div>
-            <div className="mb-6">
-              <POSSystemPicker
-                value={posProvider}
-                onChange={setPosProvider}
-                mode="new-customer"
-                portalContext="canada"
-              />
-            </div>
-            <button onClick={handleConnectPos} disabled={loading || !posProvider}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all">
-              {loading ? <Loader2 size={16} className="animate-spin" /> : <><Wifi size={16} /> Connect</>}
-            </button>
-            <button onClick={handleSkipPos} className="w-full mt-3 text-center text-[11px] text-[#A1A1A8] hover:text-white transition-colors">
-              Skip — I'll connect later
-            </button>
           </div>
         )}
 
@@ -199,7 +151,7 @@ export default function CanadaSetupPage() {
             </div>
             <h2 className="text-xl font-bold text-[#F5F5F7] mb-2">You're All Set!</h2>
             <p className="text-sm text-[#A1A1A8] mb-6">
-              Your POS is connected. Your dashboard will start populating with insights as data comes in.
+              Your account is ready. Head to your dashboard to connect your POS and start receiving insights.
             </p>
             <button onClick={handleFinish}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">

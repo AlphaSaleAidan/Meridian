@@ -17,7 +17,7 @@ logger = logging.getLogger("meridian.ai.freemocap")
 
 _skelly_available = False
 try:
-    from skellytracker import CameraConfig, SkellyCam
+    from skellytracker import CameraConfig, SkellyCam  # noqa: F401  optional-dependency probe
     _skelly_available = True
 except ImportError:
     pass

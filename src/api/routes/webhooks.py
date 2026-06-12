@@ -8,12 +8,13 @@ We acknowledge immediately and process async.
 """
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Request, Response, BackgroundTasks
 
-from ...config import square as sq_config, app as app_config
+from ...config import square as sq_config, clover as cl_config, app as app_config
 from ...square.webhook_handlers import WebhookProcessor, verify_webhook_signature
 
 logger = logging.getLogger("meridian.api.webhooks")
@@ -120,7 +121,6 @@ async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
     rows = await _db_instance.select(
         "pos_connections",
         filters={
-            # P6: schema column is external_merchant_id.
             "external_merchant_id": f"eq.{merchant_id}",
             "status": "eq.connected",
         },
@@ -130,7 +130,7 @@ async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
         return None
 
     conn = rows[0]
-    # P6: schema column is access_token_enc.
+    # Inject access_token for the SquareClient
     conn["access_token"] = conn.get("access_token_enc", "")
     return conn
 
@@ -165,14 +165,22 @@ async def square_webhook(
     # ── Step 1: Verify signature ──────────────────────────
     signature = request.headers.get("x-square-hmacsha256-signature", "")
     
-    if not sq_config.webhook_signature_key:
-        logger.error("SQUARE_WEBHOOK_SIGNATURE_KEY not configured — refusing to process")
+    # The POS webhook subscription has its own Square signature key;
+    # fall back to the shared SQUARE_WEBHOOK_SIGNATURE_KEY (used by the
+    # billing subscription) for single-subscription setups. Same pattern
+    # as the credits webhook.
+    signature_key = (
+        os.environ.get("POS_SQUARE_WEBHOOK_SIGNATURE_KEY")
+        or sq_config.webhook_signature_key
+    )
+    if not signature_key:
+        logger.error("POS_SQUARE_WEBHOOK_SIGNATURE_KEY / SQUARE_WEBHOOK_SIGNATURE_KEY not configured — refusing to process")
         return Response(status_code=503)
 
     if not verify_webhook_signature(
         body=body,
         signature=signature,
-        signature_key=sq_config.webhook_signature_key,
+        signature_key=signature_key,
         notification_url=app_config.webhook_url,
     ):
         logger.warning("Webhook signature verification failed")
@@ -267,11 +275,18 @@ async def clover_webhook(
     Clover payload: {appId, merchants: {MERCHANT_ID: [{type, objectId, ts}]}}
     Must respond 200 within 5 seconds.
     """
-    # TODO: Implement Clover webhook signature verification
-    # See: https://docs.clover.com/docs/webhooks
-    logger.warning("Clover webhook received without signature verification")
-
     body = await request.body()
+
+    # ── Signature verification (HMAC-SHA256 with app secret) ──
+    if not cl_config.app_secret:
+        logger.error("CLOVER_APP_SECRET not configured — refusing to process Clover webhook (fail closed)")
+        return Response(status_code=503)
+
+    from ...clover.oauth import CloverOAuthManager
+    signature = request.headers.get("x-clover-auth", "")
+    if not CloverOAuthManager().verify_webhook_signature(payload=body, signature=signature):
+        logger.warning("Clover webhook signature verification failed")
+        return Response(status_code=403)
 
     try:
         event = json.loads(body)
@@ -328,11 +343,20 @@ async def toast_webhook(
     Toast sends: {eventType, restaurantGuid, webhookId, data: {...}}
     Must respond 200 quickly.
     """
-    # TODO: Implement Toast webhook signature verification
-    # See: https://doc.toasttab.com/openapi/webhooks/
-    logger.warning("Toast webhook received without signature verification")
-
     body = await request.body()
+
+    # ── Fail closed: require the webhook secret to be configured ──
+    # No verification helper exists in src/toast/ yet, so the actual
+    # signature check is a marked follow-up — but we no longer process
+    # arbitrary unsigned payloads when the secret isn't even set.
+    toast_secret = os.environ.get("TOAST_WEBHOOK_SECRET", "")
+    if not toast_secret:
+        logger.error("TOAST_WEBHOOK_SECRET not configured — refusing to process Toast webhook (fail closed)")
+        return Response(status_code=503)
+
+    # TODO(follow-up): verify the Toast webhook signature against
+    # toast_secret. See: https://doc.toasttab.com/openapi/webhooks/
+    logger.warning("Toast webhook accepted WITHOUT signature verification — helper pending in src/toast/")
 
     try:
         event = json.loads(body)
@@ -397,7 +421,6 @@ async def _get_connection_by_provider_merchant(provider: str, merchant_id: str) 
         "pos_connections",
         filters={
             "provider": f"eq.{provider}",
-            # P6: schema column is external_merchant_id.
             "external_merchant_id": f"eq.{merchant_id}",
             "status": "eq.connected",
         },
@@ -407,6 +430,5 @@ async def _get_connection_by_provider_merchant(provider: str, merchant_id: str) 
         return None
 
     conn = rows[0]
-    # P6: schema column is access_token_enc.
     conn["access_token"] = conn.get("access_token_enc", "")
     return conn

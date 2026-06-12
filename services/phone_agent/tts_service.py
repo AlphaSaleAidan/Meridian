@@ -9,8 +9,11 @@ which is what Twilio Media Streams expects (mu-law decoded to linear).
 """
 import asyncio
 import logging
+import os
+import re
 from typing import AsyncGenerator, Optional
 
+import httpx
 import numpy as np
 from pipecat.services.ai_services import TTSService
 from pipecat.frames.frames import AudioRawFrame, StartFrame, EndFrame
@@ -35,6 +38,14 @@ def _resample_to_8khz(audio: np.ndarray, source_rate: int = _KOKORO_NATIVE_RATE)
 def _to_int16_bytes(audio: np.ndarray) -> bytes:
     clipped = np.clip(audio, -1.0, 1.0)
     return (clipped * 32767).astype(np.int16).tobytes()
+
+
+def _pcm16_to_float(audio_bytes: bytes) -> np.ndarray:
+    # binary_output can return an odd byte count if a chunk is truncated; drop the
+    # trailing half-sample so np.frombuffer doesn't raise.
+    if len(audio_bytes) % 2:
+        audio_bytes = audio_bytes[:-1]
+    return np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
 
 
 class KokoroTTS(TTSService):
@@ -168,8 +179,104 @@ class CosyVoiceTTS(TTSService):
         await super().stop(frame)
 
 
+# --- Telnyx hosted TTS ---
+
+TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
+# The synthesis endpoint is /v2/text-to-speech/speech (the bare /v2/text-to-speech
+# path 404s — the public website docs are wrong; the telnyx-python SDK is right).
+TELNYX_TTS_URL = "https://api.telnyx.com/v2/text-to-speech/speech"
+# Telnyx hosts Kokoro with the SAME voice ids as our local Kokoro, so the mapping
+# is just "Telnyx.KokoroTTS.{kokoro_voice}". There is no "NaturalHD" model.
+_DEFAULT_TELNYX_VOICE = os.getenv("TELNYX_TTS_VOICE", "Telnyx.KokoroTTS.af_bella")
+
+
+async def _ffmpeg_mp3_to_pcm8k(mp3_bytes: bytes) -> bytes:
+    """Decode Telnyx's MP3 response to 8 kHz signed-16-bit LE mono PCM.
+
+    binary_output returns audio/mpeg (not raw PCM), so we shell out to ffmpeg to
+    decode + downmix + resample in one pass. ffmpeg is installed in the container
+    image (see Dockerfile). Returns b"" on any failure so the call continues.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-i", "pipe:0", "-f", "s16le", "-ac", "1", "-ar", str(_TWILIO_RATE), "pipe:1",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    out, err = await proc.communicate(mp3_bytes)
+    if proc.returncode != 0:
+        logger.error("ffmpeg MP3 decode failed (rc=%s): %s", proc.returncode, err[:300])
+        return b""
+    return out
+
+
+class TelnyxTTSService(TTSService):
+    """Hosted TTS via Telnyx (POST /v2/text-to-speech/speech, binary_output).
+
+    Splits text on sentence boundaries and POSTs one request per sentence so the
+    caller hears the first words while later sentences are still rendering. Telnyx
+    returns MP3 (audio/mpeg); we decode + downmix + resample to 8 kHz mono PCM via
+    ffmpeg for the call transport. On any error we yield nothing so the call continues.
+    """
+
+    def __init__(
+        self,
+        voice: str = _DEFAULT_TELNYX_VOICE,
+        api_key: str = "",
+        output_sample_rate: int = _TWILIO_RATE,
+    ):
+        super().__init__()
+        self._voice = voice
+        self._api_key = api_key or TELNYX_API_KEY
+        self._output_sample_rate = output_sample_rate
+
+    async def run_tts(self, text: str) -> AsyncGenerator[AudioRawFrame, None]:
+        if not self._api_key:
+            logger.error("Telnyx TTS: TELNYX_API_KEY not set")
+            return
+        sentences = [s for s in re.split(r"(?<=[.!?])\s+", text.strip()) if s]
+        if not sentences:
+            return
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            for sentence in sentences:
+                try:
+                    res = await client.post(
+                        TELNYX_TTS_URL,
+                        json={
+                            "text": sentence,
+                            "voice": self._voice,
+                            "output_type": "binary_output",
+                        },
+                        headers={"Authorization": f"Bearer {self._api_key}"},
+                    )
+                    if res.status_code != 200:
+                        logger.error("Telnyx TTS %d: %s", res.status_code, res.text[:300])
+                        continue
+                    pcm8k = await _ffmpeg_mp3_to_pcm8k(res.content)
+                    if not pcm8k:
+                        continue
+                    yield AudioRawFrame(
+                        audio=pcm8k,
+                        sample_rate=self._output_sample_rate,
+                        num_channels=1,
+                    )
+                except Exception as e:
+                    logger.error("Telnyx TTS request failed: %s", e)
+                    continue
+
+    def set_merchant_voice(self, merchant_config):
+        kokoro_voice = resolve_kokoro_voice(merchant_config)
+        self._voice = f"Telnyx.KokoroTTS.{kokoro_voice}"
+
+
 def build_tts(merchant_config) -> TTSService:
-    """Factory: CosyVoice if the merchant has a clone, otherwise Kokoro."""
+    """Factory: Telnyx hosted TTS when TTS_PROVIDER=telnyx; otherwise local
+    (CosyVoice if the merchant has a clone, else Kokoro)."""
+    if os.getenv("TTS_PROVIDER", "local").lower() == "telnyx":
+        tts = TelnyxTTSService()
+        tts.set_merchant_voice(merchant_config)
+        return tts
     clone = getattr(merchant_config, "voice_clone_audio", None)
     if clone:
         tts = CosyVoiceTTS()

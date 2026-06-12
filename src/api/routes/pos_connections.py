@@ -8,7 +8,6 @@ OAuth-based systems (Square, Clover) use their own /api/square/ and
 /api/clover/ routes for the authorization flow, then share the same
 connection status and sync infrastructure here.
 """
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -49,11 +48,6 @@ class ConnectRequest(BaseModel):
     pos_system: str
     credentials: dict
     restaurant_guid: Optional[str] = None
-    # P0: optional concierge attribution. Reps that onboard a merchant
-    # pass their sales_reps.id here so we can credit the connection.
-    # NULL = self-serve / unattributed. Validated as UUID at the DB
-    # boundary by the FK (`pos_connections.connected_by_rep_id`).
-    connected_by_rep_id: Optional[str] = None
 
 
 class DisconnectRequest(BaseModel):
@@ -198,7 +192,26 @@ def _detect_business_type_from_square(merchant: dict) -> str:
     return "restaurant"
 
 
+def _canonical_clover_creds(credentials: dict) -> dict:
+    """Map UI field IDs (clover_api_token, clover_merchant_id) to the canonical
+    access_token / merchant_id keys the Clover client + sync engine expect.
+
+    The OAuth path already supplies canonical keys; this only fills the gaps for
+    the manual key/ID paste form, whose fields are namespaced (clover_*)."""
+    creds = dict(credentials)
+    if not creds.get("access_token"):
+        token = creds.get("clover_api_token") or creds.get("clover_access_token")
+        if token:
+            creds["access_token"] = token
+    if not creds.get("merchant_id"):
+        mid = creds.get("clover_merchant_id")
+        if mid:
+            creds["merchant_id"] = mid
+    return creds
+
+
 async def _test_clover(credentials: dict) -> dict:
+    credentials = _canonical_clover_creds(credentials)
     access_token = credentials.get("access_token", "")
     merchant_id = credentials.get("merchant_id", "")
     if not all([access_token, merchant_id]):
@@ -224,6 +237,9 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
     if not db:
         raise HTTPException(503, "Database not available")
 
+    if req.pos_system == "clover":
+        req.credentials = _canonical_clover_creds(req.credentials)
+
     encrypted_creds = {}
     for key, value in req.credentials.items():
         if not value:
@@ -236,6 +252,13 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
     connection_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
+    # Clover (like Square) is read by both sync paths from the dedicated
+    # access_token_enc column AND credentials_encrypted — mirror the token into
+    # both so the scheduler and the manual sync endpoint resolve it identically.
+    token_column: dict = {}
+    if req.pos_system == "clover" and encrypted_creds.get("access_token"):
+        token_column["access_token_enc"] = encrypted_creds["access_token"]
+
     existing = await db.select(
         "pos_connections",
         filters={
@@ -245,43 +268,32 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
         limit=1,
     )
 
-    # P0: rep attribution. Only write the column when a rep was passed
-    # so we don't clobber an existing attribution on re-connect.
-    rep_id = req.connected_by_rep_id or None
-
     if existing:
         connection_id = existing[0]["id"]
-        update_fields = {
-            "status": "connected",
-            "credentials_encrypted": encrypted_creds,
-            "last_error": None,
-            "updated_at": now,
-        }
-        if rep_id:
-            update_fields["connected_by_rep_id"] = rep_id
         await db.update(
             "pos_connections",
-            update_fields,
+            {
+                "status": "connected",
+                "credentials_encrypted": encrypted_creds,
+                "last_error": None,
+                "updated_at": now,
+                **token_column,
+            },
             filters={"id": f"eq.{connection_id}"},
         )
     else:
-        insert_fields = {
+        await db.insert("pos_connections", {
             "id": connection_id,
             "org_id": req.org_id,
             "provider": req.pos_system,
             "status": "connected",
             "credentials_encrypted": encrypted_creds,
-            # P6: write to `external_merchant_id` (the actual column) —
-            # the schema has no `merchant_id` column, so the previous
-            # write was silently dropped by PostgREST.
             "external_merchant_id": req.restaurant_guid or req.credentials.get("merchant_id", ""),
             "historical_import_complete": False,
             "created_at": now,
             "updated_at": now,
-        }
-        if rep_id:
-            insert_fields["connected_by_rep_id"] = rep_id
-        await db.insert("pos_connections", insert_fields)
+            **token_column,
+        })
 
     org_update = {
         "pos_system": req.pos_system,
@@ -312,27 +324,31 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
 
     await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
 
-    # P0/P1: auto-trigger initial backfill for every provider that
-    # has an API path. Previously Square + Clover were skipped here
-    # on the theory that "OAuth paths run their own backfill from
-    # the callback" — true for Square OAuth, but the wizard's
-    # credential-paste path never went through the callback and so
-    # left the connection idle until a manual /api/pos/sync trigger.
-    #
-    # P3: dispatch onto Celery instead of FastAPI background_tasks
-    # so a large merchant's initial backfill no longer pins an API
-    # worker for the duration. Route → `bulk` queue. Credentials
-    # travel inline on the task; they're already encrypted at rest
-    # on pos_connections by the time .delay() is called, so the
-    # inline copy only exists for the time the task sits in Redis.
-    api_config = get_connector_config(req.pos_system)
-    if req.pos_system in ("toast", "square", "clover") or (
-        api_config and api_config.get("auth_type") != "csv_only"
-    ):
-        from ...workers.tasks import backfill_pos_connection
-        backfill_pos_connection.delay(
-            req.pos_system, req.org_id, connection_id, req.credentials,
+    if req.pos_system == "toast":
+        background_tasks.add_task(
+            _run_toast_backfill,
+            org_id=req.org_id,
+            connection_id=connection_id,
+            credentials=req.credentials,
         )
+    elif req.pos_system == "clover":
+        background_tasks.add_task(
+            _run_clover_backfill,
+            org_id=req.org_id,
+            connection_id=connection_id,
+            access_token=req.credentials.get("access_token", ""),
+            merchant_id=(req.credentials.get("merchant_id", "") or req.restaurant_guid or ""),
+        )
+    elif req.pos_system not in ("square", "clover"):
+        api_config = get_connector_config(req.pos_system)
+        if api_config and api_config.get("auth_type") != "csv_only":
+            background_tasks.add_task(
+                _run_generic_backfill,
+                org_id=req.org_id,
+                connection_id=connection_id,
+                pos_system=req.pos_system,
+                credentials=req.credentials,
+            )
 
     return {
         "success": True,
@@ -370,6 +386,8 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
 
+        await _import_pos_staff(db, org_id, result.employee_cache)
+
         await db.update(
             "pos_connections",
             {
@@ -382,7 +400,7 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         logger.info(f"Toast backfill complete for org={org_id}: {result.summary}")
 
         try:
-            from ...pipeline import MeridianPipeline
+            from ...live_pipeline import MeridianPipeline
             import os
             pipeline = MeridianPipeline(
                 org_id=org_id,
@@ -392,7 +410,10 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
                     or os.environ.get("SUPABASE_SERVICE_KEY", ""),
                 pos_connection_id=connection_id,
             )
-            await pipeline.run_full_sync()
+            # Toast data is already in the DB via the sync engine above.
+            # run_full_sync() would re-fetch from Square (no token here), so
+            # run only the POS-agnostic analytics + portal phases.
+            await pipeline.run_analysis_only()
         except Exception as e:
             logger.warning(f"AI pipeline after Toast backfill failed: {e}")
 
@@ -405,34 +426,63 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
         )
 
 
-async def _run_square_backfill(org_id: str, connection_id: str, credentials: dict):
-    """P1: run Square initial backfill from the credential-paste path.
+async def _import_pos_staff(db, org_id: str, employee_cache: dict[str, str]) -> int:
+    """Best-effort: seed the schedule roster from the POS employee list.
 
-    Mirrors the OAuth-callback backfill kickoff in `oauth.py:run_backfill`.
-    The mapper now persists customer_id + currency thanks to the P0
-    schema migration + mapper updates.
+    Idempotent by name — a re-sync skips employees already on the roster, so the
+    merchant never gets duplicates. Never raises: the manual add-staff path in the
+    Schedule tab is always available even if the POS has no employees or this fails.
     """
+    if not employee_cache:
+        return 0
+    try:
+        existing = await db.select("schedule_staff", filters={"merchant_id": f"eq.{org_id}"})
+        have = {(r.get("name") or "").strip().lower() for r in existing}
+        rows = []
+        for name in employee_cache.values():
+            clean = (name or "").strip()
+            if not clean or clean.lower() in have:
+                continue
+            have.add(clean.lower())
+            rows.append({
+                "id": str(uuid4()),
+                "merchant_id": org_id,
+                "name": clean,
+                "role": "any",
+                "color": "#17C5B0",
+                "hourly_rate": 0,
+                "availability": {},
+                "active": True,
+            })
+        if rows:
+            await db.insert("schedule_staff", rows, return_data=False)
+        logger.info(f"POS staff import for org={org_id}: {len(rows)} new of {len(employee_cache)} POS employees")
+        return len(rows)
+    except Exception as e:
+        logger.warning(f"POS staff import failed for org={org_id}: {e}")
+        return 0
+
+
+async def _run_clover_backfill(org_id: str, connection_id: str, access_token: str, merchant_id: str):
+    """Background task: run Clover initial backfill (manual-paste and OAuth share this)."""
+    from ...clover.client import CloverClient
+    from ...clover.sync_engine import CloverSyncEngine
     from ...db import get_db
-    from ...square.client import SquareClient
-    from ...square.sync_engine import SyncEngine
 
     db = get_db()
-    access_token = credentials.get("access_token", "")
-    if not access_token:
-        logger.error(f"Square backfill: no access_token for org={org_id}")
-        return
 
     try:
-        async with SquareClient(access_token=access_token) as client:
-            engine = SyncEngine(
+        client = CloverClient(access_token=access_token, merchant_id=merchant_id)
+        try:
+            engine = CloverSyncEngine(
                 client=client,
                 org_id=org_id,
                 pos_connection_id=connection_id,
             )
             result = await engine.run_initial_backfill()
+        finally:
+            await client.close()
 
-        if result.locations:
-            await db.batch_upsert("locations", result.locations, on_conflict="org_id,external_id")
         if result.products:
             await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
         if result.transactions:
@@ -440,101 +490,37 @@ async def _run_square_backfill(org_id: str, connection_id: str, credentials: dic
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
 
-        # Sweep §3.9: persist the primary discovered location so the
-        # 15-min incremental sync can scope /v2/orders/search by
-        # location_ids instead of fanning out across every location on
-        # the merchant's account. Mappers populate `external_id` on each
-        # location dict (src/square/mappers.py:84). Only set the field
-        # when we actually discovered locations — otherwise leave the
-        # existing value untouched.
-        update_fields = {
-            "historical_import_complete": True,
-            "last_sync_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if result.locations:
-            primary_ext = result.locations[0].get("external_id")
-            if primary_ext:
-                update_fields["external_location_id"] = primary_ext
+        await _import_pos_staff(db, org_id, result.employee_cache)
 
         await db.update(
             "pos_connections",
-            update_fields,
+            {
+                "historical_import_complete": True,
+                "last_sync_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
             filters={"id": f"eq.{connection_id}"},
         )
-        logger.info(
-            f"Square backfill complete for org={org_id}: "
-            f"{len(result.transactions)} txns, {len(result.transaction_items)} items"
-        )
-    except Exception as e:
-        logger.error(f"Square backfill failed for org={org_id}: {e}", exc_info=True)
-        await db.update(
-            "pos_connections",
-            {"status": "error", "last_error": str(e)[:500]},
-            filters={"id": f"eq.{connection_id}"},
-        )
+        logger.info(f"Clover backfill complete for org={org_id}: {result.summary}")
 
+        try:
+            from ...live_pipeline import MeridianPipeline
+            import os
+            pipeline = MeridianPipeline(
+                org_id=org_id,
+                square_token="",
+                supabase_url=os.environ.get("SUPABASE_URL", ""),
+                supabase_key=os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+                    or os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                pos_connection_id=connection_id,
+            )
+            # Clover data is already in the DB via the sync engine above.
+            # run_full_sync() would re-fetch from Square (no token here), so
+            # run only the POS-agnostic analytics + portal phases.
+            await pipeline.run_analysis_only()
+        except Exception as e:
+            logger.warning(f"AI pipeline after Clover backfill failed: {e}")
 
-async def _run_clover_backfill(org_id: str, connection_id: str, credentials: dict):
-    """P1: run Clover initial backfill from the credential-paste path.
-
-    Mirrors `_run_square_backfill`. The Clover mapper now persists
-    customer_id (already there pre-P0) and currency (added in P0).
-    """
-    from ...db import get_db
-    from ...clover.client import CloverClient
-    from ...clover.sync_engine import CloverSyncEngine
-
-    db = get_db()
-    access_token = credentials.get("access_token", "")
-    merchant_id = credentials.get("merchant_id", "")
-    if not (access_token and merchant_id):
-        logger.error(
-            f"Clover backfill: missing access_token or merchant_id for org={org_id}"
-        )
-        return
-
-    try:
-        client = CloverClient(access_token=access_token, merchant_id=merchant_id)
-        engine = CloverSyncEngine(
-            client=client,
-            org_id=org_id,
-            pos_connection_id=connection_id,
-        )
-        result = await engine.run_initial_backfill()
-
-        if result.locations:
-            await db.batch_upsert("locations", result.locations, on_conflict="org_id,external_id")
-        if result.products:
-            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
-        if result.transactions:
-            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
-        if result.transaction_items:
-            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
-
-        # Sweep §3.9: persist primary discovered location so incremental
-        # sync can scope by location_id. Mappers populate `external_id`
-        # on each location dict (src/clover/mappers.py:98). No-op when
-        # no locations came back.
-        update_fields = {
-            "historical_import_complete": True,
-            "last_sync_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        }
-        if result.locations:
-            primary_ext = result.locations[0].get("external_id")
-            if primary_ext:
-                update_fields["external_location_id"] = primary_ext
-
-        await db.update(
-            "pos_connections",
-            update_fields,
-            filters={"id": f"eq.{connection_id}"},
-        )
-        logger.info(
-            f"Clover backfill complete for org={org_id}: "
-            f"{len(result.transactions)} txns, {len(result.transaction_items)} items"
-        )
     except Exception as e:
         logger.error(f"Clover backfill failed for org={org_id}: {e}", exc_info=True)
         await db.update(
@@ -661,9 +647,6 @@ async def upload_csv(
             "org_id": org_id,
             "provider": pos_system,
             "status": "connected",
-            # P6: schema column is `external_merchant_id`, not
-            # `merchant_id`. CSV-only POS has no upstream merchant id
-            # at upload time, so the value stays empty.
             "external_merchant_id": "",
             "historical_import_complete": True,
             "last_sync_at": now,
@@ -699,9 +682,6 @@ async def get_connections(org_id: str):
             "id": conn["id"],
             "provider": conn.get("provider"),
             "status": conn.get("status"),
-            # P6: schema column is `external_merchant_id` — the prior
-            # `conn.get("merchant_id")` read always returned None
-            # because that column doesn't exist.
             "merchant_id": conn.get("external_merchant_id"),
             "last_sync_at": conn.get("last_sync_at"),
             "historical_import_complete": conn.get("historical_import_complete", False),
@@ -735,7 +715,6 @@ async def disconnect_pos(req: DisconnectRequest):
 
     conn = connections[0]
 
-    # P6: schema column is `access_token_enc`, not `access_token_encrypted`.
     if req.pos_system == "square" and conn.get("access_token_enc"):
         try:
             token = decrypt_token(conn["access_token_enc"])
@@ -800,8 +779,6 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
 
         if pos_system == "square":
             creds = connection.get("credentials_encrypted") or {}
-            # P6: read the correct column; the old `access_token_encrypted`
-            # fallback is dead code now (column never existed).
             token = decrypt_token(creds.get("access_token", "") or connection.get("access_token_enc", ""))
             from ...square.client import SquareClient
             async with SquareClient(access_token=token) as client:
@@ -812,8 +789,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
         elif pos_system == "clover":
             creds = connection.get("credentials_encrypted") or {}
             token = decrypt_token(creds.get("access_token", "") or connection.get("access_token_enc", ""))
-            # P6: `merchant_id` column doesn't exist; only external_merchant_id.
-            merchant_id = connection.get("external_merchant_id", "")
+            merchant_id = connection.get("external_merchant_id", "") or connection.get("merchant_id", "")
             from ...clover.client import CloverClient
             client = CloverClient(access_token=token, merchant_id=merchant_id)
             from ...clover.sync_engine import CloverSyncEngine
@@ -847,7 +823,6 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
                 auth_method=api_config.get("auth_type", "bearer"),
                 base_url=api_config.get("base_url", ""),
                 credentials=decrypted,
-                # P6: read external_merchant_id, the actual schema column.
                 merchant_id=connection.get("external_merchant_id", ""),
             )
             connector = GenericRESTConnector(conn_config, api_config)

@@ -127,6 +127,8 @@ class ReasoningChain:
         return None
 
     def to_dict(self) -> dict:
+        experiment = self.get_phase(ReasoningPhase.EXPERIMENT)
+        experiments = experiment.content.get("experiments", []) if experiment else []
         return {
             "id": self.id,
             "agent_name": self.agent_name,
@@ -137,6 +139,10 @@ class ReasoningChain:
             "findings": self.findings,
             "caveats": self.caveats,
             "thinking": self.thinking,
+            "experiments_total": len(experiments),
+            "experiments_confirmed": sum(
+                1 for e in experiments if e.get("result") == "CONFIRMED"
+            ),
             "total_duration_ms": self.total_duration_ms,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
@@ -414,9 +420,10 @@ class KarpathyReasoning:
                         min_day = min(day_avgs.values())
                         spread = (max_day - min_day) / max(min_day, 1) * 100
                         has_pattern = spread > 15
+                        day_avg_str = ", ".join(f"{k}: {v:.0f}" for k, v in day_avgs.items())
                         result_entry.update({
                             "test_description": "Day-of-week grouping to detect weekly patterns",
-                            "data_used": f"day_averages={{{k}: {v:.0f} for k, v in day_avgs.items()}}",
+                            "data_used": f"day_averages={{{day_avg_str}}}",
                             "result": "CONFIRMED" if has_pattern else "REJECTED",
                             "posterior_probability": round(0.7 if has_pattern else 0.1, 2),
                             "evidence_strength": "MODERATE",

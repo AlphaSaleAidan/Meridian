@@ -5,7 +5,6 @@ Cross-references ReID person tracking with POS data to understand
 how returning customers differ from first-timers in zones visited,
 dwell time, and spend.
 """
-from collections import defaultdict
 from .base import BaseCrossRefAgent
 
 

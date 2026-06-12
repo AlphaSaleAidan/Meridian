@@ -353,16 +353,26 @@ async def stripe_webhook(request: Request):
 
             if db:
                 try:
+                    import json as json_mod
                     sessions = await db.select("checkout_sessions", "org_id", filters={"stripe_subscription_id": f"eq.{subscription_id}"})
                     for s in (sessions or []):
                         if s.get("org_id"):
+                            # Read-modify-write: only flip payment_status —
+                            # don't wipe setup_fee_cents/plan_tier/etc.
+                            org_rows = await db.select("organizations", "metadata", filters={"id": f"eq.{s['org_id']}"}, limit=1)
+                            meta = (org_rows[0].get("metadata") if org_rows else None) or {}
+                            if isinstance(meta, str):
+                                try:
+                                    meta = json_mod.loads(meta)
+                                except Exception:
+                                    meta = {}
                             await db.update("organizations", {
-                                "metadata": '{"payment_status": "cancelled"}',
+                                "metadata": json_mod.dumps({**meta, "payment_status": "cancelled"}),
                             }, filters={"id": f"eq.{s['org_id']}"})
                 except Exception as e:
                     logger.error(f"Webhook processing error: {e}")
 
-    except Exception as e:
+    except Exception:
         logger.exception(f"Webhook processing error for {event_type}")
 
     return {"status": "ok"}

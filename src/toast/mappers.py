@@ -6,7 +6,6 @@ All timestamps are converted to UTC ISO 8601.
 """
 import logging
 from datetime import datetime, timezone
-from typing import Any
 from uuid import uuid4
 
 logger = logging.getLogger("meridian.toast.mappers")

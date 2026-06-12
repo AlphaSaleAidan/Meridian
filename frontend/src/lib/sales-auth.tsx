@@ -56,7 +56,7 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     .from('sales_reps')
     .select('*')
     .eq('email', email)
-    .single()
+    .maybeSingle()
 
   if (repData) return repFromRow(repData)
 
@@ -116,11 +116,21 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
       }
     }, 5000)
 
+    // Only attempt the sales_reps lookup when we're either on a sales-portal
+    // route OR already have a cached rep profile. Otherwise an unrelated
+    // customer-side session triggers a 403 against sales_reps RLS.
+    const onSalesPortalRoute = typeof window !== 'undefined' && (
+      window.location.pathname.startsWith('/us/portal') ||
+      window.location.pathname.startsWith('/canada/portal')
+    )
+    const hasCachedRep = !!loadRep()
+    const shouldResolveRep = onSalesPortalRoute || hasCachedRep
+
     sb.auth.getSession().then(async ({ data: { session } }) => {
       if (!resolved) {
         clearTimeout(timeoutId)
         resolved = true
-        if (session?.user?.email) {
+        if (session?.user?.email && shouldResolveRep) {
           const profile = await resolveRepProfile(session.user.email)
           if (profile) {
             saveRep(profile)
@@ -149,13 +159,13 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         window.location.replace(portalPrefix + '/settings?reset=1')
         return
       }
-      if (session?.user?.email) {
+      if (session?.user?.email && shouldResolveRep) {
         const profile = await resolveRepProfile(session.user.email)
         if (profile) {
           saveRep(profile)
           setRep(profile)
         }
-      } else {
+      } else if (!session) {
         setRep(null)
         clearRep()
       }

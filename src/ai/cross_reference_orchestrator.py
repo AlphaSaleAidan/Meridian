@@ -97,7 +97,7 @@ class CrossReferenceOrchestrator:
         skeletal_data: list[dict] | None = None,
     ) -> dict[str, Any]:
         """Run all 10 cross-reference agents on accumulated data."""
-        from .agents.cross_ref import ALL_CROSS_REF_AGENTS, CrossRefContext, BaseCrossRefAgent
+        from .agents.cross_ref import ALL_CROSS_REF_AGENTS, CrossRefContext
 
         if journeys is None:
             active = self._tracker.get_active_journeys()
@@ -113,8 +113,6 @@ class CrossReferenceOrchestrator:
             vision_visits=vision_visits or [],
             skeletal_data=skeletal_data or [],
         )
-
-        BaseCrossRefAgent.clear_findings()
 
         use_reasoning = os.environ.get("MERIDIAN_REASONING", "1") == "1"
         agents = [cls(ctx) for cls in ALL_CROSS_REF_AGENTS]
@@ -138,11 +136,7 @@ class CrossReferenceOrchestrator:
             else:
                 outputs[agent.name] = result
 
-        self._findings = BaseCrossRefAgent("").get_findings() if False else []
-        try:
-            self._findings = [f for f in BaseCrossRefAgent.clear_findings() or []]
-        except Exception:
-            self._findings = []
+        self._findings = list(ctx.findings)
 
         succeeded = sum(
             1 for v in outputs.values()

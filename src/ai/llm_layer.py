@@ -16,8 +16,25 @@ import re
 import time
 
 from .trace_recorder import record as _trace_record, new_trace_id as _new_trace_id
+from .routing import (
+    DEFAULT_TIER,
+    is_low_confidence,
+    model_group_for_tier,
+    next_tier_up,
+    resolve_tier,
+    tier_model_list,
+)
 
 logger = logging.getLogger("meridian.ai.llm_layer")
+
+# Apply agents/registry.yaml model-tier assignments over the in-code seed map
+# once at import. Fail-soft: a missing/malformed registry leaves the seed map
+# intact (load_registry_tiers + load_agent_tiers both no-op on bad input).
+try:
+    from .routing.registry_loader import load_registry_tiers as _load_registry_tiers
+    _load_registry_tiers()
+except Exception:  # pragma: no cover - defensive only
+    pass
 
 
 def _caller_agent_name(default: str = "llm_layer") -> str:
@@ -62,6 +79,7 @@ def _record_llm_call(
     completion_tokens: int = 0,
     error: str | None = None,
     task_kind: str = "llm_call",
+    tier: str | None = None,
 ) -> None:
     """Best-effort wrapper around trace_recorder.record (already no-ops on
     failure, but the wrapper keeps the call sites tidy)."""
@@ -69,7 +87,7 @@ def _record_llm_call(
         _trace_record(
             trace_id=trace_id,
             agent_name=agent_name,
-            tier=None,  # populated by Step 3 tier resolver
+            tier=tier,
             provider=provider,
             model=model,
             prompt_tokens=prompt_tokens,
@@ -194,56 +212,20 @@ _router = None
 
 
 def _get_router():
-    """Initialize LiteLLM Router with all configured providers for auto-failover + caching."""
+    """Initialize LiteLLM Router with all configured providers for auto-failover + caching.
+
+    The model_list now carries per-tier groups (``meridian-t1/t2/t3``) plus the
+    legacy ``meridian-llm`` group, all built by ``tier_model_list`` from the same
+    provider env detection used here historically. Latency-based routing still
+    picks the fastest available member *within* the selected tier group, so the
+    free-provider failover chain is preserved — tiers only reorder preference.
+    """
     global _router
     if _router is not None:
         return _router
     try:
         from litellm import Router
-        model_list = []
-        if os.environ.get("DEEPSEEK_API_KEY"):
-            model_list.append({
-                "model_name": "meridian-llm",
-                "litellm_params": {
-                    "model": "deepseek/deepseek-chat",
-                    "api_key": os.environ["DEEPSEEK_API_KEY"],
-                    "api_base": "https://api.deepseek.com/v1",
-                },
-            })
-        if os.environ.get("SAMBANOVA_API_KEY"):
-            model_list.append({
-                "model_name": "meridian-llm",
-                "litellm_params": {
-                    "model": "openai/Meta-Llama-3.1-405B-Instruct",
-                    "api_key": os.environ["SAMBANOVA_API_KEY"],
-                    "api_base": "https://api.sambanova.ai/v1",
-                },
-            })
-        if os.environ.get("GROQ_API_KEY"):
-            model_list.append({
-                "model_name": "meridian-llm",
-                "litellm_params": {
-                    "model": "groq/llama-3.3-70b-versatile",
-                    "api_key": os.environ["GROQ_API_KEY"],
-                },
-            })
-        if os.environ.get("CEREBRAS_API_KEY"):
-            model_list.append({
-                "model_name": "meridian-llm",
-                "litellm_params": {
-                    "model": "openai/llama3.1-70b",
-                    "api_key": os.environ["CEREBRAS_API_KEY"],
-                    "api_base": "https://api.cerebras.ai/v1",
-                },
-            })
-        if os.environ.get("OPENAI_API_KEY"):
-            model_list.append({
-                "model_name": "meridian-llm",
-                "litellm_params": {
-                    "model": "gpt-4o-mini",
-                    "api_key": os.environ["OPENAI_API_KEY"],
-                },
-            })
+        model_list = tier_model_list()
         if not model_list:
             return None
         _router = Router(
@@ -255,7 +237,7 @@ def _get_router():
             redis_host=os.environ.get("REDIS_HOST"),
             redis_port=int(os.environ.get("REDIS_PORT", "6379")),
         )
-        logger.info("LiteLLM Router initialized: %d providers, caching ON", len(model_list))
+        logger.info("LiteLLM Router initialized: %d tier-group members, caching ON", len(model_list))
         return _router
     except ImportError:
         return None
@@ -279,21 +261,32 @@ async def _call_api(
     response_format: dict | None = None,
     org_id: str | None = None,
     trace_id: str | None = None,
+    agent_name: str | None = None,
+    tier: str | None = None,
 ) -> dict | None:
     """Call LLM via Router (auto-failover + caching) or direct fallback.
 
+    ``tier`` selects which LiteLLM model-group the Router targets
+    (``meridian-t1/t2/t3``); latency-based routing then picks the fastest
+    available provider *inside* that group. When ``tier`` is None it is
+    resolved from ``agent_name`` (and ultimately ``DEFAULT_TIER``), so legacy
+    callers that pass neither still route through the standard group exactly
+    as before.
+
     Every LiteLLM call records one row to ``swarm_traces`` via
-    ``trace_recorder``. The recorder is no-op-safe so this never adds risk
-    to the happy path.
+    ``trace_recorder`` (now including the resolved ``tier``). The recorder is
+    no-op-safe so this never adds risk to the happy path.
     """
     tid = trace_id or _new_trace_id()
-    agent_name = _caller_agent_name()
+    agent_name = agent_name or _caller_agent_name()
+    tier = tier or resolve_tier(agent_name)
+    group = model_group_for_tier(tier)
 
     router = _get_router()
     if router:
         start = time.perf_counter()
         try:
-            kwargs = {"model": "meridian-llm", "messages": messages, "temperature": 0.3, "max_tokens": 2000}
+            kwargs = {"model": group, "messages": messages, "temperature": 0.3, "max_tokens": 2000}
             if response_format:
                 kwargs["response_format"] = response_format
             if org_id:
@@ -307,21 +300,21 @@ async def _call_api(
             ok = result is not None
             _record_llm_call(
                 trace_id=tid, agent_name=agent_name, provider=provider, model=model,
-                latency_ms=latency_ms, success=ok,
+                latency_ms=latency_ms, success=ok, tier=tier,
                 prompt_tokens=ptok, completion_tokens=ctok,
                 error=None if ok else "non_json_response",
             )
             if result:
-                logger.info("LLM response via Router (cached=%s)", getattr(resp, '_hidden_params', {}).get('cache_hit', False))
+                logger.info("LLM response via Router tier=%s (cached=%s)", tier, getattr(resp, '_hidden_params', {}).get('cache_hit', False))
                 return result
         except Exception as e:
             latency_ms = int((time.perf_counter() - start) * 1000)
             _record_llm_call(
                 trace_id=tid, agent_name=agent_name, provider="router",
-                model="meridian-llm", latency_ms=latency_ms, success=False,
+                model=group, latency_ms=latency_ms, success=False, tier=tier,
                 error=repr(e)[:200],
             )
-            logger.warning("Router call failed: %s", e)
+            logger.warning("Router call failed (tier=%s): %s", tier, e)
 
     try:
         from litellm import acompletion
@@ -341,7 +334,7 @@ async def _call_api(
                 _record_llm_call(
                     trace_id=tid, agent_name=agent_name,
                     provider=provider or "openai", model=resp_model or model,
-                    latency_ms=latency_ms, success=ok,
+                    latency_ms=latency_ms, success=ok, tier=tier,
                     prompt_tokens=ptok, completion_tokens=ctok,
                     error=None if ok else "non_json_response",
                 )
@@ -353,7 +346,7 @@ async def _call_api(
                 _record_llm_call(
                     trace_id=tid, agent_name=agent_name,
                     provider="openai", model=model,
-                    latency_ms=latency_ms, success=False,
+                    latency_ms=latency_ms, success=False, tier=tier,
                     error=repr(e)[:200],
                 )
                 logger.warning(f"LiteLLM {model} failed: {e}")
@@ -367,14 +360,42 @@ async def _call_llm(
     messages: list[dict],
     response_format: dict | None = None,
     org_id: str | None = None,
+    agent_name: str | None = None,
+    tier: str | None = None,
 ) -> dict | None:
     """Route LLM: Router (auto-failover across all providers) → local → direct API.
 
-    A single ``trace_id`` is propagated so the router attempt and the local
-    fallback (if any) share a correlation key in ``swarm_traces``.
+    Adds masterplan Phase 3 tiering: the call targets the model-group for the
+    agent's resolved tier, and a *low-confidence* answer (None/empty or an
+    explicit ``confidence`` below threshold) is retried exactly once at the
+    next tier up — bounded to one escalation step so cost stays predictable.
+
+    A single ``trace_id`` is propagated so the router attempt, any escalation,
+    and the local fallback share a correlation key in ``swarm_traces``.
     """
     tid = _new_trace_id()
-    result = await _call_api(messages, response_format, org_id=org_id, trace_id=tid)
+    agent_name = agent_name or _caller_agent_name()
+    tier = tier or resolve_tier(agent_name)
+
+    result = await _call_api(
+        messages, response_format, org_id=org_id, trace_id=tid,
+        agent_name=agent_name, tier=tier,
+    )
+
+    # One-step confidence escalation: only when we got a parseable answer that
+    # self-reports low confidence. A None result means the router/API failed
+    # outright, which the local fallback below already handles.
+    if result is not None and is_low_confidence(result):
+        up = next_tier_up(tier)
+        if up is not None:
+            logger.info("Low-confidence result on tier=%s — escalating once to tier=%s", tier, up)
+            escalated = await _call_api(
+                messages, response_format, org_id=org_id, trace_id=tid,
+                agent_name=agent_name, tier=up,
+            )
+            if escalated is not None:
+                return escalated
+
     if result:
         return result
     logger.info("Router unavailable — trying local LLM")
