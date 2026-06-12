@@ -7,8 +7,8 @@
 - Router: react-router-dom v6 (NOT Next.js file routing)
 
 ## Hosting
-- Frontend: Railway (NOT Vercel)
-- Backend: FastAPI on Railway (api.meridian.tips)
+- Frontend: Contabo VPS nginx serving static `/root/Meridian/frontend/dist` (NOT Vercel, NOT Railway) — manual builds from the canonical tag, see `docs/30-operations/frontend-deploy.md`
+- Backend: FastAPI on Railway (api.meridian.tips) — auto-deploys from `main` on merge
 - DB: Supabase (PostgreSQL)
 - Domain: meridian.tips
 
@@ -37,7 +37,7 @@
 
 ## Common Mistakes to Avoid
 - This is NOT Next.js — no `next/image`, no `next/link`, no `getServerSideProps`
-- Frontend is NOT on Vercel — it's Railway
+- Frontend is NOT on Vercel and NOT on Railway — it's static nginx on the Contabo box, deployed manually from the canonical tag
 - Do NOT use CDN fonts — Geist is installed via npm
 - Do NOT upgrade Three.js past 0.184 without checking r158+ breaking changes
 - Always run `cat frontend/package.json` before adding dependencies
@@ -52,7 +52,7 @@
 ## AI / LLM Stack
 - Local Qwen 2.5 7B (Q4_K_M.gguf) on llama-cpp-server port 8002
 - CPU-only inference (no GPU), 4 threads, 4096 context
-- 50 AI agents with Karpathy 5-phase reasoning (THINK → HYPOTHESIZE → EXPERIMENT → SYNTHESIZE → REFLECT)
+- 48 registered AI agents (agents/registry.yaml) with Karpathy 5-phase reasoning (THINK → HYPOTHESIZE → EXPERIMENT → SYNTHESIZE → REFLECT)
 - Swarm trainer runs every 300s, stores patterns to .claude-flow/data/learned-patterns.jsonl
 - Embeddings: all-MiniLM-L6-v2 (384-dim), stored in data/vectors.db
 

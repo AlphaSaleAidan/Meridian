@@ -1,21 +1,27 @@
 # Meridian Intelligence Platform
 
 > AI-powered POS analytics for independent businesses (restaurants, smoke shops, cafes, retail, auto shops, dispensaries).
-> FastAPI + React/Vite + Supabase + Square/Clover/Toast + Celery/Redis + 41-agent AI swarm.
+> FastAPI + React/Vite + Supabase + Square/Clover/Toast + Celery/Redis + 48-agent AI swarm (registry: agents/registry.yaml).
 
 > **Security posture (post 2026-05-31 audit merges):** All four SEV-0 customer-readiness gaps and the canada.py JWT-forwarding work are now on `main`. See [`docs/AUTH_HARDENING_PLAN.md`](docs/AUTH_HARDENING_PLAN.md) for the original findings and the resolution commits (`dbc333f`, `c9cbb07`).
 
-## Runtime
+## Deployment Reality (read this before deploying ANYTHING)
+
+- **Backend (`api.meridian.tips`) = Railway**, auto-deploys from `main` on merge. Don't run `railway up`; merge → watch → verify `/health` (route check: 403 = exists+gated, 404 = missing).
+- **Frontend (`meridian.tips`) = Contabo nginx serving static `/root/Meridian/frontend/dist`** — NOT Vercel, NOT Railway, NOT auto-deployed. Built MANUALLY, only from the canonical tag lineage (`canada-portal-canonical` until PR #90 merges). Builds MUST have `frontend/.env.local` present (gitignored) or the site silently ships demo-mode with broken Supabase auth. Full procedure: `docs/30-operations/frontend-deploy.md`.
+- **Two clobber incidents (2026-06-08, 2026-06-12)** came from deploying frontend builds of `main`/WIP trees. Before any dist swap: `cp -a` backup; after: verify the served bundle hash via `curl` + nginx access.log (trust logs over mtimes).
+
+## Runtime (Contabo box 209.126.80.45)
 
 | Service | Location | Runtime | Port |
 |---------|----------|---------|------|
-| API | `src/api/app.py` | pm2 `meridian-api` (4 workers, 512MB) | :8000 |
-| Frontend | `frontend/` | Vercel (meridian.tips) | — |
+| API (local instance) | `src/api/app.py` | pm2 `meridian-api` (4 workers, 512MB) — public API is Railway, see above | :8000 |
+| Frontend | `frontend/dist` | nginx static (manual canonical-tag deploys) | :443 |
 | Workers | `src/workers/` | pm2 `celery-worker` + `celery-beat` | — |
-| Scraper | `scripts/scraper-daemon.py` | pm2 `scraper` | — |
-| DeerFlow | `services/deerflow/` | pm2 `deerflow` | :8004 |
+| Scraper | `scripts/scraper-daemon.py` | pm2 `scraper` (paused — Chrome OOM) | — |
+| DeerFlow | `services/deerflow/` | pm2 `deerflow` (`app.gateway.app:app`) | :8001 |
 | Qwen Server | `data/models/` | pm2 `qwen-server` (12GB max) | :8002 |
-| Phone Agent | `services/phone_agent/` | Fonoster + Pipecat | WS |
+| Phone Agent | `services/phone_agent/` + `src/api/routes/phone.py` | Telnyx TeXML, turn-based (streaming/Pipecat path is DEAD — do not revive) | webhook |
 | Garry | `/root/garry` | pm2 `garry` (self-healing agent) | — |
 | DB | Supabase (kbuzufjxwflrutowwnfl) | hosted (24 tables, 4 mat views) | — |
 | Cache | Redis | systemd | :6379 |
@@ -32,9 +38,9 @@ Server: 209.126.80.45 (AMD EPYC 12c, 48GB RAM, 484GB disk)
 
 ## LLM Routing Chain
 
-`llm_layer.py` routes: DeepSeek V3 → SambaNova (free, 405B) → Groq (free, 70B) → Local Llama → Cerebras (free, 70B) → OpenAI (fallback).
+`llm_layer.py` routes through LiteLLM Router **tier groups** (`meridian-t1/t2/t3`) — per-agent tiers come from `agents/registry.yaml` via `src/ai/routing/registry_loader.py`; latency-based routing picks the fastest provider inside the group. Fallback chain: DeepSeek V3 → SambaNova (free, 405B) → Groq (free, 70B) → Local Llama → Cerebras (free, 70B) → OpenAI. Every call is teed to `swarm_traces` (`src/ai/trace_recorder.py`).
 
-Env vars: `DEEPSEEK_API_KEY`, `SAMBANOVA_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY`
+Env vars: `DEEPSEEK_API_KEY`, `SAMBANOVA_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API_KEY`, `OPENAI_API_KEY`. When `OPENAI_BASE_URL` is set, calls route via the local LiteLLM gateway on :4000 (kimi-k2.6-gateway branch).
 
 ## Backend Map (`src/`)
 
@@ -42,7 +48,7 @@ Env vars: `DEEPSEEK_API_KEY`, `SAMBANOVA_API_KEY`, `GROQ_API_KEY`, `CEREBRAS_API
 
 **AI Engine** (`src/ai/`): engine.py (main orchestrator), llm_layer.py (LiteLLM Router with auto-failover + caching across DeepSeek/SambaNova/Groq/Cerebras/OpenAI), swarm_trainer.py, agent_memory.py, reasoning/karpathy_loop.py, cross_reference_orchestrator.py, dspy_optimizer.py (lazy-loaded)
 
-**41 AI Agents** (`src/ai/agents/`): All inherit base.py — action_prioritizer, basket_analysis, customer_ltv, customer_recognizer, day_of_week, demographic_profiler, discount_analyzer, dwell_time, employee_perf, feature_engineer, foot_traffic, forecaster, and 29 more. Subdirs: alerts/, canada/, economics/, financial/, freemocap/, industry_templates/, reid/, scheduling/, security/
+**AI Agents (48 registered — agents/registry.yaml)** (`src/ai/agents/`): All inherit base.py — action_prioritizer, basket_analysis, customer_ltv, customer_recognizer, day_of_week, demographic_profiler, discount_analyzer, dwell_time, employee_perf, feature_engineer, foot_traffic, forecaster, and 29 more. Subdirs: alerts/, canada/, economics/, financial/, freemocap/, industry_templates/, reid/, scheduling/, security/
 
 **Predictive** (`src/ai/predictive/`): churn_warning, demand_forecast, dynamic_pricing, goal_tracker, root_cause, scenario_engine
 
@@ -77,7 +83,7 @@ Emergency rollback knob: `TENANCY_ENFORCEMENT_DISABLED=true` flips `require_org_
 `canada.py` and `us.py` admin endpoints now **forward the caller's JWT** to Supabase (`Bearer {user_token}`) so RLS enforces row-level access at the DB layer; the service-role key is only used for `/auth/v1/admin/users` calls (where Supabase rejects non-service tokens) and as a fall-through when the user token is somehow missing.
 
 Customer-facing flows:
-- Customer accounts are created server-side (no plaintext password ever leaves the backend or hits the frontend) and the customer sets their own password via `supabase.auth.resetPasswordForEmail()` after onboarding.
+- Customer accounts are created server-side. Since PR #91, provisioning returns a readable temp password (`Mer-XXXXXXXX`) to the rep and forces a first-login reset via the `must_reset_password` metadata flag — deliberately NOT relying on Supabase recovery email (its SMTP path has burned us; see `docs/runbooks/`). The existing-user reset path is restricted to Canada customer-owner accounts (account-takeover guard, `canada.py`).
 - SLA signatures captured during onboarding persist to `sla_signatures` with IP + UA audit trail; agreement text is the legally binding record.
 
 Rate-limited routes: `/api/canada/rep-signup` (5/hr per IP) via `HourRateLimiter`.
@@ -86,15 +92,15 @@ Rate-limited routes: `/api/canada/rep-signup` (5/hr per IP) via `HourRateLimiter
 
 | Service | Stack | Purpose |
 |---------|-------|---------|
-| phone_agent | Pipecat + Kokoro/CosyVoice2 TTS + WhisperLiveKit STT + Ollama | AI phone order agent — Kokoro default, CosyVoice2 when merchant has a voice clone |
+| phone_agent | Telnyx TeXML (turn-based `<Record>` capture) + Telnyx STT + Kokoro/CosyVoice2 TTS | AI phone order agent — Kokoro default, CosyVoice2 when merchant has a voice clone. The Pipecat/Twilio streaming path drifted dead (pipecat 0.0.45→0.0.108) and was never functional — turn-based is the launch path |
 | deerflow | FastAPI + frontend | Visual knowledge graph builder |
 | evolver | Node.js | ML model training/optimization (GEP) |
 | labellerr_cv | Python notebooks | Computer vision labeling/training |
 | postal | Docker | Self-hosted email delivery |
 | training_video_pipeline | Python | Video generation/processing |
 
-### Phone Agent Pipeline
-Fonoster audio → WhisperLiveKit STT → Ollama LLM (llama3.3:70b) → TTS → Fonoster audio.
+### Phone Agent Pipeline (live, turn-based)
+Telnyx TeXML webhook → `<Record>` turn capture → Telnyx STT → LLM brain (DeepSeek 8s ceiling → SambaNova → local Qwen failover, `src/api/routes/phone.py`) → TTS → TeXML response. Live-call-tested (PRs #82/#83/#85). TeXML app "Meridian Phone Calls" = `TELNYX_VOICE_CONNECTION_ID`.
 TTS factory: `build_tts(merchant_config)` returns `CosyVoiceTTS` when the merchant has a `ref_audio` clone, otherwise `KokoroTTS` (Kokoro-82M, Apache-2.0, ~300 MB, realtime on CPU). Voice profiles: US (female, north american), Canada (female, canadian). Both implementations live in `services/phone_agent/tts_service.py`.
 
 ## Frontend Map (`frontend/src/`)
@@ -137,8 +143,16 @@ Configured in `.claude/settings.json`:
 - Money in cents (integer), display with CA$ for Canada
 - Email: Postal primary, Resend fallback
 - SMS: Telnyx primary, Twilio fallback
-- Pre-push: `cd frontend && npm run build` must pass (Vercel auto-deploys main)
+- Pre-push: `cd frontend && npm run build` must pass. Merging to `main` auto-deploys the BACKEND to Railway prod — never merge without Aidan's review. Frontend never auto-deploys (manual canonical-tag procedure only).
 - Max 500 lines per file — split if larger
 - Heavy ML packages (torch, prophet, dspy, mem0ai) are lazy-imported — don't add to top-level imports
 - LLM calls go through `src/ai/llm_layer.py` — never call OpenAI/DeepSeek directly from route handlers
-- Plaintext customer passwords never leave the backend — use `supabase.auth.resetPasswordForEmail()` for account setup
+- Customer account setup: rep-shared temp password + forced first-login reset (PR #91 flow) — do NOT route account setup through Supabase recovery email
+
+## Product Doctrine (decisions, not bugs)
+
+- **US and Canada portals are intentionally different products.** Never unify their UI; demos must reflect the difference.
+- **Rep commission system is intentionally unbuilt.** `calculate_commission` has no callers; the fraction-vs-percent rate units are unresolved BY DESIGN. Do not wire it or "fix" the units — a unique pay structure is still being designed.
+- **POS beta (P0–P6 pipeline, PR #94) is gated on a real merchant connection test.** Everything so far is verified on synthetic payloads only; the first real Square/Clover/Toast merchant IS the test. See `docs/known_issues.md` §4.
+- **Canonical Canada frontend = tag `canada-portal-canonical`** until PR #90 merges; main-built frontend deploys revert the portal (it happened twice).
+- Open technical debt is tracked in `docs/known_issues.md` — keep it authoritative.

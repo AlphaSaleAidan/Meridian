@@ -2,8 +2,9 @@
 
 ## Agent Registry
 
-Meridian runs a 20-agent swarm for POS analytics and vision intelligence.
-Each agent specializes in a specific analytical domain.
+**Source of truth: `agents/registry.yaml` — 48 registered agents** (POS analytics, vision, cross-reference, alerts, Canada-specific, economics, scheduling). The tables below are a curated overview, not the full list; trust the registry and `src/ai/agents/` over this file.
+
+Model-tier assignments come from the registry and are applied at import by `src/ai/routing/registry_loader.py`; the LiteLLM Router targets tier groups `meridian-t1/t2/t3` (`src/ai/llm_layer.py`). Every LLM call is teed to `swarm_traces` via `src/ai/trace_recorder.py` for baseline measurement.
 
 ### POS Analytics Agents
 | Agent | File | Domain |
@@ -41,7 +42,7 @@ Each agent specializes in a specific analytical domain.
 ### Phone Order Agent
 | Agent | File | Domain |
 |-------|------|--------|
-| Phone Agent | `services/phone_agent/` | AI phone order taking via LiveKit |
+| Phone Agent | `services/phone_agent/` + `src/api/routes/phone.py` | AI phone ordering via Telnyx TeXML, turn-based (streaming path is dead — see CLAUDE.md) |
 
 ## Self-Evolution Protocol (GEP)
 
