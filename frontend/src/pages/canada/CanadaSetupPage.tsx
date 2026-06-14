@@ -1,48 +1,57 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { getAuthHeaders } from '@/lib/supabase'
+import POSSystemPicker from '@/components/POSSystemPicker'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import {
-  MapPin, ArrowRight, CheckCircle2, Loader2, Lock,
+  MapPin, ArrowRight, CheckCircle2, Loader2, Wifi,
   LayoutDashboard,
 } from 'lucide-react'
 
-type Step = 'welcome' | 'password' | 'done'
+// The password reset is owned by the login page (CanadaLoginPage forces it on
+// first login via the must_reset_password flag), so this wizard does NOT prompt
+// for a password again — otherwise the customer would be asked to reset twice.
+// Flow: welcome -> connect POS -> done.
+type Step = 'welcome' | 'pos' | 'done'
 
 export default function CanadaSetupPage() {
   const navigate = useNavigate()
-  const { user, org, markOnboarded } = useAuth()
+  const { user, org, connectPos, markOnboarded } = useAuth()
 
   const [step, setStep] = useState<Step>('welcome')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
+  const [posProvider, setPosProvider] = useState<string | null>(null)
 
   if (!user || !org) {
     navigate('/canada/login', { replace: true })
     return null
   }
 
-  async function handleChangePassword() {
-    if (newPassword.length < 8) { setError('Password must be at least 8 characters'); return }
-    if (newPassword !== confirmPassword) { setError('Passwords do not match'); return }
+  async function handleConnectPos() {
+    if (!posProvider) { setError('Please select your POS system'); return }
     setLoading(true)
     setError(null)
     try {
-      if (!supabase) { setStep('done'); return }
-      const result = await Promise.race([
-        supabase.auth.updateUser({ password: newPassword }),
-        new Promise<{ error: { message: string } }>(resolve =>
-          setTimeout(() => resolve({ error: { message: '' } }), 5000)
-        ),
-      ])
-      if (result.error?.message) { setError(result.error.message); return }
+      // Record the chosen POS as pending — credentials are entered later from
+      // the dashboard, so onboarding isn't blocked on the customer having API
+      // keys on hand. Mirrors CanadaCustomerOnboardingWizard.handlePosNext.
+      const apiUrl = import.meta.env.VITE_API_URL || ''
+      if (org?.org_id) {
+        const headers = await getAuthHeaders()
+        await fetch(`${apiUrl}/api/pos/select`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ org_id: org.org_id, pos_system: posProvider, connection_status: 'pending' }),
+        })
+      } else {
+        const err = await connectPos(posProvider, '')
+        if (err && err !== 'API key is required') { setError(err); setLoading(false); return }
+      }
       setStep('done')
-    } catch {
-      setStep('done')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Connection failed')
     } finally {
       setLoading(false)
     }
@@ -53,10 +62,10 @@ export default function CanadaSetupPage() {
     navigate('/canada/dashboard', { replace: true })
   }
 
+  function handleSkipPos() { goToDashboard() }
   function handleFinish() { goToDashboard() }
 
   const firstName = org.owner_name?.split(' ')[0] || 'there'
-  const inputCls = 'w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#00d4aa]/50 focus:ring-1 focus:ring-[#00d4aa]/20 transition-colors'
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
@@ -74,10 +83,10 @@ export default function CanadaSetupPage() {
 
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 mb-8">
-          {(['welcome', 'password', 'done'] as Step[]).map((s, i) => (
+          {(['welcome', 'pos', 'done'] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center">
               <div className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                step === s ? 'bg-[#00d4aa]' : i < ['welcome', 'password', 'done'].indexOf(step) ? 'bg-[#00d4aa]/50' : 'bg-[#1F1F23]'
+                step === s ? 'bg-[#00d4aa]' : i < ['welcome', 'pos', 'done'].indexOf(step) ? 'bg-[#00d4aa]/50' : 'bg-[#1F1F23]'
               }`} />
               {i < 2 && <div className="w-8 h-[1px] bg-[#1F1F23]" />}
             </div>
@@ -104,7 +113,7 @@ export default function CanadaSetupPage() {
               Let's get your dashboard set up — it takes less than 2 minutes.
             </p>
             <button
-              onClick={() => setStep('password')}
+              onClick={() => setStep('pos')}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
             >
               Get Started <ArrowRight size={16} />
@@ -112,34 +121,34 @@ export default function CanadaSetupPage() {
           </div>
         )}
 
-        {/* CHANGE PASSWORD */}
-        {step === 'password' && (
+        {/* CONNECT POS */}
+        {step === 'pos' && (
           <div className="card p-6 sm:p-8 border border-[#1F1F23]">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-10 h-10 rounded-xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center">
-                <Lock size={18} className="text-[#00d4aa]" />
+                <Wifi size={18} className="text-[#00d4aa]" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-[#F5F5F7]">Set Your Password</h2>
-                <p className="text-[11px] text-[#A1A1A8]">Replace the temporary password with one you'll remember</p>
+                <h2 className="text-base font-bold text-[#F5F5F7]">Connect Your POS</h2>
+                <p className="text-[11px] text-[#A1A1A8]">Link your point-of-sale system to start receiving insights</p>
               </div>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">New Password</label>
-                <input type="password" value={newPassword} onChange={e => { setNewPassword(e.target.value); setError(null) }}
-                  placeholder="At least 8 characters" className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Confirm Password</label>
-                <input type="password" value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setError(null) }}
-                  placeholder="Enter password again" className={inputCls} />
-              </div>
-              <button onClick={handleChangePassword} disabled={loading}
-                className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all">
-                {loading ? <Loader2 size={16} className="animate-spin" /> : <><ArrowRight size={16} /> Save & Continue</>}
-              </button>
+            <div className="mb-6">
+              <POSSystemPicker
+                value={posProvider}
+                onChange={(posKey: string) => { setPosProvider(posKey); setError(null) }}
+                mode="new-customer"
+                portalContext="canada"
+                currency="CAD"
+              />
             </div>
+            <button onClick={handleConnectPos} disabled={loading || !posProvider}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all">
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <><Wifi size={16} /> Connect</>}
+            </button>
+            <button onClick={handleSkipPos} className="w-full mt-3 text-center text-[11px] text-[#A1A1A8] hover:text-white transition-colors">
+              Skip — I'll connect later
+            </button>
           </div>
         )}
 
@@ -151,7 +160,7 @@ export default function CanadaSetupPage() {
             </div>
             <h2 className="text-xl font-bold text-[#F5F5F7] mb-2">You're All Set!</h2>
             <p className="text-sm text-[#A1A1A8] mb-6">
-              Your account is ready. Head to your dashboard to connect your POS and start receiving insights.
+              Your dashboard will start populating with insights as your POS data comes in.
             </p>
             <button onClick={handleFinish}
               className="w-full flex items-center justify-center gap-2 py-3 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">
