@@ -190,12 +190,15 @@ class CloverDataMapper:
         """
         Clover Order → Meridian transactions table.
 
-        Mapping:
-          order.id             → external_id
-          order.total          → total_cents
-          order.clientCreatedTime → transaction_time
-          order.employee.id    → employee_name (via cache)
-          order.state          → status
+        Mapping — MUST emit the canonical `transactions` columns (same set the
+        Square mapper writes). PostgREST silently drops unknown keys, and a
+        missing NOT NULL `transaction_at`/`type` fails the insert, so the old
+        `transaction_time`/`status`/`pos_type`/... shape never persisted.
+          order.id                 → external_id
+          order.total              → total_cents
+          order.clientCreatedTime  → transaction_at
+          order.employee.id        → employee_name (via cache)
+          order.state              → type ('sale'/'void')
         """
         external_id = cl_order.get("id", "")
         employee_id = cl_order.get("employee", {}).get("id", "")
@@ -209,13 +212,19 @@ class CloverDataMapper:
         payments = cl_order.get("payments", {}).get("elements", [])
         payment_method = self._determine_payment_method(payments)
 
+        # Canonical sale/void enum the transactions.type column expects.
+        clover_state = (cl_order.get("state") or "").lower()
+        txn_type = "void" if clover_state in ("cancelled", "refunded") else "sale"
+
         return {
             "id": str(uuid4()),
             "org_id": self.org_id,
             "location_id": self.location_id,
             "external_id": external_id,
-            "pos_type": "clover",
-            "transaction_time": _clover_ts_to_iso(cl_order.get("clientCreatedTime")),
+            # transaction_at (NOT transaction_time): the actual NOT NULL column.
+            "transaction_at": _clover_ts_to_iso(cl_order.get("clientCreatedTime")),
+            # type (NOT status): canonical column, matches the Square mapper.
+            "type": txn_type,
             "total_cents": total,
             "subtotal_cents": total - tax,
             "tax_cents": tax,
@@ -224,12 +233,7 @@ class CloverDataMapper:
             "payment_method": payment_method,
             "employee_name": employee_name,
             "employee_external_id": employee_id,
-            "status": self._map_order_state(cl_order.get("state", "")),
-            "item_count": len(cl_order.get("lineItems", {}).get("elements", [])),
             "customer_id": cl_order.get("customers", {}).get("elements", [{}])[0].get("id") if cl_order.get("customers") else None,
-            "is_online": cl_order.get("isOnline", False),
-            "source": cl_order.get("orderType", {}).get("label", "in-store") if cl_order.get("orderType") else "in-store",
-            "created_at": _clover_ts_to_iso(cl_order.get("createdTime")),
         }
 
     def map_line_item(self, cl_line_item: dict, transaction_id: str, transaction_time: str) -> dict[str, Any]:
