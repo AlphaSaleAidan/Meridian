@@ -54,7 +54,7 @@ _DEFAULT_RETURN_TO = "/app/settings"
 
 def _safe_return_to(return_to: str | None) -> str:
     """Allowlist the post-OAuth redirect path. Only Canada merchant routes pass."""
-    if return_to and return_to.startswith("/canada/merchant") or return_to.startswith("/canada/onboard"):
+    if return_to and (return_to.startswith("/canada/merchant") or return_to.startswith("/canada/onboard")):
         return return_to
     return ""
 
