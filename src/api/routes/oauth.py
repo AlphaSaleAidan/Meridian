@@ -202,9 +202,8 @@ async def callback(
                     "id": org_id,
                     "name": f"Org {org_id}",
                     "slug": org_id.lower().replace(" ", "-"),
-                    "plan": "free",
-                    "is_active": True,
                     "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 })
                 logger.info(f"Created organization: {org_id}")
 

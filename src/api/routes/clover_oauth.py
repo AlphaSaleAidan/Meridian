@@ -190,9 +190,8 @@ async def callback(
                     "id": org_id,
                     "name": f"Org {org_id}",
                     "slug": org_id.lower().replace(" ", "-"),
-                    "plan": "free",
-                    "is_active": True,
                     "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 })
 
             token_enc = encrypt_token(tokens["access_token"])
