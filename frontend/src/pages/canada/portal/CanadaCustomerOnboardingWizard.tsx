@@ -8,7 +8,7 @@ import {
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import POSSystemPicker from '@/components/POSSystemPicker'
+import POSLogo from '@/components/POSLogo'
 
 // ── Canada Theme ──
 const T = {
@@ -35,8 +35,6 @@ const cardCls = `rounded-xl p-6 ${T.cardBorder} ${T.cardBg}`
 type Step = 'account' | 'sla' | 'pos' | 'inventory' | 'staff' | 'schedule' | 'checkout' | 'processing' | 'done'
 
 const STEPS: { key: Step; label: string; icon: typeof Store }[] = [
-  { key: 'account', label: 'Account', icon: User },
-  { key: 'sla', label: 'Agreement', icon: FileText },
   { key: 'pos', label: 'Connect POS', icon: Wifi },
   { key: 'staff', label: 'Invite Team', icon: Users },
 ]
@@ -75,7 +73,9 @@ export default function CanadaCustomerOnboardingWizard() {
     price: searchParams.get('price') || '',
   }
 
-  const [step, setStep] = useState<Step>('account')
+  // Account is pre-created by the rep (create-customer) and the customer arrives
+  // already authenticated via the setup link, so onboarding starts at Connect POS.
+  const [step, setStep] = useState<Step>('pos')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -749,15 +749,21 @@ export default function CanadaCustomerOnboardingWizard() {
               <h1 className={`text-xl font-bold ${T.text}`}>Connect Your POS</h1>
               <p className={`text-[13px] ${T.muted} mt-1`}>We'll pull in your transaction history to start generating insights</p>
             </div>
-            <POSSystemPicker
-              value={posProvider}
-              onChange={(posKey: string) => setPosProvider(posKey)}
-              mode="new-customer"
-              portalContext="canada"
-              currency="CAD"
-            />
-            <div className="flex justify-between">
-              <button onClick={() => setStep('account')} className={btnBack}><ArrowLeft size={14} /> Back</button>
+            <div className="grid grid-cols-2 gap-3">
+              {([{ key: 'square' as const, name: 'Square' }, { key: 'clover' as const, name: 'Clover' }]).map(p => {
+                const selected = posProvider === p.key
+                return (
+                  <button key={p.key} type="button" onClick={() => setPosProvider(p.key)}
+                    className={`relative flex flex-col items-center gap-3 px-4 py-6 rounded-xl border transition-all ${selected ? 'border-[#00d4aa] bg-[#00d4aa]/5' : `${T.cardBorder} ${T.cardBg} hover:border-[#00d4aa]/40`}`}>
+                    {selected && <CheckCircle2 size={16} className="absolute top-2 right-2 text-[#00d4aa]" />}
+                    <POSLogo system={p.key} size="lg" />
+                    <span className={`text-[13px] font-semibold ${T.text}`}>{p.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <p className={`text-[11px] ${T.muted} text-center`}>Square and Clover are supported today — more POS systems coming soon.</p>
+            <div className="flex justify-end">
               <button onClick={handlePosNext} disabled={saving || !posProvider} className={btnPrimary}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
                 {saving ? 'Connecting...' : 'Next: Invite Team'} <ArrowRight size={14} />

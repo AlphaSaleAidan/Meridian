@@ -39,7 +39,7 @@ The **US portal is a separate product** (`USPortal*` pages). US and Canada are
 | Feature | Correct state |
 |---------|--------------|
 | POS connection | Done HERE by the customer: `/canada/onboard` wizard ("Connect Your POS" step) or portal settings. This is the only place POS credentials are entered |
-| Onboarding wizard | Trimmed 4-step flow: **Account → Agreement → Connect POS → Invite Team → done** (Inventory, Schedule, Payment steps removed 2026-06-15). Staff step is a copy/text **invite link** (`/canada/staff-join?org=<org_id>`), not manual entry — staff self-add. Reachable via the rep-sent setup link with token. NOTE: the `/canada/staff-join` landing page is a follow-up (not yet built). |
+| Onboarding wizard | Trimmed 2-step flow: **Connect POS → Invite Team → done** (2026-06-15). Account is pre-created by the rep (create-customer) and the customer arrives authenticated, so the wizard **starts at Connect POS** — Account/Agreement/Inventory/Schedule/Payment steps removed. **Connect POS shows only Square + Clover** (the supported providers; full 80-system picker not used here). Staff step is a copy/text **invite link** (`/canada/staff-join?org=<org_id>`) — staff self-add. NOTE: the `/canada/staff-join` landing page is a follow-up (not yet built). |
 | First login | Temp password accepted once, forced reset (`must_reset_password` metadata) |
 
 ## 4. Feature truth table — demo portal
