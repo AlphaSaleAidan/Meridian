@@ -38,10 +38,7 @@ const STEPS: { key: Step; label: string; icon: typeof Store }[] = [
   { key: 'account', label: 'Account', icon: User },
   { key: 'sla', label: 'Agreement', icon: FileText },
   { key: 'pos', label: 'Connect POS', icon: Wifi },
-  { key: 'inventory', label: 'Inventory', icon: Package },
-  { key: 'staff', label: 'Staff', icon: Users },
-  { key: 'schedule', label: 'Schedule', icon: Calendar },
-  { key: 'checkout', label: 'Payment', icon: CreditCard },
+  { key: 'staff', label: 'Invite Team', icon: Users },
 ]
 
 const PROVINCES = [
@@ -50,7 +47,6 @@ const PROVINCES = [
   'Quebec','Saskatchewan','Yukon',
 ]
 
-interface StaffMember { id: string; name: string; role: string; hourlyRate: string }
 interface InventoryItem { id: string; name: string; category: string; costPerUnit: string; supplier: string; unit: string }
 
 function uid(): string {
@@ -109,7 +105,7 @@ export default function CanadaCustomerOnboardingWizard() {
   const inventoryDocRef = useRef<HTMLInputElement>(null)
 
   // Staff
-  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([])
+  const [staffCopied, setStaffCopied] = useState(false)
 
   // Schedule
   const [scheduleImage, setScheduleImage] = useState<File | null>(null)
@@ -270,7 +266,7 @@ export default function CanadaCustomerOnboardingWizard() {
         const err = await connectPos(posProvider, '')
         if (err && err !== 'API key is required') { setError(err); setSaving(false); return }
       }
-      setStep('inventory')
+      setStep('staff')
     } catch (err: any) { setError(err.message || 'Connection failed') }
     finally { setSaving(false) }
   }
@@ -365,27 +361,14 @@ export default function CanadaCustomerOnboardingWizard() {
     setStep('staff')
   }
 
-  // ── Staff helpers ──
-  function addStaffMember() { setStaffMembers(m => [...m, { id: uid(), name: '', role: '', hourlyRate: '' }]) }
-  function updateStaffMember(id: string, key: keyof StaffMember, value: string) {
-    setStaffMembers(m => m.map(s => s.id === id ? { ...s, [key]: value } : s))
-  }
-  function removeStaffMember(id: string) { setStaffMembers(m => m.filter(s => s.id !== id)) }
-
-  async function handleStaffNext() {
-    if (staffMembers.length > 0 && supabase && org) {
-      if (!org.org_id) { setError('Account not fully created — go back and retry signup'); return }
-      setSaving(true)
-      try {
-        const rows = staffMembers.filter(m => m.name.trim()).map(m => ({
-          business_id: org.org_id, email: `${m.name.trim().toLowerCase().replace(/\s+/g, '.')}@placeholder.local`,
-          full_name: m.name, role: m.role === 'Manager' ? 'manager' : 'staff',
-        }))
-        if (rows.length > 0) await supabase.from('business_users').insert(rows)
-      } catch (err: any) { setError(err.message || 'Failed to save staff — please try again'); setSaving(false); return }
-      finally { setSaving(false) }
-    }
-    setStep('schedule')
+  // ── Staff invite link ──
+  const staffInviteLink = `${typeof window !== 'undefined' ? window.location.origin : ''}/canada/staff-join?org=${org?.org_id || ''}`
+  async function copyStaffInvite() {
+    try {
+      await navigator.clipboard.writeText(staffInviteLink)
+      setStaffCopied(true)
+      setTimeout(() => setStaffCopied(false), 2000)
+    } catch { /* clipboard unavailable */ }
   }
 
   // ── Schedule ──
@@ -777,7 +760,7 @@ export default function CanadaCustomerOnboardingWizard() {
               <button onClick={() => setStep('account')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <button onClick={handlePosNext} disabled={saving || !posProvider} className={btnPrimary}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-                {saving ? 'Connecting...' : 'Next: Inventory'} <ArrowRight size={14} />
+                {saving ? 'Connecting...' : 'Next: Invite Team'} <ArrowRight size={14} />
               </button>
             </div>
           </div>
@@ -878,50 +861,37 @@ export default function CanadaCustomerOnboardingWizard() {
           </div>
         )}
 
-        {/* ═══ Staff ═══ */}
+        {/* ═══ Invite Team ═══ */}
         {step === 'staff' && (
           <div className="space-y-4">
             <div className="text-center mb-6">
-              <h1 className={`text-xl font-bold ${T.text}`}>Add Your Team</h1>
-              <p className={`text-[13px] ${T.muted} mt-1`}>We'll use this for labor cost analysis and staffing optimization</p>
+              <h1 className={`text-xl font-bold ${T.text}`}>Invite Your Team</h1>
+              <p className={`text-[13px] ${T.muted} mt-1`}>Share one link with your staff — they add themselves in seconds. Nothing to enter here.</p>
             </div>
-            <div className={`${cardCls} space-y-3`}>
-              {staffMembers.map((member) => (
-                <div key={member.id} className="grid grid-cols-12 gap-2 items-center">
-                  <input type="text" value={member.name} onChange={e => updateStaffMember(member.id, 'name', e.target.value)}
-                    placeholder="Name" className={`col-span-4 px-3 py-2.5 text-[12px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
-                  <select value={member.role} onChange={e => updateStaffMember(member.id, 'role', e.target.value)}
-                    className={`col-span-4 px-3 py-2.5 text-[12px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} focus:outline-none`}>
-                    <option value="">Role...</option>
-                    <option value="Manager">Manager</option><option value="Cashier">Cashier</option>
-                    <option value="Server">Server</option><option value="Cook">Cook</option>
-                    <option value="Barista">Barista</option><option value="Bartender">Bartender</option>
-                    <option value="Host">Host</option><option value="Other">Other</option>
-                  </select>
-                  <input type="number" value={member.hourlyRate} onChange={e => updateStaffMember(member.id, 'hourlyRate', e.target.value)}
-                    placeholder="CA$/hr" className={`col-span-3 px-3 py-2.5 text-[12px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} placeholder-[#6b7a74]/20 ${T.focusBorder} focus:outline-none`} />
-                  <button onClick={() => removeStaffMember(member.id)} className="col-span-1 p-1 text-[#6b7a74]/30 hover:text-red-400 transition-colors">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-              <button onClick={addStaffMember} className={`flex items-center gap-1.5 text-[12px] ${T.accentTxt} hover:text-[#F5F5F7] transition-colors`}>
-                <Plus size={14} /> Add Staff Member
-              </button>
-              {staffMembers.length === 0 && (
-                <p className={`text-[11px] ${T.muted}/40 text-center py-4`}>
-                  Add your team members to unlock labor cost insights and staffing recommendations
-                </p>
-              )}
-            </div>
-            <div className="flex justify-between">
-              <button onClick={() => setStep('inventory')} className={btnBack}><ArrowLeft size={14} /> Back</button>
+            <div className={`${cardCls} space-y-4`}>
               <div className="flex items-center gap-2">
-                <button onClick={() => setStep('schedule')} className={`text-[12px] ${T.muted} hover:text-[#F5F5F7] transition-colors`}>Skip for now</button>
-                <button onClick={handleStaffNext} disabled={saving} className={btnPrimary}>
-                  Next: Schedule <ArrowRight size={14} />
+                <Users size={16} className={T.accentTxt} />
+                <h3 className={`text-[13px] font-semibold ${T.text}`}>Staff invite link</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <input readOnly value={staffInviteLink} onFocus={e => e.currentTarget.select()}
+                  className={`flex-1 px-3 py-2.5 text-[12px] rounded-lg ${T.inputBg} ${T.inputBorder} ${T.text} focus:outline-none`} />
+                <button onClick={copyStaffInvite}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-[12px] font-medium rounded-lg transition-colors ${staffCopied ? 'bg-[#00d4aa]/15 text-[#00d4aa]' : `${T.cardBg} ${T.text} ${T.cardBorder}`}`}>
+                  {staffCopied ? <><CheckCircle2 size={14} /> Copied</> : 'Copy'}
                 </button>
               </div>
+              <a href={`sms:?&body=${encodeURIComponent(`Join the ${account.businessName || 'team'} on Meridian — add yourself here: ${staffInviteLink}`)}`}
+                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-[12px] font-semibold rounded-lg bg-[#00d4aa] text-[#0A0A0B] hover:bg-[#00d4aa]/90 transition-colors">
+                Text it to all staff
+              </a>
+              <p className={`text-[11px] ${T.muted}`}>Everyone who opens the link joins your team automatically — no manual entry needed.</p>
+            </div>
+            <div className="flex justify-between">
+              <button onClick={() => setStep('pos')} className={btnBack}><ArrowLeft size={14} /> Back</button>
+              <button onClick={startProcessing} className={btnPrimary}>
+                Finish Setup <ArrowRight size={14} />
+              </button>
             </div>
           </div>
         )}
