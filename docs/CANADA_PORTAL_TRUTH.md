@@ -38,7 +38,7 @@ The **US portal is a separate product** (`USPortal*` pages). US and Canada are
 
 | Feature | Correct state |
 |---------|--------------|
-| POS connection | Done HERE by the customer: `/canada/onboard` wizard ("Connect Your POS" step) or portal settings. This is the only place POS credentials are entered |
+| POS connection | Done HERE by the customer via **one-click OAuth** — the Connect POS step's Square/Clover card → `GET /api/{square\|clover}/authorize?org_id&return_to=/canada/onboard?oauth=connected`; provider hosts the login, callback stores the encrypted token in `pos_connections`, redirects back, wizard advances to Invite Team. No key entry. Square is live (sandbox default); **Clover authorize 503s until `CLOVER_APP_ID/SECRET` are set**. Ingestion verified by `src/tests/test_pos_ingestion.py` (mock tier, zero keys; auto-runs live sandbox when `SQUARE_ACCESS_TOKEN`/`CLOVER_*` present). KNOWN: Square txns carry `transaction_at/type` (no `currency`); Clover carries `transaction_time/status/pos_type` — schema divergence to reconcile against the `transactions` table. |
 | Onboarding wizard | Trimmed 2-step flow: **Connect POS → Invite Team → done** (2026-06-15). Account is pre-created by the rep (create-customer) and the customer arrives authenticated, so the wizard **starts at Connect POS** — Account/Agreement/Inventory/Schedule/Payment steps removed. **Connect POS shows only Square + Clover** (the supported providers; full 80-system picker not used here). Staff step is a copy/text **invite link** (`/canada/staff-join?org=<org_id>`) — staff self-add. NOTE: the `/canada/staff-join` landing page is a follow-up (not yet built). |
 | First login | Temp password accepted once, forced reset (`must_reset_password` metadata) |
 

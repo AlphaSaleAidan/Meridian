@@ -59,7 +59,7 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 export default function CanadaCustomerOnboardingWizard() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { signup, connectPos, org } = useAuth()
+  const { signup, org } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scheduleInputRef = useRef<HTMLInputElement>(null)
 
@@ -149,6 +149,20 @@ export default function CanadaCustomerOnboardingWizard() {
   const processingPct = Math.min(100, Math.round((processingElapsed / TOTAL_DURATION) * 100))
   const remainingSec = Math.max(0, TOTAL_DURATION - processingElapsed)
   const remainingMin = Math.ceil(remainingSec / 60)
+
+  // POS OAuth callback — provider redirects back here after authorize.
+  // connected → token is stored server-side, advance to Invite Team.
+  // denied → stay on Connect POS and surface the reason.
+  useEffect(() => {
+    const oauth = searchParams.get('oauth')
+    if (oauth === 'connected') {
+      setStep('staff')
+    } else if (oauth === 'denied') {
+      setStep('pos')
+      setError(searchParams.get('error') || 'POS connection was cancelled — you can try again.')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Square checkout callback — clear param after handling to prevent re-trigger
   useEffect(() => {
@@ -253,22 +267,15 @@ export default function CanadaCustomerOnboardingWizard() {
     if (!posProvider) { setError('Please select your POS provider'); return }
     setSaving(true); setError(null)
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || ''
       const orgId = org?.org_id
-      if (orgId) {
-        const headers = await getAuthHeaders()
-        await fetch(`${apiUrl}/api/pos/select`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ org_id: orgId, pos_system: posProvider, connection_status: 'pending' }),
-        })
-      } else {
-        const err = await connectPos(posProvider, '')
-        if (err && err !== 'API key is required') { setError(err); setSaving(false); return }
-      }
-      setStep('staff')
-    } catch (err: any) { setError(err.message || 'Connection failed') }
-    finally { setSaving(false) }
+      if (!orgId) { setError('Account not ready yet — please reopen your setup link.'); setSaving(false); return }
+      // One-click OAuth: provider's hosted authorize flow stores the encrypted
+      // token server-side, then redirects back to /canada/onboard?oauth=connected
+      // (handled by the mount effect, which advances to the Invite Team step).
+      const returnTo = encodeURIComponent('/canada/onboard?oauth=connected')
+      window.location.href =
+        `${API_BASE}/api/${posProvider}/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${returnTo}`
+    } catch (err: any) { setError(err.message || 'Connection failed'); setSaving(false) }
   }
 
   // ── Inventory helpers ──
