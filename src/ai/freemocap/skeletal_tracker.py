@@ -95,7 +95,7 @@ class SkeletalTracker:
             shoulder_y = (l_shoulder[1] + r_shoulder[1]) / 2
             hip_y = (l_hip[1] + r_hip[1]) / 2
             wrist_y = min(l_wrist[1], r_wrist[1])
-            ankle_y = (l_ankle[1] + r_ankle[1]) / 2
+            (l_ankle[1] + r_ankle[1]) / 2
 
             wrist_above_shoulder = wrist_y < shoulder_y - 0.05
             torso_lean = abs(shoulder_y - hip_y)

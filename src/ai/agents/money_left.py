@@ -12,7 +12,7 @@ class MoneyLeftAgent(BaseAgent):
         if not agent_outputs:
             return self._insufficient_data("Outputs from tier 1-4 agents")
 
-        avail = self.get_data_availability()
+        self.get_data_availability()
 
         # ── Phase 2: Path Selection ──────────────────────────
         # Assess quality of upstream agent inputs

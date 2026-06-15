@@ -256,7 +256,7 @@ class ProductAnalyzer:
             return opportunities
         
         # Compute averages
-        total_revenue = sum((p.get("total_revenue_cents") or 0) for p in products)
+        sum((p.get("total_revenue_cents") or 0) for p in products)
         avg_times_sold = sum((p.get("times_sold") or 0) for p in products) / len(products)
         avg_price = sum((p.get("avg_price_cents") or 0) for p in products) / len(products)
         

@@ -12,7 +12,6 @@ Implements:
 """
 import math
 import logging
-import os
 
 logger = logging.getLogger("meridian.ai.economics.models")
 
@@ -420,7 +419,7 @@ class EconomicModels:
 
         profitable_hours = []
         unprofitable_hours = []
-        total_revenue = sum(h.get("revenue_cents", 0) for h in hourly_revenue)
+        sum(h.get("revenue_cents", 0) for h in hourly_revenue)
 
         for hour_data in hourly_revenue:
             rev = hour_data.get("revenue_cents", 0)
@@ -547,7 +546,7 @@ class EconomicModels:
         actual_rate = round(total_discount_cents / total_revenue_cents * 100, 2)
         excess_rate = max(0, actual_rate - benchmark_discount_rate)
         excess_cents = int(total_revenue_cents * excess_rate / 100)
-        monthly_excess = int(excess_cents * 30 / max(1, 1))  # normalize
+        int(excess_cents * 30 / max(1, 1))  # normalize
 
         if actual_rate <= benchmark_discount_rate:
             status = "healthy"

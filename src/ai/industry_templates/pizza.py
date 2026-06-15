@@ -28,7 +28,7 @@ class PizzaAnalyzer(IndustryAnalyzer):
             })
 
         delivery_share = data.get("delivery_revenue_share_pct", 0)
-        dinein_share = data.get("dinein_revenue_share_pct", 0)
+        data.get("dinein_revenue_share_pct", 0)
         if delivery_share and delivery_share > 70:
             adjustments.append({
                 "type": "channel_imbalance",
@@ -42,7 +42,7 @@ class PizzaAnalyzer(IndustryAnalyzer):
         adjustments = []
         products = data.get("products", [])
 
-        pizzas = [p for p in products if p.get("category", "").lower() in ("pizza", "pie")]
+        [p for p in products if p.get("category", "").lower() in ("pizza", "pie")]
         sides = [p for p in products if p.get("category", "").lower() in ("side", "appetizer", "breadstick", "wing", "salad")]
 
         total_rev = sum(p.get("revenue_cents", 0) for p in products) or 1
@@ -77,7 +77,7 @@ class PizzaAnalyzer(IndustryAnalyzer):
     def analyze_patterns(self, data: dict) -> dict:
         adjustments = []
 
-        dinner_share = data.get("dinner_revenue_share_pct", 0)
+        data.get("dinner_revenue_share_pct", 0)
         lunch_share = data.get("lunch_revenue_share_pct", 0)
         if lunch_share and lunch_share < 20:
             adjustments.append({
@@ -118,7 +118,7 @@ class PizzaAnalyzer(IndustryAnalyzer):
 
         # Combo pricing
         combo_rate = data.get("combo_order_rate_pct", 0)
-        avg_ticket = data.get("avg_ticket_cents", 0)
+        data.get("avg_ticket_cents", 0)
         daily_orders = data.get("avg_daily_orders", 0)
         if combo_rate < 30 and daily_orders > 0:
             upsell_value = 400  # $4 avg combo upsell

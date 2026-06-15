@@ -414,7 +414,7 @@ class BaseAgent(ABC):
         products = getattr(ctx, "product_performance", []) or []
         inventory = getattr(ctx, "inventory", []) or []
         daily = getattr(ctx, "daily_revenue", []) or []
-        hourly = getattr(ctx, "hourly_revenue", []) or []
+        getattr(ctx, "hourly_revenue", []) or []
 
         has_items = any(t.get("items") or t.get("line_items") for t in txns[:50])
         has_employees = any(t.get("employee_name") or t.get("employee_id") for t in txns[:50])

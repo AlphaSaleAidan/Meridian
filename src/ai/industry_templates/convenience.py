@@ -112,7 +112,7 @@ class ConvenienceAnalyzer(IndustryAnalyzer):
             })
 
         # Prepared food expansion
-        prepared_margin = data.get("prepared_food_margin_pct", 0)
+        data.get("prepared_food_margin_pct", 0)
         prepared_share = data.get("prepared_food_share_pct", 0)
         daily_rev = data.get("avg_daily_revenue_cents", 0)
         if prepared_share < 20 and daily_rev > 0:

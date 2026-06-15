@@ -13,7 +13,7 @@ class StockoutAlert(BaseAlert):
             return self.no_alerts()
 
         inv_data = inv_output.get("data", {})
-        reorder_alerts = inv_data.get("reorder_alerts", [])
+        inv_data.get("reorder_alerts", [])
 
         alerts = []
         for item in inventory:

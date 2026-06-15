@@ -19,7 +19,7 @@ class FitnessAnalyzer(IndustryAnalyzer):
     def analyze_revenue(self, data: dict) -> dict:
         adjustments = []
         rev_per_member = data.get("revenue_per_member_cents", 0)
-        benchmark = self.benchmarks.get("avg_ticket_cents")
+        self.benchmarks.get("avg_ticket_cents")
 
         if rev_per_member and rev_per_member < 5000:
             adjustments.append({
@@ -56,7 +56,7 @@ class FitnessAnalyzer(IndustryAnalyzer):
                 "recommendation": "Offer free intro PT session to every new member — 40% convert to paid packages",
             })
 
-        retail_rev = sum(p.get("revenue_cents", 0) for p in retail_items)
+        sum(p.get("revenue_cents", 0) for p in retail_items)
         retail_margin = data.get("retail_margin_pct", 0)
         if retail_items and retail_margin < 50:
             adjustments.append({

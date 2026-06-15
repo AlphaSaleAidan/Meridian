@@ -475,7 +475,7 @@ class DataMapper:
         Square stores images as separate CatalogImage objects;
         for now return None, resolved in batch after catalog sync.
         """
-        image_ids = item_data.get("image_ids", [])
+        item_data.get("image_ids", [])
         return None  # Resolved in post-processing batch
 
     @staticmethod

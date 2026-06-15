@@ -457,7 +457,6 @@ async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin
     _validate_rep_id(req.rep_id)
 
     import httpx
-    import secrets
     import string
 
     supabase_url, service_key = _supabase_creds()

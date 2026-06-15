@@ -20,7 +20,7 @@ def generate(ctx, revenue: dict, bench, models) -> list[dict]:
     bench_context = ""
     if bench:
         daily_comp = bench.compare("avg_daily_revenue_cents", avg_daily)
-        ticket_comp = bench.compare("avg_ticket_cents", avg_ticket)
+        bench.compare("avg_ticket_cents", avg_ticket)
         if daily_comp.get("status") != "no_benchmark":
             bench_context = (
                 f" Relative to the {bench.data.label} industry benchmark, "

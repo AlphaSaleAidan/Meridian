@@ -52,7 +52,7 @@ class DynamicPricingOptimizer:
 
         peak_data = peak.get("data", {})
         golden_hours = peak_data.get("golden_hours", [])
-        dead_hours = peak_data.get("dead_hours", [])
+        peak_data.get("dead_hours", [])
 
         seasonal_data = seasonal.get("data", {})
         current_season_idx = seasonal_data.get("current_seasonal_index", 1.0)
@@ -61,7 +61,7 @@ class DynamicPricingOptimizer:
 
         dow_data = dow.get("data", {})
         worst_day = dow_data.get("worst_day")
-        best_day = dow_data.get("best_day")
+        dow_data.get("best_day")
 
         # Calculate per-product pricing
         price_matrix = []

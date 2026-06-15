@@ -159,7 +159,7 @@ async def _enhance_with_llm(
         logger.warning("llm_layer not available for prompt enhancement")
         return None
 
-    brand_context = _build_brand_context(brand)
+    _build_brand_context(brand)
     visual = _get_visual_language(brand.get("business_type", "retail"))
     platform_cfg = PLATFORM_CONFIG.get(platform, PLATFORM_CONFIG["instagram_reel"])
     style_desc = STYLE_PROFILES.get(style, STYLE_PROFILES["cinematic"])

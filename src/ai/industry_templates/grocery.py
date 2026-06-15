@@ -53,7 +53,7 @@ class GroceryAnalyzer(IndustryAnalyzer):
                 "recommendation": "Expand store-brand offerings in top categories — 10-15pt higher margin than national brands",
             })
 
-        perishable = [p for p in products if p.get("category", "").lower() in ("produce", "dairy", "meat", "bakery", "deli")]
+        [p for p in products if p.get("category", "").lower() in ("produce", "dairy", "meat", "bakery", "deli")]
         perishable_waste = data.get("perishable_waste_pct", 0)
         if perishable_waste > 5:
             adjustments.append({

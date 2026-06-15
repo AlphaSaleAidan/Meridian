@@ -191,7 +191,7 @@ class Remediator:
     async def _update_config(self, diagnosis, step: dict) -> str:
         """Update a configuration value to fix the issue."""
         config_key = step.get("config_key", "unknown")
-        config_value = step.get("config_value", "")
+        step.get("config_value", "")
         self._rollback_stack.append(RollbackEntry(
             action_name="update_config",
             undo_fn_name="_undo_config",

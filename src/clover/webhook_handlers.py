@@ -184,7 +184,7 @@ class CloverWebhookProcessor:
         txn = mapper.map_order_to_transaction(order)
         items = []
         for li in order.get("lineItems", {}).get("elements", []):
-            li_row = mapper.map_line_item(li, txn["id"], txn["transaction_time"])
+            li_row = mapper.map_line_item(li, txn["id"], txn["transaction_at"])
             items.append(li_row)
 
         if self._upsert_transaction:

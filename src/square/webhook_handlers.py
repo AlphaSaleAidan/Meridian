@@ -256,7 +256,7 @@ class WebhookProcessor:
 
         try:
             # Fetch recently updated catalog objects
-            updated_at = (event.get("data", {}).get("object", {})
+            (event.get("data", {}).get("object", {})
                          .get("catalog_version", {}).get("updated_at"))
             
             objects = await client.list_all_catalog(
