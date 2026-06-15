@@ -254,12 +254,16 @@ class CloverDataMapper:
             "product_id": product_id,
             "external_item_id": external_item_id,
             "name": cl_line_item.get("name", item_ref.get("name", "Unknown")),
+            "price": price,
             "quantity": qty,
             "unit_price_cents": price,
             "total_cents": int(price * qty),
             "discount_cents": abs(self._line_item_discount(cl_line_item)),
             "is_refund": cl_line_item.get("isRevenue", True) is False,
-            "transaction_time": transaction_time,
+            # transaction_at (NOT transaction_time): matches the Square line-item
+            # mapper, the transaction_items column, and the upsert's
+            # on_conflict="id,transaction_at" in _run_clover_backfill.
+            "transaction_at": transaction_time,
         }
 
     # ─── Inventory Mapper ─────────────────────────────────────

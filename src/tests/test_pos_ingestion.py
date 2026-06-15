@@ -135,7 +135,7 @@ def _first(d: dict, names: tuple) -> tuple[str | None, object]:
             return n, d[n]
     return None, None
 
-def _check_txns(provider: str, txns: list[dict]) -> tuple[bool, str]:
+def _check_txns(provider: str, txns: list[dict], items: list[dict] | None = None) -> tuple[bool, str]:
     if not txns:
         return False, "0 transactions produced (nothing ingested)"
     sample = txns[0]
@@ -147,9 +147,18 @@ def _check_txns(provider: str, txns: list[dict]) -> tuple[bool, str]:
     if sample.get("payment_method") in (None, ""): problems.append("no payment_method")
     if not all(isinstance(t.get("total_cents"), int) for t in txns):
         problems.append("non-int/missing total_cents")
+    # Line items (transaction_items) persist with on_conflict="…,transaction_at",
+    # so each must carry transaction_at + a transaction_id link.
+    items = items or []
+    li_note = ""
+    if items:
+        li = items[0]
+        if li.get("transaction_at") in (None, ""): problems.append("line items missing transaction_at")
+        if li.get("transaction_id") in (None, ""): problems.append("line items missing transaction_id")
+        li_note = f" + {len(items)} line items"
     if problems:
         return False, f"{len(txns)} txns but: {'; '.join(problems)} · keys={sorted(sample)}"
-    return True, (f"{len(txns)} transactions digested · sample {id_val}="
+    return True, (f"{len(txns)} transactions{li_note} digested · sample {id_val}="
                   f"{sample['total_cents']}¢ {sample['payment_method']} @ {ts_val} "
                   f"(ts field: {ts_name})")
 
@@ -165,7 +174,7 @@ async def run_square(tier: str) -> tuple[bool, str]:
     engine = SyncEngine(client, org_id="test-org", pos_connection_id="test-conn-sq")
     try:
         result = await engine.run_initial_backfill()
-        return _check_txns("square", result.transactions)
+        return _check_txns("square", result.transactions, result.transaction_items)
     except Exception as e:
         return False, f"backfill raised: {type(e).__name__}: {e}"
     finally:
@@ -183,7 +192,7 @@ async def run_clover(tier: str) -> tuple[bool, str]:
     engine = CloverSyncEngine(client, org_id="test-org", pos_connection_id="test-conn-cl")
     try:
         result = await engine.run_initial_backfill()
-        return _check_txns("clover", result.transactions)
+        return _check_txns("clover", result.transactions, result.transaction_items)
     except Exception as e:
         return False, f"backfill raised: {type(e).__name__}: {e}"
     finally:
