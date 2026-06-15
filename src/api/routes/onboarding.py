@@ -274,6 +274,21 @@ class ProvisionCustomerResponse(BaseModel):
     email_error: str | None = None
 
 
+# `businesses.plan_tier` is constrained to ('trial','starter','growth','enterprise')
+# (migration 20260429_001). The sales portal sends pricing-plan ids
+# (weekly/standard/premium/command), so writing req.plan straight in violates
+# businesses_plan_tier_check and 500s provisioning. Map to a valid tier.
+_VALID_PLAN_TIERS = {"trial", "starter", "growth", "enterprise"}
+_PLAN_TIER_MAP = {"weekly": "starter", "standard": "growth", "premium": "growth", "command": "enterprise"}
+
+
+def _plan_tier(plan: str | None) -> str:
+    p = (plan or "").strip().lower()
+    if p in _VALID_PLAN_TIERS:
+        return p
+    return _PLAN_TIER_MAP.get(p, "starter")
+
+
 @router.post("/provision-customer", response_model=ProvisionCustomerResponse, dependencies=[Depends(require_service_auth)])
 async def provision_customer(req: ProvisionCustomerRequest):
     """
@@ -367,7 +382,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                 "owner_name": req.owner_name,
                 "email": req.email,
                 "phone": req.phone,
-                "plan_tier": req.plan,
+                "plan_tier": _plan_tier(req.plan),
                 "business_type": req.business_type or "restaurant",
                 "pos_provider": req.pos_provider,
                 "pos_connected": False,
