@@ -757,19 +757,23 @@ export default function CanadaCustomerOnboardingWizard() {
               <p className={`text-[13px] ${T.muted} mt-1`}>We'll pull in your transaction history to start generating insights</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {([{ key: 'square' as const, name: 'Square' }, { key: 'clover' as const, name: 'Clover' }]).map(p => {
-                const selected = posProvider === p.key
+              {/* Clover is gated until its OAuth app creds are configured
+                  (authorize 503s otherwise) — show it but not selectable. */}
+              {([{ key: 'square' as const, name: 'Square', enabled: true }, { key: 'clover' as const, name: 'Clover', enabled: false }]).map(p => {
+                const selected = posProvider === p.key && p.enabled
                 return (
-                  <button key={p.key} type="button" onClick={() => setPosProvider(p.key)}
-                    className={`relative flex flex-col items-center gap-3 px-4 py-6 rounded-xl border transition-all ${selected ? 'border-[#00d4aa] bg-[#00d4aa]/5' : `${T.cardBorder} ${T.cardBg} hover:border-[#00d4aa]/40`}`}>
+                  <button key={p.key} type="button" disabled={!p.enabled}
+                    onClick={() => p.enabled && setPosProvider(p.key)}
+                    className={`relative flex flex-col items-center gap-3 px-4 py-6 rounded-xl border transition-all ${!p.enabled ? `opacity-40 cursor-not-allowed ${T.cardBorder} ${T.cardBg}` : selected ? 'border-[#00d4aa] bg-[#00d4aa]/5' : `${T.cardBorder} ${T.cardBg} hover:border-[#00d4aa]/40`}`}>
                     {selected && <CheckCircle2 size={16} className="absolute top-2 right-2 text-[#00d4aa]" />}
+                    {!p.enabled && <span className="absolute top-2 right-2 text-[9px] font-semibold uppercase tracking-wide text-[#6b7a74]">Soon</span>}
                     <POSLogo system={p.key} size="lg" />
                     <span className={`text-[13px] font-semibold ${T.text}`}>{p.name}</span>
                   </button>
                 )
               })}
             </div>
-            <p className={`text-[11px] ${T.muted} text-center`}>Square and Clover are supported today — more POS systems coming soon.</p>
+            <p className={`text-[11px] ${T.muted} text-center`}>Square is supported today — more POS systems coming soon.</p>
             <div className="flex justify-end">
               <button onClick={handlePosNext} disabled={saving || !posProvider} className={btnPrimary}>
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
