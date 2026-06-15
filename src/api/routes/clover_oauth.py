@@ -241,6 +241,11 @@ async def callback(
                 await _db_instance.insert("pos_connections", connection_data)
 
             await _db_instance.update(
+                "businesses",
+                {"pos_connected": True},
+                filters={"id": f"eq.{org_id}"},
+            )
+            await _db_instance.update(
                 "organizations",
                 {"pos_system": "clover", "pos_connection_status": "connected"},
                 filters={"id": f"eq.{org_id}"},

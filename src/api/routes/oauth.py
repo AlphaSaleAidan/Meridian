@@ -252,6 +252,20 @@ async def callback(
                 await _db_instance.insert("pos_connections", connection_data)
                 logger.info(f"Created new connection for org {org_id}")
 
+            # Reflect connected state where the merchant dashboard reads it:
+            # the dashboard gates on businesses.pos_connected (fetchBusinessForUser),
+            # and org-path falls back to organizations.pos_connection_status.
+            await _db_instance.update(
+                "businesses",
+                {"pos_connected": True},
+                filters={"id": f"eq.{org_id}"},
+            )
+            await _db_instance.update(
+                "organizations",
+                {"pos_system": "square", "pos_connection_status": "connected"},
+                filters={"id": f"eq.{org_id}"},
+            )
+
             # Create a notification
             await _db_instance.insert("notifications", {
                 "id": str(uuid4()),
