@@ -55,7 +55,7 @@ class QueueBasketAgent(BaseCrossRefAgent):
         recommendations = []
 
         if long_conv < short_conv * 0.8 and long_wait:
-            drop = short_conv - long_conv
+            short_conv - long_conv
             insights.append({
                 "type": "queue_abandonment",
                 "detail": (

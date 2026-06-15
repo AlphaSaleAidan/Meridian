@@ -8,8 +8,8 @@ class LoyaltyArchitectAgent(BaseAgent):
 
     async def analyze(self) -> dict:
         transactions = self.ctx.transactions or []
-        customers = getattr(self.ctx, "customers", [])
-        loyalty = getattr(self.ctx, "loyalty_data", [])
+        getattr(self.ctx, "customers", [])
+        getattr(self.ctx, "loyalty_data", [])
 
         if not transactions:
             return self._insufficient_data("Transaction data")

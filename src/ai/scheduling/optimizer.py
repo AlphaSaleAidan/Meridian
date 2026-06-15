@@ -40,7 +40,7 @@ def build_demand_profile(
 ) -> list[ShiftSlot]:
     """Convert agent outputs into hourly demand slots."""
     hourly_staffing = staffing_data.get("data", {}).get("hourly_staffing", [])
-    hourly_profile = peak_hours_data.get("data", {}).get("hourly_profile", [])
+    peak_hours_data.get("data", {}).get("hourly_profile", [])
 
     peak_hours_set = set()
     top_windows = peak_hours_data.get("data", {}).get("top_5_windows", [])
@@ -157,7 +157,6 @@ def _merge_consecutive_shifts(shifts: list[dict]) -> list[dict]:
         by_emp_day[key].append(s)
 
     merged = []
-    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
     for (emp, dow), slots in by_emp_day.items():
         slots_sorted = sorted(slots, key=lambda s: s["start_hour"])

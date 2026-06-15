@@ -13,7 +13,7 @@ class PromoROIAgent(BaseAgent):
         txns = getattr(self.ctx, "transactions", []) or []
         daily = getattr(self.ctx, "daily_revenue", []) or []
 
-        discount_output = agent_outputs.get("discount_analyzer", {})
+        agent_outputs.get("discount_analyzer", {})
         dow_output = agent_outputs.get("day_of_week", {})
 
         if not txns and not daily:

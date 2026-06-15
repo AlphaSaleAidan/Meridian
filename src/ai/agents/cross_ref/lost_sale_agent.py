@@ -18,7 +18,6 @@ class LostSaleAgent(BaseCrossRefAgent):
             return self._insufficient_data("Customer journey data")
 
         unconverted = self.unconverted_journeys
-        converted = self.converted_journeys
 
         if not unconverted:
             return self._result(

@@ -287,7 +287,7 @@ class SupabaseREST:
         total = 0
         for i in range(0, len(rows), chunk_size):
             chunk = rows[i : i + chunk_size]
-            result = await self.insert(table, chunk, return_data=return_data)
+            await self.insert(table, chunk, return_data=return_data)
             total += len(chunk)
             logger.debug(f"Batch insert {table}: {total}/{len(rows)}")
 

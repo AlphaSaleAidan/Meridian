@@ -104,7 +104,7 @@ class BreweryAnalyzer(IndustryAnalyzer):
 
         # Food pairing upsell
         food_attach = data.get("food_attach_rate_pct", 0)
-        avg_tab = data.get("avg_ticket_cents", 2500)
+        data.get("avg_ticket_cents", 2500)
         daily_visitors = data.get("avg_daily_visitors", 0)
         if food_attach < 25 and daily_visitors > 0:
             avg_food_spend = data.get("avg_food_spend_cents", 1200)

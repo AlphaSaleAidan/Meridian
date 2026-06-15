@@ -117,7 +117,7 @@ class ScenarioEngine:
         staff_count = params.get("staff_count", 2)
 
         peak_hours_data = self.outputs.get("peak_hours", {})
-        benchmark_data = self.outputs.get("benchmark", {})
+        self.outputs.get("benchmark", {})
 
         # Get dead hours revenue from peak hours agent
         hourly_rev = peak_hours_data.get("data", {}).get("hourly_avg", {})

@@ -492,7 +492,7 @@ class MeridianPipeline:
         hourly_rev = await self.db.get_hourly_revenue(self.org_id, days=30)
         product_perf = await self.db.get_product_performance(self.org_id, days=30)
         transactions = await self.db.get_recent_transactions(self.org_id, days=30)
-        products = await self.db.get_products(self.org_id)
+        await self.db.get_products(self.org_id)
         
         if not daily_rev and not transactions:
             logger.info("  ⏭️  No data yet for AI analysis — skipping")

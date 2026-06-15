@@ -70,7 +70,7 @@ class PaymentOptimizerAgent(BaseAgent):
             method_stats[method]["revenue"] += t.get("total_cents", 0)
 
         total_rev = sum(s["revenue"] for s in method_stats.values())
-        total_txns = sum(s["count"] for s in method_stats.values())
+        sum(s["count"] for s in method_stats.values())
 
         breakdown = []
         for method, s in sorted(

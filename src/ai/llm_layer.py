@@ -17,7 +17,6 @@ import time
 
 from .trace_recorder import record as _trace_record, new_trace_id as _new_trace_id
 from .routing import (
-    DEFAULT_TIER,
     is_low_confidence,
     model_group_for_tier,
     next_tier_up,

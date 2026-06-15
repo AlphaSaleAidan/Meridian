@@ -10,7 +10,6 @@ class BenchmarkAgent(BaseAgent):
         # ── Phase 1: Data Discovery ──────────────────────────
         avail = self.get_data_availability()
         daily = self.ctx.daily_revenue or []
-        txns = self.ctx.transactions or []
         agent_outputs = getattr(self.ctx, "agent_outputs", {})
 
         if len(daily) < 7 and not agent_outputs:

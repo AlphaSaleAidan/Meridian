@@ -330,7 +330,7 @@ def _update_memory_index():
     }
 
     lines = current.strip().split("\n")
-    existing_auto = {ln for ln in lines if "auto_" in ln or "Auto-rebuilt" in ln}
+    {ln for ln in lines if "auto_" in ln or "Auto-rebuilt" in ln}
 
     for filename, entry in auto_entries.items():
         file_path = MEMORY_DIR / filename
