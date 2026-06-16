@@ -760,14 +760,30 @@ async def disconnect_pos(req: DisconnectRequest):
         except Exception as e:
             logger.warning(f"Square token revocation failed: {e}")
 
+    now = datetime.now(timezone.utc).isoformat()
+    # Fully tear down: drop the stored token and reset the import flag so a
+    # future reconnect starts clean (and the merchant's token isn't left at rest).
     await db.update(
         "pos_connections",
-        {"status": "disconnected", "updated_at": datetime.now(timezone.utc).isoformat()},
+        {
+            "status": "disconnected",
+            "access_token_enc": None,
+            "credentials_encrypted": None,
+            "historical_import_complete": False,
+            "last_error": None,
+            "updated_at": now,
+        },
         filters={"id": f"eq.{conn['id']}"},
     )
 
+    # Close BOTH halves of the dashboard gate. The gate is
+    #   businesses.pos_connected  OR  organizations.pos_connection_status == 'connected'
+    # — the old code cleared only the org status, leaving businesses.pos_connected
+    # true, so the dashboard stayed unlocked (showing stale data) after disconnect.
+    await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{req.org_id}"})
     await db.update("organizations", {
         "pos_connection_status": None,
+        "pos_system": None,
     }, filters={"id": f"eq.{req.org_id}"})
 
     return {"success": True, "message": f"{req.pos_system.title()} disconnected."}
