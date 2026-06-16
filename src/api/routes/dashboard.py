@@ -23,6 +23,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Query, HTTPException, Depends
+from pydantic import BaseModel
 
 from ..auth import require_admin, require_org_access
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
@@ -314,6 +315,47 @@ async def get_products(
     }
     dashboard_cache.set(cache_key, response, TTL_FAST)
     return response
+
+
+class ProductCostUpdate(BaseModel):
+    cost_cents: int | None = None
+    price_cents: int | None = None
+
+
+@router.patch("/products/{product_id}")
+async def update_product_cost(
+    product_id: str,
+    body: ProductCostUpdate,
+    org_id: OrgId = None,
+    db=Depends(_get_db),
+):
+    """Set a product's unit cost (and optionally price) — powers inline cost
+    entry on the Products page so margins can compute. Cost-of-goods isn't in
+    the POS feed, so the merchant supplies it here once."""
+    rows = await db.select(
+        "products",
+        filters={"id": f"eq.{product_id}", "org_id": f"eq.{org_id}"},
+        limit=1,
+    )
+    if not rows:
+        raise HTTPException(404, "Product not found")
+
+    fields: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.cost_cents is not None:
+        if body.cost_cents < 0:
+            raise HTTPException(422, "cost_cents must be >= 0")
+        fields["cost_cents"] = body.cost_cents
+    if body.price_cents is not None:
+        if body.price_cents < 0:
+            raise HTTPException(422, "price_cents must be >= 0")
+        fields["price_cents"] = body.price_cents
+    if len(fields) == 1:
+        raise HTTPException(422, "Provide cost_cents and/or price_cents")
+
+    await db.update("products", fields, filters={"id": f"eq.{product_id}"})
+    dashboard_cache.invalidate_org(org_id)  # margins/products recompute on next read
+    return {"ok": True, "product_id": product_id,
+            "cost_cents": fields.get("cost_cents"), "price_cents": fields.get("price_cents")}
 
 
 # ─── Insights ─────────────────────────────────────────────

@@ -335,7 +335,13 @@ export default function MarginsPage() {
         <div className="card overflow-hidden" data-walkthrough="margin-breakdown">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Product Cost Breakdown</h3>
-            <p className="text-[10px] text-[#A1A1A8] mt-0.5">Click "View Cost Formulas" on any product to see ingredient-level calculations</p>
+            {summary?.has_estimates ? (
+              <p className="text-[10px] text-pm-amber-gold mt-0.5">
+                Rows marked <span className="font-semibold">est</span> use a typical ~{summary.est_cogs_pct}% cost-of-goods estimate for your business type — add real costs to make them exact.
+              </p>
+            ) : (
+              <p className="text-[10px] text-[#A1A1A8] mt-0.5">Click "View Cost Formulas" on any product to see ingredient-level calculations</p>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="pm-table min-w-[700px]">
@@ -355,6 +361,9 @@ export default function MarginsPage() {
                   <tr key={item.name}>
                     <td>
                       <span className="font-medium text-[#F5F5F7]">{item.name}</span>
+                      {item.isEstimated && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-pm-amber-gold/15 text-pm-amber-gold align-middle">est</span>
+                      )}
                       <FormulaBreakdown item={item} />
                     </td>
                     <td className="text-right font-mono text-[#F5F5F7]">{formatCents(item.sellingPriceCents)}</td>

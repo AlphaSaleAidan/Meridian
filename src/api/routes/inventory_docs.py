@@ -145,20 +145,34 @@ async def _process_inventory_doc(org_id: str, doc: dict):
         # none of which are real `products` columns — so _clean_row stripped
         # everything but {org_id,name} and the cost was silently dropped.)
         matched, inserted, unmatched = 0, 0, []
+        matched_by = {"sku": 0, "barcode": 0, "name": 0}
         if extracted and extracted.get("items"):
             existing = await db.get_products(org_id)
+            # SKU / UPC are far more reliable than name — match on those first,
+            # then fall back to a case-insensitive name match.
+            by_sku = {(p.get("sku") or "").strip().lower(): p for p in existing if (p.get("sku") or "").strip()}
+            by_barcode = {(p.get("barcode") or "").strip().lower(): p for p in existing if (p.get("barcode") or "").strip()}
             by_name = {(p.get("name") or "").strip().lower(): p for p in existing}
 
             for item in extracted["items"]:
                 name = (item.get("name") or "").strip()
-                if not name:
-                    continue
+                sku = (str(item.get("sku") or "")).strip()
+                upc = (str(item.get("upc") or item.get("barcode") or "")).strip()
                 cost_cents = _to_cents(item.get("cost"))
                 price_cents = _to_cents(item.get("selling_price"))
                 if cost_cents is None and price_cents is None:
                     continue
+                if not (name or sku or upc):
+                    continue
 
-                match = by_name.get(name.lower())
+                match = None
+                if sku and sku.lower() in by_sku:
+                    match = by_sku[sku.lower()]; matched_by["sku"] += 1
+                elif upc and upc.lower() in by_barcode:
+                    match = by_barcode[upc.lower()]; matched_by["barcode"] += 1
+                elif name and name.lower() in by_name:
+                    match = by_name[name.lower()]; matched_by["name"] += 1
+
                 if match:
                     update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
                     if cost_cents is not None:
@@ -172,7 +186,9 @@ async def _process_inventory_doc(org_id: str, doc: dict):
                     now_iso = datetime.now(timezone.utc).isoformat()
                     await db.insert("products", {
                         "org_id": org_id,
-                        "name": name,
+                        "name": name or sku or upc,
+                        "sku": sku,
+                        "barcode": upc,
                         "cost_cents": cost_cents,
                         "price_cents": price_cents,
                         "is_active": True,
@@ -180,13 +196,14 @@ async def _process_inventory_doc(org_id: str, doc: dict):
                         "updated_at": now_iso,
                     })
                     inserted += 1
-                    unmatched.append(name)
+                    unmatched.append(name or sku or upc)
 
-        # Record the match outcome so the UI can surface "N items couldn't be
-        # matched to a product in your catalog".
+        # Record the match outcome so the UI can surface "matched N (by SKU/UPC/
+        # name); M items couldn't be matched and were added as new products".
         if isinstance(extracted, dict):
             extracted["_match_summary"] = {
-                "matched": matched, "inserted": inserted, "unmatched_names": unmatched,
+                "matched": matched, "inserted": inserted,
+                "matched_by": matched_by, "unmatched_names": unmatched,
             }
 
         await db.update(
@@ -232,7 +249,7 @@ async def _extract_with_ai(file_bytes: bytes, file_type: str, file_name: str) ->
                 "content": (
                     "You are an inventory extraction bot. Extract product/item data from this image "
                     "(invoice, price list, inventory sheet). Return ONLY valid JSON with this structure:\n"
-                    '{"items": [{"name": "...", "category": "...", "cost": 0.00, "selling_price": 0.00, '
+                    '{"items": [{"name": "...", "sku": "...", "upc": "...", "category": "...", "cost": 0.00, "selling_price": 0.00, '
                     '"supplier": "...", "unit": "each", "quantity": 0}]}\n'
                     "Extract as many items as you can see. Use null for unknown fields."
                 ),
@@ -253,7 +270,7 @@ async def _extract_with_ai(file_bytes: bytes, file_type: str, file_name: str) ->
                 "content": (
                     "You are an inventory extraction bot. Extract product/item data from this document "
                     "(CSV, text, or structured data). Return ONLY valid JSON with this structure:\n"
-                    '{"items": [{"name": "...", "category": "...", "cost": 0.00, "selling_price": 0.00, '
+                    '{"items": [{"name": "...", "sku": "...", "upc": "...", "category": "...", "cost": 0.00, "selling_price": 0.00, '
                     '"supplier": "...", "unit": "each", "quantity": 0}]}\n'
                     "Extract as many items as you can find. Use null for unknown fields."
                 ),

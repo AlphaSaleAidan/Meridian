@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { Package, Search } from 'lucide-react'
+import { Package, Search, Pencil } from 'lucide-react'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { formatCents, formatCentsCompact, formatNumber, formatChartTick } from '@/lib/format'
@@ -19,6 +19,60 @@ const tooltipStyle = {
   fontSize: '12px',
   color: '#F5F5F7',
   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+}
+
+// Inline unit-cost editor → PATCH cost_cents → margins recompute. Cost-of-goods
+// isn't in the POS feed, so the merchant types it once per product here.
+function CostCell({ orgId, productId, costCents, editable, onSaved }: {
+  orgId: string; productId: string; costCents: number | null; editable: boolean; onSaved: () => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  if (!editable) {
+    return <span className="font-mono text-[#A1A1A8]">{costCents != null ? formatCents(costCents) : '—'}</span>
+  }
+
+  async function save() {
+    const dollars = parseFloat(val)
+    if (isNaN(dollars) || dollars < 0) { setEditing(false); return }
+    const cents = Math.round(dollars * 100)
+    if (cents === (costCents ?? -1)) { setEditing(false); return }
+    setSaving(true)
+    try { await api.updateProductCost(orgId, productId, { cost_cents: cents }); onSaved() }
+    finally { setSaving(false); setEditing(false) }
+  }
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1 justify-end">
+        <span className="text-[#A1A1A8]">$</span>
+        <input
+          autoFocus type="number" min="0" step="0.01" value={val} disabled={saving}
+          onChange={e => setVal(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => {
+            if (e.key === 'Enter') save()
+            if (e.key === 'Escape') setEditing(false)
+          }}
+          className="w-20 bg-[#1F1F23] border border-[#2A2A30] rounded px-2 py-1 text-right font-mono text-[#F5F5F7] text-sm"
+        />
+      </span>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => { setVal(costCents != null ? (costCents / 100).toFixed(2) : ''); setEditing(true) }}
+      className="font-mono text-sm inline-flex items-center gap-1 group hover:text-[#17C5B0] transition-colors"
+    >
+      {costCents != null
+        ? <span className="text-[#F5F5F7]">{formatCents(costCents)}</span>
+        : <span className="text-[#17C5B0]">+ Add cost</span>}
+      <Pencil size={11} className="opacity-0 group-hover:opacity-60" />
+    </button>
+  )
 }
 
 type SortKey = 'revenue' | 'quantity' | 'name'
@@ -166,6 +220,16 @@ export default function ProductsPage() {
                       <p className="text-sm font-semibold font-mono text-[#F5F5F7]">{pct.toFixed(1)}%</p>
                     </div>
                   </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-[#1F1F23] pt-2.5">
+                    <span className="text-xs text-[#A1A1A8]/60">Unit cost</span>
+                    <CostCell
+                      orgId={orgId}
+                      productId={p.product_id}
+                      costCents={p.cost_cents ?? null}
+                      editable={!isDemo && posConnected}
+                      onSaved={products.refetch}
+                    />
+                  </div>
                   <div className="mt-3 h-1.5 bg-[#1F1F23] rounded-full overflow-hidden">
                     <div className="h-full rounded-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
@@ -182,6 +246,8 @@ export default function ProductsPage() {
                   <tr>
                     <th className="text-left">Product</th>
                     <th className="text-right">Price</th>
+                    <th className="text-right">Unit Cost</th>
+                    <th className="text-right">Margin</th>
                     <th className="text-right">Revenue</th>
                     <th className="text-right">Qty Sold</th>
                     <th className="text-right">% of Total</th>
@@ -205,6 +271,22 @@ export default function ProductsPage() {
                         </td>
                         <td className="text-right font-mono text-[#A1A1A8]">
                           {p.price_cents ? formatCents(p.price_cents) : '—'}
+                        </td>
+                        <td className="text-right">
+                          <CostCell
+                            orgId={orgId}
+                            productId={p.product_id}
+                            costCents={p.cost_cents ?? null}
+                            editable={!isDemo && posConnected}
+                            onSaved={products.refetch}
+                          />
+                        </td>
+                        <td className="text-right font-mono">
+                          {p.price_cents && p.cost_cents != null && p.price_cents > 0 ? (
+                            <span className={((p.price_cents - p.cost_cents) / p.price_cents) >= 0.5 ? 'text-[#17C5B0]' : 'text-amber-400'}>
+                              {Math.round((p.price_cents - p.cost_cents) / p.price_cents * 100)}%
+                            </span>
+                          ) : <span className="text-[#A1A1A8]/40">—</span>}
                         </td>
                         <td className="text-right font-medium font-mono text-[#F5F5F7]">
                           {formatCents(p.total_revenue_cents)}

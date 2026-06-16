@@ -107,6 +107,7 @@ export interface MarginItem {
   marginPerUnitCents: number
   wasteFactor: number
   ingredients: IngredientCost[]
+  isEstimated?: boolean
 }
 
 export interface CustomerProfile {

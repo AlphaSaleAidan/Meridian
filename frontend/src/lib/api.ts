@@ -127,6 +127,7 @@ export interface ProductPerf {
   name: string
   sku: string | null
   price_cents: number | null
+  cost_cents?: number | null
   total_revenue_cents: number
   total_quantity: number
   times_sold: number
@@ -379,9 +380,17 @@ export const api = {
               marginPerUnitCents: qty ? Math.round((revenueCents - costCents) / qty) : 0,
               wasteFactor: 0,
               ingredients: [],
+              isEstimated: p.is_estimated ?? false,
             }
           }),
         })),
+
+  // Inline cost entry — set a product's unit cost (and optionally price) so
+  // margins compute. Cost-of-goods isn't in the POS feed.
+  updateProductCost: (orgId: string, productId: string, body: { cost_cents?: number; price_cents?: number }) =>
+    apiFetch<{ ok: boolean; product_id: string; cost_cents: number | null; price_cents: number | null }>(
+      `/api/dashboard/products/${productId}`, { method: 'PATCH', params: { org_id: orgId }, body },
+    ),
 
   // Inventory cost-sheet processing (upload happens via supabase storage in the
   // component; these trigger AI extraction + poll status).
