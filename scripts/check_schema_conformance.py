@@ -39,6 +39,13 @@ CALLBACK_INSERTS = {
     "clover: notifications": ("notifications",
         {"id", "org_id", "user_id", "channel", "scheduled_for", "title", "body",
          "priority", "source_type", "status", "created_at"}),
+    # /api/pos/connect (manual/picker path — pos_connections.py)
+    "pos/connect: organizations": ("organizations",
+        {"id", "name", "slug", "vertical", "created_at", "updated_at"}),
+    "pos/connect: pos_connections": ("pos_connections",
+        {"id", "org_id", "provider", "status", "credentials_encrypted",
+         "external_merchant_id", "historical_import_complete",
+         "created_at", "updated_at"}),
 }
 
 

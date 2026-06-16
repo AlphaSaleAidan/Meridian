@@ -259,6 +259,26 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
     if req.pos_system == "clover" and encrypted_creds.get("access_token"):
         token_column["access_token_enc"] = encrypted_creds["access_token"]
 
+    # Ensure the organizations row exists BEFORE any pos_connections write —
+    # pos_connections.org_id FKs to organizations.id. Customers live in the
+    # `businesses` table, so the parallel organizations row is often missing and
+    # the insert below would hit pos_connections_org_id_fkey (409 23503), failing
+    # the whole connect. Create it with the NOT-NULL `vertical` (refined to the
+    # detected business type by the organizations update further down).
+    existing_org = await db.select(
+        "organizations", filters={"id": f"eq.{req.org_id}"}, limit=1,
+    )
+    if not existing_org:
+        await db.insert("organizations", {
+            "id": req.org_id,
+            "name": f"Org {req.org_id}",
+            "slug": req.org_id.lower().replace(" ", "-"),
+            "vertical": "other",
+            "created_at": now,
+            "updated_at": now,
+        })
+        logger.info(f"Created organizations row for {req.org_id} (pos/connect)")
+
     existing = await db.select(
         "pos_connections",
         filters={
@@ -323,6 +343,10 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
                 logger.warning(f"Square business type detection failed: {e}")
 
     await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
+    # Mirror the connected flag onto businesses — the customer dashboard gate
+    # reads businesses.pos_connected, and businesses-based customers have no
+    # pos_connection_status column to fall back on.
+    await db.update("businesses", {"pos_connected": True}, filters={"id": f"eq.{req.org_id}"})
 
     if req.pos_system == "toast":
         background_tasks.add_task(
@@ -339,6 +363,19 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
             access_token=req.credentials.get("access_token", ""),
             merchant_id=(req.credentials.get("merchant_id", "") or req.restaurant_guid or ""),
         )
+    elif req.pos_system == "square":
+        # Square backfill was never wired on this manual/picker path — the
+        # connection saved but no transactions were ingested ("connected, no
+        # data"). Kick the same backfill the OAuth callback uses.
+        token = req.credentials.get("access_token", "")
+        if token:
+            from ...workers.backfill import run_backfill
+            background_tasks.add_task(
+                run_backfill,
+                access_token=token,
+                org_id=req.org_id,
+                connection_id=connection_id,
+            )
     elif req.pos_system not in ("square", "clover"):
         api_config = get_connector_config(req.pos_system)
         if api_config and api_config.get("auth_type") != "csv_only":

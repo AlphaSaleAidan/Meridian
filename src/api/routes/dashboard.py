@@ -626,16 +626,19 @@ async def get_day_transactions(
         "transactions",
         filters={
             "org_id": f"eq.{org_id}",
-            "created_at": f"gte.{date}T00:00:00Z",
+            # Use transaction_at (when the sale happened), NOT created_at (row
+            # insert time) — backfilled historical sales all get a recent
+            # created_at, so filtering on it hid every drilled-into day.
+            "transaction_at": f"gte.{date}T00:00:00Z",
         },
-        order="created_at.asc",
+        order="transaction_at.asc",
         limit=500,
     )
 
     # Filter to same-day only (Supabase gte doesn't have lte in same filter easily)
     day_txns = [
         t for t in transactions
-        if t.get("created_at", "")[:10] == date
+        if t.get("transaction_at", "")[:10] == date
     ]
 
     # Load line items for each transaction
@@ -681,7 +684,7 @@ async def get_day_transactions(
 
         result_txns.append({
             "id": tx_id,
-            "created_at": t.get("created_at", ""),
+            "created_at": t.get("transaction_at", ""),
             "total_cents": t.get("total_cents", 0) or 0,
             "tip_cents": t.get("tip_cents", 0) or 0,
             "discount_cents": t.get("discount_cents", 0) or 0,
