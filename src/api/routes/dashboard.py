@@ -165,26 +165,29 @@ async def get_revenue(
     )
 
     result = {
+        # `or 0` (not .get(...,0)) — aggregate rows can carry an explicit NULL
+        # (e.g. void-only days have total_revenue_cents=null), which would reach
+        # the frontend charts/sparklines as null → NaN.
         "daily": [
             {
                 "date": r.get("day_bucket"),
-                "revenue_cents": r.get("total_revenue_cents", 0),
-                "transactions": r.get("transaction_count", 0),
-                "avg_ticket_cents": r.get("avg_ticket_cents", 0),
-                "refund_cents": r.get("refund_total_cents", 0),
-                "tax_cents": r.get("total_tax_cents", 0),
-                "tip_cents": r.get("total_tip_cents", 0),
-                "discount_cents": r.get("total_discount_cents", 0),
-                "customers": r.get("unique_customers", 0),
+                "revenue_cents": r.get("total_revenue_cents") or 0,
+                "transactions": r.get("transaction_count") or 0,
+                "avg_ticket_cents": r.get("avg_ticket_cents") or 0,
+                "refund_cents": r.get("refund_total_cents") or 0,
+                "tax_cents": r.get("total_tax_cents") or 0,
+                "tip_cents": r.get("total_tip_cents") or 0,
+                "discount_cents": r.get("total_discount_cents") or 0,
+                "customers": r.get("unique_customers") or 0,
             }
             for r in daily
         ],
         "weekly": [
             {
                 "week": r.get("week_bucket"),
-                "revenue_cents": r.get("total_revenue_cents", 0),
-                "transactions": r.get("transaction_count", 0),
-                "avg_ticket_cents": r.get("avg_ticket_cents", 0),
+                "revenue_cents": r.get("total_revenue_cents") or 0,
+                "transactions": r.get("transaction_count") or 0,
+                "avg_ticket_cents": r.get("avg_ticket_cents") or 0,
             }
             for r in weekly
         ],
@@ -273,13 +276,13 @@ async def get_hourly_revenue(
         "hourly": [
             {
                 "hour": r.get("hour_bucket"),
-                "revenue_cents": r.get("total_revenue_cents", 0),
-                "sales": r.get("sale_count", 0),
-                "refunds": r.get("refund_count", 0),
-                "avg_ticket_cents": r.get("avg_ticket_cents", 0),
-                "customers": r.get("unique_customers", 0),
-                "cash_count": r.get("cash_count", 0),
-                "credit_count": r.get("credit_count", 0),
+                "revenue_cents": r.get("total_revenue_cents") or 0,
+                "sales": r.get("sale_count") or 0,
+                "refunds": r.get("refund_count") or 0,
+                "avg_ticket_cents": r.get("avg_ticket_cents") or 0,
+                "customers": r.get("unique_customers") or 0,
+                "cash_count": r.get("cash_count") or 0,
+                "credit_count": r.get("credit_count") or 0,
             }
             for r in hourly
         ],
@@ -327,8 +330,8 @@ async def get_products(
         agg["times_sold"] += row.get("times_sold", 0) or 0
         agg["daily"].append({
             "date": row.get("day_bucket"),
-            "revenue_cents": row.get("total_revenue_cents", 0),
-            "quantity": row.get("total_quantity", 0),
+            "revenue_cents": row.get("total_revenue_cents") or 0,
+            "quantity": row.get("total_quantity") or 0,
         })
 
     # List the FULL catalog — every active product appears, even with no sales
