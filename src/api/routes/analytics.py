@@ -313,7 +313,9 @@ async def get_menu_engineering(
     items = []
     for pid, perf in perf_agg.items():
         product = product_map.get(pid, {})
-        cost_per_unit = product.get("cost_per_unit", 0) or 0
+        # Real column is `cost_cents` (was reading non-existent `cost_per_unit`
+        # → cost always 0 → every item fake-100% margin → bogus BCG split).
+        cost_per_unit = product.get("cost_cents") or 0
         revenue = perf["total_revenue_cents"]
         quantity = perf["total_quantity"]
         cost = cost_per_unit * quantity

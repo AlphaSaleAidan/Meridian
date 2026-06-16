@@ -193,6 +193,68 @@ async def get_revenue(
     return result
 
 
+@router.get("/revenue/annual")
+async def get_annual_revenue(
+    org_id: OrgId,
+    db=Depends(_get_db),
+):
+    """Historical revenue by calendar year + a monthly series, so merchants can
+    see prior-year revenue. Backed by the ~18 months the initial backfill pulls."""
+    cache_key = dashboard_cache.make_key("annual", org_id)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # ~25 months so the current and previous full year both have coverage.
+    daily = await db.get_daily_revenue(org_id, days=760)
+
+    by_year: dict[str, dict] = {}
+    by_month: dict[str, dict] = {}
+    for r in daily:
+        bucket = r.get("day_bucket") or ""
+        if len(bucket) < 7:
+            continue
+        year, month = bucket[:4], bucket[:7]
+        rev = r.get("total_revenue_cents", 0) or 0
+        txns = r.get("transaction_count", 0) or 0
+        for key, agg in ((year, by_year), (month, by_month)):
+            slot = agg.setdefault(key, {"revenue_cents": 0, "transaction_count": 0})
+            slot["revenue_cents"] += rev
+            slot["transaction_count"] += txns
+
+    years = [
+        {
+            "year": int(y),
+            "revenue_cents": v["revenue_cents"],
+            "transaction_count": v["transaction_count"],
+            "avg_ticket_cents": (v["revenue_cents"] // v["transaction_count"]) if v["transaction_count"] else 0,
+        }
+        for y, v in sorted(by_year.items())
+    ]
+    monthly = [
+        {"month": m, "revenue_cents": v["revenue_cents"], "transaction_count": v["transaction_count"]}
+        for m, v in sorted(by_month.items())
+    ]
+
+    current_year = years[-1] if years else None
+    prior_year = years[-2] if len(years) >= 2 else None
+    yoy_pct = None
+    if current_year and prior_year and prior_year["revenue_cents"] > 0:
+        yoy_pct = round(
+            (current_year["revenue_cents"] - prior_year["revenue_cents"]) / prior_year["revenue_cents"] * 100, 1
+        )
+
+    result = {
+        "years": years,
+        "monthly": monthly,
+        "current_year": current_year,
+        "prior_year": prior_year,
+        "yoy_pct": yoy_pct,
+    }
+    dashboard_cache.set(cache_key, result, TTL_SLOW)
+    return result
+
+
 @router.get("/revenue/hourly")
 async def get_hourly_revenue(
     org_id: OrgId,

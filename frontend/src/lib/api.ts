@@ -293,6 +293,12 @@ export const api = {
     : !orgId ? delay(EMPTY.hourly)
     : apiFetch<HourlyData>('/api/dashboard/revenue/hourly', { params: { org_id: orgId, days } }),
 
+  // Historical revenue by calendar year (+ monthly series) so merchants can see
+  // prior-year revenue. Backed by the ~18 months the backfill pulls.
+  annualRevenue: (orgId: string) =>
+    isDemo(orgId) || !orgId ? delay({ years: [], monthly: [], current_year: null, prior_year: null, yoy_pct: null })
+    : apiFetch<any>('/api/dashboard/revenue/annual', { params: { org_id: orgId } }),
+
   products: (orgId: string, days = 30) =>
     isDemo(orgId) ? delay(demoData.products(days))
     : !orgId ? delay(EMPTY.products)
@@ -349,7 +355,24 @@ export const api = {
   staff: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.staff())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/staff', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/staff', { params: { org_id: orgId } })
+        .then((r: any) => ({
+          ...r,
+          // Backend returns real per-employee POS metrics in snake_case. Map to
+          // the fields the page renders; the synthetic metrics the POS can't
+          // provide (upsell rate, ratings, hours) are left undefined and the
+          // page shows the real ones (revenue, txns, avg ticket, tips).
+          staff: (r.staff ?? []).map((s: any) => ({
+            id: s.name,
+            name: s.name,
+            role: '',
+            avgTicketCents: s.avg_ticket_cents ?? 0,
+            revenueCents: s.revenue_cents ?? 0,
+            transactionCount: s.transaction_count ?? 0,
+            tipCents: s.tip_cents ?? 0,
+            trend: 'stable',
+          })),
+        })),
 
   margins: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.margins())
@@ -407,12 +430,75 @@ export const api = {
   menuEngineering: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.menuEngineering())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/menu-engineering', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/menu-engineering', { params: { org_id: orgId, days: 365 } })
+        .then((r: any) => {
+          const rows = r.items ?? []
+          const maxQty = Math.max(1, ...rows.map((i: any) => i.quantity_sold ?? 0))
+          const rec: Record<string, string> = {
+            star: 'Feature prominently & protect the price.',
+            puzzle: 'Promote or reposition — high margin, low volume.',
+            plowhorse: 'Popular but thin — re-engineer cost or nudge price.',
+            dog: 'Low on both — consider cutting or reworking.',
+          }
+          return {
+            quadrants: r.quadrants ?? {},
+            items: rows.map((i: any) => {
+              const q = i.quadrant ?? 'dog'
+              return {
+                name: i.name ?? 'Unknown',
+                category: '',
+                monthlySales: i.quantity_sold ?? 0,
+                marginPct: Math.round(i.margin_pct ?? 0),
+                // 0–200 index scales for the scatter (median ≈ 100).
+                popularityIndex: Math.round(((i.quantity_sold ?? 0) / maxQty) * 190) + 5,
+                profitabilityIndex: Math.max(0, Math.min(200, Math.round((i.margin_pct ?? 0) * 2))),
+                quadrant: q,
+                recommendation: rec[q] ?? '',
+                revenueCents: i.revenue_cents ?? 0,
+                marginCents: (i.revenue_cents ?? 0) - (i.cost_cents ?? 0),
+              }
+            }),
+          }
+        }),
 
   anomalies: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.anomalies())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/anomalies', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/anomalies', { params: { org_id: orgId, days: 90 } })
+        .then((r: any) => ({
+          stats: r.stats ?? {},
+          // Backend returns z-score rows ({type,date,z_score,value_cents/value,
+          // expected_cents/expected,description}); the page renders the demo
+          // Anomaly shape. Derive severity from |z|, map fields, keep it real.
+          anomalies: (r.anomalies ?? []).map((a: any) => {
+            const z = a.z_score ?? 0
+            const isCents = a.value_cents != null
+            const actual = isCents ? Math.round((a.value_cents ?? 0) / 100) : (a.value ?? 0)
+            const expected = isCents ? Math.round((a.expected_cents ?? 0) / 100) : (a.expected ?? 0)
+            const deviationPct = expected ? Math.round(((actual - expected) / expected) * 100) : 0
+            const titles: Record<string, string> = {
+              revenue_spike: 'Revenue spike', revenue_drop: 'Revenue drop',
+              refund_spike: 'Refund spike', transaction_spike: 'Traffic spike',
+              transaction_drop: 'Traffic drop',
+            }
+            return {
+              id: `${a.type}-${a.date}`,
+              type: a.type,
+              severity: Math.abs(z) >= 3 ? 'critical' : Math.abs(z) >= 2.5 ? 'warning' : 'info',
+              title: titles[a.type] ?? 'Anomaly',
+              description: a.description ?? '',
+              detectedAt: a.date,
+              metric: a.type,
+              expected,
+              actual,
+              deviationPct,
+              agentSource: 'Transaction Analyst',
+              acknowledged: false,
+              zScore: z,
+              detectionMethod: 'zscore',
+            }
+          }),
+        })),
 
   customers: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.customers())
