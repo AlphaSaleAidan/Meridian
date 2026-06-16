@@ -44,15 +44,35 @@ async def run_backfill(
             f"{progress.detail} ({progress.progress_pct:.0f}%)"
         )
 
-    async with SquareClient(access_token=access_token) as client:
-        engine = SyncEngine(
-            client=client,
-            org_id=org_id,
-            pos_connection_id=connection_id,
-            on_progress=on_progress,
-        )
+    try:
+        async with SquareClient(access_token=access_token) as client:
+            engine = SyncEngine(
+                client=client,
+                org_id=org_id,
+                pos_connection_id=connection_id,
+                on_progress=on_progress,
+            )
 
-        result = await engine.run_initial_backfill()
+            result = await engine.run_initial_backfill()
+    except Exception as e:
+        # Surface the failure instead of leaving a silent "connected, no data"
+        # state (e.g. a 401 from a bad/expired Square token). Record the error
+        # on the connection and revert the connected flags the dashboard gates
+        # on, so the portal can prompt a reconnect.
+        err = str(e)[:500]
+        logger.error(f"Backfill failed for org={org_id}: {err}", exc_info=True)
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            await db.update(
+                "pos_connections",
+                {"status": "error", "last_error": err, "updated_at": now},
+                filters={"id": f"eq.{connection_id}"},
+            )
+            await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
+            await db.update("organizations", {"pos_connection_status": "error"}, filters={"id": f"eq.{org_id}"})
+        except Exception as record_err:
+            logger.error(f"Could not record backfill failure for org={org_id}: {record_err}")
+        raise
 
     # ── Persist to Supabase ──────────────────────────────
     if result.locations:
@@ -114,6 +134,9 @@ async def run_backfill(
             "historical_import_complete": True,
             "last_sync_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
+            # Clear any prior failure now that a sync has succeeded.
+            "status": "connected",
+            "last_error": None,
         },
         filters={"id": f"eq.{connection_id}"},
     )
