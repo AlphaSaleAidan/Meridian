@@ -271,19 +271,8 @@ async def callback(
                 filters={"id": f"eq.{org_id}"},
             )
 
-            # Create a notification
-            await _db_instance.insert("notifications", {
-                "id": str(uuid4()),
-                "org_id": org_id,
-                "title": "Square Connected!",
-                "body": f"Successfully connected to Square merchant {tokens['merchant_id']}. Starting initial data sync...",
-                "priority": "normal",
-                "source_type": "event",
-                "status": "active",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-
-            # Kick off historical backfill in background
+            # Kick off historical backfill in background FIRST — a failure of the
+            # (best-effort) welcome notification below must never prevent data sync.
             conn_id = existing[0]["id"] if existing else connection_data["id"]
             from ...workers.backfill import run_backfill
             background_tasks.add_task(
@@ -293,6 +282,31 @@ async def callback(
                 connection_id=conn_id,
             )
             logger.info(f"Queued backfill task for org={org_id}, connection={conn_id}")
+
+            # Best-effort welcome notification — NON-FATAL. notifications has
+            # NOT-NULL user_id/channel/scheduled_for; if user_id can't be resolved
+            # (or the insert otherwise fails) we must not roll back a successful
+            # connection. Previously this threw and pushed the whole callback into
+            # the "Connected but failed to save" partial path.
+            try:
+                _biz = await _db_instance.select("businesses", filters={"id": f"eq.{org_id}"}, limit=1)
+                owner_user_id = _biz[0].get("owner_user_id") if _biz else None
+                if owner_user_id:
+                    await _db_instance.insert("notifications", {
+                        "id": str(uuid4()),
+                        "org_id": org_id,
+                        "user_id": owner_user_id,
+                        "channel": "in_app",
+                        "scheduled_for": datetime.now(timezone.utc).isoformat(),
+                        "title": "Square Connected!",
+                        "body": f"Successfully connected to Square merchant {tokens['merchant_id']}. Starting initial data sync...",
+                        "priority": "normal",
+                        "source_type": "event",
+                        "status": "active",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+            except Exception as notify_err:
+                logger.warning(f"Welcome notification skipped for org {org_id}: {notify_err}")
 
         else:
             logger.warning("DB not initialized — tokens returned but not persisted")

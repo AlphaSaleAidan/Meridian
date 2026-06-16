@@ -52,6 +52,8 @@ class FakeDB:
     REQUIRED_NOT_NULL: dict[str, set[str]] = {
         "organizations": {"id", "name", "slug", "vertical", "created_at", "updated_at"},
         "pos_connections": {"id", "org_id", "provider", "status", "created_at", "updated_at"},
+        "notifications": {"id", "org_id", "user_id", "channel", "scheduled_for",
+                          "title", "body", "status", "created_at"},
     }
 
     def __init__(self):

@@ -256,17 +256,8 @@ async def callback(
                 filters={"id": f"eq.{org_id}"},
             )
 
-            await _db_instance.insert("notifications", {
-                "id": str(uuid4()),
-                "org_id": org_id,
-                "title": "Clover Connected!",
-                "body": f"Successfully connected to Clover merchant {resolved_merchant_id}. Starting initial data sync...",
-                "priority": "normal",
-                "source_type": "event",
-                "status": "active",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-
+            # Queue backfill FIRST — the best-effort notification below must never
+            # block data sync or roll back a successful connection.
             from .pos_connections import _run_clover_backfill
             background_tasks.add_task(
                 _run_clover_backfill,
@@ -276,6 +267,28 @@ async def callback(
                 merchant_id=resolved_merchant_id,
             )
             logger.info(f"Queued Clover backfill for org={org_id}, connection={conn_id}")
+
+            # Best-effort welcome notification — NON-FATAL (notifications has
+            # NOT-NULL user_id/channel/scheduled_for).
+            try:
+                _biz = await _db_instance.select("businesses", filters={"id": f"eq.{org_id}"}, limit=1)
+                owner_user_id = _biz[0].get("owner_user_id") if _biz else None
+                if owner_user_id:
+                    await _db_instance.insert("notifications", {
+                        "id": str(uuid4()),
+                        "org_id": org_id,
+                        "user_id": owner_user_id,
+                        "channel": "in_app",
+                        "scheduled_for": datetime.now(timezone.utc).isoformat(),
+                        "title": "Clover Connected!",
+                        "body": f"Successfully connected to Clover merchant {resolved_merchant_id}. Starting initial data sync...",
+                        "priority": "normal",
+                        "source_type": "event",
+                        "status": "active",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+            except Exception as notify_err:
+                logger.warning(f"Welcome notification skipped for org {org_id}: {notify_err}")
         else:
             logger.warning("DB not initialized — Clover tokens returned but not persisted")
 

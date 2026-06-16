@@ -33,17 +33,19 @@ run_layer() {
 inproc=FAIL
 ingestion=FAIL
 stateprobe=FAIL
+conformance=FAIL
 
+run_layer "conformance" "$PY" scripts/check_schema_conformance.py             && conformance=PASS
 run_layer "inproc"     "$PY" -m pytest tests/e2e/test_portal_connect.py -q && inproc=PASS
 run_layer "ingestion"  "$PY" -m src.tests.test_pos_ingestion                && ingestion=PASS
 run_layer "stateprobe" "$PY" scripts/probe_oauth_state.py --provider square -n 12 && stateprobe=PASS
 
 overall=PASS
-[ "$inproc" = PASS ] && [ "$ingestion" = PASS ] && [ "$stateprobe" = PASS ] || overall=FAIL
+[ "$conformance" = PASS ] && [ "$inproc" = PASS ] && [ "$ingestion" = PASS ] && [ "$stateprobe" = PASS ] || overall=FAIL
 
 echo
 echo "===================================================================="
-echo "HARNESS: inproc=${inproc} ingestion=${ingestion} stateprobe=${stateprobe} => ${overall}"
+echo "HARNESS: conformance=${conformance} inproc=${inproc} ingestion=${ingestion} stateprobe=${stateprobe} => ${overall}"
 echo "===================================================================="
 
 [ "$overall" = PASS ] && exit 0 || exit 1
