@@ -508,7 +508,37 @@ export const api = {
   agents: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.agents())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/agents', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/agents', { params: { org_id: orgId } })
+        .then((r: any) => {
+          const catFor = (n: string) => {
+            const s = (n || '').toLowerCase()
+            if (s.includes('forecast') || s.includes('predict')) return 'forecasting'
+            if (s.includes('optim') || s.includes('price') || s.includes('margin')) return 'optimization'
+            if (s.includes('strateg') || s.includes('growth')) return 'strategy'
+            if (s.includes('coordin') || s.includes('orchestr')) return 'coordination'
+            return 'analysis'
+          }
+          return {
+            // chains/calibration aren't produced by the backend — omit so the
+            // page hides those sections instead of rendering empty/NaN.
+            agents: (r.agents ?? []).map((a: any) => {
+              const conf = a.avg_confidence ?? 0
+              const findings = a.recent_findings ?? []
+              return {
+                id: a.name,
+                name: a.name,
+                status: a.status === 'active' ? 'active' : 'idle',
+                lastRun: a.last_trained || '',
+                nextRun: '',
+                findings: findings.length,
+                confidence: conf <= 1 ? Math.round(conf * 100) : Math.round(conf),
+                category: catFor(a.name),
+                description: '',
+                latestFinding: findings[0]?.title ?? '',
+              }
+            }),
+          }
+        }),
 
   actions: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.actions())

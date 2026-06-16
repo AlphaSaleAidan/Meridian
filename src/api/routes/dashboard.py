@@ -715,6 +715,8 @@ async def get_connection(
                 "provider": r.get("provider"),
                 "status": r.get("status"),
                 "external_merchant_id": r.get("external_merchant_id"),
+                # Alias the frontend (SettingsPage / ConnectionInfo) reads.
+                "merchant_id": r.get("external_merchant_id"),
                 "external_location_id": r.get("external_location_id"),
                 "last_sync_at": r.get("last_sync_at"),
                 "sync_cursor": r.get("sync_cursor"),

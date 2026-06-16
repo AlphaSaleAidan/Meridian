@@ -1,4 +1,4 @@
-const CACHE_NAME = 'meridian-v12-20260616'
+const CACHE_NAME = 'meridian-v13-20260616'
 const SHELL_URLS = ['/', '/index.html']
 
 self.addEventListener('install', (event) => {
