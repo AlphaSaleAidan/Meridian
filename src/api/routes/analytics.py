@@ -168,7 +168,10 @@ async def get_margins(
         product = product_map.get(pid, {})
         name = product.get("name", "Unknown")
         category_id = product.get("category_id")
-        cost_per_unit = product.get("cost_per_unit", 0) or 0
+        # Per-unit cost of goods, in cents. Column is `cost_cents` (was reading
+        # the non-existent `cost_per_unit`, so cost was always 0 → fake 100%
+        # margins). Null until a cost sheet / restock invoice is uploaded.
+        cost_per_unit = product.get("cost_cents") or 0
         revenue = perf["total_revenue_cents"]
         quantity = perf["total_quantity"]
         cost = cost_per_unit * quantity  # cost in cents
@@ -198,6 +201,11 @@ async def get_margins(
     if total_revenue > 0:
         overall_margin = round((total_revenue - total_cost) / total_revenue * 100, 1)
 
+    # Catalog-wide cost coverage drives the "upload a cost sheet" prompt — count
+    # over ALL active products, not just those that sold in the window.
+    catalog_total = len(products)
+    catalog_with_cost = sum(1 for p in products if (p.get("cost_cents") or 0) > 0)
+
     result = {
         "products": margin_items,
         "summary": {
@@ -207,6 +215,9 @@ async def get_margins(
             "overall_margin_pct": overall_margin,
             "products_with_cost": sum(1 for m in margin_items if m["cost_cents"] > 0),
             "products_without_cost": sum(1 for m in margin_items if m["cost_cents"] == 0),
+            "catalog_total": catalog_total,
+            "catalog_with_cost": catalog_with_cost,
+            "catalog_missing_cost": catalog_total - catalog_with_cost,
         },
         "period_days": days,
     }

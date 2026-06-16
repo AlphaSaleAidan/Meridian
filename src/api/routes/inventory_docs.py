@@ -19,6 +19,20 @@ logger = logging.getLogger("meridian.api.inventory_docs")
 router = APIRouter(prefix="/api/inventory-docs", tags=["inventory-docs"], dependencies=[Depends(require_org_access)])
 
 
+def _to_cents(value) -> int | None:
+    """Dollars (float/str, possibly with $ or commas) -> integer cents, or None."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, str):
+            value = value.replace("$", "").replace(",", "").strip()
+            if not value:
+                return None
+        return int(round(float(value) * 100))
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get("/{org_id}")
 async def list_docs(org_id: str):
     from ...db import _db_instance as db
@@ -115,21 +129,65 @@ async def _process_inventory_doc(org_id: str, doc: dict):
         file_type = doc.get("file_type", "")
         extracted = await _extract_with_ai(file_bytes, file_type, doc["file_name"])
 
+        # Fail clearly instead of silently "completing" with nothing — e.g. the
+        # extractor isn't configured, or couldn't read any line-items.
+        if not extracted or (not extracted.get("items") and extracted.get("error")):
+            raise RuntimeError(extracted.get("error") if extracted else "Could not read the document")
+        if not extracted.get("items"):
+            raise RuntimeError("No products with costs were found in that document")
+
+        # Map extracted line-items onto the products catalog. The AI returns
+        # dollar amounts (cost / selling_price); the products table stores
+        # integer cents in `cost_cents` / `price_cents`. Match invoice items to
+        # existing catalog rows by name (case-insensitive) and UPDATE their cost
+        # so margins can compute; insert genuinely new items. (The previous
+        # version wrote `cost_per_unit`/`selling_price`/`category`/`supplier` —
+        # none of which are real `products` columns — so _clean_row stripped
+        # everything but {org_id,name} and the cost was silently dropped.)
+        matched, inserted, unmatched = 0, 0, []
         if extracted and extracted.get("items"):
-            products = []
+            existing = await db.get_products(org_id)
+            by_name = {(p.get("name") or "").strip().lower(): p for p in existing}
+
             for item in extracted["items"]:
-                products.append({
-                    "org_id": org_id,
-                    "name": item.get("name", "Unknown"),
-                    "category": item.get("category"),
-                    "cost_per_unit": item.get("cost"),
-                    "selling_price": item.get("selling_price"),
-                    "supplier": item.get("supplier"),
-                    "unit": item.get("unit", "each"),
-                    "source": "document_upload",
-                })
-            if products:
-                await db.batch_upsert("products", products, on_conflict="org_id,name")
+                name = (item.get("name") or "").strip()
+                if not name:
+                    continue
+                cost_cents = _to_cents(item.get("cost"))
+                price_cents = _to_cents(item.get("selling_price"))
+                if cost_cents is None and price_cents is None:
+                    continue
+
+                match = by_name.get(name.lower())
+                if match:
+                    update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
+                    if cost_cents is not None:
+                        update_fields["cost_cents"] = cost_cents
+                    # Only fill price if the catalog doesn't already have one.
+                    if price_cents is not None and not match.get("price_cents"):
+                        update_fields["price_cents"] = price_cents
+                    await db.update("products", update_fields, filters={"id": f"eq.{match['id']}"})
+                    matched += 1
+                else:
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    await db.insert("products", {
+                        "org_id": org_id,
+                        "name": name,
+                        "cost_cents": cost_cents,
+                        "price_cents": price_cents,
+                        "is_active": True,
+                        "created_at": now_iso,
+                        "updated_at": now_iso,
+                    })
+                    inserted += 1
+                    unmatched.append(name)
+
+        # Record the match outcome so the UI can surface "N items couldn't be
+        # matched to a product in your catalog".
+        if isinstance(extracted, dict):
+            extracted["_match_summary"] = {
+                "matched": matched, "inserted": inserted, "unmatched_names": unmatched,
+            }
 
         await db.update(
             "inventory_document_uploads",
@@ -140,7 +198,10 @@ async def _process_inventory_doc(org_id: str, doc: dict):
             },
             filters={"id": f"eq.{doc_id}"},
         )
-        logger.info(f"Inventory doc processed for org={org_id}: {len(extracted.get('items', []))} items extracted")
+        logger.info(
+            f"Inventory doc processed for org={org_id}: "
+            f"{len(extracted.get('items', []))} extracted, {matched} cost-matched, {inserted} new"
+        )
 
     except Exception as e:
         logger.error(f"Inventory doc processing failed for org={org_id}: {e}", exc_info=True)

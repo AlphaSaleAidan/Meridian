@@ -353,7 +353,47 @@ export const api = {
   margins: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.margins())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/margins', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/margins', { params: { org_id: orgId, days: 365 } })
+        .then((r: any) => ({
+          summary: r.summary ?? {},
+          // Backend returns snake_case `products`; the page renders MarginItem[]
+          // under `items`. Map the real fields and default the demo-only
+          // embellishments (waste/leakage/ingredients) so real margins render.
+          items: (r.products ?? []).map((p: any) => {
+            const revenueCents = p.revenue_cents ?? 0
+            const costCents = p.cost_cents ?? 0
+            const qty = p.quantity_sold ?? 0
+            return {
+              name: p.name ?? 'Unknown',
+              revenueCents,
+              costCents,
+              marginCents: p.profit_cents ?? (revenueCents - costCents),
+              marginPct: p.margin_pct ?? 0,
+              leakageCents: 0,
+              category: '',
+              sellingPriceCents: qty ? Math.round(revenueCents / qty) : 0,
+              monthlySales: qty,
+              rawCostPerServingCents: qty ? Math.round(costCents / qty) : 0,
+              wasteAdjustedCostCents: costCents,
+              pourCostPct: revenueCents ? Math.round((costCents / revenueCents) * 100) : 0,
+              marginPerUnitCents: qty ? Math.round((revenueCents - costCents) / qty) : 0,
+              wasteFactor: 0,
+              ingredients: [],
+            }
+          }),
+        })),
+
+  // Inventory cost-sheet processing (upload happens via supabase storage in the
+  // component; these trigger AI extraction + poll status).
+  processInventoryDoc: (orgId: string, docId: string) =>
+    apiFetch<{ status: string; message?: string }>(
+      `/api/inventory-docs/${orgId}/process/${docId}`, { method: 'POST', params: { org_id: orgId } },
+    ),
+
+  inventoryDocStatus: (orgId: string, docId: string) =>
+    apiFetch<{ status: string; extracted_data?: any; error_message?: string }>(
+      `/api/inventory-docs/${orgId}/status/${docId}`, { params: { org_id: orgId } },
+    ),
 
   menuEngineering: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.menuEngineering())
