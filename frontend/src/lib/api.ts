@@ -67,6 +67,14 @@ export interface Overview {
   revenue_change_pct: number
   transaction_count_30d: number
   avg_ticket_cents: number
+  // All-time figures (within a ~13mo window) — used as a fallback so backfilled
+  // history is shown when the trailing 30 days has no sales.
+  lifetime_revenue_cents?: number
+  lifetime_transaction_count?: number
+  lifetime_avg_ticket_cents?: number
+  first_activity_at?: string | null
+  last_activity_at?: string | null
+  lifetime_days_with_data?: number
   money_left_score: MoneyLeftScore | null
   connection: { status: string; provider: string | null; last_sync_at: string | null }
   days_with_data: number

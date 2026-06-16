@@ -24,7 +24,7 @@ const tooltipStyle = {
 type SortKey = 'revenue' | 'quantity' | 'name'
 
 export default function ProductsPage() {
-  const [days, setDays] = useState(30)
+  const [days, setDays] = useState(365)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('revenue')
   const orgId = useOrgId()
@@ -71,13 +71,13 @@ export default function ProductsPage() {
             </p>
           </div>
           <div className="period-toggle">
-            {[7, 30, 90].map(d => (
+            {[30, 90, 365].map(d => (
               <button
                 key={d}
                 onClick={() => setDays(d)}
                 className={days === d ? 'period-btn-active' : 'period-btn-inactive'}
               >
-                {d}D
+                {d === 365 ? '1Y' : `${d}D`}
               </button>
             ))}
           </div>

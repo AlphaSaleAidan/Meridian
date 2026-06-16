@@ -74,8 +74,12 @@ async def get_overview(
     if cached is not None:
         return cached
 
+    # Pull ~13 months so we can report all-time figures alongside the trailing
+    # 30d. A freshly-connected merchant whose backfilled history is all older
+    # than 30 days would otherwise see a $0 hero ("connected but nothing shows")
+    # even though the data is present — surface the history instead.
     daily, money_left, connection = await asyncio.gather(
-        db.get_daily_revenue(org_id, days=60),
+        db.get_daily_revenue(org_id, days=400),
         db.select(
             "money_left_scores",
             filters={"org_id": f"eq.{org_id}"},
@@ -90,7 +94,8 @@ async def get_overview(
     cutoff = (now - timedelta(days=30)).isoformat()
 
     current = [r for r in daily if r.get("day_bucket", "") >= cutoff]
-    prior = [r for r in daily if r.get("day_bucket", "") < cutoff]
+    prior_window = (now - timedelta(days=60)).isoformat()
+    prior = [r for r in daily if prior_window <= r.get("day_bucket", "") < cutoff]
 
     current_revenue = sum(r.get("total_revenue_cents", 0) or 0 for r in current)
     prior_revenue = sum(r.get("total_revenue_cents", 0) or 0 for r in prior)
@@ -101,11 +106,24 @@ async def get_overview(
     if prior_revenue > 0:
         change_pct = round((current_revenue - prior_revenue) / prior_revenue * 100, 1)
 
+    # All-time (within the ~13mo pull) so history is always visible.
+    days_with_data = [r for r in daily if (r.get("total_revenue_cents") or r.get("transaction_count"))]
+    lifetime_revenue = sum(r.get("total_revenue_cents", 0) or 0 for r in daily)
+    lifetime_txns = sum(r.get("transaction_count", 0) or 0 for r in daily)
+    buckets = sorted(r.get("day_bucket", "") for r in days_with_data if r.get("day_bucket"))
+
     result = {
         "revenue_cents_30d": current_revenue,
         "revenue_change_pct": change_pct,
         "transaction_count_30d": current_txns,
         "avg_ticket_cents": avg_ticket,
+        # All-time fields — the frontend falls back to these when the 30d window
+        # is empty so backfilled history is still shown.
+        "lifetime_revenue_cents": lifetime_revenue,
+        "lifetime_transaction_count": lifetime_txns,
+        "lifetime_avg_ticket_cents": (lifetime_revenue // lifetime_txns) if lifetime_txns else 0,
+        "first_activity_at": buckets[0] if buckets else None,
+        "last_activity_at": buckets[-1] if buckets else None,
         "money_left_score": money_left[0] if money_left else None,
         "connection": {
             "status": connection.get("status", "disconnected") if connection else "disconnected",
@@ -113,6 +131,7 @@ async def get_overview(
             "last_sync_at": connection.get("last_sync_at", None) if connection else None,
         },
         "days_with_data": len(current),
+        "lifetime_days_with_data": len(days_with_data),
     }
     dashboard_cache.set(cache_key, result, TTL_FAST)
     return result
@@ -249,20 +268,44 @@ async def get_products(
             "quantity": row.get("total_quantity", 0),
         })
 
-    # Merge product info
-    result = []
-    for pid, perf in perf_by_product.items():
-        product = product_map.get(pid, {})
-        result.append({
+    # List the FULL catalog — every active product appears, even with no sales
+    # in the window. Otherwise a freshly-connected merchant whose only data is
+    # older than `days` sees an empty product list while total_products > 0
+    # (the "connected but nothing shows" symptom). cost_cents is included so the
+    # UI can show true margin where a cost exists (and "needs cost" where null).
+    def _row(perf: dict, product: dict) -> dict:
+        return {
             **perf,
             "name": product.get("name", "Unknown"),
             "sku": product.get("sku"),
             "category_id": product.get("category_id"),
             "price_cents": product.get("price_cents"),
-        })
+            "cost_cents": product.get("cost_cents"),
+        }
 
-    # Sort by revenue descending
-    result.sort(key=lambda x: x["total_revenue_cents"], reverse=True)
+    result = []
+    seen_pids = set()
+    for product in products:
+        pid = product["id"]
+        seen_pids.add(pid)
+        perf = perf_by_product.get(pid) or {
+            "product_id": pid,
+            "total_revenue_cents": 0,
+            "total_quantity": 0,
+            "times_sold": 0,
+            "daily": [],
+        }
+        result.append(_row(perf, product))
+
+    # Keep performance for products no longer in the active catalog
+    # (deleted/inactive) so historical sales aren't silently dropped.
+    for pid, perf in perf_by_product.items():
+        if pid in seen_pids:
+            continue
+        result.append(_row(perf, product_map.get(pid, {})))
+
+    # Sort by revenue descending, then name so the catalog has a stable order
+    result.sort(key=lambda x: (-(x["total_revenue_cents"] or 0), x["name"] or ""))
 
     response = {
         "products": result,

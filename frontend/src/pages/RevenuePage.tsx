@@ -18,9 +18,9 @@ import { useAuth } from '@/lib/auth'
 const Revenue3D = lazy(() => import('@/components/Revenue3D'))
 
 const periods = [
-  { label: '7D', days: 7 },
   { label: '30D', days: 30 },
   { label: '90D', days: 90 },
+  { label: '1Y', days: 365 },
 ]
 
 const tooltipStyle = {
@@ -33,7 +33,7 @@ const tooltipStyle = {
 }
 
 export default function RevenuePage() {
-  const [days, setDays] = useState(30)
+  const [days, setDays] = useState(365)
   const [drillDate, setDrillDate] = useState<string | null>(null)
   const [view3D, setView3D] = useState(false)
   const orgId = useOrgId()
