@@ -11,6 +11,7 @@ import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
 import Top3ActionsPanel from '@/components/Top3ActionsPanel'
+import { HistoricalRevenueSection, OpenOrdersSection } from '@/components/SalesHistorySections'
 
 /**
  * Canada-merchant home — the payable hero surface.
@@ -380,6 +381,10 @@ export default function MerchantHomePage() {
           subtitle={marginPct != null ? 'blended' : 'analyzing…'}
         />
       </div>
+
+      {/* Historical revenue (prior-year) + open-order pipeline from the POS */}
+      <HistoricalRevenueSection />
+      <OpenOrdersSection />
 
       {/* Top 3 Actions */}
       <Top3ActionsPanel />

@@ -299,6 +299,12 @@ export const api = {
     isDemo(orgId) || !orgId ? delay({ years: [], monthly: [], current_year: null, prior_year: null, yoy_pct: null })
     : apiFetch<any>('/api/dashboard/revenue/annual', { params: { org_id: orgId } }),
 
+  // Unpaid OPEN + DRAFT orders (quotes / open tickets) pulled live from the POS.
+  // Pipeline, NOT revenue — surfaced separately from sales numbers.
+  openOrders: (orgId: string) =>
+    isDemo(orgId) || !orgId ? delay({ orders: [], summary: { open_count: 0, draft_count: 0, total_cents: 0 }, provider: null })
+    : apiFetch<any>('/api/dashboard/open-orders', { params: { org_id: orgId } }),
+
   products: (orgId: string, days = 30) =>
     isDemo(orgId) ? delay(demoData.products(days))
     : !orgId ? delay(EMPTY.products)

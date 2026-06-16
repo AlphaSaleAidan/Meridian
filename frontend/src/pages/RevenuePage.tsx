@@ -14,6 +14,7 @@ import TransactionDrillDown from '@/components/TransactionDrillDown'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import DataPageSkeleton from '@/components/DataPageSkeleton'
 import { useAuth } from '@/lib/auth'
+import { HistoricalRevenueSection, OpenOrdersSection } from '@/components/SalesHistorySections'
 
 const Revenue3D = lazy(() => import('@/components/Revenue3D'))
 
@@ -30,66 +31,6 @@ const tooltipStyle = {
   fontSize: '12px',
   color: '#F5F5F7',
   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-}
-
-// Historical revenue by calendar year + monthly trend — lets merchants see
-// prior-year revenue from the ~18 months the backfill pulls.
-function HistoricalRevenueSection() {
-  const orgId = useOrgId()
-  const { data } = useApi<any>(() => api.annualRevenue(orgId), [orgId])
-  const years = data?.years ?? []
-  if (years.length === 0) return null
-
-  const monthly = (data?.monthly ?? []).map((m: any) => ({
-    label: m.month,
-    revenue: (m.revenue_cents ?? 0) / 100,
-  }))
-  const cur = data?.current_year
-  const prior = data?.prior_year
-  const yoy = data?.yoy_pct
-
-  return (
-    <ScrollReveal variant="fadeUp" delay={0.05}>
-      <div className="card p-4 sm:p-5">
-        <div className="flex items-start justify-between mb-4 gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-[#F5F5F7]">Historical Revenue</h3>
-            <p className="text-[10px] text-[#A1A1A8]">Revenue by year — up to ~18 months of history</p>
-          </div>
-          {cur && prior && yoy != null && (
-            <div className="text-right flex-shrink-0">
-              <p className="text-sm font-bold font-mono text-[#F5F5F7]">{formatCentsCompact(cur.revenue_cents)}</p>
-              <p className={`text-[10px] font-mono ${yoy >= 0 ? 'text-[#17C5B0]' : 'text-amber-400'}`}>
-                {yoy >= 0 ? '+' : ''}{yoy}% vs {prior.year}
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          {years.map((y: any) => (
-            <div key={y.year} className="rounded-lg bg-[#1F1F23]/40 p-3">
-              <p className="text-[10px] text-[#A1A1A8]/60 font-mono">{y.year}</p>
-              <p className="text-sm font-bold font-mono text-[#F5F5F7]">{formatCentsCompact(y.revenue_cents)}</p>
-              <p className="text-[10px] text-[#A1A1A8]/40">{formatNumber(y.transaction_count)} txns</p>
-            </div>
-          ))}
-        </div>
-
-        {monthly.length > 1 && (
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={monthly} margin={{ top: 0, right: 5, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: '#A1A1A8', fontSize: 9, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#A1A1A8', fontSize: 9, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false} tickFormatter={formatChartTick} />
-              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }} formatter={(v: number) => [formatCents(v * 100), 'Revenue']} cursor={{ fill: 'rgba(26,143,214,0.04)' }} />
-              <Bar dataKey="revenue" fill="#1A8FD6" radius={[4, 4, 0, 0]} fillOpacity={0.8} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </ScrollReveal>
-  )
 }
 
 export default function RevenuePage() {
@@ -223,6 +164,9 @@ export default function RevenuePage() {
 
       {/* Historical revenue (prior-year) */}
       <HistoricalRevenueSection />
+
+      {/* Open orders / quotes pipeline */}
+      <OpenOrdersSection />
 
       {/* Revenue Chart */}
       <ScrollReveal variant="fadeUp" delay={0.1}>

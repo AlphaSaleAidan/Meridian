@@ -196,6 +196,73 @@ async def get_revenue(
     return result
 
 
+@router.get("/open-orders")
+async def get_open_orders(
+    org_id: OrgId,
+    db=Depends(_get_db),
+):
+    """Unpaid OPEN + DRAFT orders pulled live from the POS — the merchant's
+    pipeline (quotes / open tickets). These are NOT revenue (no payment taken)
+    so they're excluded from the sales numbers; surfaced separately here."""
+    cache_key = dashboard_cache.make_key("open_orders", org_id)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    empty = {"orders": [], "summary": {"open_count": 0, "draft_count": 0, "total_cents": 0}, "provider": None}
+
+    conns = await db.select(
+        "pos_connections",
+        filters={"org_id": f"eq.{org_id}", "provider": "eq.square", "status": "eq.connected"},
+        limit=1,
+    )
+    if not conns:
+        return empty
+    conn = conns[0]
+
+    try:
+        from ...security.encryption import decrypt_token
+        from ...square.client import SquareClient
+        creds = conn.get("credentials_encrypted") or {}
+        token = decrypt_token(creds.get("access_token", "") or conn.get("access_token_enc", ""))
+        if not token:
+            return empty
+
+        orders = []
+        async with SquareClient(access_token=token) as client:
+            locs = await client.list_locations()
+            loc_ids = [l["id"] for l in (locs or [])]
+            raw = await client.search_all_orders(location_ids=loc_ids, states=["OPEN", "DRAFT"])
+            for o in raw:
+                line_items = o.get("line_items") or []
+                orders.append({
+                    "id": o.get("id"),
+                    "state": o.get("state"),
+                    "created_at": o.get("created_at"),
+                    "updated_at": o.get("updated_at"),
+                    "total_cents": (o.get("total_money") or {}).get("amount", 0) or 0,
+                    "item_count": len(line_items),
+                    "items": [li.get("name", "Item") for li in line_items[:4]],
+                    "reference_id": o.get("reference_id"),
+                })
+    except Exception as e:
+        logger.warning("open-orders fetch failed for org=%s: %s", org_id, e)
+        return empty
+
+    orders.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    result = {
+        "orders": orders,
+        "summary": {
+            "open_count": sum(1 for o in orders if o["state"] == "OPEN"),
+            "draft_count": sum(1 for o in orders if o["state"] == "DRAFT"),
+            "total_cents": sum(o["total_cents"] for o in orders),
+        },
+        "provider": "square",
+    }
+    dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
+
+
 @router.get("/revenue/annual")
 async def get_annual_revenue(
     org_id: OrgId,

@@ -292,6 +292,11 @@ export default function SettingsPage() {
   const basePath = location.pathname.startsWith('/app') ? '/app'
     : location.pathname.startsWith('/canada/demo') ? '/canada/demo'
     : '/demo'
+  // Where the sales history + open-orders sections live (home for the Canada
+  // merchant portal, the Revenue page for the /app dashboard).
+  const salesHistoryHref = location.pathname.includes('/canada/merchant') ? '/canada/merchant'
+    : location.pathname.startsWith('/app') ? '/app/revenue'
+    : location.pathname.replace(/\/settings.*$/, '') || '/'
   const orgId = useOrgId()
   const conn = useApi(() => api.connection(orgId), [orgId])
   const [showCameraWizard, setShowCameraWizard] = useState(false)
@@ -315,11 +320,21 @@ export default function SettingsPage() {
       {/* POS Connections */}
       <ScrollReveal variant="fadeUp" delay={0.1}>
         <div className="card overflow-hidden">
-          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
-            <h3 className="text-sm font-semibold text-[#F5F5F7]">POS Connections</h3>
-            <p className="text-[11px] text-[#A1A1A8]/50 mt-0.5">
-              {connections.length > 0 ? 'Your connected POS systems' : 'Select your POS and enter your API key to connect'}
-            </p>
+          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#F5F5F7]">POS Connections</h3>
+              <p className="text-[11px] text-[#A1A1A8]/50 mt-0.5">
+                {connections.length > 0 ? 'Your connected POS systems' : 'Select your POS and enter your API key to connect'}
+              </p>
+            </div>
+            {connections.length > 0 && (
+              <a
+                href={salesHistoryHref}
+                className="flex items-center gap-1 text-[11px] font-medium text-[#1A8FD6] hover:text-[#17C5B0] transition-colors flex-shrink-0 whitespace-nowrap"
+              >
+                View sales history <ExternalLink size={11} />
+              </a>
+            )}
           </div>
 
           {connections.length > 0 ? (
