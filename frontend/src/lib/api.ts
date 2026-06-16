@@ -503,7 +503,7 @@ export const api = {
   customers: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.customers())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/customers', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/customers', { params: { org_id: orgId, days: 365 } }),
 
   agents: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.agents())
