@@ -202,6 +202,11 @@ async def callback(
                     "id": org_id,
                     "name": f"Org {org_id}",
                     "slug": org_id.lower().replace(" ", "-"),
+                    # `vertical` is NOT NULL with no default on organizations — omitting
+                    # it failed the insert, so the org row was never created and the
+                    # pos_connections FK (org_id -> organizations.id) rejected the
+                    # connection ("Connected but failed to save").
+                    "vertical": "other",
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 })

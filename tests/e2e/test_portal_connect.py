@@ -45,6 +45,15 @@ class FakeDB:
     "eq.<value>" convention (also tolerates a bare value).
     """
 
+    # NOT NULL columns with no DB default — mirror the real Postgres schema so a
+    # missing required column fails here the way it does in production. (Sourced
+    # from the live PostgREST OpenAPI 'required' set.) This is what catches the
+    # class of bug where the OAuth callback omitted organizations.vertical.
+    REQUIRED_NOT_NULL: dict[str, set[str]] = {
+        "organizations": {"id", "name", "slug", "vertical", "created_at", "updated_at"},
+        "pos_connections": {"id", "org_id", "provider", "status", "created_at", "updated_at"},
+    }
+
     def __init__(self):
         # table -> list[dict rows]
         self.tables: dict[str, list[dict]] = {
@@ -91,8 +100,15 @@ class FakeDB:
         self.calls.append(("insert", table, data))
         rows = data if isinstance(data, list) else [data]
         stored = []
+        required = self.REQUIRED_NOT_NULL.get(table, set())
         for row in rows:
             row = dict(row)
+            missing = [c for c in required if row.get(c) in (None, "")]
+            if missing:
+                # Emulate Postgres 23502 NOT NULL violation, as PostgREST/SupabaseREST would raise.
+                raise RuntimeError(
+                    f"23502 null value in column(s) {missing} of table '{table}' violates not-null constraint"
+                )
             self._rows(table).append(row)
             stored.append(row)
         return stored if return_data else []
