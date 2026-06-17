@@ -206,9 +206,9 @@ export function generateAgents(): AgentInfo[] {
     { id: 'retention-strategist', name: 'Retention Strategist', status: 'active', lastRun: hoursAgo(2), nextRun: hoursFromNow(4), findings: 4, confidence: 79, category: 'strategy', description: 'Recommends specific retention plays per customer segment', latestFinding: bizSub('Winback offer for 12 lapsed customers: 15% discount projected to recover $840/mo') },
     { id: 'staff-performance-analyst', name: 'Staff Performance', status: 'active', lastRun: hoursAgo(3), nextRun: hoursFromNow(3), findings: 5, confidence: 82, category: 'analysis', description: 'Correlates staff schedules with revenue and upsell metrics', latestFinding: bizSub('Sarah M. achieves 2.3x avg upsell rate during morning shifts — model for training') },
     { id: 'peak-hour-optimizer', name: 'Peak Hour Optimizer', status: 'active', lastRun: hoursAgo(1), nextRun: hoursFromNow(5), findings: 3, confidence: 90, category: 'optimization', description: 'Maps transaction density and recommends staffing levels', latestFinding: `${getBusinessProfile(getActiveBusinessType()).peakLabel} generates 47% of daily revenue but is 1 staff member short` },
-    { id: 'inventory-intelligence', name: 'Inventory Intelligence', status: 'active', lastRun: hoursAgo(2), nextRun: hoursFromNow(4), findings: 4, confidence: 85, category: 'optimization', description: 'Predicts stockout risk and optimal reorder points', latestFinding: bizSub('Espresso beans will stockout in 2 days at current velocity — reorder now') },
+    { id: 'inventory-intelligence', name: 'Inventory Intelligence', status: 'active', lastRun: hoursAgo(2), nextRun: hoursFromNow(4), findings: 4, confidence: 85, category: 'optimization', description: 'Predicts stockout risk and optimal reorder points', latestFinding: bizSub('Espresso stock will run out in 2 days at current velocity — reorder now') },
     { id: 'competitor-benchmarker', name: 'Competitor Benchmarker', status: 'idle', lastRun: hoursAgo(24), nextRun: hoursFromNow(24), findings: 3, confidence: 72, category: 'analysis', description: 'Compares metrics against industry benchmarks', latestFinding: bizSub('Average ticket $10.20 is 16% above Coffee Shop industry median of $8.80') },
-    { id: 'margin-optimizer', name: 'Margin Optimizer', status: 'active', lastRun: hoursAgo(1), nextRun: hoursFromNow(5), findings: 5, confidence: 83, category: 'optimization', description: 'Identifies margin leakage and pricing opportunities', latestFinding: bizSub('Matcha Latte margin at 62% vs 75% category avg — ingredient cost review needed') },
+    { id: 'margin-optimizer', name: 'Margin Optimizer', status: 'active', lastRun: hoursAgo(1), nextRun: hoursFromNow(5), findings: 5, confidence: 83, category: 'optimization', description: 'Identifies margin leakage and pricing opportunities', latestFinding: bizSub('Matcha Latte margin at 62% vs 75% category avg — unit cost review needed') },
     { id: 'loyalty-architect', name: 'Loyalty Architect', status: 'idle', lastRun: hoursAgo(48), nextRun: hoursFromNow(48), findings: 2, confidence: 71, category: 'strategy', description: 'Monitors loyalty program ROI and reward optimization', latestFinding: bizSub('Points redemption rate 23% — below 35% benchmark. Simplify reward tiers.') },
     { id: 'location-analyst', name: 'Location Analyst', status: 'idle', lastRun: hoursAgo(72), nextRun: hoursFromNow(96), findings: 1, confidence: 68, category: 'analysis', description: 'Compares multi-location performance metrics', latestFinding: bizSub('Single location detected — agent will activate when additional locations are added') },
     { id: 'insight-narrator', name: 'Insight Narrator', status: 'active', lastRun: minutesAgo(30), nextRun: hoursFromNow(2), findings: 10, confidence: 87, category: 'coordination', description: 'Synthesizes all agent findings into plain English narratives', latestFinding: bizSub('Generated executive brief: 3 critical actions, $3,200/mo combined impact potential') },
@@ -248,9 +248,11 @@ export function generateTopActions(): TopAction[] {
   const peak = bp.peakLabel
   const scaleMap: Record<string, number> = { coffee_shop: 1, restaurant: 3, fast_food: 2, auto_shop: 2.5, smoke_shop: 0.7 }
   const m = scaleMap[bt] || 1
-  const $s = (base: number) => `$${Math.round(base * m).toLocaleString()}`
+  // cx() applies the currency multiplier (1.38 on Canada, 1.0 elsewhere) so the
+  // prose dollar figures match the CAD-scaled impactCents badges the panel renders.
+  const $s = (base: number) => `$${cx(base * m).toLocaleString()}`
   const sm = (cents: number) => Math.round(cents * m)
-  const pFmt = (cents: number) => `$${(cents / 100).toFixed(2)}`
+  const pFmt = (cents: number) => `$${(cx(cents) / 100).toFixed(2)}`
   const p4 = p[4] || { name: 'Item E', price: 625 }
   const p1 = p[1] || { name: 'Item B', price: 525 }
   const p9 = p[9] || { name: 'Item J', price: 425 }
@@ -478,10 +480,10 @@ export function generateTopActions(): TopAction[] {
     },
     {
       rank: 10,
-      title: bizSub('Target 23 Champions with exclusive early access to new Iced Latte flavor'),
+      title: 'Target 23 Champions with an exclusive preview of upcoming products & member-only perks',
       description: bizSub('Customer-segmentor identified 23 Champions (top 8% by RFM score) driving 41% of revenue. Customer-ltv BG/NBD model confirms p(alive) >0.95 for this cohort. Loyalty-architect recommends exclusive preview to deepen engagement.'),
-      expectedImpact: bizSub('+$280/month from increased Champion visit frequency'),
-      impactCents: cx(28000),
+      expectedImpact: bizSub(`+${$s(280)}/month from increased Champion visit frequency`),
+      impactCents: cx(sm(28000)),
       effort: 'Low',
       confidence: 76,
       priority: 'Medium',
@@ -490,8 +492,8 @@ export function generateTopActions(): TopAction[] {
       reasoning: {
         observation: bizSub('23 Champion customers: RFM score 5/5/5, avg 18 visits/mo, avg spend $15.80/visit, LTV $4,200+. BG/NBD p(alive): 0.95-0.98. 4 of 23 showing early frequency decline (18 → 14 visits/mo).'),
         reasoning: bizSub('Customer-segmentor RFM analysis assigned segment via recency (days since last visit), frequency (visits/90d), monetary (avg order value). Customer-ltv ran BG/NBD model (lifetimes library) for p(alive) and Gamma-Gamma for expected monetary value. 4 Champions showing 22% frequency decline — early churn signal. Loyalty-architect recommends exclusive preview (cost: ~$0/marginal cost for existing inventory) to arrest decline. If it recovers 2 of 4 declining Champions: 2 x 4 extra visits/mo x $15.80 = $126/mo. Plus word-of-mouth from 23 Champions driving 1 new referral/mo at $140 LTV = $280/mo total.'),
-        conclusion: bizSub('Send personalized invite to Champions for exclusive early tasting of new Iced Latte seasonal flavor. Track with customer-recognizer for visit frequency changes over 30 days.'),
-        impact: bizSub('+$280/month from retained Champion frequency + referral revenue'),
+        conclusion: 'Send personalized invites to Champions for an exclusive preview of upcoming products and member-only perks. Track with customer-recognizer for visit frequency changes over 30 days.',
+        impact: bizSub(`+${$s(280)}/month from retained Champion frequency + referral revenue`),
         confidence: 76,
         priority: 'Medium',
         rawData: { champion_count: 23, revenue_share: '41%', avg_visits_month: 18, avg_spend: '$15.80', declining_count: 4, bg_nbd_p_alive: '0.95-0.98', gamma_gamma_emv: '$15.80', rfm_score: '5/5/5', model: 'BG/NBD + Gamma-Gamma + RFM' },
