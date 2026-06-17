@@ -290,11 +290,14 @@ function generateInsights(): { insights: Insight[]; total: number } {
   }
   const m = scaleMap[bt] || 1
 
-  // Dynamic price helpers
-  const priceFmt = (cents: number) => `$${(cents / 100).toFixed(2)}`
-  const p4price = (p[4]?.price || 625) / 100
-  const p3price = (p[3]?.price || 500) / 100
-  const p10price = (p[10]?.price || 895) / 100
+  // Dynamic price helpers. cx() applies the currency multiplier (1.38 on the
+  // Canada portal, 1.0 elsewhere) so every prose dollar figure matches the
+  // CAD-scaled impact_cents badges the cards render. Product prices carry no
+  // business-scale (m), only currency; revenue figures carry both.
+  const priceFmt = (cents: number) => `$${(cx(cents) / 100).toFixed(2)}`
+  const p4price = cx(p[4]?.price || 625) / 100
+  const p3price = cx(p[3]?.price || 500) / 100
+  const p10price = cx(p[10]?.price || 895) / 100
   const p4suggest = Math.round(p4price * 1.12 * 100) / 100
   const p3suggest = Math.round(p3price * 1.10 * 100) / 100
   const p10suggest = Math.round(p10price * 1.11 * 100) / 100
@@ -302,7 +305,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
   const p3name = p[3]?.name || 'Item D'
   const p10name = p[10]?.name || 'Item K'
 
-  const $s = (base: number) => `$${Math.round(base * m).toLocaleString()}`
+  const $s = (base: number) => `$${cx(base * m).toLocaleString()}`
   const sm = (cents: number) => Math.round(cents * m) // scale cents
   const txPerDay = bt === 'auto_shop' ? 22 : bt === 'smoke_shop' ? 65 : sm(118)
   const pzM4 = Math.round((p[4]?.price || 625) * 0.45)
@@ -348,9 +351,9 @@ function generateInsights(): { insights: Insight[]; total: number } {
       summary: `Our analysis identified 3 products where data supports a price adjustment. Top opportunity: *${p4name}* — current price ${priceFmt(p[4]?.price || 625)}, demand elasticity analysis shows highly inelastic demand (elasticity: -0.3), supporting a ${priceFmt(Math.round((p[4]?.price || 625) * 0.12))} increase.\n\n*Economic rationale:*\nHarvard Business Review research demonstrates that a 1% price increase yields an average 11.1% improvement in operating profit — making pricing the single highest-leverage variable in the P&L [Harvard Business Review, 2023]. Businesses using data-driven menu engineering achieve 8-15% higher gross margins vs. cost-plus pricing [Cornell Hospitality Quarterly, 2024].\n\nMeta-analysis data shows items with <5% price increases exhibit near-zero demand reduction (mean elasticity: -1.2 for staples) [Journal of Marketing Research, 2023].\n\n*Implementation:*\n1. ${p4name}: $${p4price.toFixed(2)} → $${p4suggest.toFixed(2)} (+12%, still below competitor avg)\n2. ${p3name}: $${p3price.toFixed(2)} → $${p3suggest.toFixed(2)} (+10%, high demand inelasticity)\n3. ${p10name}: $${p10price.toFixed(2)} → $${p10suggest.toFixed(2)} (+11%, premium positioning supports it)\n4. Total combined potential: ${$s(840)}/month`,
       details: {
         opportunities: [
-          { name: p4name, current: p[4]?.price || 625, suggested: Math.floor((p[4]?.price || 625) * 1.12), elasticity: -0.3 },
-          { name: p3name, current: p[3]?.price || 500, suggested: Math.floor((p[3]?.price || 500) * 1.10), elasticity: -0.4 },
-          { name: p10name, current: p[10]?.price || 895, suggested: Math.floor((p[10]?.price || 895) * 1.11), elasticity: -0.6 },
+          { name: p4name, current: cx(p[4]?.price || 625), suggested: cx(Math.floor((p[4]?.price || 625) * 1.12)), elasticity: -0.3 },
+          { name: p3name, current: cx(p[3]?.price || 500), suggested: cx(Math.floor((p[3]?.price || 500) * 1.10)), elasticity: -0.4 },
+          { name: p10name, current: cx(p[10]?.price || 895), suggested: cx(Math.floor((p[10]?.price || 895) * 1.11)), elasticity: -0.6 },
         ],
         citations: ['hbr_pricing_power', 'cornell_menu_pricing', 'jmr_elasticity', 'mckinsey_pricing'],
       },
@@ -359,7 +362,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     },
     {
       id: uuid(),
-      type: 'anomaly',
+      type: 'seasonal',
       title: `\u{1F327}️ Weather Correlation Detected: Rain Days = -23% Revenue`,
       summary: `Meridian's pattern analysis detected a strong negative correlation between precipitation and your daily revenue. On days with >0.1" rainfall, revenue drops an average of 23% (${$s(387)} below daily mean).\n\n*Intelligence synthesis:*\nNation's Restaurant News reports that weather accounts for $22B in annual U.S. restaurant revenue variability [NRN, 2026]. Deloitte's retail analytics practice found that businesses with weather-responsive operations (adjusting staffing, promotions, and inventory based on forecasts) recover 40-60% of weather-related revenue losses [Deloitte Insights, 2026].\n\n*Weather playbook:*\n1. Monitor 3-day forecasts — reduce prep by 20% on predicted rain days\n2. Launch "rainy day specials" via push notification or social media\n3. Cut one staff member on rain days to protect labor ratio\n4. Promote delivery/pickup options more aggressively when rain is forecast\n5. *Estimated recovery:* 40% of weather losses = ${$s(155)}/rain day`,
       details: {
@@ -422,9 +425,9 @@ function generateInsights(): { insights: Insight[]; total: number } {
       summary: `Meridian's menu engineering analysis classified your products into the Boston Consulting Group matrix. Three items are "Puzzles" — high profitability but low popularity: ${p4name} (${priceFmt(pzM4)} margin, 3.1% of orders), ${p[7]?.name || 'Item H'} (${priceFmt(pzM7)} margin, 2.8% of orders), and ${p[11]?.name || 'Item L'} (${priceFmt(pzM11)} margin, 1.9% of orders).\n\n*Research-backed strategy:*\nCornell's menu engineering framework shows that repositioning Puzzles through strategic placement, staff recommendations, and bundling converts 30-50% into Stars within 4-6 weeks [Cornell Hospitality Quarterly, 2024]. McKinsey's consumer research confirms that item visibility drives 22% of customer selection — meaning placement changes alone can shift order patterns [McKinsey Consumer, 2025].\n\n*Conversion playbook:*\n1. Move all 3 Puzzles to the "golden triangle" on your menu board (top-right quadrant)\n2. Train staff to recommend one Puzzle per customer interaction\n3. Create a combo: Puzzle item + Star item at 10% bundle discount\n4. *Expected lift:* Convert 1-2 Puzzles to Stars = ${$s(340)}-${$s(680)}/mo additional margin`,
       details: {
         puzzles: [
-          { name: p[4]?.name || 'Item E', margin_cents: pzM4, order_pct: 3.1 },
-          { name: p[7]?.name || 'Item H', margin_cents: pzM7, order_pct: 2.8 },
-          { name: p[11]?.name || 'Item L', margin_cents: pzM11, order_pct: 1.9 },
+          { name: p[4]?.name || 'Item E', margin_cents: cx(pzM4), order_pct: 3.1 },
+          { name: p[7]?.name || 'Item H', margin_cents: cx(pzM7), order_pct: 2.8 },
+          { name: p[11]?.name || 'Item L', margin_cents: cx(pzM11), order_pct: 1.9 },
         ],
         citations: ['cornell_menu_engineering', 'mckinsey_consumer_choice', 'nra_menu_trends'],
       },
@@ -464,12 +467,12 @@ function generateInsights(): { insights: Insight[]; total: number } {
     },
     {
       id: uuid(),
-      type: 'staffing',
+      type: 'seasonal',
       title: `\u{1F4C5} Monday Revenue Gap: 38% Below Saturday — ${$s(620)}/Mo Recovery Potential`,
       summary: `Saturday averages ${$s(2180)} while Monday generates only ${$s(1350)} — a 38% revenue gap.\n\nNRA daypart research shows businesses capturing 3+ strong dayparts achieve 40% higher revenue per square foot [National Restaurant Association, 2025]. Counter-seasonal promotions can recover 30-50% of the weakest day's revenue gap [National Restaurant Association, 2025].\n\n*Monday recovery playbook:*\n1. Launch a Monday-specific promotion (e.g., "Happy Monday" with a featured item at 15% off)\n2. Test a loyalty multiplier (2x points on Mondays)\n3. Shift marketing spend to drive traffic on slow days\n4. *Target:* Close 25% of the gap = ${$s(620)}/month`,
       details: {
-        best_day: { name: 'Saturday', avg_cents: sm(218000) },
-        worst_day: { name: 'Monday', avg_cents: sm(135000) },
+        best_day: { name: 'Saturday', avg_cents: cx(sm(218000)) },
+        worst_day: { name: 'Monday', avg_cents: cx(sm(135000)) },
         gap_pct: 38,
         citations: ['nra_daypart_analysis', 'nra_seasonal_trends'],
       },
@@ -482,7 +485,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
       title: `\u{1F4C8} Statistical Anomaly: 42% Above Expected (Last Saturday)`,
       summary: `Revenue of ${$s(3180)} last Saturday represents a 42% deviation from the expected ${$s(2240)} (z-score: 2.8σ, confidence: 56%).\n\n*Positive anomaly investigation:*\nIdentify the driver — was it higher traffic, larger tickets, or a specific product? If replicable, this pattern could be worth ~${$s(940)}/occurrence. McKinsey's customer analytics research shows businesses that identify and replicate positive anomalies see 10-30% lift in targeted segments [McKinsey & Company, 2024].\n\nPreliminary analysis suggests the spike correlated with a local event. Consider partnering for recurring cross-promotion.`,
       details: {
-        anomaly: { date: daysAgo(2), revenue_cents: sm(318000), expected_cents: sm(224000), z_score: 2.8, type: 'spike' },
+        anomaly: { date: daysAgo(2), revenue_cents: cx(sm(318000)), expected_cents: cx(sm(224000)), z_score: 2.8, type: 'spike' },
         citations: ['mckinsey_customer_analytics', 'nra_seasonal_trends'],
       },
       impact_cents: cx(sm(94000)), confidence: 0.56, action_status: 'viewed',
@@ -492,11 +495,11 @@ function generateInsights(): { insights: Insight[]; total: number } {
       id: uuid(),
       type: 'pricing',
       title: `\u{1F3F7}️ Discount Rate at 4.8% — Margin Erosion Risk`,
-      summary: `Your discount rate (4.8%) exceeds the industry benchmark of 3.0%. This costs you an estimated $${sm(310).toLocaleString()} in unnecessary margin erosion. Shift from blanket discounts to targeted, time-limited promotions — research shows targeted promotions outperform blanket discounts 3:1.\n\nResearch from Harvard Business Review shows that targeted, time-limited promotions outperform blanket discounts by a 3:1 margin in terms of incremental revenue generated [Harvard Business Review, 2023].\n\n*Recommended strategy:*\n1. Audit current discount triggers — identify which are driving new customers vs. subsidizing existing ones\n2. Cap blanket discounts at 3% of revenue\n3. Shift budget to targeted offers: loyalty rewards, slow-day promotions, and new customer incentives`,
+      summary: `Your discount rate (4.8%) exceeds the industry benchmark of 3.0%. This costs you an estimated $${cx(sm(310)).toLocaleString()} in unnecessary margin erosion. Shift from blanket discounts to targeted, time-limited promotions — research shows targeted promotions outperform blanket discounts 3:1.\n\nResearch from Harvard Business Review shows that targeted, time-limited promotions outperform blanket discounts by a 3:1 margin in terms of incremental revenue generated [Harvard Business Review, 2023].\n\n*Recommended strategy:*\n1. Audit current discount triggers — identify which are driving new customers vs. subsidizing existing ones\n2. Cap blanket discounts at 3% of revenue\n3. Shift budget to targeted offers: loyalty rewards, slow-day promotions, and new customer incentives`,
       details: {
         actual_rate_pct: 4.8,
         benchmark_rate_pct: 3.0,
-        excess_cents: sm(31000),
+        excess_cents: cx(sm(31000)),
         citations: ['hbr_discount_strategy', 'mckinsey_pricing'],
       },
       impact_cents: cx(sm(31000)), confidence: 0.7, action_status: 'pending',
@@ -506,12 +509,12 @@ function generateInsights(): { insights: Insight[]; total: number } {
       id: uuid(),
       type: 'general',
       title: `\u{1F4A1} Tip Rate at 12.4% — Optimization Can Boost Staff Retention`,
-      summary: `Your tip rate (12.4%) is 5.6 points below the optimal 18.0%. Research from Cornell shows that POS tip prompts with suggested amounts (18%/20%/25%) increase average tips by 38% vs. open-entry fields. Implementing this alone could add ~$${sm(480).toLocaleString()}/month to your staff's take-home pay, improving retention [Cornell Hospitality Quarterly, 2023].\n\nHigher tips don't just help your staff — they directly reduce turnover. With labor costs averaging 28% of revenue in ${indLabel} businesses [Bureau of Labor Statistics, 2025], reducing turnover through better tip income is one of the highest-ROI operational changes available.\n\n*Implementation:* Update your POS tip screen to show preset buttons at 18%, 20%, and 25% (plus custom). Cornell research shows this single change increases tip probability by 27%.`,
+      summary: `Your tip rate (12.4%) is 5.6 points below the optimal 18.0%. Research from Cornell shows that POS tip prompts with suggested amounts (18%/20%/25%) increase average tips by 38% vs. open-entry fields. Implementing this alone could add ~$${cx(sm(480)).toLocaleString()}/month to your staff's take-home pay, improving retention [Cornell Hospitality Quarterly, 2023].\n\nHigher tips don't just help your staff — they directly reduce turnover. With labor costs averaging 28% of revenue in ${indLabel} businesses [Bureau of Labor Statistics, 2025], reducing turnover through better tip income is one of the highest-ROI operational changes available.\n\n*Implementation:* Update your POS tip screen to show preset buttons at 18%, 20%, and 25% (plus custom). Cornell research shows this single change increases tip probability by 27%.`,
       details: {
         current_rate_pct: 12.4,
         optimal_rate_pct: 18.0,
         gap_pct: 5.6,
-        monthly_potential_cents: sm(48000),
+        monthly_potential_cents: cx(sm(48000)),
         citations: ['cornell_tipping', 'bls_labor_costs', 'square_payments_report'],
       },
       impact_cents: cx(sm(48000)), confidence: 0.65, action_status: 'accepted',
@@ -519,13 +522,13 @@ function generateInsights(): { insights: Insight[]; total: number } {
     },
     {
       id: uuid(),
-      type: 'general',
+      type: 'benchmark',
       title: `\u{1F4C8} Strong Revenue Momentum — Compounding Growth Detected`,
       summary: `Week-over-week revenue grew +8.3%, reflecting sustained demand acceleration. Your trailing average of ${$s(1680)}/day across ${txPerDay} daily transactions indicates healthy throughput. Relative to the ${indLabel} industry benchmark, your daily revenue places you in the above median (+16.2% vs. industry median of ${$s(1450)}/day).\n\nAt this trajectory, annualized revenue projects to ~${$s(613200)}, assuming no seasonal adjustment. To sustain this growth curve, ensure staffing scales proportionally — understaffed peak hours cost 8-15% of potential revenue [MIT Sloan Management Review, 2024].\n\n*Recommended actions:*\n1. Lock in supplier agreements at current volume to protect margins\n2. Evaluate whether current ${peak} staffing can support continued growth\n3. Consider modest price increases on top sellers while demand is strong — a 1% price lift yields ~11% operating profit improvement [Harvard Business Review, 2023]`,
       details: {
         wow_growth_pct: 8.3,
-        avg_daily_cents: sm(168000),
-        annualized_cents: sm(61320000),
+        avg_daily_cents: cx(sm(168000)),
+        annualized_cents: cx(sm(61320000)),
         benchmark_gap_pct: 16.2,
         citations: ['nra_2025_pricing', 'mit_sloan_scheduling', 'hbr_pricing_power'],
       },
@@ -702,15 +705,21 @@ function generateOverview(daily: DailyRevenue[]): Overview {
   const priorRevenue = Math.floor(totalRevenue * 0.88) // 12% growth
   const changePct = ((totalRevenue - priorRevenue) / priorRevenue) * 100
 
+  // Scale by business type (same multiplier the insight cards use) so the
+  // dashboard money-left score matches the money_left insight card, then apply
+  // the currency multiplier via cx() — consistent on both US and Canada.
+  const mlScale: Record<string, number> = { coffee_shop: 1, restaurant: 3, fast_food: 2, auto_shop: 2.5, smoke_shop: 0.7 }
+  const mlm = mlScale[getActiveBusinessType()] || 1
+  const mlc = (cents: number) => cx(Math.round(cents * mlm))
   const moneyLeft: MoneyLeftScore = {
     id: uuid(),
-    total_score_cents: cx(234000),
+    total_score_cents: mlc(234000),
     components: {
-      underpriced_products: { amount_cents: cx(52000), label: 'Pricing', description: 'Items underpriced vs market' },
-      peak_hour_missed: { amount_cents: cx(84000), label: 'Peak Hours', description: 'Revenue lost from understaffed peak hours' },
-      dead_stock: { amount_cents: cx(38000), label: 'Dead Stock', description: 'Zero-velocity inventory holding costs' },
-      staffing_waste: { amount_cents: cx(32000), label: 'Staffing', description: 'Labor cost optimization' },
-      discount_leakage: { amount_cents: cx(28000), label: 'Discounts', description: 'Excessive discounting eroding margins' },
+      underpriced_products: { amount_cents: mlc(52000), label: 'Pricing', description: 'Items underpriced vs market' },
+      peak_hour_missed: { amount_cents: mlc(84000), label: 'Peak Hours', description: 'Revenue lost from understaffed peak hours' },
+      dead_stock: { amount_cents: mlc(38000), label: 'Dead Stock', description: 'Zero-velocity inventory holding costs' },
+      staffing_waste: { amount_cents: mlc(32000), label: 'Staffing', description: 'Labor cost optimization' },
+      discount_leakage: { amount_cents: mlc(28000), label: 'Discounts', description: 'Excessive discounting eroding margins' },
     },
     scored_at: hoursAgo(1),
   }
@@ -909,7 +918,14 @@ export const demoData = {
   insights: (limit: number) => {
     resetSeed()
     const all = generateInsights()
-    return { insights: all.insights.slice(0, limit), total: all.total }
+    // Rotate the deck daily so the demo feels fresh on repeat visits, but keep
+    // the money_left headline pinned at the top — it's the hero insight.
+    const dayOffset = Math.floor(Date.now() / 86_400_000)
+    const head = all.insights.filter(i => i.type === 'money_left')
+    const rest = all.insights.filter(i => i.type !== 'money_left')
+    const o = rest.length ? ((dayOffset % rest.length) + rest.length) % rest.length : 0
+    const rotated = [...head, ...rest.slice(o), ...rest.slice(0, o)]
+    return { insights: rotated.slice(0, limit), total: all.total }
   },
 
   forecasts: () => { resetSeed(); return generateForecasts() },
