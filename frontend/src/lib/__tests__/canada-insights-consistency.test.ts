@@ -112,6 +112,25 @@ describe('Canada insights diagnostic', () => {
       // ---- Agents latest findings (slop only) ----
       for (const ag of generateAgents()) scanText(`agent ${ag.name}`, ag.latestFinding, findings, leak)
 
+      // ---- Grouping correctness ----
+      // Every insight type must map to a real Insights-page filter tab, and the
+      // Seasonal / Benchmarks tabs must not be empty.
+      const VALID_TYPES = new Set(['money_left', 'product_recommendation', 'pricing', 'staffing', 'anomaly', 'seasonal', 'inventory', 'benchmark', 'general'])
+      const types = insights.map(i => i.type)
+      for (const t of new Set(types)) if (!VALID_TYPES.has(t)) findings.push(`[GROUP] insight type "${t}" maps to no filter tab`)
+      for (const need of ['seasonal', 'benchmark']) if (!types.includes(need)) findings.push(`[GROUP] filter "${need}" has zero insights (empty tab)`)
+
+      // Top Actions bucket by effort: Low -> "Today · Instant win", else "This
+      // week · Strategic". Need enough in each lane, and genuinely strategic
+      // moves (campaigns/programs/launches) must never sit in the instant lane.
+      const actions = generateTopActions()
+      if (actions.filter(a => a.effort === 'Low').length < 2) findings.push('[GROUP] <2 instant-win (Low) actions; daily lane shows 2')
+      if (actions.filter(a => a.effort !== 'Low').length < 1) findings.push('[GROUP] <1 strategic action; weekly lane shows 1')
+      // "switch to" catches the forecast-model change; "ensemble" alone is NOT
+      // strategic (it appears in #4's same-day anomaly investigation).
+      const STRATEGIC = /\b(campaign|program|launch|bundle|preview|member|winback)\b|switch to/i
+      for (const a of actions) if (a.effort === 'Low' && STRATEGIC.test(a.title)) findings.push(`[GROUP] strategic action in instant-win lane: ${a.title}`)
+
       if (findings.length) {
         console.log(`\n===== ${v}: ${findings.length} findings =====`)
         for (const f of findings) console.log(f)
