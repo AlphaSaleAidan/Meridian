@@ -362,7 +362,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     },
     {
       id: uuid(),
-      type: 'anomaly',
+      type: 'seasonal',
       title: `\u{1F327}️ Weather Correlation Detected: Rain Days = -23% Revenue`,
       summary: `Meridian's pattern analysis detected a strong negative correlation between precipitation and your daily revenue. On days with >0.1" rainfall, revenue drops an average of 23% (${$s(387)} below daily mean).\n\n*Intelligence synthesis:*\nNation's Restaurant News reports that weather accounts for $22B in annual U.S. restaurant revenue variability [NRN, 2026]. Deloitte's retail analytics practice found that businesses with weather-responsive operations (adjusting staffing, promotions, and inventory based on forecasts) recover 40-60% of weather-related revenue losses [Deloitte Insights, 2026].\n\n*Weather playbook:*\n1. Monitor 3-day forecasts — reduce prep by 20% on predicted rain days\n2. Launch "rainy day specials" via push notification or social media\n3. Cut one staff member on rain days to protect labor ratio\n4. Promote delivery/pickup options more aggressively when rain is forecast\n5. *Estimated recovery:* 40% of weather losses = ${$s(155)}/rain day`,
       details: {
@@ -467,7 +467,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     },
     {
       id: uuid(),
-      type: 'staffing',
+      type: 'seasonal',
       title: `\u{1F4C5} Monday Revenue Gap: 38% Below Saturday — ${$s(620)}/Mo Recovery Potential`,
       summary: `Saturday averages ${$s(2180)} while Monday generates only ${$s(1350)} — a 38% revenue gap.\n\nNRA daypart research shows businesses capturing 3+ strong dayparts achieve 40% higher revenue per square foot [National Restaurant Association, 2025]. Counter-seasonal promotions can recover 30-50% of the weakest day's revenue gap [National Restaurant Association, 2025].\n\n*Monday recovery playbook:*\n1. Launch a Monday-specific promotion (e.g., "Happy Monday" with a featured item at 15% off)\n2. Test a loyalty multiplier (2x points on Mondays)\n3. Shift marketing spend to drive traffic on slow days\n4. *Target:* Close 25% of the gap = ${$s(620)}/month`,
       details: {
@@ -522,7 +522,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     },
     {
       id: uuid(),
-      type: 'general',
+      type: 'benchmark',
       title: `\u{1F4C8} Strong Revenue Momentum — Compounding Growth Detected`,
       summary: `Week-over-week revenue grew +8.3%, reflecting sustained demand acceleration. Your trailing average of ${$s(1680)}/day across ${txPerDay} daily transactions indicates healthy throughput. Relative to the ${indLabel} industry benchmark, your daily revenue places you in the above median (+16.2% vs. industry median of ${$s(1450)}/day).\n\nAt this trajectory, annualized revenue projects to ~${$s(613200)}, assuming no seasonal adjustment. To sustain this growth curve, ensure staffing scales proportionally — understaffed peak hours cost 8-15% of potential revenue [MIT Sloan Management Review, 2024].\n\n*Recommended actions:*\n1. Lock in supplier agreements at current volume to protect margins\n2. Evaluate whether current ${peak} staffing can support continued growth\n3. Consider modest price increases on top sellers while demand is strong — a 1% price lift yields ~11% operating profit improvement [Harvard Business Review, 2023]`,
       details: {
@@ -918,7 +918,14 @@ export const demoData = {
   insights: (limit: number) => {
     resetSeed()
     const all = generateInsights()
-    return { insights: all.insights.slice(0, limit), total: all.total }
+    // Rotate the deck daily so the demo feels fresh on repeat visits, but keep
+    // the money_left headline pinned at the top — it's the hero insight.
+    const dayOffset = Math.floor(Date.now() / 86_400_000)
+    const head = all.insights.filter(i => i.type === 'money_left')
+    const rest = all.insights.filter(i => i.type !== 'money_left')
+    const o = rest.length ? ((dayOffset % rest.length) + rest.length) % rest.length : 0
+    const rotated = [...head, ...rest.slice(o), ...rest.slice(0, o)]
+    return { insights: rotated.slice(0, limit), total: all.total }
   },
 
   forecasts: () => { resetSeed(); return generateForecasts() },
