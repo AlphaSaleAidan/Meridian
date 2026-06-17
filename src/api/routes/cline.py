@@ -69,7 +69,7 @@ def _get_detector_sync():
 
 # ── POST /api/cline/chat ─────────────────────────────────
 
-@router.post("/api/cline/chat", response_model=ChatResponse)
+@router.post("/api/cline/chat", response_model=ChatResponse, dependencies=[Depends(require_org_access)])
 async def cline_chat(req: ChatRequest):
     """Chat with the Cline IT agent about system health."""
     cline = _get_cline_sync()
@@ -92,7 +92,7 @@ async def cline_chat(req: ChatRequest):
 
 # ── POST /api/cline/report-error ─────────────────────────
 
-@router.post("/api/cline/report-error", response_model=ErrorReportResponse)
+@router.post("/api/cline/report-error", response_model=ErrorReportResponse, dependencies=[Depends(require_org_access)])
 async def report_error(req: ErrorReport):
     """Report a frontend error for Cline to analyze and potentially auto-fix."""
     detector = _get_detector_sync()
