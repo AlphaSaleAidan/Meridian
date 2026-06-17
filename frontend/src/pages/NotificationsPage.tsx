@@ -41,20 +41,26 @@ export default function NotificationsPage() {
     setAcknowledging(notifId)
     try {
       await api.acknowledgeNotification(orgId, notifId)
+    } catch {
+      toast('Could not mark as read — please try again', 'error')
+    } finally {
       refetch()
-    } catch { /* ignore */ }
-    setAcknowledging(null)
-  }, [orgId, refetch])
+      setAcknowledging(null)
+    }
+  }, [orgId, refetch, toast])
 
   const handleAcknowledgeAll = useCallback(async () => {
     if (!orgId) return
     setAcknowledging('all')
     try {
       await api.acknowledgeAllNotifications(orgId)
-      refetch()
       toast('All notifications marked as read', 'success')
-    } catch { /* ignore */ }
-    setAcknowledging(null)
+    } catch {
+      toast('Could not mark all as read — please try again', 'error')
+    } finally {
+      refetch()
+      setAcknowledging(null)
+    }
   }, [orgId, refetch, toast])
 
   if (!isDemo && !posConnected) return <DataPageSkeleton title="Notifications"><div /></DataPageSkeleton>
