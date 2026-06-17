@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useOrgId } from './useOrg'
+import { getAuthHeaders } from '@/lib/supabase'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
@@ -16,6 +17,7 @@ export function useInsightsCooldown() {
       try {
         const res = await fetch(
           `${API_BASE}/api/dashboard/insights/cooldown?org_id=${orgId}`,
+          { headers: await getAuthHeaders(), credentials: 'include' },
         )
         if (!res.ok) return
         const data = await res.json()
