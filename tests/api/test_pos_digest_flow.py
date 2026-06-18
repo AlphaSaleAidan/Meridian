@@ -152,3 +152,24 @@ def test_square_split_payment_captures_all_tenders():
         {"type": "cash", "amount_cents": 1000, "employee_id": "e1"},
     ]
     assert txn["metadata"]["card_brand"] == "VISA"
+
+
+# ── Refunds: Square refunded_money captured so net revenue isn't overstated ──
+
+def test_square_payment_enrichment_captures_refund():
+    from src.square.mappers import DataMapper
+    mapper = DataMapper(org_id=ORG)
+    enr = mapper.map_payment_enrichment({
+        "order_id": "o1",
+        "refunded_money": {"amount": 4000, "currency": "USD"},
+        "card_details": {"card": {"card_brand": "VISA", "last_4": "1234"}},
+    })
+    assert enr["metadata_updates"]["refund_cents"] == 4000
+    assert enr["_order_id"] == "o1"
+
+
+def test_square_payment_enrichment_no_refund_omits_field():
+    from src.square.mappers import DataMapper
+    mapper = DataMapper(org_id=ORG)
+    enr = mapper.map_payment_enrichment({"order_id": "o2"})
+    assert "refund_cents" not in enr.get("metadata_updates", {})

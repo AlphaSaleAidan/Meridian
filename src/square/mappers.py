@@ -343,6 +343,13 @@ class DataMapper:
             fee = processing_fee[0].get("amount_money", {})
             metadata_updates["processing_fee_cents"] = fee.get("amount", 0)
 
+        # Refunds: Square Payment.refunded_money is the total refunded to date.
+        # Capture it so net revenue isn't overstated (the order keeps its gross
+        # total otherwise). Metadata, not a new column — no migration.
+        refunded = sq_payment.get("refunded_money", {})
+        if refunded.get("amount"):
+            metadata_updates["refund_cents"] = refunded.get("amount", 0)
+
         risk = sq_payment.get("risk_evaluation", {})
         if risk.get("risk_level"):
             metadata_updates["risk_level"] = risk["risk_level"]
