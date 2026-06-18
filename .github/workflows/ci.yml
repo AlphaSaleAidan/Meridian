@@ -1,0 +1,43 @@
+name: CI
+
+# Fills the gaps left by the existing workflows (syntax-check = py_compile + tsc,
+# gitleaks, security): adds Python lint (ruff) and the deterministic POS
+# ingestion harness so connect/propagation regressions are caught on every PR.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ruff:
+    name: Python lint (ruff)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install ruff --quiet
+      - name: ruff check
+        run: ruff check src/
+
+  pos-ingestion-harness:
+    name: POS ingestion harness (mock tier)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: pip install -r requirements.txt --quiet
+      - name: Run harness (Square + Clover, stubbed — no credentials)
+        env:
+          TESTING: '1'
+          OAUTH_STATE_SECRET: ci-test-only-secret
+          PYTHONPATH: ${{ github.workspace }}
+        run: python src/tests/test_pos_ingestion.py
