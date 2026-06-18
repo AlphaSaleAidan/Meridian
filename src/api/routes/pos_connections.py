@@ -16,7 +16,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 
-from ..auth import require_org_access
+from ..auth import require_org_access, require_jwt, require_org_member
 from ...security.encryption import encrypt_token, decrypt_token
 from ...services.pos_connectors import (
     GenericRESTConnector,
@@ -231,8 +231,16 @@ async def _test_clover(credentials: dict) -> dict:
 # ─── Connect (save credentials + start sync) ────────────────
 
 @router.post("/connect")
-async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
+async def connect_pos(
+    req: ConnectRequest,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_jwt),
+):
     """Encrypt and store POS credentials, then trigger initial backfill."""
+    # Tenancy: the router guard only sees query/path org_id; this endpoint takes
+    # org_id in the body, so enforce membership explicitly (closes CA-1/CA-2).
+    await require_org_member(user, req.org_id)
+
     from ...db import _db_instance as db
     if not db:
         raise HTTPException(503, "Database not available")
@@ -695,8 +703,11 @@ async def get_connections(org_id: str):
 # ─── Disconnect ──────────────────────────────────────────────
 
 @router.post("/disconnect")
-async def disconnect_pos(req: DisconnectRequest):
+async def disconnect_pos(req: DisconnectRequest, user: dict = Depends(require_jwt)):
     """Disconnect a POS system and revoke tokens if applicable."""
+    # Tenancy: org_id is in the body, so enforce membership explicitly.
+    await require_org_member(user, req.org_id)
+
     from ...db import _db_instance as db
     if not db:
         raise HTTPException(503, "Database not available")
