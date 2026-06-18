@@ -20,6 +20,7 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 
 from ..auth import require_org_access
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
+from ...db.revenue import is_revenue_txn, net_revenue_cents
 
 logger = logging.getLogger("meridian.api.analytics")
 
@@ -76,6 +77,9 @@ async def get_staff_performance(
     # Aggregate by employee_name
     staff_map: dict[str, dict] = {}
     for txn in transactions:
+        # Revenue is completed sales only — skip voids and net refunds (audit #6).
+        if not is_revenue_txn(txn):
+            continue
         name = txn.get("employee_name") or "Unknown"
         if name not in staff_map:
             staff_map[name] = {
@@ -86,11 +90,11 @@ async def get_staff_performance(
                 "refund_cents": 0,
             }
         entry = staff_map[name]
-        total = txn.get("total_cents", 0) or 0
-        entry["revenue_cents"] += total
+        refund = txn.get("refund_cents", 0) or 0
+        entry["revenue_cents"] += (txn.get("total_cents", 0) or 0) - refund
         entry["transaction_count"] += 1
         entry["tip_cents"] += txn.get("tip_cents", 0) or 0
-        entry["refund_cents"] += txn.get("refund_cents", 0) or 0
+        entry["refund_cents"] += refund
 
     staff_list = []
     for name, data in staff_map.items():
@@ -490,8 +494,11 @@ async def get_customers(
     customer_map: dict[str, dict] = {}
 
     for txn in transactions:
+        # Net sales only — skip voids, subtract refunds (audit #6).
+        if not is_revenue_txn(txn):
+            continue
         method = txn.get("payment_method", "unknown") or "unknown"
-        total = txn.get("total_cents", 0) or 0
+        total = (txn.get("total_cents", 0) or 0) - (txn.get("refund_cents", 0) or 0)
 
         if method not in method_map:
             method_map[method] = {
@@ -528,8 +535,9 @@ async def get_customers(
         method_map.values(), key=lambda x: x["revenue_cents"], reverse=True
     )
 
-    total_txns = len(transactions)
-    total_revenue = sum(t.get("total_cents", 0) or 0 for t in transactions)
+    # Completed sales only; net revenue (excludes voids, nets refunds — audit #6).
+    total_txns = sum(1 for t in transactions if is_revenue_txn(t))
+    total_revenue = net_revenue_cents(transactions)
     avg_ticket = total_revenue // total_txns if total_txns else 0
 
     # Customer segments from identified customers
