@@ -9,6 +9,7 @@ import Layout from '@/components/Layout'
 import DemoLayout from '@/components/DemoLayout'
 import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
 import { merchantPillars } from '@/config/merchantPillars'
+import { EmptyState } from '@/components/LoadingState'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 
@@ -556,8 +557,13 @@ export default function App() {
               {/* Unsubscribe -- public, no auth */}
               <Route path="/unsubscribe" element={<Suspense fallback={<LazyFallback />}><UnsubscribePage /></Suspense>} />
 
-              {/* Catch-all → landing page */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {/* Catch-all → lightweight not-found (reuses EmptyState) */}
+              <Route path="*" element={
+                <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6">
+                  <EmptyState title="Page not found" description="That page doesn't exist or may have moved." />
+                  <a href="/" className="text-sm text-[#17C5B0] hover:underline">Back to Meridian</a>
+                </div>
+              } />
             </Routes>
           </Suspense>
           </ToastProvider>
