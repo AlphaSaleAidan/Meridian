@@ -15,7 +15,15 @@ Key Clover ↔ Square differences:
 import logging
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
+from uuid import uuid4, uuid5, NAMESPACE_URL
+
+_ID_NS = uuid5(NAMESPACE_URL, "meridian.pos")
+
+
+def _stable_id(*parts: object) -> str:
+    """Deterministic UUID from a natural key, so re-syncs upsert the SAME row
+    (no duplicates) and distinct rows never share an id (no clobber)."""
+    return str(uuid5(_ID_NS, ":".join(str(p) for p in parts)))
 
 logger = logging.getLogger("meridian.clover.mappers")
 
@@ -228,7 +236,9 @@ class CloverDataMapper:
             metadata["device_id"] = device_id
 
         return {
-            "id": str(uuid4()),
+            # Deterministic from the order's natural key so a re-sync updates
+            # this row instead of churning the PK / orphaning its line items.
+            "id": _stable_id(self.org_id, "clover", external_id),
             "org_id": self.org_id,
             "location_id": self.location_id,
             "external_id": external_id,
@@ -260,8 +270,13 @@ class CloverDataMapper:
         price = cl_line_item.get("price", 0) or 0
         qty = cl_line_item.get("unitQty", 1000) / 1000  # Clover uses 1/1000 units
 
+        # Stable per-line identity: the order's (deterministic) txn id + the
+        # Clover lineItem id. Distinct lines never collide; re-syncs are idempotent.
+        line_external_id = f"{transaction_id}:{cl_line_item.get('id', '')}"
+
         return {
-            "id": str(uuid4()),
+            "id": _stable_id(self.org_id, "clover", line_external_id),
+            "external_id": line_external_id,
             "org_id": self.org_id,
             "transaction_id": transaction_id,
             "provider": "clover",  # transient routing hint — stripped before write

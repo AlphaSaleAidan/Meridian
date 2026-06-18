@@ -243,3 +243,51 @@ def test_clover_refund_fetch_failure_is_nonfatal(monkeypatch):
     result = _Result([{"external_id": "ORD1"}])
     _run(eng._apply_refunds(result, None, None))  # must not raise
     assert "refund_cents" not in result.transactions[0].get("metadata", {})
+
+
+# ── Row identity: deterministic + distinct so upserts don't dup or clobber ──
+
+def test_clover_ids_deterministic_and_distinct():
+    from src.clover.mappers import CloverDataMapper
+    m = CloverDataMapper(org_id=ORG)
+    order = {"id": "ORD9", "total": 1000, "state": "paid", "payments": {"elements": []}}
+    t1 = m.map_order_to_transaction(order)
+    t2 = m.map_order_to_transaction(order)
+    assert t1["id"] == t2["id"] and t1["external_id"] == "ORD9"   # re-sync idempotent
+    li = lambda lid: m.map_line_item({"id": lid, "name": "X", "price": 500, "unitQty": 1000}, t1["id"], t1["transaction_at"])
+    assert li("LI1")["id"] == li("LI1")["id"]                     # same line → same id
+    assert li("LI1")["id"] != li("LI2")["id"]                     # distinct lines → distinct id
+    assert li("LI1")["external_id"] != li("LI2")["external_id"]
+
+
+def test_square_ids_deterministic_and_distinct():
+    from src.square.mappers import DataMapper
+    m = DataMapper(org_id=ORG)
+    order = {
+        "id": "SQ9", "state": "COMPLETED", "created_at": "2026-01-01T00:00:00Z", "location_id": "L1",
+        "total_money": {"amount": 1000}, "total_tax_money": {"amount": 0},
+        "total_tip_money": {"amount": 0}, "total_discount_money": {"amount": 0}, "tenders": [],
+        "line_items": [
+            {"uid": "u1", "name": "A", "quantity": "1", "base_price_money": {"amount": 500}, "total_money": {"amount": 500}},
+            {"uid": "u2", "name": "B", "quantity": "1", "base_price_money": {"amount": 500}, "total_money": {"amount": 500}},
+        ],
+    }
+    t1 = m.map_transaction(order); t2 = m.map_transaction(order)
+    assert t1["id"] == t2["id"]                                   # re-sync idempotent
+    r1 = m.map_transaction_items(order, t1["id"], t1["transaction_at"])
+    r2 = m.map_transaction_items(order, t2["id"], t2["transaction_at"])
+    assert [r["id"] for r in r1] == [r["id"] for r in r2]         # idempotent
+    assert len({r["id"] for r in r1}) == 2                        # distinct lines distinct ids
+
+
+def test_same_external_id_across_providers_does_not_collide():
+    from src.clover.mappers import CloverDataMapper
+    from src.square.mappers import DataMapper
+    cl = CloverDataMapper(org_id=ORG).map_order_to_transaction(
+        {"id": "DUP", "total": 0, "state": "paid", "payments": {"elements": []}})
+    sq = DataMapper(org_id=ORG).map_transaction(
+        {"id": "DUP", "state": "COMPLETED", "created_at": "2026-01-01T00:00:00Z", "location_id": "L",
+         "total_money": {"amount": 0}, "total_tax_money": {"amount": 0},
+         "total_tip_money": {"amount": 0}, "total_discount_money": {"amount": 0}, "tenders": []})
+    assert cl["external_id"] == sq["external_id"] == "DUP"
+    assert cl["id"] != sq["id"]                                   # provider in id → no clobber
