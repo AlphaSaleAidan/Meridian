@@ -304,11 +304,12 @@ class DataMapper:
 
             # Stable per-line identity: the order's (deterministic) txn id + the
             # Square line-item uid. Distinct lines never collide; re-syncs idempotent.
-            line_external_id = f"{transaction_id}:{item.get('uid', '')}"
+            # (transaction_items has no external_id column — pkey (id, transaction_at)
+            # — so the natural key only feeds the deterministic id; it isn't stored.)
+            line_key = f"{transaction_id}:{item.get('uid', '')}"
 
             rows.append({
-                "id": _stable_id(self.org_id, "square", line_external_id),
-                "external_id": line_external_id,
+                "id": _stable_id(self.org_id, "square", line_key),
                 "transaction_id": transaction_id,
                 "transaction_at": transaction_at,
                 "provider": "square",  # transient routing hint — stripped before write

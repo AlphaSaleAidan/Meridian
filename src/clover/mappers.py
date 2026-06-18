@@ -272,11 +272,12 @@ class CloverDataMapper:
 
         # Stable per-line identity: the order's (deterministic) txn id + the
         # Clover lineItem id. Distinct lines never collide; re-syncs are idempotent.
-        line_external_id = f"{transaction_id}:{cl_line_item.get('id', '')}"
+        # (transaction_items has no external_id column — pkey is (id, transaction_at)
+        # — so the natural key only feeds the deterministic id; it isn't stored.)
+        line_key = f"{transaction_id}:{cl_line_item.get('id', '')}"
 
         return {
-            "id": _stable_id(self.org_id, "clover", line_external_id),
-            "external_id": line_external_id,
+            "id": _stable_id(self.org_id, "clover", line_key),
             "org_id": self.org_id,
             "transaction_id": transaction_id,
             "provider": "clover",  # transient routing hint — stripped before write

@@ -257,7 +257,7 @@ def test_clover_ids_deterministic_and_distinct():
     li = lambda lid: m.map_line_item({"id": lid, "name": "X", "price": 500, "unitQty": 1000}, t1["id"], t1["transaction_at"])
     assert li("LI1")["id"] == li("LI1")["id"]                     # same line → same id
     assert li("LI1")["id"] != li("LI2")["id"]                     # distinct lines → distinct id
-    assert li("LI1")["external_id"] != li("LI2")["external_id"]
+    assert "external_id" not in li("LI1")                         # no such column on transaction_items
 
 
 def test_square_ids_deterministic_and_distinct():
