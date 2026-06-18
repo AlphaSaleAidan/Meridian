@@ -183,12 +183,13 @@ def test_clover_client_uses_configured_base():
     assert "clover.com" in base
 
 
-@pytest.mark.xfail(reason="KNOWN GAP: pos_connections test/connect hardcodes PROD "
-                          "connect.squareup.com + Square-Version 2024-01-18, ignoring "
-                          "environment — sandbox merchants can't test/connect. Fix: route "
-                          "through SquareClient.", strict=False)
-def test_connect_path_should_not_hardcode_prod_square_url():
+def test_connect_path_routes_square_through_env_aware_client():
+    """Regression: test-connection + connect must NOT hardcode the prod Square URL
+    or a stale Square-Version — they route through SquareClient, which honors the
+    configured environment (sandbox vs prod). Guards the fix so it can't regress."""
     import inspect
     from src.api.routes import pos_connections
     src = inspect.getsource(pos_connections)
     assert "connect.squareup.com" not in src, "connect path still hardcodes the prod Square URL"
+    assert "2024-01-18" not in src, "connect path still pins a stale Square-Version"
+    assert "_square_merchant_and_vertical" in src, "expected the shared env-aware Square helper"

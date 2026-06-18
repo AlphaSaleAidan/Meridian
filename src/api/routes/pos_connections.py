@@ -124,34 +124,30 @@ async def _test_toast(credentials: dict) -> dict:
         }
 
 
+async def _square_merchant_and_vertical(access_token: str) -> tuple[dict, str]:
+    """Fetch the Square merchant profile + detect a business vertical, via
+    SquareClient so it honors the configured Square environment (sandbox vs
+    prod) and the current Square-Version. Shared by test-connection and connect
+    so both always speak to the same Square. Returns (merchant, vertical)."""
+    from ...square.client import SquareClient
+    async with SquareClient(access_token=access_token) as client:
+        merchant = await client.get_merchant("me")
+        vertical = _detect_business_type_from_square(merchant)
+        locations = await client.list_locations()
+        if locations:
+            mcc = locations[0].get("mcc", "")
+            if mcc:
+                vertical = _mcc_to_business_type(mcc) or vertical
+    return merchant, vertical
+
+
 async def _test_square(credentials: dict) -> dict:
     access_token = credentials.get("access_token", "")
     if not access_token:
         return {"success": False, "message": "Access token required."}
 
     try:
-        import httpx
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Square-Version": "2024-01-18",
-        }
-        async with httpx.AsyncClient(timeout=15.0) as http:
-            resp = await http.get("https://connect.squareup.com/v2/merchants/me", headers=headers)
-            if resp.status_code != 200:
-                return {"success": False, "message": "Square rejected the credentials."}
-            data = resp.json()
-            merchant = data.get("merchant", {})
-
-            detected_type = _detect_business_type_from_square(merchant)
-
-            loc_resp = await http.get("https://connect.squareup.com/v2/locations", headers=headers)
-            if loc_resp.status_code == 200:
-                locations = loc_resp.json().get("locations", [])
-                if locations:
-                    mcc = locations[0].get("mcc", "")
-                    if mcc:
-                        detected_type = _mcc_to_business_type(mcc) or detected_type
-
+        merchant, detected_type = await _square_merchant_and_vertical(access_token)
         return {
             "success": True,
             "message": "Connected to Square.",
@@ -312,21 +308,7 @@ async def connect_pos(
         token = req.credentials.get("access_token", "")
         if token:
             try:
-                import httpx
-                async with httpx.AsyncClient(timeout=10.0) as http:
-                    headers = {"Authorization": f"Bearer {token}", "Square-Version": "2024-01-18"}
-                    mr = await http.get("https://connect.squareup.com/v2/merchants/me", headers=headers)
-                    if mr.status_code == 200:
-                        merchant = mr.json().get("merchant", {})
-                        bt = _detect_business_type_from_square(merchant)
-                        lr = await http.get("https://connect.squareup.com/v2/locations", headers=headers)
-                        if lr.status_code == 200:
-                            locs = lr.json().get("locations", [])
-                            if locs:
-                                mcc_bt = _mcc_to_business_type(locs[0].get("mcc", ""))
-                                if mcc_bt:
-                                    bt = mcc_bt
-                        org_update["vertical"] = bt
+                _, org_update["vertical"] = await _square_merchant_and_vertical(token)
             except Exception as e:
                 logger.warning(f"Square business type detection failed: {e}")
 
