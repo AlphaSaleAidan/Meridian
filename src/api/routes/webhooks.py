@@ -74,19 +74,14 @@ async def _upsert_inventory(snapshots: list[dict]):
 
 
 async def _disconnect_merchant(connection_id: str):
-    """Mark a connection as disconnected (auth revoked)."""
+    """Mark a connection as disconnected (auth revoked) — full gate teardown."""
     from ...db import _db_instance
     if not _db_instance:
         return
-
-    await _db_instance.update(
-        "pos_connections",
-        {
-            "status": "disconnected",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        },
-        filters={"id": f"eq.{connection_id}"},
-    )
+    # Reuse the manual-disconnect teardown so a revoked merchant closes BOTH gate
+    # fields + clears the token (org_id resolved from the connection row).
+    from .pos_connections import teardown_connection
+    await teardown_connection(_db_instance, connection_id)
 
 
 async def _send_notification(

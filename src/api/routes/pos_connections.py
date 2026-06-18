@@ -702,6 +702,41 @@ async def get_connections(org_id: str):
 
 # ─── Disconnect ──────────────────────────────────────────────
 
+async def teardown_connection(db, connection_id: str, org_id: str | None = None) -> None:
+    """Fully tear down a POS connection so the dashboard gate can't stay half-open.
+
+    The gate is `businesses.pos_connected OR organizations.pos_connection_status
+    == 'connected'`, so a disconnect MUST close both. Also clears the stored token
+    (don't leave a revoked merchant's token at rest) and resets the import flag so
+    a future reconnect starts clean. Shared by the manual disconnect endpoint and
+    the webhook auth-revoked path.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    await db.update(
+        "pos_connections",
+        {
+            "status": "disconnected",
+            "access_token_enc": None,
+            "credentials_encrypted": None,
+            "historical_import_complete": False,
+            "last_error": None,
+            "updated_at": now,
+        },
+        filters={"id": f"eq.{connection_id}"},
+    )
+
+    if org_id is None:
+        rows = await db.select("pos_connections", filters={"id": f"eq.{connection_id}"}, limit=1)
+        org_id = rows[0].get("org_id") if rows else None
+    if org_id:
+        await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
+        await db.update(
+            "organizations",
+            {"pos_connection_status": None, "pos_system": None},
+            filters={"id": f"eq.{org_id}"},
+        )
+
+
 @router.post("/disconnect")
 async def disconnect_pos(req: DisconnectRequest, user: dict = Depends(require_jwt)):
     """Disconnect a POS system and revoke tokens if applicable."""
@@ -734,15 +769,7 @@ async def disconnect_pos(req: DisconnectRequest, user: dict = Depends(require_jw
         except Exception as e:
             logger.warning(f"Square token revocation failed: {e}")
 
-    await db.update(
-        "pos_connections",
-        {"status": "disconnected", "updated_at": datetime.now(timezone.utc).isoformat()},
-        filters={"id": f"eq.{conn['id']}"},
-    )
-
-    await db.update("organizations", {
-        "pos_connection_status": None,
-    }, filters={"id": f"eq.{req.org_id}"})
+    await teardown_connection(db, conn["id"], req.org_id)
 
     return {"success": True, "message": f"{req.pos_system.title()} disconnected."}
 
