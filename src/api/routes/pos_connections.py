@@ -331,6 +331,10 @@ async def connect_pos(
                 logger.warning(f"Square business type detection failed: {e}")
 
     await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
+    # Open BOTH halves of the dashboard gate (businesses.pos_connected is the
+    # primary gate; businesses-based customers have no org status to fall back
+    # on). Mirrors the OAuth callback path and is symmetric with disconnect.
+    await db.update("businesses", {"pos_connected": True}, filters={"id": f"eq.{req.org_id}"})
 
     if req.pos_system == "toast":
         background_tasks.add_task(
