@@ -280,6 +280,56 @@ def refresh_square_tokens():
     return result
 
 
+@shared_task(name="src.workers.tasks.sync_all_pos_incremental", rate_limit="2/m")
+def sync_all_pos_incremental():
+    """Every 15 min: incremental sync for every connected, import-complete POS
+    connection (Square + Clover + Toast). One failing connection never blocks the
+    rest. Without this, merchant data froze after the one-time backfill (audit #5);
+    nothing in the beat schedule drove ongoing propagation."""
+    logger.info("Running incremental POS sync for all active connections")
+
+    async def _sync_all():
+        from ..db import init_db, close_db
+        from ..services.pos_sync_runner import run_incremental
+
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+
+        try:
+            connections = await db.select(
+                "pos_connections",
+                filters={
+                    "status": "eq.connected",
+                    "historical_import_complete": "eq.true",
+                },
+            )
+            synced = errors = 0
+            for conn in connections or []:
+                org_id = conn.get("org_id")
+                provider = conn.get("provider") or "square"
+                try:
+                    await run_incremental(org_id, provider, conn)
+                    synced += 1
+                except Exception as e:
+                    errors += 1
+                    logger.error(
+                        f"Incremental sync failed org={org_id} provider={provider}: {e}"
+                    )
+            return {
+                "status": "complete",
+                "synced": synced,
+                "errors": errors,
+                "total": len(connections or []),
+            }
+        finally:
+            await close_db()
+
+    result = run_async(_sync_all())
+    logger.info(f"Incremental POS sync complete: {result}")
+    return result
+
+
 @shared_task(name="src.workers.tasks.train_swarm_batch")
 def train_swarm_batch():
     """Train swarm on all active merchants' latest outputs."""

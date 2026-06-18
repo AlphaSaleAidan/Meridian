@@ -37,6 +37,7 @@ celery_app.conf.update(
         Queue('bulk', routing_key='bulk'),
     ],
     task_routes={
+        "src.workers.tasks.sync_all_pos_incremental": {"queue": "default"},
         "src.workers.tasks.sync_pos_data": {"queue": "default"},
         "src.workers.tasks.run_analysis": {"queue": "default"},
         "src.workers.tasks.process_billing_renewals": {"queue": "critical"},
@@ -63,6 +64,11 @@ celery_app.conf.update(
     result_expires=3600,
     worker_max_tasks_per_child=200,
     beat_schedule={
+        "pos-incremental-sync": {
+            "task": "src.workers.tasks.sync_all_pos_incremental",
+            "schedule": 900.0,  # every 15 min — ongoing POS propagation (audit #5)
+            "options": {"queue": "default"},
+        },
         "nightly-analysis": {
             "task": "src.workers.tasks.run_nightly_analysis",
             "schedule": crontab(hour=2, minute=0),  # 2 AM UTC daily
