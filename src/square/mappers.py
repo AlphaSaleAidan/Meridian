@@ -502,10 +502,21 @@ class DataMapper:
         if sq_order.get("reference_id"):
             meta["reference_id"] = sq_order["reference_id"]
 
-        # Tender details
+        # Tender details (primary card brand, kept for back-compat)
         if tenders:
             t = tenders[0]
             if t.get("card_details", {}).get("card", {}).get("card_brand"):
                 meta["card_brand"] = t["card_details"]["card"]["card_brand"]
+
+            # Capture EVERY tender so split payments aren't reduced to the first
+            # (payment_method on the transaction is only the primary tender).
+            meta["tenders"] = [
+                {
+                    "type": DataMapper._map_payment_method(td),
+                    "amount_cents": (td.get("amount_money") or {}).get("amount", 0) or 0,
+                    "employee_id": td.get("employee_id"),
+                }
+                for td in tenders
+            ]
 
         return meta

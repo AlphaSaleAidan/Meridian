@@ -232,6 +232,10 @@ class CloverDataMapper:
             "discount_cents": abs(discount),
             "tip_cents": self._sum_tips(payments),
             "payment_method": payment_method,
+            # Capture EVERY tender so split payments aren't lost (payment_method
+            # above is only the primary). Stored in metadata (no schema change);
+            # promote to a top-level column in a later coordinated migration.
+            "metadata": {"tenders": self._map_tenders(payments)},
             "employee_name": employee_name,
             "employee_external_id": employee_id,
             "customer_id": cl_order.get("customers", {}).get("elements", [{}])[0].get("id") if cl_order.get("customers") else None,
@@ -313,15 +317,9 @@ class CloverDataMapper:
             total += d.get("amount", 0)
         return total
 
-    def _determine_payment_method(self, payments: list[dict]) -> str:
-        """Determine primary payment method from Clover payments."""
-        if not payments:
-            return "unknown"
-        # Use the first/largest payment's tender type
-        payment = payments[0]
-        tender = payment.get("tender", {})
-        label = tender.get("label", "").lower()
-
+    def _clover_tender_type(self, payment: dict) -> str:
+        """Map one Clover payment's tender to a Meridian payment_method enum."""
+        label = payment.get("tender", {}).get("label", "").lower()
         if "cash" in label:
             return "cash"
         elif "credit" in label or "card" in label:
@@ -334,6 +332,23 @@ class CloverDataMapper:
             return "other"
         else:
             return payment.get("cardTransaction", {}).get("type", "card").lower() if payment.get("cardTransaction") else "other"
+
+    def _determine_payment_method(self, payments: list[dict]) -> str:
+        """Primary payment method = the first payment's tender type."""
+        if not payments:
+            return "unknown"
+        return self._clover_tender_type(payments[0])
+
+    def _map_tenders(self, payments: list[dict]) -> list[dict]:
+        """Every tender on the order — so split payments aren't reduced to one."""
+        return [
+            {
+                "type": self._clover_tender_type(p),
+                "amount_cents": p.get("amount", 0) or 0,
+                "tip_cents": p.get("tipAmount", 0) or 0,
+            }
+            for p in payments
+        ]
 
     def _map_order_state(self, state: str) -> str:
         """Map Clover order state to Meridian status."""

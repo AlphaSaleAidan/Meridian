@@ -108,3 +108,47 @@ def test_square_incremental_db_load_is_now_active(monkeypatch):
     eng.db = _FakeDB([{"external_id": "varX", "id": "prod-9"}])
     _run(eng.run_incremental_sync())
     assert captured.get("lookup") == {"varX": "prod-9"}
+
+
+# ── Multi-tender: split payments must not be reduced to the first tender ──
+
+def test_clover_split_payment_captures_all_tenders():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {
+        "total": 3000, "state": "paid",
+        "payments": {"elements": [
+            {"tender": {"label": "Cash"}, "amount": 1000, "tipAmount": 0},
+            {"tender": {"label": "Credit Card"}, "amount": 2000, "tipAmount": 300},
+        ]},
+    }
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["payment_method"] == "cash"  # primary = first tender
+    assert txn["metadata"]["tenders"] == [
+        {"type": "cash", "amount_cents": 1000, "tip_cents": 0},
+        {"type": "card", "amount_cents": 2000, "tip_cents": 300},
+    ]
+
+
+def test_square_split_payment_captures_all_tenders():
+    from src.square.mappers import DataMapper
+    mapper = DataMapper(org_id=ORG)
+    order = {
+        "id": "o1", "state": "COMPLETED", "created_at": "2026-01-01T00:00:00Z",
+        "location_id": "L1",
+        "total_money": {"amount": 3000, "currency": "USD"},
+        "total_tax_money": {"amount": 0}, "total_tip_money": {"amount": 0},
+        "total_discount_money": {"amount": 0},
+        "tenders": [
+            {"type": "CARD", "amount_money": {"amount": 2000}, "employee_id": "e1",
+             "card_details": {"card": {"card_brand": "VISA"}}},
+            {"type": "CASH", "amount_money": {"amount": 1000}, "employee_id": "e1"},
+        ],
+    }
+    txn = mapper.map_transaction(order)
+    assert txn["payment_method"] == "credit_card"  # primary = first tender
+    assert txn["metadata"]["tenders"] == [
+        {"type": "credit_card", "amount_cents": 2000, "employee_id": "e1"},
+        {"type": "cash", "amount_cents": 1000, "employee_id": "e1"},
+    ]
+    assert txn["metadata"]["card_brand"] == "VISA"
