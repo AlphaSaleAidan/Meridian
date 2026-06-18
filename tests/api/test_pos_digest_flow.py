@@ -360,3 +360,18 @@ def test_write_sync_result_noop_when_empty(monkeypatch):
     db = _WriteDB()
     _run(pc._write_sync_result(db, _SyncResult([], [], [])))
     assert db.calls == []
+
+
+# ── Clover region support: connect to NA / EU / LATAM merchant hosts ──
+
+def test_clover_region_hosts():
+    from src.config import CloverConfig
+    # production routes to the merchant's regional host
+    assert CloverConfig(environment="production", region="na").api_base_url == "https://api.clover.com"
+    assert CloverConfig(environment="production", region="eu").api_base_url == "https://api.eu.clover.com"
+    assert CloverConfig(environment="production", region="eu").base_url == "https://eu.clover.com"
+    assert CloverConfig(environment="production", region="la").api_base_url == "https://api.la.clover.com"
+    # unknown region falls back to NA (US + Canada)
+    assert CloverConfig(environment="production", region="xx").api_base_url == "https://api.clover.com"
+    # sandbox is region-agnostic
+    assert CloverConfig(environment="sandbox", region="eu").api_base_url == "https://apisandbox.dev.clover.com"

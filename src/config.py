@@ -63,6 +63,21 @@ class SquareConfig:
 
 # ─── Clover Configuration ─────────────────────────────────
 
+# Clover runs separate production hosts per region; a merchant's tokens + data
+# live ONLY on their region's host. "na" (US + Canada) is the default. Sandbox is
+# region-agnostic, so these only apply in production.
+_CLOVER_PROD_WEB = {
+    "na": "https://www.clover.com",
+    "eu": "https://eu.clover.com",
+    "la": "https://la.clover.com",
+}
+_CLOVER_PROD_API = {
+    "na": "https://api.clover.com",
+    "eu": "https://api.eu.clover.com",
+    "la": "https://api.la.clover.com",
+}
+
+
 @dataclass(frozen=True)
 class CloverConfig:
     """Clover API configuration."""
@@ -71,6 +86,7 @@ class CloverConfig:
     access_token: str = os.getenv("CLOVER_ACCESS_TOKEN", "")
     merchant_id: str = os.getenv("CLOVER_MERCHANT_ID", "")
     environment: str = os.getenv("CLOVER_ENVIRONMENT", "sandbox")
+    region: str = os.getenv("CLOVER_REGION", "na").lower()
     # Built but gated: connector exists, but new connect/test attempts return
     # "coming soon" until POS_CLOVER_ENABLED=true. Square is the live provider.
     enabled: bool = os.getenv("POS_CLOVER_ENABLED", "false").lower() == "true"
@@ -78,13 +94,13 @@ class CloverConfig:
     @property
     def base_url(self) -> str:
         if self.environment == "production":
-            return "https://www.clover.com"
+            return _CLOVER_PROD_WEB.get(self.region, _CLOVER_PROD_WEB["na"])
         return "https://sandbox.dev.clover.com"
 
     @property
     def api_base_url(self) -> str:
         if self.environment == "production":
-            return "https://api.clover.com"
+            return _CLOVER_PROD_API.get(self.region, _CLOVER_PROD_API["na"])
         return "https://apisandbox.dev.clover.com"
 
     @property
