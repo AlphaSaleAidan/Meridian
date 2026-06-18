@@ -36,9 +36,12 @@ async def _upsert_transaction(txn: dict, items: list[dict]):
         on_conflict="org_id,external_id",
     )
     if items:
+        # Same conflict key as the backfill/incremental path (id is deterministic
+        # now, so this dedupes idempotently). Was (org_id,external_id) here vs
+        # (id,transaction_at) there — that split could double-write a line item.
         await _db_instance.batch_upsert(
             "transaction_items", items,
-            on_conflict="org_id,external_id",
+            on_conflict="id,transaction_at",
         )
 
 

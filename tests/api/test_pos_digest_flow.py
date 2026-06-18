@@ -291,3 +291,19 @@ def test_same_external_id_across_providers_does_not_collide():
          "total_tip_money": {"amount": 0}, "total_discount_money": {"amount": 0}, "tenders": []})
     assert cl["external_id"] == sq["external_id"] == "DUP"
     assert cl["id"] != sq["id"]                                   # provider in id → no clobber
+
+
+# ── Propagate (Step C): transaction_items conflict key unified everywhere ──
+
+def test_transaction_items_conflict_key_unified():
+    """Every transaction_items upsert (backfill, incremental, webhook) must key
+    on (id,transaction_at). A split key (some on org_id,external_id) could
+    double-write a line item. Pins the unification."""
+    import inspect, re
+    from src.api.routes import pos_connections, webhooks
+    for mod in (pos_connections, webhooks):
+        src = inspect.getsource(mod)
+        keys = re.findall(r'"transaction_items".*?on_conflict="([^"]+)"', src, re.S)
+        assert keys, f"{mod.__name__}: no transaction_items upsert found"
+        for k in keys:
+            assert k == "id,transaction_at", f"{mod.__name__}: transaction_items keyed on {k}"
