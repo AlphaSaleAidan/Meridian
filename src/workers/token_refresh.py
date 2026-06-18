@@ -25,13 +25,18 @@ async def refresh_expiring_tokens() -> dict:
     db = get_db()
 
     cutoff = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
-    connections = await db.select(
+    all_conns = await db.select(
         "pos_connections",
-        filters={
-            "status": "eq.connected",
-            "token_expires_at": f"lt.{cutoff}",
-        },
+        filters={"status": "eq.connected"},
     )
+    # Refresh anything expiring within 7 days OR with a missing/blank expiry. The
+    # manual /connect path never set token_expires_at, and a server-side `lt` filter
+    # silently EXCLUDES those NULLs — so they expired unnoticed and sync died at
+    # ~30 days with no signal (audit #8). Filter in Python to include them.
+    connections = [
+        c for c in (all_conns or [])
+        if not c.get("token_expires_at") or c["token_expires_at"] < cutoff
+    ]
 
     stats = {"refreshed": 0, "failed": 0, "errors": []}
 

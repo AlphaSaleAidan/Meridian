@@ -52,11 +52,25 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
 
     except Exception as e:
         logger.error(f"Sync failed {org_id}/{provider}: {e}", exc_info=True)
+        now = datetime.now(timezone.utc).isoformat()
+        # An auth failure (revoked/expired token) is terminal — flip the connection
+        # out of 'connected' so the dashboard prompts a reconnect, instead of the
+        # 15-min sweep hammering a dead token forever (audit #8). A transient error
+        # keeps 'connected' so a blip doesn't falsely sign the merchant out.
+        is_auth = getattr(e, "status_code", None) in (401, 403)
         await db.update(
             "pos_connections",
-            {"last_error": str(e)[:500]},
+            {"status": "error", "last_error": str(e)[:500], "updated_at": now}
+            if is_auth else {"last_error": str(e)[:500], "updated_at": now},
             filters={"id": f"eq.{conn_id}"},
         )
+        if is_auth:
+            await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
+            await db.update(
+                "organizations",
+                {"pos_connection_status": "error"},
+                filters={"id": f"eq.{org_id}"},
+            )
         raise
 
 
