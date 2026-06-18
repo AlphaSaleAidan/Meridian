@@ -44,15 +44,35 @@ async def run_backfill(
             f"{progress.detail} ({progress.progress_pct:.0f}%)"
         )
 
-    async with SquareClient(access_token=access_token) as client:
-        engine = SyncEngine(
-            client=client,
-            org_id=org_id,
-            pos_connection_id=connection_id,
-            on_progress=on_progress,
-        )
+    try:
+        async with SquareClient(access_token=access_token) as client:
+            engine = SyncEngine(
+                client=client,
+                org_id=org_id,
+                pos_connection_id=connection_id,
+                on_progress=on_progress,
+            )
 
-        result = await engine.run_initial_backfill()
+            result = await engine.run_initial_backfill()
+    except Exception as e:
+        # Surface the failure instead of leaving a silent "connected, no data"
+        # state (e.g. a 401 from a bad/expired Square token). Record the error
+        # on the connection and revert the connected flags the dashboard gates
+        # on, so the portal can prompt a reconnect.
+        err = str(e)[:500]
+        logger.error(f"Backfill failed for org={org_id}: {err}", exc_info=True)
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            await db.update(
+                "pos_connections",
+                {"status": "error", "last_error": err, "updated_at": now},
+                filters={"id": f"eq.{connection_id}"},
+            )
+            await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
+            await db.update("organizations", {"pos_connection_status": "error"}, filters={"id": f"eq.{org_id}"})
+        except Exception as record_err:
+            logger.error(f"Could not record backfill failure for org={org_id}: {record_err}")
+        raise
 
     # ── Persist to Supabase ──────────────────────────────
     if result.locations:
@@ -62,12 +82,12 @@ async def run_backfill(
             on_conflict="org_id,external_id",
         )
 
-    if result.categories:
-        await db.batch_upsert(
-            "categories",
-            result.categories,
-            on_conflict="org_id,external_id",
-        )
+    # Sweep §3.1: the `categories` table does not exist in the production
+    # schema, so this upsert previously failed (silently — guarded by the
+    # `if result.categories` check, which is empty for any merchant whose
+    # catalog has no CATEGORY CatalogObjects). Categories are recorded
+    # via the product rows' metadata; no separate table is needed.
+    # Reversible: re-add the block if a categories table migration ships.
 
     if result.products:
         await db.batch_upsert(
@@ -84,17 +104,25 @@ async def run_backfill(
         )
 
     if result.transaction_items:
+        # P4: `transaction_items` has no `external_id` column. Match
+        # the credential-paste path's conflict key (id, transaction_at)
+        # — both columns exist and are populated by the mappers.
         await db.batch_upsert(
             "transaction_items",
             result.transaction_items,
-            on_conflict="transaction_id,external_id",
+            on_conflict="id,transaction_at",
         )
 
     if result.inventory_snapshots:
+        # Sweep §3.2: the inventory_snapshots column is `snapshot_at`,
+        # not `snapshot_date`. The Square mapper already emits
+        # `snapshot_at` (src/square/mappers.py:415); only the on_conflict
+        # spec was stale, which would raise PG 42P10 on first OAuth-path
+        # inventory upsert.
         await db.batch_upsert(
             "inventory_snapshots",
             result.inventory_snapshots,
-            on_conflict="org_id,product_id,location_id,snapshot_date",
+            on_conflict="org_id,product_id,location_id,snapshot_at",
         )
 
     logger.info(f"Backfill persisted for org={org_id}: {result.summary}")
@@ -106,6 +134,9 @@ async def run_backfill(
             "historical_import_complete": True,
             "last_sync_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat(),
+            # Clear any prior failure now that a sync has succeeded.
+            "status": "connected",
+            "last_error": None,
         },
         filters={"id": f"eq.{connection_id}"},
     )
