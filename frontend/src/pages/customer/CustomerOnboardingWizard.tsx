@@ -343,15 +343,15 @@ export default function CustomerOnboardingWizard() {
     if (inventoryItems.length > 0 && supabase && org) {
       setSaving(true)
       try {
+        // products has no category/cost_per_unit/supplier/unit columns — writing
+        // them 400s the step. Map cost (dollars) → cost_cents (int).
         const rows = inventoryItems
           .filter(item => item.name.trim())
           .map(item => ({
             org_id: org.org_id,
             name: item.name,
-            category: item.category || null,
-            cost_per_unit: item.costPerUnit ? parseFloat(item.costPerUnit) : null,
-            supplier: item.supplier || null,
-            unit: item.unit || 'each',
+            is_active: true,
+            cost_cents: item.costPerUnit ? Math.round(parseFloat(item.costPerUnit) * 100) : null,
           }))
         if (rows.length > 0) {
           await supabase.from('products').upsert(rows, { onConflict: 'org_id,name' })

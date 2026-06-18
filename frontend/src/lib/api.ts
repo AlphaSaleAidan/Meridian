@@ -67,6 +67,14 @@ export interface Overview {
   revenue_change_pct: number
   transaction_count_30d: number
   avg_ticket_cents: number
+  // All-time figures (within a ~13mo window) — used as a fallback so backfilled
+  // history is shown when the trailing 30 days has no sales.
+  lifetime_revenue_cents?: number
+  lifetime_transaction_count?: number
+  lifetime_avg_ticket_cents?: number
+  first_activity_at?: string | null
+  last_activity_at?: string | null
+  lifetime_days_with_data?: number
   money_left_score: MoneyLeftScore | null
   connection: { status: string; provider: string | null; last_sync_at: string | null }
   days_with_data: number
@@ -119,6 +127,7 @@ export interface ProductPerf {
   name: string
   sku: string | null
   price_cents: number | null
+  cost_cents?: number | null
   total_revenue_cents: number
   total_quantity: number
   times_sold: number
@@ -284,6 +293,18 @@ export const api = {
     : !orgId ? delay(EMPTY.hourly)
     : apiFetch<HourlyData>('/api/dashboard/revenue/hourly', { params: { org_id: orgId, days } }),
 
+  // Historical revenue by calendar year (+ monthly series) so merchants can see
+  // prior-year revenue. Backed by the ~18 months the backfill pulls.
+  annualRevenue: (orgId: string) =>
+    isDemo(orgId) || !orgId ? delay({ years: [], monthly: [], current_year: null, prior_year: null, yoy_pct: null })
+    : apiFetch<any>('/api/dashboard/revenue/annual', { params: { org_id: orgId } }),
+
+  // Unpaid OPEN + DRAFT orders (quotes / open tickets) pulled live from the POS.
+  // Pipeline, NOT revenue — surfaced separately from sales numbers.
+  openOrders: (orgId: string) =>
+    isDemo(orgId) || !orgId ? delay({ orders: [], summary: { open_count: 0, draft_count: 0, total_cents: 0 }, provider: null })
+    : apiFetch<any>('/api/dashboard/open-orders', { params: { org_id: orgId } }),
+
   products: (orgId: string, days = 30) =>
     isDemo(orgId) ? delay(demoData.products(days))
     : !orgId ? delay(EMPTY.products)
@@ -340,32 +361,190 @@ export const api = {
   staff: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.staff())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/staff', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/staff', { params: { org_id: orgId } })
+        .then((r: any) => ({
+          ...r,
+          // Backend returns real per-employee POS metrics in snake_case. Map to
+          // the fields the page renders; the synthetic metrics the POS can't
+          // provide (upsell rate, ratings, hours) are left undefined and the
+          // page shows the real ones (revenue, txns, avg ticket, tips).
+          staff: (r.staff ?? []).map((s: any) => ({
+            id: s.name,
+            name: s.name,
+            role: '',
+            avgTicketCents: s.avg_ticket_cents ?? 0,
+            revenueCents: s.revenue_cents ?? 0,
+            transactionCount: s.transaction_count ?? 0,
+            tipCents: s.tip_cents ?? 0,
+            trend: 'stable',
+          })),
+        })),
 
   margins: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.margins())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/margins', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/margins', { params: { org_id: orgId, days: 365 } })
+        .then((r: any) => ({
+          summary: r.summary ?? {},
+          // Backend returns snake_case `products`; the page renders MarginItem[]
+          // under `items`. Map the real fields and default the demo-only
+          // embellishments (waste/leakage/ingredients) so real margins render.
+          items: (r.products ?? []).map((p: any) => {
+            const revenueCents = p.revenue_cents ?? 0
+            const costCents = p.cost_cents ?? 0
+            const qty = p.quantity_sold ?? 0
+            return {
+              name: p.name ?? 'Unknown',
+              revenueCents,
+              costCents,
+              marginCents: p.profit_cents ?? (revenueCents - costCents),
+              marginPct: p.margin_pct ?? 0,
+              leakageCents: 0,
+              category: '',
+              sellingPriceCents: qty ? Math.round(revenueCents / qty) : 0,
+              monthlySales: qty,
+              rawCostPerServingCents: qty ? Math.round(costCents / qty) : 0,
+              wasteAdjustedCostCents: costCents,
+              pourCostPct: revenueCents ? Math.round((costCents / revenueCents) * 100) : 0,
+              marginPerUnitCents: qty ? Math.round((revenueCents - costCents) / qty) : 0,
+              wasteFactor: 0,
+              ingredients: [],
+              isEstimated: p.is_estimated ?? false,
+            }
+          }),
+        })),
+
+  // Inline cost entry — set a product's unit cost (and optionally price) so
+  // margins compute. Cost-of-goods isn't in the POS feed.
+  updateProductCost: (orgId: string, productId: string, body: { cost_cents?: number; price_cents?: number }) =>
+    apiFetch<{ ok: boolean; product_id: string; cost_cents: number | null; price_cents: number | null }>(
+      `/api/dashboard/products/${productId}`, { method: 'PATCH', params: { org_id: orgId }, body },
+    ),
+
+  // Inventory cost-sheet processing (upload happens via supabase storage in the
+  // component; these trigger AI extraction + poll status).
+  processInventoryDoc: (orgId: string, docId: string) =>
+    apiFetch<{ status: string; message?: string }>(
+      `/api/inventory-docs/${orgId}/process/${docId}`, { method: 'POST', params: { org_id: orgId } },
+    ),
+
+  inventoryDocStatus: (orgId: string, docId: string) =>
+    apiFetch<{ status: string; extracted_data?: any; error_message?: string }>(
+      `/api/inventory-docs/${orgId}/status/${docId}`, { params: { org_id: orgId } },
+    ),
 
   menuEngineering: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.menuEngineering())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/menu-engineering', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/menu-engineering', { params: { org_id: orgId, days: 365 } })
+        .then((r: any) => {
+          const rows = r.items ?? []
+          const maxQty = Math.max(1, ...rows.map((i: any) => i.quantity_sold ?? 0))
+          const rec: Record<string, string> = {
+            star: 'Feature prominently & protect the price.',
+            puzzle: 'Promote or reposition — high margin, low volume.',
+            plowhorse: 'Popular but thin — re-engineer cost or nudge price.',
+            dog: 'Low on both — consider cutting or reworking.',
+          }
+          return {
+            quadrants: r.quadrants ?? {},
+            items: rows.map((i: any) => {
+              const q = i.quadrant ?? 'dog'
+              return {
+                name: i.name ?? 'Unknown',
+                category: '',
+                monthlySales: i.quantity_sold ?? 0,
+                marginPct: Math.round(i.margin_pct ?? 0),
+                // 0–200 index scales for the scatter (median ≈ 100).
+                popularityIndex: Math.round(((i.quantity_sold ?? 0) / maxQty) * 190) + 5,
+                profitabilityIndex: Math.max(0, Math.min(200, Math.round((i.margin_pct ?? 0) * 2))),
+                quadrant: q,
+                recommendation: rec[q] ?? '',
+                revenueCents: i.revenue_cents ?? 0,
+                marginCents: (i.revenue_cents ?? 0) - (i.cost_cents ?? 0),
+              }
+            }),
+          }
+        }),
 
   anomalies: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.anomalies())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/anomalies', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/anomalies', { params: { org_id: orgId, days: 90 } })
+        .then((r: any) => ({
+          stats: r.stats ?? {},
+          // Backend returns z-score rows ({type,date,z_score,value_cents/value,
+          // expected_cents/expected,description}); the page renders the demo
+          // Anomaly shape. Derive severity from |z|, map fields, keep it real.
+          anomalies: (r.anomalies ?? []).map((a: any) => {
+            const z = a.z_score ?? 0
+            const isCents = a.value_cents != null
+            const actual = isCents ? Math.round((a.value_cents ?? 0) / 100) : (a.value ?? 0)
+            const expected = isCents ? Math.round((a.expected_cents ?? 0) / 100) : (a.expected ?? 0)
+            const deviationPct = expected ? Math.round(((actual - expected) / expected) * 100) : 0
+            const titles: Record<string, string> = {
+              revenue_spike: 'Revenue spike', revenue_drop: 'Revenue drop',
+              refund_spike: 'Refund spike', transaction_spike: 'Traffic spike',
+              transaction_drop: 'Traffic drop',
+            }
+            return {
+              id: `${a.type}-${a.date}`,
+              type: a.type,
+              severity: Math.abs(z) >= 3 ? 'critical' : Math.abs(z) >= 2.5 ? 'warning' : 'info',
+              title: titles[a.type] ?? 'Anomaly',
+              description: a.description ?? '',
+              detectedAt: a.date,
+              metric: a.type,
+              expected,
+              actual,
+              deviationPct,
+              agentSource: 'Transaction Analyst',
+              acknowledged: false,
+              zScore: z,
+              detectionMethod: 'zscore',
+            }
+          }),
+        })),
 
   customers: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.customers())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/customers', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/customers', { params: { org_id: orgId, days: 365 } }),
 
   agents: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.agents())
     : !orgId ? delay(EMPTY.empty)
-    : apiFetch<any>('/api/dashboard/agents', { params: { org_id: orgId } }),
+    : apiFetch<any>('/api/dashboard/agents', { params: { org_id: orgId } })
+        .then((r: any) => {
+          const catFor = (n: string) => {
+            const s = (n || '').toLowerCase()
+            if (s.includes('forecast') || s.includes('predict')) return 'forecasting'
+            if (s.includes('optim') || s.includes('price') || s.includes('margin')) return 'optimization'
+            if (s.includes('strateg') || s.includes('growth')) return 'strategy'
+            if (s.includes('coordin') || s.includes('orchestr')) return 'coordination'
+            return 'analysis'
+          }
+          return {
+            // chains/calibration aren't produced by the backend — omit so the
+            // page hides those sections instead of rendering empty/NaN.
+            agents: (r.agents ?? []).map((a: any) => {
+              const conf = a.avg_confidence ?? 0
+              const findings = a.recent_findings ?? []
+              return {
+                id: a.name,
+                name: a.name,
+                status: a.status === 'active' ? 'active' : 'idle',
+                lastRun: a.last_trained || '',
+                nextRun: '',
+                findings: findings.length,
+                confidence: conf <= 1 ? Math.round(conf * 100) : Math.round(conf),
+                category: catFor(a.name),
+                description: '',
+                latestFinding: findings[0]?.title ?? '',
+              }
+            }),
+          }
+        }),
 
   actions: (orgId: string) =>
     isDemo(orgId) ? delay(demoData.actions())

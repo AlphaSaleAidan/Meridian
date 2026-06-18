@@ -73,6 +73,12 @@ export interface StaffMember {
   customerRating: number
   revenuePerHour: number
   trend: 'up' | 'down' | 'stable'
+  // Real POS-derived fields (the metrics the POS actually provides per
+  // employee). Optional so demo data (which has the richer synthetic fields)
+  // still type-checks.
+  revenueCents?: number
+  transactionCount?: number
+  tipCents?: number
 }
 
 export interface PeakHourCell {
@@ -107,6 +113,7 @@ export interface MarginItem {
   marginPerUnitCents: number
   wasteFactor: number
   ingredients: IngredientCost[]
+  isEstimated?: boolean
 }
 
 export interface CustomerProfile {

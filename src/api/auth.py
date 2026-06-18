@@ -6,6 +6,7 @@ Auth dependencies for Meridian API.
 - require_admin_jwt: JWT + admin email check
 - require_service_auth: Authorization Bearer token OR X-Admin-Key (service/internal endpoints)
 """
+import json
 import logging
 import os
 import time
@@ -138,6 +139,35 @@ async def _check_org_membership(user: dict, org_id: str) -> bool:
     return False
 
 
+async def _org_id_from_body(request: Request) -> str | None:
+    """Resolve org_id (or merchant_id) from the request BODY for endpoints that
+    pass it there instead of query/path.
+
+    Reads via Starlette's cached body/form (`request.body()` caches `_body`,
+    `request.form()` caches `_form`) so the handler still receives the full
+    payload — reading here does NOT consume the request stream.
+    """
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return None
+    ctype = request.headers.get("content-type", "")
+    try:
+        if "application/json" in ctype:
+            raw = await request.body()  # cached on request._body for the handler
+            if not raw:
+                return None
+            data = json.loads(raw)
+            if isinstance(data, dict):
+                val = data.get("org_id") or data.get("merchant_id")
+                return val if isinstance(val, str) and val.strip() else None
+        elif "multipart/form-data" in ctype or "x-www-form-urlencoded" in ctype:
+            form = await request.form()  # cached on request._form for the handler
+            val = form.get("org_id") or form.get("merchant_id")
+            return val if isinstance(val, str) and val.strip() else None
+    except Exception as exc:
+        logger.warning("require_org_access: body org_id resolution failed: %s", exc)
+    return None
+
+
 async def require_org_access(
     request: Request,
     auth_header: str = Depends(_auth_header),
@@ -156,8 +186,20 @@ async def require_org_access(
     """
     org_id = request.query_params.get("org_id") or request.path_params.get("org_id")
     if not org_id:
+        # SECURITY (CA-1/CA-2): also resolve org_id from the request BODY. POS
+        # connect/disconnect/test, cline, predictive, spaces, vision and
+        # upload-csv all pass org_id in the body — previously the guard saw no
+        # query/path org_id, returned None (no-op), and allowed UNAUTHENTICATED
+        # cross-tenant writes. Now a body org_id is enforced exactly like a
+        # query/path one (valid JWT + verified membership below).
+        org_id = await _org_id_from_body(request)
+    if not org_id:
+        # Genuinely no org param anywhere → no-op; routes with no org are guarded
+        # by their own deps (require_admin / require_jwt / etc.).
         return None
 
+    # An org was named (query, path, OR body) → require a valid principal AND
+    # membership. Deny by default if either is missing.
     if not auth_header:
         raise HTTPException(401, "Authorization header required for org-scoped endpoint")
     token = auth_header.removeprefix("Bearer ").strip()

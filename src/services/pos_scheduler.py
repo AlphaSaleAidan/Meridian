@@ -39,6 +39,42 @@ async def _sync_loop():
         await asyncio.sleep(CHECK_INTERVAL_SECONDS)
 
 
+def _acquire_lock(key: str, ttl_seconds: int) -> bool:
+    """Best-effort cross-worker lock: the scheduler runs in EVERY uvicorn worker
+    (--workers 4), so without this all 4 would sync/backfill the same connection
+    at once. Returns True (proceed) if Redis is unavailable."""
+    try:
+        from ..db.cache import dashboard_cache
+        r = getattr(dashboard_cache, "_redis", None)
+        if r is None or not getattr(dashboard_cache, "_use_redis", False):
+            return True
+        return bool(r.set(f"lock:possync:{key}", "1", nx=True, ex=int(ttl_seconds)))
+    except Exception:
+        return True
+
+
+async def _recover_backfill(org_id: str, provider: str, conn: dict):
+    """A connection whose initial import never completed (historical_import_complete
+    is false — backfill errored or the flag was never set) would otherwise be
+    skipped forever and never sync new sales. Re-run the backfill: on success it
+    sets historical_import_complete=true and incremental sync takes over; on
+    failure run_backfill marks status=error so this won't loop."""
+    if provider != "square":
+        return  # only Square backfill is wired here; others heal via their own paths
+    logger.info(f"Recovery backfill for {org_id}/{provider} (historical_import_complete=false)")
+    try:
+        from ..security.encryption import decrypt_token
+        creds = conn.get("credentials_encrypted") or {}
+        token = decrypt_token(creds.get("access_token", "") or conn.get("access_token_enc", ""))
+        if not token:
+            logger.warning(f"No token to recover backfill for {org_id}")
+            return
+        from ..workers.backfill import run_backfill
+        await run_backfill(access_token=token, org_id=org_id, connection_id=conn["id"])
+    except Exception as e:
+        logger.error(f"Recovery backfill failed for {org_id}/{provider}: {e}")
+
+
 async def _check_and_sync():
     """Find all connections due for sync and run them."""
     from ..db import _db_instance as db
@@ -46,12 +82,12 @@ async def _check_and_sync():
         return
 
     try:
+        # Include connections that never finished their initial import — they
+        # used to be filtered out (historical_import_complete=true only) and so
+        # were stranded forever, never syncing new sales.
         connections = await db.select(
             "pos_connections",
-            filters={
-                "status": "eq.connected",
-                "historical_import_complete": "eq.true",
-            },
+            filters={"status": "eq.connected"},
         )
     except Exception as e:
         logger.warning(f"Could not fetch connections (will retry next cycle): {e}")
@@ -77,6 +113,15 @@ async def _check_and_sync():
                 continue
 
         org_id = conn.get("org_id", "")
+
+        # Only one worker handles a given connection per cycle.
+        if not _acquire_lock(str(conn.get("id")), frequency * 60):
+            continue
+
+        if not conn.get("historical_import_complete"):
+            await _recover_backfill(org_id, provider, conn)
+            continue
+
         logger.info(f"Sync due for {org_id}/{provider} — starting incremental sync")
 
         try:

@@ -56,7 +56,12 @@ oauth_manager = CloverOAuthManager()
 
 def _safe_return_to(return_to: str | None) -> str:
     """Allowlist the post-OAuth redirect path. Only Canada merchant routes pass."""
-    if return_to and return_to.startswith("/canada/merchant"):
+    if return_to and (
+        return_to.startswith("/canada/merchant")
+        or return_to.startswith("/canada/onboard")
+        or return_to.startswith("/canada/dashboard")
+        or return_to.startswith("/canada/setup")
+    ):
         return return_to
     return ""
 
@@ -190,9 +195,13 @@ async def callback(
                     "id": org_id,
                     "name": f"Org {org_id}",
                     "slug": org_id.lower().replace(" ", "-"),
-                    "plan": "free",
-                    "is_active": True,
+                    # `vertical` is NOT NULL with no default on organizations — omitting
+                    # it failed the insert, so the org row was never created and the
+                    # pos_connections FK (org_id -> organizations.id) rejected the
+                    # connection ("Connected but failed to save").
+                    "vertical": "other",
                     "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 })
 
             token_enc = encrypt_token(tokens["access_token"])
@@ -242,22 +251,18 @@ async def callback(
                 await _db_instance.insert("pos_connections", connection_data)
 
             await _db_instance.update(
+                "businesses",
+                {"pos_connected": True},
+                filters={"id": f"eq.{org_id}"},
+            )
+            await _db_instance.update(
                 "organizations",
                 {"pos_system": "clover", "pos_connection_status": "connected"},
                 filters={"id": f"eq.{org_id}"},
             )
 
-            await _db_instance.insert("notifications", {
-                "id": str(uuid4()),
-                "org_id": org_id,
-                "title": "Clover Connected!",
-                "body": f"Successfully connected to Clover merchant {resolved_merchant_id}. Starting initial data sync...",
-                "priority": "normal",
-                "source_type": "event",
-                "status": "active",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
-
+            # Queue backfill FIRST — the best-effort notification below must never
+            # block data sync or roll back a successful connection.
             from .pos_connections import _run_clover_backfill
             background_tasks.add_task(
                 _run_clover_backfill,
@@ -267,6 +272,28 @@ async def callback(
                 merchant_id=resolved_merchant_id,
             )
             logger.info(f"Queued Clover backfill for org={org_id}, connection={conn_id}")
+
+            # Best-effort welcome notification — NON-FATAL (notifications has
+            # NOT-NULL user_id/channel/scheduled_for).
+            try:
+                _biz = await _db_instance.select("businesses", filters={"id": f"eq.{org_id}"}, limit=1)
+                owner_user_id = _biz[0].get("owner_user_id") if _biz else None
+                if owner_user_id:
+                    await _db_instance.insert("notifications", {
+                        "id": str(uuid4()),
+                        "org_id": org_id,
+                        "user_id": owner_user_id,
+                        "channel": "in_app",
+                        "scheduled_for": datetime.now(timezone.utc).isoformat(),
+                        "title": "Clover Connected!",
+                        "body": f"Successfully connected to Clover merchant {resolved_merchant_id}. Starting initial data sync...",
+                        "priority": "normal",
+                        "source_type": "event",
+                        "status": "active",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+            except Exception as notify_err:
+                logger.warning(f"Welcome notification skipped for org {org_id}: {notify_err}")
         else:
             logger.warning("DB not initialized — Clover tokens returned but not persisted")
 

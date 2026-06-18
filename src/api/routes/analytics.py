@@ -42,6 +42,17 @@ def _validate_org_id(org_id: str = Query(..., description="Organization ID")) ->
 
 OrgId = Annotated[str, Depends(_validate_org_id)]
 
+# Typical cost-of-goods ratio by business type, used ONLY to estimate margins
+# before a merchant supplies real costs. Rough industry ballparks — always shown
+# as "estimated" and replaced the moment a real cost is entered/uploaded.
+_COGS_BY_VERTICAL = {
+    "restaurant": 0.32, "cafe": 0.28, "coffee_shop": 0.28, "coffee": 0.28,
+    "bar": 0.22, "bakery": 0.30, "food_truck": 0.33, "quick_service": 0.30,
+    "retail": 0.55, "grocery": 0.68, "convenience": 0.70, "boutique": 0.50,
+    "salon": 0.15, "spa": 0.15, "fitness": 0.12, "service": 0.10, "other": 0.40,
+}
+_DEFAULT_COGS_PCT = 0.40
+
 
 def _get_db():
     from ...db import _db_instance
@@ -160,18 +171,41 @@ async def get_margins(
         agg["total_revenue_cents"] += row.get("total_revenue_cents", 0) or 0
         agg["total_quantity"] += row.get("total_quantity", 0) or 0
 
+    # Estimated-margin fallback: when a product has no real cost yet, estimate
+    # cost-of-goods from a typical COGS ratio for the business type so the page
+    # isn't empty. Each item is flagged is_estimated; a real cost (entered or
+    # uploaded) replaces the estimate immediately.
+    vertical = ""
+    try:
+        org_rows = await db.select("organizations", filters={"id": f"eq.{org_id}"}, limit=1)
+        vertical = (org_rows[0].get("vertical") or "").lower() if org_rows else ""
+    except Exception:
+        vertical = ""
+    est_cogs = _COGS_BY_VERTICAL.get(vertical, _DEFAULT_COGS_PCT)
+
     margin_items = []
     total_revenue = 0
     total_cost = 0
+    estimated_count = 0
 
     for pid, perf in perf_agg.items():
         product = product_map.get(pid, {})
         name = product.get("name", "Unknown")
         category_id = product.get("category_id")
-        cost_per_unit = product.get("cost_per_unit", 0) or 0
+        # Per-unit cost of goods, in cents. Column is `cost_cents` (was reading
+        # the non-existent `cost_per_unit`, so cost was always 0 → fake 100%
+        # margins). Null until a cost sheet / restock invoice is uploaded — then
+        # we fall back to a vertical-based estimate, clearly flagged.
+        cost_per_unit = product.get("cost_cents") or 0
         revenue = perf["total_revenue_cents"]
         quantity = perf["total_quantity"]
-        cost = cost_per_unit * quantity  # cost in cents
+        if cost_per_unit > 0:
+            cost = cost_per_unit * quantity
+            estimated = False
+        else:
+            cost = int(round(revenue * est_cogs))
+            estimated = True
+            estimated_count += 1
 
         margin_pct = 0.0
         if revenue > 0:
@@ -189,6 +223,8 @@ async def get_margins(
             "profit_cents": revenue - int(cost),
             "margin_pct": margin_pct,
             "quantity_sold": quantity,
+            "is_estimated": estimated,
+            "cost_source": "estimated" if estimated else "actual",
         })
 
     # Sort by profit descending
@@ -197,6 +233,11 @@ async def get_margins(
     overall_margin = 0.0
     if total_revenue > 0:
         overall_margin = round((total_revenue - total_cost) / total_revenue * 100, 1)
+
+    # Catalog-wide cost coverage drives the "upload a cost sheet" prompt — count
+    # over ALL active products, not just those that sold in the window.
+    catalog_total = len(products)
+    catalog_with_cost = sum(1 for p in products if (p.get("cost_cents") or 0) > 0)
 
     result = {
         "products": margin_items,
@@ -207,6 +248,12 @@ async def get_margins(
             "overall_margin_pct": overall_margin,
             "products_with_cost": sum(1 for m in margin_items if m["cost_cents"] > 0),
             "products_without_cost": sum(1 for m in margin_items if m["cost_cents"] == 0),
+            "catalog_total": catalog_total,
+            "catalog_with_cost": catalog_with_cost,
+            "catalog_missing_cost": catalog_total - catalog_with_cost,
+            "estimated_items": estimated_count,
+            "has_estimates": estimated_count > 0,
+            "est_cogs_pct": round(est_cogs * 100),
         },
         "period_days": days,
     }
@@ -266,7 +313,9 @@ async def get_menu_engineering(
     items = []
     for pid, perf in perf_agg.items():
         product = product_map.get(pid, {})
-        cost_per_unit = product.get("cost_per_unit", 0) or 0
+        # Real column is `cost_cents` (was reading non-existent `cost_per_unit`
+        # → cost always 0 → every item fake-100% margin → bogus BCG split).
+        cost_per_unit = product.get("cost_cents") or 0
         revenue = perf["total_revenue_cents"]
         quantity = perf["total_quantity"]
         cost = cost_per_unit * quantity

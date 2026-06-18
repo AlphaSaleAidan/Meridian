@@ -54,7 +54,12 @@ _DEFAULT_RETURN_TO = "/app/settings"
 
 def _safe_return_to(return_to: str | None) -> str:
     """Allowlist the post-OAuth redirect path. Only Canada merchant routes pass."""
-    if return_to and return_to.startswith("/canada/merchant"):
+    if return_to and (
+        return_to.startswith("/canada/merchant")
+        or return_to.startswith("/canada/onboard")
+        or return_to.startswith("/canada/dashboard")
+        or return_to.startswith("/canada/setup")
+    ):
         return return_to
     return ""
 
@@ -202,9 +207,13 @@ async def callback(
                     "id": org_id,
                     "name": f"Org {org_id}",
                     "slug": org_id.lower().replace(" ", "-"),
-                    "plan": "free",
-                    "is_active": True,
+                    # `vertical` is NOT NULL with no default on organizations — omitting
+                    # it failed the insert, so the org row was never created and the
+                    # pos_connections FK (org_id -> organizations.id) rejected the
+                    # connection ("Connected but failed to save").
+                    "vertical": "other",
                     "created_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
                 })
                 logger.info(f"Created organization: {org_id}")
 
@@ -253,19 +262,22 @@ async def callback(
                 await _db_instance.insert("pos_connections", connection_data)
                 logger.info(f"Created new connection for org {org_id}")
 
-            # Create a notification
-            await _db_instance.insert("notifications", {
-                "id": str(uuid4()),
-                "org_id": org_id,
-                "title": "Square Connected!",
-                "body": f"Successfully connected to Square merchant {tokens['merchant_id']}. Starting initial data sync...",
-                "priority": "normal",
-                "source_type": "event",
-                "status": "active",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            })
+            # Reflect connected state where the merchant dashboard reads it:
+            # the dashboard gates on businesses.pos_connected (fetchBusinessForUser),
+            # and org-path falls back to organizations.pos_connection_status.
+            await _db_instance.update(
+                "businesses",
+                {"pos_connected": True},
+                filters={"id": f"eq.{org_id}"},
+            )
+            await _db_instance.update(
+                "organizations",
+                {"pos_system": "square", "pos_connection_status": "connected"},
+                filters={"id": f"eq.{org_id}"},
+            )
 
-            # Kick off historical backfill in background
+            # Kick off historical backfill in background FIRST — a failure of the
+            # (best-effort) welcome notification below must never prevent data sync.
             conn_id = existing[0]["id"] if existing else connection_data["id"]
             from ...workers.backfill import run_backfill
             background_tasks.add_task(
@@ -275,6 +287,31 @@ async def callback(
                 connection_id=conn_id,
             )
             logger.info(f"Queued backfill task for org={org_id}, connection={conn_id}")
+
+            # Best-effort welcome notification — NON-FATAL. notifications has
+            # NOT-NULL user_id/channel/scheduled_for; if user_id can't be resolved
+            # (or the insert otherwise fails) we must not roll back a successful
+            # connection. Previously this threw and pushed the whole callback into
+            # the "Connected but failed to save" partial path.
+            try:
+                _biz = await _db_instance.select("businesses", filters={"id": f"eq.{org_id}"}, limit=1)
+                owner_user_id = _biz[0].get("owner_user_id") if _biz else None
+                if owner_user_id:
+                    await _db_instance.insert("notifications", {
+                        "id": str(uuid4()),
+                        "org_id": org_id,
+                        "user_id": owner_user_id,
+                        "channel": "in_app",
+                        "scheduled_for": datetime.now(timezone.utc).isoformat(),
+                        "title": "Square Connected!",
+                        "body": f"Successfully connected to Square merchant {tokens['merchant_id']}. Starting initial data sync...",
+                        "priority": "normal",
+                        "source_type": "event",
+                        "status": "active",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+            except Exception as notify_err:
+                logger.warning(f"Welcome notification skipped for org {org_id}: {notify_err}")
 
         else:
             logger.warning("DB not initialized — tokens returned but not persisted")

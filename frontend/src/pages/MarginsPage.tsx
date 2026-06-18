@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useState, useRef, type ChangeEvent } from 'react'
 import { clsx } from 'clsx'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from 'recharts'
-import { DollarSign, TrendingDown, AlertTriangle, Target, ChevronDown, ChevronUp, Calculator } from 'lucide-react'
+import {
+  DollarSign, TrendingDown, AlertTriangle, Target, ChevronDown, ChevronUp, Calculator,
+  UploadCloud, Loader2, CheckCircle2,
+} from 'lucide-react'
 import { generateMarginWaterfall, type MarginItem } from '@/lib/agent-data'
 import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
@@ -12,8 +15,85 @@ import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { useApi } from '@/hooks/useApi'
+import { supabase } from '@/lib/supabase'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import AwaitingDataBanner from '@/components/AwaitingDataBanner'
+
+// Upload a cost sheet / restock invoice → AI extraction (inventory-docs) →
+// products.cost_cents → margins compute. Reuses the inventory-docs pipeline.
+function CostSheetUploader({ orgId, onComplete }: { orgId: string; onComplete: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [state, setState] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle')
+  const [msg, setMsg] = useState('')
+
+  async function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!supabase) { setState('error'); setMsg('Storage not configured.'); return }
+    setState('uploading'); setMsg(file.name)
+    try {
+      const ext = file.name.split('.').pop() || 'bin'
+      const path = `${orgId}/cost_sheet_${Date.now()}.${ext}`
+      const up = await supabase.storage.from('inventory-docs').upload(path, file)
+      if (up.error) throw up.error
+      const ins = await supabase
+        .from('inventory_document_uploads')
+        .insert({ org_id: orgId, file_name: file.name, file_path: path, file_type: file.type, status: 'pending' })
+        .select('id')
+        .single()
+      if (ins.error) throw ins.error
+      const docId = (ins.data as { id: string }).id
+
+      setState('processing'); setMsg('Reading your document…')
+      await api.processInventoryDoc(orgId, docId)
+
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 3000))
+        const st = await api.inventoryDocStatus(orgId, docId)
+        if (st.status === 'completed') {
+          const m = st.extracted_data?._match_summary
+          setState('done')
+          setMsg(m
+            ? `Matched ${m.matched} product${m.matched === 1 ? '' : 's'}${m.inserted ? `, added ${m.inserted} new` : ''}.`
+            : 'Costs imported.')
+          onComplete()
+          return
+        }
+        if (st.status === 'failed') {
+          setState('error'); setMsg(st.error_message || 'Could not read that file.'); return
+        }
+      }
+      setState('error'); setMsg('Still processing — check back shortly.')
+    } catch (err: any) {
+      setState('error'); setMsg(err?.message?.slice(0, 140) || 'Upload failed.')
+    }
+  }
+
+  const busy = state === 'uploading' || state === 'processing'
+  return (
+    <div className="flex flex-col items-start gap-1.5 flex-shrink-0">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.heic"
+        onChange={handleFile}
+        className="sr-only"
+      />
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pm-amber-gold text-pm-bg font-bold text-sm hover:bg-pm-amber-gold/90 transition-colors disabled:opacity-60"
+      >
+        {state === 'done' ? <CheckCircle2 size={16} /> : busy ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+        {state === 'uploading' ? 'Uploading…' : state === 'processing' ? 'Reading…' : state === 'done' ? 'Imported' : 'Upload cost sheet'}
+      </button>
+      {msg && (
+        <p className={clsx('text-2xs font-mono max-w-[220px]', state === 'error' ? 'text-red-400' : 'text-pm-muted')}>{msg}</p>
+      )}
+    </div>
+  )
+}
 
 const tooltipStyle = {
   backgroundColor: '#111113',
@@ -79,6 +159,12 @@ export default function MarginsPage() {
   const apiData = useApi(() => api.margins(orgId), [orgId])
 
   const items: MarginItem[] = isDemo ? generateMarginWaterfall() : (apiData.data?.items ?? [])
+  const summary = apiData.data?.summary
+  const catalogTotal = summary?.catalog_total ?? 0
+  const missingCost = summary?.catalog_missing_cost ?? 0
+  // Prices come from the POS but cost-of-goods doesn't — prompt the merchant to
+  // upload a cost sheet / restock invoice so margins stop reading as ~100%.
+  const showCostPrompt = !isDemo && posConnected && catalogTotal > 0 && missingCost > 0
 
   // Only surface loading / error once a POS is actually connected. Before that
   // the analytics endpoint 401s — instead of a scaffold we render the real
@@ -114,6 +200,28 @@ export default function MarginsPage() {
       </ScrollReveal>
 
       {awaitingData && <AwaitingDataBanner posConnected={posConnected} label="margin analysis" />}
+
+      {showCostPrompt && (
+        <ScrollReveal variant="fadeUp">
+          <div className="card p-4 sm:p-5 border border-pm-amber-gold/30 bg-pm-amber-gold/[0.05]">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <span className="inline-flex p-2.5 rounded-xl bg-pm-amber-gold/10 text-pm-amber-gold flex-shrink-0">
+                <Calculator size={22} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-semibold text-[#F5F5F7]">Unlock your true margins</h3>
+                <p className="mt-0.5 text-sm text-[#A1A1A8]">
+                  Your POS gives us the <span className="text-[#F5F5F7]">selling price</span> of every item, but not what
+                  you <span className="text-[#F5F5F7]">paid</span> for it — so {missingCost} of {catalogTotal} product{catalogTotal === 1 ? '' : 's'}{' '}
+                  show ~100% margin. Upload your <span className="text-[#F5F5F7]">last inventory statement or restock invoice</span>{' '}
+                  (PDF, Excel, CSV, or a photo) and we'll read the costs in automatically.
+                </p>
+              </div>
+              <CostSheetUploader orgId={orgId} onComplete={apiData.refetch} />
+            </div>
+          </div>
+        </ScrollReveal>
+      )}
 
       <StaggerContainer className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-walkthrough="margin-stats">
         <StaggerItem>
@@ -227,7 +335,13 @@ export default function MarginsPage() {
         <div className="card overflow-hidden" data-walkthrough="margin-breakdown">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Product Cost Breakdown</h3>
-            <p className="text-[10px] text-[#A1A1A8] mt-0.5">Click "View Cost Formulas" on any product to see ingredient-level calculations</p>
+            {summary?.has_estimates ? (
+              <p className="text-[10px] text-pm-amber-gold mt-0.5">
+                Rows marked <span className="font-semibold">est</span> use a typical ~{summary.est_cogs_pct}% cost-of-goods estimate for your business type — add real costs to make them exact.
+              </p>
+            ) : (
+              <p className="text-[10px] text-[#A1A1A8] mt-0.5">Click "View Cost Formulas" on any product to see ingredient-level calculations</p>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="pm-table min-w-[700px]">
@@ -247,6 +361,9 @@ export default function MarginsPage() {
                   <tr key={item.name}>
                     <td>
                       <span className="font-medium text-[#F5F5F7]">{item.name}</span>
+                      {item.isEstimated && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-pm-amber-gold/15 text-pm-amber-gold align-middle">est</span>
+                      )}
                       <FormulaBreakdown item={item} />
                     </td>
                     <td className="text-right font-mono text-[#F5F5F7]">{formatCents(item.sellingPriceCents)}</td>

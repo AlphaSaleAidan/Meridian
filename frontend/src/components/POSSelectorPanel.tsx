@@ -257,6 +257,16 @@ const POS_FIELDS: Record<string, { key: string; label: string; placeholder: stri
   ],
 }
 
+// Providers with server-side 1-click OAuth. For these we must NOT collect a
+// pasted access token — that path 401s on a bad/stale token and silently leaves
+// a "connected, no data" connection. Instead redirect to the authorize endpoint,
+// which signs the merchant into the provider and mints a valid token via the
+// callback. (Manual token entry stays for non-OAuth POS like Toast.)
+const OAUTH_AUTHORIZE: Record<string, string> = {
+  square: '/api/square/authorize',
+  clover: '/api/clover/authorize',
+}
+
 function LayoutA({ system, onConnect, isDemo, repId }: {
   system: POSSystem; onConnect?: (s: POSSystem) => void; isDemo: boolean;
   repId?: string | null;
@@ -272,6 +282,16 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
   const [connected, setConnected] = useState(false)
   const orgId = useOrgId()
   const apiBase = import.meta.env.VITE_API_URL || ''
+  const oauthPath = OAUTH_AUTHORIZE[system.key]
+
+  function startOAuth() {
+    // Demo / no real org → fall back to the demo onConnect behaviour.
+    if (!orgId || orgId === 'demo') { onConnect?.(system); return }
+    const ret = encodeURIComponent(window.location.pathname + window.location.search)
+    const rep = repId ? `&rep_id=${encodeURIComponent(repId)}` : ''
+    window.location.href =
+      `${apiBase}${oauthPath}?org_id=${encodeURIComponent(orgId)}&return_to=${ret}${rep}`
+  }
 
   const allFilled = fields.every(f => (creds[f.key] || '').trim().length > 0)
 
@@ -386,10 +406,31 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
         </ol>
       </div>
 
-      {/* P6: per-provider credential inputs. Square = 1 field;
-          Clover = 2; Toast = 3. Unknown providers default to single
-          access_token. */}
-      {!isDemo && !connected && (
+      {/* OAuth providers (Square, Clover): 1-click sign-in — no token to paste. */}
+      {oauthPath && !isDemo && !connected && (
+        <div className="space-y-2">
+          {connectError && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-400">
+              <AlertTriangle size={12} /> {connectError}
+            </div>
+          )}
+          <button
+            onClick={startOAuth}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[12px] font-medium text-white rounded-lg transition-all"
+            style={{ backgroundColor: system.brandColor }}
+          >
+            <Wifi size={12} /> Connect with {system.name}
+          </button>
+          <p className="text-[9px] text-[#A1A1A8]/40 text-center">
+            You'll sign in to {system.name} securely — no keys to copy or paste.
+          </p>
+        </div>
+      )}
+
+      {/* P6: per-provider credential inputs for non-OAuth POS (e.g. Toast).
+          Square = 1 field; Clover = 2; Toast = 3. Unknown providers default
+          to single access_token. */}
+      {!oauthPath && !isDemo && !connected && (
         <div className="space-y-2">
           {fields.map(f => (
             <div key={f.key} className="space-y-1">

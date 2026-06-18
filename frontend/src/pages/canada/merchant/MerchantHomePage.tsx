@@ -11,6 +11,7 @@ import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
 import Top3ActionsPanel from '@/components/Top3ActionsPanel'
+import { HistoricalRevenueSection, OpenOrdersSection } from '@/components/SalesHistorySections'
 
 /**
  * Canada-merchant home — the payable hero surface.
@@ -132,14 +133,32 @@ export default function MerchantHomePage() {
   const basePath = useMerchantBasePath()
 
   const overview = useApi(() => (skip ? api.overview('') : api.overview(orgId)), [orgId, skip])
-  const revenue = useApi(() => (skip ? api.revenue('', 30) : api.revenue(orgId, 30)), [orgId, skip])
+  // Pull a year of daily revenue so the sparklines reflect backfilled history,
+  // not just the last 30 days (which is empty for a merchant whose data predates
+  // the connect).
+  const revenue = useApi(() => (skip ? api.revenue('', 365) : api.revenue(orgId, 365)), [orgId, skip])
   const margins = useApi<{ items: Array<{ revenueCents: number; marginCents: number }> }>(
     () => (skip ? Promise.resolve({ items: [] }) : api.margins(orgId)),
     [orgId, skip],
   )
 
   const data = overview.data
-  const netCents = data?.revenue_cents_30d ?? 0
+  const net30d = data?.revenue_cents_30d ?? 0
+  const lifetimeCents = data?.lifetime_revenue_cents ?? 0
+  // No sales in the last 30 days but the merchant has backfilled history →
+  // show all-time figures instead of a bare $0 ("connected but nothing shows").
+  const showLifetime = net30d === 0 && lifetimeCents > 0
+  const netCents = showLifetime ? lifetimeCents : net30d
+  const txCount = showLifetime
+    ? (data?.lifetime_transaction_count ?? 0)
+    : (data?.transaction_count_30d ?? 0)
+  const avgTicket = showLifetime
+    ? (data?.lifetime_avg_ticket_cents ?? 0)
+    : (data?.avg_ticket_cents ?? 0)
+  const periodLabel = showLifetime ? 'all time' : '30 days'
+  const lastActivity = data?.last_activity_at
+    ? new Date(data.last_activity_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null
   const animatedNet = useCountUp(skip ? 0 : netCents)
 
   // ── Data-destination scaffold: no POS connected ───────────────────────
@@ -265,7 +284,9 @@ export default function MerchantHomePage() {
             {org?.business_name || 'Dashboard'}
           </h1>
           <p className="text-sm text-pm-muted mt-1">
-            Last 30 days · <span className="font-mono">{data.days_with_data}</span> days with data
+            {showLifetime
+              ? <>All time · <span className="font-mono">{data.lifetime_days_with_data}</span> days with data</>
+              : <>Last 30 days · <span className="font-mono">{data.days_with_data}</span> days with data</>}
           </p>
         </div>
         <span className={clsx(
@@ -284,16 +305,22 @@ export default function MerchantHomePage() {
       <div className="rounded-2xl bg-pm-surface border border-pm-border p-6 sm:p-8">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
           <div>
-            <p className="text-2xs font-semibold uppercase tracking-wider text-pm-muted">Net sales · 30 days</p>
+            <p className="text-2xs font-semibold uppercase tracking-wider text-pm-muted">Net sales · {periodLabel}</p>
             <p className="mt-1.5 text-4xl sm:text-5xl font-bold font-mono text-pm-text tracking-tight tabular-nums">
               {formatCad(animatedNet / 100)}
             </p>
-            <p className={clsx(
-              'mt-2 text-sm font-semibold font-mono',
-              changeType === 'negative' ? 'text-pm-amber-orange' : 'text-pm-teal',
-            )}>
-              {formatPercent(data.revenue_change_pct)} vs. prior 30 days
-            </p>
+            {showLifetime ? (
+              <p className="mt-2 text-sm font-semibold font-mono text-pm-muted">
+                No sales in the last 30 days{lastActivity ? ` · last activity ${lastActivity}` : ''}
+              </p>
+            ) : (
+              <p className={clsx(
+                'mt-2 text-sm font-semibold font-mono',
+                changeType === 'negative' ? 'text-pm-amber-orange' : 'text-pm-teal',
+              )}>
+                {formatPercent(data.revenue_change_pct)} vs. prior 30 days
+              </p>
+            )}
           </div>
           {recoverableCents > 0 && (
             <Link
@@ -324,25 +351,27 @@ export default function MerchantHomePage() {
           iconColor="text-pm-teal"
           sparkColor="text-pm-teal"
           spark={revSpark}
-          change={formatPercent(data.revenue_change_pct)}
+          change={showLifetime ? undefined : formatPercent(data.revenue_change_pct)}
           changeType={changeType}
-          subtitle="30d"
+          subtitle={showLifetime ? 'all time' : '30d'}
         />
         <MoneyTile
           label="Transactions"
-          value={formatNumber(data.transaction_count_30d)}
+          value={formatNumber(txCount)}
           icon={ShoppingCart}
           iconColor="text-pm-blue"
           sparkColor="text-pm-blue"
           spark={txSpark}
+          subtitle={periodLabel}
         />
         <MoneyTile
           label="Avg Ticket"
-          value={formatCad(data.avg_ticket_cents / 100)}
+          value={formatCad(avgTicket / 100)}
           icon={Receipt}
           iconColor="text-pm-blue"
           sparkColor="text-pm-blue"
           spark={ticketSpark}
+          subtitle={periodLabel}
         />
         <MoneyTile
           label="Gross Margin"
@@ -352,6 +381,10 @@ export default function MerchantHomePage() {
           subtitle={marginPct != null ? 'blended' : 'analyzing…'}
         />
       </div>
+
+      {/* Historical revenue (prior-year) + open-order pipeline from the POS */}
+      <HistoricalRevenueSection />
+      <OpenOrdersSection />
 
       {/* Top 3 Actions */}
       <Top3ActionsPanel />
