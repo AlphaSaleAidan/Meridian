@@ -39,7 +39,10 @@ export function useApi<T>(
         if (ac.signal.aborted) return
         const canRetry = attempt < RETRY_DELAYS.length && isRetryable(err)
         if (!canRetry) {
-          setState({ data: null, loading: false, error: err.message || 'Unknown error' })
+          // Keep the last successful data so a failed refetch surfaces the
+          // error without blanking an already-populated page. Initial load
+          // (prev.data === null) is unchanged.
+          setState(prev => ({ data: prev.data, loading: false, error: err.message || 'Unknown error' }))
           return
         }
         await new Promise<void>(r => {
