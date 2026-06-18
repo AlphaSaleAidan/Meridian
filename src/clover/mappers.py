@@ -15,7 +15,15 @@ Key Clover ↔ Square differences:
 import logging
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
+from uuid import uuid4, uuid5, NAMESPACE_URL
+
+_ID_NS = uuid5(NAMESPACE_URL, "meridian.pos")
+
+
+def _stable_id(*parts: object) -> str:
+    """Deterministic UUID from a natural key, so re-syncs upsert the SAME row
+    (no duplicates) and distinct rows never share an id (no clobber)."""
+    return str(uuid5(_ID_NS, ":".join(str(p) for p in parts)))
 
 logger = logging.getLogger("meridian.clover.mappers")
 
@@ -216,8 +224,21 @@ class CloverDataMapper:
         clover_state = (cl_order.get("state") or "").lower()
         txn_type = "void" if clover_state in ("cancelled", "refunded") else "sale"
 
+        # Metadata (no schema change): every tender so split payments aren't
+        # lost; service-charge revenue that's otherwise invisible; the device
+        # that rang the order so multi-register merchants are attributable.
+        metadata: dict[str, Any] = {"tenders": self._map_tenders(payments)}
+        service_charge = self._sum_service_charges(cl_order)
+        if service_charge:
+            metadata["service_charge_cents"] = service_charge
+        device_id = (cl_order.get("device") or {}).get("id")
+        if device_id:
+            metadata["device_id"] = device_id
+
         return {
-            "id": str(uuid4()),
+            # Deterministic from the order's natural key so a re-sync updates
+            # this row instead of churning the PK / orphaning its line items.
+            "id": _stable_id(self.org_id, "clover", external_id),
             "org_id": self.org_id,
             "location_id": self.location_id,
             "external_id": external_id,
@@ -232,6 +253,7 @@ class CloverDataMapper:
             "discount_cents": abs(discount),
             "tip_cents": self._sum_tips(payments),
             "payment_method": payment_method,
+            "metadata": metadata,
             "employee_name": employee_name,
             "employee_external_id": employee_id,
             "customer_id": cl_order.get("customers", {}).get("elements", [{}])[0].get("id") if cl_order.get("customers") else None,
@@ -248,8 +270,14 @@ class CloverDataMapper:
         price = cl_line_item.get("price", 0) or 0
         qty = cl_line_item.get("unitQty", 1000) / 1000  # Clover uses 1/1000 units
 
+        # Stable per-line identity: the order's (deterministic) txn id + the
+        # Clover lineItem id. Distinct lines never collide; re-syncs are idempotent.
+        # (transaction_items has no external_id column — pkey is (id, transaction_at)
+        # — so the natural key only feeds the deterministic id; it isn't stored.)
+        line_key = f"{transaction_id}:{cl_line_item.get('id', '')}"
+
         return {
-            "id": str(uuid4()),
+            "id": _stable_id(self.org_id, "clover", line_key),
             "org_id": self.org_id,
             "transaction_id": transaction_id,
             "provider": "clover",  # transient routing hint — stripped before write
@@ -306,6 +334,11 @@ class CloverDataMapper:
         """Sum tips across all payments."""
         return sum(p.get("tipAmount", 0) or 0 for p in payments)
 
+    def _sum_service_charges(self, cl_order: dict) -> int:
+        """Sum applied service charges (auto-gratuity, etc.) — Clover cents."""
+        charges = (cl_order.get("serviceCharges") or {}).get("elements", [])
+        return sum(c.get("amount", 0) or 0 for c in charges)
+
     def _line_item_discount(self, cl_line_item: dict) -> int:
         """Get discount on a single line item."""
         total = 0
@@ -313,15 +346,9 @@ class CloverDataMapper:
             total += d.get("amount", 0)
         return total
 
-    def _determine_payment_method(self, payments: list[dict]) -> str:
-        """Determine primary payment method from Clover payments."""
-        if not payments:
-            return "unknown"
-        # Use the first/largest payment's tender type
-        payment = payments[0]
-        tender = payment.get("tender", {})
-        label = tender.get("label", "").lower()
-
+    def _clover_tender_type(self, payment: dict) -> str:
+        """Map one Clover payment's tender to a Meridian payment_method enum."""
+        label = payment.get("tender", {}).get("label", "").lower()
         if "cash" in label:
             return "cash"
         elif "credit" in label or "card" in label:
@@ -334,6 +361,23 @@ class CloverDataMapper:
             return "other"
         else:
             return payment.get("cardTransaction", {}).get("type", "card").lower() if payment.get("cardTransaction") else "other"
+
+    def _determine_payment_method(self, payments: list[dict]) -> str:
+        """Primary payment method = the first payment's tender type."""
+        if not payments:
+            return "unknown"
+        return self._clover_tender_type(payments[0])
+
+    def _map_tenders(self, payments: list[dict]) -> list[dict]:
+        """Every tender on the order — so split payments aren't reduced to one."""
+        return [
+            {
+                "type": self._clover_tender_type(p),
+                "amount_cents": p.get("amount", 0) or 0,
+                "tip_cents": p.get("tipAmount", 0) or 0,
+            }
+            for p in payments
+        ]
 
     def _map_order_state(self, state: str) -> str:
         """Map Clover order state to Meridian status."""

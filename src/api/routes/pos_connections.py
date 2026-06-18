@@ -9,6 +9,7 @@ OAuth-based systems (Square, Clover) use their own /api/square/ and
 connection status and sync infrastructure here.
 """
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
@@ -16,7 +17,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 
-from ..auth import require_org_access
+from ..auth import require_org_access, require_jwt, require_org_member
 from ...security.encryption import encrypt_token, decrypt_token
 from ...services.pos_connectors import (
     GenericRESTConnector,
@@ -36,6 +37,47 @@ router = APIRouter(
     tags=["pos-connections"],
     dependencies=[Depends(require_org_access)],
 )
+
+
+def _atomic_write_enabled() -> bool:
+    return os.environ.get("POS_ATOMIC_WRITE", "").lower() in ("1", "true", "yes")
+
+
+async def _write_sync_result(db, result) -> None:
+    """Persist a SyncResult's products + transactions + transaction_items.
+
+    The single write path for every backfill/incremental caller (replaces three
+    copy-pasted blocks). Idempotent via deterministic ids, so it's safe to retry.
+
+    - POS_ATOMIC_WRITE=1 and the DB exposes the `pos_sync_upsert` RPC → the three
+      tables are written in ONE transaction (all-or-nothing). Falls back to the
+      sequential path if the RPC errors.
+    - Otherwise → sequential upserts in FK-safe order (products → transactions →
+      transaction_items). A partial failure self-heals on the next (idempotent) sync.
+    """
+    products = list(getattr(result, "products", None) or [])
+    transactions = list(getattr(result, "transactions", None) or [])
+    items = list(getattr(result, "transaction_items", None) or [])
+    if not (products or transactions or items):
+        return
+
+    if _atomic_write_enabled() and hasattr(db, "rpc"):
+        try:
+            await db.rpc("pos_sync_upsert", {
+                "_products": products,
+                "_transactions": transactions,
+                "_transaction_items": items,
+            })
+            return
+        except Exception as e:
+            logger.warning(f"atomic pos_sync_upsert failed; falling back to sequential: {e}")
+
+    if products:
+        await db.batch_upsert("products", products, on_conflict="org_id,external_id")
+    if transactions:
+        await db.batch_upsert("transactions", transactions, on_conflict="org_id,external_id")
+    if items:
+        await db.batch_upsert("transaction_items", items, on_conflict="id,transaction_at")
 
 
 class TestConnectionRequest(BaseModel):
@@ -124,34 +166,30 @@ async def _test_toast(credentials: dict) -> dict:
         }
 
 
+async def _square_merchant_and_vertical(access_token: str) -> tuple[dict, str]:
+    """Fetch the Square merchant profile + detect a business vertical, via
+    SquareClient so it honors the configured Square environment (sandbox vs
+    prod) and the current Square-Version. Shared by test-connection and connect
+    so both always speak to the same Square. Returns (merchant, vertical)."""
+    from ...square.client import SquareClient
+    async with SquareClient(access_token=access_token) as client:
+        merchant = await client.get_merchant("me")
+        vertical = _detect_business_type_from_square(merchant)
+        locations = await client.list_locations()
+        if locations:
+            mcc = locations[0].get("mcc", "")
+            if mcc:
+                vertical = _mcc_to_business_type(mcc) or vertical
+    return merchant, vertical
+
+
 async def _test_square(credentials: dict) -> dict:
     access_token = credentials.get("access_token", "")
     if not access_token:
         return {"success": False, "message": "Access token required."}
 
     try:
-        import httpx
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Square-Version": "2024-01-18",
-        }
-        async with httpx.AsyncClient(timeout=15.0) as http:
-            resp = await http.get("https://connect.squareup.com/v2/merchants/me", headers=headers)
-            if resp.status_code != 200:
-                return {"success": False, "message": "Square rejected the credentials."}
-            data = resp.json()
-            merchant = data.get("merchant", {})
-
-            detected_type = _detect_business_type_from_square(merchant)
-
-            loc_resp = await http.get("https://connect.squareup.com/v2/locations", headers=headers)
-            if loc_resp.status_code == 200:
-                locations = loc_resp.json().get("locations", [])
-                if locations:
-                    mcc = locations[0].get("mcc", "")
-                    if mcc:
-                        detected_type = _mcc_to_business_type(mcc) or detected_type
-
+        merchant, detected_type = await _square_merchant_and_vertical(access_token)
         return {
             "success": True,
             "message": "Connected to Square.",
@@ -231,8 +269,16 @@ async def _test_clover(credentials: dict) -> dict:
 # ─── Connect (save credentials + start sync) ────────────────
 
 @router.post("/connect")
-async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
+async def connect_pos(
+    req: ConnectRequest,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_jwt),
+):
     """Encrypt and store POS credentials, then trigger initial backfill."""
+    # Tenancy: the router guard only sees query/path org_id; this endpoint takes
+    # org_id in the body, so enforce membership explicitly (closes CA-1/CA-2).
+    await require_org_member(user, req.org_id)
+
     from ...db import _db_instance as db
     if not db:
         raise HTTPException(503, "Database not available")
@@ -304,25 +350,15 @@ async def connect_pos(req: ConnectRequest, background_tasks: BackgroundTasks):
         token = req.credentials.get("access_token", "")
         if token:
             try:
-                import httpx
-                async with httpx.AsyncClient(timeout=10.0) as http:
-                    headers = {"Authorization": f"Bearer {token}", "Square-Version": "2024-01-18"}
-                    mr = await http.get("https://connect.squareup.com/v2/merchants/me", headers=headers)
-                    if mr.status_code == 200:
-                        merchant = mr.json().get("merchant", {})
-                        bt = _detect_business_type_from_square(merchant)
-                        lr = await http.get("https://connect.squareup.com/v2/locations", headers=headers)
-                        if lr.status_code == 200:
-                            locs = lr.json().get("locations", [])
-                            if locs:
-                                mcc_bt = _mcc_to_business_type(locs[0].get("mcc", ""))
-                                if mcc_bt:
-                                    bt = mcc_bt
-                        org_update["vertical"] = bt
+                _, org_update["vertical"] = await _square_merchant_and_vertical(token)
             except Exception as e:
                 logger.warning(f"Square business type detection failed: {e}")
 
     await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
+    # Open BOTH halves of the dashboard gate (businesses.pos_connected is the
+    # primary gate; businesses-based customers have no org status to fall back
+    # on). Mirrors the OAuth callback path and is symmetric with disconnect.
+    await db.update("businesses", {"pos_connected": True}, filters={"id": f"eq.{req.org_id}"})
 
     if req.pos_system == "toast":
         background_tasks.add_task(
@@ -379,12 +415,7 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
             )
             result = await engine.run_initial_backfill()
 
-        if result.products:
-            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
-        if result.transactions:
-            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
-        if result.transaction_items:
-            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+        await _write_sync_result(db, result)
 
         await _import_pos_staff(db, org_id, result.employee_cache)
 
@@ -483,12 +514,7 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
         finally:
             await client.close()
 
-        if result.products:
-            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
-        if result.transactions:
-            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
-        if result.transaction_items:
-            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+        await _write_sync_result(db, result)
 
         await _import_pos_staff(db, org_id, result.employee_cache)
 
@@ -694,9 +720,47 @@ async def get_connections(org_id: str):
 
 # ─── Disconnect ──────────────────────────────────────────────
 
+async def teardown_connection(db, connection_id: str, org_id: str | None = None) -> None:
+    """Fully tear down a POS connection so the dashboard gate can't stay half-open.
+
+    The gate is `businesses.pos_connected OR organizations.pos_connection_status
+    == 'connected'`, so a disconnect MUST close both. Also clears the stored token
+    (don't leave a revoked merchant's token at rest) and resets the import flag so
+    a future reconnect starts clean. Shared by the manual disconnect endpoint and
+    the webhook auth-revoked path.
+    """
+    now = datetime.now(timezone.utc).isoformat()
+    await db.update(
+        "pos_connections",
+        {
+            "status": "disconnected",
+            "access_token_enc": None,
+            "credentials_encrypted": None,
+            "historical_import_complete": False,
+            "last_error": None,
+            "updated_at": now,
+        },
+        filters={"id": f"eq.{connection_id}"},
+    )
+
+    if org_id is None:
+        rows = await db.select("pos_connections", filters={"id": f"eq.{connection_id}"}, limit=1)
+        org_id = rows[0].get("org_id") if rows else None
+    if org_id:
+        await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
+        await db.update(
+            "organizations",
+            {"pos_connection_status": None, "pos_system": None},
+            filters={"id": f"eq.{org_id}"},
+        )
+
+
 @router.post("/disconnect")
-async def disconnect_pos(req: DisconnectRequest):
+async def disconnect_pos(req: DisconnectRequest, user: dict = Depends(require_jwt)):
     """Disconnect a POS system and revoke tokens if applicable."""
+    # Tenancy: org_id is in the body, so enforce membership explicitly.
+    await require_org_member(user, req.org_id)
+
     from ...db import _db_instance as db
     if not db:
         raise HTTPException(503, "Database not available")
@@ -723,15 +787,7 @@ async def disconnect_pos(req: DisconnectRequest):
         except Exception as e:
             logger.warning(f"Square token revocation failed: {e}")
 
-    await db.update(
-        "pos_connections",
-        {"status": "disconnected", "updated_at": datetime.now(timezone.utc).isoformat()},
-        filters={"id": f"eq.{conn['id']}"},
-    )
-
-    await db.update("organizations", {
-        "pos_connection_status": None,
-    }, filters={"id": f"eq.{req.org_id}"})
+    await teardown_connection(db, conn["id"], req.org_id)
 
     return {"success": True, "message": f"{req.pos_system.title()} disconnected."}
 
@@ -784,6 +840,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             async with SquareClient(access_token=token) as client:
                 from ...square.sync_engine import SyncEngine
                 engine = SyncEngine(client=client, org_id=org_id, pos_connection_id=connection["id"])
+                engine.db = db  # activate DB-backed product/location lookup load
                 result = await engine.run_incremental_sync(since=since)
 
         elif pos_system == "clover":
@@ -794,6 +851,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             client = CloverClient(access_token=token, merchant_id=merchant_id)
             from ...clover.sync_engine import CloverSyncEngine
             engine = CloverSyncEngine(client=client, org_id=org_id, pos_connection_id=connection["id"])
+            engine.db = db  # so incremental line items resolve product_id (not NULL)
             result = await engine.run_incremental_sync(since=since)
 
         elif pos_system == "toast":
@@ -847,10 +905,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             logger.info(f"Generic sync complete for {org_id}/{pos_system}: {sync_result.records_fetched} records")
             return
 
-        if result.transactions:
-            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
-        if result.transaction_items:
-            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+        await _write_sync_result(db, result)
 
         await db.update(
             "pos_connections",

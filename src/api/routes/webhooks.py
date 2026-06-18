@@ -36,9 +36,12 @@ async def _upsert_transaction(txn: dict, items: list[dict]):
         on_conflict="org_id,external_id",
     )
     if items:
+        # Same conflict key as the backfill/incremental path (id is deterministic
+        # now, so this dedupes idempotently). Was (org_id,external_id) here vs
+        # (id,transaction_at) there — that split could double-write a line item.
         await _db_instance.batch_upsert(
             "transaction_items", items,
-            on_conflict="org_id,external_id",
+            on_conflict="id,transaction_at",
         )
 
 
@@ -74,19 +77,14 @@ async def _upsert_inventory(snapshots: list[dict]):
 
 
 async def _disconnect_merchant(connection_id: str):
-    """Mark a connection as disconnected (auth revoked)."""
+    """Mark a connection as disconnected (auth revoked) — full gate teardown."""
     from ...db import _db_instance
     if not _db_instance:
         return
-
-    await _db_instance.update(
-        "pos_connections",
-        {
-            "status": "disconnected",
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-        },
-        filters={"id": f"eq.{connection_id}"},
-    )
+    # Reuse the manual-disconnect teardown so a revoked merchant closes BOTH gate
+    # fields + clears the token (org_id resolved from the connection row).
+    from .pos_connections import teardown_connection
+    await teardown_connection(_db_instance, connection_id)
 
 
 async def _send_notification(

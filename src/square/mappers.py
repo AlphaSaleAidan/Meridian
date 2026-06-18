@@ -9,7 +9,15 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
-from uuid import uuid4
+from uuid import uuid4, uuid5, NAMESPACE_URL
+
+_ID_NS = uuid5(NAMESPACE_URL, "meridian.pos")
+
+
+def _stable_id(*parts: object) -> str:
+    """Deterministic UUID from a natural key, so re-syncs upsert the SAME row
+    (no duplicates) and distinct rows never share an id (no clobber)."""
+    return str(uuid5(_ID_NS, ":".join(str(p) for p in parts)))
 
 logger = logging.getLogger("meridian.square.mappers")
 
@@ -233,7 +241,9 @@ class DataMapper:
         location_id = self.location_lookup.get(sq_location_id)
 
         return {
-            "id": str(uuid4()),
+            # Deterministic from the order's natural key so a re-sync updates
+            # this row instead of churning the PK / orphaning its line items.
+            "id": _stable_id(self.org_id, "square", sq_order.get("id")),
             "org_id": self.org_id,
             "location_id": location_id,
             "pos_connection_id": self.pos_connection_id,
@@ -292,8 +302,14 @@ class DataMapper:
                     "price": (mod.get("total_price_money") or {}).get("amount", 0),
                 })
 
+            # Stable per-line identity: the order's (deterministic) txn id + the
+            # Square line-item uid. Distinct lines never collide; re-syncs idempotent.
+            # (transaction_items has no external_id column — pkey (id, transaction_at)
+            # — so the natural key only feeds the deterministic id; it isn't stored.)
+            line_key = f"{transaction_id}:{item.get('uid', '')}"
+
             rows.append({
-                "id": str(uuid4()),
+                "id": _stable_id(self.org_id, "square", line_key),
                 "transaction_id": transaction_id,
                 "transaction_at": transaction_at,
                 "provider": "square",  # transient routing hint — stripped before write
@@ -342,6 +358,13 @@ class DataMapper:
         if processing_fee:
             fee = processing_fee[0].get("amount_money", {})
             metadata_updates["processing_fee_cents"] = fee.get("amount", 0)
+
+        # Refunds: Square Payment.refunded_money is the total refunded to date.
+        # Capture it so net revenue isn't overstated (the order keeps its gross
+        # total otherwise). Metadata, not a new column — no migration.
+        refunded = sq_payment.get("refunded_money", {})
+        if refunded.get("amount"):
+            metadata_updates["refund_cents"] = refunded.get("amount", 0)
 
         risk = sq_payment.get("risk_evaluation", {})
         if risk.get("risk_level"):
@@ -502,10 +525,21 @@ class DataMapper:
         if sq_order.get("reference_id"):
             meta["reference_id"] = sq_order["reference_id"]
 
-        # Tender details
+        # Tender details (primary card brand, kept for back-compat)
         if tenders:
             t = tenders[0]
             if t.get("card_details", {}).get("card", {}).get("card_brand"):
                 meta["card_brand"] = t["card_details"]["card"]["card_brand"]
+
+            # Capture EVERY tender so split payments aren't reduced to the first
+            # (payment_method on the transaction is only the primary tender).
+            meta["tenders"] = [
+                {
+                    "type": DataMapper._map_payment_method(td),
+                    "amount_cents": (td.get("amount_money") or {}).get("amount", 0) or 0,
+                    "employee_id": td.get("employee_id"),
+                }
+                for td in tenders
+            ]
 
         return meta

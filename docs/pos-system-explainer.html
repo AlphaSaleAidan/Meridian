@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meridian POS — Read-Only System Explainer</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121922; --ink:#e8eef5; --muted:#8aa0b4;
+    --line:#1f2c3a; --teal:#17c5b0; --amber:#f5b34a; --red:#ef6b6b; --blue:#5aa9f0;
+    --radius:14px; --maxw:920px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 50% -10%, #14202c 0%, var(--bg) 60%);
+    color:var(--ink); font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:28px;
+  }
+  .deck{width:100%; max-width:var(--maxw)}
+  .stage{
+    position:relative; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--radius); min-height:520px; padding:40px 44px 64px;
+    box-shadow:0 30px 80px -40px #000; overflow:hidden;
+  }
+  .slide{display:none; animation:rise .32s cubic-bezier(.2,.7,.2,1)}
+  .slide.on{display:block}
+  @keyframes rise{from{opacity:0; transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+  .kicker{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); margin:0 0 6px}
+  h1{font-size:30px; line-height:1.15; margin:0 0 14px; letter-spacing:-.01em}
+  h2{font-size:23px; margin:0 0 12px; letter-spacing:-.01em}
+  p{color:#cdd9e5; margin:0 0 12px}
+  .muted{color:var(--muted)}
+  .pipe{display:flex; gap:10px; flex-wrap:wrap; margin:22px 0}
+  .pill{flex:1; min-width:180px; background:#0e151d; border:1px solid var(--line); border-radius:12px; padding:14px 16px}
+  .pill .n{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+  .pill .t{font-size:17px; font-weight:600; margin-top:4px}
+  .pill .d{font-size:13px; color:var(--muted); margin-top:6px}
+  .pill.c1{border-top:3px solid var(--blue)} .pill.c2{border-top:3px solid var(--teal)} .pill.c3{border-top:3px solid var(--amber)}
+  ul{margin:8px 0 0; padding-left:0; list-style:none}
+  li{position:relative; padding:7px 0 7px 26px; border-bottom:1px solid #16212c}
+  li:last-child{border-bottom:0}
+  li::before{content:""; position:absolute; left:4px; top:14px; width:8px; height:8px; border-radius:50%; background:var(--teal)}
+  li.was::before{background:var(--red)} li.now::before{background:var(--teal)}
+  code{background:#0a1016; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:13px; color:#bfe9e0}
+  .row{display:flex; gap:18px; flex-wrap:wrap}
+  .col{flex:1; min-width:240px}
+  .tag{display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted); margin-bottom:8px}
+  .tag.fix{color:#8ff0e2; border-color:#1d4e47}
+  .bignum{font-size:13px; color:var(--muted)}
+  .flow{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:18px 0; font-size:14px}
+  .flow .step{background:#0e151d; border:1px solid var(--line); border-radius:9px; padding:8px 11px}
+  .flow .arr{color:var(--muted)}
+  nav{display:flex; align-items:center; justify-content:space-between; margin-top:18px}
+  .dots{display:flex; gap:8px}
+  .dot{width:9px; height:9px; border-radius:50%; background:#26333f; border:0; cursor:pointer; padding:0}
+  .dot.on{background:var(--teal); transform:scale(1.15)}
+  button.nav{background:#16212c; color:var(--ink); border:1px solid var(--line); border-radius:9px; padding:8px 16px; cursor:pointer; font-size:14px}
+  button.nav:hover{border-color:var(--teal)}
+  button.nav:disabled{opacity:.35; cursor:default}
+  .count{position:absolute; right:18px; bottom:16px; font-size:12px; color:var(--muted)}
+  .legend{font-size:12px; color:var(--muted); margin-top:10px}
+  .legend b{color:var(--red)} .legend i{color:var(--teal); font-style:normal}
+</style>
+</head>
+<body>
+<div class="deck">
+  <div class="stage" id="stage">
+
+    <section class="slide on">
+      <p class="kicker">Meridian · POS Read-Only System</p>
+      <h1>Connect → Digest → Propagate</h1>
+      <p>How a merchant's point-of-sale data flows into Meridian, read-only, and what we hardened across the rebuild. Three stages, one job: <b>read the merchant's sales without ever writing back to their POS</b>.</p>
+      <div class="pipe">
+        <div class="pill c1"><div class="n">Stage 1</div><div class="t">Connect POS</div><div class="d">Square / Clover OAuth or a manual key paste → one stored connection.</div></div>
+        <div class="pill c2"><div class="n">Stage 2</div><div class="t">Digest (read-only)</div><div class="d">Pull orders, items, payments, refunds → normalize to our schema.</div></div>
+        <div class="pill c3"><div class="n">Stage 3</div><div class="t">Propagate</div><div class="d">Land it in the DB so the dashboard sees it — without clobbering rows.</div></div>
+      </div>
+      <p class="muted">Use ← / → to move through the stages and the upgrades behind each.</p>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Stage 1</p>
+      <h2>Connect POS — three doors, one connection</h2>
+      <div class="flow">
+        <span class="step">Square / Clover OAuth</span><span class="arr">or</span>
+        <span class="step">Manual key paste</span><span class="arr">or</span>
+        <span class="step">CSV upload</span><span class="arr">→</span>
+        <span class="step">pos_connections row</span><span class="arr">→</span>
+        <span class="step">background backfill</span>
+      </div>
+      <p>Every path lands in one <code>pos_connections</code> record (encrypted token) and opens the dashboard gate. OAuth uses an HMAC-signed state token (CSRF) with a 10-minute TTL.</p>
+      <p class="tag fix">What we hardened</p>
+      <ul>
+        <li class="now"><b>Tenancy guard:</b> <code>/connect</code> &amp; <code>/disconnect</code> now require a JWT + org membership on the body <code>org_id</code> — closes a cross-tenant write gap.</li>
+        <li class="now"><b>Env-aware Square:</b> test &amp; connect route through the Square client, honoring sandbox vs production (was hardcoded to prod).</li>
+        <li class="now"><b>Clean disconnect:</b> tears down <i>both</i> gate fields and clears the stored token (no half-open dashboard, no token left at rest).</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Stage 2 · read-only</p>
+      <h2>Digest — how we read the merchant's data</h2>
+      <div class="flow">
+        <span class="step">merchant + locations</span><span class="arr">→</span>
+        <span class="step">categories + items</span><span class="arr">→</span>
+        <span class="step">orders (18 mo, chunked)</span><span class="arr">→</span>
+        <span class="step">payments + refunds</span><span class="arr">→</span>
+        <span class="step">inventory</span>
+      </div>
+      <p>A <b>backfill</b> pulls history once; an <b>incremental sync</b> + <b>webhooks</b> keep it current. Provider-specific mappers normalize everything into our shared schema (cents, ISO timestamps, products / transactions / line items).</p>
+      <p class="muted">Read-only means read-only: we fetch and map. We never push anything back to Square or Clover.</p>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Stage 2 · upgrades</p>
+      <h2>Digest — data we were silently losing</h2>
+      <p class="legend"><b>● before</b> &nbsp; <i>● now</i></p>
+      <ul>
+        <li class="was"><b>Incremental items had no product link</b> — every recent line item stored <code>product_id = NULL</code> (the lookup wasn't loaded). <i>Now loaded from the DB for both providers.</i></li>
+        <li class="was"><b>Split payments collapsed to one tender</b> — cash+card recorded only the first. <i>Now every tender captured (Clover + Square).</i></li>
+        <li class="was"><b>Refunds ignored</b> — a refunded order kept its gross total, overstating revenue. <i>Now Square <code>refunded_money</code> + Clover <code>/refunds</code> folded in.</i></li>
+        <li class="was"><b>Clover service charges invisible</b> — auto-gratuity/fees weren't fetched. <i>Now captured.</i></li>
+        <li class="was"><b>Multi-register blind</b> — the device that rang an order was dropped. <i>Now captured for attribution.</i></li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Stage 3</p>
+      <h2>Propagate — landing it without overwrites</h2>
+      <div class="flow">
+        <span class="step">products</span><span class="arr">→</span>
+        <span class="step">transactions</span><span class="arr">→</span>
+        <span class="step">transaction_items</span><span class="arr">→</span>
+        <span class="step">dashboard reads</span>
+      </div>
+      <p>Writes go in FK-safe order through one shared write path. The dashboard then reads transactions, revenue, products, insights from these tables.</p>
+      <div class="row">
+        <div class="col">
+          <p class="tag">The old hazard</p>
+          <p class="muted">Every row id was random (<code>uuid4</code>). Re-syncs <b>duplicated</b> line items, <b>churned</b> transaction PKs (orphaning items), and the webhook path keyed on a column line items didn't have → <b>clobbered</b> each other.</p>
+        </div>
+        <div class="col">
+          <p class="tag fix">The fix</p>
+          <p class="muted">Deterministic <code>uuid5</code> ids from each row's natural key + provider. Re-syncs upsert the <i>same</i> row; distinct rows never share an id; one unified conflict key everywhere.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Stage 3 · invariants</p>
+      <h2>Why rows can't write over each other</h2>
+      <ul>
+        <li class="now"><b>Deterministic ids:</b> <code>uuid5(org, provider, natural_key)</code> → idempotent re-syncs, stable foreign keys.</li>
+        <li class="now"><b>Stable line-item identity:</b> each item carries <code>{txn_id}:{line_id}</code> so distinct lines never collide.</li>
+        <li class="now"><b>One conflict key:</b> all <code>transaction_items</code> writes upsert on <code>(id, transaction_at)</code> — backfill, incremental, and webhook agree.</li>
+        <li class="now"><b>Provider in the key:</b> a Clover and a Square order with the same external id can't collide.</li>
+        <li class="now"><b>Self-healing writes:</b> a partial failure converges on the next sync (idempotent). Optional single-transaction RPC is wired behind a flag.</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Status &amp; what's next</p>
+      <h2>Where this lives</h2>
+      <p>All three stages are built, tested, and documented on branch <code>feat/core-flows</code> (off <code>main</code>) — <b>34 passing tests</b>, nothing deployed yet.</p>
+      <ul>
+        <li class="now"><b>Safe to merge independently:</b> every upgrade writes into existing columns (the <code>metadata</code> JSONB), never a new column — so no migration is required to ship.</li>
+        <li><b>One coordinated migration, later:</b> promote the <code>metadata.*</code> fields (tenders, refund_cents, service_charge_cents, device_id) to queryable columns, enable the atomic-write RPC, and flip on per-provider tables.</li>
+      </ul>
+      <p class="muted">Docs: CONNECTION_FLOW.md · PROPAGATE_FLOW.md · CORE_FLOWS_REBUILD_PLAN.md</p>
+    </section>
+
+    <div class="count" id="count"></div>
+  </div>
+
+  <nav>
+    <button class="nav" id="prev">← Prev</button>
+    <div class="dots" id="dots"></div>
+    <button class="nav" id="next">Next →</button>
+  </nav>
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const dots=document.getElementById('dots');
+  const count=document.getElementById('count');
+  const prev=document.getElementById('prev'), next=document.getElementById('next');
+  let i=0;
+  slides.forEach((_,n)=>{const b=document.createElement('button');b.className='dot'+(n===0?' on':'');b.setAttribute('aria-label','Slide '+(n+1));b.onclick=()=>go(n);dots.appendChild(b);});
+  function go(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('on',k===i));
+    [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));
+    count.textContent=(i+1)+' / '+slides.length;
+    prev.disabled=i===0; next.disabled=i===slides.length-1;
+  }
+  prev.onclick=()=>go(i-1); next.onclick=()=>go(i+1);
+  document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')go(i+1);if(e.key==='ArrowLeft')go(i-1);});
+  go(0);
+</script>
+</body>
+</html>

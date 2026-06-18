@@ -191,6 +191,10 @@ class CloverSyncEngine:
                     f"{len(result.transaction_items)} line items"
                 )
 
+                # Fold refunds into the transactions just mapped (Clover caps
+                # refunds to the most recent 90 days regardless of the window).
+                await self._apply_refunds(result, start_time, end_time)
+
             except Exception as e:
                 logger.error(f"Order sync failed: {e}")
                 result.errors.append(f"orders: {e}")
@@ -246,9 +250,26 @@ class CloverSyncEngine:
         self._emit_progress()
 
         try:
-            # Build mapper with existing lookups (loaded from DB in production)
+            # Load the product lookup from the DB so incremental line items
+            # resolve product_id. Without it every incremental item is stored
+            # with product_id=NULL (the mapper has no in-memory lookup outside a
+            # full backfill). `self.db` is injected by the incremental runner.
+            product_lookup: dict[str, str] = {}
+            db = getattr(self, "db", None)
+            if db is not None:
+                try:
+                    prods = await db.select("products", filters={"org_id": f"eq.{self.org_id}"})
+                    for prod in prods or []:
+                        ext = prod.get("external_id", "")
+                        if ext:
+                            product_lookup[ext] = prod["id"]
+                    logger.info("Clover incremental: loaded %d product lookups", len(product_lookup))
+                except Exception as e:
+                    logger.warning("Clover incremental: failed to load product lookup: %s", e)
+
             mapper = CloverDataMapper(
                 org_id=self.org_id,
+                product_lookup=product_lookup,
                 pos_connection_id=self.pos_connection_id,
             )
 
@@ -271,6 +292,8 @@ class CloverSyncEngine:
 
                 self.progress.items_synced += 1
 
+            await self._apply_refunds(result, since, end_time)
+
             result.completed_at = datetime.now(timezone.utc)
             self.progress.update(
                 "complete",
@@ -288,3 +311,32 @@ class CloverSyncEngine:
             self._emit_progress()
 
         return result
+
+    async def _apply_refunds(self, result, start_time, end_time) -> None:
+        """Fold refund amounts into each matching transaction's
+        metadata.refund_cents, so a refunded order's net revenue isn't
+        overstated. Clover's refund object carries orderRef.id directly, so the
+        link to the transaction (by external_id) needs no extra fetch.
+        Best-effort: a refund-fetch failure must never fail the sync.
+        """
+        try:
+            refunds = await self.client.list_refunds(start_time=start_time, end_time=end_time)
+        except Exception as e:
+            logger.warning(f"Clover refund fetch failed (non-fatal): {e}")
+            return
+
+        by_order: dict[str, int] = {}
+        for r in refunds:
+            oid = (r.get("orderRef") or {}).get("id")
+            if oid:
+                by_order[oid] = by_order.get(oid, 0) + (r.get("amount", 0) or 0)
+        if not by_order:
+            return
+
+        applied = 0
+        for txn in result.transactions:
+            refund_cents = by_order.get(txn.get("external_id"))
+            if refund_cents:
+                txn.setdefault("metadata", {})["refund_cents"] = refund_cents
+                applied += 1
+        logger.info(f"Clover refunds applied to {applied} transactions")

@@ -267,7 +267,7 @@ class CloverClient:
         self,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        expand: str = "lineItems,payments",
+        expand: str = "lineItems,payments,serviceCharges,device",
         max_items: int | None = None,
     ) -> list[dict]:
         """
@@ -298,9 +298,30 @@ class CloverClient:
             max_items=max_items,
         )
 
-    async def get_order(self, order_id: str, expand: str = "lineItems,payments") -> dict:
-        """Get a single order with line items and payments."""
+    async def get_order(self, order_id: str, expand: str = "lineItems,payments,serviceCharges,device") -> dict:
+        """Get a single order with line items, payments, service charges, device."""
         return await self._get(f"/orders/{order_id}", params={"expand": expand})
+
+    async def list_refunds(
+        self,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+        max_items: int | None = None,
+    ) -> list[dict]:
+        """List refunds in a time range. Each refund carries orderRef.id + amount.
+
+        NOTE: Clover caps this endpoint to the most recent 90 days regardless of
+        the requested range (it auto-adjusts older windows).
+        """
+        params: dict[str, Any] = {}
+        filters = []
+        if start_time:
+            filters.append(f"createdTime>={int(start_time.timestamp() * 1000)}")
+        if end_time:
+            filters.append(f"createdTime<={int(end_time.timestamp() * 1000)}")
+        if filters:
+            params["filter"] = "&".join(filters)
+        return await self._paginate("/refunds", "elements", params=params, max_items=max_items)
 
     # ─── Payments ─────────────────────────────────────────────
 
