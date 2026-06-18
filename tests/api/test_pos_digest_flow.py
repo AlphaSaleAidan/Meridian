@@ -199,3 +199,47 @@ def test_clover_no_service_charge_or_device_omits_fields():
     txn = mapper.map_order_to_transaction(order)
     assert "service_charge_cents" not in txn["metadata"]
     assert "device_id" not in txn["metadata"]
+
+
+# ── Clover refunds folded into transactions (net revenue accuracy) ──
+
+class _Result:
+    def __init__(self, txns):
+        self.transactions = txns
+
+
+def test_clover_refunds_folded_by_order(monkeypatch):
+    from src.clover import sync_engine as se
+    eng = se.CloverSyncEngine(client=_FakeOrdersClient(), org_id=ORG, pos_connection_id="C1")
+
+    async def fake_list_refunds(start_time=None, end_time=None, max_items=None):
+        return [
+            {"orderRef": {"id": "ORD1"}, "amount": 4000},
+            {"orderRef": {"id": "ORD1"}, "amount": 500},   # 2nd partial refund, same order
+            {"orderRef": {"id": "ORD2"}, "amount": 1000},
+            {"amount": 999},                                # no orderRef → ignored
+        ]
+    eng.client.list_refunds = fake_list_refunds
+
+    result = _Result([
+        {"external_id": "ORD1", "metadata": {"tenders": []}},
+        {"external_id": "ORD2"},                            # no metadata yet → created
+        {"external_id": "ORD3"},                            # no refund
+    ])
+    _run(eng._apply_refunds(result, None, None))
+    assert result.transactions[0]["metadata"]["refund_cents"] == 4500  # summed
+    assert result.transactions[1]["metadata"]["refund_cents"] == 1000
+    assert "refund_cents" not in result.transactions[2].get("metadata", {})
+
+
+def test_clover_refund_fetch_failure_is_nonfatal(monkeypatch):
+    from src.clover import sync_engine as se
+    eng = se.CloverSyncEngine(client=_FakeOrdersClient(), org_id=ORG, pos_connection_id="C1")
+
+    async def boom(**kw):
+        raise RuntimeError("clover 500")
+    eng.client.list_refunds = boom
+
+    result = _Result([{"external_id": "ORD1"}])
+    _run(eng._apply_refunds(result, None, None))  # must not raise
+    assert "refund_cents" not in result.transactions[0].get("metadata", {})
