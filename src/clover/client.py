@@ -267,7 +267,7 @@ class CloverClient:
         self,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        expand: str = "lineItems,payments",
+        expand: str = "lineItems,payments,serviceCharges,device",
         max_items: int | None = None,
     ) -> list[dict]:
         """

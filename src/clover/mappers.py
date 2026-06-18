@@ -216,6 +216,17 @@ class CloverDataMapper:
         clover_state = (cl_order.get("state") or "").lower()
         txn_type = "void" if clover_state in ("cancelled", "refunded") else "sale"
 
+        # Metadata (no schema change): every tender so split payments aren't
+        # lost; service-charge revenue that's otherwise invisible; the device
+        # that rang the order so multi-register merchants are attributable.
+        metadata: dict[str, Any] = {"tenders": self._map_tenders(payments)}
+        service_charge = self._sum_service_charges(cl_order)
+        if service_charge:
+            metadata["service_charge_cents"] = service_charge
+        device_id = (cl_order.get("device") or {}).get("id")
+        if device_id:
+            metadata["device_id"] = device_id
+
         return {
             "id": str(uuid4()),
             "org_id": self.org_id,
@@ -232,10 +243,7 @@ class CloverDataMapper:
             "discount_cents": abs(discount),
             "tip_cents": self._sum_tips(payments),
             "payment_method": payment_method,
-            # Capture EVERY tender so split payments aren't lost (payment_method
-            # above is only the primary). Stored in metadata (no schema change);
-            # promote to a top-level column in a later coordinated migration.
-            "metadata": {"tenders": self._map_tenders(payments)},
+            "metadata": metadata,
             "employee_name": employee_name,
             "employee_external_id": employee_id,
             "customer_id": cl_order.get("customers", {}).get("elements", [{}])[0].get("id") if cl_order.get("customers") else None,
@@ -309,6 +317,11 @@ class CloverDataMapper:
     def _sum_tips(self, payments: list[dict]) -> int:
         """Sum tips across all payments."""
         return sum(p.get("tipAmount", 0) or 0 for p in payments)
+
+    def _sum_service_charges(self, cl_order: dict) -> int:
+        """Sum applied service charges (auto-gratuity, etc.) — Clover cents."""
+        charges = (cl_order.get("serviceCharges") or {}).get("elements", [])
+        return sum(c.get("amount", 0) or 0 for c in charges)
 
     def _line_item_discount(self, cl_line_item: dict) -> int:
         """Get discount on a single line item."""

@@ -173,3 +173,29 @@ def test_square_payment_enrichment_no_refund_omits_field():
     mapper = DataMapper(org_id=ORG)
     enr = mapper.map_payment_enrichment({"order_id": "o2"})
     assert "refund_cents" not in enr.get("metadata_updates", {})
+
+
+# ── Clover service charges + device: revenue + multi-register attribution ──
+
+def test_clover_captures_service_charge_and_device():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {
+        "total": 5000, "state": "paid",
+        "payments": {"elements": [{"tender": {"label": "Credit Card"}, "amount": 5000}]},
+        "serviceCharges": {"elements": [{"name": "Auto Gratuity", "amount": 900}]},
+        "device": {"id": "DEV-7"},
+    }
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["metadata"]["service_charge_cents"] == 900
+    assert txn["metadata"]["device_id"] == "DEV-7"
+
+
+def test_clover_no_service_charge_or_device_omits_fields():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {"total": 1000, "state": "paid",
+             "payments": {"elements": [{"tender": {"label": "Cash"}, "amount": 1000}]}}
+    txn = mapper.map_order_to_transaction(order)
+    assert "service_charge_cents" not in txn["metadata"]
+    assert "device_id" not in txn["metadata"]
