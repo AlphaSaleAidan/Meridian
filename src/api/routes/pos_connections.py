@@ -9,6 +9,7 @@ OAuth-based systems (Square, Clover) use their own /api/square/ and
 connection status and sync infrastructure here.
 """
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
@@ -36,6 +37,47 @@ router = APIRouter(
     tags=["pos-connections"],
     dependencies=[Depends(require_org_access)],
 )
+
+
+def _atomic_write_enabled() -> bool:
+    return os.environ.get("POS_ATOMIC_WRITE", "").lower() in ("1", "true", "yes")
+
+
+async def _write_sync_result(db, result) -> None:
+    """Persist a SyncResult's products + transactions + transaction_items.
+
+    The single write path for every backfill/incremental caller (replaces three
+    copy-pasted blocks). Idempotent via deterministic ids, so it's safe to retry.
+
+    - POS_ATOMIC_WRITE=1 and the DB exposes the `pos_sync_upsert` RPC → the three
+      tables are written in ONE transaction (all-or-nothing). Falls back to the
+      sequential path if the RPC errors.
+    - Otherwise → sequential upserts in FK-safe order (products → transactions →
+      transaction_items). A partial failure self-heals on the next (idempotent) sync.
+    """
+    products = list(getattr(result, "products", None) or [])
+    transactions = list(getattr(result, "transactions", None) or [])
+    items = list(getattr(result, "transaction_items", None) or [])
+    if not (products or transactions or items):
+        return
+
+    if _atomic_write_enabled() and hasattr(db, "rpc"):
+        try:
+            await db.rpc("pos_sync_upsert", {
+                "_products": products,
+                "_transactions": transactions,
+                "_transaction_items": items,
+            })
+            return
+        except Exception as e:
+            logger.warning(f"atomic pos_sync_upsert failed; falling back to sequential: {e}")
+
+    if products:
+        await db.batch_upsert("products", products, on_conflict="org_id,external_id")
+    if transactions:
+        await db.batch_upsert("transactions", transactions, on_conflict="org_id,external_id")
+    if items:
+        await db.batch_upsert("transaction_items", items, on_conflict="id,transaction_at")
 
 
 class TestConnectionRequest(BaseModel):
@@ -373,12 +415,7 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
             )
             result = await engine.run_initial_backfill()
 
-        if result.products:
-            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
-        if result.transactions:
-            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
-        if result.transaction_items:
-            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+        await _write_sync_result(db, result)
 
         await _import_pos_staff(db, org_id, result.employee_cache)
 
@@ -477,12 +514,7 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
         finally:
             await client.close()
 
-        if result.products:
-            await db.batch_upsert("products", result.products, on_conflict="org_id,external_id")
-        if result.transactions:
-            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
-        if result.transaction_items:
-            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+        await _write_sync_result(db, result)
 
         await _import_pos_staff(db, org_id, result.employee_cache)
 
@@ -873,10 +905,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             logger.info(f"Generic sync complete for {org_id}/{pos_system}: {sync_result.records_fetched} records")
             return
 
-        if result.transactions:
-            await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
-        if result.transaction_items:
-            await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+        await _write_sync_result(db, result)
 
         await db.update(
             "pos_connections",

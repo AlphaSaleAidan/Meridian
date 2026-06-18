@@ -303,7 +303,60 @@ def test_transaction_items_conflict_key_unified():
     from src.api.routes import pos_connections, webhooks
     for mod in (pos_connections, webhooks):
         src = inspect.getsource(mod)
-        keys = re.findall(r'"transaction_items".*?on_conflict="([^"]+)"', src, re.S)
+        keys = re.findall(r'batch_upsert\(\s*"transaction_items".*?on_conflict="([^"]+)"', src, re.S)
         assert keys, f"{mod.__name__}: no transaction_items upsert found"
         for k in keys:
             assert k == "id,transaction_at", f"{mod.__name__}: transaction_items keyed on {k}"
+
+
+# ── Step C: _write_sync_result — one FK-safe, flag-gated write path ──
+
+class _WriteDB:
+    def __init__(self, rpc_raises=False):
+        self.calls = []
+        self._rpc_raises = rpc_raises
+    async def batch_upsert(self, table, rows, on_conflict=None):
+        self.calls.append(table)
+    async def rpc(self, name, args):
+        self.calls.append(("rpc", name))
+        if self._rpc_raises:
+            raise RuntimeError("no such function: " + name)
+
+
+class _SyncResult:
+    def __init__(self, products, transactions, items):
+        self.products = products
+        self.transactions = transactions
+        self.transaction_items = items
+
+
+def test_write_sync_result_sequential_by_default(monkeypatch):
+    monkeypatch.delenv("POS_ATOMIC_WRITE", raising=False)
+    from src.api.routes import pos_connections as pc
+    db = _WriteDB()
+    _run(pc._write_sync_result(db, _SyncResult([{"a": 1}], [{"b": 2}], [{"c": 3}])))
+    assert db.calls == ["products", "transactions", "transaction_items"]  # FK order, no rpc
+
+
+def test_write_sync_result_atomic_when_enabled(monkeypatch):
+    monkeypatch.setenv("POS_ATOMIC_WRITE", "1")
+    from src.api.routes import pos_connections as pc
+    db = _WriteDB()
+    _run(pc._write_sync_result(db, _SyncResult([{"a": 1}], [], [])))
+    assert db.calls == [("rpc", "pos_sync_upsert")]  # one atomic call, no sequential
+
+
+def test_write_sync_result_falls_back_on_rpc_error(monkeypatch):
+    monkeypatch.setenv("POS_ATOMIC_WRITE", "1")
+    from src.api.routes import pos_connections as pc
+    db = _WriteDB(rpc_raises=True)
+    _run(pc._write_sync_result(db, _SyncResult([{"a": 1}], [{"b": 2}], [])))
+    assert db.calls == [("rpc", "pos_sync_upsert"), "products", "transactions"]  # fell back
+
+
+def test_write_sync_result_noop_when_empty(monkeypatch):
+    monkeypatch.delenv("POS_ATOMIC_WRITE", raising=False)
+    from src.api.routes import pos_connections as pc
+    db = _WriteDB()
+    _run(pc._write_sync_result(db, _SyncResult([], [], [])))
+    assert db.calls == []
