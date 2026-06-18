@@ -246,9 +246,26 @@ class CloverSyncEngine:
         self._emit_progress()
 
         try:
-            # Build mapper with existing lookups (loaded from DB in production)
+            # Load the product lookup from the DB so incremental line items
+            # resolve product_id. Without it every incremental item is stored
+            # with product_id=NULL (the mapper has no in-memory lookup outside a
+            # full backfill). `self.db` is injected by the incremental runner.
+            product_lookup: dict[str, str] = {}
+            db = getattr(self, "db", None)
+            if db is not None:
+                try:
+                    prods = await db.select("products", filters={"org_id": f"eq.{self.org_id}"})
+                    for prod in prods or []:
+                        ext = prod.get("external_id", "")
+                        if ext:
+                            product_lookup[ext] = prod["id"]
+                    logger.info("Clover incremental: loaded %d product lookups", len(product_lookup))
+                except Exception as e:
+                    logger.warning("Clover incremental: failed to load product lookup: %s", e)
+
             mapper = CloverDataMapper(
                 org_id=self.org_id,
+                product_lookup=product_lookup,
                 pos_connection_id=self.pos_connection_id,
             )
 

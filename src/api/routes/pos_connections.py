@@ -808,6 +808,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             async with SquareClient(access_token=token) as client:
                 from ...square.sync_engine import SyncEngine
                 engine = SyncEngine(client=client, org_id=org_id, pos_connection_id=connection["id"])
+                engine.db = db  # activate DB-backed product/location lookup load
                 result = await engine.run_incremental_sync(since=since)
 
         elif pos_system == "clover":
@@ -818,6 +819,7 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             client = CloverClient(access_token=token, merchant_id=merchant_id)
             from ...clover.sync_engine import CloverSyncEngine
             engine = CloverSyncEngine(client=client, org_id=org_id, pos_connection_id=connection["id"])
+            engine.db = db  # so incremental line items resolve product_id (not NULL)
             result = await engine.run_incremental_sync(since=since)
 
         elif pos_system == "toast":
