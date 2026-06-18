@@ -399,8 +399,8 @@ export default function PhoneOrdersPage() {
   const business: PhoneBizConfig = useMemo(() => {
     const cad = typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
     const currency = cad ? 'CA$' : '$'
-    if (!isDemo && phoneConfig?.exists) return { id: phoneConfig.merchant_id, name: phoneConfig.business_name || org?.business_name || 'My Business', vertical: phoneConfig.business_type || 'restaurant', country: 'US' as const, currency, taxRate: 0.08, phone: phoneConfig.phone_number || '', greeting: phoneConfig.greeting || '', voice: phoneConfig.voice || 'af_bella', orderTypes: (phoneConfig.order_types || ['pickup', 'delivery']) as any, menu: (phoneConfig.menu_items || []).map((m: any, i: number) => ({ id: m.id || `item-${i}`, name: m.name || '', price: m.price || 0, category: m.category || 'General' })) }
-    if (!isDemo) return { id: orgId || '', name: org?.business_name || 'My Business', vertical: 'restaurant', country: 'US' as const, currency, taxRate: 0.08, phone: '', greeting: '', voice: 'af_bella', orderTypes: ['pickup', 'delivery'] as any, menu: [] }
+    if (!isDemo && phoneConfig?.exists) return { id: phoneConfig.merchant_id, name: phoneConfig.business_name || org?.business_name || 'My Business', vertical: phoneConfig.business_type || 'restaurant', country: cad ? 'CA' : 'US', currency, taxRate: cad ? 0.13 : 0.08, phone: phoneConfig.phone_number || '', greeting: phoneConfig.greeting || '', voice: phoneConfig.voice || 'af_bella', orderTypes: (phoneConfig.order_types || ['pickup', 'delivery']) as any, menu: (phoneConfig.menu_items || []).map((m: any, i: number) => ({ id: m.id || `item-${i}`, name: m.name || '', price: m.price || 0, category: m.category || 'General' })) }
+    if (!isDemo) return { id: orgId || '', name: org?.business_name || 'My Business', vertical: 'restaurant', country: cad ? 'CA' : 'US', currency, taxRate: cad ? 0.13 : 0.08, phone: '', greeting: '', voice: 'af_bella', orderTypes: ['pickup', 'delivery'] as any, menu: [] }
     return demoData.business
   }, [phoneConfig, demoData.business, org?.business_name, isDemo, orgId])
 

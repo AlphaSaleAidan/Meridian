@@ -654,7 +654,7 @@ export default function SchedulePage() {
                   borderColor: laborTone ? `${laborTone.fg}40` : '#1F1F23',
                   backgroundColor: laborTone ? `${laborTone.bg}15` : 'transparent',
                 }}
-                title={`Labor cost vs ${(effectiveRevenueCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} projected weekly revenue. Floor ${laborTarget.floorPct}% • Target ${laborTarget.targetPct}% • Warn ${laborTarget.warningPct}%.`}
+                title={`Labor cost vs ${(effectiveRevenueCents / 100).toLocaleString(country === 'CA' ? 'en-CA' : 'en-US', { style: 'currency', currency: country === 'CA' ? 'CAD' : 'USD', maximumFractionDigits: 0 })} projected weekly revenue. Floor ${laborTarget.floorPct}% • Target ${laborTarget.targetPct}% • Warn ${laborTarget.warningPct}%.`}
               >
                 <Percent size={11} style={{ color: laborTone?.fg }} />
                 <span className="text-[12px] font-mono font-semibold" style={{ color: laborTone?.fg }}>

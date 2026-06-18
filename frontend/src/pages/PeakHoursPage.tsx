@@ -1,6 +1,6 @@
 import { Clock, TrendingUp, Users, Zap } from 'lucide-react'
 import { generatePeakHourHeatmap, type PeakHourCell } from '@/lib/agent-data'
-import { formatCents } from '@/lib/format'
+import { formatCents, formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
@@ -222,7 +222,7 @@ export default function PeakHoursPage() {
                 Your <span className="text-[#F5F5F7] font-medium">7-9AM window</span> generates {morningPct}% of daily revenue
                 but current staffing is 1 person below optimal. Adding 1 staff member during this window would
                 reduce average queue time from 4.2 to 2.1 minutes and recover an estimated
-                <span className="text-[#17C5B0] font-medium"> $520/month</span> in lost walkout revenue.
+                <span className="text-[#17C5B0] font-medium"> {formatCentsCompact(52000)}/month</span> in lost walkout revenue.
                 <span className="text-[#A1A1A8]/50"> (Confidence: 88%)</span>
               </p>
             </div>
