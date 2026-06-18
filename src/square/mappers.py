@@ -237,6 +237,7 @@ class DataMapper:
             "org_id": self.org_id,
             "location_id": location_id,
             "pos_connection_id": self.pos_connection_id,
+            "provider": "square",  # transient routing hint — stripped before write
             "external_id": sq_order.get("id"),
             "type": txn_type,
             "subtotal_cents": subtotal,
@@ -295,6 +296,7 @@ class DataMapper:
                 "id": str(uuid4()),
                 "transaction_id": transaction_id,
                 "transaction_at": transaction_at,
+                "provider": "square",  # transient routing hint — stripped before write
                 "org_id": self.org_id,
                 "product_id": product_id,
                 "product_name": item.get("name", "Unknown Item"),

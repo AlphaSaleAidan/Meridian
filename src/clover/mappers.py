@@ -221,6 +221,7 @@ class CloverDataMapper:
             "org_id": self.org_id,
             "location_id": self.location_id,
             "external_id": external_id,
+            "provider": "clover",  # transient routing hint — stripped before write
             # transaction_at (NOT transaction_time): the actual NOT NULL column.
             "transaction_at": _clover_ts_to_iso(cl_order.get("clientCreatedTime")),
             # type (NOT status): canonical column, matches the Square mapper.
@@ -251,6 +252,7 @@ class CloverDataMapper:
             "id": str(uuid4()),
             "org_id": self.org_id,
             "transaction_id": transaction_id,
+            "provider": "clover",  # transient routing hint — stripped before write
             "product_id": product_id,
             "external_item_id": external_item_id,
             "name": cl_line_item.get("name", item_ref.get("name", "Unknown")),

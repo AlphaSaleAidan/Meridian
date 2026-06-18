@@ -6,12 +6,45 @@ this client uses the Supabase REST API (PostgREST) for all CRUD operations.
 Supports upserts, batch inserts, filtered queries, and RPC function calls.
 """
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger("meridian.db.supabase_rest")
+
+# ─── Per-provider table routing (POS isolation, Option C) ──────────────────
+# Each POS system writes to its own canonical table (square_transactions, …) so
+# ingestion paths can never overwrite each other. `provider` is a TRANSIENT hint
+# stamped on rows by the mappers; it is stripped here before the write (the tables
+# carry no provider column). Gated by POS_PER_PROVIDER_TABLES so this is a no-op
+# until the per-provider migration + view swap is live — flag OFF = writes go to
+# the base table exactly as before. See docs/ARCHITECTURE.md §4.
+_PER_PROVIDER_TABLES = {"transactions", "transaction_items"}
+_KNOWN_PROVIDERS = {"square", "clover", "toast"}
+
+
+def _per_provider_enabled() -> bool:
+    return os.environ.get("POS_PER_PROVIDER_TABLES", "").lower() in ("1", "true", "yes")
+
+
+def _route_by_provider(table: str, rows: list[dict]) -> list[tuple[str, list[dict]]]:
+    """Split rows into (target_table, rows) groups. For per-provider tables the
+    transient `provider` hint is always stripped from each row; when the flag is on,
+    rows with a known provider are routed to `{provider}_{table}`. Everything else
+    is a single group on the base table (with provider stripped). Returns the
+    original (table, rows) untouched for non-per-provider tables."""
+    if not rows or table not in _PER_PROVIDER_TABLES:
+        return [(table, rows)]
+    enabled = _per_provider_enabled()
+    groups: dict[str, list[dict]] = {}
+    for r in rows:
+        prov = str(r.get("provider") or "").lower()
+        target = f"{prov}_{table}" if (enabled and prov in _KNOWN_PROVIDERS) else table
+        clean = {k: v for k, v in r.items() if k != "provider"}
+        groups.setdefault(target, []).append(clean)
+    return list(groups.items())
 
 
 class SupabaseRESTError(Exception):
@@ -285,11 +318,12 @@ class SupabaseREST:
             return 0
 
         total = 0
-        for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
-            await self.insert(table, chunk, return_data=return_data)
-            total += len(chunk)
-            logger.debug(f"Batch insert {table}: {total}/{len(rows)}")
+        for target, group in _route_by_provider(table, rows):
+            for i in range(0, len(group), chunk_size):
+                chunk = group[i : i + chunk_size]
+                await self.insert(target, chunk, return_data=return_data)
+                total += len(chunk)
+                logger.debug(f"Batch insert {target}: {total}/{len(rows)}")
 
         return total
 
@@ -305,11 +339,12 @@ class SupabaseREST:
             return 0
 
         total = 0
-        for i in range(0, len(rows), chunk_size):
-            chunk = rows[i : i + chunk_size]
-            await self.upsert(table, chunk, on_conflict=on_conflict, return_data=False)
-            total += len(chunk)
-            logger.debug(f"Batch upsert {table}: {total}/{len(rows)}")
+        for target, group in _route_by_provider(table, rows):
+            for i in range(0, len(group), chunk_size):
+                chunk = group[i : i + chunk_size]
+                await self.upsert(target, chunk, on_conflict=on_conflict, return_data=False)
+                total += len(chunk)
+                logger.debug(f"Batch upsert {target}: {total}/{len(rows)}")
 
         return total
 
