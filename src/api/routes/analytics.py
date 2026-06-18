@@ -14,6 +14,7 @@ import asyncio
 import logging
 import math
 import re
+import statistics
 from typing import Annotated
 
 from fastapi import APIRouter, Query, HTTPException, Depends
@@ -338,9 +339,8 @@ async def get_menu_engineering(
     quantities = sorted(i["quantity_sold"] for i in items)
     margins = sorted(i["margin_pct"] for i in items)
 
-    mid = len(quantities) // 2
-    median_qty = quantities[mid] if quantities else 0
-    median_margin = margins[mid] if margins else 0.0
+    median_qty = statistics.median(quantities) if quantities else 0
+    median_margin = statistics.median(margins) if margins else 0.0
 
     # Classify into quadrants
     quadrant_counts = {"stars": 0, "plowhorses": 0, "puzzles": 0, "dogs": 0}
@@ -758,7 +758,8 @@ async def get_actions(
 
 def _compute_priority(impact_cents: int, confidence: float) -> str:
     """Compute action priority based on impact and confidence."""
-    score = (impact_cents / 100) * (confidence or 0.5)
+    conf = confidence if confidence is not None else 0.5
+    score = (impact_cents / 100) * conf
     if score >= 500:
         return "critical"
     elif score >= 200:
