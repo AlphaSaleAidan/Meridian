@@ -321,6 +321,33 @@ class CloverClient:
         """List all item categories."""
         return await self._paginate("/categories", "elements")
 
+    # ─── Merchant Configuration (read-only lookups) ───────────
+
+    async def list_order_types(self) -> list[dict]:
+        """List merchant-configured order types (e.g. Dine In, Take Out, Delivery).
+
+        Orders carry an `orderType` reference; this resolves its id → label so
+        transactions can be segmented by service style. Small, merchant-level set.
+        """
+        return await self._paginate("/order_types", "elements")
+
+    async def list_tenders(self) -> list[dict]:
+        """List merchant-configured tenders (cash, credit card, plus any custom).
+
+        A tender has id, label, and labelKey (canonical for Clover system tenders:
+        com.clover.tender.cash / com.clover.tender.check). Used to map a payment's
+        tender → payment_method authoritatively instead of inferring from the label.
+        """
+        return await self._paginate("/tenders", "elements")
+
+    async def list_tax_rates(self) -> list[dict]:
+        """List merchant-configured tax rates (id, name, rate, isDefault).
+
+        Read-only reference used to validate computed tax during reconciliation;
+        not a write path.
+        """
+        return await self._paginate("/tax_rates", "elements")
+
     async def list_item_stocks(self) -> list[dict]:
         """List current inventory stock counts."""
         return await self._paginate("/item_stocks", "elements")

@@ -58,6 +58,32 @@ class CloverSyncEngine:
         if self.on_progress:
             self.on_progress(self.progress)
 
+    async def _fetch_config_lookups(self) -> tuple[dict[str, str], dict[str, dict]]:
+        """Fetch the merchant's order-type and tender config for mapping.
+
+        Returns (order_type_lookup: id->label, tender_lookup: id->{label,labelKey}).
+        Both are small, merchant-level sets. Best-effort: a fetch failure yields an
+        empty lookup, and the mapper falls back to whatever the order/payment
+        objects carry inline — so a config-fetch hiccup never blocks a sync.
+        """
+        order_type_lookup: dict[str, str] = {}
+        tender_lookup: dict[str, dict] = {}
+        try:
+            for ot in await self.client.list_order_types():
+                ot_id = ot.get("id")
+                if ot_id:
+                    order_type_lookup[ot_id] = ot.get("label", "") or ""
+        except Exception as e:
+            logger.warning(f"Could not fetch order types (non-fatal): {e}")
+        try:
+            for t in await self.client.list_tenders():
+                t_id = t.get("id")
+                if t_id:
+                    tender_lookup[t_id] = {"label": t.get("label", ""), "labelKey": t.get("labelKey", "")}
+        except Exception as e:
+            logger.warning(f"Could not fetch tenders (non-fatal): {e}")
+        return order_type_lookup, tender_lookup
+
     # ─── Initial Backfill ─────────────────────────────────────
 
     async def run_initial_backfill(
@@ -83,9 +109,12 @@ class CloverSyncEngine:
             self._emit_progress()
 
             merchant = await self.client.get_merchant()
+            order_type_lookup, tender_lookup = await self._fetch_config_lookups()
             mapper = CloverDataMapper(
                 org_id=self.org_id,
                 pos_connection_id=self.pos_connection_id,
+                order_type_lookup=order_type_lookup,
+                tender_lookup=tender_lookup,
             )
             result.locations = [mapper.map_merchant_to_location(merchant)]
             logger.info(f"Merchant: {merchant.get('name', 'Unknown')}")
@@ -267,10 +296,13 @@ class CloverSyncEngine:
                 except Exception as e:
                     logger.warning("Clover incremental: failed to load product lookup: %s", e)
 
+            order_type_lookup, tender_lookup = await self._fetch_config_lookups()
             mapper = CloverDataMapper(
                 org_id=self.org_id,
                 product_lookup=product_lookup,
                 pos_connection_id=self.pos_connection_id,
+                order_type_lookup=order_type_lookup,
+                tender_lookup=tender_lookup,
             )
 
             orders = await self.client.list_orders(

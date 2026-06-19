@@ -33,10 +33,23 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
             if result is None:
                 return
 
+        wrote_rows = bool(result.transactions or result.transaction_items)
         if result.transactions:
             await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
         if result.transaction_items:
             await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
+
+        # Refresh the analytics matviews so the new rows actually surface on the
+        # dashboard. The backfill path refreshes via run_analysis_only(), but the
+        # 15-min incremental sweep writes straight to `transactions` and would
+        # otherwise leave daily_revenue/hourly_revenue stale until the next
+        # backfill — new revenue lands in the table but never on the dashboard.
+        # Best-effort: a refresh hiccup must not fail (or unwind) a good sync.
+        if wrote_rows:
+            try:
+                await db.refresh_views()
+            except Exception as e:
+                logger.warning(f"Matview refresh after incremental sync failed (non-fatal): {e}")
 
         await db.update(
             "pos_connections",
