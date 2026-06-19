@@ -1,17 +1,32 @@
 """
 Token Refresh Worker — Daily cron job.
 
-Refreshes Square OAuth tokens expiring within 7 days.
-Square access tokens expire after 30 days.
+Refreshes OAuth tokens expiring within 7 days. Square access tokens last ~30
+days; Clover v2 access tokens last only ~30 min (so Clover is refreshed primarily
+inline at sync time — see clover.oauth.ensure_fresh_clover_token — and this daily
+pass is a backstop that keeps the refresh-token chain alive for idle connections).
+Provider dispatch picks the matching OAuth manager so a Clover row is never
+refreshed against Square's endpoint (or vice versa).
 """
 import logging
 from datetime import datetime, timedelta, timezone
 
+from ..clover.oauth import CloverOAuthError, CloverOAuthManager
 from ..db import get_db
 from ..security.encryption import decrypt_token, encrypt_token
 from ..square.oauth import OAuthManager, OAuthError
 
 logger = logging.getLogger("meridian.workers.token_refresh")
+
+
+def _oauth_for(provider: str):
+    """Return the OAuth manager for a connection's provider, or None if the
+    provider has no refresh flow (e.g. Toast client-credentials, generic)."""
+    if provider == "square":
+        return OAuthManager()
+    if provider == "clover":
+        return CloverOAuthManager()
+    return None
 
 
 async def refresh_expiring_tokens() -> dict:
@@ -21,7 +36,6 @@ async def refresh_expiring_tokens() -> dict:
     Returns:
         {"refreshed": count, "failed": count, "errors": [...]}
     """
-    oauth = OAuthManager()
     db = get_db()
 
     cutoff = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
@@ -45,6 +59,11 @@ async def refresh_expiring_tokens() -> dict:
         org_id = conn.get("org_id", "unknown")
 
         try:
+            oauth = _oauth_for(conn.get("provider", ""))
+            if oauth is None:
+                # Provider has no refresh flow (Toast/generic) — skip silently.
+                continue
+
             refresh_token = decrypt_token(conn.get("refresh_token_enc", ""))
 
             if not refresh_token:
@@ -76,7 +95,7 @@ async def refresh_expiring_tokens() -> dict:
             logger.info(f"Refreshed token for org={org_id} connection={connection_id}, new expiry: {tokens['expires_at']}")
             stats["refreshed"] += 1
 
-        except OAuthError as e:
+        except (OAuthError, CloverOAuthError) as e:
             logger.error(f"Token refresh failed for connection {connection_id}: {e}")
             stats["errors"].append(f"{connection_id}: {str(e)}")
             stats["failed"] += 1

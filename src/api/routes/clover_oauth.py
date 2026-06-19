@@ -205,8 +205,12 @@ async def callback(
                 })
 
             token_enc = encrypt_token(tokens["access_token"])
-            # Clover tokens don't expire, so no refresh/expiry fields. Mirror the
-            # token into both columns the two sync paths read from.
+            # v2/OAuth tokens expire (~30 min) and carry a refresh_token; store
+            # both + expiry so the sync path can refresh inline. Legacy apps
+            # return blank refresh/expiry → columns stay null (non-expiring).
+            refresh_enc = (
+                encrypt_token(tokens["refresh_token"]) if tokens.get("refresh_token") else None
+            )
             connection_data = {
                 "id": str(uuid4()),
                 "org_id": org_id,
@@ -214,6 +218,8 @@ async def callback(
                 "status": "connected",
                 "external_merchant_id": resolved_merchant_id,
                 "access_token_enc": token_enc,
+                "refresh_token_enc": refresh_enc,
+                "token_expires_at": tokens.get("expires_at") or None,
                 "credentials_encrypted": {
                     "access_token": token_enc,
                     "merchant_id": resolved_merchant_id,
@@ -240,6 +246,8 @@ async def callback(
                         "status": "connected",
                         "external_merchant_id": resolved_merchant_id,
                         "access_token_enc": token_enc,
+                        "refresh_token_enc": refresh_enc,
+                        "token_expires_at": tokens.get("expires_at") or None,
                         "credentials_encrypted": connection_data["credentials_encrypted"],
                         "last_error": None,
                         "updated_at": datetime.now(timezone.utc).isoformat(),

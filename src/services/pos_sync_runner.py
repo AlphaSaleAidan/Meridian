@@ -85,7 +85,9 @@ async def _sync_square(org_id, conn_id, connection, since):
 
 
 async def _sync_clover(org_id, conn_id, connection, since):
-    token = decrypt_token(connection.get("access_token_enc", ""))
+    from ..clover.oauth import ensure_fresh_clover_token
+    # Clover v2 access tokens expire in ~30 min — refresh inline before syncing.
+    token = await ensure_fresh_clover_token(connection)
     merchant_id = connection.get("external_merchant_id", "")
     from ..clover.client import CloverClient
     from ..clover.sync_engine import CloverSyncEngine
