@@ -19,6 +19,9 @@ from fastapi.responses import RedirectResponse
 
 from ...square.oauth import OAuthManager, OAuthError
 from ...security.encryption import encrypt_token
+# Shared post-OAuth return-path allowlist (also used by clover_oauth.py) so the
+# two callbacks can't drift — US /onboard was missing here before centralization.
+from ._oauth_return import safe_return_to as _safe_return_to
 
 logger = logging.getLogger("meridian.api.oauth")
 
@@ -50,18 +53,6 @@ oauth_manager = OAuthManager()
 # unknown return_to falls back to the legacy /app/settings target so existing
 # (US) flows are byte-identical.
 _DEFAULT_RETURN_TO = "/app/settings"
-
-
-def _safe_return_to(return_to: str | None) -> str:
-    """Allowlist the post-OAuth redirect path. Only Canada merchant routes pass."""
-    if return_to and (
-        return_to.startswith("/canada/merchant")
-        or return_to.startswith("/canada/onboard")
-        or return_to.startswith("/canada/dashboard")
-        or return_to.startswith("/canada/setup")
-    ):
-        return return_to
-    return ""
 
 
 def _redirect_to(return_to: str, params: dict) -> RedirectResponse:
