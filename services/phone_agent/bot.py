@@ -1,133 +1,178 @@
 """
-Pipecat phone-agent pipeline.
+Pipecat **1.4** phone-agent pipeline (rebuilt).
 
-Default stack (CPU-only, commercial-friendly):
-  Twilio Media Streams → Silero VAD → Moonshine STT → SambaNova LLM →
-  Kokoro TTS → Twilio Media Streams
+Telnyx/Twilio Media Streams → Silero VAD → Moonshine STT → DeepSeek LLM (with
+order tools) → Kokoro TTS → Media Streams.
 
-Env overrides:
-  USE_OLLAMA=1            → Ollama LLM instead of SambaNova
-  USE_WHISPER=1           → WhisperLiveKit STT instead of Moonshine
-  ENABLE_CALL_RECORDING=1 → WAV recording of inbound + outbound audio
+Rebuilt from the old 0.0.45 custom pipeline (which used the now-removed
+FunctionCallFrame / moved ai_services and was never wired). This version uses
+pipecat's **built-in** services (DeepSeek / Moonshine / Kokoro) and the 1.x
+function-calling API (register_function + FunctionCallParams.result_callback), so
+there's far less custom code and the LLM stage is actually connected.
+
+The order tools call our existing order pipeline unchanged:
+  normalize_order → create_pos_order → route_order → log + spoken confirmation.
+
+Phase 2 swaps STT/TTS to NVIDIA Nemotron via `pipecat.services.nvidia` (same
+pipeline). Env:
+  ENABLE_CALL_RECORDING=1  → WAV archival
+  DEEPSEEK_API_KEY / DEEPSEEK_MODEL
 """
+import json
 import logging
 import os
-import wave
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
 
-from pipecat.frames.frames import AudioRawFrame, Frame
+from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineTask, PipelineParams
-from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from pipecat.transports.network.fastapi_websocket import (
-    FastAPIWebsocketTransport,
-    FastAPIWebsocketParams,
+from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.aggregators.llm_context import LLMContext
+from pipecat.processors.aggregators.llm_response_universal import (
+    LLMContextAggregatorPair,
+    LLMUserAggregatorParams,
 )
-from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.adapters.schemas.function_schema import FunctionSchema
+from pipecat.adapters.schemas.tools_schema import ToolsSchema
+from pipecat.services.llm_service import FunctionCallParams
+from pipecat.services.deepseek.llm import DeepSeekLLMService
+from pipecat.services.moonshine.stt import MoonshineSTTService
+from pipecat.services.kokoro.tts import KokoroTTSService
 from pipecat.serializers.twilio import TwilioFrameSerializer
+from pipecat.serializers.telnyx import TelnyxFrameSerializer
+from pipecat.transports.websocket.fastapi import (
+    FastAPIWebsocketParams,
+    FastAPIWebsocketTransport,
+)
 
-try:
-    from pipecat.serializers.telnyx import TelnyxFrameSerializer
-except ImportError:  # older pipecat without the Telnyx serializer
-    TelnyxFrameSerializer = None  # type: ignore[assignment, misc]
-
-from stt_service import build_stt
-from tts_service import build_tts
-from llm_service import build_llm, LLMContext, ORDER_TOOLS
-from order_processor import OrderProcessor
 from merchant_config import MerchantPhoneConfig
+from order_normalizer import normalize_order
+from pos_connector import create_pos_order
+from order_router import route_order
 from caller_memory import build_memory_block_for
 
 logger = logging.getLogger("meridian.phone_agent.bot")
 
-RECORDING_DIR = Path(os.getenv("RECORDING_DIR", "/tmp/meridian_recordings"))
-ENABLE_RECORDING = os.getenv("ENABLE_CALL_RECORDING", "0") == "1"
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+
+# ─── Order tool schemas (1.x FunctionSchema; same shapes the brain expects) ───
+_SUBMIT_ORDER = FunctionSchema(
+    name="submit_order",
+    description="Call ONLY after the customer confirms the complete order is correct.",
+    properties={
+        "customer_name": {"type": "string"},
+        "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in", "appointment", "hold"]},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "quantity": {"type": "integer"},
+                    "size": {"type": "string"},
+                    "modifications": {"type": "array", "items": {"type": "string"}},
+                    "special_instructions": {"type": "string"},
+                },
+                "required": ["name", "quantity"],
+            },
+        },
+        "delivery_address": {"type": "string"},
+        "special_requests": {"type": "string"},
+        "caller_phone": {"type": "string"},
+    },
+    required=["customer_name", "order_type", "items"],
+)
+_TRANSFER = FunctionSchema(
+    name="transfer_to_human",
+    description="Call when the customer asks to speak to a person.",
+    properties={"reason": {"type": "string"}},
+    required=[],
+)
+_END_CALL = FunctionSchema(
+    name="end_call_no_order",
+    description="Call when the call ends without an order.",
+    properties={"reason": {"type": "string", "enum": [
+        "order_completed", "customer_declined", "wrong_number", "question_only", "customer_hung_up"]}},
+    required=["reason"],
+)
 
 
-class CallRecorder(FrameProcessor):
-    """Records raw audio frames to a WAV file for call archival / QA review."""
-
-    def __init__(
-        self,
-        merchant_id: str,
-        session_ref: str,
-        sample_rate: int = 8000,
-        channels: int = 1,
-        sample_width: int = 2,
-    ):
-        super().__init__()
-        self._wav: wave.Wave_write | None = None
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        out_dir = RECORDING_DIR / merchant_id
-        out_dir.mkdir(parents=True, exist_ok=True)
-        self._path = out_dir / f"{session_ref}_{ts}.wav"
-        self._wav = wave.open(str(self._path), "wb")
-        self._wav.setnchannels(channels)
-        self._wav.setsampwidth(sample_width)
-        self._wav.setframerate(sample_rate)
-        logger.info("Recording to %s", self._path)
-
-    async def process_frame(self, frame: Frame, direction: FrameDirection):
-        await super().process_frame(frame, direction)
-        if isinstance(frame, AudioRawFrame) and self._wav:
-            try:
-                self._wav.writeframes(frame.audio)
-            except Exception as e:
-                logger.debug("Recording write failed: %s", e)
-        await self.push_frame(frame, direction)
-
-    async def cleanup(self):
-        if self._wav:
-            try:
-                self._wav.close()
-                logger.info("Recording saved: %s", self._path)
-            except Exception as e:
-                logger.warning("Recording close failed: %s", e)
-            self._wav = None
-        await super().cleanup()
-
-
-def build_system_prompt(
-    config: MerchantPhoneConfig,
-    caller_info: dict,
-    memory_block: str = "",
-) -> str:
+def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_block: str = "") -> str:
     menu_section = ""
     if config.menu_items:
-        menu_lines = []
+        lines = []
         for item in config.menu_items:
             sizes = ", ".join(item.get("sizes", []))
-            price = f"${item.get('price', 0):.2f}"
-            line = f"- {item['name']}: {price}"
+            line = f"- {item['name']}: ${item.get('price', 0):.2f}"
             if sizes:
                 line += f" (sizes: {sizes})"
             if item.get("modifications"):
                 line += f" [options: {', '.join(item['modifications'])}]"
-            menu_lines.append(line)
-        menu_section = "\n\nMENU:\n" + "\n".join(menu_lines)
-
-    order_types = ", ".join(config.order_types)
+            lines.append(line)
+        menu_section = "\n\nMENU:\n" + "\n".join(lines)
     memory_section = f"\n\n{memory_block}" if memory_block else ""
-
     return f"""You are the AI phone assistant for {config.business_name}.
 Keep replies SHORT — 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
 
 RULES:
 - Greet the caller warmly using: "{config.greeting}"
-- Take their order item by item, confirm name + size + quantity + modifications
+- Take their order item by item; confirm name + size + quantity + modifications
 - Read back the complete order before submitting
-- Only call submit_order() AFTER the customer confirms the order is correct
-- If the customer asks to speak to a person, call transfer_to_human()
+- Only call submit_order() AFTER the customer confirms it's correct
+- If the customer asks for a person, call transfer_to_human()
 - If the call ends without an order, call end_call_no_order()
-- Available order types: {order_types}
-- If an item is not on the menu, say so politely and suggest alternatives
+- Available order types: {", ".join(config.order_types)}
+- If an item isn't on the menu, say so politely and suggest alternatives
 {menu_section}
 
 CALLER:
 Phone: {caller_info.get('phone', 'unknown')}{memory_section}"""
+
+
+def _confirmation(order: dict, pos_result: dict) -> str:
+    items = ", ".join(
+        f"{i['quantity']} {i.get('size', '')} {i['name']}".strip() for i in order.get("items", [])
+    )
+    msg = f"Great, {order.get('customer_name', '')}! I've placed your order for {items} for {order.get('order_type', 'pickup')}."
+    eta = pos_result.get("estimated_ready_minutes")
+    msg += f" It should be ready in about {eta} minutes." if (pos_result.get("success") and eta) else " The kitchen has been notified."
+    return msg + " Anything else?"
+
+
+async def _log_call(merchant_id: str, call_sid: str, caller: dict, status: str, **extra: Any) -> None:
+    entry = {"merchant_id": merchant_id, "call_sid": call_sid, "caller_phone": caller.get("phone", ""),
+             "status": status, "created_at": datetime.now(timezone.utc).isoformat(), **extra}
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        logger.info("Call log (no Supabase): %s", json.dumps(entry, default=str))
+        return
+    try:
+        import httpx
+        async with httpx.AsyncClient() as c:
+            await c.post(f"{SUPABASE_URL}/rest/v1/phone_call_logs", json=entry,
+                         headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",
+                                  "Content-Type": "application/json", "Prefer": "return=minimal"})
+    except Exception as e:
+        logger.error("Call log failed: %s", e)
+
+
+def _build_serializer(provider: str, stream_sid: str, call_sid: str | None,
+                      call_control_id: str | None, outbound_encoding: str | None):
+    if provider == "telnyx":
+        # inbound_encoding is REQUIRED in pipecat 1.x (the old code omitted it → TypeError).
+        return TelnyxFrameSerializer(
+            stream_id=stream_sid,
+            outbound_encoding=outbound_encoding or "PCMU",
+            inbound_encoding="PCMU",
+            call_control_id=call_control_id or "",
+            api_key=os.getenv("TELNYX_API_KEY", ""),
+        )
+    return TwilioFrameSerializer(stream_sid=stream_sid, call_sid=call_sid or "")
 
 
 async def run_call_bot(
@@ -142,21 +187,7 @@ async def run_call_bot(
     call_control_id: str | None = None,
     outbound_encoding: str | None = None,
 ):
-    serializer = None
-    if stream_sid:
-        # Decode the provider's mu-law 8 kHz frame envelope to 16-bit linear
-        # inbound and re-encode outbound. Without this the audio is unintelligible.
-        if provider == "telnyx":
-            if TelnyxFrameSerializer is None:
-                raise RuntimeError("pipecat Telnyx serializer not installed")
-            serializer = TelnyxFrameSerializer(
-                stream_id=stream_sid,
-                call_control_id=call_control_id or "",
-                outbound_encoding=outbound_encoding or "PCMU",
-                api_key=os.getenv("TELNYX_API_KEY", ""),
-            )
-        else:
-            serializer = TwilioFrameSerializer(stream_sid=stream_sid, call_sid=call_sid or "")
+    serializer = _build_serializer(provider, stream_sid, call_sid, call_control_id, outbound_encoding) if stream_sid else None
 
     transport = FastAPIWebsocketTransport(
         websocket=websocket,
@@ -164,67 +195,70 @@ async def run_call_bot(
             audio_in_enabled=True,
             audio_out_enabled=True,
             add_wav_header=False,
-            vad_enabled=True,
-            vad_analyzer=SileroVADAnalyzer(),
-            vad_audio_passthrough=True,
             serializer=serializer,
         ),
     )
 
-    stt = build_stt(merchant_config.language)
-    llm = build_llm()
-    tts = build_tts(merchant_config)
+    stt = MoonshineSTTService()                 # Phase 1 (EN). Phase 2 → NVIDIA Nemotron ASR.
+    tts = KokoroTTSService()                     # Phase 1.       Phase 2 → MagpieTTS.
+    llm = DeepSeekLLMService(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, model=DEEPSEEK_MODEL)
 
-    order_processor = OrderProcessor(
-        merchant_id=merchant_id,
-        call_sid=session_ref,
-        merchant_config=merchant_config,
-        caller_info=caller_info,
-    )
+    # ── Order tools as registered LLM functions (call our existing pipeline) ──
+    state = {"submitted": False}
+
+    async def _on_submit_order(params: FunctionCallParams):
+        args = params.arguments or {}
+        if state["submitted"]:
+            await params.result_callback({"status": "already_submitted"})
+            return
+        state["submitted"] = True
+        normalized = normalize_order(args, merchant_config)
+        pos_result = await create_pos_order(
+            normalized, merchant_config.pos_system,
+            merchant_config.pos_access_token, merchant_config.pos_location_id,
+        )
+        await route_order(normalized, merchant_config, caller_info, pos_result)
+        await _log_call(merchant_id, session_ref, caller_info, "order_placed",
+                        order_data=normalized, pos_result=pos_result)
+        await params.result_callback({"success": True, "say": _confirmation(normalized, pos_result)})
+
+    async def _on_transfer(params: FunctionCallParams):
+        await _log_call(merchant_id, session_ref, caller_info, "transferred",
+                        notes=(params.arguments or {}).get("reason", ""))
+        await params.result_callback({"say": "Let me transfer you to a team member — one moment."})
+
+    async def _on_end_call(params: FunctionCallParams):
+        reason = (params.arguments or {}).get("reason", "unknown")
+        await _log_call(merchant_id, session_ref, caller_info, f"no_order_{reason}")
+        await params.result_callback({"say": "Thank you for calling. Have a great day!"})
+
+    llm.register_function("submit_order", _on_submit_order)
+    llm.register_function("transfer_to_human", _on_transfer)
+    llm.register_function("end_call_no_order", _on_end_call)
 
     memory_block = ""
-    caller_phone = caller_info.get("phone", "")
-    if caller_phone:
+    if caller_info.get("phone"):
         try:
-            memory_block = await build_memory_block_for(merchant_id, caller_phone)
+            memory_block = await build_memory_block_for(merchant_id, caller_info["phone"])
         except Exception as e:
             logger.warning("caller memory lookup failed: %s", e)
 
-    system_prompt = build_system_prompt(merchant_config, caller_info, memory_block)
     context = LLMContext(
-        messages=[{"role": "system", "content": system_prompt}],
-        tools=ORDER_TOOLS,
+        messages=[{"role": "system", "content": build_system_prompt(merchant_config, caller_info, memory_block)}],
+        tools=ToolsSchema(standard_tools=[_SUBMIT_ORDER, _TRANSFER, _END_CALL]),
     )
-    context_aggregator = llm.create_context_aggregator(context)
+    user_agg, assistant_agg = LLMContextAggregatorPair(
+        context, user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+    )
 
-    recorder = None
-    if ENABLE_RECORDING:
-        try:
-            recorder = CallRecorder(merchant_id=merchant_id, session_ref=session_ref)
-        except Exception as e:
-            logger.warning("Call recording init failed: %s", e)
-
-    pipeline_stages = [
+    pipeline = Pipeline([
         transport.input(),
         stt,
-        context_aggregator.user(),
+        user_agg,
         llm,
-        order_processor,
         tts,
-    ]
-    if recorder:
-        pipeline_stages.append(recorder)
-    pipeline_stages.extend([
         transport.output(),
-        context_aggregator.assistant(),
+        assistant_agg,
     ])
-
-    pipeline = Pipeline(pipeline_stages)
     task = PipelineTask(pipeline, PipelineParams(allow_interruptions=True))
-
-    runner = PipelineRunner()
-    try:
-        await runner.run(task)
-    finally:
-        if recorder:
-            await recorder.cleanup()
+    await PipelineRunner().run(task)

@@ -1,39 +1,21 @@
-# Meridian AI Phone Agent — Pipecat pipeline dependencies
-# All packages have commercial-friendly licenses (MIT / Apache-2.0 / BSD).
+# Meridian AI Phone Agent — Pipecat 1.x pipeline dependencies (rebuilt).
+# Commercial-friendly (MIT / Apache-2.0 / BSD). Heavy (torch via STT/TTS) — runs on
+# a capable host, NOT the lean Railway API image (kept as a sidecar).
 
-# Web framework
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
+# Voice pipeline (1.x). Extras pull the built-in service deps we use:
+#   silero  → VAD            moonshine → STT (EN, Phase 1)
+#   kokoro  → TTS (Phase 1)  deepseek  → LLM (OpenAI-compatible)
+#   nvidia  → Nemotron ASR/TTS + LLM (Phase 2)
+#   websocket → FastAPI websocket transport (Telnyx/Twilio media streams)
+pipecat-ai[silero,moonshine,kokoro,deepseek,nvidia,websocket]==1.4.0
 
-# Voice pipeline — needs Twilio serializer (added in 0.0.40+)
-pipecat-ai>=0.0.45
+# Web framework (sidecar HTTP/WS entrypoint)
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
 
-# STT — Moonshine (English, CPU-realtime, ~107ms latency)
-useful-moonshine>=0.1.0
-
-# STT fallback — Whisper for non-English
-whisperlivekit>=0.3.0
-faster-whisper>=1.0.0
-
-# TTS — Kokoro-82M (Apache-2.0, ~300 MB, top of TTS-Arena Jan 2026)
-kokoro>=0.9.0
-soundfile>=0.12.0
-
-# TTS voice cloning (optional, only if merchant uploads a reference sample)
-# cosyvoice>=0.2.0
-
-# LLM — SambaNova via OpenAI-compatible API + Ollama fallback
-aiohttp>=3.9.0
-
-# Audio processing
-numpy>=1.26.0
-scipy>=1.12.0
-
-# VAD — Silero (MIT, <1ms per chunk on CPU)
-silero-vad>=5.0
-
-# HTTP client for POS APIs + Supabase
-httpx>=0.25.0
+# HTTP client for POS APIs + Supabase logging
+httpx>=0.27.0
 
 # Utilities
+numpy>=1.26.0
 python-dotenv>=1.0.0
