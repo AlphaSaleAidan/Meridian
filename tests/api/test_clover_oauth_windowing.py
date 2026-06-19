@@ -232,3 +232,177 @@ def test_ensure_fresh_token_falls_back_on_refresh_failure(monkeypatch):
     monkeypatch.setattr(clover_oauth.CloverOAuthManager, "refresh_token", fail)
     out = _run(ensure_fresh_clover_token(conn))
     assert out == "stored-tok"
+
+
+# ── 4. exchange_code: v2-first with legacy fallback ───────────────────────
+
+class _FakeResp:
+    def __init__(self, status_code, json_data=None, text=""):
+        self.status_code = status_code
+        self._json = json_data or {}
+        self.text = text
+        self.headers = {"content-type": "application/json"}
+
+    def json(self):
+        return self._json
+
+
+def _patch_httpx(monkeypatch, *, post=None, get=None, post_raises=False):
+    """Replace httpx.AsyncClient in clover.oauth with a fake recording calls."""
+    record = {"post": 0, "get": 0, "post_url": None, "get_url": None}
+
+    class _FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, **k):
+            record["post"] += 1
+            record["post_url"] = url
+            if post_raises:
+                raise clover_oauth.httpx.HTTPError("boom")
+            return post
+
+        async def get(self, url, **k):
+            record["get"] += 1
+            record["get_url"] = url
+            return get
+
+    monkeypatch.setattr(clover_oauth.httpx, "AsyncClient", _FakeClient)
+    return record
+
+
+def test_exchange_code_uses_v2_when_available(monkeypatch):
+    rec = _patch_httpx(
+        monkeypatch,
+        post=_FakeResp(200, {
+            "access_token": "v2-acc",
+            "refresh_token": "v2-ref",
+            "access_token_expiration": 1_700_000_000,
+            "refresh_token_expiration": 1_800_000_000,
+        }),
+    )
+    mgr = clover_oauth.CloverOAuthManager()
+    out = _run(mgr.exchange_code("CODE", merchant_id="M1"))
+
+    assert out["access_token"] == "v2-acc"
+    assert out["refresh_token"] == "v2-ref"
+    assert out["expires_at"].startswith("2023-11-14")
+    assert "/oauth/v2/token" in rec["post_url"]
+    assert rec["get"] == 0, "legacy GET must not run when v2 succeeds"
+
+
+def test_exchange_code_falls_back_to_legacy(monkeypatch):
+    rec = _patch_httpx(
+        monkeypatch,
+        post=_FakeResp(400, {"message": "unsupported_grant"}),
+        get=_FakeResp(200, {"access_token": "legacy-acc"}),
+    )
+    mgr = clover_oauth.CloverOAuthManager()
+    out = _run(mgr.exchange_code("CODE", merchant_id="M1"))
+
+    assert out["access_token"] == "legacy-acc"
+    assert out["refresh_token"] == ""        # legacy → no refresh token
+    assert out["expires_at"] == ""           # legacy → no expiry
+    assert rec["post"] == 1 and rec["get"] == 1
+    assert "/oauth/token" in rec["get_url"] and "/v2/" not in rec["get_url"]
+
+
+def test_exchange_code_falls_back_when_v2_network_errors(monkeypatch):
+    rec = _patch_httpx(
+        monkeypatch,
+        post_raises=True,
+        get=_FakeResp(200, {"access_token": "legacy-acc"}),
+    )
+    mgr = clover_oauth.CloverOAuthManager()
+    out = _run(mgr.exchange_code("CODE"))
+    assert out["access_token"] == "legacy-acc"
+    assert rec["get"] == 1
+
+
+def test_exchange_code_raises_when_both_fail(monkeypatch):
+    _patch_httpx(
+        monkeypatch,
+        post=_FakeResp(400, {"message": "bad"}),
+        get=_FakeResp(401, {"message": "invalid_code"}),
+    )
+    mgr = clover_oauth.CloverOAuthManager()
+    try:
+        _run(mgr.exchange_code("CODE"))
+        assert False, "expected CloverOAuthError"
+    except clover_oauth.CloverOAuthError:
+        pass
+
+
+# ── 5. Webhook auth: X-Clover-Auth == static Auth Code (NOT HMAC) ─────────
+
+from types import SimpleNamespace  # noqa: E402
+
+from fastapi import Request  # noqa: E402
+import src.api.routes.webhooks as wh_mod  # noqa: E402
+
+
+def _set_auth_code(monkeypatch, code: str):
+    # cl_config is a frozen dataclass — swap the module-level reference instead.
+    monkeypatch.setattr(wh_mod, "cl_config", SimpleNamespace(webhook_auth_code=code))
+
+
+def _webhook_request(body: bytes, headers: dict) -> Request:
+    raw = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
+    scope = {"type": "http", "method": "POST", "headers": raw, "path": "/api/webhooks/clover"}
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request(scope, receive)
+
+
+def _call_clover_webhook(body: bytes, headers: dict):
+    from fastapi import BackgroundTasks
+    req = _webhook_request(body, headers)
+    return _run(wh_mod.clover_webhook(req, BackgroundTasks()))
+
+
+def test_webhook_accepts_matching_auth_code(monkeypatch):
+    _set_auth_code(monkeypatch,"AUTH-CODE-123")
+    body = b'{"appId":"A","merchants":{}}'
+    resp = _call_clover_webhook(body, {"X-Clover-Auth": "AUTH-CODE-123"})
+    assert resp.status_code == 200
+
+
+def test_webhook_rejects_wrong_auth_code(monkeypatch):
+    _set_auth_code(monkeypatch,"AUTH-CODE-123")
+    body = b'{"appId":"A","merchants":{"M1":[{"type":"ORDER"}]}}'
+    resp = _call_clover_webhook(body, {"X-Clover-Auth": "WRONG"})
+    assert resp.status_code == 403
+
+
+def test_webhook_rejects_hmac_style_signature(monkeypatch):
+    # Regression for Finding 4: the OLD code expected an HMAC of the body. A real
+    # Clover webhook sends the static auth code verbatim; an HMAC value must fail.
+    _set_auth_code(monkeypatch,"AUTH-CODE-123")
+    import hashlib
+    import hmac as _hmac
+    body = b'{"merchants":{"M1":[{"type":"ORDER"}]}}'
+    bogus = _hmac.new(b"AUTH-CODE-123", body, hashlib.sha256).hexdigest()
+    resp = _call_clover_webhook(body, {"X-Clover-Auth": bogus})
+    assert resp.status_code == 403
+
+
+def test_webhook_fails_closed_without_configured_code(monkeypatch):
+    _set_auth_code(monkeypatch,"")
+    resp = _call_clover_webhook(b'{"merchants":{"M1":[]}}', {"X-Clover-Auth": "anything"})
+    assert resp.status_code == 503
+
+
+def test_webhook_verification_handshake_acks_without_auth(monkeypatch):
+    # Initial callback-URL validation: {verificationCode} arrives with no auth
+    # header — must ack 200 so the URL can be activated in the Dashboard.
+    _set_auth_code(monkeypatch,"")
+    resp = _call_clover_webhook(b'{"verificationCode":"abc123"}', {})
+    assert resp.status_code == 200

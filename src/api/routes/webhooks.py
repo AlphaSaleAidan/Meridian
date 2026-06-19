@@ -6,6 +6,7 @@ Webhook Routes — Receive and process Square webhook events.
 IMPORTANT: Square requires a 200 response within 3 seconds.
 We acknowledge immediately and process async.
 """
+import hmac
 import json
 import logging
 import os
@@ -275,21 +276,29 @@ async def clover_webhook(
     """
     body = await request.body()
 
-    # ── Signature verification (HMAC-SHA256 with app secret) ──
-    if not cl_config.app_secret:
-        logger.error("CLOVER_APP_SECRET not configured — refusing to process Clover webhook (fail closed)")
-        return Response(status_code=503)
-
-    from ...clover.oauth import CloverOAuthManager
-    signature = request.headers.get("x-clover-auth", "")
-    if not CloverOAuthManager().verify_webhook_signature(payload=body, signature=signature):
-        logger.warning("Clover webhook signature verification failed")
-        return Response(status_code=403)
-
     try:
         event = json.loads(body)
     except json.JSONDecodeError:
         return Response(status_code=400)
+
+    # ── Initial callback-URL validation handshake ──
+    # Clover POSTs {verificationCode: ...} (no X-Clover-Auth yet) when you first
+    # register the URL. Log it so it can be pasted into the Dashboard, ack 200.
+    verification_code = event.get("verificationCode")
+    if verification_code:
+        logger.info(f"Clover webhook verificationCode received: {verification_code}")
+        return Response(status_code=200)
+
+    # ── Authenticate real events: X-Clover-Auth carries the static Clover Auth
+    #    Code verbatim — compare (constant-time), do NOT HMAC the payload. ──
+    if not cl_config.webhook_auth_code:
+        logger.error("CLOVER_WEBHOOK_AUTH_CODE not configured — refusing Clover webhook (fail closed)")
+        return Response(status_code=503)
+
+    received = request.headers.get("x-clover-auth", "")
+    if not hmac.compare_digest(received, cl_config.webhook_auth_code):
+        logger.warning("Clover webhook auth code mismatch")
+        return Response(status_code=403)
 
     merchants = event.get("merchants", {})
     if not merchants:

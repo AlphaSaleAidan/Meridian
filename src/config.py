@@ -85,6 +85,10 @@ class CloverConfig:
     app_secret: str = os.getenv("CLOVER_APP_SECRET", "")
     access_token: str = os.getenv("CLOVER_ACCESS_TOKEN", "")
     merchant_id: str = os.getenv("CLOVER_MERCHANT_ID", "")
+    # Clover Auth Code (Dashboard → Your Apps → App Settings → Webhooks). Merchant
+    # webhooks carry it verbatim in the X-Clover-Auth header; we authenticate by
+    # comparing, NOT by HMAC. https://docs.clover.com/dev/docs/webhooks
+    webhook_auth_code: str = os.getenv("CLOVER_WEBHOOK_AUTH_CODE", "")
     environment: str = os.getenv("CLOVER_ENVIRONMENT", "sandbox")
     region: str = os.getenv("CLOVER_REGION", "na").lower()
     # Built but gated: connector exists, but new connect/test attempts return

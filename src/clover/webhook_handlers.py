@@ -10,12 +10,11 @@ Clover sends webhooks for:
 Clover webhooks are simpler than Square:
   - Payload: {appId, merchants: {merchant_id: [{type, objectId, ts}]}}
   - No full object in payload — always need to re-fetch from API
-  - HMAC-SHA256 signed with app secret
+  - Authenticated by the X-Clover-Auth header (static Clover Auth Code), verified
+    in the route (api/routes/webhooks.py), NOT by HMAC of the payload.
 
 All handlers are async and designed to be enqueued (respond 200 first, process later).
 """
-import hashlib
-import hmac
 import logging
 from typing import Any, Callable
 
@@ -23,25 +22,6 @@ from .client import CloverClient
 from .mappers import CloverDataMapper
 
 logger = logging.getLogger("meridian.clover.webhooks")
-
-
-def verify_webhook_signature(
-    body: bytes,
-    signature: str,
-    app_secret: str,
-) -> bool:
-    """
-    Verify Clover webhook HMAC-SHA256 signature.
-
-    Clover signs the raw body with the app secret.
-    """
-    expected = hmac.new(
-        key=app_secret.encode("utf-8"),
-        msg=body,
-        digestmod=hashlib.sha256,
-    ).hexdigest()
-
-    return hmac.compare_digest(expected, signature)
 
 
 class CloverWebhookProcessor:

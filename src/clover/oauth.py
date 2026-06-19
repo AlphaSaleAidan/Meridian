@@ -16,8 +16,6 @@ Clover OAuth notes:
   - Scopes are implicit based on app permissions (set in Clover dashboard)
   - Sandbox uses sandbox.dev.clover.com, production uses www.clover.com
 """
-import hashlib
-import hmac
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -269,27 +267,6 @@ class CloverOAuthManager:
         if not is_valid:
             logger.info(f"Token for merchant {merchant_id} is already invalid")
         return True
-
-    # ─── Webhook Signature Verification ───────────────────────
-
-    def verify_webhook_signature(
-        self,
-        payload: bytes,
-        signature: str,
-    ) -> bool:
-        """
-        Verify Clover webhook HMAC signature.
-
-        Clover signs webhooks with HMAC-SHA256 using the app secret.
-        """
-        expected = hmac.new(
-            self.app_secret.encode(),
-            payload,
-            hashlib.sha256,
-        ).hexdigest()
-
-        return hmac.compare_digest(expected, signature)
-
 
 # ─── Inline token resolution (v2 expiring tokens) ─────────────
 
