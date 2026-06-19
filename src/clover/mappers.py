@@ -61,6 +61,8 @@ class CloverDataMapper:
         category_lookup: dict[str, str] | None = None,
         employee_cache: dict[str, str] | None = None,
         pos_connection_id: str | None = None,
+        order_type_lookup: dict[str, str] | None = None,
+        tender_lookup: dict[str, dict] | None = None,
     ):
         self.org_id = org_id
         self.location_id = location_id
@@ -68,6 +70,11 @@ class CloverDataMapper:
         self.category_lookup = category_lookup or {}
         self.employee_cache = employee_cache or {}
         self.pos_connection_id = pos_connection_id
+        # Merchant-config lookups (from /order_types and /tenders). Both optional:
+        # orders/payments often carry the label inline, so an empty lookup just
+        # means we fall back to whatever the order/payment object embeds.
+        self.order_type_lookup = order_type_lookup or {}   # order_type_id -> label
+        self.tender_lookup = tender_lookup or {}           # tender_id -> {label, labelKey}
 
     # ─── Location Mapper (Merchant → Location) ────────────────
 
@@ -236,6 +243,13 @@ class CloverDataMapper:
         device_id = (cl_order.get("device") or {}).get("id")
         if device_id:
             metadata["device_id"] = device_id
+        # Service style (Dine In / Take Out / Delivery) for analytics segmentation.
+        # Use the inline label if the order carries it; otherwise resolve the
+        # orderType id against the merchant's /order_types lookup.
+        order_type = cl_order.get("orderType") or {}
+        order_type_label = order_type.get("label") or self.order_type_lookup.get(order_type.get("id", ""))
+        if order_type_label:
+            metadata["order_type"] = order_type_label
 
         return {
             # Deterministic from the order's natural key so a re-sync updates
@@ -352,17 +366,48 @@ class CloverDataMapper:
         return total
 
     def _clover_tender_type(self, payment: dict) -> str:
-        """Map one Clover payment's tender to a Meridian payment_method enum."""
-        label = payment.get("tender", {}).get("label", "").lower()
-        if "cash" in label:
+        """Map one Clover payment's tender to a Meridian payment_method enum.
+
+        Prefers the merchant's /tenders config (resolved by tender id), which is
+        authoritative even when the payment only carries the tender id, and uses
+        Clover's canonical `labelKey` (com.clover.tender.cash/check) before falling
+        back to fuzzy label matching. Custom tenders only have a label.
+        """
+        tender = payment.get("tender", {}) or {}
+        tender_id = tender.get("id", "")
+        label_key = tender.get("labelKey", "") or ""
+        label = tender.get("label", "") or ""
+
+        # Authoritative merchant config: fills in fields a payment's inline tender
+        # reference may omit (often it carries only the id).
+        looked = self.tender_lookup.get(tender_id) if tender_id else None
+        if looked:
+            label_key = label_key or looked.get("labelKey", "") or ""
+            label = label or looked.get("label", "") or ""
+
+        lk = label_key.lower()
+        if lk:
+            if "cash" in lk:
+                return "cash"
+            if "credit" in lk or "card" in lk:
+                return "card"
+            if "debit" in lk:
+                return "debit"
+            if "check" in lk or "external" in lk:
+                return "other"
+
+        lbl = label.lower()
+        # Order matters: "Gift Card" and "Debit Card" both contain "card", so the
+        # specific tenders must be matched before the generic credit/card check.
+        if "cash" in lbl:
             return "cash"
-        elif "credit" in label or "card" in label:
-            return "card"
-        elif "debit" in label:
-            return "debit"
-        elif "gift" in label:
+        elif "gift" in lbl:
             return "gift_card"
-        elif "external" in label or "other" in label:
+        elif "debit" in lbl:
+            return "debit"
+        elif "credit" in lbl or "card" in lbl:
+            return "card"
+        elif "external" in lbl or "other" in lbl:
             return "other"
         else:
             return payment.get("cardTransaction", {}).get("type", "card").lower() if payment.get("cardTransaction") else "other"

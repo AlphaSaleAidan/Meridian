@@ -461,3 +461,155 @@ def test_clover_region_hosts():
     assert CloverConfig(environment="production", region="xx").api_base_url == "https://api.clover.com"
     # sandbox is region-agnostic
     assert CloverConfig(environment="sandbox", region="eu").api_base_url == "https://apisandbox.dev.clover.com"
+
+
+# ── Incremental sync must refresh the analytics matviews ──
+#
+# The backfill path refreshes views via run_analysis_only(); the 15-min
+# incremental sweep writes straight to `transactions` and used to skip the
+# refresh, so daily_revenue/hourly_revenue went stale (new revenue in the table
+# but never on the dashboard). These pin the refresh.
+
+class _RefreshRecordingDB:
+    def __init__(self):
+        self.upserts = []
+        self.refreshed = 0
+        self.updates = 0
+
+    async def batch_upsert(self, table, rows, on_conflict=None):
+        self.upserts.append((table, len(rows)))
+
+    async def refresh_views(self):
+        self.refreshed += 1
+
+    async def update(self, table, values, filters=None):
+        self.updates += 1
+
+
+class _IncResult:
+    def __init__(self, transactions, transaction_items):
+        self.transactions = transactions
+        self.transaction_items = transaction_items
+
+
+def test_incremental_sync_refreshes_matviews(monkeypatch):
+    import src.db as dbmod
+    from src.services import pos_sync_runner as r
+
+    db = _RefreshRecordingDB()
+    monkeypatch.setattr(dbmod, "get_db", lambda: db)
+
+    async def fake_clover(org_id, conn_id, connection, since):
+        return _IncResult([{"id": "t1", "external_id": "o1"}], [])
+
+    monkeypatch.setattr(r, "_sync_clover", fake_clover)
+    _run(r.run_incremental(ORG, "clover", {"id": "C1", "last_sync_at": None}))
+    assert db.refreshed == 1  # matviews refreshed after writing new rows
+
+
+def test_incremental_sync_skips_refresh_when_no_rows(monkeypatch):
+    """An empty sync writes nothing, so there's no reason to refresh matviews."""
+    import src.db as dbmod
+    from src.services import pos_sync_runner as r
+
+    db = _RefreshRecordingDB()
+    monkeypatch.setattr(dbmod, "get_db", lambda: db)
+
+    async def fake_clover(org_id, conn_id, connection, since):
+        return _IncResult([], [])
+
+    monkeypatch.setattr(r, "_sync_clover", fake_clover)
+    _run(r.run_incremental(ORG, "clover", {"id": "C1", "last_sync_at": None}))
+    assert db.refreshed == 0
+    assert db.upserts == []
+
+
+def test_incremental_refresh_failure_is_nonfatal(monkeypatch):
+    """A matview-refresh hiccup must not fail (or unwind) an otherwise-good sync —
+    the rows are already written; last_sync_at must still advance."""
+    import src.db as dbmod
+    from src.services import pos_sync_runner as r
+
+    class _RaisingRefreshDB(_RefreshRecordingDB):
+        async def refresh_views(self):
+            raise RuntimeError("matview locked")
+
+    db = _RaisingRefreshDB()
+    monkeypatch.setattr(dbmod, "get_db", lambda: db)
+
+    async def fake_clover(org_id, conn_id, connection, since):
+        return _IncResult([{"id": "t1", "external_id": "o1"}], [])
+
+    monkeypatch.setattr(r, "_sync_clover", fake_clover)
+    _run(r.run_incremental(ORG, "clover", {"id": "C1", "last_sync_at": None}))
+    assert db.updates == 1  # last_sync_at still advanced despite refresh failure
+
+
+# ── Order type (service style) segmentation ──
+
+def test_clover_order_type_label_inline():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {"total": 1000, "state": "paid",
+             "orderType": {"id": "OT1", "label": "Take Out"},
+             "payments": {"elements": []}}
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["metadata"]["order_type"] == "Take Out"
+
+
+def test_clover_order_type_resolved_from_lookup():
+    from src.clover.mappers import CloverDataMapper
+    # Order carries only the orderType id; the merchant /order_types lookup resolves it.
+    mapper = CloverDataMapper(org_id=ORG, order_type_lookup={"OT2": "Delivery"})
+    order = {"total": 1000, "state": "paid",
+             "orderType": {"id": "OT2"},
+             "payments": {"elements": []}}
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["metadata"]["order_type"] == "Delivery"
+
+
+def test_clover_no_order_type_omits_field():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {"total": 1000, "state": "paid", "payments": {"elements": []}}
+    txn = mapper.map_order_to_transaction(order)
+    assert "order_type" not in txn["metadata"]
+
+
+# ── Tender mapping via merchant /tenders config (labelKey is authoritative) ──
+
+def test_clover_tender_method_from_labelkey_lookup():
+    from src.clover.mappers import CloverDataMapper
+    # Payment carries ONLY the tender id; the merchant config resolves it via the
+    # canonical labelKey — more reliable than fuzzy-matching an inline label.
+    mapper = CloverDataMapper(
+        org_id=ORG,
+        tender_lookup={"TND1": {"label": "", "labelKey": "com.clover.tender.cash"}},
+    )
+    order = {"total": 500, "state": "paid",
+             "payments": {"elements": [{"tender": {"id": "TND1"}, "amount": 500}]}}
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["payment_method"] == "cash"
+
+
+def test_clover_custom_tender_label_from_lookup():
+    from src.clover.mappers import CloverDataMapper
+    # A custom tender has no labelKey — resolve its human label from the config.
+    mapper = CloverDataMapper(
+        org_id=ORG,
+        tender_lookup={"TND2": {"label": "Gift Card", "labelKey": ""}},
+    )
+    order = {"total": 500, "state": "paid",
+             "payments": {"elements": [{"tender": {"id": "TND2"}, "amount": 500}]}}
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["payment_method"] == "gift_card"
+
+
+def test_clover_tender_inline_label_still_works_without_lookup():
+    from src.clover.mappers import CloverDataMapper
+    # No lookup → fall back to the payment's inline tender label (unchanged behavior).
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {"total": 500, "state": "paid",
+             "payments": {"elements": [{"tender": {"label": "Credit Card"}, "amount": 500}]}}
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["payment_method"] == "card"
