@@ -298,11 +298,14 @@ async def connect_pos(
     connection_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    # Clover (like Square) is read by both sync paths from the dedicated
-    # access_token_enc column AND credentials_encrypted — mirror the token into
-    # both so the scheduler and the manual sync endpoint resolve it identically.
+    # Clover and Square are read by the incremental scheduler from the dedicated
+    # access_token_enc column (pos_sync_runner decrypts access_token_enc), while
+    # manual connect stores creds in credentials_encrypted — mirror the token
+    # into both so the scheduler resolves it identically to the OAuth path.
+    # Without this, a manually-keyed Square/Clover connection would sync the
+    # initial backfill but then silently stop (incremental decrypts "").
     token_column: dict = {}
-    if req.pos_system == "clover" and encrypted_creds.get("access_token"):
+    if req.pos_system in ("clover", "square") and encrypted_creds.get("access_token"):
         token_column["access_token_enc"] = encrypted_creds["access_token"]
 
     existing = await db.select(
@@ -322,6 +325,10 @@ async def connect_pos(
                 "status": "connected",
                 "credentials_encrypted": encrypted_creds,
                 "last_error": None,
+                # Reconnect kicks off a fresh backfill below, so the logical
+                # state is PENDING (connected + import-incomplete) until it
+                # finishes — not the prior connection's COMPLETE.
+                "historical_import_complete": False,
                 "updated_at": now,
                 **token_column,
             },
@@ -375,7 +382,20 @@ async def connect_pos(
             access_token=req.credentials.get("access_token", ""),
             merchant_id=(req.credentials.get("merchant_id", "") or req.restaurant_guid or ""),
         )
-    elif req.pos_system not in ("square", "clover"):
+    elif req.pos_system == "square":
+        # Square normally connects via OAuth (the callback dispatches this same
+        # run_backfill). A user-pasted access token lands here instead, so run
+        # the identical initial backfill so the lifecycle advances PENDING →
+        # COMPLETE (or → FAILED on a bad token) and the connection becomes
+        # eligible for incremental sync — rather than sitting PENDING forever.
+        from ...workers.backfill import run_backfill
+        background_tasks.add_task(
+            run_backfill,
+            access_token=req.credentials.get("access_token", ""),
+            org_id=req.org_id,
+            connection_id=connection_id,
+        )
+    else:
         api_config = get_connector_config(req.pos_system)
         if api_config and api_config.get("auth_type") != "csv_only":
             background_tasks.add_task(
@@ -425,6 +445,10 @@ async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict
                 "historical_import_complete": True,
                 "last_sync_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
+                # Clear any prior failure so a successful retry leaves COMPLETE,
+                # not a stale FAILED (status=error) state.
+                "status": "connected",
+                "last_error": None,
             },
             filters={"id": f"eq.{connection_id}"},
         )
@@ -524,6 +548,10 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
                 "historical_import_complete": True,
                 "last_sync_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
+                # Clear any prior failure so a successful retry leaves COMPLETE,
+                # not a stale FAILED (status=error) state.
+                "status": "connected",
+                "last_error": None,
             },
             filters={"id": f"eq.{connection_id}"},
         )
@@ -594,6 +622,10 @@ async def _run_generic_backfill(org_id: str, connection_id: str, pos_system: str
                 "historical_import_complete": True,
                 "last_sync_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
+                # Clear any prior failure so a successful retry leaves COMPLETE,
+                # not a stale FAILED (status=error) state.
+                "status": "connected",
+                "last_error": None,
             },
             filters={"id": f"eq.{connection_id}"},
         )
@@ -704,18 +736,42 @@ async def get_connections(org_id: str):
 
     result = []
     for conn in connections or []:
+        status = conn.get("status")
+        import_complete = conn.get("historical_import_complete", False)
         result.append({
             "id": conn["id"],
             "provider": conn.get("provider"),
-            "status": conn.get("status"),
+            "status": status,
+            # Derived lifecycle state for the frontend (additive — the raw
+            # status + historical_import_complete + last_error are unchanged):
+            #   failed   = status=='error'
+            #   complete = connected + import done
+            #   pending  = connected + import in progress
+            "state": _derive_connection_state(status, import_complete),
             "merchant_id": conn.get("external_merchant_id"),
             "last_sync_at": conn.get("last_sync_at"),
-            "historical_import_complete": conn.get("historical_import_complete", False),
+            "historical_import_complete": import_complete,
             "last_error": conn.get("last_error"),
             "created_at": conn.get("created_at"),
         })
 
     return {"connections": result}
+
+
+def _derive_connection_state(status: str | None, historical_import_complete: bool) -> str:
+    """Collapse (status, historical_import_complete) into a single lifecycle
+    state for the frontend. Additive helper — does not change stored data.
+
+      status=='error'                                  → 'failed'
+      status=='connected' and import complete          → 'complete'
+      status=='connected' and import incomplete        → 'pending'
+      status=='disconnected' (or anything else)        → returns the raw status
+    """
+    if status == "error":
+        return "failed"
+    if status == "connected":
+        return "complete" if historical_import_complete else "pending"
+    return status or "unknown"
 
 
 # ─── Disconnect ──────────────────────────────────────────────
@@ -917,6 +973,22 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             filters={"id": f"eq.{connection['id']}"},
         )
         logger.info(f"Incremental sync complete for {org_id}/{pos_system}: {result.summary}")
+
+        # ── Reconcile against Square (read-only, best-effort) ──
+        # Surface a sync gap in logs without failing the sync.
+        if pos_system == "square":
+            try:
+                from ...services.reconcile import reconcile_square
+                creds = connection.get("credentials_encrypted") or {}
+                token = decrypt_token(
+                    creds.get("access_token", "") or connection.get("access_token_enc", "")
+                )
+                from ...square.client import SquareClient
+                async with SquareClient(access_token=token) as rc_client:
+                    report = await reconcile_square(db, org_id, rc_client)
+                logger.info(f"Reconcile after sync for org={org_id}: {report}")
+            except Exception as e:
+                logger.warning(f"Reconcile after sync failed for org={org_id}: {e}")
 
     except Exception as e:
         logger.error(f"Incremental sync failed for {org_id}/{pos_system}: {e}", exc_info=True)

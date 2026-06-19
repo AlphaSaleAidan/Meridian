@@ -36,6 +36,7 @@ os.environ.pop("TENANCY_ENFORCEMENT_DISABLED", None)  # ensure enforcement ON
 import src.db as db_mod  # noqa: E402
 from src.api import auth  # noqa: E402
 from src.api.routes import oauth, clover_oauth  # noqa: E402
+from src.api.routes import pos_connections as pc_mod  # noqa: E402
 from src.api.routes.pos_connections import (  # noqa: E402
     connect_pos,
     disconnect_pos,
@@ -127,6 +128,51 @@ def test_connect_stores_connection_and_opens_gate(monkeypatch, provider):
     biz_upd = [v for (t, v, f) in db.updates if t == "businesses"]
     assert any(v.get("pos_connection_status") == "connected" for v in org_upd), org_upd
     assert any(v.get("pos_connected") is True for v in biz_upd), biz_upd
+
+
+# ── 2b. Manual key entry triggers the initial backfill + token mirror ────
+
+def test_manual_square_key_entry_dispatches_backfill_and_mirrors_token(monkeypatch):
+    """A user-pasted Square access token must run the SAME initial backfill the
+    OAuth callback uses (so the lifecycle advances PENDING→COMPLETE/FAILED), and
+    the token must be mirrored into access_token_enc so the incremental
+    scheduler (which decrypts access_token_enc) can keep syncing."""
+    _set_member(monkeypatch, True)
+
+    async def _no_http(_token):
+        return ({"business_name": "Acme"}, "restaurant")
+    monkeypatch.setattr(pc_mod, "_square_merchant_and_vertical", _no_http)
+
+    db = FakeDB()
+    db_mod._db_instance = db
+    bt = BackgroundTasks()
+    req = ConnectRequest(org_id=ORG, pos_system="square",
+                         credentials={"access_token": "sq-tok"})
+    out = _run(connect_pos(req, bt, user=USER))
+    assert out["success"] is True and out["syncing"] is True
+
+    # initial backfill scheduled (the real run_backfill, same as OAuth)
+    names = [getattr(t.func, "__name__", "") for t in bt.tasks]
+    assert "run_backfill" in names, names
+
+    # stored row starts PENDING and mirrors the token into access_token_enc
+    rows = [row for (t, row) in db.inserts if t == "pos_connections"]
+    assert rows, db.inserts
+    row = rows[0]
+    assert row["historical_import_complete"] is False
+    assert row.get("access_token_enc"), "square token must be mirrored to access_token_enc"
+
+
+def test_manual_clover_key_entry_dispatches_backfill(monkeypatch):
+    _set_member(monkeypatch, True)
+    db = FakeDB()
+    db_mod._db_instance = db
+    bt = BackgroundTasks()
+    req = ConnectRequest(org_id=ORG, pos_system="clover",
+                         credentials={"access_token": "cl-tok", "merchant_id": "M1"})
+    _run(connect_pos(req, bt, user=USER))
+    names = [getattr(t.func, "__name__", "") for t in bt.tasks]
+    assert "_run_clover_backfill" in names, names
 
 
 # ── 3. Disconnect teardown closes BOTH gate fields + clears token ────────

@@ -321,6 +321,58 @@ class SquareClient:
         resp = await self.get(f"/v2/payments/{payment_id}")
         return resp.get("payment", {})
 
+    # ─── Refunds ──────────────────────────────────────────────
+
+    async def list_refunds(
+        self,
+        begin_time: str | None = None,
+        end_time: str | None = None,
+        location_id: str | None = None,
+        cursor: str | None = None,
+        limit: int = 100,
+    ) -> tuple[list[dict], str | None]:
+        """List payment refunds with optional filters.
+
+        Each refund dict carries: id, amount_money{amount, currency},
+        created_at, location_id, status (e.g. COMPLETED). Returns
+        (refunds, next_cursor).
+        """
+        params: dict[str, Any] = {"limit": str(limit)}
+        if begin_time:
+            params["begin_time"] = begin_time
+        if end_time:
+            params["end_time"] = end_time
+        if location_id:
+            params["location_id"] = location_id
+        if cursor:
+            params["cursor"] = cursor
+
+        resp = await self.get("/v2/refunds", params=params)
+        return resp.get("refunds", []), resp.get("cursor")
+
+    async def list_all_refunds(
+        self,
+        begin_time: str | None = None,
+        end_time: str | None = None,
+        location_id: str | None = None,
+    ) -> list[dict]:
+        """Fetch all refunds in a window with automatic pagination."""
+        all_refunds: list[dict] = []
+        cursor = None
+
+        while True:
+            refunds, cursor = await self.list_refunds(
+                begin_time=begin_time,
+                end_time=end_time,
+                location_id=location_id,
+                cursor=cursor,
+            )
+            all_refunds.extend(refunds)
+            if not cursor:
+                break
+
+        return all_refunds
+
     # ─── Inventory ────────────────────────────────────────────
 
     async def batch_retrieve_inventory_counts(

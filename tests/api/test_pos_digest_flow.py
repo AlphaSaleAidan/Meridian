@@ -154,9 +154,12 @@ def test_square_split_payment_captures_all_tenders():
     assert txn["metadata"]["card_brand"] == "VISA"
 
 
-# ── Refunds: Square refunded_money captured so net revenue isn't overstated ──
+# ── Refunds: now emitted as type='refund' rows, NOT enrichment metadata ──
 
-def test_square_payment_enrichment_captures_refund():
+def test_square_payment_enrichment_no_longer_writes_refund_cents():
+    """Refunds moved to discrete type='refund' transaction rows (the single
+    source of truth daily_revenue reads). map_payment_enrichment must NOT also
+    write metadata.refund_cents, which would double-count net revenue."""
     from src.square.mappers import DataMapper
     mapper = DataMapper(org_id=ORG)
     enr = mapper.map_payment_enrichment({
@@ -164,15 +167,10 @@ def test_square_payment_enrichment_captures_refund():
         "refunded_money": {"amount": 4000, "currency": "USD"},
         "card_details": {"card": {"card_brand": "VISA", "last_4": "1234"}},
     })
-    assert enr["metadata_updates"]["refund_cents"] == 4000
-    assert enr["_order_id"] == "o1"
-
-
-def test_square_payment_enrichment_no_refund_omits_field():
-    from src.square.mappers import DataMapper
-    mapper = DataMapper(org_id=ORG)
-    enr = mapper.map_payment_enrichment({"order_id": "o2"})
     assert "refund_cents" not in enr.get("metadata_updates", {})
+    # Other enrichment (card metadata) still flows through.
+    assert enr["metadata_updates"]["card_brand"] == "VISA"
+    assert enr["_order_id"] == "o1"
 
 
 # ── Clover service charges + device: revenue + multi-register attribution ──
@@ -208,28 +206,42 @@ class _Result:
         self.transactions = txns
 
 
-def test_clover_refunds_folded_by_order(monkeypatch):
+def test_clover_refunds_appended_as_refund_rows(monkeypatch):
+    """_apply_refunds now APPENDS type='refund' rows (so daily_revenue, which
+    filters on type='refund', picks them up). It no longer writes
+    metadata.refund_cents on the sale transactions — the refund rows are the
+    single source of truth."""
     from src.clover import sync_engine as se
+    from src.clover.mappers import _stable_id, _clover_ts_to_iso
     eng = se.CloverSyncEngine(client=_FakeOrdersClient(), org_id=ORG, pos_connection_id="C1")
 
     async def fake_list_refunds(start_time=None, end_time=None, max_items=None):
         return [
-            {"orderRef": {"id": "ORD1"}, "amount": 4000},
-            {"orderRef": {"id": "ORD1"}, "amount": 500},   # 2nd partial refund, same order
-            {"orderRef": {"id": "ORD2"}, "amount": 1000},
-            {"amount": 999},                                # no orderRef → ignored
+            {"id": "RF1", "orderRef": {"id": "ORD1"}, "amount": 4000,
+             "taxAmount": 200, "tipAmount": 0, "createdTime": 1700000000000},
+            {"id": "RF2", "orderRef": {"id": "ORD2"}, "amount": 1000,
+             "createdTime": 1700000100000},
+            {"amount": 999},  # no refund id → skipped
         ]
     eng.client.list_refunds = fake_list_refunds
 
-    result = _Result([
-        {"external_id": "ORD1", "metadata": {"tenders": []}},
-        {"external_id": "ORD2"},                            # no metadata yet → created
-        {"external_id": "ORD3"},                            # no refund
-    ])
+    sale = {"external_id": "ORD1", "type": "sale", "metadata": {"tenders": []}}
+    result = _Result([sale])
     _run(eng._apply_refunds(result, None, None))
-    assert result.transactions[0]["metadata"]["refund_cents"] == 4500  # summed
-    assert result.transactions[1]["metadata"]["refund_cents"] == 1000
-    assert "refund_cents" not in result.transactions[2].get("metadata", {})
+
+    # The original sale row is untouched (no metadata.refund_cents).
+    assert "refund_cents" not in result.transactions[0].get("metadata", {})
+    # Two refund rows appended (the no-id one skipped).
+    refunds = [t for t in result.transactions if t.get("type") == "refund"]
+    assert len(refunds) == 2
+    rf1 = next(t for t in refunds if t["external_id"] == "RF1")
+    assert rf1["total_cents"] == 4000
+    assert rf1["tax_cents"] == 200
+    assert rf1["org_id"] == ORG
+    assert rf1["pos_connection_id"] == "C1"
+    # Deterministic id keyed on the refund id (re-sync upserts the same row).
+    assert rf1["id"] == _stable_id(ORG, "clover", "refund:RF1")
+    assert rf1["transaction_at"] == _clover_ts_to_iso(1700000000000)
 
 
 def test_clover_refund_fetch_failure_is_nonfatal(monkeypatch):
@@ -240,9 +252,11 @@ def test_clover_refund_fetch_failure_is_nonfatal(monkeypatch):
         raise RuntimeError("clover 500")
     eng.client.list_refunds = boom
 
-    result = _Result([{"external_id": "ORD1"}])
+    result = _Result([{"external_id": "ORD1", "type": "sale"}])
     _run(eng._apply_refunds(result, None, None))  # must not raise
     assert "refund_cents" not in result.transactions[0].get("metadata", {})
+    # No refund rows appended on a fetch failure.
+    assert [t for t in result.transactions if t.get("type") == "refund"] == []
 
 
 # ── Row identity: deterministic + distinct so upserts don't dup or clobber ──
@@ -272,7 +286,8 @@ def test_square_ids_deterministic_and_distinct():
             {"uid": "u2", "name": "B", "quantity": "1", "base_price_money": {"amount": 500}, "total_money": {"amount": 500}},
         ],
     }
-    t1 = m.map_transaction(order); t2 = m.map_transaction(order)
+    t1 = m.map_transaction(order)
+    t2 = m.map_transaction(order)
     assert t1["id"] == t2["id"]                                   # re-sync idempotent
     r1 = m.map_transaction_items(order, t1["id"], t1["transaction_at"])
     r2 = m.map_transaction_items(order, t2["id"], t2["transaction_at"])
@@ -299,7 +314,8 @@ def test_transaction_items_conflict_key_unified():
     """Every transaction_items upsert (backfill, incremental, webhook) must key
     on (id,transaction_at). A split key (some on org_id,external_id) could
     double-write a line item. Pins the unification."""
-    import inspect, re
+    import inspect
+    import re
     from src.api.routes import pos_connections, webhooks
     for mod in (pos_connections, webhooks):
         src = inspect.getsource(mod)
