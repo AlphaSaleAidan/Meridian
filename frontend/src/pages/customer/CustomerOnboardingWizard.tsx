@@ -9,6 +9,7 @@ import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSelectorPanel from '@/components/POSSelectorPanel'
+import { usePosStatusPoll } from '@/hooks/usePosStatusPoll'
 import type { POSSystem } from '@/data/pos-systems'
 
 type Step = 'account' | 'pos' | 'inventory' | 'staff' | 'schedule' | 'checkout' | 'processing' | 'done'
@@ -111,6 +112,14 @@ export default function CustomerOnboardingWizard() {
   // POS
   const [posProvider, setPosProvider] = useState<string | null>(null)
   const [posFields, setPosFields] = useState<Record<string, string>>({})
+  // One-click OAuth return state. After "Connect with Square/Clover" the page
+  // redirects to the provider and back to /onboard?oauth=success; we then poll
+  // /status (across providers) to confirm the connection before continuing.
+  const orgId = org?.org_id
+  const [oauthSyncing, setOauthSyncing] = useState(false)
+  const [oauthConnected, setOauthConnected] = useState(false)
+  const [oauthError, setOauthError] = useState<string | null>(null)
+  const posConn = usePosStatusPoll(orgId, oauthSyncing)
 
   // Inventory
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -220,6 +229,36 @@ export default function CustomerOnboardingWizard() {
       setStep('checkout')
     }
   }, [searchParams])
+
+  // ── One-click OAuth return ──
+  // "Connect with Square/Clover" redirects to the provider and back to
+  // /onboard?oauth=success|error. Resume on the POS step and confirm via /status.
+  useEffect(() => {
+    const oauth = searchParams.get('oauth')
+    if (!oauth) return
+    // Clear the param so a refresh doesn't re-trigger this.
+    const cleaned = new URLSearchParams(searchParams)
+    cleaned.delete('oauth'); cleaned.delete('merchant_id'); cleaned.delete('error'); cleaned.delete('warning')
+    window.history.replaceState({}, '', `${window.location.pathname}${cleaned.toString() ? '?' + cleaned.toString() : ''}`)
+    if (oauth === 'success') {
+      setStep('pos'); setError(null); setOauthError(null); setOauthConnected(false); setOauthSyncing(true)
+    } else if (oauth === 'denied' || oauth === 'error') {
+      setStep('pos')
+      setOauthError(searchParams.get('error') || 'POS authorization didn\'t complete. You can try again.')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // When polling confirms a live connection, stop the spinner and let the user
+  // continue. The historical backfill keeps running server-side.
+  useEffect(() => {
+    if (!posConn) return
+    setPosProvider(posConn.provider)
+    setOauthSyncing(false)
+    setOauthConnected(true)
+    saveProgress('inventory')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posConn])
 
   function updateAccount(key: string, value: string) {
     setAccount(a => ({ ...a, [key]: value }))
@@ -741,6 +780,22 @@ export default function CustomerOnboardingWizard() {
               <p className="text-[13px] text-[#A1A1A8] mt-1">We'll pull in your transaction history to start generating insights</p>
             </div>
 
+            {oauthError && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[12px] text-red-400">
+                {oauthError}
+              </div>
+            )}
+            {oauthSyncing && !oauthConnected && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 text-[12px] text-[#1A8FD6]">
+                <Loader2 size={14} className="animate-spin" /> Confirming your POS connection…
+              </div>
+            )}
+            {oauthConnected && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[12px] text-[#17C5B0]">
+                <CheckCircle2 size={14} /> Connected{posProvider ? ` to ${posProvider}` : ''} — historical sync is running in the background. Continue setup.
+              </div>
+            )}
+
             <POSSelectorPanel
               onSelect={(system: POSSystem) => {
                 setPosProvider(system.key)
@@ -756,7 +811,9 @@ export default function CustomerOnboardingWizard() {
               <button onClick={() => setStep('account')} className="flex items-center gap-2 px-4 py-2.5 text-[13px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">
                 <ArrowLeft size={14} /> Back
               </button>
-              <button onClick={handlePosNext} disabled={saving || !posProvider}
+              <button
+                onClick={oauthConnected ? () => { saveProgress('inventory'); setStep('inventory') } : handlePosNext}
+                disabled={saving || (!oauthConnected && !posProvider)}
                 className="flex items-center gap-2 px-6 py-2.5 text-[13px] font-medium text-white bg-[#1A8FD6] rounded-lg hover:bg-[#1574B8] disabled:opacity-50 transition-colors">
                 {saving ? <Loader2 size={14} className="animate-spin" /> : null}
                 {saving ? 'Connecting...' : 'Next: Inventory'} <ArrowRight size={14} />
