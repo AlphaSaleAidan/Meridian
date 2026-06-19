@@ -107,6 +107,21 @@ class CloverConfig:
     def oauth_authorize_url(self) -> str:
         return f"{self.base_url}/oauth/authorize"
 
+    # v2/OAuth expiring-token endpoints. Production lives on the regional web host
+    # (e.g. www.clover.com); sandbox lives on the API host (apisandbox.dev.clover.com),
+    # NOT the sandbox web host. https://docs.clover.com/dev/docs/use-oauth
+    @property
+    def _oauth_v2_host(self) -> str:
+        return self.base_url if self.environment == "production" else self.api_base_url
+
+    @property
+    def oauth_v2_token_url(self) -> str:
+        return f"{self._oauth_v2_host}/oauth/v2/token"
+
+    @property
+    def oauth_v2_refresh_url(self) -> str:
+        return f"{self._oauth_v2_host}/oauth/v2/refresh"
+
     @property
     def redirect_uri(self) -> str:
         return os.getenv(

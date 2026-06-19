@@ -13,7 +13,7 @@ Clover API differences from Square:
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import httpx
@@ -22,6 +22,33 @@ from ..config import clover as cl_config, retry as retry_config
 from .rate_limiter import CloverRateLimiter, standard_limiter
 
 logger = logging.getLogger("meridian.clover.client")
+
+# Clover silently caps every time-filtered query to the most recent 90 days: a
+# wider requested range is auto-adjusted to the latest 90 days, so anything older
+# is dropped without error. We window long ranges into <=90-day slices and
+# concatenate. https://docs.clover.com/dev/docs/applying-filters
+CLOVER_MAX_WINDOW_DAYS = 90
+
+
+def _time_windows(
+    start: datetime | None,
+    end: datetime | None,
+    max_days: int = CLOVER_MAX_WINDOW_DAYS,
+):
+    """Yield (win_start, win_end) sub-ranges each no longer than max_days.
+
+    If either bound is missing there's no finite range to slice, so yield the
+    pair unchanged (the single-bound or unbounded query is valid as-is).
+    """
+    if start is None or end is None or start >= end:
+        yield (start, end)
+        return
+    cur = start
+    step = timedelta(days=max_days)
+    while cur < end:
+        nxt = min(cur + step, end)
+        yield (cur, nxt)
+        cur = nxt
 
 
 class CloverAPIError(Exception):
@@ -217,6 +244,43 @@ class CloverClient:
 
         return all_items
 
+    async def _list_time_filtered(
+        self,
+        path: str,
+        time_field: str,
+        start_time: datetime | None,
+        end_time: datetime | None,
+        extra_params: dict | None = None,
+        max_items: int | None = None,
+    ) -> list[dict]:
+        """Paginate a time-filtered list endpoint, windowed to Clover's 90-day cap.
+
+        Filters are emitted as REPEATED ``filter=`` query params (Clover's
+        documented syntax: ``?filter=a>=X&filter=a<=Y``). Passing the list to
+        httpx serializes it as separate params; joining into one value would let
+        httpx URL-encode the ``&`` and Clover would see a single malformed filter.
+        """
+        results: list[dict] = []
+        for win_start, win_end in _time_windows(start_time, end_time):
+            if max_items is not None and len(results) >= max_items:
+                break
+            params: dict[str, Any] = dict(extra_params or {})
+            filters: list[str] = []
+            if win_start is not None:
+                filters.append(f"{time_field}>={int(win_start.timestamp() * 1000)}")
+            if win_end is not None:
+                filters.append(f"{time_field}<={int(win_end.timestamp() * 1000)}")
+            if filters:
+                params["filter"] = filters  # repeated filter= params (NOT &-joined)
+            remaining = None if max_items is None else max_items - len(results)
+            page = await self._paginate(
+                path, "elements", params=params, max_items=remaining
+            )
+            results.extend(page)
+        if max_items is not None:
+            results = results[:max_items]
+        return results
+
     # ─── Merchant Info ────────────────────────────────────────
 
     async def get_merchant(self) -> dict:
@@ -273,28 +337,15 @@ class CloverClient:
         """
         List orders within a time range.
 
-        Clover orders use clientCreatedTime (milliseconds since epoch).
+        Clover orders use clientCreatedTime (milliseconds since epoch). Ranges
+        wider than 90 days are windowed automatically (Clover's cap).
         """
-        params: dict[str, Any] = {"expand": expand}
-        filters = []
-
-        if start_time:
-            ts_ms = int(start_time.timestamp() * 1000)
-            filters.append(f"clientCreatedTime>={ts_ms}")
-
-        if end_time:
-            ts_ms = int(end_time.timestamp() * 1000)
-            filters.append(f"clientCreatedTime<={ts_ms}")
-
-        if filters:
-            params["filter"] = "&".join(filters)
-        
-        params["orderBy"] = "clientCreatedTime DESC"
-
-        return await self._paginate(
+        return await self._list_time_filtered(
             "/orders",
-            "elements",
-            params=params,
+            "clientCreatedTime",
+            start_time,
+            end_time,
+            extra_params={"expand": expand, "orderBy": "clientCreatedTime DESC"},
             max_items=max_items,
         )
 
@@ -310,18 +361,16 @@ class CloverClient:
     ) -> list[dict]:
         """List refunds in a time range. Each refund carries orderRef.id + amount.
 
-        NOTE: Clover caps this endpoint to the most recent 90 days regardless of
-        the requested range (it auto-adjusts older windows).
+        Clover caps this endpoint to the most recent 90 days per query, so wide
+        ranges are windowed into <=90-day slices and concatenated.
         """
-        params: dict[str, Any] = {}
-        filters = []
-        if start_time:
-            filters.append(f"createdTime>={int(start_time.timestamp() * 1000)}")
-        if end_time:
-            filters.append(f"createdTime<={int(end_time.timestamp() * 1000)}")
-        if filters:
-            params["filter"] = "&".join(filters)
-        return await self._paginate("/refunds", "elements", params=params, max_items=max_items)
+        return await self._list_time_filtered(
+            "/refunds",
+            "createdTime",
+            start_time,
+            end_time,
+            max_items=max_items,
+        )
 
     # ─── Payments ─────────────────────────────────────────────
 
@@ -331,22 +380,14 @@ class CloverClient:
         end_time: datetime | None = None,
         max_items: int | None = None,
     ) -> list[dict]:
-        """List payments within a time range."""
-        params: dict[str, Any] = {}
-        filters = []
-
-        if start_time:
-            ts_ms = int(start_time.timestamp() * 1000)
-            filters.append(f"createdTime>={ts_ms}")
-
-        if end_time:
-            ts_ms = int(end_time.timestamp() * 1000)
-            filters.append(f"createdTime<={ts_ms}")
-
-        if filters:
-            params["filter"] = "&".join(filters)
-
-        return await self._paginate("/payments", "elements", params=params, max_items=max_items)
+        """List payments within a time range (windowed to Clover's 90-day cap)."""
+        return await self._list_time_filtered(
+            "/payments",
+            "createdTime",
+            start_time,
+            end_time,
+            max_items=max_items,
+        )
 
     # ─── Employees ────────────────────────────────────────────
 
