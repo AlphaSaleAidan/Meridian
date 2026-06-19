@@ -212,9 +212,12 @@ class CloverDataMapper:
         employee_id = cl_order.get("employee", {}).get("id", "")
         employee_name = self.employee_cache.get(employee_id, "")
 
+        # Clover order.total = subtotal(after discounts) + tax + service charges
+        # (tips are NOT in total). So subtotal = total - tax - service_charge.
         total = cl_order.get("total", 0) or 0
         tax = self._sum_tax(cl_order)
         discount = self._sum_discounts(cl_order)
+        service_charge = self._sum_service_charges(cl_order)
 
         # Payment method from payments
         payments = cl_order.get("payments", {}).get("elements", [])
@@ -228,7 +231,6 @@ class CloverDataMapper:
         # lost; service-charge revenue that's otherwise invisible; the device
         # that rang the order so multi-register merchants are attributable.
         metadata: dict[str, Any] = {"tenders": self._map_tenders(payments)}
-        service_charge = self._sum_service_charges(cl_order)
         if service_charge:
             metadata["service_charge_cents"] = service_charge
         device_id = (cl_order.get("device") or {}).get("id")
@@ -248,7 +250,7 @@ class CloverDataMapper:
             # type (NOT status): canonical column, matches the Square mapper.
             "type": txn_type,
             "total_cents": total,
-            "subtotal_cents": total - tax,
+            "subtotal_cents": total - tax - service_charge,
             "tax_cents": tax,
             "discount_cents": abs(discount),
             "tip_cents": self._sum_tips(payments),
@@ -289,7 +291,10 @@ class CloverDataMapper:
             "unit_price_cents": price,
             "total_cents": int(price * qty),
             "discount_cents": abs(self._line_item_discount(cl_line_item)),
-            "is_refund": cl_line_item.get("isRevenue", True) is False,
+            # Clover marks a refunded line with the `refunded` boolean. `isRevenue`
+            # is a DIFFERENT concept (non-revenue items: fees, comps, gift-card
+            # sales) and must not be conflated with a refund.
+            "is_refund": bool(cl_line_item.get("refunded", False)),
             # transaction_at (NOT transaction_time): matches the Square line-item
             # mapper, the transaction_items column, and the upsert's
             # on_conflict="id,transaction_at" in _run_clover_backfill.
@@ -379,12 +384,3 @@ class CloverDataMapper:
             for p in payments
         ]
 
-    def _map_order_state(self, state: str) -> str:
-        """Map Clover order state to Meridian status."""
-        state_map = {
-            "open": "pending",
-            "locked": "completed",
-            "paid": "completed",
-            "": "completed",  # Default for orders without state
-        }
-        return state_map.get(state.lower(), "completed")

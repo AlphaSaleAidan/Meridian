@@ -331,7 +331,10 @@ class CloverClient:
         self,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        expand: str = "lineItems,payments,serviceCharges,device",
+        # Nested expansion is REQUIRED for tax: line-item taxRates/discounts are
+        # not populated unless dotted-path expanded (Clover caps ~3-4/call, so we
+        # keep the 4 that feed revenue + breakdowns and drop `device`).
+        expand: str = "lineItems.taxRates,payments,discounts,serviceCharges",
         max_items: int | None = None,
     ) -> list[dict]:
         """
@@ -349,8 +352,13 @@ class CloverClient:
             max_items=max_items,
         )
 
-    async def get_order(self, order_id: str, expand: str = "lineItems,payments,serviceCharges,device") -> dict:
-        """Get a single order with line items, payments, service charges, device."""
+    async def get_order(
+        self,
+        order_id: str,
+        expand: str = "lineItems.taxRates,payments,discounts,serviceCharges",
+    ) -> dict:
+        """Get a single order with line items (+ taxRates), payments, discounts,
+        service charges."""
         return await self._get(f"/orders/{order_id}", params={"expand": expand})
 
     async def list_refunds(
