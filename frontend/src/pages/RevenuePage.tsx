@@ -14,13 +14,14 @@ import TransactionDrillDown from '@/components/TransactionDrillDown'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import DataPageSkeleton from '@/components/DataPageSkeleton'
 import { useAuth } from '@/lib/auth'
+import { HistoricalRevenueSection, OpenOrdersSection } from '@/components/SalesHistorySections'
 
 const Revenue3D = lazy(() => import('@/components/Revenue3D'))
 
 const periods = [
-  { label: '7D', days: 7 },
   { label: '30D', days: 30 },
   { label: '90D', days: 90 },
+  { label: '1Y', days: 365 },
 ]
 
 const tooltipStyle = {
@@ -33,7 +34,7 @@ const tooltipStyle = {
 }
 
 export default function RevenuePage() {
-  const [days, setDays] = useState(30)
+  const [days, setDays] = useState(365)
   const [drillDate, setDrillDate] = useState<string | null>(null)
   const [view3D, setView3D] = useState(false)
   const orgId = useOrgId()
@@ -160,6 +161,12 @@ export default function RevenuePage() {
           </DashboardTiltCard>
         </StaggerItem>
       </StaggerContainer>
+
+      {/* Historical revenue (prior-year) */}
+      <HistoricalRevenueSection />
+
+      {/* Open orders / quotes pipeline */}
+      <OpenOrdersSection />
 
       {/* Revenue Chart */}
       <ScrollReveal variant="fadeUp" delay={0.1}>

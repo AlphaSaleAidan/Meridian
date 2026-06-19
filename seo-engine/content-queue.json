@@ -1,0 +1,45 @@
+{
+  "_comment": "Ledger of SEO content the engine has produced. The daily report reads this. status: drafted (awaiting human review) | approved | published | rejected. Nothing is 'published' until a human approves and it ships to the live build.",
+  "items": [
+    {
+      "slug": "pipeda-compliance-small-business",
+      "title": "PIPEDA Compliance for Canadian Small Businesses",
+      "type": "guide",
+      "status": "drafted",
+      "draftedAt": "2026-06-19",
+      "publishedAt": null,
+      "url": "https://meridian.tips/guides/pipeda-compliance-small-business",
+      "branch": "feat/canada-compliance-seo"
+    },
+    {
+      "slug": "quebec-law-25-small-business",
+      "title": "Quebec Law 25 for Small Businesses",
+      "type": "guide",
+      "status": "drafted",
+      "draftedAt": "2026-06-19",
+      "publishedAt": null,
+      "url": "https://meridian.tips/guides/quebec-law-25-small-business",
+      "branch": "feat/canada-compliance-seo"
+    },
+    {
+      "slug": "pos-data-residency-canada",
+      "title": "Where Does Your POS Data Live? Canadian Data Residency Explained",
+      "type": "guide",
+      "status": "drafted",
+      "draftedAt": "2026-06-19",
+      "publishedAt": null,
+      "url": "https://meridian.tips/guides/pos-data-residency-canada",
+      "branch": "feat/canada-compliance-seo"
+    },
+    {
+      "slug": "meridian-compliance-first-canada",
+      "title": "Why We Built Meridian Compliance-First for Canada",
+      "type": "guide",
+      "status": "drafted",
+      "draftedAt": "2026-06-19",
+      "publishedAt": null,
+      "url": "https://meridian.tips/guides/meridian-compliance-first-canada",
+      "branch": "feat/canada-compliance-seo"
+    }
+  ]
+}

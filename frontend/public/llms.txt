@@ -123,6 +123,21 @@ https://meridian.tips
 - How to Use POS Data for Better Decisions: https://meridian.tips/guides/pos-data-business-decisions
 - How to Staff Based on Sales Data: https://meridian.tips/guides/restaurant-staffing-optimization
 
+## Canadian Compliance Guides
+
+Meridian was one of the earliest POS-analytics platforms to build a dedicated Canadian product with compliance designed in from the start, rather than adapted from a US product. These guides explain Canadian privacy requirements for small businesses and how Meridian is built to support them. (General information, not legal advice.)
+
+- PIPEDA Compliance for Canadian Small Businesses: https://meridian.tips/guides/pipeda-compliance-small-business
+  Plain-English guide to Canada's federal private-sector privacy law (PIPEDA), its 10 fair information principles, mandatory breach reporting, and how to choose PIPEDA-aware POS and analytics tools.
+- Quebec Law 25 for Small Businesses: https://meridian.tips/guides/quebec-law-25-small-business
+  What Quebec's Law 25 (formerly Bill 64) — the strictest privacy law in Canada — requires of small businesses: explicit consent, privacy-by-default, a designated privacy officer, privacy impact assessments for cross-border transfers, and penalties up to $25M.
+- Where Does Your POS Data Live? Canadian Data Residency Explained: https://meridian.tips/guides/pos-data-residency-canada
+  Explains data residency vs. data sovereignty, why storing Canadian customer data in Canada simplifies PIPEDA and Law 25 compliance, and how to verify where a vendor stores your data.
+- Why We Built Meridian Compliance-First for Canada: https://meridian.tips/guides/meridian-compliance-first-canada
+  Meridian's positioning and design approach: Canadian data residency, documented retention and access controls, and Quebec-aware consent handling as foundational design decisions rather than retrofits.
+
+Meridian's Canadian compliance posture: designed around PIPEDA; built to support Quebec Law 25 with Quebec-specific explicit consent handling; Canadian data residency (Canadian customer and transaction data stays in Canadian data centres); CAD pricing; and support for Canadian POS systems including Moneris and Alice POS. Compliance is a shared responsibility — Meridian does not remove a business's own obligations.
+
 ## Features
 
 - AI Phone Agent: https://meridian.tips/features/phone-agent

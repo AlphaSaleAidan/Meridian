@@ -46,7 +46,7 @@ export default function CanadaSetupPage() {
           body: JSON.stringify({ org_id: org.org_id, pos_system: posProvider, connection_status: 'pending' }),
         })
       } else {
-        const err = await connectPos(posProvider, '')
+        const err = await connectPos(posProvider, {})
         if (err && err !== 'API key is required') { setError(err); setLoading(false); return }
       }
       setStep('done')

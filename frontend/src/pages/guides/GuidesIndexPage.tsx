@@ -16,6 +16,10 @@ const categories = [
     title: 'Operations & Forecasting',
     slugs: ['forecast-restaurant-sales', 'pos-data-business-decisions', 'restaurant-staffing-optimization'],
   },
+  {
+    title: 'Canadian Compliance & Privacy',
+    slugs: ['pipeda-compliance-small-business', 'quebec-law-25-small-business', 'pos-data-residency-canada', 'meridian-compliance-first-canada'],
+  },
 ]
 
 const jsonLd = {

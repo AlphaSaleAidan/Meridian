@@ -284,8 +284,11 @@ export default function USCustomerOnboardingWizard() {
           body: JSON.stringify({ org_id: orgId, pos_system: posProvider, connection_status: 'pending' }),
         })
       } else {
-        const err = await connectPos(posProvider, '')
-        if (err && err !== 'API key is required') { setError(err); setSaving(false); return }
+        // P1: connectPos signature changed to credentials object. Pass
+        // {} for the selection-only path (credential collection lives
+        // in a later step / the rep-facing portal).
+        const err = await connectPos(posProvider, {})
+        if (err) { setError(err); setSaving(false); return }
       }
       setStep('inventory')
     } catch (err: any) { setError(err.message || 'Connection failed') }
@@ -362,10 +365,11 @@ export default function USCustomerOnboardingWizard() {
     setSaving(true)
     try {
       if (inventoryItems.length > 0) {
+        // products has no category/cost_per_unit/supplier/unit columns — writing
+        // them 400s the whole step. Map cost (dollars) → cost_cents (int).
         const rows = inventoryItems.filter(item => item.name.trim()).map(item => ({
-          org_id: org.org_id, name: item.name, category: item.category || null,
-          cost_per_unit: item.costPerUnit ? parseFloat(item.costPerUnit) : null,
-          supplier: item.supplier || null, unit: item.unit || 'each',
+          org_id: org.org_id, name: item.name, is_active: true,
+          cost_cents: item.costPerUnit ? Math.round(parseFloat(item.costPerUnit) * 100) : null,
         }))
         if (rows.length > 0) await supabase.from('products').upsert(rows, { onConflict: 'org_id,name' })
       }

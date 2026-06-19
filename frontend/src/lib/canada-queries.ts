@@ -64,6 +64,12 @@ export function useCanadaLeads(repId: string | undefined) {
     queryFn: () => canadaLeadsService.list(repId),
     // Seed from the service's module-level cache so first paint is instant.
     initialData: () => canadaLeadsService.cached(repId) ?? undefined,
+    // Gate on a real rep_id. The cold-login path mounts the dashboard
+    // briefly with rep === null before the navigate-driven re-render
+    // commits the rep; without this gate the first fetch fires against
+    // `__all__`, hits RLS / returns empty, and `refetchOnMount: false`
+    // means the recovered rep_id key never refetches until a refresh.
+    enabled: !!repId,
   })
 }
 
@@ -132,6 +138,11 @@ export function useDeleteCanadaLead() {
 export function useCanadaLeadsRealtime(repId: string | undefined) {
   const qc = useQueryClient()
   useEffect(() => {
+    // Mirror the `enabled` gate on useCanadaLeads. Without this, a
+    // brief rep-undefined render at cold login opens a websocket with
+    // no rep filter; harmless after the unique-channel-name fix but
+    // still wasted work.
+    if (!repId) return
     const channel = canadaLeadsService.subscribe(repId, (deals) => {
       qc.setQueryData(canadaKeys.leads(repId), deals)
     })

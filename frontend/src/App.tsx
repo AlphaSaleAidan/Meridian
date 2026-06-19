@@ -11,6 +11,8 @@ import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
 import { merchantPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
+import CookieConsentBanner from '@/components/compliance/CookieConsentBanner'
+import { loadGA4, CONSENT_EVENT } from '@/lib/analytics'
 
 const CustomerLoginPage = lazyRetry(() => import('@/pages/customer/CustomerLoginPage'))
 const CustomerSignupPage = lazyRetry(() => import('@/pages/customer/CustomerSignupPage'))
@@ -234,6 +236,14 @@ function useLenis() {
 
 export default function App() {
   useLenis()
+  useEffect(() => {
+    // Load GA4 if the visitor already consented (returning visitor), and whenever
+    // consent is granted this session. No-op until VITE_GA4_ID is set + consent === 'all'.
+    loadGA4()
+    const onConsent = () => loadGA4()
+    window.addEventListener(CONSENT_EVENT, onConsent)
+    return () => window.removeEventListener(CONSENT_EVENT, onConsent)
+  }, [])
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -559,6 +569,7 @@ export default function App() {
               {/* Catch-all → landing page */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
+            <CookieConsentBanner />
           </Suspense>
           </ToastProvider>
         </SalesAuthProvider>
