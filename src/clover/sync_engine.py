@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .client import CloverClient
-from .mappers import CloverDataMapper
+from .mappers import CloverDataMapper, _clover_ts_to_iso, _stable_id
 from ..integrations.base.models import SyncProgress, SyncResult
 
 logger = logging.getLogger("meridian.clover.sync_engine")
@@ -313,11 +313,17 @@ class CloverSyncEngine:
         return result
 
     async def _apply_refunds(self, result, start_time, end_time) -> None:
-        """Fold refund amounts into each matching transaction's
-        metadata.refund_cents, so a refunded order's net revenue isn't
-        overstated. Clover's refund object carries orderRef.id directly, so the
-        link to the transaction (by external_id) needs no extra fetch.
-        Best-effort: a refund-fetch failure must never fail the sync.
+        """Append each Clover refund as its own ``type='refund'`` transaction row.
+
+        The ``daily_revenue`` materialized view computes its refund total from
+        rows where ``type='refund'`` (it does NOT read ``metadata.refund_cents``),
+        so the only way refunds reach revenue is as discrete refund rows. Each
+        refund becomes one row keyed by the refund's own id — the refund rows are
+        the single source of truth, so we no longer touch ``metadata.refund_cents``
+        on the sale transactions.
+
+        A refund row has no line items; that's expected. Best-effort: a
+        refund-fetch failure must never fail the sync.
         """
         try:
             refunds = await self.client.list_refunds(start_time=start_time, end_time=end_time)
@@ -325,18 +331,26 @@ class CloverSyncEngine:
             logger.warning(f"Clover refund fetch failed (non-fatal): {e}")
             return
 
-        by_order: dict[str, int] = {}
+        appended = 0
         for r in refunds:
-            oid = (r.get("orderRef") or {}).get("id")
-            if oid:
-                by_order[oid] = by_order.get(oid, 0) + (r.get("amount", 0) or 0)
-        if not by_order:
-            return
-
-        applied = 0
-        for txn in result.transactions:
-            refund_cents = by_order.get(txn.get("external_id"))
-            if refund_cents:
-                txn.setdefault("metadata", {})["refund_cents"] = refund_cents
-                applied += 1
-        logger.info(f"Clover refunds applied to {applied} transactions")
+            refund_id = r.get("id")
+            if not refund_id:
+                continue
+            # createdTime is Clover ms; fall back to clientCreatedTime if absent.
+            ts_ms = r.get("createdTime") or r.get("clientCreatedTime")
+            result.transactions.append({
+                "id": _stable_id(self.org_id, "clover", f"refund:{refund_id}"),
+                "org_id": self.org_id,
+                "location_id": getattr(self, "location_id", None),
+                "pos_connection_id": self.pos_connection_id,
+                "provider": "clover",  # transient routing hint — stripped before write
+                "external_id": refund_id,
+                "type": "refund",
+                "total_cents": r.get("amount", 0) or 0,
+                "tax_cents": r.get("taxAmount", 0) or 0,
+                "tip_cents": r.get("tipAmount", 0) or 0,
+                "transaction_at": _clover_ts_to_iso(ts_ms),
+                "metadata": {"clover_refund_id": refund_id},
+            })
+            appended += 1
+        logger.info(f"Clover refunds appended as {appended} refund transaction rows")

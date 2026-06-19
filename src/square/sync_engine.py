@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from .client import SquareClient
-from .mappers import DataMapper
+from .mappers import DataMapper, _stable_id
 from ..integrations.base.models import SyncProgress, SyncResult
 
 logger = logging.getLogger("meridian.square.sync_engine")
@@ -69,7 +69,12 @@ class SyncEngine:
           5. Inventory snapshots (5-15 sec)
         """
         result = SyncResult()
-        
+
+        # Backfill window start (18 months) — shared by orders + refunds.
+        start_date_iso = (
+            datetime.now(timezone.utc) - timedelta(days=30 * 18)
+        ).isoformat()
+
         try:
             # ── Phase 1: Locations ────────────────────────────
             self._update_progress("locations", "Pulling merchant locations...", 0)
@@ -99,6 +104,16 @@ class SyncEngine:
                 f"Synced {len(result.transactions)} transactions, "
                 f"{len(result.transaction_items)} line items",
                 90,
+            )
+
+            # ── Phase 4b: Refunds ─────────────────────────────
+            # Appended as type='refund' rows so daily_revenue (which filters on
+            # type='refund') picks them up. Best-effort: never fail the backfill.
+            await self._apply_refunds(
+                result,
+                location_ids=location_ids,
+                begin_time=start_date_iso,
+                location_lookup=self._mapper.location_lookup,
             )
 
             # ── Phase 5: Inventory ────────────────────────────
@@ -194,11 +209,19 @@ class SyncEngine:
             for order in orders:
                 txn = mapper.map_transaction(order)
                 result.transactions.append(txn)
-                
+
                 items = mapper.map_transaction_items(
                     order, txn["id"], txn["transaction_at"]
                 )
                 result.transaction_items.extend(items)
+
+            # Refunds since the same window → type='refund' rows for revenue.
+            await self._apply_refunds(
+                result,
+                location_ids=location_ids,
+                begin_time=since_str,
+                location_lookup=location_lookup,
+            )
 
             result.completed_at = datetime.now(timezone.utc)
             logger.info(
@@ -364,6 +387,58 @@ class SyncEngine:
         except Exception as e:
             logger.warning(f"Inventory sync failed (non-critical): {e}")
             result.errors.append(f"Inventory sync: {str(e)}")
+
+    # ─── Refunds ──────────────────────────────────────────────
+
+    async def _apply_refunds(
+        self,
+        result: SyncResult,
+        location_ids: list[str] | None = None,
+        begin_time: str | None = None,
+        location_lookup: dict[str, str] | None = None,
+    ) -> None:
+        """Append each COMPLETED Square refund as its own ``type='refund'`` row.
+
+        The ``daily_revenue`` materialized view sums ``total_cents`` where
+        ``type='refund'`` (it ignores any ``metadata.refund_cents``), so refunds
+        only reach revenue as discrete refund rows. Each refund becomes one row
+        keyed by the refund's own id. A refund row has no line items.
+
+        Best-effort: a refund-fetch failure must never fail the sync.
+        """
+        location_lookup = location_lookup or {}
+        try:
+            refunds = await self.client.list_all_refunds(begin_time=begin_time)
+        except Exception as e:
+            logger.warning(f"Square refund fetch failed (non-fatal): {e}")
+            result.errors.append(f"Refund sync: {str(e)}")
+            return
+
+        appended = 0
+        for refund in refunds:
+            # Only COMPLETED refunds represent money actually returned.
+            if refund.get("status") != "COMPLETED":
+                continue
+            refund_id = refund.get("id")
+            if not refund_id:
+                continue
+            amount = (refund.get("amount_money") or {}).get("amount", 0) or 0
+            sq_location_id = refund.get("location_id")
+            location_id = location_lookup.get(sq_location_id) if sq_location_id else None
+            result.transactions.append({
+                "id": _stable_id(self.org_id, "square", f"refund:{refund_id}"),
+                "org_id": self.org_id,
+                "location_id": location_id,
+                "pos_connection_id": self.pos_connection_id,
+                "provider": "square",  # transient routing hint — stripped before write
+                "external_id": refund_id,
+                "type": "refund",
+                "total_cents": amount,
+                "transaction_at": refund.get("created_at"),
+                "metadata": {"square_refund_id": refund_id},
+            })
+            appended += 1
+        logger.info(f"Square refunds appended as {appended} refund transaction rows")
 
     # ─── Progress Helpers ─────────────────────────────────────
 

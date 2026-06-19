@@ -186,6 +186,18 @@ async def run_backfill(
     except Exception as e:
         logger.error(f"AI pipeline failed for org={org_id}: {e}", exc_info=True)
 
+    # ── Reconcile against Square (read-only, best-effort) ─
+    # Cross-check our stored net sales vs Square's payment total so a sync gap
+    # surfaces in logs. Never fails the backfill.
+    try:
+        from ..services.reconcile import reconcile_square
+
+        async with SquareClient(access_token=access_token) as rc_client:
+            report = await reconcile_square(db, org_id, rc_client)
+        logger.info(f"Reconcile after backfill for org={org_id}: {report}")
+    except Exception as e:
+        logger.warning(f"Reconcile after backfill failed for org={org_id}: {e}")
+
     return result
 
 
