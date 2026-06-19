@@ -10,6 +10,7 @@ and pin the two things that matter:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 from datetime import date, timedelta
@@ -61,16 +62,80 @@ def _ctx(daily):
     )
 
 
-# ── 1. Engine is OFF by default ──────────────────────────────
+# ── 1. Engine modes: primary by default, disable flag, endpoint ──
 
-def test_engine_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("TIMESFM_ENABLED", raising=False)
+def _fresh_engine():
     eng = get_timesfm_engine()
-    # Fresh availability check (singleton may carry prior state across tests).
     eng._model = None
     eng._load_attempted = False
+    eng._load_error = None
+    return eng
+
+
+def test_engine_disable_flag(monkeypatch):
+    monkeypatch.setenv("TIMESFM_DISABLED", "1")
+    monkeypatch.delenv("TIMESFM_ENDPOINT", raising=False)
+    eng = _fresh_engine()
     assert eng.is_available() is False
     assert eng.forecast([1.0, 2.0, 3.0], 7) is None
+
+
+def test_engine_local_unavailable_without_package(monkeypatch):
+    # Default (primary) mode, but the timesfm package isn't installed in CI → local
+    # load fails → unavailable, so callers fall back. No endpoint set.
+    monkeypatch.delenv("TIMESFM_DISABLED", raising=False)
+    monkeypatch.delenv("TIMESFM_ENDPOINT", raising=False)
+    eng = _fresh_engine()
+    assert eng.is_available() is False
+    assert eng.forecast([1.0, 2.0, 3.0], 7) is None
+
+
+def test_engine_endpoint_mode(monkeypatch):
+    # With TIMESFM_ENDPOINT set, the engine is available and POSTs the series.
+    monkeypatch.delenv("TIMESFM_DISABLED", raising=False)
+    monkeypatch.setenv("TIMESFM_ENDPOINT", "http://timesfm.local/forecast")
+    eng = _fresh_engine()
+    assert eng.is_available() is True
+
+    import io
+    import src.ai.predictive.timesfm_engine as te
+
+    captured = {}
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["body"] = json.loads(req.data.decode())
+        return _Resp(json.dumps({
+            "point": [100.0] * 7,
+            "lower": [90.0] * 7,
+            "upper": [110.0] * 7,
+        }).encode())
+
+    monkeypatch.setattr(te.urllib.request, "urlopen", fake_urlopen)
+    fc = eng.forecast([1.0, 2.0, 3.0, 4.0], 7)
+    assert fc is not None
+    assert fc.point == [100.0] * 7
+    assert captured["body"]["horizon"] == 7
+    assert captured["url"] == "http://timesfm.local/forecast"
+
+
+def test_engine_endpoint_failure_falls_back(monkeypatch):
+    monkeypatch.delenv("TIMESFM_DISABLED", raising=False)
+    monkeypatch.setenv("TIMESFM_ENDPOINT", "http://timesfm.local/forecast")
+    eng = _fresh_engine()
+    import src.ai.predictive.timesfm_engine as te
+
+    def boom(req, timeout=None):
+        raise te.urllib.error.URLError("connection refused")
+
+    monkeypatch.setattr(te.urllib.request, "urlopen", boom)
+    assert eng.forecast([1.0, 2.0, 3.0], 7) is None  # caller falls back to WMA
 
 
 # ── 2. Agent skips cleanly when TimesFM is unavailable ───────

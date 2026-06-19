@@ -1,11 +1,12 @@
-# Optional TimesFM forecasting extra — NOT part of core requirements.
+# Optional TimesFM LOCAL-inference extra — NOT part of core requirements and NOT
+# installed in the Railway API image (torch OOMs Railway — see requirements-ml.txt).
 #
-# These are heavy (torch + the model weights download to ~hundreds of MB) and are
-# only needed on a host that runs the TimesFM forecaster. The code is inert unless
-# TIMESFM_ENABLED=1 AND these are installed, so the core deploy is unaffected.
+# Only needed to run TimesFM in-process (LOCAL mode) on a host with enough RAM.
+# The PROD path is ENDPOINT mode: stand up a small sidecar that installs these and
+# exposes a /forecast HTTP endpoint, then set TIMESFM_ENDPOINT on the API service —
+# that keeps torch out of the lean API container.
 #
-#   pip install -r requirements-timesfm.txt
-#   export TIMESFM_ENABLED=1
+#   pip install -r requirements-timesfm.txt     # on the sidecar / capable host
 #
 # Pin/adjust to the torch build that matches the host (CPU vs CUDA).
 timesfm[torch]>=2.0.0

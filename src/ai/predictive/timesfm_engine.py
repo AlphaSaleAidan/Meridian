@@ -1,39 +1,42 @@
 """
-TimesFM forecasting engine — thin wrapper around Google Research's TimesFM
-(Time Series Foundation Model) for zero-shot revenue forecasting.
+TimesFM forecasting engine — Meridian's PRIMARY revenue forecaster.
 
-TimesFM is a decoder-only foundation model pretrained on ~100B real-world time
-points. It produces zero-shot point + quantile forecasts with no per-series
-training, which makes it a strong drop-in upgrade over the moving-average /
-AutoARIMA paths once a series has enough history.
+TimesFM is Google Research's decoder-only time-series foundation model, pretrained
+on ~100B real-world time points. It produces zero-shot point + quantile forecasts
+with no per-series training — a strong upgrade over the moving-average / AutoARIMA
+paths. Meridian uses it as the primary forecaster (swarm agent + persisted dashboard
+forecasts); the statistical WMA method is the automatic fallback.
 
-This wrapper is intentionally OPTIONAL and OFF by default:
-  - torch + the `timesfm` package + the model weights (hundreds of MB) are heavy;
-    we do NOT add them to core requirements and load nothing unless TIMESFM_ENABLED=1.
-  - When unavailable (package missing, weights missing, load/inference error), the
-    engine reports unavailable and callers fall back to their existing forecasters.
-This mirrors the repo's existing "try the heavy lib, fall back gracefully" pattern
-(see ForecasterAgent's statsforecast guard).
+Two backends, chosen by environment (so it works without bloating the lean API host):
 
-Provision (on a host with enough RAM — NOT the current edge box):
-    pip install -r requirements-timesfm.txt   # torch + timesfm
-    export TIMESFM_ENABLED=1
-The model weights download from HuggingFace on first load (overridable via
-TIMESFM_REPO). The real-model code path is written against the documented TimesFM
-2.x API and is exercised only once provisioned; until then this module is inert and
-every caller keeps its existing forecaster.
+  • ENDPOINT mode (recommended for prod) — set ``TIMESFM_ENDPOINT`` to a small
+    TimesFM inference sidecar. The engine POSTs the series and gets back the
+    forecast over HTTP. No torch in the API container. This is the prod path
+    because the API image deliberately excludes torch (it OOMs Railway — see
+    requirements-ml.txt).
+  • LOCAL mode — in-process model via the ``timesfm`` package + weights. Only
+    viable on a host with enough RAM (NOT the Railway API box). Activates when no
+    endpoint is set and the package is importable.
+
+Fallback is always safe: if TimesFM is disabled (``TIMESFM_DISABLED=1``), the
+endpoint is unreachable, or local load/inference fails, ``forecast()`` returns
+``None`` and every caller falls back to the WMA forecaster. This mirrors the repo's
+existing "try the heavy path, fall back gracefully" pattern.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 logger = logging.getLogger("meridian.ai.predictive.timesfm")
 
 # Context cap: TimesFM 2.5 supports up to 16k, but daily revenue history is short
-# and a smaller window keeps memory modest on shared hosts.
+# and a smaller window keeps memory modest.
 _MAX_CONTEXT = 512
 
 
@@ -45,15 +48,20 @@ class TimesFMForecast:
     upper: list[float]
 
 
-def _enabled() -> bool:
-    return os.environ.get("TIMESFM_ENABLED", "").lower() in ("1", "true", "yes")
+def _disabled() -> bool:
+    return os.environ.get("TIMESFM_DISABLED", "").lower() in ("1", "true", "yes")
+
+
+def _endpoint() -> str:
+    return os.environ.get("TIMESFM_ENDPOINT", "").strip()
 
 
 class TimesFMEngine:
-    """Lazy, process-wide singleton wrapper around a loaded TimesFM model.
+    """Lazy, process-wide singleton wrapper around TimesFM (endpoint or local).
 
     Obtain the shared instance via the module-level ``get_timesfm_engine()``.
-    A failed load is remembered so we don't repeatedly retry an impossible import.
+    A failed local load is remembered so we don't repeatedly retry an impossible
+    import; an unreachable endpoint just falls back per-call.
     """
 
     _instance: "TimesFMEngine | None" = None
@@ -64,34 +72,52 @@ class TimesFMEngine:
         self._load_attempted = False
         self._load_error: str | None = None
 
-    # ── availability / lazy load ─────────────────────────────
+    # ── mode / availability ──────────────────────────────────
+    def _mode(self) -> str:
+        if _disabled():
+            return "off"
+        if _endpoint():
+            return "endpoint"
+        return "local"
+
+    def is_available(self) -> bool:
+        mode = self._mode()
+        if mode == "off":
+            self._load_error = "TIMESFM_DISABLED set"
+            return False
+        if mode == "endpoint":
+            return True  # actual reachability is validated per-call (with fallback)
+        return self._ensure_loaded()
+
+    @property
+    def unavailable_reason(self) -> str | None:
+        return self._load_error
+
     def _ensure_loaded(self) -> bool:
+        """Local in-process model load (lazy, once)."""
         if self._model is not None:
             return True
         if self._load_attempted:
             return False  # already tried and failed — don't hammer the import
         self._load_attempted = True
-        if not _enabled():
-            self._load_error = "TIMESFM_ENABLED not set"
-            return False
         try:
-            import timesfm  # noqa: F401  (heavy; imported only when enabled)
+            import timesfm  # noqa: F401  (heavy; only imported in local mode)
         except ImportError as e:
-            self._load_error = f"timesfm package not installed: {e}"
-            logger.info("TimesFM disabled — %s", self._load_error)
+            self._load_error = f"timesfm package not installed (use TIMESFM_ENDPOINT in prod): {e}"
+            logger.info("TimesFM local unavailable — %s", self._load_error)
             return False
         try:
             self._model = self._load_model(timesfm)
-            logger.info("TimesFM model loaded")
+            logger.info("TimesFM model loaded (local)")
             return True
         except Exception as e:  # weights download / OOM / version drift
-            self._load_error = f"TimesFM load failed: {e}"
+            self._load_error = f"TimesFM local load failed: {e}"
             logger.warning(self._load_error)
             self._model = None
             return False
 
     def _load_model(self, timesfm):
-        """Instantiate the pretrained model. Isolated so the constructor API
+        """Instantiate the pretrained model. Isolated so constructor API
         differences between timesfm releases stay contained in one place."""
         hparams = timesfm.TimesFmHparams(
             backend=os.environ.get("TIMESFM_BACKEND", "cpu"),
@@ -99,29 +125,51 @@ class TimesFMEngine:
             context_len=_MAX_CONTEXT,
         )
         checkpoint = timesfm.TimesFmCheckpoint(
-            huggingface_repo_id=os.environ.get(
-                "TIMESFM_REPO", "google/timesfm-2.0-500m-pytorch"
-            )
+            huggingface_repo_id=os.environ.get("TIMESFM_REPO", "google/timesfm-2.0-500m-pytorch")
         )
         return timesfm.TimesFm(hparams=hparams, checkpoint=checkpoint)
 
-    def is_available(self) -> bool:
-        return self._ensure_loaded()
-
-    @property
-    def unavailable_reason(self) -> str | None:
-        return self._load_error
-
     # ── forecasting ──────────────────────────────────────────
     def forecast(self, series: list[float], horizon: int, freq: int = 0) -> TimesFMForecast | None:
-        """Zero-shot forecast ``horizon`` steps ahead.
+        """Zero-shot forecast ``horizon`` steps ahead (oldest→newest series).
 
-        ``series`` is the historical values oldest→newest; ``freq`` is TimesFM's
-        frequency indicator (0 = high-frequency, e.g. daily). Returns ``None`` if
-        the model is unavailable or anything goes wrong — callers MUST fall back.
+        Returns ``None`` if TimesFM is unavailable or anything goes wrong — callers
+        MUST fall back to the statistical forecaster.
         """
         if horizon <= 0 or len(series) < 2:
             return None
+        mode = self._mode()
+        if mode == "off":
+            return None
+        if mode == "endpoint":
+            return self._forecast_via_endpoint(series, horizon, freq)
+        return self._forecast_local(series, horizon, freq)
+
+    def _forecast_via_endpoint(self, series, horizon, freq) -> TimesFMForecast | None:
+        url = _endpoint()
+        payload = json.dumps({
+            "series": [float(x) for x in series[-_MAX_CONTEXT:]],
+            "horizon": int(horizon),
+            "freq": int(freq),
+        }).encode()
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
+        )
+        try:
+            timeout = float(os.environ.get("TIMESFM_TIMEOUT", "20"))
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = json.loads(resp.read().decode() or "{}")
+            point = [float(v) for v in body["point"][:horizon]]
+            lower = [float(v) for v in body.get("lower", [])[:horizon]] or [p * 0.85 for p in point]
+            upper = [float(v) for v in body.get("upper", [])[:horizon]] or [p * 1.15 for p in point]
+            if len(point) != horizon:
+                return None
+            return TimesFMForecast(point=point, lower=lower, upper=upper)
+        except (urllib.error.URLError, KeyError, ValueError, TimeoutError) as e:
+            logger.warning("TimesFM endpoint failed, caller will fall back: %s", e)
+            return None
+
+    def _forecast_local(self, series, horizon, freq) -> TimesFMForecast | None:
         if not self._ensure_loaded():
             return None
         try:
@@ -133,7 +181,7 @@ class TimesFMEngine:
             lo, hi = self._extract_bounds(quantile_fc, point, horizon, np)
             return TimesFMForecast(point=point, lower=lo, upper=hi)
         except Exception as e:
-            logger.warning("TimesFM forecast failed, caller will fall back: %s", e)
+            logger.warning("TimesFM local forecast failed, caller will fall back: %s", e)
             return None
 
     @staticmethod
