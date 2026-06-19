@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+numpy>=1.26,<2
+# Heavy: pulls torch + the model framework. This is the whole reason the sidecar
+# exists (kept OUT of the main API image). Pin the torch build to the host (CPU/CUDA).
+timesfm[torch]>=2.0.0
