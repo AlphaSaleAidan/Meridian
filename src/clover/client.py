@@ -332,9 +332,10 @@ class CloverClient:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         # Nested expansion is REQUIRED for tax: line-item taxRates/discounts are
-        # not populated unless dotted-path expanded (Clover caps ~3-4/call, so we
-        # keep the 4 that feed revenue + breakdowns and drop `device`).
-        expand: str = "lineItems.taxRates,payments,discounts,serviceCharges",
+        # not populated unless dotted-path expanded. This is 5 expansions (Clover
+        # guideline is ~3-4) — deliberate: we want tax + order discounts + correct
+        # subtotal + multi-register attribution with no breakdown left blank.
+        expand: str = "lineItems.taxRates,payments,discounts,serviceCharges,device",
         max_items: int | None = None,
     ) -> list[dict]:
         """
@@ -355,10 +356,10 @@ class CloverClient:
     async def get_order(
         self,
         order_id: str,
-        expand: str = "lineItems.taxRates,payments,discounts,serviceCharges",
+        expand: str = "lineItems.taxRates,payments,discounts,serviceCharges,device",
     ) -> dict:
         """Get a single order with line items (+ taxRates), payments, discounts,
-        service charges."""
+        service charges, and device."""
         return await self._get(f"/orders/{order_id}", params={"expand": expand})
 
     async def list_refunds(
