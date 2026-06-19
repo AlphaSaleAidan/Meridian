@@ -20,13 +20,22 @@ import math
 from datetime import datetime, date, timedelta, timezone
 from uuid import uuid4
 
+from ..predictive.timesfm_engine import get_timesfm_engine
+
 logger = logging.getLogger("meridian.ai.generators.forecasts")
 
 
 class ForecastGenerator:
-    """Generates revenue forecasts from historical data."""
+    """Generates revenue forecasts from historical data.
+
+    When TimesFM is provisioned (TIMESFM_ENABLED=1 + weights), the daily/weekly
+    forecasts come from the foundation model; otherwise they fall back to the
+    weighted-moving-average method below. The persisted-forecast row shape is
+    identical either way — only `model_version`/`features_used.method` differ.
+    """
 
     MODEL_VERSION = "meridian-forecast-v1"
+    TIMESFM_MODEL_VERSION = "timesfm-2.x"
 
     def generate(self, ctx) -> list[dict]:
         """
@@ -92,6 +101,12 @@ class ForecastGenerator:
         
         if len(revenues) < 7:
             return []
+
+        # TimesFM path (preferred when provisioned). Returns the same row shape;
+        # falls through to the WMA method below when the model is unavailable.
+        tf_rows = self._timesfm_daily(ctx, revenues, dates, horizon)
+        if tf_rows is not None:
+            return tf_rows
 
         # Step 1: Day-of-week averages (weighted: recent weeks count more)
         dow_avgs = self._weighted_dow_averages(revenues, dates)
@@ -207,6 +222,12 @@ class ForecastGenerator:
         if not last_date:
             return []
 
+        # TimesFM path (preferred when provisioned) — forecasts daily then rolls
+        # up to weekly totals; falls through to the WMA method when unavailable.
+        tf_rows = self._timesfm_weekly(ctx, revenues, last_date, horizon)
+        if tf_rows is not None:
+            return tf_rows
+
         forecasts = []
         for i in range(1, horizon + 1):
             week_start = last_date + timedelta(days=(i-1) * 7 + 1)
@@ -240,6 +261,79 @@ class ForecastGenerator:
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             })
 
+        return forecasts
+
+    # ─── TimesFM Foundation-Model Path ────────────────────────
+
+    def _timesfm_daily(
+        self, ctx, revenues: list[int], dates: list, horizon: int
+    ) -> list[dict] | None:
+        """Daily forecasts from TimesFM. Returns None (caller falls back to WMA)
+        when the model is unavailable or inference fails."""
+        engine = get_timesfm_engine()
+        if not engine.is_available():
+            return None
+        fc = engine.forecast([float(r) for r in revenues], horizon)
+        if fc is None:
+            return None
+
+        last_date = dates[-1]
+        forecasts = []
+        for i in range(1, horizon + 1):
+            forecast_date = last_date + timedelta(days=i)
+            forecasts.append({
+                "id": str(uuid4()),
+                "org_id": ctx.org_id,
+                "location_id": ctx.location_id,
+                "forecast_type": "daily_revenue",
+                "period_start": forecast_date.isoformat(),
+                "period_end": forecast_date.isoformat(),
+                "predicted_value_cents": max(0, int(round(fc.point[i - 1]))),
+                "lower_bound_cents": max(0, int(round(fc.lower[i - 1]))),
+                "upper_bound_cents": max(0, int(round(fc.upper[i - 1]))),
+                "confidence_score": round(0.8 * (0.97 ** (i - 1)), 2),
+                "model_version": self.TIMESFM_MODEL_VERSION,
+                "features_used": {"method": "timesfm", "training_days": len(revenues)},
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            })
+        return forecasts
+
+    def _timesfm_weekly(
+        self, ctx, revenues: list[int], last_date, horizon: int
+    ) -> list[dict] | None:
+        """Weekly forecasts from TimesFM: forecast horizon*7 days, then roll up to
+        weekly totals. Returns None when the model is unavailable."""
+        engine = get_timesfm_engine()
+        if not engine.is_available():
+            return None
+        fc = engine.forecast([float(r) for r in revenues], horizon * 7)
+        if fc is None:
+            return None
+
+        forecasts = []
+        for w in range(horizon):
+            seg = fc.point[w * 7:(w + 1) * 7]
+            if not seg:
+                break
+            seg_lo = fc.lower[w * 7:(w + 1) * 7]
+            seg_hi = fc.upper[w * 7:(w + 1) * 7]
+            week_start = last_date + timedelta(days=w * 7 + 1)
+            week_end = week_start + timedelta(days=6)
+            forecasts.append({
+                "id": str(uuid4()),
+                "org_id": ctx.org_id,
+                "location_id": ctx.location_id,
+                "forecast_type": "weekly_revenue",
+                "period_start": week_start.isoformat(),
+                "period_end": week_end.isoformat(),
+                "predicted_value_cents": max(0, int(round(sum(seg)))),
+                "lower_bound_cents": max(0, int(round(sum(seg_lo)))),
+                "upper_bound_cents": max(0, int(round(sum(seg_hi)))),
+                "confidence_score": round(0.72 * (0.93 ** w), 2),
+                "model_version": self.TIMESFM_MODEL_VERSION,
+                "features_used": {"method": "timesfm", "training_days": len(revenues)},
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            })
         return forecasts
 
     # ─── Statistical Helpers ──────────────────────────────────

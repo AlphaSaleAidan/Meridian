@@ -503,6 +503,7 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
     from .agents.benchmark import BenchmarkAgent
     from .agents.money_left import MoneyLeftAgent
     from .agents.forecaster import ForecasterAgent
+    from .agents.timesfm_forecaster import TimesFMForecasterAgent
     from .agents.customer_ltv import CustomerLTVAgent
     from .agents.promo_roi import PromoROIAgent
     from .agents.cashflow_forecast import CashFlowForecastAgent
@@ -569,6 +570,7 @@ async def run_agent_swarm(ctx: AnalysisContext) -> dict:
     ctx.agent_outputs = agent_outputs
     strategic_5a_agents = [
         ForecasterAgent(ctx),
+        TimesFMForecasterAgent(ctx),
         CustomerLTVAgent(ctx),
         PromoROIAgent(ctx),
         BenchmarkAgent(ctx),
