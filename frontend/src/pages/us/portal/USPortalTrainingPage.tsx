@@ -1,5 +1,6 @@
 import { GraduationCap } from 'lucide-react'
 import PlaybookViewer from '@/components/training/PlaybookViewer'
+import ComplianceGuidesCard from '@/components/training/ComplianceGuidesCard'
 
 export default function USPortalTrainingPage() {
   return (
@@ -15,6 +16,8 @@ export default function USPortalTrainingPage() {
           </p>
         </div>
       </header>
+
+      <ComplianceGuidesCard accent="#00d4aa" />
 
       <PlaybookViewer country="us" />
     </div>
