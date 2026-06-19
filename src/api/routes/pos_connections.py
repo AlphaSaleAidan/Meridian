@@ -298,11 +298,14 @@ async def connect_pos(
     connection_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    # Clover (like Square) is read by both sync paths from the dedicated
-    # access_token_enc column AND credentials_encrypted — mirror the token into
-    # both so the scheduler and the manual sync endpoint resolve it identically.
+    # Clover and Square are read by the incremental scheduler from the dedicated
+    # access_token_enc column (pos_sync_runner decrypts access_token_enc), while
+    # manual connect stores creds in credentials_encrypted — mirror the token
+    # into both so the scheduler resolves it identically to the OAuth path.
+    # Without this, a manually-keyed Square/Clover connection would sync the
+    # initial backfill but then silently stop (incremental decrypts "").
     token_column: dict = {}
-    if req.pos_system == "clover" and encrypted_creds.get("access_token"):
+    if req.pos_system in ("clover", "square") and encrypted_creds.get("access_token"):
         token_column["access_token_enc"] = encrypted_creds["access_token"]
 
     existing = await db.select(
@@ -379,7 +382,20 @@ async def connect_pos(
             access_token=req.credentials.get("access_token", ""),
             merchant_id=(req.credentials.get("merchant_id", "") or req.restaurant_guid or ""),
         )
-    elif req.pos_system not in ("square", "clover"):
+    elif req.pos_system == "square":
+        # Square normally connects via OAuth (the callback dispatches this same
+        # run_backfill). A user-pasted access token lands here instead, so run
+        # the identical initial backfill so the lifecycle advances PENDING →
+        # COMPLETE (or → FAILED on a bad token) and the connection becomes
+        # eligible for incremental sync — rather than sitting PENDING forever.
+        from ...workers.backfill import run_backfill
+        background_tasks.add_task(
+            run_backfill,
+            access_token=req.credentials.get("access_token", ""),
+            org_id=req.org_id,
+            connection_id=connection_id,
+        )
+    else:
         api_config = get_connector_config(req.pos_system)
         if api_config and api_config.get("auth_type") != "csv_only":
             background_tasks.add_task(
