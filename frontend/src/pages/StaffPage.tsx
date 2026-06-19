@@ -20,8 +20,14 @@ function TrendIcon({ trend }: { trend: string }) {
   return <Minus size={12} className="text-[#A1A1A8]/40" />
 }
 
-function StaffCard({ member, rank }: { member: StaffMember; rank: number }) {
+// Real connected-merchant data has revenueCents set; demo data carries the
+// richer synthetic fields (upsell/rating/rev-per-hour). Render whichever we have.
+function StaffCard({ member, rank, teamRevenue }: { member: StaffMember; rank: number; teamRevenue: number }) {
   const isTop = rank <= 2
+  const real = member.revenueCents != null
+  const revenue = member.revenueCents ?? member.revenuePerHour
+  const txns = member.transactionCount ?? member.transactionsPerShift
+  const sharePct = teamRevenue > 0 ? Math.round((revenue / teamRevenue) * 100) : 0
 
   return (
     <div className={clsx('card-hover p-4', isTop && 'border-[#17C5B0]/10')}>
@@ -35,14 +41,14 @@ function StaffCard({ member, rank }: { member: StaffMember; rank: number }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h4 className="text-sm font-semibold text-[#F5F5F7]">{member.name}</h4>
-            <TrendIcon trend={member.trend} />
+            {!real && <TrendIcon trend={member.trend} />}
             {rank === 1 && <Award size={14} className="text-amber-400" />}
           </div>
-          <p className="text-xs text-[#A1A1A8]/50">{member.role}</p>
+          {member.role && <p className="text-xs text-[#A1A1A8]/50">{member.role}</p>}
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-sm font-bold font-mono text-[#F5F5F7]">{formatCents(member.revenuePerHour)}</p>
-          <p className="text-[10px] text-[#A1A1A8]/40">rev/hour</p>
+          <p className="text-sm font-bold font-mono text-[#F5F5F7]">{formatCents(revenue)}</p>
+          <p className="text-[10px] text-[#A1A1A8]/40">{real ? 'revenue' : 'rev/hour'}</p>
         </div>
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
@@ -51,19 +57,34 @@ function StaffCard({ member, rank }: { member: StaffMember; rank: number }) {
           <p className="text-xs font-bold font-mono text-[#F5F5F7]">{formatCents(member.avgTicketCents)}</p>
         </div>
         <div>
-          <p className="text-[10px] text-[#A1A1A8]/40">Txns/Shift</p>
-          <p className="text-xs font-bold font-mono text-[#F5F5F7]">{member.transactionsPerShift}</p>
+          <p className="text-[10px] text-[#A1A1A8]/40">Transactions</p>
+          <p className="text-xs font-bold font-mono text-[#F5F5F7]">{txns}</p>
         </div>
-        <div>
-          <p className="text-[10px] text-[#A1A1A8]/40">Upsell Rate</p>
-          <p className={clsx('text-xs font-bold font-mono', member.upsellRate >= 25 ? 'text-[#17C5B0]' : member.upsellRate >= 15 ? 'text-[#F5F5F7]' : 'text-amber-400')}>
-            {member.upsellRate}%
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] text-[#A1A1A8]/40">Rating</p>
-          <p className="text-xs font-bold font-mono text-[#F5F5F7]">{member.customerRating}</p>
-        </div>
+        {real ? (
+          <>
+            <div>
+              <p className="text-[10px] text-[#A1A1A8]/40">Tips</p>
+              <p className="text-xs font-bold font-mono text-[#F5F5F7]">{formatCents(member.tipCents ?? 0)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#A1A1A8]/40">% of Sales</p>
+              <p className="text-xs font-bold font-mono text-[#F5F5F7]">{sharePct}%</p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <p className="text-[10px] text-[#A1A1A8]/40">Upsell Rate</p>
+              <p className={clsx('text-xs font-bold font-mono', member.upsellRate >= 25 ? 'text-[#17C5B0]' : member.upsellRate >= 15 ? 'text-[#F5F5F7]' : 'text-amber-400')}>
+                {member.upsellRate}%
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#A1A1A8]/40">Rating</p>
+              <p className="text-xs font-bold font-mono text-[#F5F5F7]">{member.customerRating}</p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -84,9 +105,12 @@ export default function StaffPage() {
   if (!isDemo && apiData.loading) return <LoadingPage />
   if (!isDemo && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
 
-  const avgRevPerHour = staff.length ? Math.round(staff.reduce((s, m) => s + m.revenuePerHour, 0) / staff.length) : 0
-  const avgUpsell = staff.length ? Math.round(staff.reduce((s, m) => s + m.upsellRate, 0) / staff.length) : 0
-  const topPerformer = staff[0] ?? null
+  const rev = (m: StaffMember) => m.revenueCents ?? m.revenuePerHour ?? 0
+  const sorted = [...staff].sort((a, b) => rev(b) - rev(a))
+  const teamRevenue = sorted.reduce((s, m) => s + rev(m), 0)
+  const avgTicket = sorted.length ? Math.round(sorted.reduce((s, m) => s + (m.avgTicketCents || 0), 0) / sorted.length) : 0
+  const topPerformer = sorted[0] ?? null
+  const topShare = teamRevenue > 0 && topPerformer ? Math.round((rev(topPerformer) / teamRevenue) * 100) : 0
 
   return (
     <DataPageSkeleton title="Staff" layout="table">
@@ -121,8 +145,8 @@ export default function StaffPage() {
                 <DollarSign size={16} className="text-[#17C5B0]" />
               </div>
               <div>
-                <p className="stat-label">Avg Rev/Hour</p>
-                <p className="text-lg font-bold text-[#17C5B0] font-mono">{formatCents(avgRevPerHour)}</p>
+                <p className="stat-label">Total Revenue</p>
+                <p className="text-lg font-bold text-[#17C5B0] font-mono">{formatCents(teamRevenue)}</p>
               </div>
             </div>
           </DashboardTiltCard>
@@ -134,8 +158,8 @@ export default function StaffPage() {
                 <Target size={16} className="text-[#7C5CFF]" />
               </div>
               <div>
-                <p className="stat-label">Avg Upsell</p>
-                <p className="text-lg font-bold text-[#7C5CFF] font-mono">{avgUpsell}%</p>
+                <p className="stat-label">Avg Ticket</p>
+                <p className="text-lg font-bold text-[#7C5CFF] font-mono">{formatCents(avgTicket)}</p>
               </div>
             </div>
           </DashboardTiltCard>
@@ -157,8 +181,8 @@ export default function StaffPage() {
 
       <ScrollReveal variant="fadeUp" delay={0.1}>
         <div className="space-y-2">
-          {staff.map((member, i) => (
-            <StaffCard key={member.id} member={member} rank={i + 1} />
+          {sorted.map((member, i) => (
+            <StaffCard key={member.id} member={member} rank={i + 1} teamRevenue={teamRevenue} />
           ))}
         </div>
       </ScrollReveal>
@@ -173,11 +197,9 @@ export default function StaffPage() {
               <h3 className="text-sm font-semibold text-[#F5F5F7]">AI Coaching Insight</h3>
               {topPerformer ? (
               <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-                <span className="text-[#F5F5F7] font-medium">{topPerformer.name}</span> achieves a {topPerformer.upsellRate}% upsell rate —
-                <span className="text-[#17C5B0] font-medium"> {Math.round(topPerformer.upsellRate / avgUpsell * 100 - 100)}% above team average</span>.
-                Key differentiator: suggestive selling during morning rush when customers are time-constrained but open to add-ons.
-                {staff.length > 1 && <> Recommended: Pair with {staff[staff.length - 1].name} for mentoring shifts to transfer technique.</>}
-                <span className="text-[#A1A1A8]/50"> (Confidence: 82%)</span>
+                <span className="text-[#F5F5F7] font-medium">{topPerformer.name}</span> leads the team with
+                <span className="text-[#17C5B0] font-medium"> {formatCents(rev(topPerformer))}</span> in sales — {topShare}% of total revenue.
+                {sorted.length > 1 && <> {sorted[sorted.length - 1].name} has the most room to grow — a mentoring shift could lift overall ticket size.</>}
               </p>
               ) : (
               <p className="text-xs text-[#A1A1A8]/50 mt-1">No staff data available yet.</p>

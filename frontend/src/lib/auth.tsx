@@ -26,7 +26,7 @@ export interface AuthState {
   signup: (email: string, password: string, fullName: string, businessName: string, meta?: Record<string, string>) => Promise<string | null>
   logout: () => Promise<void>
   validateToken: (token: string) => Promise<string | null>
-  connectPos: (provider: string, apiKey: string) => Promise<string | null>
+  connectPos: (provider: string, credentials: Record<string, string>, repId?: string | null) => Promise<string | null>
   resetPassword: (email: string) => Promise<string | null>
   markOnboarded: () => void
 }
@@ -74,7 +74,7 @@ async function fetchBusinessForUser(userId: string, email: string): Promise<OrgP
     .from('businesses')
     .select('*')
     .eq('owner_user_id', userId)
-    .single()
+    .maybeSingle()
 
   if (data) {
     const org = orgFromBusiness(data, email)
@@ -88,7 +88,7 @@ async function fetchBusinessForUser(userId: string, email: string): Promise<OrgP
     .eq('email', email)
     .order('created_at', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (orgData) {
     const org = orgFromBusiness(orgData, email)
@@ -122,7 +122,7 @@ async function checkIsSalesRep(email: string): Promise<boolean> {
     .select('id')
     .eq('email', email)
     .eq('is_active', true)
-    .single()
+    .maybeSingle()
 
   return !!data
 }
@@ -352,7 +352,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null
   }, [])
 
-  const connectPos = useCallback(async (provider: string, apiKey: string): Promise<string | null> => {
+  const connectPos = useCallback(async (
+    provider: string,
+    credentials: Record<string, string>,
+    repId?: string | null,
+  ): Promise<string | null> => {
+    // P1: credentials is the full per-provider shape.
+    //   Square → { access_token }
+    //   Clover → { access_token, merchant_id }
+    //   Toast  → { client_id, client_secret, restaurant_guid }
+    //   Generic → whatever the connector registry expects (e.g. provider_name+access_token)
+    // The keys MUST match what the backend test/connect handlers
+    // read (src/api/routes/pos_connections.py) — wrong keys = silent
+    // rejection at the "all required fields" check.
     if (!supabase) {
       if (org) {
         const updated = { ...org, pos_provider: provider, pos_connected: true, onboarded: true }
@@ -363,7 +375,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (!org) return 'No business found — please complete sign-up first'
-    if (!apiKey) return 'API key is required'
+    const filled = Object.entries(credentials).filter(([, v]) => v && v.trim().length > 0)
+    if (!filled.length) {
+      // Selection-only path (e.g. the Canada wizard's POS step records
+      // the merchant's selection via /api/pos/select before
+      // collecting credentials). Nothing to test or connect here —
+      // return success so the wizard advances. Local-only state is
+      // already maintained by the supabase-absent branch above.
+      const updated = { ...org, pos_provider: provider }
+      saveOrg(updated)
+      setOrg(updated)
+      return null
+    }
+    const credsToSend = Object.fromEntries(filled)
 
     const apiUrl = import.meta.env.VITE_API_URL || ''
 
@@ -371,14 +395,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const testRes = await fetch(`${apiUrl}/api/pos/test-connection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pos_system: provider, credentials: { access_token: apiKey } }),
+        body: JSON.stringify({ pos_system: provider, credentials: credsToSend }),
       })
       const testData = await testRes.json()
-      if (!testRes.ok || !testData.valid) {
-        return testData.detail || testData.error || 'Invalid API key — could not connect to your POS'
+      // Backends return either {success:true,...} or {valid:true,...}.
+      // Treat any 2xx with `success !== false` as ok so we don't
+      // reject a successful test just because the response shape
+      // differs per provider.
+      const ok = testRes.ok && testData?.success !== false && testData?.valid !== false
+      if (!ok) {
+        return testData.message || testData.detail || testData.error
+          || 'Could not connect to your POS — check your credentials.'
       }
     } catch {
-      return 'Could not reach the server to validate your API key'
+      return 'Could not reach the server to validate your credentials'
     }
 
     try {
@@ -388,12 +418,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           org_id: org.org_id,
           pos_system: provider,
-          credentials: { access_token: apiKey },
+          credentials: credsToSend,
+          // Restaurant GUID is also surfaced as a top-level field
+          // on the backend ConnectRequest so it gets persisted to
+          // pos_connections.merchant_id for Toast.
+          restaurant_guid: credsToSend.restaurant_guid,
+          // P2: rep attribution. Forwarded to the backend's
+          // ConnectRequest.connected_by_rep_id; written to
+          // pos_connections only when present.
+          connected_by_rep_id: repId || null,
         }),
       })
       const connectData = await connectRes.json()
       if (!connectRes.ok) {
-        return connectData.detail || 'Failed to save POS connection'
+        return connectData.detail || connectData.message || 'Failed to save POS connection'
       }
     } catch {
       return 'Could not reach the server to save your connection'

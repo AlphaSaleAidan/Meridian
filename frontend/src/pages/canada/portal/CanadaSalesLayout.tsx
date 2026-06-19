@@ -116,22 +116,26 @@ export default function CanadaSalesLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Preload all sibling portal page chunks so tab switches don't flash the
-  // InlineFallback pulse. Runs on idle after the layout mounts so the initial
-  // render isn't delayed.
+  // Preload sibling portal page chunks on idle. Trimmed in fix #3:
+  // only the 3 most-likely next tabs (Leads, Accounts, Commissions)
+  // get eager-imported, and the preload is gated to once per session
+  // via sessionStorage so revisiting the layout doesn't re-chew the
+  // network on every mount. The remaining tabs lazy-load on click
+  // (one InlineFallback pulse per first visit) — preferable to
+  // pre-fetching ~10 chunks that compete with the very first
+  // useCanadaLeads fetch for bandwidth and main-thread time.
   useEffect(() => {
+    const PRELOAD_KEY = 'meridian.canadaPortal.preloaded'
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(PRELOAD_KEY) === '1') {
+      return
+    }
     const preload = () => {
-      void import('./CanadaPortalDashboardPage')
       void import('./CanadaPortalLeadsPage')
-      void import('./CanadaPortalLeadDetailPage')
-      void import('./CanadaPortalCreateCustomerPage')
       void import('./CanadaPortalAccountsPage')
       void import('./CanadaPortalCommissionsPage')
-      void import('./CanadaPortalTrainingPage')
-      void import('./CanadaPortalProposalsPage')
-      void import('./CanadaPortalTeamPage')
-      void import('./CanadaPortalSettingsPage')
-      void import('@/pages/us/portal/USPortalBadgePage')
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(PRELOAD_KEY, '1')
+      }
     }
     const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
     if (typeof ric === 'function') {

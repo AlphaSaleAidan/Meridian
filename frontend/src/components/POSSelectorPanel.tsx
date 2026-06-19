@@ -17,6 +17,10 @@ interface POSSelectorPanelProps {
   onWaitlist?: (system: POSSystem, email: string) => void
   defaultSelected?: string
   className?: string
+  // P6: rep attribution. Forwarded to /api/pos/connect as
+  // connected_by_rep_id when present. Settings page omits;
+  // rep-facing surfaces should pass useSalesAuth().rep?.rep_id.
+  repId?: string | null
 }
 
 export default function POSSelectorPanel({
@@ -26,6 +30,7 @@ export default function POSSelectorPanel({
   onWaitlist,
   defaultSelected,
   className,
+  repId,
 }: POSSelectorPanelProps) {
   const isDemo = useIsDemo()
   const orgId = useOrgId()
@@ -197,7 +202,7 @@ export default function POSSelectorPanel({
           {/* Dynamic Content Based on Status */}
           <div className="p-4 space-y-4">
             {selected.status === 'integrated' && (
-              <LayoutA system={selected} onConnect={onConnect} isDemo={isDemo} />
+              <LayoutA system={selected} onConnect={onConnect} isDemo={isDemo} repId={repId} />
             )}
             {selected.status === 'coming_soon' && (
               <LayoutC
@@ -234,8 +239,42 @@ export default function POSSelectorPanel({
   )
 }
 
-function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?: (s: POSSystem) => void; isDemo: boolean }) {
-  const [apiKey, setApiKey] = useState('')
+// P6: per-provider credential field map. MUST match what the backend
+// test/connect handlers read in src/api/routes/pos_connections.py —
+// wrong keys = silent rejection at the "all required fields" check
+// (the same bug the wizard fix in P1 closed). For unknown providers
+// we default to a single `access_token` input.
+const POS_FIELDS: Record<string, { key: string; label: string; placeholder: string }[]> = {
+  square: [{ key: 'access_token', label: 'Access Token', placeholder: 'EAAAl…' }],
+  clover: [
+    { key: 'access_token', label: 'Access Token', placeholder: 'Your Clover access token' },
+    { key: 'merchant_id',  label: 'Merchant ID',   placeholder: 'XXXXXXXXXX' },
+  ],
+  toast: [
+    { key: 'client_id',       label: 'Client ID',       placeholder: 'Toast partner client_id' },
+    { key: 'client_secret',   label: 'Client Secret',   placeholder: 'Toast partner client_secret' },
+    { key: 'restaurant_guid', label: 'Restaurant GUID', placeholder: 'xxxxxxxx-xxxx-…' },
+  ],
+}
+
+// Providers with server-side 1-click OAuth. For these we must NOT collect a
+// pasted access token — that path 401s on a bad/stale token and silently leaves
+// a "connected, no data" connection. Instead redirect to the authorize endpoint,
+// which signs the merchant into the provider and mints a valid token via the
+// callback. (Manual token entry stays for non-OAuth POS like Toast.)
+const OAUTH_AUTHORIZE: Record<string, string> = {
+  square: '/api/square/authorize',
+  clover: '/api/clover/authorize',
+}
+
+function LayoutA({ system, onConnect, isDemo, repId }: {
+  system: POSSystem; onConnect?: (s: POSSystem) => void; isDemo: boolean;
+  repId?: string | null;
+}) {
+  const fields = POS_FIELDS[system.key] || [{ key: 'access_token', label: 'API Access Token', placeholder: `Paste your ${system.name} access token…` }]
+  // P6: per-field credentials object (was a single `apiKey` string —
+  // Clover + Toast were silently broken on this surface).
+  const [creds, setCreds] = useState<Record<string, string>>({})
   const [testing, setTesting] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [testResult, setTestResult] = useState<{ valid: boolean; merchant?: string; error?: string } | null>(null)
@@ -243,9 +282,30 @@ function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?:
   const [connected, setConnected] = useState(false)
   const orgId = useOrgId()
   const apiBase = import.meta.env.VITE_API_URL || ''
+  const oauthPath = OAUTH_AUTHORIZE[system.key]
+
+  function startOAuth() {
+    // Demo / no real org → fall back to the demo onConnect behaviour.
+    if (!orgId || orgId === 'demo') { onConnect?.(system); return }
+    const ret = encodeURIComponent(window.location.pathname + window.location.search)
+    const rep = repId ? `&rep_id=${encodeURIComponent(repId)}` : ''
+    window.location.href =
+      `${apiBase}${oauthPath}?org_id=${encodeURIComponent(orgId)}&return_to=${ret}${rep}`
+  }
+
+  const allFilled = fields.every(f => (creds[f.key] || '').trim().length > 0)
+
+  function buildCredentials(): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const f of fields) {
+      const v = (creds[f.key] || '').trim()
+      if (v) out[f.key] = v
+    }
+    return out
+  }
 
   async function handleTest() {
-    if (!apiKey.trim()) return
+    if (!allFilled) return
     setTesting(true)
     setTestResult(null)
     setConnectError('')
@@ -253,10 +313,15 @@ function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?:
       const res = await fetch(`${apiBase}/api/pos/test-connection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pos_system: system.key, credentials: { access_token: apiKey.trim() } }),
+        body: JSON.stringify({ pos_system: system.key, credentials: buildCredentials() }),
       })
       const data = await res.json()
-      setTestResult({ valid: !!data.valid, merchant: data.merchant_name, error: data.detail || data.error })
+      const ok = res.ok && data?.success !== false && data?.valid !== false
+      setTestResult({
+        valid: ok,
+        merchant: data?.details?.business_name || data?.merchant_name,
+        error: data?.message || data?.detail || data?.error,
+      })
     } catch {
       setTestResult({ valid: false, error: 'Could not reach the server' })
     } finally {
@@ -265,21 +330,33 @@ function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?:
   }
 
   async function handleConnect() {
-    if (!apiKey.trim() || !orgId || orgId === 'demo') {
+    if (!allFilled || !orgId || orgId === 'demo') {
       onConnect?.(system)
       return
     }
     setConnecting(true)
     setConnectError('')
     try {
+      const credsToSend = buildCredentials()
       const res = await fetch(`${apiBase}/api/pos/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ org_id: orgId, pos_system: system.key, credentials: { access_token: apiKey.trim() } }),
+        body: JSON.stringify({
+          org_id: orgId,
+          pos_system: system.key,
+          credentials: credsToSend,
+          // P6: Toast's restaurant_guid surfaces as a top-level
+          // ConnectRequest field on the backend so it persists to
+          // pos_connections.external_merchant_id.
+          restaurant_guid: credsToSend.restaurant_guid,
+          // P6: rep attribution forwarded when the surface has rep
+          // context (Canada portal). Settings page leaves it null.
+          connected_by_rep_id: repId || null,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
-        setConnectError(data.detail || 'Failed to connect')
+        setConnectError(data.detail || data.message || 'Failed to connect')
         return
       }
       setConnected(true)
@@ -329,17 +406,48 @@ function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?:
         </ol>
       </div>
 
-      {/* API Key Input */}
-      {!isDemo && !connected && (
+      {/* OAuth providers (Square, Clover): 1-click sign-in — no token to paste. */}
+      {oauthPath && !isDemo && !connected && (
         <div className="space-y-2">
-          <label className="text-[11px] font-medium text-[#A1A1A8]">API Access Token</label>
-          <input
-            type="password"
-            value={apiKey}
-            onChange={e => { setApiKey(e.target.value); setTestResult(null); setConnectError('') }}
-            placeholder={`Paste your ${system.name} access token...`}
-            className="w-full px-3 py-2.5 text-[12px] font-mono bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40"
-          />
+          {connectError && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-[11px] text-red-400">
+              <AlertTriangle size={12} /> {connectError}
+            </div>
+          )}
+          <button
+            onClick={startOAuth}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[12px] font-medium text-white rounded-lg transition-all"
+            style={{ backgroundColor: system.brandColor }}
+          >
+            <Wifi size={12} /> Connect with {system.name}
+          </button>
+          <p className="text-[9px] text-[#A1A1A8]/40 text-center">
+            You'll sign in to {system.name} securely — no keys to copy or paste.
+          </p>
+        </div>
+      )}
+
+      {/* P6: per-provider credential inputs for non-OAuth POS (e.g. Toast).
+          Square = 1 field; Clover = 2; Toast = 3. Unknown providers default
+          to single access_token. */}
+      {!oauthPath && !isDemo && !connected && (
+        <div className="space-y-2">
+          {fields.map(f => (
+            <div key={f.key} className="space-y-1">
+              <label className="text-[11px] font-medium text-[#A1A1A8]">{f.label}</label>
+              <input
+                type="password"
+                value={creds[f.key] || ''}
+                onChange={e => {
+                  setCreds(prev => ({ ...prev, [f.key]: e.target.value }))
+                  setTestResult(null)
+                  setConnectError('')
+                }}
+                placeholder={f.placeholder}
+                className="w-full px-3 py-2.5 text-[12px] font-mono bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40"
+              />
+            </div>
+          ))}
           {testResult && (
             <div className={clsx(
               'flex items-center gap-2 p-2 rounded-lg text-[11px]',
@@ -357,14 +465,14 @@ function LayoutA({ system, onConnect, isDemo }: { system: POSSystem; onConnect?:
           <div className="flex gap-2">
             <button
               onClick={handleTest}
-              disabled={testing || !apiKey.trim()}
+              disabled={testing || !allFilled}
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium border border-[#1F1F23] rounded-lg text-[#A1A1A8] hover:text-[#F5F5F7] hover:border-[#A1A1A8]/30 disabled:opacity-40 transition-all"
             >
               {testing ? <><Wifi size={12} className="animate-pulse" /> Testing...</> : <><Wifi size={12} /> Test Connection</>}
             </button>
             <button
               onClick={handleConnect}
-              disabled={connecting || !apiKey.trim()}
+              disabled={connecting || !allFilled}
               className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-[12px] font-medium text-white rounded-lg disabled:opacity-40 transition-all"
               style={{ backgroundColor: system.brandColor }}
             >

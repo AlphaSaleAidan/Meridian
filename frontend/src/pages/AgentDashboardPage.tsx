@@ -178,8 +178,8 @@ export default function AgentDashboardPage() {
                 <Target size={16} className="text-amber-400" />
               </div>
               <div>
-                <p className="stat-label">Actions Today</p>
-                <p className="text-lg font-bold text-amber-400 font-mono">3</p>
+                <p className="stat-label">With Findings</p>
+                <p className="text-lg font-bold text-amber-400 font-mono">{agents.filter(a => a.findings > 0).length}</p>
               </div>
             </div>
           </DashboardTiltCard>
@@ -220,7 +220,9 @@ export default function AgentDashboardPage() {
         </div>
       </ScrollReveal>
 
-      {/* Agent Chaining — Feedback Loops */}
+      {/* Agent Chaining — only when chain data exists (not produced by the
+          live backend, so hidden for real merchants instead of empty). */}
+      {chains.length > 0 && (
       <ScrollReveal variant="fadeUp" delay={0.15}>
         <div className="card overflow-hidden">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
@@ -256,8 +258,10 @@ export default function AgentDashboardPage() {
           </div>
         </div>
       </ScrollReveal>
+      )}
 
-      {/* Confidence Calibration */}
+      {/* Confidence Calibration — only when calibration data exists. */}
+      {calibration.length > 0 && (
       <ScrollReveal variant="fadeUp" delay={0.2}>
         <div className="card overflow-hidden">
           <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
@@ -314,6 +318,7 @@ export default function AgentDashboardPage() {
           </div>
         </div>
       </ScrollReveal>
+      )}
     </div>
     </DataPageSkeleton>
   )

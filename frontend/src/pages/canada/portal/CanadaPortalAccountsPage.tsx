@@ -1,14 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Wifi, Calendar, ChevronRight, RefreshCw, AlertTriangle, CreditCard, Loader2, Send } from 'lucide-react'
 import { deriveClientsFromLeads, type SalesClient } from '@/lib/canada-sales-demo-data'
-import { canadaLeadsService } from '@/lib/canada-leads-service'
+import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { useToast } from '@/components/Toast'
 import { getAuthHeaders } from '@/lib/supabase'
-
-function formatCurrency(value: number): string {
-  return 'CA$' + value.toLocaleString('en-CA')
-}
+import { formatCad as formatCurrency } from '@/lib/format'
+import { PortalPage } from './PortalPage'
 
 function daysUntilBilling(assignedAt: string): number {
   const assigned = new Date(assignedAt)
@@ -37,27 +35,36 @@ type BillingStatus = 'unchecked' | 'checking' | 'active' | 'pending' | 'past_due
 export default function CanadaPortalAccountsPage() {
   const { rep } = useSalesAuth()
   const { toast } = useToast()
-  const [clients, setClients] = useState<SalesClient[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: deals = [], isLoading, error } = useCanadaLeads(rep?.rep_id)
+  useCanadaLeadsRealtime(rep?.rep_id)
+  const clients: SalesClient[] = useMemo(() => deriveClientsFromLeads(deals), [deals])
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [syncingId, setSyncingId] = useState<string | null>(null)
+  // P2: per-client live POS connection state. Key = client.id, value
+  // = a tagged union: 'none' (org has no pos_connections row),
+  // 'error' (the fetch itself errored), or 'connected' (the first row
+  // from GET /api/pos/connections/{org_id}). Lazy-fetched on
+  // expansion so we don't hammer the API for a long list. Sweep §2.6:
+  // the old shape collapsed 'none' and 'error' to `null`, hiding
+  // backend failures behind a "Not connected" badge.
+  type PosConn = {
+    provider: string | null
+    status: string | null
+    last_sync_at: string | null
+    historical_import_complete: boolean
+  }
+  type PosConnState =
+    | { kind: 'none' }
+    | { kind: 'error' }
+    | { kind: 'connected'; conn: PosConn }
+  const [posByClient, setPosByClient] = useState<Record<string, PosConnState | undefined>>({})
+  const getConn = (s: PosConnState | undefined): PosConn | null =>
+    s?.kind === 'connected' ? s.conn : null
   const [billingStatuses, setBillingStatuses] = useState<Record<string, BillingStatus>>({})
   const [notifyingId, setNotifyingId] = useState<string | null>(null)
   const [notifiedIds, setNotifiedIds] = useState<Set<string>>(new Set())
   const [cardUpdateId, setCardUpdateId] = useState<string | null>(null)
-
-  useEffect(() => {
-    canadaLeadsService.list(rep?.rep_id).then(deals => {
-      setClients(deriveClientsFromLeads(deals))
-    }).catch(() => {
-      setClients([])
-    }).finally(() => setLoading(false))
-    const channel = canadaLeadsService.subscribe(rep?.rep_id, deals => {
-      setClients(deriveClientsFromLeads(deals))
-    })
-    return () => { canadaLeadsService.unsubscribe(channel) }
-  }, [rep?.rep_id])
 
   async function checkBilling(clientId: string) {
     setBillingStatuses(prev => ({ ...prev, [clientId]: 'checking' }))
@@ -102,6 +109,84 @@ export default function CanadaPortalAccountsPage() {
     setNotifyingId(null)
   }
 
+  // P2: lazy fetch the live POS connection for a client when its tile
+  // is expanded. Stores a tagged state in posByClient[client.id] —
+  // 'none' (org has no pos_connections row), 'error' (fetch failed),
+  // or 'connected' (first row from /api/pos/connections/{org_id}).
+  // Auth headers carry the rep's Supabase JWT; backend
+  // `require_org_access` enforces tenancy.
+  async function fetchPosConnection(clientId: string) {
+    if (posByClient[clientId] !== undefined) return
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(
+        `${API_BASE}/api/pos/connections/${clientId}`,
+        { headers },
+      )
+      if (!res.ok) {
+        setPosByClient(prev => ({ ...prev, [clientId]: { kind: 'error' } }))
+        return
+      }
+      const data = await res.json()
+      const conn = (data?.connections || [])[0] || null
+      setPosByClient(prev => ({
+        ...prev,
+        [clientId]: conn
+          ? { kind: 'connected', conn: {
+              provider: conn.provider || null,
+              status: conn.status || null,
+              last_sync_at: conn.last_sync_at || null,
+              historical_import_complete: !!conn.historical_import_complete,
+            } }
+          : { kind: 'none' },
+      }))
+    } catch {
+      setPosByClient(prev => ({ ...prev, [clientId]: { kind: 'error' } }))
+    }
+  }
+
+  useEffect(() => {
+    if (expandedId) fetchPosConnection(expandedId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedId])
+
+  // P2: real Sync POS handler. POSTs /api/pos/sync/{org_id}/{provider}
+  // and re-fetches the connection so last_sync_at refreshes. No
+  // setTimeout fakery — the button reflects actual server state.
+  async function handleSyncPos(client: SalesClient) {
+    const conn = getConn(posByClient[client.id])
+    const provider = conn?.provider
+    if (!provider) {
+      toast('No connected POS — nothing to sync.', 'error')
+      return
+    }
+    setSyncingId(client.id)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(
+        `${API_BASE}/api/pos/sync/${client.id}/${provider}`,
+        { method: 'POST', headers },
+      )
+      if (!res.ok) {
+        toast('Sync failed — see backend logs.', 'error')
+      } else {
+        toast('Sync started.', 'success')
+        // Re-fetch the connection a moment later so the displayed
+        // last_sync_at reflects the new sync attempt. The backend
+        // updates last_sync_at on the connection row when the
+        // background sync completes; this refresh shows the change.
+        setTimeout(() => {
+          setPosByClient(prev => { const next = { ...prev }; delete next[client.id]; return next })
+          fetchPosConnection(client.id)
+        }, 1500)
+      }
+    } catch {
+      toast('Could not reach the server.', 'error')
+    } finally {
+      setSyncingId(null)
+    }
+  }
+
   async function sendCardUpdate(client: SalesClient) {
     setCardUpdateId(client.id)
     try {
@@ -133,68 +218,72 @@ export default function CanadaPortalAccountsPage() {
   const annualRevenue = totalMRR * 12
   const avgRevPerAccount = activeCount > 0 ? Math.round(totalMRR / activeCount) : 0
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-8 h-8 rounded-lg bg-[#00d4aa]/15 border border-[#00d4aa]/30 flex items-center justify-center animate-pulse">
-          <span className="text-[#00d4aa] font-bold text-sm">M</span>
-        </div>
-      </div>
-    )
-  }
+  const emptyState = (
+    <div className="py-12 text-center text-sm text-pm-canada-text-faint">
+      No active accounts yet. Close some deals to see them here.
+    </div>
+  )
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-white">Accounts</h1>
-        <p className="text-sm text-[#6b7a74] mt-0.5">{activeCount} active accounts generating revenue</p>
+        <p className="text-sm text-pm-canada-text-muted mt-0.5">{activeCount} active accounts generating revenue</p>
       </div>
+
+      <PortalPage
+        isLoading={isLoading}
+        error={error}
+        isEmpty={clients.length === 0}
+        emptyState={emptyState}
+        errorTitle="Could not load your accounts"
+      >
 
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-              <Users size={16} className="text-[#00d4aa]" />
+            <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
+              <Users size={16} className="text-pm-accent" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Active Accounts</p>
+              <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Active Accounts</p>
               <p className="text-lg font-bold text-white">{activeCount}</p>
-              <p className="text-[10px] text-[#4a5550]">{activeCount} weekly / {activeCount} monthly</p>
+              <p className="text-2xs text-pm-canada-text-faint">{activeCount} weekly / {activeCount} monthly</p>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-              <DollarSign size={16} className="text-[#00d4aa]" />
+            <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
+              <DollarSign size={16} className="text-pm-accent" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Monthly Recurring</p>
-              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(totalMRR)}</p>
+              <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Monthly Recurring</p>
+              <p className="text-lg font-bold text-pm-amber-gold">{formatCurrency(totalMRR)}</p>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-              <TrendingUp size={16} className="text-[#00d4aa]" />
+            <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
+              <TrendingUp size={16} className="text-pm-accent" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Annual Revenue</p>
-              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(annualRevenue)}</p>
+              <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Annual Revenue</p>
+              <p className="text-lg font-bold text-pm-amber-gold">{formatCurrency(annualRevenue)}</p>
             </div>
           </div>
         </div>
-        <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+        <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#00d4aa]/10 flex items-center justify-center">
-              <BarChart3 size={16} className="text-[#00d4aa]" />
+            <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
+              <BarChart3 size={16} className="text-pm-accent" />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#6b7a74]">Avg per Account</p>
-              <p className="text-lg font-bold text-[#f0b429]">{formatCurrency(avgRevPerAccount)}/mo</p>
+              <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Avg per Account</p>
+              <p className="text-lg font-bold text-pm-amber-gold">{formatCurrency(avgRevPerAccount)}/mo</p>
             </div>
           </div>
         </div>
@@ -202,10 +291,10 @@ export default function CanadaPortalAccountsPage() {
 
       {/* Search */}
       <div className="relative">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6b7a74]/60" />
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-pm-canada-text-muted/60" />
         <input
           type="text" value={search} onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-3 py-2.5 bg-[#0f1512] border border-[#1a2420] rounded-xl text-sm text-white placeholder-[#4a5550] focus:outline-none focus:border-[#00d4aa]/50"
+          className="w-full pl-9 pr-3 py-2.5 bg-pm-canada-surface border border-pm-canada-border rounded-xl text-sm text-white placeholder-pm-canada-text-faint focus:outline-none focus:border-pm-accent/50"
           placeholder="Search accounts..."
         />
       </div>
@@ -221,78 +310,85 @@ export default function CanadaPortalAccountsPage() {
             <div key={client.id}>
               {/* Account Row Card */}
               <div
-                className="bg-[#0f1512] border border-[#1a2420] rounded-xl px-5 py-4 cursor-pointer hover:border-[#00d4aa]/30 transition-colors"
+                className="bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-4 cursor-pointer hover:border-pm-accent/30 transition-colors"
                 onClick={() => setExpandedId(isExpanded ? null : client.id)}
               >
                 <div className="flex items-center gap-4">
                   {/* Status Icon */}
-                  <CheckCircle2 size={18} className="text-[#00d4aa] flex-shrink-0" />
+                  <CheckCircle2 size={18} className="text-pm-accent flex-shrink-0" />
 
                   {/* Business + Contact */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{client.business_name}</p>
-                    <p className="text-xs text-[#6b7a74]">{client.contact_name}</p>
+                    <p className="text-xs text-pm-canada-text-muted">{client.contact_name}</p>
                   </div>
 
-                  {/* POS Badge */}
-                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1a2420] border border-[#1a2420]">
-                    <Wifi size={10} className="text-[#6b7a74]" />
-                    <span className="text-[10px] text-[#6b7a74] font-medium capitalize">{client.pos_provider || 'N/A'}</span>
+                  {/* POS Badge — P2: live from pos_connections when
+                      we've fetched it (i.e. tile was expanded once),
+                      falls back to canada_leads-derived selection
+                      until first fetch lands. The fallback is honest:
+                      lead's recorded selection is what we have to
+                      show before talking to the backend. */}
+                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-pm-canada-border border border-pm-canada-border">
+                    <Wifi size={10} className="text-pm-canada-text-muted" />
+                    <span className="text-2xs text-pm-canada-text-muted font-medium capitalize">
+                      {getConn(posByClient[client.id])?.provider || client.pos_provider || 'N/A'}
+                    </span>
                   </div>
 
                   {/* Revenue Badge */}
-                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-                    <DollarSign size={10} className="text-[#00d4aa]" />
-                    <span className="text-[10px] text-[#f0b429] font-medium">CA${client.monthly_revenue.toLocaleString()}/mo</span>
+                  <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-pm-accent/10 border border-pm-accent/20">
+                    <DollarSign size={10} className="text-pm-accent" />
+                    <span className="text-2xs text-pm-amber-gold font-medium">CA${client.monthly_revenue.toLocaleString()}/mo</span>
                   </div>
 
                   {/* Next Billing */}
-                  <div className="hidden md:flex items-center gap-1.5 text-[#6b7a74]">
+                  <div className="hidden md:flex items-center gap-1.5 text-pm-canada-text-muted">
                     <Calendar size={10} />
-                    <span className="text-[10px]">{formatDate(nextBilling)}</span>
+                    <span className="text-2xs">{formatDate(nextBilling)}</span>
                   </div>
 
                   {/* Payment Status Badge */}
                   {billingStatuses[client.id] === 'active' && (
-                    <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-                      <CheckCircle2 size={10} className="text-[#00d4aa]" />
-                      <span className="text-[10px] text-[#00d4aa] font-medium">Paid</span>
+                    <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-pm-accent/10 border border-pm-accent/20">
+                      <CheckCircle2 size={10} className="text-pm-accent" />
+                      <span className="text-2xs text-pm-accent font-medium">Paid</span>
                     </div>
                   )}
                   {billingStatuses[client.id] === 'pending' && (
-                    <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#f0b429]/10 border border-[#f0b429]/20">
-                      <span className="text-[10px] text-[#f0b429] font-medium">Pending</span>
+                    <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-pm-amber-gold/10 border border-pm-amber-gold/20">
+                      <span className="text-2xs text-pm-amber-gold font-medium">Pending</span>
                     </div>
                   )}
                   {billingStatuses[client.id] === 'past_due' && (
                     <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-500/10 border border-red-500/20">
                       <AlertTriangle size={10} className="text-red-400" />
-                      <span className="text-[10px] text-red-400 font-medium">Past Due</span>
+                      <span className="text-2xs text-red-400 font-medium">Past Due</span>
                     </div>
                   )}
 
                   {/* Due In Badge */}
-                  <div className="hidden md:flex items-center px-2.5 py-1 rounded-full bg-[#00d4aa]/10">
-                    <span className="text-[10px] text-[#00d4aa] font-medium">Due in {daysLeft}d</span>
+                  <div className="hidden md:flex items-center px-2.5 py-1 rounded-full bg-pm-accent/10">
+                    <span className="text-2xs text-pm-accent font-medium">Due in {daysLeft}d</span>
                   </div>
 
                   {/* Chevron */}
-                  <ChevronRight size={16} className={`text-[#4a5550] transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                  <ChevronRight size={16} className={`text-pm-canada-text-faint transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                 </div>
               </div>
 
               {/* Expanded Detail */}
               {isExpanded && (
-                <div className="bg-[#0a0f0d] border border-[#1a2420] border-t-0 rounded-b-xl px-5 py-5 -mt-1 space-y-5">
+                <div className="bg-pm-canada-bg border border-pm-canada-border border-t-0 rounded-b-xl px-5 py-5 -mt-1 space-y-5">
                   {/* Top row: back + active badge */}
                   <div className="flex items-center justify-between">
                     <button
                       onClick={() => setExpandedId(null)}
-                      className="text-xs text-[#00d4aa] hover:text-[#00d4aa]/80 transition-colors"
+                      className="text-xs text-pm-accent hover:text-pm-accent/80 transition-colors"
                     >
                       &larr; Back to accounts
                     </button>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-[#00d4aa]/10 text-[#00d4aa] border border-[#00d4aa]/20">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-2xs font-medium bg-pm-accent/10 text-pm-accent border border-pm-accent/20">
                       Active
                     </span>
                   </div>
@@ -300,62 +396,70 @@ export default function CanadaPortalAccountsPage() {
                   {/* Business Info */}
                   <div>
                     <h3 className="text-base font-bold text-white">{client.business_name}</h3>
-                    <p className="text-xs text-[#6b7a74] mt-0.5">{client.contact_name} &middot; {client.contact_email}</p>
+                    <p className="text-xs text-pm-canada-text-muted mt-0.5">{client.contact_name} &middot; {client.contact_email}</p>
                   </div>
 
                   {/* Inline Stats Row */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="bg-[#0f1512] border border-[#1a2420] rounded-lg px-3 py-2">
-                      <p className="text-[10px] text-[#4a5550]">Revenue / Plan</p>
-                      <p className="text-xs font-semibold text-white">{formatCurrency(client.monthly_revenue)} <span className="text-[#6b7a74] capitalize">({client.plan})</span></p>
+                    <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
+                      <p className="text-2xs text-pm-canada-text-faint">Revenue / Plan</p>
+                      <p className="text-xs font-semibold text-white">{formatCurrency(client.monthly_revenue)} <span className="text-pm-canada-text-muted capitalize">({client.plan})</span></p>
                     </div>
-                    <div className="bg-[#0f1512] border border-[#1a2420] rounded-lg px-3 py-2">
-                      <p className="text-[10px] text-[#4a5550]">Next Billing</p>
+                    <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
+                      <p className="text-2xs text-pm-canada-text-faint">Next Billing</p>
                       <p className="text-xs font-semibold text-white">{formatDate(nextBilling)}</p>
                     </div>
-                    <div className="bg-[#0f1512] border border-[#1a2420] rounded-lg px-3 py-2">
-                      <p className="text-[10px] text-[#4a5550]">POS System</p>
-                      <p className="text-xs font-semibold text-white capitalize">{client.pos_provider || 'Not connected'}</p>
+                    <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
+                      <p className="text-2xs text-pm-canada-text-faint">POS System</p>
+                      <p className="text-xs font-semibold text-white capitalize">
+                        {(() => {
+                          const s = posByClient[client.id]
+                          if (s === undefined) return client.pos_provider || 'Loading…'
+                          if (s.kind === 'error') return 'Couldn’t load'
+                          if (s.kind === 'connected') return s.conn.provider || 'Not connected'
+                          return 'Not connected'
+                        })()}
+                      </p>
                     </div>
-                    <div className="bg-[#0f1512] border border-[#1a2420] rounded-lg px-3 py-2">
-                      <p className="text-[10px] text-[#4a5550]">Transactions</p>
-                      <p className="text-xs font-semibold text-[#6b7a74]">&mdash;</p>
+                    <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
+                      <p className="text-2xs text-pm-canada-text-faint">Transactions</p>
+                      <p className="text-xs font-semibold text-pm-canada-text-muted">&mdash;</p>
                     </div>
                   </div>
 
                   {/* Billing Schedule Card */}
-                  <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4">
+                  <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
                     <h4 className="text-xs font-semibold text-white mb-3">Billing Schedule</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
-                        <p className="text-[10px] text-[#4a5550]">Started</p>
+                        <p className="text-2xs text-pm-canada-text-faint">Started</p>
                         <p className="text-xs text-white">{formatDate(client.assigned_at)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[#4a5550]">Next Payment</p>
+                        <p className="text-2xs text-pm-canada-text-faint">Next Payment</p>
                         <p className="text-xs text-white">{formatDate(nextBilling)}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[#4a5550]">Cycle</p>
+                        <p className="text-2xs text-pm-canada-text-faint">Cycle</p>
                         <p className="text-xs text-white">Monthly</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[#4a5550]">Amount</p>
+                        <p className="text-2xs text-pm-canada-text-faint">Amount</p>
                         <p className="text-xs text-white">{formatCurrency(client.monthly_revenue)}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Billing Actions */}
-                  <div className="bg-[#0f1512] border border-[#1a2420] rounded-xl p-4 space-y-3">
+                  <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-semibold text-white flex items-center gap-1.5">
-                        <CreditCard size={12} className="text-[#00d4aa]" /> Payment
+                        <CreditCard size={12} className="text-pm-accent" /> Payment
                       </h4>
                       <button
                         onClick={() => checkBilling(client.id)}
                         disabled={billingStatuses[client.id] === 'checking'}
-                        className="text-[10px] text-[#6b7a74] hover:text-[#00d4aa] transition-colors flex items-center gap-1"
+                        className="text-2xs text-pm-canada-text-muted hover:text-pm-accent transition-colors flex items-center gap-1"
                       >
                         <RefreshCw size={10} className={billingStatuses[client.id] === 'checking' ? 'animate-spin' : ''} />
                         Check Status
@@ -363,32 +467,32 @@ export default function CanadaPortalAccountsPage() {
                     </div>
 
                     {billingStatuses[client.id] === 'checking' && (
-                      <div className="flex items-center gap-2 text-xs text-[#6b7a74]">
+                      <div className="flex items-center gap-2 text-xs text-pm-canada-text-muted">
                         <Loader2 size={12} className="animate-spin" /> Checking...
                       </div>
                     )}
                     {billingStatuses[client.id] === 'active' && (
-                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#00d4aa]/10 border border-[#00d4aa]/20">
-                        <CheckCircle2 size={14} className="text-[#00d4aa]" />
-                        <span className="text-[11px] text-[#00d4aa] font-medium">Payment active — card on file</span>
+                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-pm-accent/10 border border-pm-accent/20">
+                        <CheckCircle2 size={14} className="text-pm-accent" />
+                        <span className="text-2xs text-pm-accent font-medium">Payment active — card on file</span>
                       </div>
                     )}
                     {billingStatuses[client.id] === 'pending' && (
-                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#f0b429]/10 border border-[#f0b429]/20">
-                        <span className="text-[11px] text-[#f0b429] font-medium">Invoice sent — awaiting payment</span>
+                      <div className="flex items-center gap-2 p-2.5 rounded-lg bg-pm-amber-gold/10 border border-pm-amber-gold/20">
+                        <span className="text-2xs text-pm-amber-gold font-medium">Invoice sent — awaiting payment</span>
                       </div>
                     )}
                     {billingStatuses[client.id] === 'past_due' && (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20">
                           <AlertTriangle size={14} className="text-red-400" />
-                          <span className="text-[11px] text-red-400 font-medium">Payment past due</span>
+                          <span className="text-2xs text-red-400 font-medium">Payment past due</span>
                         </div>
                         <div className="flex gap-2">
                           <button
                             onClick={() => notifyClient(client)}
                             disabled={notifyingId === client.id || notifiedIds.has(client.id)}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 disabled:opacity-50 transition-all"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-2xs font-medium text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 disabled:opacity-50 transition-all"
                           >
                             {notifyingId === client.id ? <Loader2 size={12} className="animate-spin" /> : notifiedIds.has(client.id) ? <CheckCircle2 size={12} /> : <Send size={12} />}
                             {notifiedIds.has(client.id) ? 'Notified' : 'Notify'}
@@ -396,7 +500,7 @@ export default function CanadaPortalAccountsPage() {
                           <button
                             onClick={() => sendCardUpdate(client)}
                             disabled={cardUpdateId === client.id}
-                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium text-[#0a0f0d] bg-[#00d4aa] rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all"
+                            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-2xs font-medium text-pm-canada-bg bg-pm-accent rounded-lg hover:bg-pm-accent/90 disabled:opacity-50 transition-all"
                           >
                             {cardUpdateId === client.id ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />}
                             Update Card
@@ -405,17 +509,29 @@ export default function CanadaPortalAccountsPage() {
                       </div>
                     )}
                     {(!billingStatuses[client.id] || billingStatuses[client.id] === 'unchecked' || billingStatuses[client.id] === 'none') && billingStatuses[client.id] !== 'checking' && (
-                      <p className="text-[11px] text-[#4a5550]">Click "Check Status" to see billing status.</p>
+                      <p className="text-2xs text-pm-canada-text-faint">Click "Check Status" to see billing status.</p>
                     )}
                   </div>
 
-                  {/* POS Sync */}
+                  {/* POS Sync — P2: real last_sync_at from
+                      pos_connections; real POST to /api/pos/sync/...
+                      no more setTimeout theatre. */}
                   <div className="space-y-3">
-                    <p className="text-[10px] text-[#4a5550]">Last POS sync: {new Date(Date.now() - 1000 * 60 * 47).toLocaleString('en-CA')}</p>
+                    <p className="text-2xs text-pm-canada-text-faint">
+                      {(() => {
+                        const s = posByClient[client.id]
+                        if (s === undefined) return 'Last POS sync: loading…'
+                        if (s.kind === 'error') return 'Last POS sync: couldn’t load'
+                        const ts = s.kind === 'connected' ? s.conn.last_sync_at : null
+                        return ts
+                          ? `Last POS sync: ${new Date(ts).toLocaleString('en-CA')}`
+                          : 'Last POS sync: never'
+                      })()}
+                    </p>
                     <button
-                      onClick={() => { setSyncingId(client.id); setTimeout(() => setSyncingId(null), 2000) }}
-                      disabled={syncingId === client.id}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-[#1a2420] rounded-xl text-xs text-[#6b7a74] hover:border-[#00d4aa]/30 hover:text-[#00d4aa] disabled:opacity-50 transition-colors"
+                      onClick={() => handleSyncPos(client)}
+                      disabled={syncingId === client.id || !getConn(posByClient[client.id])?.provider}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border rounded-xl text-xs text-pm-canada-text-muted hover:border-pm-accent/30 hover:text-pm-accent disabled:opacity-50 transition-colors"
                     >
                       <RefreshCw size={12} className={syncingId === client.id ? 'animate-spin' : ''} />
                       {syncingId === client.id ? 'Syncing...' : 'Sync POS Data'}
@@ -427,12 +543,15 @@ export default function CanadaPortalAccountsPage() {
           )
         })}
 
-        {filtered.length === 0 && (
-          <div className="py-12 text-center text-sm text-[#4a5550]">
-            {search ? 'No accounts match your search.' : 'No active accounts yet. Close some deals to see them here.'}
+        {/* When user is searching but no result, show inline hint — the
+            "no accounts at all" empty state is handled by PortalPage. */}
+        {clients.length > 0 && filtered.length === 0 && (
+          <div className="py-12 text-center text-sm text-pm-canada-text-faint">
+            No accounts match your search.
           </div>
         )}
       </div>
+      </PortalPage>
     </div>
   )
 }

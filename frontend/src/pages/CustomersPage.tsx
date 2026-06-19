@@ -227,6 +227,116 @@ function ConnectCamerasButton({ status, cameraCount, onConnect }: {
   )
 }
 
+// Real connected-merchant view. POS sales are largely anonymous, so RFM
+// segments / cohorts / churn (the demo view) aren't derivable — show the
+// honest, real metrics the POS feed supports instead of a blank page.
+function RealCustomersView({ data }: { data: any }) {
+  const summary = data?.summary ?? {}
+  const methods: any[] = data?.payment_methods ?? []
+  const top: any[] = data?.top_customers ?? []
+  const methodTotal = methods.reduce((s, m) => s + (m.revenue_cents || 0), 0) || 1
+
+  const tiles = [
+    { label: 'Transactions', val: (summary.total_transactions ?? 0).toLocaleString(), color: 'text-[#1A8FD6]', Icon: Users },
+    { label: 'Revenue', val: formatCentsCompact(summary.total_revenue_cents ?? 0), color: 'text-[#17C5B0]', Icon: DollarSign },
+    { label: 'Avg Ticket', val: formatCents(summary.avg_ticket_cents ?? 0), color: 'text-[#7C5CFF]', Icon: DollarSign },
+    { label: 'Repeat Rate', val: `${summary.repeat_rate_pct ?? 0}%`, color: 'text-[#17C5B0]', Icon: Heart },
+    { label: 'Identified', val: (summary.identified_customers ?? 0).toLocaleString(), color: 'text-amber-400', Icon: Shield },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <StaggerContainer className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        {tiles.map(t => (
+          <StaggerItem key={t.label}>
+            <DashboardTiltCard className="card p-4">
+              <div className="flex items-center gap-2">
+                <div className={clsx('w-8 h-8 rounded-lg flex items-center justify-center bg-[#1F1F23]', t.color)}>
+                  <t.Icon size={16} />
+                </div>
+                <div>
+                  <p className="stat-label">{t.label}</p>
+                  <p className={clsx('text-lg font-bold font-mono', t.color)}>{t.val}</p>
+                </div>
+              </div>
+            </DashboardTiltCard>
+          </StaggerItem>
+        ))}
+      </StaggerContainer>
+
+      <ScrollReveal variant="fadeUp" delay={0.05}>
+        <div className="card p-4 border border-[#1A8FD6]/20 bg-[#1A8FD6]/[0.04] flex items-start gap-3">
+          <Users size={18} className="text-[#1A8FD6] flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-[#A1A1A8] leading-relaxed">
+            POS sales are anonymous unless a customer is identified at checkout. Full segments, cohorts and
+            churn scoring unlock once you capture customers (loyalty, email at checkout, or camera analytics).
+            Below is what we can derive from your sales today.
+          </p>
+        </div>
+      </ScrollReveal>
+
+      {methods.length > 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.1}>
+          <div className="card p-4 sm:p-5">
+            <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Payment Methods</h3>
+            <div className="space-y-3">
+              {methods.map(m => (
+                <div key={m.method}>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-[#F5F5F7] capitalize">{m.method}</span>
+                    <span className="font-mono text-[#A1A1A8]">{formatCentsCompact(m.revenue_cents || 0)} · {(m.transaction_count || 0).toLocaleString()} txns</span>
+                  </div>
+                  <div className="h-1.5 bg-[#1F1F23] rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0]" style={{ width: `${Math.round((m.revenue_cents || 0) / methodTotal * 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </ScrollReveal>
+      )}
+
+      <ScrollReveal variant="fadeUp" delay={0.15}>
+        <div className="card overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23]">
+            <h3 className="text-sm font-semibold text-[#F5F5F7]">Top Customers</h3>
+            <p className="text-[10px] text-[#A1A1A8] mt-0.5">Identified repeat customers, ranked by spend</p>
+          </div>
+          {top.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="pm-table min-w-[500px]">
+                <thead>
+                  <tr>
+                    <th className="text-center w-8">#</th>
+                    <th className="text-left">Customer</th>
+                    <th className="text-right">Visits</th>
+                    <th className="text-right">Total Spent</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {top.map((c, i) => (
+                    <tr key={c.customer_id}>
+                      <td className="text-center font-mono text-[10px] text-[#A1A1A8]/50">{i + 1}</td>
+                      <td className="text-xs text-[#F5F5F7] font-mono">{c.customer_id}</td>
+                      <td className="text-right font-mono text-[#F5F5F7]">{c.transaction_count}</td>
+                      <td className="text-right font-mono text-[#F5F5F7]">{formatCentsCompact(c.total_spent_cents || 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="px-5 py-8 text-center">
+              <p className="text-sm text-[#A1A1A8]">No identified customers yet.</p>
+              <p className="text-xs text-[#A1A1A8]/50 mt-1">Your POS sales are anonymous — capture customers to build profiles.</p>
+            </div>
+          )}
+        </div>
+      </ScrollReveal>
+    </div>
+  )
+}
+
 export default function CustomersPage() {
   const orgId = useOrgId()
   const isDemoMode = useIsDemo()
@@ -243,6 +353,30 @@ export default function CustomersPage() {
 
   if (!isDemoMode && apiData.loading) return <LoadingPage />
   if (!isDemoMode && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
+
+  // Real merchants get the honest POS-derived view (the demo keeps the rich
+  // RFM/cohort/ranking UI, which POS data can't populate).
+  if (!isDemoMode) {
+    return (
+      <DataPageSkeleton title="Customers" layout="table">
+        <div className="space-y-6">
+          {showCameraWizard && (
+            <CameraSetupWizard orgId="" onComplete={() => setShowCameraWizard(false)} onClose={() => setShowCameraWizard(false)} />
+          )}
+          <ScrollReveal variant="fadeUp">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-[#F5F5F7]">Customer Intelligence</h1>
+                <p className="text-sm text-[#A1A1A8] mt-1">Spend, repeat rate &amp; payment mix from your POS sales</p>
+              </div>
+              <ConnectCamerasButton status={cameraStatus} cameraCount={0} onConnect={() => setShowCameraWizard(true)} />
+            </div>
+          </ScrollReveal>
+          <RealCustomersView data={apiData.data} />
+        </div>
+      </DataPageSkeleton>
+    )
+  }
 
   const totalCustomers = segments.reduce((s, seg) => s + seg.count, 0)
   const vipCount = segments.filter(s => s.name === 'Champions' || s.name === 'Loyal').reduce((s, seg) => s + seg.count, 0)
