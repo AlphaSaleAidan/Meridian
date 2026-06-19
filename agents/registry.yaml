@@ -40,6 +40,7 @@ agents:
   - {name: feature_engineer,     class: FeatureEngineerAgent,     module: src.ai.agents.feature_engineer,     category: analytics_ml, exec_tier: 6, calls_llm: false, model_tier: null}
   - {name: foot_traffic,         class: FootTrafficAgent,         module: src.ai.agents.foot_traffic,         category: analytics_ml, exec_tier: 1, calls_llm: false, model_tier: null}
   - {name: forecaster,           class: ForecasterAgent,          module: src.ai.agents.forecaster,           category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
+  - {name: timesfm_forecaster,   class: TimesFMForecasterAgent,   module: src.ai.agents.timesfm_forecaster,   category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
   - {name: growth_score,         class: GrowthScoreAgent,         module: src.ai.agents.growth_score,         category: analytics_ml, exec_tier: 5, calls_llm: false, model_tier: null}
   - {name: inventory_intel,      class: InventoryIntelAgent,      module: src.ai.agents.inventory_intel,      category: analytics_ml, exec_tier: 2, calls_llm: false, model_tier: null}
   - {name: location_analyst,     class: LocationAnalystAgent,     module: src.ai.agents.location_analyst,     category: analytics_ml, exec_tier: 3, calls_llm: false, model_tier: null}

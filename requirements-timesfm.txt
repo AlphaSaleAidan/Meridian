@@ -1,0 +1,11 @@
+# Optional TimesFM forecasting extra — NOT part of core requirements.
+#
+# These are heavy (torch + the model weights download to ~hundreds of MB) and are
+# only needed on a host that runs the TimesFM forecaster. The code is inert unless
+# TIMESFM_ENABLED=1 AND these are installed, so the core deploy is unaffected.
+#
+#   pip install -r requirements-timesfm.txt
+#   export TIMESFM_ENABLED=1
+#
+# Pin/adjust to the torch build that matches the host (CPU vs CUDA).
+timesfm[torch]>=2.0.0

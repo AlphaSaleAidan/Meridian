@@ -17,6 +17,7 @@ from .staffing import StaffingAgent
 from .benchmark import BenchmarkAgent
 from .money_left import MoneyLeftAgent
 from .forecaster import ForecasterAgent
+from .timesfm_forecaster import TimesFMForecasterAgent
 from .customer_ltv import CustomerLTVAgent
 from .promo_roi import PromoROIAgent
 from .cashflow_forecast import CashFlowForecastAgent
