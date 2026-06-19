@@ -199,6 +199,76 @@ def test_clover_no_service_charge_or_device_omits_fields():
     assert "device_id" not in txn["metadata"]
 
 
+# ── Tax / discount / subtotal breakdown (Finding 5/7) ────────────────────
+
+def test_clover_tax_summed_from_expanded_line_item_taxrates():
+    # With expand=lineItems.taxRates, each line carries taxRates.elements[].taxAmount.
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {
+        "total": 1100, "state": "paid",
+        "lineItems": {"elements": [
+            {"id": "li1", "price": 1000,
+             "taxRates": {"elements": [{"taxAmount": 100}]}},
+        ]},
+        "payments": {"elements": [{"tender": {"label": "Cash"}, "amount": 1100}]},
+    }
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["tax_cents"] == 100
+    assert txn["total_cents"] == 1100
+    assert txn["subtotal_cents"] == 1000  # total - tax - service_charge(0)
+
+
+def test_clover_subtotal_excludes_tax_and_service_charge():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {
+        "total": 5000, "state": "paid",
+        "lineItems": {"elements": [
+            {"id": "li1", "price": 3600, "taxRates": {"elements": [{"taxAmount": 500}]}},
+        ]},
+        "serviceCharges": {"elements": [{"name": "Auto Gratuity", "amount": 900}]},
+        "payments": {"elements": [{"tender": {"label": "Credit Card"}, "amount": 5000}]},
+    }
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["tax_cents"] == 500
+    assert txn["metadata"]["service_charge_cents"] == 900
+    # 5000 total = 3600 subtotal + 500 tax + 900 service charge
+    assert txn["subtotal_cents"] == 3600
+
+
+def test_clover_order_level_discount_summed_from_expanded_discounts():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    order = {
+        "total": 900, "state": "paid",
+        "discounts": {"elements": [{"name": "10% off", "amount": -100}]},
+        "payments": {"elements": [{"tender": {"label": "Cash"}, "amount": 900}]},
+    }
+    txn = mapper.map_order_to_transaction(order)
+    assert txn["discount_cents"] == 100  # abs() of -100
+
+
+# ── Line-item refund flag uses `refunded`, not `isRevenue` (Finding 6) ────
+
+def test_clover_line_item_refund_flag_uses_refunded_field():
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    refunded_line = {"id": "li1", "name": "X", "price": 500, "refunded": True}
+    out = mapper.map_line_item(refunded_line, "txn-1", "2026-01-01T00:00:00+00:00")
+    assert out["is_refund"] is True
+
+
+def test_clover_non_revenue_item_is_not_flagged_as_refund():
+    # isRevenue=false (a non-revenue item) must NOT be treated as a refund.
+    from src.clover.mappers import CloverDataMapper
+    mapper = CloverDataMapper(org_id=ORG)
+    non_rev_line = {"id": "li2", "name": "Gift Card", "price": 2500,
+                    "isRevenue": False}  # refunded absent
+    out = mapper.map_line_item(non_rev_line, "txn-1", "2026-01-01T00:00:00+00:00")
+    assert out["is_refund"] is False
+
+
 # ── Clover refunds folded into transactions (net revenue accuracy) ──
 
 class _Result:
