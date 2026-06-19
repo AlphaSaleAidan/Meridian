@@ -1,0 +1,141 @@
+{
+  "_comment": "SEO content backlog for the autonomous draft loop. Every topic must be TRUE-to-product and defensible. status: queued | drafting | drafted | published | rejected. type: guide | blog | integration | comparison | city. Pillars link the cluster. No fabricated claims, no invented metrics.",
+  "updatedAt": "2026-06-19",
+  "topics": [
+    {
+      "id": "ca-bc-pipa",
+      "title": "BC PIPA for Small Businesses: How It Differs from PIPEDA",
+      "type": "guide",
+      "cluster": "canada-compliance",
+      "intent": "BC business owners researching provincial privacy obligations",
+      "status": "queued",
+      "priority": 1
+    },
+    {
+      "id": "ca-alberta-pipa",
+      "title": "Alberta PIPA: A Small Business Privacy Guide",
+      "type": "guide",
+      "cluster": "canada-compliance",
+      "intent": "Alberta business owners researching provincial privacy obligations",
+      "status": "queued",
+      "priority": 1
+    },
+    {
+      "id": "ca-consent-pos",
+      "title": "Getting Valid Customer Consent for Loyalty and Marketing Data in Canada",
+      "type": "guide",
+      "cluster": "canada-compliance",
+      "intent": "operators running loyalty programs unsure about consent rules",
+      "status": "queued",
+      "priority": 1
+    },
+    {
+      "id": "ca-breach-playbook",
+      "title": "Data Breach Reporting in Canada: A Small Business Playbook",
+      "type": "guide",
+      "cluster": "canada-compliance",
+      "intent": "owners worried about what to do if customer data is exposed",
+      "status": "queued",
+      "priority": 2
+    },
+    {
+      "id": "int-moneris",
+      "title": "Moneris POS Analytics: Connect Moneris to Meridian",
+      "type": "integration",
+      "cluster": "canada-integrations",
+      "intent": "Canadian merchants on Moneris searching for analytics",
+      "status": "queued",
+      "priority": 1
+    },
+    {
+      "id": "int-alice",
+      "title": "Alice POS Analytics: Multi-Location Reporting for Canadian Retail",
+      "type": "integration",
+      "cluster": "canada-integrations",
+      "intent": "Canadian retail groups on Alice POS",
+      "status": "queued",
+      "priority": 2
+    },
+    {
+      "id": "int-lightspeed-ca",
+      "title": "Lightspeed POS Analytics for Canadian Restaurants and Retail",
+      "type": "integration",
+      "cluster": "canada-integrations",
+      "intent": "Lightspeed merchants (Montreal-HQ POS) wanting deeper analytics",
+      "status": "queued",
+      "priority": 2
+    },
+    {
+      "id": "int-touchbistro",
+      "title": "TouchBistro Analytics: Turn Your POS Data Into Revenue Insights",
+      "type": "integration",
+      "cluster": "canada-integrations",
+      "intent": "TouchBistro (Toronto-HQ) restaurant operators",
+      "status": "queued",
+      "priority": 2
+    },
+    {
+      "id": "city-toronto-cafe",
+      "title": "Cafe Analytics in Toronto: Benchmarks and Trends",
+      "type": "city",
+      "cluster": "canada-local",
+      "intent": "Toronto cafe owners searching local analytics",
+      "status": "queued",
+      "priority": 3
+    },
+    {
+      "id": "city-vancouver-restaurant",
+      "title": "Restaurant Analytics in Vancouver: What the Data Shows",
+      "type": "city",
+      "cluster": "canada-local",
+      "intent": "Vancouver restaurant owners",
+      "status": "queued",
+      "priority": 3
+    },
+    {
+      "id": "city-montreal-restaurant-fr",
+      "title": "Analytique de restaurant a Montreal (FR-CA landing)",
+      "type": "city",
+      "cluster": "canada-local",
+      "intent": "French-language Montreal operators (Law 25 / FR-CA SEO)",
+      "status": "queued",
+      "priority": 2
+    },
+    {
+      "id": "guide-gst-hst-pos",
+      "title": "Tracking GST/HST/PST in Your POS Data: A Canadian Owner's Guide",
+      "type": "guide",
+      "cluster": "canada-operations",
+      "intent": "Canadian operators reconciling sales tax from POS",
+      "status": "queued",
+      "priority": 1
+    },
+    {
+      "id": "guide-cad-margins",
+      "title": "Protecting Restaurant Margins Through Canadian Food Inflation",
+      "type": "guide",
+      "cluster": "canada-operations",
+      "intent": "Canadian operators squeezed by food costs",
+      "status": "queued",
+      "priority": 2
+    },
+    {
+      "id": "vs-toast-canada",
+      "title": "Meridian vs Toast Analytics for Canadian Restaurants",
+      "type": "comparison",
+      "cluster": "comparisons",
+      "intent": "Canadian operators comparing analytics options",
+      "status": "queued",
+      "priority": 2
+    },
+    {
+      "id": "guide-pos-data-ownership",
+      "title": "Who Owns Your POS Data? A Guide for Canadian Merchants",
+      "type": "guide",
+      "cluster": "canada-compliance",
+      "intent": "owners worried about data lock-in and ownership",
+      "status": "queued",
+      "priority": 1
+    }
+  ]
+}

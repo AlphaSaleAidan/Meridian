@@ -41,6 +41,8 @@ export default function CookieConsentBanner() {
   const handleAcceptAll = () => {
     localStorage.setItem(STORAGE_KEY, 'all')
     setConsent('all')
+    // Notify analytics loader that consent was just granted (GA4 loads only after this).
+    try { window.dispatchEvent(new Event('meridian-consent-changed')) } catch { /* SSR */ }
   }
 
   const handleEssentialOnly = () => {

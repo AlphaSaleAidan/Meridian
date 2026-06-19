@@ -1,0 +1,5 @@
+# Secrets and runtime state — never commit
+.env
+drafts/
+.reddit-seen.json
+*.log

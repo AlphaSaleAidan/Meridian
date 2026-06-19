@@ -386,6 +386,56 @@ export default function CanadaLandingPage() {
       {/* FOOTER */}
       <footer className="border-t border-[#1F1F23]/40 py-8">
         <div className="max-w-content mx-auto px-4 sm:px-6">
+          {/* Compliance guides & resources */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-8 pb-8 mb-8 border-b border-[#1F1F23]/40 sm:grid-cols-3">
+            <div>
+              <h4 className="text-[12px] font-semibold text-[#F5F5F7] mb-3 flex items-center gap-1.5">
+                <span className="text-[#17C5B0]">🇨🇦</span> Canadian Compliance Guides
+              </h4>
+              <ul className="space-y-2 text-[12px] text-[#A1A1A8]/60">
+                {[
+                  { label: 'Why We Built Compliance-First', path: '/guides/meridian-compliance-first-canada' },
+                  { label: 'PIPEDA for Small Business', path: '/guides/pipeda-compliance-small-business' },
+                  { label: 'Quebec Law 25 Explained', path: '/guides/quebec-law-25-small-business' },
+                  { label: 'Where Your POS Data Lives', path: '/guides/pos-data-residency-canada' },
+                ].map(l => (
+                  <li key={l.path}>
+                    <a onClick={() => navigate(l.path)} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">{l.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-[12px] font-semibold text-[#F5F5F7] mb-3">Resources</h4>
+              <ul className="space-y-2 text-[12px] text-[#A1A1A8]/60">
+                {[
+                  { label: 'All Guides', path: '/guides' },
+                  { label: 'Free Tools', path: '/tools/food-cost-calculator' },
+                  { label: 'Blog', path: '/blog' },
+                  { label: 'FAQ', path: '/faq' },
+                ].map(l => (
+                  <li key={l.path}>
+                    <a onClick={() => navigate(l.path)} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">{l.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-[12px] font-semibold text-[#F5F5F7] mb-3">Meridian Canada</h4>
+              <ul className="space-y-2 text-[12px] text-[#A1A1A8]/60">
+                {[
+                  { label: 'Live Demo', path: '/canada/demo' },
+                  { label: 'Careers', path: '/canada/careers' },
+                  { label: 'Customer Login', path: '/canada/login' },
+                  { label: 'Get Started', path: '/canada/onboard' },
+                ].map(l => (
+                  <li key={l.path}>
+                    <a onClick={() => navigate(l.path)} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">{l.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
           <div className="flex flex-col gap-4 sm:gap-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">

@@ -851,6 +851,327 @@ export const guides: GuideData[] = [
     ctaDescription:
       'Meridian analyzes your sales patterns to recommend optimal staffing for every shift — so you stop overspending on labor and start maximizing revenue per labor hour.',
   },
+
+  /* ─── 10. PIPEDA FOR SMALL BUSINESS (Canada) ────── */
+  {
+    slug: 'pipeda-compliance-small-business',
+    seoTitle: 'PIPEDA Compliance for Canadian Small Businesses: A Practical Guide | Meridian',
+    description:
+      'A plain-English guide to PIPEDA for Canadian small business owners. Learn what customer data the law covers, your obligations, and how to choose POS and analytics tools that are built for Canadian privacy requirements.',
+    datePublished: '2026-06-19',
+    heroTitle: 'PIPEDA Compliance',
+    heroAccent: 'for Canadian Small Businesses',
+    heroDescription:
+      'If you collect customer information — names, emails, loyalty data, payment records — Canada\'s federal privacy law applies to you. Here is what PIPEDA actually requires, in plain English, and how to pick tools that were built with it in mind.',
+    sections: [
+      {
+        title: 'What PIPEDA Is and Who It Applies To',
+        paragraphs: [
+          'PIPEDA — the Personal Information Protection and Electronic Documents Act — is Canada\'s federal private-sector privacy law. It governs how businesses collect, use, and disclose personal information in the course of commercial activity. For most small businesses operating across Canada (outside of provinces with their own substantially-similar laws, like Quebec, BC, and Alberta for certain activities), PIPEDA is the baseline.',
+          'The common myth is that PIPEDA is "only for big companies." It is not. A single-location cafe that keeps a customer email list, a loyalty program, or stored card-on-file data is handling personal information under the law. The size of your business does not exempt you — what matters is that you collect personal information for commercial purposes.',
+        ],
+        stat: { value: '10', label: 'fair information principles at the core of PIPEDA' },
+      },
+      {
+        title: 'The 10 Fair Information Principles (In Plain Terms)',
+        paragraphs: [
+          'PIPEDA is built on ten principles: accountability, identifying purposes, consent, limiting collection, limiting use and disclosure, accuracy, safeguards, openness, individual access, and challenging compliance. Translated for a small business owner, they boil down to a few practical habits.',
+          'Collect only the data you actually need. Tell customers why you are collecting it. Get meaningful consent. Keep it accurate and secure. Let people see and correct their own information when they ask. Do not use data for new purposes without fresh consent. Have someone responsible for privacy in your organization — even if that someone is you.',
+        ],
+        tip: 'Designate one person as your privacy point of contact and write down, in one page, what customer data you collect and why. That single document satisfies a surprising share of your "openness" and "accountability" obligations.',
+      },
+      {
+        title: 'Where Small Businesses Actually Trip Up',
+        paragraphs: [
+          'The most common gaps are not dramatic breaches — they are quiet defaults. Collecting more data than you use. Keeping it forever with no retention schedule. Storing customer information in tools that move it offshore without anyone realizing. Sharing it with third-party vendors who have weaker safeguards than you do.',
+          'Your POS and analytics stack is usually where the most sensitive data lives: transaction histories, customer profiles, payment metadata. That makes the privacy posture of those tools one of the most important decisions you make — not a back-office detail.',
+        ],
+      },
+      {
+        title: 'Mandatory Breach Reporting',
+        paragraphs: [
+          'Since 2018, PIPEDA requires organizations to report breaches of security safeguards that pose a "real risk of significant harm" to the Office of the Privacy Commissioner of Canada, to notify affected individuals, and to keep records of all breaches — even minor ones. Penalties for knowingly failing to report can reach up to $100,000.',
+          'For a small business, the practical implication is simple: you need to know where your customer data lives and who has access, so that if something goes wrong you can actually assess and report it. Tools that keep your data consolidated, access-controlled, and within Canada make that obligation far easier to meet.',
+        ],
+      },
+      {
+        title: 'Choosing PIPEDA-Aware Tools',
+        paragraphs: [
+          'You do not become compliant by buying software — compliance is your responsibility as the business. But the tools you choose make compliance dramatically easier or harder. Look for documented data retention, clear consent handling, role-based access controls, Canadian data residency, and vendors who are transparent about how your data is processed.',
+          'Meridian was designed around exactly these requirements. As one of the earliest POS-analytics platforms to build a dedicated Canadian portal, Meridian handles customer data with documented retention, consent, and access controls, keeps Canadian data in Canadian data centres, and is built to support PIPEDA and Quebec\'s Law 25. That means the analytics layer sitting on top of your POS is working with the law, not around it.',
+        ],
+        tip: 'This guide is general information, not legal advice. For obligations specific to your business, consult a Canadian privacy lawyer or the Office of the Privacy Commissioner\'s small-business resources.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'Does PIPEDA apply to my small business?',
+        a: 'If you collect, use, or disclose personal information in the course of commercial activity, PIPEDA generally applies — regardless of your size. There is no small-business exemption based on revenue or headcount. Some provinces (Quebec, BC, Alberta) have their own substantially-similar laws that may apply instead for intra-provincial activity, but PIPEDA is the federal baseline for most businesses operating across Canada.',
+      },
+      {
+        q: 'What counts as "personal information" under PIPEDA?',
+        a: 'Personal information is any factual or subjective information about an identifiable individual: names, email addresses, phone numbers, loyalty and purchase history, payment records, and more. For a typical restaurant or retail shop, your customer email list, loyalty program data, and stored transaction records all qualify.',
+      },
+      {
+        q: 'What happens if I do not comply with PIPEDA?',
+        a: 'The Office of the Privacy Commissioner of Canada can investigate complaints, and matters can proceed to Federal Court, which can order changes and award damages. Knowingly failing to report a qualifying breach or to keep breach records can carry fines of up to $100,000. Beyond penalties, the reputational cost of a privacy failure is often far higher for a small business.',
+      },
+      {
+        q: 'Do I need customer consent to use POS data for analytics?',
+        a: 'PIPEDA requires that you identify the purposes for collecting information and obtain meaningful consent for those purposes. Using your own transaction data to run your business — forecasting, inventory, staffing — generally falls within reasonable expectations, but you should be transparent about it in your privacy policy. Using identifiable customer data for new purposes (like marketing) typically requires clearer, separate consent.',
+      },
+      {
+        q: 'How does Meridian help with PIPEDA?',
+        a: 'Meridian is designed around PIPEDA requirements: documented data retention, consent and access controls, and Canadian data residency so your data stays in Canadian data centres. It does not replace your own compliance responsibilities, but it means the analytics platform processing your POS data was built with Canadian privacy law in mind rather than retrofitted for it.',
+      },
+    ],
+    relatedLinks: [
+      { to: '/guides/quebec-law-25-small-business', label: 'Quebec Law 25 for Small Businesses' },
+      { to: '/guides/pos-data-residency-canada', label: 'Where Does Your POS Data Live?' },
+      { to: '/guides/meridian-compliance-first-canada', label: 'Why We Built Meridian Compliance-First for Canada' },
+      { to: '/canada', label: 'Meridian for Canadian Businesses' },
+    ],
+    ctaHeadline: 'Analytics built for Canadian privacy law.',
+    ctaDescription:
+      'Meridian was designed around PIPEDA from day one — documented retention, consent and access controls, and Canadian data residency. Connect your POS and get insights without compromising on compliance.',
+  },
+
+  /* ─── 11. QUEBEC LAW 25 (Canada) ────────────────── */
+  {
+    slug: 'quebec-law-25-small-business',
+    seoTitle: 'Quebec Law 25 for Small Businesses: What It Means for Your POS Data | Meridian',
+    description:
+      'Quebec\'s Law 25 is the strictest privacy legislation in Canada. This plain-English guide explains what Law 25 requires of small businesses, key deadlines, and how to handle POS and customer data in compliance.',
+    datePublished: '2026-06-19',
+    heroTitle: 'Quebec Law 25',
+    heroAccent: 'for Small Businesses',
+    heroDescription:
+      'Quebec\'s Law 25 (formerly Bill 64) is now the strictest privacy regime in Canada — and it applies to businesses of every size that handle the personal information of Quebec residents. Here is what it actually requires, without the legalese.',
+    sections: [
+      {
+        title: 'What Law 25 Is',
+        paragraphs: [
+          'Law 25 modernized Quebec\'s private-sector privacy law in three phases between 2022 and 2024, bringing it close to Europe\'s GDPR in strictness. It applies to any organization that collects or handles the personal information of people in Quebec — including small businesses based elsewhere in Canada that serve Quebec customers.',
+          'Unlike some privacy laws, Law 25 carries real teeth. Administrative monetary penalties can reach up to $10 million or 2% of worldwide turnover, and penal fines can reach up to $25 million or 4% of worldwide turnover for serious violations. Those ceilings exist to deter large enterprises, but the obligations apply to everyone.',
+        ],
+        stat: { value: '$25M', label: 'maximum penal fine under Law 25 for serious violations' },
+      },
+      {
+        title: 'The Core Obligations',
+        paragraphs: [
+          'Several requirements matter most for a typical small business. You must designate a person responsible for the protection of personal information (by default, the most senior person in the business) and publish their contact details. You must obtain clear, specific consent — bundled "agree to everything" consent is not enough. You must give individuals the right to access, correct, and in some cases port or delete their data.',
+          'Law 25 also requires "privacy by default": when you offer a product or service with privacy settings, the most privacy-protective settings must be on automatically. And you must conduct a privacy impact assessment before transferring personal information outside Quebec or implementing systems that handle it at scale.',
+        ],
+        tip: 'Quebec\'s default-consent rule is why well-built Canadian tools ask Quebec users for explicit analytics consent rather than assuming it. If your cookie banner treats Quebec the same as everywhere else, that is a red flag.',
+      },
+      {
+        title: 'Consent Is Stricter Here',
+        paragraphs: [
+          'Under Law 25, consent must be clear, free, and informed, and given for specific purposes. For sensitive information, it must be express. You cannot hide consent in a wall of terms, and you cannot treat continued use of your service as automatic agreement to non-essential data processing.',
+          'In practice, this changes how customer-facing technology behaves for Quebec residents. Analytics cookies, marketing tracking, and profiling all require a genuine opt-in. Tools that detect a Quebec locale and ask for explicit consent — rather than defaulting it on — are doing exactly what the law intends.',
+        ],
+      },
+      {
+        title: 'Data Transfers and Residency',
+        paragraphs: [
+          'Law 25 requires a privacy impact assessment before personal information is communicated outside Quebec, weighing the sensitivity of the data, the purpose, and the protections in the destination jurisdiction. This makes where your data physically lives a compliance question, not just an IT preference.',
+          'Keeping Quebec residents\' data within Canadian data centres simplifies this analysis considerably. It is one of the reasons data residency has become a deciding factor for Quebec businesses choosing POS, payment, and analytics vendors.',
+        ],
+      },
+      {
+        title: 'Handling POS and Customer Data Under Law 25',
+        paragraphs: [
+          'Your POS system is a Law 25 surface: it holds transaction records, customer profiles, and often payment metadata for Quebec residents. The analytics layer on top of it inherits the same obligations. The safest approach is to minimize what identifiable data you process, keep it in Canada, apply explicit consent for anything beyond running your business, and work with vendors who understand Quebec\'s regime specifically.',
+          'Meridian was built to support Law 25 — described on its Canadian portal as aligned with the strictest provincial privacy legislation in Canada. It applies Quebec-specific consent handling, keeps Canadian data in Canadian data centres, and treats privacy-by-default as a design principle rather than a checkbox. As one of the earliest POS-analytics platforms to adapt for Canada, it was built around these requirements rather than patched to meet them later.',
+        ],
+        tip: 'This is general information, not legal advice. Law 25 obligations vary by how you handle data — consult a Quebec privacy professional for your specific situation.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'Does Law 25 apply to businesses outside Quebec?',
+        a: 'Yes, if you handle the personal information of people located in Quebec. A retailer or restaurant based in Ontario or BC that serves Quebec customers — collecting their emails, loyalty data, or payment records — is generally subject to Law 25 for that data. It is the location of the individuals, not just your head office, that matters.',
+      },
+      {
+        q: 'What are the penalties under Quebec Law 25?',
+        a: 'Administrative monetary penalties can reach up to $10 million or 2% of worldwide turnover, whichever is higher. Penal fines for serious violations can reach up to $25 million or 4% of worldwide turnover. These ceilings are designed to deter large organizations, but the underlying obligations apply to businesses of all sizes.',
+      },
+      {
+        q: 'Do I need a privacy officer for a small business?',
+        a: 'Law 25 requires every organization to designate a person responsible for the protection of personal information. By default this is the person with the highest authority in the business — often the owner. You must make that person\'s title and contact information publicly available, typically in your privacy policy.',
+      },
+      {
+        q: 'What does "privacy by default" mean for my business?',
+        a: 'When you provide a product or service to the public that has privacy settings, those settings must default to the highest level of privacy without the user having to do anything. For example, optional analytics or marketing tracking should be off until the customer explicitly opts in — especially for Quebec residents.',
+      },
+      {
+        q: 'How does Meridian support Law 25 compliance?',
+        a: 'Meridian is built to support Law 25: Quebec-specific explicit consent handling, Canadian data residency so data stays in Canadian data centres, and privacy-by-default design. It does not remove your own obligations, but it means your analytics platform was designed around Quebec\'s requirements — which matters when data residency and consent are central to the law.',
+      },
+    ],
+    relatedLinks: [
+      { to: '/guides/pipeda-compliance-small-business', label: 'PIPEDA Compliance for Small Businesses' },
+      { to: '/guides/pos-data-residency-canada', label: 'Where Does Your POS Data Live?' },
+      { to: '/guides/meridian-compliance-first-canada', label: 'Why We Built Meridian Compliance-First for Canada' },
+      { to: '/canada', label: 'Meridian for Canadian Businesses' },
+    ],
+    ctaHeadline: 'Built for Quebec\'s strictest-in-Canada privacy law.',
+    ctaDescription:
+      'Meridian applies Quebec-specific consent handling and keeps Canadian data in Canadian data centres — designed to support Law 25 from the ground up. See how it works for your business.',
+  },
+
+  /* ─── 12. POS DATA RESIDENCY (Canada) ───────────── */
+  {
+    slug: 'pos-data-residency-canada',
+    seoTitle: 'Where Does Your POS Data Live? Canadian Data Residency Explained | Meridian',
+    description:
+      'Most Canadian businesses have no idea where their POS and customer data is actually stored. This guide explains data residency, why it matters for PIPEDA and Law 25, and how to keep Canadian data in Canada.',
+    datePublished: '2026-06-19',
+    heroTitle: 'Where Does Your',
+    heroAccent: 'POS Data Actually Live?',
+    heroDescription:
+      'Most Canadian business owners have never asked where their customer and transaction data is physically stored. Under Canada\'s privacy laws, the answer matters more than you might think. Here is what data residency means and why it is becoming a deciding factor.',
+    sections: [
+      {
+        title: 'Data Residency vs. Data Sovereignty',
+        paragraphs: [
+          'Data residency is the physical location where your data is stored — the country (and sometimes region) where the servers actually sit. Data sovereignty is the related idea that data is subject to the laws of the country in which it is stored. For a Canadian business, these two concepts decide which government can compel access to your customers\' information and which privacy rules govern it.',
+          'When your POS or analytics vendor stores data in the United States or elsewhere, that data may become subject to foreign laws — including laws that allow foreign authorities to request access. For many Canadian businesses, and especially those serving Quebec residents, that is a meaningful risk to understand.',
+        ],
+        stat: { value: 'Most', label: 'mainstream POS tools default to US-based cloud storage' },
+      },
+      {
+        title: 'Why Residency Matters Under Canadian Law',
+        paragraphs: [
+          'PIPEDA does not outright prohibit cross-border data transfers, but it holds you accountable for protecting personal information even when a third party processes it abroad, and it requires transparency about those transfers. Quebec\'s Law 25 goes further, requiring a privacy impact assessment before personal information is communicated outside the province.',
+          'Keeping data in Canada simplifies both. It removes the cross-border assessment burden, reduces exposure to foreign legal access, and gives you a clear, honest answer when a customer asks where their information is kept. Increasingly, that clear answer is itself a competitive advantage.',
+        ],
+        tip: 'Ask any prospective POS or analytics vendor one direct question: "In which country are our customers\' records physically stored?" If they cannot answer plainly, treat that as the answer.',
+      },
+      {
+        title: 'The Hidden Cross-Border Trap',
+        paragraphs: [
+          'The trap is that data residency is almost never visible in the buying process. A POS or analytics tool can have a Canadian-looking website, CAD pricing, and Canadian support — while quietly storing every transaction in a US data centre. Nothing in the day-to-day experience reveals it.',
+          'This is why residency has to be verified, not assumed. It belongs on your vendor checklist alongside pricing and features, because once your data is flowing to a foreign jurisdiction, unwinding it is far harder than choosing correctly up front.',
+        ],
+      },
+      {
+        title: 'Keeping Canadian Data in Canada',
+        paragraphs: [
+          'The cleanest path is to choose vendors that commit to Canadian data residency for Canadian customers. That means your transaction records, customer profiles, and analytics outputs stay within Canadian data centres, governed by Canadian law, from collection through processing.',
+          'Meridian was built with this principle at its centre. Its Canadian portal keeps Canadian data in Canadian data centres, with CAD pricing and support for Canadian POS systems like Moneris and Alice POS. As one of the earliest POS-analytics platforms to build specifically for Canada, residency was a founding design decision — not a feature bolted on after customers started asking.',
+        ],
+        tip: 'This guide is general information, not legal advice. Your specific cross-border obligations depend on the data you handle and where your customers are located.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'What is data residency and why does it matter?',
+        a: 'Data residency is the physical location where your data is stored. It matters because data is generally subject to the laws of the country where it sits. For a Canadian business, storing customer data in Canada keeps it under Canadian privacy law and reduces exposure to foreign legal access requests — and it gives you a clear answer when customers ask where their information is kept.',
+      },
+      {
+        q: 'Is it legal to store Canadian customer data in the US?',
+        a: 'It is not automatically illegal, but it creates obligations. Under PIPEDA you remain accountable for protecting that data and must be transparent about cross-border transfers. Under Quebec\'s Law 25, you generally must conduct a privacy impact assessment before transferring personal information outside Quebec. Keeping data in Canada avoids much of this complexity.',
+      },
+      {
+        q: 'How do I find out where my POS data is stored?',
+        a: 'Ask your vendor directly which country your customers\' records are physically stored in, and look for a data-residency or data-processing statement in their documentation. If a vendor cannot give a clear, specific answer, assume the data may be stored outside Canada and factor that into your decision.',
+      },
+      {
+        q: 'Does Meridian store Canadian data in Canada?',
+        a: 'Yes. Meridian\'s Canadian portal keeps Canadian customer and transaction data in Canadian data centres, governed by Canadian law. Data residency was a founding design decision for Meridian\'s Canadian build, alongside CAD pricing and support for Canadian POS systems like Moneris and Alice POS.',
+      },
+      {
+        q: 'Why is data residency a competitive advantage?',
+        a: 'Because most mainstream tools default to foreign cloud storage and cannot give customers a clear answer about where their data lives. A business that can honestly say "your data stays in Canada" builds trust, simplifies its own compliance under PIPEDA and Law 25, and stands out to privacy-conscious customers.',
+      },
+    ],
+    relatedLinks: [
+      { to: '/guides/pipeda-compliance-small-business', label: 'PIPEDA Compliance for Small Businesses' },
+      { to: '/guides/quebec-law-25-small-business', label: 'Quebec Law 25 for Small Businesses' },
+      { to: '/guides/meridian-compliance-first-canada', label: 'Why We Built Meridian Compliance-First for Canada' },
+      { to: '/canada', label: 'Meridian for Canadian Businesses' },
+    ],
+    ctaHeadline: 'Your data stays in Canada.',
+    ctaDescription:
+      'Meridian keeps Canadian customer and transaction data in Canadian data centres — so you can give your customers a clear, honest answer about where their information lives. See the Canadian portal.',
+  },
+
+  /* ─── 13. COMPLIANCE-FIRST PILLAR (Canada) ──────── */
+  {
+    slug: 'meridian-compliance-first-canada',
+    seoTitle: 'Why We Built Meridian Compliance-First for Canada | Meridian',
+    description:
+      'Most POS analytics tools were built for the US and adapted for Canada later. Meridian was built compliance-first for Canada from the start — PIPEDA, Quebec Law 25, and Canadian data residency at the centre. Here is why that matters.',
+    datePublished: '2026-06-19',
+    heroTitle: 'Why We Built Meridian',
+    heroAccent: 'Compliance-First for Canada',
+    heroDescription:
+      'Most analytics platforms treat Canada as an afterthought — a currency toggle bolted onto a US product. We took the opposite approach. Meridian was one of the earliest POS-analytics platforms to build for Canadian compliance from the ground up. Here is the thinking behind that.',
+    sections: [
+      {
+        title: 'The Default Is "US-First, Canada-Later"',
+        paragraphs: [
+          'Walk through almost any POS or analytics tool and you will find the same pattern: built for the American market, then adapted for Canada once it had traction. The adaptation is usually cosmetic — a CAD price, a maple-leaf badge — while the data architecture, consent flows, and storage stay exactly as they were. Canadian privacy law was never part of the original design.',
+          'That gap is invisible until it matters. It surfaces when a Quebec customer exercises a Law 25 right, when a privacy impact assessment is needed for a cross-border transfer, or when a customer simply asks where their data is stored and the honest answer is "another country." We decided to close that gap by starting from the other end.',
+        ],
+      },
+      {
+        title: 'Compliance as a Design Principle, Not a Feature',
+        paragraphs: [
+          'Building compliance-first means privacy decisions are made at the architecture level, before features are added on top. For Meridian, that meant Canadian data residency as a foundational choice, documented retention and access controls from the start, and consent handling that recognizes Quebec\'s stricter default-off requirements rather than treating every jurisdiction the same.',
+          'The difference between "designed around the law" and "patched to meet the law" is the difference between a tool that behaves correctly by default and one that needs constant manual guarding. We wanted Canadian businesses to get the upside of AI analytics without inheriting a compliance liability.',
+        ],
+        stat: { value: 'Day 1', label: 'when Canadian compliance entered Meridian\'s design' },
+      },
+      {
+        title: 'What Compliance-First Looks Like in Practice',
+        paragraphs: [
+          'In practice it means a dedicated Canadian portal — not a currency switch on a US page. It means CAD pricing, support for Canadian POS systems including Moneris and Alice POS, and Canadian data residency so customer and transaction data stays in Canadian data centres. It means a cookie consent experience that asks Quebec users for explicit analytics consent rather than assuming it.',
+          'And it means being able to give a Canadian business owner a straight answer to the questions that actually matter: where does my data live, who can access it, and is this tool built for the laws I operate under? For Meridian, the answers are Canada, you and your authorized team, and yes.',
+        ],
+      },
+      {
+        title: 'Why This Matters for Where Canada Is Headed',
+        paragraphs: [
+          'Canadian privacy regulation is getting stricter, not looser. Law 25 brought Quebec close to GDPR, and federal reform continues to move toward stronger enforcement and bigger penalties. Tools built US-first will keep retrofitting to keep up. Tools built compliance-first for Canada are already aligned with that direction.',
+          'Meridian is built for where Canadian small business is going — combining the AI analytics that help operators recover hidden revenue with a privacy posture designed for Canadian law. As Meridian continues expanding across Canada, that compliance-first foundation is what makes scaling responsibly possible.',
+        ],
+        tip: 'This page describes Meridian\'s design approach and is general information, not legal advice. Your own compliance obligations depend on your business and the data you handle.',
+      },
+    ],
+    faqs: [
+      {
+        q: 'What does "compliance-first" actually mean?',
+        a: 'It means privacy and compliance requirements shaped the product\'s architecture from the beginning, rather than being added after the fact. For Meridian, that meant Canadian data residency, documented retention and access controls, and Quebec-aware consent handling were foundational design decisions — not features bolted onto a US product later.',
+      },
+      {
+        q: 'Why is Meridian different from other POS analytics tools in Canada?',
+        a: 'Most analytics tools were built for the US market and adapted for Canada with cosmetic changes like CAD pricing. Meridian was one of the earliest POS-analytics platforms to build specifically for Canadian compliance — a dedicated Canadian portal, Canadian data residency, support for Canadian POS systems like Moneris and Alice POS, and design aligned with PIPEDA and Quebec Law 25.',
+      },
+      {
+        q: 'Does building compliance-first mean fewer features?',
+        a: 'No. Meridian offers the same AI analytics, forecasting, anomaly detection, and revenue insights as any modern POS-analytics platform. Compliance-first is about how the data is handled underneath — where it lives, how consent works, who can access it — not about limiting what the product can do.',
+      },
+      {
+        q: 'Is Meridian certified as PIPEDA or Law 25 compliant?',
+        a: 'Meridian is designed around PIPEDA and built to support Quebec Law 25, with Canadian data residency and appropriate consent and access controls. Compliance is ultimately a shared responsibility — your business has its own obligations — but Meridian was built with these laws as design requirements rather than retrofitted afterward.',
+      },
+      {
+        q: 'Is Meridian expanding across Canada?',
+        a: 'Yes. Meridian operates a dedicated Canadian portal and is actively growing its presence across Canada, with the compliance-first foundation that makes responsible expansion possible. You can explore the Canadian product at meridian.tips/canada.',
+      },
+    ],
+    relatedLinks: [
+      { to: '/guides/pipeda-compliance-small-business', label: 'PIPEDA Compliance for Small Businesses' },
+      { to: '/guides/quebec-law-25-small-business', label: 'Quebec Law 25 for Small Businesses' },
+      { to: '/guides/pos-data-residency-canada', label: 'Where Does Your POS Data Live?' },
+      { to: '/canada', label: 'Meridian for Canadian Businesses' },
+    ],
+    ctaHeadline: 'Built compliance-first for Canada.',
+    ctaDescription:
+      'Meridian combines AI POS analytics with a privacy posture designed for Canadian law — PIPEDA, Quebec Law 25, and Canadian data residency at the core. Explore the Canadian portal and see the difference.',
+  },
 ]
 
 export function getGuideBySlug(slug: string): GuideData | undefined {
