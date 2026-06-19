@@ -161,6 +161,36 @@ async def _log_call(merchant_id: str, call_sid: str, caller: dict, status: str, 
         logger.error("Call log failed: %s", e)
 
 
+def _nemotron_on() -> bool:
+    """Use NVIDIA Nemotron (NVCF-hosted) STT/TTS when a key is present and not
+    explicitly disabled. Falls back to local Moonshine/Kokoro otherwise."""
+    return bool(os.getenv("NVIDIA_API_KEY")) and os.getenv("NEMOTRON_DISABLED", "").lower() not in ("1", "true", "yes")
+
+
+def _build_stt(config: MerchantPhoneConfig):
+    """STT: Nemotron 3.5 ASR (streaming, NVCF-hosted, 40 langs) → Moonshine (EN, local)."""
+    if _nemotron_on():
+        try:
+            from pipecat.services.nvidia.stt import NvidiaSTTService
+            logger.info("STT: Nemotron 3.5 ASR (NVCF)")
+            return NvidiaSTTService(api_key=os.environ["NVIDIA_API_KEY"])
+        except Exception as e:
+            logger.warning("Nemotron STT unavailable, falling back to Moonshine: %s", e)
+    return MoonshineSTTService()
+
+
+def _build_tts(config: MerchantPhoneConfig):
+    """TTS: Magpie-TTS-multilingual (NVCF-hosted, EN+FR for Canada) → Kokoro (local)."""
+    if _nemotron_on():
+        try:
+            from pipecat.services.nvidia.tts import NvidiaTTSService
+            logger.info("TTS: Nemotron MagpieTTS multilingual (NVCF)")
+            return NvidiaTTSService(api_key=os.environ["NVIDIA_API_KEY"])
+        except Exception as e:
+            logger.warning("Nemotron TTS unavailable, falling back to Kokoro: %s", e)
+    return KokoroTTSService()
+
+
 def _build_serializer(provider: str, stream_sid: str, call_sid: str | None,
                       call_control_id: str | None, outbound_encoding: str | None):
     if provider == "telnyx":
@@ -199,8 +229,8 @@ async def run_call_bot(
         ),
     )
 
-    stt = MoonshineSTTService()                 # Phase 1 (EN). Phase 2 → NVIDIA Nemotron ASR.
-    tts = KokoroTTSService()                     # Phase 1.       Phase 2 → MagpieTTS.
+    stt = _build_stt(merchant_config)   # Nemotron 3.5 ASR (NVCF) → Moonshine fallback
+    tts = _build_tts(merchant_config)   # Magpie-TTS multilingual (NVCF) → Kokoro fallback
     llm = DeepSeekLLMService(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, model=DEEPSEEK_MODEL)
 
     # ── Order tools as registered LLM functions (call our existing pipeline) ──
