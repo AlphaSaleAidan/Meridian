@@ -35,7 +35,10 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
-from pipecat.turns.user_mute.always_user_mute_strategy import AlwaysUserMuteStrategy
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
+from pipecat.turns.user_start.min_words_user_turn_start_strategy import (
+    MinWordsUserTurnStartStrategy,
+)
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.services.llm_service import FunctionCallParams
@@ -132,6 +135,17 @@ RULES:
 - If the call ends without an order, call end_call_no_order()
 - Available order types: {", ".join(config.order_types)}
 - If an item isn't on the menu, say so politely and suggest alternatives
+
+IF THE CALLER SOUNDS DISSATISFIED OR FRUSTRATED — watch for signals like: "no", "that's
+not what I said", "that's wrong", "not right", "you're not listening", "I already told you",
+"that's not it", "ugh", "this isn't working", repeating themselves, correcting you, or
+sounding annoyed:
+- STOP and slow down — do NOT push ahead with the order or move to the next step.
+- Briefly and sincerely apologize, e.g. "Sorry about that — let me get it right."
+- Ask them to repeat ONLY the part that was wrong, listen carefully, and read just that
+  part back to confirm before continuing. Never repeat the same mistake or argue.
+- If they're still frustrated after a try or two, or clearly want a person, call
+  transfer_to_human().
 {menu_section}
 
 CALLER:
@@ -345,12 +359,18 @@ async def run_call_bot(
         context,
         user_params=LLMUserAggregatorParams(
             vad_analyzer=_vad_analyzer(),
-            # No barge-in: mute the caller's audio while the bot is speaking so
-            # background voices / a TV / cross-talk can't cut the agent off
-            # mid-sentence. We only listen for the answer once the bot finishes
-            # its turn (BotStoppedSpeaking un-mutes). This is the robust fix for
-            # "every nearby noise interrupts the bot" — stronger than VAD tuning.
-            user_mute_strategies=[AlwaysUserMuteStrategy()],
+            # Selective barge-in: the bot is only interrupted mid-sentence by a
+            # real, multi-word interjection — background voices / a TV / a stray
+            # sound (which transcribe to 0-1 words) don't cut it off. pipecat
+            # applies min_words ONLY while the bot is speaking; once it's the
+            # caller's turn a single word responds normally. So noise is ignored
+            # but a genuine "no, that's wrong" still gets through. Tune the
+            # threshold live via INTERRUPT_MIN_WORDS (lower = easier to interrupt).
+            user_turn_strategies=UserTurnStrategies(
+                start=[MinWordsUserTurnStartStrategy(
+                    min_words=int(os.getenv("INTERRUPT_MIN_WORDS", "3")),
+                )],
+            ),
         ),
     )
 
