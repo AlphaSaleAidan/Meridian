@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -334,4 +335,15 @@ async def run_call_bot(
         assistant_agg,
     ])
     task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+
+    @transport.event_handler("on_client_connected")
+    async def _on_client_connected(_transport, _client):
+        # Greet the instant the call connects, before the caller says anything.
+        # Spoken straight through TTS (no LLM round-trip) so the hello is immediate,
+        # and recorded in the context so the brain knows it already greeted and
+        # doesn't repeat itself on the caller's first turn.
+        greeting = (merchant_config.greeting or "").strip() or "Thank you for calling!"
+        context.add_message({"role": "assistant", "content": greeting})
+        await task.queue_frames([TTSSpeakFrame(greeting)])
+
     await PipelineRunner().run(task)
