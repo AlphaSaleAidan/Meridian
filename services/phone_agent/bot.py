@@ -167,13 +167,27 @@ def _nemotron_on() -> bool:
     return bool(os.getenv("NVIDIA_API_KEY")) and os.getenv("NEMOTRON_DISABLED", "").lower() not in ("1", "true", "yes")
 
 
+def _language(config: MerchantPhoneConfig) -> "Language":
+    """Map the merchant's configured language to a pipecat Language. Canada-first:
+    any 'fr*' code → Canadian French; everything else → US English."""
+    from pipecat.transcriptions.language import Language
+    code = (getattr(config, "language", "") or "en").lower()
+    return Language.FR_CA if code.startswith("fr") else Language.EN_US
+
+
 def _build_stt(config: MerchantPhoneConfig):
-    """STT: Nemotron 3.5 ASR (streaming, NVCF-hosted, 40 langs) → Moonshine (EN, local)."""
+    """STT: Nemotron 3.5 ASR (streaming, NVCF-hosted, 40 langs) → Moonshine (EN, local).
+    Without an explicit language, Nemotron defaults to en-US and mis-transcribes
+    French, so we always pass the merchant's language."""
     if _nemotron_on():
         try:
             from pipecat.services.nvidia.stt import NvidiaSTTService
-            logger.info("STT: Nemotron 3.5 ASR (NVCF)")
-            return NvidiaSTTService(api_key=os.environ["NVIDIA_API_KEY"])
+            lang = _language(config)
+            logger.info("STT: Nemotron 3.5 ASR (NVCF, lang=%s)", lang)
+            return NvidiaSTTService(
+                api_key=os.environ["NVIDIA_API_KEY"],
+                params=NvidiaSTTService.InputParams(language=lang),
+            )
         except Exception as e:
             logger.warning("Nemotron STT unavailable, falling back to Moonshine: %s", e)
     return MoonshineSTTService()
@@ -184,8 +198,12 @@ def _build_tts(config: MerchantPhoneConfig):
     if _nemotron_on():
         try:
             from pipecat.services.nvidia.tts import NvidiaTTSService
-            logger.info("TTS: Nemotron MagpieTTS multilingual (NVCF)")
-            return NvidiaTTSService(api_key=os.environ["NVIDIA_API_KEY"])
+            lang = _language(config)
+            logger.info("TTS: Nemotron MagpieTTS multilingual (NVCF, lang=%s)", lang)
+            return NvidiaTTSService(
+                api_key=os.environ["NVIDIA_API_KEY"],
+                params=NvidiaTTSService.InputParams(language=lang),
+            )
         except Exception as e:
             logger.warning("Nemotron TTS unavailable, falling back to Kokoro: %s", e)
     return KokoroTTSService()
