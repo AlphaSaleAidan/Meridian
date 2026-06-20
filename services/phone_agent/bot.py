@@ -221,14 +221,31 @@ def _build_serializer(provider: str, stream_sid: str, call_sid: str | None,
                       call_control_id: str | None, outbound_encoding: str | None):
     if provider == "telnyx":
         # inbound_encoding is REQUIRED in pipecat 1.x (the old code omitted it → TypeError).
+        # auto_hang_up (default on) calls Telnyx's REST API to end the call when the
+        # bot stops — that needs an api_key, so only enable it when one is present.
+        api_key = os.getenv("TELNYX_API_KEY", "")
         return TelnyxFrameSerializer(
             stream_id=stream_sid,
             outbound_encoding=outbound_encoding or "PCMU",
             inbound_encoding="PCMU",
             call_control_id=call_control_id or "",
-            api_key=os.getenv("TELNYX_API_KEY", ""),
+            api_key=api_key,
+            params=TelnyxFrameSerializer.InputParams(auto_hang_up=bool(api_key)),
         )
-    return TwilioFrameSerializer(stream_sid=stream_sid, call_sid=call_sid or "")
+    # Twilio auto_hang_up needs account_sid + auth_token; without them the
+    # serializer raises on init. Pass creds when configured, else disable it
+    # (the call still ends when the media WebSocket closes).
+    account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
+    auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+    if account_sid and auth_token:
+        return TwilioFrameSerializer(
+            stream_sid=stream_sid, call_sid=call_sid or "",
+            account_sid=account_sid, auth_token=auth_token,
+        )
+    return TwilioFrameSerializer(
+        stream_sid=stream_sid, call_sid=call_sid or "",
+        params=TwilioFrameSerializer.InputParams(auto_hang_up=False),
+    )
 
 
 async def run_call_bot(
