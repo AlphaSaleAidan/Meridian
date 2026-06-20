@@ -38,7 +38,7 @@ function buildJsonLd(guide: GuideData) {
       description: guide.description,
       image: 'https://meridian.tips/og-image.png',
       inLanguage: guide.slug.includes('canada') || guide.slug.includes('pipeda') || guide.slug.includes('quebec') ? 'en-CA' : 'en-US',
-      author: { '@type': 'Organization', name: 'Meridian', url: 'https://meridian.tips/' },
+      author: { '@type': 'Person', name: 'Aidan Pierce', jobTitle: 'Founder & CEO', url: 'https://meridian.tips/about' },
       publisher: {
         '@type': 'Organization',
         name: 'Meridian',
@@ -105,6 +105,8 @@ export default function GuidePage() {
           </h1>
           <p className="guide-summary mt-5 text-lg text-[#A1A1A8] leading-relaxed max-w-2xl">{guide.heroDescription}</p>
           <div className="mt-6 flex items-center gap-3 text-[12px] text-[#6B7280]">
+            <span>By <Link to="/about" className="text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Aidan Pierce</Link>, Founder</span>
+            <span className="w-1 h-1 rounded-full bg-[#6B7280]" />
             <BookOpen size={14} />
             <span>{Math.ceil(guide.sections.length * 1.5)} min read</span>
             <span className="w-1 h-1 rounded-full bg-[#6B7280]" />
@@ -191,6 +193,7 @@ export default function GuidePage() {
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-[12px] text-[#6B7280]">
               <Link to="/" className="hover:text-[#A1A1A8]">Home</Link>
               <Link to="/guides" className="hover:text-[#A1A1A8]">All Guides</Link>
+              <Link to="/about" className="hover:text-[#A1A1A8]">About</Link>
               <Link to="/blog" className="hover:text-[#A1A1A8]">Blog</Link>
               <Link to="/for/restaurants" className="hover:text-[#A1A1A8]">For Restaurants</Link>
               <Link to="/for/coffee-shops" className="hover:text-[#A1A1A8]">For Coffee Shops</Link>
