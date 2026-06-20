@@ -721,9 +721,27 @@ async def _charge_for_call(merchant_id: str, call_sid: str, duration_seconds: in
 
 
 def _media_stream_twiml(merchant_id: str, caller_phone: str) -> str:
-    """TwiML that hands the call off to the Pipecat WebSocket."""
+    """TwiML that hands the call off to the Pipecat WebSocket.
+
+    Telnyx and Twilio differ for BIDIRECTIONAL streaming: Telnyx's <Stream>
+    defaults to bidirectionalMode="mp3", which does NOT send the bot's audio back
+    as raw PCMU — so the caller hears nothing. Telnyx needs bidirectionalMode="rtp"
+    + PCMU/8k (what TelnyxFrameSerializer speaks), plus a trailing <Pause> to hold
+    the call leg. Twilio's <Connect><Stream> is bidirectional by default.
+    (Matches pipecat's telnyx-chatbot example.)
+    """
     stream_url = f"wss://{MEDIA_STREAM_HOST}/twilio/media-stream/{merchant_id}"
     safe_caller = _escape(caller_phone or "")
+    if PHONE_PROVIDER == "telnyx":
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="{stream_url}" bidirectionalMode="rtp" bidirectionalCodec="PCMU" bidirectionalSamplingRate="8000">
+      <Parameter name="caller_phone" value="{safe_caller}" />
+    </Stream>
+  </Connect>
+  <Pause length="40"/>
+</Response>"""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
