@@ -25,6 +25,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -32,6 +34,10 @@ from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
+)
+from pipecat.turns.user_turn_strategies import UserTurnStrategies
+from pipecat.turns.user_start.min_words_user_turn_start_strategy import (
+    MinWordsUserTurnStartStrategy,
 )
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
@@ -56,7 +62,7 @@ logger = logging.getLogger("meridian.phone_agent.bot")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")  # V4 flash: low-latency + tool-calling (was V3 deepseek-chat)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
@@ -129,6 +135,17 @@ RULES:
 - If the call ends without an order, call end_call_no_order()
 - Available order types: {", ".join(config.order_types)}
 - If an item isn't on the menu, say so politely and suggest alternatives
+
+IF THE CALLER SOUNDS DISSATISFIED OR FRUSTRATED — watch for signals like: "no", "that's
+not what I said", "that's wrong", "not right", "you're not listening", "I already told you",
+"that's not it", "ugh", "this isn't working", repeating themselves, correcting you, or
+sounding annoyed:
+- STOP and slow down — do NOT push ahead with the order or move to the next step.
+- Briefly and sincerely apologize, e.g. "Sorry about that — let me get it right."
+- Ask them to repeat ONLY the part that was wrong, listen carefully, and read just that
+  part back to confirm before continuing. Never repeat the same mistake or argue.
+- If they're still frustrated after a try or two, or clearly want a person, call
+  transfer_to_human().
 {menu_section}
 
 CALLER:
@@ -159,6 +176,24 @@ async def _log_call(merchant_id: str, call_sid: str, caller: dict, status: str, 
                                   "Content-Type": "application/json", "Prefer": "return=minimal"})
     except Exception as e:
         logger.error("Call log failed: %s", e)
+
+
+def _vad_analyzer() -> SileroVADAnalyzer:
+    """Silero VAD tuned for noisy phone environments.
+
+    The library defaults (confidence 0.7 / start_secs 0.2 / min_volume 0.6) are
+    very sensitive — a TV or background chatter just above a low volume floor reads
+    as the caller speaking and interrupts the bot mid-sentence. We require louder,
+    more-confident, slightly-sustained speech before it counts as a turn (rejects
+    background), while keeping stop_secs short so turn-end stays snappy. All four
+    are overridable per-deploy via VAD_* env vars for live tuning without a code change.
+    """
+    return SileroVADAnalyzer(params=VADParams(
+        confidence=float(os.getenv("VAD_CONFIDENCE", "0.85")),   # was 0.70 — surer it's speech
+        start_secs=float(os.getenv("VAD_START_SECS", "0.30")),   # was 0.20 — must be sustained
+        stop_secs=float(os.getenv("VAD_STOP_SECS", "0.30")),     # was 0.20 — keep responsive
+        min_volume=float(os.getenv("VAD_MIN_VOLUME", "0.70")),   # was 0.60 — ignore quiet noise
+    ))
 
 
 def _nemotron_on() -> bool:
@@ -321,7 +356,22 @@ async def run_call_bot(
         tools=ToolsSchema(standard_tools=[_SUBMIT_ORDER, _TRANSFER, _END_CALL]),
     )
     user_agg, assistant_agg = LLMContextAggregatorPair(
-        context, user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+        context,
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=_vad_analyzer(),
+            # Selective barge-in: the bot is only interrupted mid-sentence by a
+            # real, multi-word interjection — background voices / a TV / a stray
+            # sound (which transcribe to 0-1 words) don't cut it off. pipecat
+            # applies min_words ONLY while the bot is speaking; once it's the
+            # caller's turn a single word responds normally. So noise is ignored
+            # but a genuine "no, that's wrong" still gets through. Tune the
+            # threshold live via INTERRUPT_MIN_WORDS (lower = easier to interrupt).
+            user_turn_strategies=UserTurnStrategies(
+                start=[MinWordsUserTurnStartStrategy(
+                    min_words=int(os.getenv("INTERRUPT_MIN_WORDS", "3")),
+                )],
+            ),
+        ),
     )
 
     pipeline = Pipeline([
@@ -333,5 +383,19 @@ async def run_call_bot(
         transport.output(),
         assistant_agg,
     ])
-    task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+    # Interruptions are governed by the AlwaysUserMuteStrategy on the user
+    # aggregator above (allow_interruptions is not a real pipecat 1.4 param — it
+    # was silently ignored). The bot speaks its full turn, then listens.
+    task = PipelineTask(pipeline, params=PipelineParams())
+
+    @transport.event_handler("on_client_connected")
+    async def _on_client_connected(_transport, _client):
+        # Greet the instant the call connects, before the caller says anything.
+        # Spoken straight through TTS (no LLM round-trip) so the hello is immediate,
+        # and recorded in the context (now, not after the bot finishes speaking) so
+        # a caller who talks over the greeting doesn't get greeted twice.
+        greeting = (merchant_config.greeting or "").strip() or "Thank you for calling!"
+        context.add_message({"role": "assistant", "content": greeting})
+        await task.queue_frames([TTSSpeakFrame(greeting)])
+
     await PipelineRunner().run(task)
