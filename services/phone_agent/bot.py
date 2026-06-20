@@ -334,9 +334,17 @@ async def run_call_bot(
         if caller_info.get("phone") and not args.get("caller_phone"):
             args["caller_phone"] = caller_info["phone"]
         normalized = normalize_order(args, merchant_config)
+        # POS creds: prefer the merchant's own connected token; for a Square
+        # merchant with none (the demo), fall back to Meridian's Square creds from
+        # env so the order still lands in a real Square dashboard. Keeps tokens in
+        # env, not the DB.
+        pos_token = merchant_config.pos_access_token
+        pos_location = merchant_config.pos_location_id
+        if merchant_config.pos_system == "square" and not pos_token:
+            pos_token = os.getenv("SQUARE_ACCESS_TOKEN", "")
+            pos_location = pos_location or os.getenv("SQUARE_LOCATION_ID", "")
         pos_result = await create_pos_order(
-            normalized, merchant_config.pos_system,
-            merchant_config.pos_access_token, merchant_config.pos_location_id,
+            normalized, merchant_config.pos_system, pos_token, pos_location,
         )
         await route_order(normalized, merchant_config, caller_info, pos_result)
         await _log_call(merchant_id, session_ref, caller_info, "order_placed",
