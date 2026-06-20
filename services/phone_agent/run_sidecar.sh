@@ -37,10 +37,12 @@ echo "phone-agent sidecar → 127.0.0.1:$PORT  (provider=$PHONE_PROVIDER, nemotr
 if [ "${1:-}" = "--daemon" ]; then
   pkill -f "uvicorn main:app" 2>/dev/null || true; sleep 1
   setsid nohup "${CMD[@]}" >"$LOG" 2>&1 < /dev/null & disown
-  sleep 6
-  curl -sf --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null \
-    && echo "started; /health OK; logs: $LOG" \
-    || { echo "FAILED to come up — see $LOG"; tail -20 "$LOG"; exit 1; }
+  # uvicorn + the pipecat import can take ~8s to bind — poll, don't single-shot.
+  for _ in $(seq 1 20); do
+    sleep 1
+    curl -sf --max-time 3 "http://127.0.0.1:$PORT/health" >/dev/null && { echo "started; /health OK; logs: $LOG"; exit 0; }
+  done
+  echo "FAILED to come up within 20s — see $LOG"; tail -20 "$LOG"; exit 1
 else
   exec "${CMD[@]}"
 fi
