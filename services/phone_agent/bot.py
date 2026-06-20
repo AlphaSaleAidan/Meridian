@@ -66,7 +66,8 @@ DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")  # V4 flash: low-latency + tool-calling (was V3 deepseek-chat)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+# _log_call writes phone_call_logs → needs service-role (anon lacks INSERT GRANT).
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
 
 # ─── Order tool schemas (1.x FunctionSchema; same shapes the brain expects) ───
 _SUBMIT_ORDER = FunctionSchema(

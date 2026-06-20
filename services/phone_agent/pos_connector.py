@@ -14,7 +14,7 @@ import httpx
 logger = logging.getLogger("meridian.phone_agent.pos")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")  # writes need service-role
 
 TOAST_API_BASE = os.getenv("TOAST_API_BASE_URL", "https://ws-api.toasttab.com")
 

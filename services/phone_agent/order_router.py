@@ -16,7 +16,9 @@ from sms_checkout import send_checkout_sms
 logger = logging.getLogger("meridian.phone_agent.router")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+# Writes (phone_orders inserts/updates) need the service-role key — the anon role
+# lacks INSERT GRANT on phone_orders (42501 permission denied). Fall back to anon.
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
 
 
 async def route_order(
