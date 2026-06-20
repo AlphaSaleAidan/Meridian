@@ -93,31 +93,47 @@ async def _create_square_order(
             ),
         })
 
+    # Build the fulfillment by order type. Square requires a time on each:
+    # pickup_at for PICKUP, deliver_at for DELIVERY (else 400). Both use ASAP.
+    _recipient = {
+        "display_name": order.get("customer_name", "Phone Order"),
+        "phone_number": order.get("caller_phone", ""),
+    }
+    _note = f"Phone order via Meridian AI • {order.get('special_requests', '')}".strip()
+    _now = datetime.now(timezone.utc)
+    if (order.get("order_type") or "pickup").lower() == "delivery":
+        fulfillment = {
+            "type": "DELIVERY",
+            "state": "PROPOSED",
+            "delivery_details": {
+                "recipient": {
+                    **_recipient,
+                    # Square wants a structured address; the caller's free-text
+                    # delivery address goes in line 1 (kitchen reads the note too).
+                    "address": {"address_line_1": order.get("delivery_address", "") or "Address provided by phone"},
+                },
+                "schedule_type": "ASAP",
+                "deliver_at": (_now + timedelta(minutes=45)).isoformat(),
+                "note": _note,
+            },
+        }
+    else:
+        fulfillment = {
+            "type": "PICKUP",
+            "state": "PROPOSED",
+            "pickup_details": {
+                "recipient": _recipient,
+                "schedule_type": "ASAP",
+                "pickup_at": (_now + timedelta(minutes=15)).isoformat(),
+                "note": _note,
+            },
+        }
     payload = {
         "idempotency_key": str(uuid.uuid4()),
         "order": {
             "location_id": location_id,
             "line_items": line_items,
-            "fulfillments": [
-                {
-                    "type": "PICKUP" if order.get("order_type") == "pickup" else "SHIPMENT",
-                    "state": "PROPOSED",
-                    "pickup_details": {
-                        "recipient": {
-                            "display_name": order.get("customer_name", "Phone Order"),
-                            "phone_number": order.get("caller_phone", ""),
-                        },
-                        # Square requires a pickup_at on a pickup fulfillment (else
-                        # 400 "SCHEDULED pickup must have a pickup_at time"). ASAP +
-                        # ~15 min out is a sane default for a phone order.
-                        "schedule_type": "ASAP",
-                        "pickup_at": (
-                            datetime.now(timezone.utc) + timedelta(minutes=15)
-                        ).isoformat(),
-                        "note": f"Phone order via Meridian AI • {order.get('special_requests', '')}".strip(),
-                    },
-                }
-            ],
+            "fulfillments": [fulfillment],
         },
     }
 
