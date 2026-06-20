@@ -308,7 +308,11 @@ async def run_call_bot(
             # Strip background noise (TV, room chatter) from the caller's audio
             # BEFORE it reaches the STT, so a noisy room doesn't get transcribed as
             # gibberish. RNNoise = free, local, DL-based voice isolation (no key).
-            audio_in_filter=RNNoiseFilter(),
+            # Toggle off with RNNOISE_DISABLED=1.
+            audio_in_filter=(
+                None if os.getenv("RNNOISE_DISABLED", "").lower() in ("1", "true", "yes")
+                else RNNoiseFilter()
+            ),
         ),
     )
 
