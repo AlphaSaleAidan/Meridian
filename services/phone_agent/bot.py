@@ -290,5 +290,5 @@ async def run_call_bot(
         transport.output(),
         assistant_agg,
     ])
-    task = PipelineTask(pipeline, PipelineParams(allow_interruptions=True))
+    task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
     await PipelineRunner().run(task)
