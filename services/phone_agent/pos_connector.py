@@ -6,6 +6,7 @@ Orders are always saved to Supabase regardless of POS routing outcome.
 """
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import httpx
@@ -13,7 +14,7 @@ import httpx
 logger = logging.getLogger("meridian.phone_agent.pos")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")  # writes need service-role
 
 TOAST_API_BASE = os.getenv("TOAST_API_BASE_URL", "https://ws-api.toasttab.com")
 
@@ -106,6 +107,13 @@ async def _create_square_order(
                             "display_name": order.get("customer_name", "Phone Order"),
                             "phone_number": order.get("caller_phone", ""),
                         },
+                        # Square requires a pickup_at on a pickup fulfillment (else
+                        # 400 "SCHEDULED pickup must have a pickup_at time"). ASAP +
+                        # ~15 min out is a sane default for a phone order.
+                        "schedule_type": "ASAP",
+                        "pickup_at": (
+                            datetime.now(timezone.utc) + timedelta(minutes=15)
+                        ).isoformat(),
                         "note": f"Phone order via Meridian AI • {order.get('special_requests', '')}".strip(),
                     },
                 }

@@ -26,6 +26,7 @@ from typing import Any
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.audio.filters.rnnoise_filter import RNNoiseFilter
 from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -65,7 +66,8 @@ DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")  # V4 flash: low-latency + tool-calling (was V3 deepseek-chat)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+# _log_call writes phone_call_logs → needs service-role (anon lacks INSERT GRANT).
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY", "")
 
 # ─── Order tool schemas (1.x FunctionSchema; same shapes the brain expects) ───
 _SUBMIT_ORDER = FunctionSchema(
@@ -304,6 +306,14 @@ async def run_call_bot(
             audio_out_enabled=True,
             add_wav_header=False,
             serializer=serializer,
+            # Inbound noise cancellation. OFF by default: pipecat's RNNoise filter
+            # mangled even clean 16 kHz speech in this pipeline (sample-rate/frame
+            # mismatch — "cheeseburger" → "bean"), so it's opt-in only via
+            # RNNOISE_ENABLED=1 pending a fix or a keyed filter (Krisp/Koala).
+            audio_in_filter=(
+                RNNoiseFilter() if os.getenv("RNNOISE_ENABLED", "").lower() in ("1", "true", "yes")
+                else None
+            ),
         ),
     )
 
@@ -320,10 +330,22 @@ async def run_call_bot(
             await params.result_callback({"status": "already_submitted"})
             return
         state["submitted"] = True
+        # The LLM can't know the caller's number — inject the real one from the
+        # Telnyx start event so the POS order recipient + checkout SMS have it.
+        if caller_info.get("phone") and not args.get("caller_phone"):
+            args["caller_phone"] = caller_info["phone"]
         normalized = normalize_order(args, merchant_config)
+        # POS creds: prefer the merchant's own connected token; for a Square
+        # merchant with none (the demo), fall back to Meridian's Square creds from
+        # env so the order still lands in a real Square dashboard. Keeps tokens in
+        # env, not the DB.
+        pos_token = merchant_config.pos_access_token
+        pos_location = merchant_config.pos_location_id
+        if merchant_config.pos_system == "square" and not pos_token:
+            pos_token = os.getenv("SQUARE_ACCESS_TOKEN", "")
+            pos_location = pos_location or os.getenv("SQUARE_LOCATION_ID", "")
         pos_result = await create_pos_order(
-            normalized, merchant_config.pos_system,
-            merchant_config.pos_access_token, merchant_config.pos_location_id,
+            normalized, merchant_config.pos_system, pos_token, pos_location,
         )
         await route_order(normalized, merchant_config, caller_info, pos_result)
         await _log_call(merchant_id, session_ref, caller_info, "order_placed",
