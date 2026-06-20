@@ -35,6 +35,7 @@ from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
     LLMUserAggregatorParams,
 )
+from pipecat.turns.user_mute.always_user_mute_strategy import AlwaysUserMuteStrategy
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.services.llm_service import FunctionCallParams
@@ -341,7 +342,16 @@ async def run_call_bot(
         tools=ToolsSchema(standard_tools=[_SUBMIT_ORDER, _TRANSFER, _END_CALL]),
     )
     user_agg, assistant_agg = LLMContextAggregatorPair(
-        context, user_params=LLMUserAggregatorParams(vad_analyzer=_vad_analyzer()),
+        context,
+        user_params=LLMUserAggregatorParams(
+            vad_analyzer=_vad_analyzer(),
+            # No barge-in: mute the caller's audio while the bot is speaking so
+            # background voices / a TV / cross-talk can't cut the agent off
+            # mid-sentence. We only listen for the answer once the bot finishes
+            # its turn (BotStoppedSpeaking un-mutes). This is the robust fix for
+            # "every nearby noise interrupts the bot" — stronger than VAD tuning.
+            user_mute_strategies=[AlwaysUserMuteStrategy()],
+        ),
     )
 
     pipeline = Pipeline([
@@ -353,7 +363,10 @@ async def run_call_bot(
         transport.output(),
         assistant_agg,
     ])
-    task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+    # Interruptions are governed by the AlwaysUserMuteStrategy on the user
+    # aggregator above (allow_interruptions is not a real pipecat 1.4 param — it
+    # was silently ignored). The bot speaks its full turn, then listens.
+    task = PipelineTask(pipeline, params=PipelineParams())
 
     @transport.event_handler("on_client_connected")
     async def _on_client_connected(_transport, _client):
