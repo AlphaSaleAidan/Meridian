@@ -26,6 +26,7 @@ from typing import Any
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.audio.filters.rnnoise_filter import RNNoiseFilter
 from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -304,6 +305,10 @@ async def run_call_bot(
             audio_out_enabled=True,
             add_wav_header=False,
             serializer=serializer,
+            # Strip background noise (TV, room chatter) from the caller's audio
+            # BEFORE it reaches the STT, so a noisy room doesn't get transcribed as
+            # gibberish. RNNoise = free, local, DL-based voice isolation (no key).
+            audio_in_filter=RNNoiseFilter(),
         ),
     )
 
@@ -320,6 +325,10 @@ async def run_call_bot(
             await params.result_callback({"status": "already_submitted"})
             return
         state["submitted"] = True
+        # The LLM can't know the caller's number — inject the real one from the
+        # Telnyx start event so the POS order recipient + checkout SMS have it.
+        if caller_info.get("phone") and not args.get("caller_phone"):
+            args["caller_phone"] = caller_info["phone"]
         normalized = normalize_order(args, merchant_config)
         pos_result = await create_pos_order(
             normalized, merchant_config.pos_system,
