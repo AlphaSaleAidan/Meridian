@@ -721,9 +721,27 @@ async def _charge_for_call(merchant_id: str, call_sid: str, duration_seconds: in
 
 
 def _media_stream_twiml(merchant_id: str, caller_phone: str) -> str:
-    """TwiML that hands the call off to the Pipecat WebSocket."""
+    """TwiML that hands the call off to the Pipecat WebSocket.
+
+    Telnyx and Twilio differ for BIDIRECTIONAL streaming: Telnyx's <Stream>
+    defaults to bidirectionalMode="mp3", which does NOT send the bot's audio back
+    as raw PCMU — so the caller hears nothing. Telnyx needs bidirectionalMode="rtp"
+    + PCMU/8k (what TelnyxFrameSerializer speaks), plus a trailing <Pause> to hold
+    the call leg. Twilio's <Connect><Stream> is bidirectional by default.
+    (Matches pipecat's telnyx-chatbot example.)
+    """
     stream_url = f"wss://{MEDIA_STREAM_HOST}/twilio/media-stream/{merchant_id}"
     safe_caller = _escape(caller_phone or "")
+    if PHONE_PROVIDER == "telnyx":
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="{stream_url}" bidirectionalMode="rtp" bidirectionalCodec="PCMU" bidirectionalSamplingRate="8000">
+      <Parameter name="caller_phone" value="{safe_caller}" />
+    </Stream>
+  </Connect>
+  <Pause length="40"/>
+</Response>"""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
@@ -775,7 +793,24 @@ async def twilio_voice(request: Request):
             await _log_call_end(call_sid, "credits_paused")
             return Response(content=_credits_paused_twiml(), media_type=TWIML)
 
-    if MEDIA_STREAMS_ENABLED:
+    # Per-merchant opt-in: stream only when the global switch is on AND this
+    # merchant has streaming_enabled (default off, migration 024). Everyone else
+    # stays on the proven turn-based path — so rollout is one merchant at a time.
+    # The demo merchant can be opted in via STREAMING_TEST_DEMO=1 for live
+    # verification without needing a DB row.
+    #
+    # English-only: the NVCF-hosted Nemotron streaming ASR serves en-US only, so a
+    # French merchant must stay on the turn-based path (which transcribes FR) until
+    # a French streaming ASR is wired. We never route a 'fr*' merchant to streaming
+    # even if the flag is set — that would silently mis-transcribe the call.
+    merchant_lang = ((config_row or {}).get("language") or "en").lower()
+    streaming_on = MEDIA_STREAMS_ENABLED and not merchant_lang.startswith("fr") and (
+        bool((config_row or {}).get("streaming_enabled"))
+        or (merchant_id == DEMO_MERCHANT_ID and os.getenv("STREAMING_TEST_DEMO") == "1")
+    )
+    if MEDIA_STREAMS_ENABLED and merchant_lang.startswith("fr") and (config_row or {}).get("streaming_enabled"):
+        logger.info("Merchant %s is French — keeping on turn-based path (streaming ASR is en-US only)", merchant_id)
+    if streaming_on:
         logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
         return Response(content=_media_stream_twiml(merchant_id, caller_phone), media_type=TWIML)
 
