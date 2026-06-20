@@ -305,13 +305,13 @@ async def run_call_bot(
             audio_out_enabled=True,
             add_wav_header=False,
             serializer=serializer,
-            # Strip background noise (TV, room chatter) from the caller's audio
-            # BEFORE it reaches the STT, so a noisy room doesn't get transcribed as
-            # gibberish. RNNoise = free, local, DL-based voice isolation (no key).
-            # Toggle off with RNNOISE_DISABLED=1.
+            # Inbound noise cancellation. OFF by default: pipecat's RNNoise filter
+            # mangled even clean 16 kHz speech in this pipeline (sample-rate/frame
+            # mismatch — "cheeseburger" → "bean"), so it's opt-in only via
+            # RNNOISE_ENABLED=1 pending a fix or a keyed filter (Krisp/Koala).
             audio_in_filter=(
-                None if os.getenv("RNNOISE_DISABLED", "").lower() in ("1", "true", "yes")
-                else RNNoiseFilter()
+                RNNoiseFilter() if os.getenv("RNNOISE_ENABLED", "").lower() in ("1", "true", "yes")
+                else None
             ),
         ),
     )
