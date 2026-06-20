@@ -176,13 +176,21 @@ def _language(config: MerchantPhoneConfig) -> "Language":
 
 
 def _build_stt(config: MerchantPhoneConfig):
-    """STT: Nemotron 3.5 ASR (streaming, NVCF-hosted, 40 langs) → Moonshine (EN, local).
-    Without an explicit language, Nemotron defaults to en-US and mis-transcribes
-    French, so we always pass the merchant's language."""
+    """STT: Nemotron 3.5 ASR (streaming, NVCF-hosted) → Moonshine (local).
+
+    IMPORTANT: the NVCF-hosted `nemotron-asr-streaming` (online) model only serves
+    en-US today — requesting language_code=fr makes the gRPC stream drop in a
+    reconnect loop (verified). So the streaming ASR is English-only; French
+    merchants stay on the turn-based path (see phone.py /voice gate). We clamp to
+    en-US defensively here too, so a French config can never wedge a live call."""
     if _nemotron_on():
         try:
             from pipecat.services.nvidia.stt import NvidiaSTTService
+            from pipecat.transcriptions.language import Language
             lang = _language(config)
+            if lang != Language.EN_US:
+                logger.warning("Nemotron streaming ASR is en-US only; '%s' unsupported — using en-US", lang)
+                lang = Language.EN_US
             logger.info("STT: Nemotron 3.5 ASR (NVCF, lang=%s)", lang)
             return NvidiaSTTService(
                 api_key=os.environ["NVIDIA_API_KEY"],

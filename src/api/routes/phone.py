@@ -780,10 +780,18 @@ async def twilio_voice(request: Request):
     # stays on the proven turn-based path — so rollout is one merchant at a time.
     # The demo merchant can be opted in via STREAMING_TEST_DEMO=1 for live
     # verification without needing a DB row.
-    streaming_on = MEDIA_STREAMS_ENABLED and (
+    #
+    # English-only: the NVCF-hosted Nemotron streaming ASR serves en-US only, so a
+    # French merchant must stay on the turn-based path (which transcribes FR) until
+    # a French streaming ASR is wired. We never route a 'fr*' merchant to streaming
+    # even if the flag is set — that would silently mis-transcribe the call.
+    merchant_lang = ((config_row or {}).get("language") or "en").lower()
+    streaming_on = MEDIA_STREAMS_ENABLED and not merchant_lang.startswith("fr") and (
         bool((config_row or {}).get("streaming_enabled"))
         or (merchant_id == DEMO_MERCHANT_ID and os.getenv("STREAMING_TEST_DEMO") == "1")
     )
+    if MEDIA_STREAMS_ENABLED and merchant_lang.startswith("fr") and (config_row or {}).get("streaming_enabled"):
+        logger.info("Merchant %s is French — keeping on turn-based path (streaming ASR is en-US only)", merchant_id)
     if streaming_on:
         logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
         return Response(content=_media_stream_twiml(merchant_id, caller_phone), media_type=TWIML)
