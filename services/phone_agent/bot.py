@@ -25,6 +25,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.frames.frames import TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -159,6 +161,24 @@ async def _log_call(merchant_id: str, call_sid: str, caller: dict, status: str, 
                                   "Content-Type": "application/json", "Prefer": "return=minimal"})
     except Exception as e:
         logger.error("Call log failed: %s", e)
+
+
+def _vad_analyzer() -> SileroVADAnalyzer:
+    """Silero VAD tuned for noisy phone environments.
+
+    The library defaults (confidence 0.7 / start_secs 0.2 / min_volume 0.6) are
+    very sensitive — a TV or background chatter just above a low volume floor reads
+    as the caller speaking and interrupts the bot mid-sentence. We require louder,
+    more-confident, slightly-sustained speech before it counts as a turn (rejects
+    background), while keeping stop_secs short so turn-end stays snappy. All four
+    are overridable per-deploy via VAD_* env vars for live tuning without a code change.
+    """
+    return SileroVADAnalyzer(params=VADParams(
+        confidence=float(os.getenv("VAD_CONFIDENCE", "0.85")),   # was 0.70 — surer it's speech
+        start_secs=float(os.getenv("VAD_START_SECS", "0.30")),   # was 0.20 — must be sustained
+        stop_secs=float(os.getenv("VAD_STOP_SECS", "0.30")),     # was 0.20 — keep responsive
+        min_volume=float(os.getenv("VAD_MIN_VOLUME", "0.70")),   # was 0.60 — ignore quiet noise
+    ))
 
 
 def _nemotron_on() -> bool:
@@ -321,7 +341,7 @@ async def run_call_bot(
         tools=ToolsSchema(standard_tools=[_SUBMIT_ORDER, _TRANSFER, _END_CALL]),
     )
     user_agg, assistant_agg = LLMContextAggregatorPair(
-        context, user_params=LLMUserAggregatorParams(vad_analyzer=SileroVADAnalyzer()),
+        context, user_params=LLMUserAggregatorParams(vad_analyzer=_vad_analyzer()),
     )
 
     pipeline = Pipeline([
@@ -334,4 +354,15 @@ async def run_call_bot(
         assistant_agg,
     ])
     task = PipelineTask(pipeline, params=PipelineParams(allow_interruptions=True))
+
+    @transport.event_handler("on_client_connected")
+    async def _on_client_connected(_transport, _client):
+        # Greet the instant the call connects, before the caller says anything.
+        # Spoken straight through TTS (no LLM round-trip) so the hello is immediate,
+        # and recorded in the context (now, not after the bot finishes speaking) so
+        # a caller who talks over the greeting doesn't get greeted twice.
+        greeting = (merchant_config.greeting or "").strip() or "Thank you for calling!"
+        context.add_message({"role": "assistant", "content": greeting})
+        await task.queue_frames([TTSSpeakFrame(greeting)])
+
     await PipelineRunner().run(task)
