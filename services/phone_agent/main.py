@@ -11,6 +11,7 @@ Two modes:
 """
 import logging
 import os
+import time
 
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import JSONResponse
@@ -44,6 +45,11 @@ except ImportError:
     logger.info("Pipecat not available — Twilio-only mode")
 
 OLLAMA_URL = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+# Which media-stream envelope the inbound provider speaks. The backend's /voice
+# TwiML hands the call to wss://{MEDIA_STREAM_HOST}/twilio/media-stream/{merchant_id};
+# this sidecar is that host, so it must drain the same start event the backend would.
+PHONE_PROVIDER = os.getenv("PHONE_PROVIDER", "twilio").lower()
 
 
 @app.get("/health")
@@ -141,6 +147,85 @@ if HAS_PIPECAT:
             )
         except Exception as e:
             logger.error("Inbound call error: %s", e, exc_info=True)
+
+    @app.websocket("/twilio/media-stream/{merchant_id}")
+    async def media_stream(websocket: WebSocket, merchant_id: str):
+        """Provider Media Streams WebSocket → Pipecat pipeline.
+
+        This is the endpoint the backend's /voice TwiML points Twilio/Telnyx at
+        (wss://MEDIA_STREAM_HOST/twilio/media-stream/{merchant_id}). It drains the
+        provider's connected→start prelude to capture the stream id (and, for
+        Telnyx, the call_control_id + encoding), then hands the socket to the
+        pipeline. The TwilioFrameSerializer/TelnyxFrameSerializer in run_call_bot
+        decode the mu-law media frames from here on.
+        """
+        await websocket.accept()
+        logger.info("Media stream connected: merchant=%s provider=%s", merchant_id, PHONE_PROVIDER)
+
+        config = await get_merchant_config(merchant_id)
+        if not config:
+            logger.warning("No config for merchant %s — rejecting", merchant_id)
+            await websocket.close(code=1008, reason="Merchant not configured")
+            return
+        if not getattr(config, "active", True):
+            logger.info("Phone agent disabled for merchant %s", merchant_id)
+            await websocket.close(code=1008, reason="Phone agent disabled")
+            return
+
+        stream_sid: str | None = None
+        call_sid = ""
+        caller_phone = ""
+        call_control_id = ""
+        outbound_encoding = "PCMU"
+        try:
+            for _ in range(5):
+                msg = await websocket.receive_json()
+                if msg.get("event") != "start":
+                    continue
+                start = msg.get("start", {})
+                if PHONE_PROVIDER == "telnyx":
+                    stream_sid = start.get("stream_id") or msg.get("stream_id")
+                    call_control_id = start.get("call_control_id", "")
+                    call_sid = call_control_id
+                    fmt = start.get("media_format", {}) or {}
+                    outbound_encoding = (fmt.get("encoding") or "PCMU").upper()
+                    params = start.get("custom_parameters", {}) or start.get("customParameters", {}) or {}
+                    caller_phone = params.get("caller_phone", "") or start.get("from", "")
+                else:
+                    stream_sid = start.get("streamSid")
+                    call_sid = start.get("callSid", "")
+                    params = start.get("customParameters", {}) or {}
+                    caller_phone = params.get("caller_phone", "")
+                break
+        except Exception as e:
+            logger.error("Failed to read %s start event: %s", PHONE_PROVIDER, e)
+            await websocket.close(code=1011, reason="Bad media handshake")
+            return
+
+        if not stream_sid:
+            logger.error("No stream id in %s handshake — aborting", PHONE_PROVIDER)
+            await websocket.close(code=1011, reason="Missing stream id")
+            return
+
+        session_ref = call_sid or f"mstream-{int(time.time() * 1000)}"
+        caller_info = {"phone": caller_phone, "session_ref": session_ref}
+        try:
+            await run_call_bot(
+                websocket=websocket,
+                merchant_id=merchant_id,
+                session_ref=session_ref,
+                merchant_config=config,
+                caller_info=caller_info,
+                stream_sid=stream_sid,
+                call_sid=call_sid,
+                provider=PHONE_PROVIDER,
+                call_control_id=call_control_id,
+                outbound_encoding=outbound_encoding,
+            )
+        except Exception as e:
+            logger.error("Media stream pipeline error: %s", e, exc_info=True)
+        finally:
+            logger.info("Media stream ended: merchant=%s session=%s", merchant_id, session_ref)
 
 
 if __name__ == "__main__":
