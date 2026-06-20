@@ -775,7 +775,16 @@ async def twilio_voice(request: Request):
             await _log_call_end(call_sid, "credits_paused")
             return Response(content=_credits_paused_twiml(), media_type=TWIML)
 
-    if MEDIA_STREAMS_ENABLED:
+    # Per-merchant opt-in: stream only when the global switch is on AND this
+    # merchant has streaming_enabled (default off, migration 024). Everyone else
+    # stays on the proven turn-based path — so rollout is one merchant at a time.
+    # The demo merchant can be opted in via STREAMING_TEST_DEMO=1 for live
+    # verification without needing a DB row.
+    streaming_on = MEDIA_STREAMS_ENABLED and (
+        bool((config_row or {}).get("streaming_enabled"))
+        or (merchant_id == DEMO_MERCHANT_ID and os.getenv("STREAMING_TEST_DEMO") == "1")
+    )
+    if streaming_on:
         logger.info("Routing call %s to Pipecat media stream (merchant=%s)", call_sid, merchant_id)
         return Response(content=_media_stream_twiml(merchant_id, caller_phone), media_type=TWIML)
 
