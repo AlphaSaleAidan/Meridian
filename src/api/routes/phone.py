@@ -1295,3 +1295,98 @@ async def twilio_health():
         "qwen_url": QWEN_URL,
         "active_sessions": len(_sessions),
     }
+
+
+# ─── PAY ON THE PHONE: payment confirmation webhook ──────────────────────────
+# Square POSTs here when a payment link is paid. On payment.updated/order.updated
+# → COMPLETED/paid we flip the held phone_orders row to paid and release the
+# kitchen ticket (anti-scam: the kitchen only ever sees PAID tickets).
+#
+# The main POS-sync webhook (/api/webhooks/square) enriches transactions but does
+# NOT touch phone_orders, so this is a dedicated, minimal flip endpoint.
+#
+# ponytail: a poll-fallback (Square /v2/payments?order_id=... every N s for orders
+# stuck in awaiting_payment) could back this up if a webhook is ever missed; not
+# built now since the webhook is the supported path.
+@router.post("/payment-webhook")
+async def phone_payment_webhook(request: Request):
+    """Square payment webhook → release the held phone order once paid."""
+    body = await request.body()
+
+    # Verify the Square signature when a key is configured (reuse the shared
+    # helper + key resolution used by /api/webhooks/square). If no key is set we
+    # only accept the demo simulate path (below) — never an unsigned real flip.
+    sig_ok = False
+    try:
+        from ...config import square as sq_config, app as app_config
+        from ...square.webhook_handlers import verify_webhook_signature
+        signature_key = (
+            os.environ.get("POS_SQUARE_WEBHOOK_SIGNATURE_KEY")
+            or sq_config.webhook_signature_key
+        )
+        if signature_key:
+            sig_ok = verify_webhook_signature(
+                body=body,
+                signature=request.headers.get("x-square-hmacsha256-signature", ""),
+                signature_key=signature_key,
+                notification_url=app_config.webhook_url,
+            )
+    except Exception as e:
+        logger.warning("Payment webhook signature check unavailable: %s", e)
+
+    try:
+        event = json.loads(body)
+    except json.JSONDecodeError:
+        return Response(content='{"error":"bad_json"}', status_code=400,
+                        media_type="application/json")
+
+    # Demo-safe: an unsigned {"simulate": true, ...} body flips immediately so the
+    # flow is demonstrable without a real charge. Real (signed) events flip too.
+    simulate = bool(event.get("simulate"))
+    if not sig_ok and not simulate:
+        logger.warning("Payment webhook rejected (no valid signature, not simulate)")
+        return Response(content='{"error":"unauthorized"}', status_code=403,
+                        media_type="application/json")
+
+    event_type = event.get("type", "")
+    obj = event.get("data", {}).get("object", {})
+    payment = obj.get("payment", {}) if isinstance(obj, dict) else {}
+    order_obj = obj.get("order", {}) if isinstance(obj, dict) else {}
+
+    # Treat it as paid on a COMPLETED payment or a paid order update.
+    status = (payment.get("status") or order_obj.get("state") or "").upper()
+    is_paid = (
+        simulate
+        or event_type in ("payment.created", "payment.updated") and status in ("COMPLETED", "APPROVED")
+        or event_type == "order.updated" and status in ("COMPLETED", "PAID")
+    )
+    if not is_paid:
+        # Acknowledge non-paid events so Square doesn't retry.
+        return Response(content='{"ok":true,"action":"ignored"}', status_code=200,
+                        media_type="application/json")
+
+    # Square's payment carries the order_id it was created against; that's our
+    # phone_orders.pos_order_id. Fall back to merchant+phone for the simulate path.
+    pos_order_id = (
+        payment.get("order_id")
+        or order_obj.get("id")
+        or event.get("pos_order_id", "")
+    )
+    merchant_id = event.get("merchant_id", "")
+    caller_phone = event.get("caller_phone", payment.get("buyer_phone_number", ""))
+
+    try:
+        from pay_on_phone import mark_order_paid
+    except ImportError as e:
+        logger.error("pay_on_phone not importable: %s", e)
+        return Response(content='{"error":"unavailable"}', status_code=503,
+                        media_type="application/json")
+
+    result = await mark_order_paid(
+        merchant_id=merchant_id,
+        caller_phone=caller_phone,
+        pos_order_id=pos_order_id,
+        simulate=simulate,
+    )
+    return {"ok": True, "released": result.get("released", False),
+            "matched_by": result.get("matched_by", "")}

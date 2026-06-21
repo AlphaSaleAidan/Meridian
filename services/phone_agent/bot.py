@@ -57,7 +57,8 @@ from pipecat.transports.websocket.fastapi import (
 from merchant_config import MerchantPhoneConfig
 from order_normalizer import normalize_order
 from pos_connector import create_pos_order
-from order_router import route_order
+from order_router import route_order  # noqa: F401  (kept for back-compat imports)
+from pay_on_phone import dispatch_order, resolve_mode
 from caller_memory import build_memory_block_for
 
 logger = logging.getLogger("meridian.phone_agent.bot")
@@ -94,6 +95,11 @@ _SUBMIT_ORDER = FunctionSchema(
         "delivery_address": {"type": "string"},
         "special_requests": {"type": "string"},
         "caller_phone": {"type": "string"},
+        "pay_choice": {
+            "type": "string",
+            "enum": ["pay_now", "pay_at_pickup"],
+            "description": "Only when payment is optional: the caller's chosen payment timing.",
+        },
     },
     required=["customer_name", "order_type", "items"],
 )
@@ -126,6 +132,32 @@ def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_b
             lines.append(line)
         menu_section = "\n\nMENU:\n" + "\n".join(lines)
     memory_section = f"\n\n{memory_block}" if memory_block else ""
+
+    # PAY ON THE PHONE — tell the agent the payment step for this merchant.
+    mode = getattr(config, "payment_mode", "pay_now")
+    if mode == "pay_now":
+        payment_section = (
+            "\n\nPAYMENT (required to send the order):\n"
+            "- After the customer confirms the order, call submit_order().\n"
+            "- Then tell them: you've just texted a secure payment link to their "
+            "phone they can tap to pay with Apple Pay, Google Pay or card, and the "
+            "order goes to the kitchen as soon as it's paid.\n"
+            "- Do NOT promise the order is being prepared before payment — it's held "
+            "until paid."
+        )
+    elif mode == "optional":
+        payment_section = (
+            "\n\nPAYMENT:\n"
+            "- Before submitting, ask: \"Would you like to pay now by secure text "
+            "link, or pay at pickup?\"\n"
+            "- Pass their choice as pay_choice (\"pay_now\" or \"pay_at_pickup\") to "
+            "submit_order().\n"
+            "- If they choose pay now, tell them you've texted a secure link and the "
+            "order is sent once it's paid."
+        )
+    else:  # pay_at_pickup
+        payment_section = "\n\nPAYMENT:\n- Let the customer know they can pay at pickup."
+
     return f"""You are the AI phone assistant for {config.business_name}.
 Keep replies SHORT — 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
 
@@ -137,7 +169,7 @@ RULES:
 - If the customer asks for a person, call transfer_to_human()
 - If the call ends without an order, call end_call_no_order()
 - Available order types: {", ".join(config.order_types)}
-- If an item isn't on the menu, say so politely and suggest alternatives
+- If an item isn't on the menu, say so politely and suggest alternatives{payment_section}
 
 IF THE CALLER SOUNDS DISSATISFIED OR FRUSTRATED — watch for signals like: "no", "that's
 not what I said", "that's wrong", "not right", "you're not listening", "I already told you",
@@ -163,6 +195,19 @@ def _confirmation(order: dict, pos_result: dict) -> str:
     eta = pos_result.get("estimated_ready_minutes")
     msg += f" It should be ready in about {eta} minutes." if (pos_result.get("success") and eta) else " The kitchen has been notified."
     return msg + " Anything else?"
+
+
+def _pay_now_confirmation(order: dict) -> str:
+    """Spoken line for the pay-now (anti-scam) path: order taken, link texted,
+    kitchen released once paid."""
+    name = order.get("customer_name", "")
+    lead = f"Thanks, {name}! " if name else "Thanks! "
+    return (
+        lead
+        + "I've just texted a secure payment link to your phone — tap it to pay "
+        "with Apple Pay, Google Pay or card, and your order goes straight to the "
+        "kitchen. Anything else?"
+    )
 
 
 async def _log_call(merchant_id: str, call_sid: str, caller: dict, status: str, **extra: Any) -> None:
@@ -374,10 +419,28 @@ async def run_call_bot(
         pos_result = await create_pos_order(
             normalized, merchant_config.pos_system, pos_token, pos_location,
         )
-        await route_order(normalized, merchant_config, caller_info, pos_result)
-        await _log_call(merchant_id, session_ref, caller_info, "order_placed",
-                        order_data=normalized, pos_result=pos_result)
-        await params.result_callback({"success": True, "say": _confirmation(normalized, pos_result)})
+
+        # ── PAY ON THE PHONE: branch on the merchant's payment_mode ──────────
+        # pay_now (default): order is OPEN in the POS but the kitchen ticket is
+        #   HELD (awaiting_payment) until the caller pays via a secure texted
+        #   link — anti-scam, no no-shows / prank orders reach the kitchen.
+        # optional: the caller's pay_choice decides (defaults to pay_now).
+        # pay_at_pickup: legacy behavior — order goes to the kitchen unpaid.
+        mode = resolve_mode(merchant_config, args.get("pay_choice", ""))
+        await dispatch_order(
+            normalized, merchant_config, caller_info, pos_result,
+            pay_choice=args.get("pay_choice", ""),
+        )
+        if mode == "pay_now":
+            say = _pay_now_confirmation(normalized)
+            log_status = "awaiting_payment"
+        else:
+            say = _confirmation(normalized, pos_result)
+            log_status = "order_placed"
+
+        await _log_call(merchant_id, session_ref, caller_info, log_status,
+                        order_data=normalized, pos_result=pos_result, payment_mode=mode)
+        await params.result_callback({"success": True, "say": say})
 
     async def _on_transfer(params: FunctionCallParams):
         await _log_call(merchant_id, session_ref, caller_info, "transferred",
