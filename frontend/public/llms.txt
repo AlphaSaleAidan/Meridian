@@ -212,6 +212,17 @@ A: Average is 3-5% net profit margin. Well-managed restaurants achieve 10-15%. F
 
 Meridian Intelligence (Meridian AI Business Solutions) was founded by Aidan Pierce, who serves as Founder and CEO. Aidan started Meridian to give independent restaurants, cafés, auto shops, and retailers the kind of analytics large chains take for granted — connected directly to the POS systems they already run, with plain-English insights. He built Meridian compliance-first for the Canadian market (CAD pricing, Canadian POS integrations like Moneris, PIPEDA and Quebec Law 25 alignment). Profile: https://meridian.tips/about
 
+## Brand & Founder — Quick Answers
+
+Q: What is Meridian AI Business Solutions?
+A: Meridian AI Business Solutions (operating as Meridian Intelligence, at meridian.tips) is an AI-powered POS analytics platform for small and medium businesses in Canada and the US. It connects to a merchant's existing POS, then surfaces revenue insights, anomaly alerts, forecasts, and compliance-aligned analytics. It is distinct from other "Meridian AI" companies in venue intelligence, sales automation, or private-markets CRM.
+
+Q: Who founded Meridian Intelligence?
+A: Meridian Intelligence (Meridian AI Business Solutions) was founded by Aidan Pierce, who is its Founder and CEO. More at https://meridian.tips/about
+
+Q: Who is Aidan Pierce?
+A: Aidan Pierce is the founder and CEO of Meridian Intelligence (Meridian AI Business Solutions), a compliance-first POS analytics platform built Canada-first for restaurants, cafés, auto shops, and retailers.
+
 ## Contact
 
 - General: hello@meridian.tips
