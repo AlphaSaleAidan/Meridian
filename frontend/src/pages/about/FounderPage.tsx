@@ -45,13 +45,17 @@ const PRINCIPLES = [
 ]
 
 function buildJsonLd() {
+  // @id matches the global Organization graph in index.html so Google resolves the
+  // founder/CEO relationship into a single entity across the whole site.
   const person = {
     '@type': 'Person',
+    '@id': 'https://meridian.tips/#aidan-pierce',
     name: FOUNDER.name,
     jobTitle: FOUNDER.title,
     url: 'https://meridian.tips/about',
     description: `${FOUNDER.name} is the founder and CEO of ${FOUNDER.org}, a compliance-first POS analytics platform for Canadian businesses.`,
-    worksFor: { '@type': 'Organization', name: FOUNDER.org, url: 'https://meridian.tips/' },
+    knowsAbout: ['POS analytics', 'restaurant revenue intelligence', 'PIPEDA compliance', 'small business analytics'],
+    worksFor: { '@id': 'https://meridian.tips/#organization' },
     ...(FOUNDER.sameAs.length ? { sameAs: FOUNDER.sameAs } : {}),
   }
   return [
@@ -59,15 +63,17 @@ function buildJsonLd() {
       '@type': 'AboutPage',
       name: `About ${FOUNDER.org}`,
       url: 'https://meridian.tips/about',
-      mainEntity: person,
+      mainEntity: { '@id': 'https://meridian.tips/#aidan-pierce' },
     },
     person,
     {
       '@type': 'Organization',
+      '@id': 'https://meridian.tips/#organization',
       name: FOUNDER.org,
+      alternateName: ['Meridian AI Business Solutions', 'Meridian AI'],
       url: 'https://meridian.tips/',
       logo: { '@type': 'ImageObject', url: 'https://meridian.tips/meridian-icon.svg' },
-      founder: { '@type': 'Person', name: FOUNDER.name },
+      founder: { '@id': 'https://meridian.tips/#aidan-pierce' },
       areaServed: ['CA', 'US'],
     },
     {

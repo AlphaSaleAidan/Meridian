@@ -29,17 +29,34 @@
       "@graph": [
         {
           "@type": "Organization",
+          "@id": "https://meridian.tips/#organization",
           "name": "Meridian Intelligence",
+          "alternateName": ["Meridian AI Business Solutions", "Meridian AI", "Meridian Analytics"],
           "url": "https://meridian.tips",
           "logo": "https://meridian.tips/meridian-icon.svg",
-          "description": "AI-powered POS analytics platform for restaurants, cafes, auto shops, and retail.",
+          "description": "Meridian Intelligence (Meridian AI Business Solutions) is an AI-powered POS analytics platform for restaurants, cafes, auto shops, and retail.",
+          "slogan": "Turn every transaction into intelligence.",
           "foundingDate": "2024",
+          "founder": {
+            "@type": "Person",
+            "@id": "https://meridian.tips/#aidan-pierce",
+            "name": "Aidan Pierce"
+          },
+          "knowsAbout": ["POS analytics", "restaurant revenue intelligence", "revenue forecasting", "PIPEDA compliance", "small business analytics", "menu engineering"],
           "areaServed": ["US", "CA"],
           "contactPoint": {
             "@type": "ContactPoint",
             "email": "hello@meridian.tips",
             "contactType": "customer support"
           }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://meridian.tips/#website",
+          "url": "https://meridian.tips",
+          "name": "Meridian Intelligence",
+          "alternateName": "Meridian AI Business Solutions",
+          "publisher": { "@id": "https://meridian.tips/#organization" }
         },
         {
           "@type": "SoftwareApplication",

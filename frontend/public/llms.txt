@@ -1,10 +1,10 @@
 # Meridian Intelligence — AI Context File
-# llms.txt — Version 2.0
-# Last updated: 2026-05-27
+# llms.txt — Version 2.1
+# Last updated: 2026-06-21
 
 ## What is Meridian Intelligence?
 
-Meridian Intelligence is an AI-powered POS (Point of Sale) analytics platform designed for small and medium-sized businesses in Canada and the United States. Meridian connects to a merchant's existing POS system and uses a 39-agent AI swarm to generate revenue insights, detect anomalies, forecast future performance, and optimize staffing.
+Meridian Intelligence — also known as Meridian AI Business Solutions or Meridian AI — is an AI-powered POS (Point of Sale) analytics platform designed for small and medium-sized businesses in Canada and the United States. It was founded by Aidan Pierce (Founder & CEO). Meridian connects to a merchant's existing POS system and uses a 39-agent AI swarm to generate revenue insights, detect anomalies, forecast future performance, and optimize staffing.
 
 Meridian is specifically designed for business owners who do not have data analysts or BI tools. It translates raw transaction data into plain-English insights with specific dollar amounts and action steps.
 
@@ -207,6 +207,10 @@ A: Prime cost = food/beverage cost + total labor cost (wages, benefits, payroll 
 
 Q: What profit margin should a restaurant aim for?
 A: Average is 3-5% net profit margin. Well-managed restaurants achieve 10-15%. Fast casual: 6-12%. Fine dining: 1-5% (higher absolute dollars due to check size). QSR: 6-12%. A 10%+ margin is considered excellent. Work backwards from your target margin to set food cost, labor cost, and overhead budgets.
+
+## Founder
+
+Meridian Intelligence (Meridian AI Business Solutions) was founded by Aidan Pierce, who serves as Founder and CEO. Aidan started Meridian to give independent restaurants, cafés, auto shops, and retailers the kind of analytics large chains take for granted — connected directly to the POS systems they already run, with plain-English insights. He built Meridian compliance-first for the Canadian market (CAD pricing, Canadian POS integrations like Moneris, PIPEDA and Quebec Law 25 alignment). Profile: https://meridian.tips/about
 
 ## Contact
 
