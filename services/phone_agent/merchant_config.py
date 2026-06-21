@@ -38,6 +38,18 @@ class MerchantPhoneConfig:
     sms_checkout_enabled: bool
     sms_ordering_enabled: bool
     tax_rate: float = 0.13
+    # PAY ON THE PHONE: pay_now (DEFAULT, anti-scam — kitchen only sees PAID
+    # tickets), pay_at_pickup (legacy OPEN/unpaid), or optional (caller chooses).
+    payment_mode: str = "pay_now"
+
+
+_VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
+
+
+def _norm_payment_mode(value: Optional[str]) -> str:
+    """Normalize the configured payment_mode; unknown/missing → pay_now (default)."""
+    mode = (value or "").strip().lower()
+    return mode if mode in _VALID_PAYMENT_MODES else "pay_now"
 
 
 async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]:
@@ -86,6 +98,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 sms_checkout_enabled=row.get("sms_checkout_enabled", True),
                 sms_ordering_enabled=row.get("sms_ordering_enabled", True),
                 tax_rate=row.get("tax_rate", 0.13),
+                # Default to pay_now if the column is missing/null (anti-scam default).
+                payment_mode=_norm_payment_mode(row.get("payment_mode")),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
@@ -166,4 +180,5 @@ def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
         sms_checkout_enabled=True,
         sms_ordering_enabled=True,
         tax_rate=0.13,
+        payment_mode="pay_now",
     )
