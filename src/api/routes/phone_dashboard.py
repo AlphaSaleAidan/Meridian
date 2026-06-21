@@ -139,9 +139,31 @@ def _decrypt_connection_token(conn: dict) -> str:
     return ""
 
 
-@router.post("/menu/sync/{merchant_id}")
-async def sync_menu_from_pos(merchant_id: str, _auth=Depends(require_service_auth)):
+# ---------------------------------------------------------------------------
+# Auto menu-builder — when a merchant connects their POS, build the phone
+# agent's menu from the POS catalog (read-only) and expose VISIBLE progress.
+#
+# State model (PONYTAIL ceiling): the "building" set is a process-local set of
+# merchant_ids whose sync is in flight. It's intentionally NOT persisted — it
+# only needs to survive the few seconds an extraction takes, and a single API
+# worker handles both the trigger and the status poll for a given merchant.
+# Ceiling: with multiple API workers behind a load balancer, a poll could hit a
+# worker that doesn't know a build is running; it would then report 'ready'
+# (menu_items present) or 'idle' (none) instead of 'building'. That's a cosmetic
+# regression in the progress animation only — the menu still builds correctly
+# via the background trigger. A `menu_sync_status` column on phone_agent_config
+# would make it cross-worker durable; out of scope for the smallest diff.
+# ---------------------------------------------------------------------------
+
+_MENU_BUILDING: set[str] = set()
+
+
+async def _sync_menu_from_pos_impl(merchant_id: str, db) -> dict:
     """Pull the merchant's menu from their connected POS (read-only) and store it.
+
+    The single extraction path — shared by the manual POST /menu/sync endpoint
+    and the auto-trigger fired on POS connect (pos_connections). Marks the
+    merchant 'building' for the duration so GET /menu/status can show progress.
 
     Credential resolution, in order:
       1. Manual creds on the phone_agent_config row (pos_system + pos_access_token)
@@ -158,69 +180,139 @@ async def sync_menu_from_pos(merchant_id: str, _auth=Depends(require_service_aut
     """
     from ...services.pos_connectors.menu_extractor import extract_menu_items
 
+    _MENU_BUILDING.add(merchant_id)
+    try:
+        config_rows = await db.select(
+            "phone_agent_config",
+            filters={"merchant_id": f"eq.{merchant_id}"},
+            limit=1,
+        )
+        config_row = config_rows[0] if config_rows else {}
+
+        system = (config_row.get("pos_system") or "").strip()
+        token = (config_row.get("pos_access_token") or "").strip()
+        location_id = (config_row.get("pos_location_id") or "").strip()
+        external_merchant_id = ""
+        source = "phone_config"
+
+        if not (system and token):
+            conns = await db.select(
+                "pos_connections",
+                filters={"org_id": f"eq.{merchant_id}", "status": "eq.connected"},
+                order="updated_at.desc",
+                limit=1,
+            )
+            if conns:
+                conn = conns[0]
+                system = system or (conn.get("provider") or "").strip()
+                external_merchant_id = (conn.get("external_merchant_id") or "").strip()
+                token = token or _decrypt_connection_token(conn)
+                source = "pos_connections"
+
+        if not system or not token:
+            return {
+                "synced": False,
+                "reason": "no POS credentials on file (neither manual config nor an OAuth connection)",
+                "item_count": 0,
+            }
+
+        items = await extract_menu_items(
+            system,
+            token,
+            merchant_id=external_merchant_id,
+            location_id=location_id,
+        )
+        if not items:
+            return {
+                "synced": False,
+                "reason": "POS returned no catalog items (empty menu or auth failed)",
+                "item_count": 0,
+                "source": source,
+            }
+
+        payload = {"menu_items": items, "updated_at": datetime.now(timezone.utc).isoformat()}
+        if config_rows:
+            await db.update(
+                "phone_agent_config",
+                payload,
+                filters={"merchant_id": f"eq.{merchant_id}"},
+            )
+        else:
+            await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
+
+        logger.info("Synced %d menu items from %s (%s) for %s", len(items), system, source, merchant_id)
+        return {"synced": True, "item_count": len(items), "source": source, "sample": items[:5]}
+    finally:
+        _MENU_BUILDING.discard(merchant_id)
+
+
+async def auto_build_menu_on_connect(merchant_id: str) -> None:
+    """Best-effort auto-trigger fired after a POS connection becomes active.
+
+    Reuses the exact extraction path the manual endpoint uses. Never raises — a
+    menu-build failure must not break the POS connect response. Skips merchants
+    whose id isn't a UUID (the menu_items shape keys off the org/merchant id).
+    """
+    if not _UUID_RE.match(merchant_id or ""):
+        return
+    try:
+        db = get_db()
+        result = await _sync_menu_from_pos_impl(merchant_id, db)
+        logger.info("auto menu-build for %s: %s", merchant_id, result.get("reason") or f"{result.get('item_count', 0)} items")
+    except Exception as e:  # noqa: BLE001 — auto-build is best-effort, never break connect
+        logger.warning("auto menu-build failed for %s: %s", merchant_id, e)
+
+
+@router.post("/menu/sync/{merchant_id}")
+async def sync_menu_from_pos(merchant_id: str, _auth=Depends(require_service_auth)):
+    """Manual trigger: pull the merchant's menu from their connected POS."""
+    _validate_merchant_id(merchant_id)
+    return await _sync_menu_from_pos_impl(merchant_id, get_db())
+
+
+@router.get("/menu/status/{merchant_id}")
+async def get_menu_status(merchant_id: str, _auth=Depends(require_service_auth)):
+    """Menu-build progress for the customer account UI.
+
+    state:
+      building → a sync is in flight in this worker
+      ready    → menu_items already stored
+      error    → config row carries a menu_sync_error (best-effort; reserved)
+      idle     → nothing stored and nothing in flight
+    """
     _validate_merchant_id(merchant_id)
     db = get_db()
 
-    config_rows = await db.select(
+    rows = await db.select(
         "phone_agent_config",
         filters={"merchant_id": f"eq.{merchant_id}"},
         limit=1,
     )
-    config_row = config_rows[0] if config_rows else {}
+    row = rows[0] if rows else {}
+    items = row.get("menu_items") or []
+    item_count = len(items) if isinstance(items, list) else 0
+    sample = [
+        (it.get("name") or "").strip()
+        for it in (items if isinstance(items, list) else [])[:5]
+        if isinstance(it, dict) and (it.get("name") or "").strip()
+    ]
 
-    system = (config_row.get("pos_system") or "").strip()
-    token = (config_row.get("pos_access_token") or "").strip()
-    location_id = (config_row.get("pos_location_id") or "").strip()
-    external_merchant_id = ""
-    source = "phone_config"
-
-    if not (system and token):
-        conns = await db.select(
-            "pos_connections",
-            filters={"org_id": f"eq.{merchant_id}", "status": "eq.connected"},
-            order="updated_at.desc",
-            limit=1,
-        )
-        if conns:
-            conn = conns[0]
-            system = system or (conn.get("provider") or "").strip()
-            external_merchant_id = (conn.get("external_merchant_id") or "").strip()
-            token = token or _decrypt_connection_token(conn)
-            source = "pos_connections"
-
-    if not system or not token:
-        return {
-            "synced": False,
-            "reason": "no POS credentials on file (neither manual config nor an OAuth connection)",
-            "item_count": 0,
-        }
-
-    items = await extract_menu_items(
-        system,
-        token,
-        merchant_id=external_merchant_id,
-        location_id=location_id,
-    )
-    if not items:
-        return {
-            "synced": False,
-            "reason": "POS returned no catalog items (empty menu or auth failed)",
-            "item_count": 0,
-            "source": source,
-        }
-
-    payload = {"menu_items": items, "updated_at": datetime.now(timezone.utc).isoformat()}
-    if config_rows:
-        await db.update(
-            "phone_agent_config",
-            payload,
-            filters={"merchant_id": f"eq.{merchant_id}"},
-        )
+    building = merchant_id in _MENU_BUILDING
+    if building:
+        state = "building"
+    elif row.get("menu_sync_error"):
+        state = "error"
+    elif item_count > 0:
+        state = "ready"
     else:
-        await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
+        state = "idle"
 
-    logger.info("Synced %d menu items from %s (%s) for %s", len(items), system, source, merchant_id)
-    return {"synced": True, "item_count": len(items), "source": source, "sample": items[:5]}
+    return {
+        "state": state,
+        "item_count": item_count,
+        "updated_at": row.get("updated_at"),
+        "sample": sample,
+    }
 
 
 @router.get("/calls/{merchant_id}")

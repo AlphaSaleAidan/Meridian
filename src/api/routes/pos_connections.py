@@ -406,12 +406,32 @@ async def connect_pos(
                 credentials=req.credentials,
             )
 
+    # Auto-build the phone agent's menu from the freshly-connected POS catalog
+    # (read-only). Best-effort + non-blocking: it shares the manual sync's
+    # extraction path and never affects this connect response. The customer
+    # account polls GET /api/phone/menu/status to watch it populate.
+    background_tasks.add_task(_auto_build_phone_menu, req.org_id)
+
     return {
         "success": True,
         "connection_id": connection_id,
         "message": f"{req.pos_system.title()} connected. Initial data sync started.",
         "syncing": True,
     }
+
+
+async def _auto_build_phone_menu(org_id: str) -> None:
+    """Background task: kick the phone-agent menu build for a connected merchant.
+
+    merchant_id IS the org_id in this system. Delegates to the phone dashboard's
+    shared extraction helper so manual sync and auto-build run identical code.
+    Never raises — a menu-build failure must not affect POS connect/sync.
+    """
+    try:
+        from .phone_dashboard import auto_build_menu_on_connect
+        await auto_build_menu_on_connect(org_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Auto menu-build dispatch failed for org={org_id}: {e}")
 
 
 async def _run_toast_backfill(org_id: str, connection_id: str, credentials: dict):
@@ -877,6 +897,8 @@ async def trigger_sync(org_id: str, pos_system: str, background_tasks: Backgroun
         pos_system=pos_system,
         connection=conn,
     )
+    # Refresh the phone-agent menu too (read-only, best-effort, non-blocking).
+    background_tasks.add_task(_auto_build_phone_menu, org_id)
 
     return {"success": True, "message": "Sync started."}
 

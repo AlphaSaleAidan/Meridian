@@ -12,6 +12,7 @@ import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
 import AwaitingDataBanner from '@/components/AwaitingDataBanner'
 import MenuPriceBuilder from '@/components/menu/MenuPriceBuilder'
+import MenuBuildStatus from '@/components/menu/MenuBuildStatus'
 
 type MenuTab = 'matrix' | 'priceBuilder'
 
@@ -102,6 +103,10 @@ export default function MenuEngineeringPage() {
           </p>
         </div>
       </ScrollReveal>
+
+      {/* Auto menu-builder progress — visible as soon as a POS connects and the
+          phone-agent menu starts populating from the catalog (read-only). */}
+      <MenuBuildStatus />
 
       {awaitingData && <AwaitingDataBanner posConnected={posConnected} label="menu matrix" />}
 

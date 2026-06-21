@@ -93,6 +93,15 @@ export const phoneService = {
     return res.json()
   },
 
+  async getMenuStatus(merchantId: string): Promise<MenuBuildStatus> {
+    const res = await fetch(
+      `${API_BASE}/api/phone/menu/status/${merchantId}`,
+      { headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return { state: 'idle', item_count: 0, sample: [] }
+    return res.json()
+  },
+
   async provisionNumber(req: {
     merchant_id: string
     country?: string
@@ -117,6 +126,15 @@ export interface ProvisionNumberResponse {
   phone_number: string
   provisioned: boolean
   already_existed: boolean
+}
+
+export type MenuBuildState = 'idle' | 'building' | 'ready' | 'error'
+
+export interface MenuBuildStatus {
+  state: MenuBuildState
+  item_count: number
+  updated_at?: string | null
+  sample: string[]
 }
 
 export interface TestChatResponse {
