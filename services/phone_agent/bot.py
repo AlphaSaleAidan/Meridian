@@ -18,6 +18,7 @@ pipeline). Env:
   ENABLE_CALL_RECORDING=1  → WAV archival
   DEEPSEEK_API_KEY / DEEPSEEK_MODEL
 """
+import asyncio
 import json
 import logging
 import os
@@ -254,6 +255,32 @@ def _build_tts(config: MerchantPhoneConfig):
     return KokoroTTSService()
 
 
+async def _start_noise_suppression(call_control_id: str | None, provider: str) -> None:
+    """Carrier-side noise suppression (Telnyx) — Telnyx cleans the caller's audio
+    BEFORE it streams to us, using a telephony-tuned engine (Krisp/DeepFilterNet).
+    This is the right fix for narrowband phone noise (local RNNoise is wideband and
+    mangles 8 kHz mu-law). No local deps/keys. Best-effort + flag-gated:
+    set NOISE_SUPPRESSION_ENGINE (e.g. "Krisp" or "DeepFilterNet") to enable.
+    """
+    engine = os.getenv("NOISE_SUPPRESSION_ENGINE", "").strip()
+    api_key = os.getenv("TELNYX_API_KEY", "")
+    if provider != "telnyx" or not call_control_id or not engine or not api_key:
+        return
+    try:
+        import httpx
+        async with httpx.AsyncClient() as c:
+            res = await c.post(
+                f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/suppression_start",
+                json={"direction": "inbound", "noise_suppression_engine": engine},
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                timeout=8,
+            )
+        logger.info("Telnyx noise suppression (%s, inbound) → HTTP %s %s",
+                    engine, res.status_code, res.text[:120] if res.status_code >= 300 else "")
+    except Exception as e:
+        logger.warning("Telnyx noise suppression start failed: %s", e)
+
+
 def _build_serializer(provider: str, stream_sid: str, call_sid: str | None,
                       call_control_id: str | None, outbound_encoding: str | None):
     if provider == "telnyx":
@@ -416,6 +443,9 @@ async def run_call_bot(
         # Spoken straight through TTS (no LLM round-trip) so the hello is immediate,
         # and recorded in the context (now, not after the bot finishes speaking) so
         # a caller who talks over the greeting doesn't get greeted twice.
+        # Carrier-side noise suppression (Telnyx) the instant the call connects —
+        # cleans the caller's audio before it reaches STT (fire-and-forget).
+        asyncio.create_task(_start_noise_suppression(call_control_id, provider))
         greeting = (merchant_config.greeting or "").strip() or "Thank you for calling!"
         context.add_message({"role": "assistant", "content": greeting})
         await task.queue_frames([TTSSpeakFrame(greeting)])
