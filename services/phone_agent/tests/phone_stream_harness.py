@@ -57,7 +57,8 @@ import bot  # noqa: E402
 from merchant_config import _demo_config  # noqa: E402
 
 TURN1 = "Hi, I'd like one double cheeseburger and a large fries for pickup. My name is Sam."
-TURN2 = "Yes, that is correct. That's everything, thank you."
+TURN2 = "No drinks, that's everything."
+TURN3 = "Yes, that's correct. Please go ahead and submit the order."
 SAMPLE_RATE = 16000
 
 
@@ -111,23 +112,26 @@ class _Caller(FrameProcessor):
     async def _converse(self):
         await asyncio.sleep(0.5)
         await self._play(self.turns[0])   # the order
-        await asyncio.sleep(16)           # bot reads back + asks to confirm
-        await self._play(self.turns[1])   # "yes, that's correct"
+        await asyncio.sleep(16)           # bot reads back + asks about drinks/mods
+        await self._play(self.turns[1])   # "no drinks, that's everything"
+        await asyncio.sleep(16)           # bot reads back full order + asks to confirm
+        await self._play(self.turns[2])   # "yes, submit the order"
 
 
 async def run_harness() -> dict:
     cfg = _demo_config("harness")
     with tempfile.TemporaryDirectory() as d:
-        c1, c2 = os.path.join(d, "c1.wav"), os.path.join(d, "c2.wav")
+        c1, c2, c3 = os.path.join(d, "c1.wav"), os.path.join(d, "c2.wav"), os.path.join(d, "c3.wav")
         _espeak(TURN1, c1)
         _espeak(TURN2, c2)
-        turns = [_load_pcm(c1), _load_pcm(c2)]
+        _espeak(TURN3, c3)
+        turns = [_load_pcm(c1), _load_pcm(c2), _load_pcm(c3)]
 
     stt, tts = bot._build_stt(cfg), bot._build_tts(cfg)
     llm = DeepSeekLLMService(
         api_key=os.environ["DEEPSEEK_API_KEY"],
         base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-        model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
     )
 
     captured: dict = {}
@@ -157,11 +161,11 @@ async def run_harness() -> dict:
     runner = PipelineRunner(handle_sigint=False)
 
     async def _stopper():
-        await asyncio.sleep(85)
+        await asyncio.sleep(110)
         await task.queue_frames([EndFrame()])
 
     try:
-        await asyncio.wait_for(asyncio.gather(runner.run(task), _stopper()), timeout=110)
+        await asyncio.wait_for(asyncio.gather(runner.run(task), _stopper()), timeout=140)
     except asyncio.TimeoutError:
         pass
 
