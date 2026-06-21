@@ -258,6 +258,71 @@ export interface InventoryData {
   }
 }
 
+// ─── CPA Handoff (Taxes & Expenses) Types ────────────────
+
+export interface CpaMonthly {
+  month: string
+  revenue_cents: number
+  sales_tax_collected_cents: number
+  order_count: number
+  expenses_total_cents: number
+}
+
+export interface CpaCard {
+  card_last4: string
+  institution?: string
+  account_name?: string
+}
+
+export interface CpaSummary {
+  org_id: string
+  year: number
+  currency: string
+  revenue_cents: number
+  sales_tax_collected_cents: number
+  order_count: number
+  expenses_total_cents: number
+  net_cents: number
+  monthly: CpaMonthly[]
+  cards?: CpaCard[]
+  generated_at?: string
+}
+
+export interface CpaExpense {
+  id: string
+  expense_date: string
+  category: string
+  vendor: string
+  amount_cents: number
+  note?: string | null
+}
+
+export interface ExpenseInput {
+  expense_date: string
+  category: string
+  vendor: string
+  amount_cents: number
+  note?: string
+}
+
+export interface CpaBankConnection {
+  id: string
+  institution: string
+  status: string
+  last_sync_at: string | null
+  cards?: string[]
+}
+
+export interface CpaBankTransaction {
+  id: string
+  card_last4: string
+  posted_date: string
+  description: string
+  amount_cents: number
+  direction: 'debit' | 'credit'
+  suggested_category: string | null
+}
+
 // ─── API Functions ───────────────────────────────────────
 
 function isDemo(orgId: string): boolean {
@@ -625,6 +690,48 @@ export const api = {
 
   squareAuthorize: (orgId: string) =>
     `${API_BASE}/api/square/authorize?org_id=${orgId}`,
+
+  // ── CPA Handoff (Taxes & Expenses) ──
+  cpaSummary: (orgId: string, year: number) =>
+    isDemo(orgId) ? delay(demoData.cpaSummary())
+    : !orgId ? delay(EMPTY.empty)
+    : apiFetch<CpaSummary>('/api/cpa/summary', { params: { org_id: orgId, year } }),
+
+  cpaExpenses: (orgId: string, year: number) =>
+    isDemo(orgId) ? delay(demoData.cpaExpenses())
+    : !orgId ? delay({ expenses: [], total: 0 })
+    : apiFetch<{ expenses: CpaExpense[]; total: number }>('/api/cpa/expenses', { params: { org_id: orgId, year } }),
+
+  addExpense: (orgId: string, body: ExpenseInput) =>
+    apiFetch<{ expense: CpaExpense }>('/api/cpa/expenses', { method: 'POST', params: { org_id: orgId }, body: { ...body, org_id: orgId } }),
+
+  deleteExpense: (orgId: string, id: string) =>
+    apiFetch<{ ok: boolean; expense_id: string }>(`/api/cpa/expenses/${id}`, { method: 'DELETE', params: { org_id: orgId } }),
+
+  cpaExportUrl: (orgId: string, year: number, fmt: 'csv' | 'html') =>
+    `${API_BASE}/api/cpa/export.${fmt}?org_id=${orgId}&year=${year}`,
+
+  // ── CPA Handoff — bank connections / transactions ──
+  cpaBankConnections: (orgId: string) =>
+    isDemo(orgId) ? delay(demoData.cpaConnections())
+    : !orgId ? delay({ connections: [] })
+    : apiFetch<{ connections: CpaBankConnection[] }>('/api/cpa/bank/connections', { params: { org_id: orgId } }),
+
+  cpaBankTransactions: (orgId: string, year: number, cardLast4?: string) =>
+    isDemo(orgId) ? delay(demoData.cpaTransactions())
+    : !orgId ? delay({ transactions: [], total: 0 })
+    : apiFetch<{ transactions: CpaBankTransaction[]; total: number }>('/api/cpa/bank/transactions', {
+        params: { org_id: orgId, year, ...(cardLast4 ? { card_last4: cardLast4 } : {}) },
+      }),
+
+  cpaConnectDemoBank: (orgId: string) =>
+    apiFetch<{ connection: CpaBankConnection }>('/api/cpa/bank/connect-demo', { method: 'POST', params: { org_id: orgId } }),
+
+  cpaBankSync: (orgId: string) =>
+    apiFetch<{ ok: boolean; synced: number }>('/api/cpa/bank/sync', { method: 'POST', params: { org_id: orgId } }),
+
+  cpaLinkToken: (orgId: string) =>
+    apiFetch<{ link_token: string }>('/api/cpa/bank/link-token', { method: 'POST', params: { org_id: orgId } }),
 
   cameras: (orgId: string) =>
     isDemo(orgId) ? delay({ org_id: orgId, cameras: [], total: 0 })
