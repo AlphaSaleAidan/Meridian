@@ -61,6 +61,14 @@ EXPENSE_CATEGORIES = {
     "marketing", "equipment", "fees", "other",
 }
 
+# Owner-readable labels for each expense category (used in the by-category
+# breakdown that the summary, CSV, and printable report all share).
+CATEGORY_LABELS = {
+    "supplies": "Supplies", "cogs": "Cost of goods", "rent": "Rent",
+    "utilities": "Utilities", "payroll": "Payroll", "marketing": "Marketing",
+    "equipment": "Equipment", "fees": "Fees", "other": "Other",
+}
+
 # Bank-transaction debits in this category are NOT counted as deductible expenses
 # (account transfers / settlements / refunds are not spend).
 NON_EXPENSE_TXN_CATEGORY = "transfer"
@@ -192,6 +200,33 @@ async def _load_year_data(db, org_id: str, year: int) -> dict:
         c["txn_count"] += 1
     cards_list = sorted(cards.values(), key=lambda c: c["total_cents"], reverse=True)
 
+    # ── Deductible spend by category (the owner-readable "where the money went")
+    # Combines manual expenses + card debits (excluding transfers). This is the
+    # same number set the expenses_total is built from, just sliced by category so
+    # an owner can see their biggest deductible costs at a glance.
+    by_cat: dict[str, int] = {}
+    for e in expenses:
+        cat = (e.get("category") or "other")
+        by_cat[cat] = by_cat.get(cat, 0) + int(e.get("amount_cents", 0) or 0)
+    for t in transactions:
+        if t.get("direction") != "debit":
+            continue
+        cat = (t.get("category") or "other")
+        if cat == NON_EXPENSE_TXN_CATEGORY:
+            continue
+        by_cat[cat] = by_cat.get(cat, 0) + int(t.get("amount_cents", 0) or 0)
+    cat_total = sum(by_cat.values()) or 1
+    by_category = [
+        {
+            "category": cat,
+            "label": CATEGORY_LABELS.get(cat, cat.title()),
+            "amount_cents": cents,
+            "pct": round(cents * 100 / cat_total, 1),
+        }
+        for cat, cents in sorted(by_cat.items(), key=lambda kv: kv[1], reverse=True)
+        if cents > 0
+    ]
+
     return {
         "orders": orders,
         "expenses": expenses,
@@ -205,6 +240,7 @@ async def _load_year_data(db, org_id: str, year: int) -> dict:
         "net_cents": net_cents,
         "monthly": monthly_list,
         "cards": cards_list,
+        "by_category": by_category,
     }
 
 
@@ -235,6 +271,7 @@ async def get_summary(
         "net_cents": d["net_cents"],
         "monthly": d["monthly"],
         "cards": d["cards"],
+        "by_category": d["by_category"],
         "disclaimer": CPA_DISCLAIMER,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -396,6 +433,11 @@ async def export_csv(
             _dollars(m["expenses_total_cents"]),
         ])
     w.writerow([])
+    w.writerow(["Deductible spend by category"])
+    w.writerow(["Category", "Amount", "% of spend"])
+    for c in d["by_category"]:
+        w.writerow([c["label"], _dollars(c["amount_cents"]), f"{c['pct']}%"])
+    w.writerow([])
     w.writerow(["Per-card spend (card debits)"])
     w.writerow(["Card", "Total spend", "Transactions"])
     for c in d["cards"]:
@@ -425,6 +467,22 @@ async def export_csv(
     )
 
 
+def _category_lead(d: dict) -> str:
+    """Plain-English one-liner so a business owner — not just a CPA — instantly
+    reads the breakdown: total deductible spend + the single biggest category."""
+    cats = d.get("by_category") or []
+    total = d.get("expenses_total_cents", 0)
+    if not cats or total <= 0:
+        return "<p class='lead'>No deductible expenses recorded yet for this year.</p>"
+    top = cats[0]
+    return (
+        f"<p class='lead'>You recorded <b>${_dollars(total)}</b> in deductible "
+        f"business spending. Your biggest cost was <b>{escape(top['label'])}</b> at "
+        f"${_dollars(top['amount_cents'])} ({top['pct']}% of all spend). Every dollar "
+        f"here lowers the income your CPA reports.</p>"
+    )
+
+
 def _build_html(org_id: str, year: int, d: dict) -> str:
     """Self-contained printable HTML packet (zero-dep; merchant uses Save-as-PDF)."""
     def rows_monthly() -> str:
@@ -435,6 +493,20 @@ def _build_html(org_id: str, year: int, d: dict) -> str:
             f"<td class='r'>${_dollars(m['expenses_total_cents'])}</td></tr>"
             for m in d["monthly"]
         )
+
+    def rows_category() -> str:
+        if not d["by_category"]:
+            return "<tr><td colspan='3' class='muted'>No expenses recorded.</td></tr>"
+        out = []
+        for c in d["by_category"]:
+            pct = c["pct"]
+            out.append(
+                f"<tr><td>{escape(c['label'])}</td>"
+                f"<td class='r'>${_dollars(c['amount_cents'])}</td>"
+                f"<td><div class='bar'><span style='width:{pct}%'></span></div>"
+                f"<span class='pct'>{pct}%</span></td></tr>"
+            )
+        return "".join(out)
 
     def rows_cards() -> str:
         if not d["cards"]:
@@ -493,6 +565,12 @@ def _build_html(org_id: str, year: int, d: dict) -> str:
   td.r, th.r {{ text-align: right; }}
   .muted {{ color: #8a93a6; font-style: italic; }}
   .summary td:last-child {{ text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }}
+  .bar {{ display: inline-block; width: 140px; height: 9px; background: #eef0f6;
+         border-radius: 5px; overflow: hidden; vertical-align: middle; margin-right: 8px; }}
+  .bar span {{ display: block; height: 100%; background: #1a8fd6; border-radius: 5px; }}
+  .pct {{ font-size: 12px; color: #5b6478; font-variant-numeric: tabular-nums; }}
+  .lead {{ font-size: 13px; color: #14213d; margin: 4px 0 14px; line-height: 1.55; }}
+  .lead b {{ color: #1a8fd6; }}
   @media print {{
     body {{ padding: 0; }}
     h2 {{ page-break-after: avoid; }}
@@ -512,6 +590,13 @@ def _build_html(org_id: str, year: int, d: dict) -> str:
     <tr><td>Order count</td><td>{d['order_count']}</td></tr>
     <tr><td>Expenses total</td><td>${_dollars(d['expenses_total_cents'])}</td></tr>
     <tr><td>Net (revenue − expenses)</td><td>${_dollars(d['net_cents'])}</td></tr>
+  </table>
+
+  <h2>Where your money went — deductible spend by category</h2>
+  {_category_lead(d)}
+  <table>
+    <tr><th>Category</th><th class="r">Amount</th><th>Share of spend</th></tr>
+    {rows_category()}
   </table>
 
   <h2>Monthly breakdown</h2>
