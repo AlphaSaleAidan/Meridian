@@ -30,6 +30,7 @@ const SchedulePage = lazyRetry(() => import('@/pages/SchedulePage'))
 const PeakHoursPage = lazyRetry(() => import('@/pages/PeakHoursPage'))
 const StaffPage = lazyRetry(() => import('@/pages/StaffPage'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
+const PhoneSetupWizard = lazyRetry(() => import('@/pages/canada/merchant/PhoneSetupWizard'))
 const CPAHandoffPage = lazyRetry(() => import('@/pages/canada/merchant/CPAHandoffPage'))
 const CameraIntelligencePage = lazyRetry(() => import('@/pages/seo/CameraIntelligencePage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
@@ -92,7 +93,10 @@ export const merchantPillars: Pillar[] = [
     path: 'phone',
     label: 'Phone Calls',
     icon: Phone,
-    segments: [{ view: 'orders', label: 'Phone Orders', Component: PhoneOrdersPage }],
+    segments: [
+      { view: 'orders', label: 'Phone Orders', Component: PhoneOrdersPage },
+      { view: 'setup', label: 'Set up', Component: PhoneSetupWizard },
+    ],
   },
   {
     path: 'tax',
