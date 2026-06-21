@@ -1182,7 +1182,7 @@ export default function CanadaCustomerOnboardingWizard() {
             <p className={`text-sm ${T.muted} text-center max-w-sm mb-8`}>
               Your dashboard is live. We're already analyzing your data and generating insights.
             </p>
-            <button onClick={() => navigate('/canada/dashboard')}
+            <button onClick={() => navigate('/canada/merchant')}
               className={`flex items-center gap-2 px-8 py-3 text-sm font-medium text-pm-canada-bg ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.2)]`}>
               Go to Dashboard <ArrowRight size={16} />
             </button>

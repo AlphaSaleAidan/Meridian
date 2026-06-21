@@ -59,7 +59,7 @@ export default function CanadaSetupPage() {
 
   function goToDashboard() {
     markOnboarded()
-    navigate('/canada/dashboard', { replace: true })
+    navigate('/canada/merchant', { replace: true })
   }
 
   function handleSkipPos() { goToDashboard() }

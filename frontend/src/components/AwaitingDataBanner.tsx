@@ -9,7 +9,11 @@ interface AwaitingDataBannerProps {
 
 export default function AwaitingDataBanner({ posConnected, label }: AwaitingDataBannerProps) {
   const location = useLocation()
-  const settingsPath = location.pathname.startsWith('/canada')
+  const settingsPath = location.pathname.startsWith('/canada/merchant')
+    ? '/canada/merchant/settings'
+    : location.pathname.startsWith('/canada/demo')
+    ? '/canada/demo/settings'
+    : location.pathname.startsWith('/canada')
     ? '/canada/dashboard/settings'
     : '/app/settings'
 
