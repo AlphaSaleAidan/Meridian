@@ -27,7 +27,13 @@ const TIPS = [
 
 function ConnectCTA() {
   const location = useLocation()
-  const settingsPath = location.pathname.startsWith('/canada') ? '/canada/dashboard/settings' : '/app/settings'
+  const settingsPath = location.pathname.startsWith('/canada/merchant')
+    ? '/canada/merchant/settings'
+    : location.pathname.startsWith('/canada/demo')
+    ? '/canada/demo/settings'
+    : location.pathname.startsWith('/canada')
+    ? '/canada/dashboard/settings'
+    : '/app/settings'
   const [tipIdx, setTipIdx] = useState(() => Math.floor(Math.random() * TIPS.length))
   useEffect(() => {
     const i = setInterval(() => setTipIdx(p => (p + 1) % TIPS.length), 6000)

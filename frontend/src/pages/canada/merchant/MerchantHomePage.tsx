@@ -90,17 +90,19 @@ interface TileProps {
   change?: string
   changeType?: 'positive' | 'negative'
   subtitle?: string
+  /** When set the whole tile becomes a link to this in-portal route. */
+  to?: string
 }
 
 function MoneyTile({
-  label, value, icon: Icon, iconColor, sparkColor, spark, change, changeType, subtitle,
+  label, value, icon: Icon, iconColor, sparkColor, spark, change, changeType, subtitle, to,
 }: TileProps) {
-  return (
-    <div className="rounded-xl bg-pm-surface border border-pm-border p-4 sm:p-5 flex flex-col">
+  const inner = (
+    <>
       <div className="flex items-start justify-between gap-2">
         <p className="text-2xs font-medium uppercase tracking-wider text-pm-muted truncate">{label}</p>
         <span className={clsx('p-1.5 rounded-lg bg-pm-border/60 flex-shrink-0', iconColor)}>
-          <Icon size={15} />
+          {to ? <ArrowUpRight size={15} className="text-pm-muted group-hover:text-pm-amber-gold transition-colors" /> : <Icon size={15} />}
         </span>
       </div>
       <p className="mt-2 text-xl sm:text-2xl font-bold font-mono text-pm-text tracking-tight">{value}</p>
@@ -120,8 +122,18 @@ function MoneyTile({
           <Sparkline values={spark} />
         </div>
       )}
-    </div>
+    </>
   )
+
+  const base = 'rounded-xl bg-pm-surface border border-pm-border p-4 sm:p-5 flex flex-col'
+  if (to) {
+    return (
+      <Link to={to} className={clsx(base, 'group hover:border-pm-amber-gold/40 transition-colors')}>
+        {inner}
+      </Link>
+    )
+  }
+  return <div className={base}>{inner}</div>
 }
 
 export default function MerchantHomePage() {
@@ -137,7 +149,7 @@ export default function MerchantHomePage() {
   // not just the last 30 days (which is empty for a merchant whose data predates
   // the connect).
   const revenue = useApi(() => (skip ? api.revenue('', 365) : api.revenue(orgId, 365)), [orgId, skip])
-  const margins = useApi<{ items: Array<{ revenueCents: number; marginCents: number }> }>(
+  const margins = useApi<{ items: Array<{ revenueCents: number; marginCents: number; leakageCents?: number }> }>(
     () => (skip ? Promise.resolve({ items: [] }) : api.margins(orgId)),
     [orgId, skip],
   )
@@ -271,7 +283,9 @@ export default function MerchantHomePage() {
   const marginItems = margins.data?.items ?? []
   const totalRev = marginItems.reduce((s, m) => s + (m.revenueCents || 0), 0)
   const totalMargin = marginItems.reduce((s, m) => s + (m.marginCents || 0), 0)
+  const totalLeakage = marginItems.reduce((s, m) => s + (m.leakageCents || 0), 0)
   const marginPct = totalRev > 0 ? (totalMargin / totalRev) * 100 : null
+  const marginsPath = `${basePath}/inventory?view=margins`
 
   const recoverableCents = data.money_left_score?.total_score_cents ?? 0
   const changeType = data.revenue_change_pct >= 0 ? 'positive' : 'negative'
@@ -378,9 +392,45 @@ export default function MerchantHomePage() {
           value={marginPct != null ? `${marginPct.toFixed(1)}%` : '—'}
           icon={Percent}
           iconColor={marginPct != null && marginPct < 55 ? 'text-pm-amber-orange' : 'text-pm-amber-gold'}
-          subtitle={marginPct != null ? 'blended' : 'analyzing…'}
+          subtitle={marginPct != null ? 'blended · see breakdown →' : 'analyzing…'}
+          to={marginPct != null ? marginsPath : undefined}
         />
       </div>
+
+      {/* Margins highlight — surface profit health up front with a direct link
+          to the full per-product breakdown (Inventory → Margins). */}
+      {marginPct != null && (
+        <Link
+          to={marginsPath}
+          className="group block rounded-2xl bg-pm-surface border border-pm-border p-5 sm:p-6 hover:border-pm-amber-gold/40 transition-colors"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="inline-flex p-2.5 rounded-xl bg-pm-amber-gold/10 text-pm-amber-gold flex-shrink-0">
+                <Percent size={20} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-pm-muted">Blended gross margin</p>
+                <p className="mt-0.5 text-2xl font-bold font-mono text-pm-text tabular-nums">
+                  {marginPct.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+            {totalLeakage > 0 && (
+              <div className="sm:text-right">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-pm-amber-orange">Margin leakage</p>
+                <p className="mt-0.5 text-2xl font-bold font-mono text-pm-amber-orange tabular-nums">
+                  {formatCadMo(totalLeakage / 100)}
+                </p>
+              </div>
+            )}
+            <span className="inline-flex items-center gap-1.5 text-2xs font-semibold text-pm-amber-gold flex-shrink-0">
+              See per-product margins
+              <ArrowUpRight size={14} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </span>
+          </div>
+        </Link>
+      )}
 
       {/* Historical revenue (prior-year) + open-order pipeline from the POS */}
       <HistoricalRevenueSection />

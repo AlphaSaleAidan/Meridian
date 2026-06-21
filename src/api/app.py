@@ -50,6 +50,7 @@ from .routes.oauth import router as oauth_router
 from .routes.clover_oauth import router as clover_oauth_router
 from .routes.webhooks import router as webhook_router
 from .routes.dashboard import router as dashboard_router
+from .routes.cpa import router as cpa_router
 from .routes.payouts import router as payouts_router
 from .routes.onboarding import router as onboarding_router
 from .routes.predictive import router as predictive_router
@@ -219,6 +220,7 @@ app.include_router(oauth_router)
 app.include_router(clover_oauth_router)
 app.include_router(webhook_router)
 app.include_router(dashboard_router)
+app.include_router(cpa_router)
 app.include_router(payouts_router)
 app.include_router(onboarding_router)
 app.include_router(predictive_router)

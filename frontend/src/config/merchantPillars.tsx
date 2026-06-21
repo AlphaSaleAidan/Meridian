@@ -1,6 +1,6 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
-  LayoutDashboard, Zap, Layers, Calendar, Phone, Video, Settings,
+  LayoutDashboard, Zap, Layers, Calendar, Phone, Video, Settings, Receipt,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 
@@ -30,6 +30,8 @@ const SchedulePage = lazyRetry(() => import('@/pages/SchedulePage'))
 const PeakHoursPage = lazyRetry(() => import('@/pages/PeakHoursPage'))
 const StaffPage = lazyRetry(() => import('@/pages/StaffPage'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
+const PhoneSetupWizard = lazyRetry(() => import('@/pages/canada/merchant/PhoneSetupWizard'))
+const CPAHandoffPage = lazyRetry(() => import('@/pages/canada/merchant/CPAHandoffPage'))
 const CameraIntelligencePage = lazyRetry(() => import('@/pages/seo/CameraIntelligencePage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
@@ -91,7 +93,16 @@ export const merchantPillars: Pillar[] = [
     path: 'phone',
     label: 'Phone Calls',
     icon: Phone,
-    segments: [{ view: 'orders', label: 'Phone Orders', Component: PhoneOrdersPage }],
+    segments: [
+      { view: 'orders', label: 'Phone Orders', Component: PhoneOrdersPage },
+      { view: 'setup', label: 'Set up', Component: PhoneSetupWizard },
+    ],
+  },
+  {
+    path: 'tax',
+    label: 'Taxes & Expenses',
+    icon: Receipt,
+    segments: [{ view: 'handoff', label: 'CPA Handoff', Component: CPAHandoffPage }],
   },
   {
     path: 'camera',

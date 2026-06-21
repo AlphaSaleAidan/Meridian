@@ -883,6 +883,136 @@ function generateInventory(): InventoryData {
   return { items, total: items.length, alerts: { low_stock: lowStock, overstocked, trending_up: trendingUp } }
 }
 
+// ─── CPA Handoff (Taxes & Expenses) ─────────────────────
+// Synthetic tax-prep data for /canada/demo. Mirrors the backend
+// /api/cpa/summary + /api/cpa/expenses shapes; all money in integer CAD cents.
+
+const CPA_DEMO_MONTHS = [
+  '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12',
+]
+
+function generateCpaSummary() {
+  const year = new Date().getFullYear()
+  // Plausible small-merchant year: revenue ramps through the year, ~13% sales
+  // tax collected, expenses ~24% of revenue.
+  const baseRev = [
+    28000, 26500, 31000, 33500, 36000, 38500, 41000, 39500, 37000, 35500, 39000, 44000,
+  ]
+  const monthly = CPA_DEMO_MONTHS.map((mm, i) => {
+    const revenue_cents = cx(baseRev[i] * 100)
+    const sales_tax_collected_cents = Math.round(revenue_cents * 0.13)
+    const expenses_total_cents = Math.round(revenue_cents * 0.24)
+    const order_count = 110 + Math.round(baseRev[i] / 280)
+    return {
+      month: `${year}-${mm}`,
+      revenue_cents,
+      sales_tax_collected_cents,
+      order_count,
+      expenses_total_cents,
+    }
+  })
+  const revenue_cents = monthly.reduce((s, m) => s + m.revenue_cents, 0)
+  const sales_tax_collected_cents = monthly.reduce((s, m) => s + m.sales_tax_collected_cents, 0)
+  const order_count = monthly.reduce((s, m) => s + m.order_count, 0)
+  const expenses_total_cents = monthly.reduce((s, m) => s + m.expenses_total_cents, 0)
+  return {
+    org_id: 'demo',
+    year,
+    currency: 'CAD',
+    revenue_cents,
+    sales_tax_collected_cents,
+    order_count,
+    expenses_total_cents,
+    net_cents: revenue_cents - expenses_total_cents,
+    monthly,
+    cards: [
+      { card_last4: '4821', institution: 'RBC Royal Bank', account_name: 'Business Operating' },
+      { card_last4: '9032', institution: 'RBC Royal Bank', account_name: 'Business Visa' },
+    ],
+    generated_at: new Date().toISOString(),
+  }
+}
+
+function generateCpaExpenses() {
+  const year = new Date().getFullYear()
+  const rows = [
+    { expense_date: `${year}-01-12`, category: 'supplies', vendor: 'Costco Business', amount_cents: cx(48230), note: 'paper goods' },
+    { expense_date: `${year}-02-03`, category: 'rent', vendor: 'Maple Property Group', amount_cents: cx(320000), note: 'February lease' },
+    { expense_date: `${year}-02-19`, category: 'utilities', vendor: 'BC Hydro', amount_cents: cx(41800), note: '' },
+    { expense_date: `${year}-03-08`, category: 'cogs', vendor: 'Sysco Canada', amount_cents: cx(186400), note: 'food order' },
+    { expense_date: `${year}-04-01`, category: 'marketing', vendor: 'Meta Ads', amount_cents: cx(52000), note: 'spring campaign' },
+    { expense_date: `${year}-05-15`, category: 'equipment', vendor: 'Restaurant Depot', amount_cents: cx(129900), note: 'new fridge' },
+    { expense_date: `${year}-06-02`, category: 'fees', vendor: 'Square', amount_cents: cx(38750), note: 'processing fees' },
+    { expense_date: `${year}-06-20`, category: 'payroll', vendor: 'Wagepoint', amount_cents: cx(540000), note: 'June payroll run' },
+  ].map((r, i) => ({ id: `demo-exp-${i + 1}`, ...r }))
+  return { expenses: rows, total: rows.length }
+}
+
+function generateCpaConnections() {
+  return {
+    connections: [
+      {
+        id: 'demo-conn-1',
+        institution: 'RBC Royal Bank',
+        status: 'connected',
+        last_sync_at: new Date(Date.now() - 3 * 3600_000).toISOString(),
+        cards: ['4821', '9032'],
+      },
+    ],
+  }
+}
+
+function generateCpaTransactions() {
+  const year = new Date().getFullYear()
+  const cards = ['4821', '9032']
+  const debitVendors: Array<[string, string]> = [
+    ['Sysco Canada', 'cogs'], ['Costco Business', 'supplies'], ['BC Hydro', 'utilities'],
+    ['Meta Ads', 'marketing'], ['Square', 'fees'], ['Wagepoint', 'payroll'],
+    ['Restaurant Depot', 'equipment'], ['Maple Property Group', 'rent'], ['Telus', 'utilities'],
+    ['Staples', 'supplies'],
+  ]
+  const rows: Array<{
+    id: string
+    card_last4: string
+    posted_date: string
+    description: string
+    amount_cents: number
+    direction: 'debit' | 'credit'
+    suggested_category: string | null
+  }> = []
+  for (let i = 0; i < 25; i++) {
+    const card_last4 = cards[i % 2]
+    const month = String((i % 12) + 1).padStart(2, '0')
+    const day = String(((i * 7) % 27) + 1).padStart(2, '0')
+    // Every 6th row is a deposit (credit / settlement); the rest are debits.
+    const isCredit = i % 6 === 5
+    if (isCredit) {
+      rows.push({
+        id: `demo-txn-${i + 1}`,
+        card_last4,
+        posted_date: `${year}-${month}-${day}`,
+        description: 'Square settlement deposit',
+        amount_cents: cx(rand(40000, 120000)),
+        direction: 'credit',
+        suggested_category: null,
+      })
+    } else {
+      const [vendor, cat] = debitVendors[i % debitVendors.length]
+      rows.push({
+        id: `demo-txn-${i + 1}`,
+        card_last4,
+        posted_date: `${year}-${month}-${day}`,
+        description: vendor,
+        amount_cents: cx(rand(2000, 90000)),
+        direction: 'debit',
+        suggested_category: cat,
+      })
+    }
+  }
+  rows.sort((a, b) => (a.posted_date < b.posted_date ? 1 : -1))
+  return { transactions: rows, total: rows.length }
+}
+
 // ─── Public API ─────────────────────────────────────────
 
 let _cacheKey: string | null = null
@@ -998,4 +1128,10 @@ export const demoData = {
     resetSeed()
     return { actions: generateTopActions() }
   },
+
+  // ── CPA Handoff (Taxes & Expenses) ──
+  cpaSummary: () => { resetSeed(); return generateCpaSummary() },
+  cpaExpenses: () => { resetSeed(); return generateCpaExpenses() },
+  cpaConnections: () => generateCpaConnections(),
+  cpaTransactions: () => { resetSeed(); return generateCpaTransactions() },
 }

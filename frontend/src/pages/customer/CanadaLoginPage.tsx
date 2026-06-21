@@ -10,7 +10,7 @@ export default function CanadaLoginPage() {
   const location = useLocation()
   const { ready, authenticated, org, logout } = useAuth()
 
-  const from = (location.state as { from?: string })?.from || '/canada/dashboard'
+  const from = (location.state as { from?: string })?.from || '/canada/merchant'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
