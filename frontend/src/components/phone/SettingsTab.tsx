@@ -12,6 +12,7 @@ import {
 } from '@/lib/phone-orders-demo-data'
 import { phoneService } from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
+import MenuBuildStatus from '@/components/menu/MenuBuildStatus'
 
 const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
 
@@ -229,6 +230,9 @@ export default function SettingsTab({ biz, onReconfigure, connectedPos, onConnec
           </div>
         )}
       </div>
+
+      {/* Auto menu-builder progress — populates from the connected POS catalog. */}
+      <MenuBuildStatus />
 
       {/* Save + Reconfigure */}
       <button onClick={handleSave} disabled={saving}

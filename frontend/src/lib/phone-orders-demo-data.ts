@@ -274,6 +274,19 @@ export const MIDTOWN_KITCHEN: PhoneBizConfig = {
   ],
 }
 
+/**
+ * Synthetic menu-build target for the demo. The MenuBuildStatus component
+ * animates the item count climbing up to this set, then settles on "ready".
+ * Demo never calls the backend — this is the whole catalog it "discovers".
+ */
+export function getMenuBuildDemo(bizId?: string): { item_count: number; sample: string[] } {
+  const menu = getPhoneDemoData(bizId).business.menu
+  return {
+    item_count: menu.length,
+    sample: menu.slice(0, 5).map(m => m.name),
+  }
+}
+
 export { generateCalls } from './phone-transcript-builder'
 
 export function getPhoneStats(calls: PhoneCallEntry[], period: 'today' | '7d' | '30d' | '90d'): PhoneStats {
