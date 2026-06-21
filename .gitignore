@@ -35,3 +35,6 @@ services/labellerr_cv/
 # Catch every nested .claude-flow/ tooling drop wherever it lands
 **/.claude-flow/
 services/higgsfield/
+
+# local test venv (worktree-only, do not commit)
+.venv-test/
