@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy, Percent, CalendarPlus } from 'lucide-react'
+import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy, Percent } from 'lucide-react'
 import {
   generateScheduleStaff, generateScheduleShifts,
   generatePeakHourHeatmap, getHolidaysForWeek,
@@ -14,10 +14,10 @@ import { useAuth } from '@/lib/auth'
 import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
-import MobileDayView from '@/components/schedule/MobileDayView'
+import PositionsBoard, { type AssignTarget } from '@/components/schedule/PositionsBoard'
+import { positionsForType, buildPositionSchedule } from '@/components/schedule/schedule-positions'
 import WeekCoverageStrip from '@/components/schedule/WeekCoverageStrip'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
-import QuickBuildSheet, { type QuickShiftSpec } from '@/components/schedule/QuickBuildSheet'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
 import { ROLE_GROUPS, getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
@@ -160,7 +160,6 @@ export default function SchedulePage() {
   // Mobile day selection is lifted here so the coverage strip and day view stay in sync.
   const [mobileDay, setMobileDay] = useState(() => indexOfTodayInWeek(getMonday(new Date())))
   const [showAddStaff, setShowAddStaff] = useState(false)
-  const [showQuickBuild, setShowQuickBuild] = useState(false)
   const [selectedShift, setSelectedShift] = useState<ScheduleShift | null>(null)
   const [isPublished, setIsPublished] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -414,36 +413,50 @@ export default function SchedulePage() {
     }
   }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
 
-  const handleQuickCreate = useCallback(async (specs: QuickShiftSpec[]) => {
-    if (specs.length === 0) return
+  // Assign a staff member to a position slot. The slot is either an existing
+  // shift (just set its staffMemberId) or a brand-new required position (create
+  // the shift, already assigned). Passing staffId=null unassigns/empties it.
+  const handleAssign = useCallback(async (target: AssignTarget, staffId: string | null) => {
     const ws = formatDateISO(weekStartDate)
-    const optimistic: ScheduleShift[] = specs.map((sp, i) => ({
-      id: `shift-qb-${Date.now()}-${i}`,
-      staffMemberId: sp.staffMemberId,
-      dayOfWeek: sp.dayOfWeek,
-      shiftDate: formatDateISO(addDays(weekStartDate, sp.dayOfWeek)),
-      startTime: sp.startTime, endTime: sp.endTime,
-      role: sp.role, breakMinutes: sp.breakMinutes,
-      notes: '', status: 'draft', isRecommended: false,
-    }))
-    setShifts(prev => [...prev, ...optimistic])
+    const portal = portalContext as 'us' | 'ca'
+
+    if (target.kind === 'shift') {
+      const existing = shifts.find(s => s.id === target.shiftId)
+      if (!existing) return
+      const updated = { ...existing, staffMemberId: staffId }
+      setShifts(prev => prev.map(s => (s.id === existing.id ? updated : s)))
+      setIsPublished(false)
+      if (!liveMode || !isUuid(existing.id)) return
+      try { await api.scheduleUpdateShift(existing.id, shiftToApiUpdate(updated)) }
+      catch (e) {
+        console.warn('assign failed:', e)
+        setShifts(prev => prev.map(s => (s.id === existing.id ? existing : s)))
+        showToast('Could not save assignment')
+      }
+      return
+    }
+
+    // new position slot → create an assigned shift
+    const tempId = `shift-pos-${Date.now()}`
+    const ns: ScheduleShift = {
+      id: tempId, staffMemberId: staffId, dayOfWeek: target.dayOfWeek,
+      shiftDate: formatDateISO(addDays(weekStartDate, target.dayOfWeek)),
+      startTime: target.start, endTime: target.end, role: target.role,
+      breakMinutes: target.breakMinutes, notes: '', status: 'draft', isRecommended: false,
+    }
+    setShifts(prev => [...prev, ns])
     setIsPublished(false)
-    showToast(`Added ${optimistic.length} shift${optimistic.length === 1 ? '' : 's'}`)
     if (!liveMode) return
     try {
-      const portal = portalContext as 'us' | 'ca'
-      const results = await Promise.all(optimistic.map(s =>
-        api.scheduleCreateShift(shiftToApiCreate(s, merchantId, portal, ws))))
-      const saved = results.map(r => shiftFromApi(r.shift))
-      const tempIds = new Set(optimistic.map(o => o.id))
-      setShifts(prev => [...prev.filter(s => !tempIds.has(s.id)), ...saved])
+      const res = await api.scheduleCreateShift(shiftToApiCreate(ns, merchantId, portal, ws))
+      const saved = shiftFromApi(res.shift)
+      setShifts(prev => prev.map(s => (s.id === tempId ? saved : s)))
     } catch (e) {
-      console.warn('quick build persist failed:', e)
-      const refresh = await api.scheduleShifts(merchantId, ws).catch(() => null)
-      if (refresh) setShifts(refresh.shifts.map(shiftFromApi))
-      showToast('Some shifts failed to save — refreshed from server')
+      console.warn('create position shift failed:', e)
+      setShifts(prev => prev.filter(s => s.id !== tempId))
+      showToast('Could not assign to position')
     }
-  }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
+  }, [liveMode, merchantId, portalContext, weekStartDate, shifts, showToast])
 
   const handleShiftSave = useCallback(async (u: ScheduleShift) => {
     const prevShift = shifts.find(s => s.id === u.id)
@@ -517,13 +530,18 @@ export default function SchedulePage() {
 
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true)
-    const opt = buildOptimalSchedule(staff, peakHours, weekStartDate)
+    // Position-based optimizer: fill every required position, scaled by sales
+    // history (peak-hour intensity), busiest days first.
+    const defs = positionsForType(businessType)
+    const opt = buildPositionSchedule(staff, defs, peakHours, weekStartDate)
     if (!liveMode) {
       // Demo: cosmetic delay + local set.
       await new Promise(r => setTimeout(r, 1200))
       setShifts(opt); setIsPublished(false); setIsGenerating(false)
-      const used = new Set(opt.map(s => s.staffMemberId).filter(Boolean)).size
-      showToast(`Schedule generated — ${opt.length} shifts across ${used} staff`)
+      const open = opt.filter(s => !s.staffMemberId).length
+      showToast(open > 0
+        ? `Filled ${opt.length - open} positions · ${open} still open`
+        : `All ${opt.length} positions filled`)
       return
     }
     // Live: wipe this week's draft shifts, then bulk-create the optimal set.
@@ -540,8 +558,10 @@ export default function SchedulePage() {
       ))
       const saved = results.map(r => shiftFromApi(r.shift))
       setShifts(saved)
-      const used = new Set(saved.map(s => s.staffMemberId).filter(Boolean)).size
-      showToast(`Schedule generated — ${saved.length} shifts across ${used} staff`)
+      const open = saved.filter(s => !s.staffMemberId).length
+      showToast(open > 0
+        ? `Filled ${saved.length - open} positions · ${open} still open`
+        : `All ${saved.length} positions filled`)
     } catch (e) {
       console.warn('generate persist failed:', e)
       const refresh = await api.scheduleShifts(merchantId, ws).catch(() => null)
@@ -550,7 +570,7 @@ export default function SchedulePage() {
     } finally {
       setIsGenerating(false)
     }
-  }, [liveMode, merchantId, portalContext, staff, peakHours, weekStartDate, shifts, showToast])
+  }, [liveMode, merchantId, portalContext, staff, peakHours, weekStartDate, shifts, businessType, showToast])
 
   const handlePublish = useCallback(async () => {
     setIsPublished(true)
@@ -617,40 +637,34 @@ export default function SchedulePage() {
               <p className="text-[12px] text-[#A1A1A8] mt-0.5">AI-powered staff scheduling</p>
             </div>
           </div>
-          {/* Actions — on mobile: a prominent primary row (Build/Publish) above a
-              secondary row (Staff/Copy/Generate/PDF). On desktop they collapse to one row. */}
+          {/* Actions — primary row (Auto-fill/Publish) above a de-emphasized
+              secondary row (Copy/PDF/Staff). On desktop they collapse to one row. */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
-            {/* Secondary actions */}
+            {/* Secondary actions — Staff is intentionally low-key (icon only) */}
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => setShowAddStaff(true)}
-                aria-label="Add staff member" title="Add staff"
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
-                <Plus size={15} /><span>Staff</span>
-              </button>
               <button onClick={handleCopyPrevWeek}
                 aria-label="Copy shifts from previous week" title="Copy shifts from previous week"
                 className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <Copy size={15} /><span>Copy</span>
-              </button>
-              <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
-                aria-label={isGenerating ? 'Generating schedule' : 'Auto-generate schedule with AI'}
-                title={isGenerating ? 'Generating...' : 'Auto-fill with AI'}
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all disabled:opacity-40">
-                <Sparkles size={15} className={isGenerating ? 'animate-spin text-[#17C5B0]' : 'text-[#17C5B0]'} />
-                <span>{isGenerating ? 'Generating…' : 'AI fill'}</span>
               </button>
               <button onClick={handleDownloadPdf}
                 aria-label="Download schedule as PDF" title="Download PDF"
                 className="flex items-center justify-center px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <FileDown size={15} />
               </button>
+              <button onClick={() => setShowAddStaff(true)}
+                aria-label="Manage staff" title="Manage staff"
+                className="flex items-center justify-center px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <Users size={15} />
+              </button>
             </div>
             {/* Primary actions */}
             <div className="flex items-center gap-2">
-              <button onClick={() => setShowQuickBuild(true)} disabled={staff.length === 0}
-                aria-label="Quick build shifts" title="Quick build"
+              <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
+                aria-label={isGenerating ? 'Filling positions' : 'Auto-fill positions from sales history'}
+                title={isGenerating ? 'Filling…' : 'Auto-fill positions'}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#1A8FD6]/20 hover:shadow-[#1A8FD6]/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-40">
-                <CalendarPlus size={15} /><span>Build</span>
+                <Sparkles size={15} className={isGenerating ? 'animate-spin' : ''} /><span>{isGenerating ? 'Filling…' : 'Auto-fill'}</span>
               </button>
               <button onClick={handlePublish}
                 disabled={realShifts.length === 0 || isPublished}
@@ -791,18 +805,12 @@ export default function SchedulePage() {
             <img src="/schedule-illustration.png" alt="" className="w-28 h-28 object-contain drop-shadow-[0_8px_24px_rgba(23,197,176,0.25)]" />
             <div>
               <h3 className="text-base font-bold text-[#F5F5F7]">Your week is a blank canvas</h3>
-              <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Build it in a few taps — pick a shift, who works it, and which days.</p>
+              <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Auto-fill every position from your sales history, then drag staff into any slot below.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => setShowQuickBuild(true)}
-                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 active:scale-[0.98] transition-all">
-                <CalendarPlus size={15} /> Build my week
-              </button>
-              <button onClick={handleGenerate}
-                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
-                <Sparkles size={14} className="text-[#17C5B0]" /> AI fill
-              </button>
-            </div>
+            <button onClick={handleGenerate} disabled={isGenerating}
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-40">
+              <Sparkles size={15} /> Auto-fill positions
+            </button>
           </div>
         </ScrollReveal>
       )}
@@ -833,14 +841,16 @@ export default function SchedulePage() {
         </ScrollReveal>
       )}
 
-      {/* Mobile day view */}
+      {/* Mobile positions board — drag from the staff pool, or tap a slot */}
       {!isGenerating && (
-        <MobileDayView
-          shifts={shifts} staff={staff} holidays={holidays}
-          weekStartDate={weekStartDate}
-          day={mobileDay} onDayChange={setMobileDay}
-          onShiftClick={handleShiftClick} onSlotClick={handleSlotClick}
-        />
+        <div className="lg:hidden">
+          <PositionsBoard
+            shifts={shifts} staff={staff} businessType={businessType}
+            peaks={peakHours} weekStartDate={weekStartDate}
+            day={mobileDay} onDayChange={setMobileDay}
+            onAssign={handleAssign} onShiftClick={handleShiftClick}
+          />
+        </div>
       )}
 
       {/* Team this week — weekly hours + overtime watch */}
@@ -870,8 +880,6 @@ export default function SchedulePage() {
 
       <AddStaffModal open={showAddStaff} onClose={() => setShowAddStaff(false)}
         onSave={handleAddStaff} businessType={businessType} />
-      <QuickBuildSheet open={showQuickBuild} staff={staff} defaultDay={mobileDay}
-        onClose={() => setShowQuickBuild(false)} onCreate={handleQuickCreate} />
       <ShiftEditPopover shift={selectedShift} staff={staff} onClose={() => setSelectedShift(null)}
         onSave={handleShiftSave} onDelete={handleShiftDelete} onSplitShift={handleSplitShift} />
     </div>
