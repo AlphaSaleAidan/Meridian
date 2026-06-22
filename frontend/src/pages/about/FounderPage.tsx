@@ -54,6 +54,12 @@ function buildJsonLd() {
     jobTitle: FOUNDER.title,
     url: 'https://meridian.tips/about',
     description: `${FOUNDER.name} is the founder and CEO of ${FOUNDER.org}, a compliance-first POS analytics platform for Canadian businesses.`,
+    // disambiguatingDescription separates this Aidan Pierce from same-name entities Google
+    // already resolves (notably Brett Pierce / "Meridian Stories", and 100+ unrelated "Aidan
+    // Pierce" profiles). schema.org's purpose-built property for name-collision disambiguation.
+    disambiguatingDescription:
+      `Founder and CEO of Meridian Intelligence (meridian.tips), the POS analytics company — ` +
+      `not affiliated with Meridian Stories or any other Meridian-named organization.`,
     knowsAbout: ['POS analytics', 'restaurant revenue intelligence', 'PIPEDA compliance', 'small business analytics'],
     worksFor: { '@id': 'https://meridian.tips/#organization' },
     ...(FOUNDER.sameAs.length ? { sameAs: FOUNDER.sameAs } : {}),
