@@ -15,6 +15,8 @@ import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import MobileDayView from '@/components/schedule/MobileDayView'
+import WeekCoverageStrip from '@/components/schedule/WeekCoverageStrip'
+import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
 import { ROLE_GROUPS, getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
@@ -34,6 +36,12 @@ function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDat
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function formatDateISO(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
 function timeToMinutes(t: string) { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
+/** Index (0=Mon..6=Sun) of today within the displayed week, or 0 if not in it. */
+function indexOfTodayInWeek(weekStart: Date): number {
+  const todayStr = formatDateISO(new Date())
+  for (let i = 0; i < 7; i++) if (formatDateISO(addDays(weekStart, i)) === todayStr) return i
+  return 0
+}
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
@@ -148,6 +156,8 @@ export default function SchedulePage() {
   const portalContext = isCanadaPath() ? 'ca' : 'us'
   const country = portalContext === 'ca' ? 'CA' : 'US'
   const [weekStartDate, setWeekStartDate] = useState(() => getMonday(new Date()))
+  // Mobile day selection is lifted here so the coverage strip and day view stay in sync.
+  const [mobileDay, setMobileDay] = useState(() => indexOfTodayInWeek(getMonday(new Date())))
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [selectedShift, setSelectedShift] = useState<ScheduleShift | null>(null)
   const [isPublished, setIsPublished] = useState(false)
@@ -222,6 +232,9 @@ export default function SchedulePage() {
   const holidays = useMemo(
     () => getHolidaysForWeek(weekStartDate, country as 'US' | 'CA'),
     [weekStartDate, country])
+
+  // When the week changes, jump the mobile day view to today (or Monday).
+  useEffect(() => { setMobileDay(indexOfTodayInWeek(weekStartDate)) }, [weekStartDate])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg); setTimeout(() => setToast(null), 4000)
@@ -675,6 +688,19 @@ export default function SchedulePage() {
         </div>
       </ScrollReveal>
 
+      {/* Week-at-a-glance coverage — ties scheduled staff to predicted demand */}
+      {!isGenerating && staff.length > 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.035}>
+          <WeekCoverageStrip
+            weekStartDate={weekStartDate}
+            shifts={shifts}
+            peaks={peakHours}
+            selectedDay={mobileDay}
+            onSelectDay={setMobileDay}
+          />
+        </ScrollReveal>
+      )}
+
       {/* Role filter bar */}
       <ScrollReveal variant="fadeUp" delay={0.04}>
         <div
@@ -756,8 +782,16 @@ export default function SchedulePage() {
         <MobileDayView
           shifts={shifts} staff={staff} holidays={holidays}
           weekStartDate={weekStartDate}
+          day={mobileDay} onDayChange={setMobileDay}
           onShiftClick={handleShiftClick} onSlotClick={handleSlotClick}
         />
+      )}
+
+      {/* Team this week — weekly hours + overtime watch */}
+      {!isGenerating && staff.length > 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.055}>
+          <TeamHoursPanel staff={staff} shifts={shifts} />
+        </ScrollReveal>
       )}
 
       {/* AI Recommendations — surfaces uncovered peak windows */}

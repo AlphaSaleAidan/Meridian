@@ -139,6 +139,110 @@ export const DEMO_WEEKLY_REVENUE_CENTS: Record<string, number> = {
   smoke_shop:  15_000_00,
 }
 
+/* ------------------------------------------------------------------ *
+ * Coverage: does scheduled staffing actually meet predicted demand?
+ * This is the owner's real question — "am I covered for the rush?"
+ * ------------------------------------------------------------------ */
+
+export interface DayCoverage {
+  day: number
+  demandHours: number   // hours that need at least one person
+  coveredHours: number  // demanded hours where scheduled heads >= needed
+  score: number         // coveredHours / demandHours (1 when no demand)
+  busiestHour: number | null
+  scheduledStaff: number
+  worstGap: { hour: number; need: number; have: number } | null
+}
+
+/** Translate a normalized demand ratio (0..1) into a needed headcount. */
+function demandHeads(ratio: number): number {
+  if (ratio > 0.75) return 3
+  if (ratio > 0.5) return 2
+  if (ratio > 0.25) return 1
+  return 0
+}
+
+/**
+ * Compare predicted hourly demand (from peak-hour intensity) against the
+ * number of staff actually scheduled that hour. `peaks` is the FULL week so
+ * the demand scale is consistent across days.
+ */
+export function computeDayCoverage(
+  day: number,
+  shifts: ScheduleShift[],
+  peaks: { day: number; hour: number; intensity: number }[],
+): DayCoverage {
+  const maxI = Math.max(...peaks.map(p => p.intensity), 1)
+  const dayPeaks = peaks.filter(p => p.day === day)
+  const dayShifts = shifts.filter(s => s.dayOfWeek === day && !s.isRecommended)
+
+  let demandHours = 0, coveredHours = 0
+  let busiestHour: number | null = null, busiestI = -1
+  let worstGap: DayCoverage['worstGap'] = null
+
+  for (const p of dayPeaks) {
+    if (p.intensity > busiestI) { busiestI = p.intensity; busiestHour = p.hour }
+    const need = demandHeads(p.intensity / maxI)
+    if (need === 0) continue
+    demandHours++
+    const have = dayShifts.filter(s =>
+      timeToMinutes(s.startTime) <= p.hour * 60 && timeToMinutes(s.endTime) > p.hour * 60,
+    ).length
+    if (have >= need) coveredHours++
+    else if (!worstGap || need - have > worstGap.need - worstGap.have) {
+      worstGap = { hour: p.hour, need, have }
+    }
+  }
+
+  const scheduledStaff = new Set(dayShifts.map(s => s.staffMemberId).filter(Boolean)).size
+  const score = demandHours > 0 ? coveredHours / demandHours : 1
+  return { day, demandHours, coveredHours, score, busiestHour, scheduledStaff, worstGap }
+}
+
+export function coverageTone(c: DayCoverage): {
+  fg: string; label: 'covered' | 'light' | 'gaps' | 'empty'
+} {
+  if (c.demandHours === 0 && c.scheduledStaff === 0) return { fg: '#3A3A42', label: 'empty' }
+  if (c.score >= 0.9) return { fg: '#17C5B0', label: 'covered' }
+  if (c.score >= 0.6) return { fg: '#D4A843', label: 'light' }
+  return { fg: '#E06B5E', label: 'gaps' }
+}
+
+/* ------------------------------------------------------------------ *
+ * "Right now" — who's on the clock and who's up next (mobile glance).
+ * ------------------------------------------------------------------ */
+
+export interface NowNext {
+  onNow: { shift: ScheduleShift; member: ScheduleStaffMember | null }[]
+  next: { shift: ScheduleShift; member: ScheduleStaffMember | null } | null
+}
+
+export function getNowNext(
+  shifts: ScheduleShift[],
+  staffMap: Map<string, ScheduleStaffMember>,
+  dayIndex: number,
+  nowMinutes: number,
+): NowNext {
+  const todays = shifts
+    .filter(s => s.dayOfWeek === dayIndex && !s.isRecommended)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+  const onNow = todays
+    .filter(s => timeToMinutes(s.startTime) <= nowMinutes && timeToMinutes(s.endTime) > nowMinutes)
+    .map(s => ({ shift: s, member: s.staffMemberId ? staffMap.get(s.staffMemberId) ?? null : null }))
+  const upcoming = todays.find(s => timeToMinutes(s.startTime) > nowMinutes)
+  const next = upcoming
+    ? { shift: upcoming, member: upcoming.staffMemberId ? staffMap.get(upcoming.staffMemberId) ?? null : null }
+    : null
+  return { onNow, next }
+}
+
+/** Weekly overtime watch tone for a staff member's total hours. */
+export function overtimeTone(hours: number): { fg: string; label: 'over' | 'near' | 'ok' } | null {
+  if (hours >= 40) return { fg: '#E06B5E', label: 'over' }
+  if (hours >= 36) return { fg: '#D4A843', label: 'near' }
+  return null
+}
+
 /** Sum labor cost (cents) over real (non-recommended) shifts. */
 export function computeWeeklyLaborCents(
   shifts: ScheduleShift[],

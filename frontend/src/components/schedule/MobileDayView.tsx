@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react'
-import { Plus, ChevronRight, CalendarDays, Coffee } from 'lucide-react'
+import { useMemo } from 'react'
+import { Plus, ChevronRight, CalendarDays, Coffee, Radio } from 'lucide-react'
 import type { ScheduleShift, ScheduleStaffMember } from '@/lib/agent-data'
-import { fmtTime, timeToMinutes } from './schedule-helpers'
+import { fmtTime, timeToMinutes, getNowNext } from './schedule-helpers'
 
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function formatDateISO(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
@@ -23,19 +23,13 @@ interface Props {
   staff: ScheduleStaffMember[]
   holidays: { date: string; name: string }[]
   weekStartDate: Date
+  day: number
+  onDayChange: (day: number) => void
   onShiftClick: (s: ScheduleShift) => void
   onSlotClick: (day: number, hour: number) => void
 }
 
-export default function MobileDayView({ shifts, staff, holidays, weekStartDate, onShiftClick, onSlotClick }: Props) {
-  const [day, setDay] = useState(() => {
-    const now = new Date(), todayStr = formatDateISO(now)
-    for (let i = 0; i < 7; i++) {
-      if (formatDateISO(addDays(weekStartDate, i)) === todayStr) return i
-    }
-    return 0
-  })
-
+export default function MobileDayView({ shifts, staff, holidays, weekStartDate, day, onDayChange, onShiftClick, onSlotClick }: Props) {
   const staffMap = useMemo(() => new Map(staff.map(s => [s.id, s])), [staff])
   const todayStr = formatDateISO(new Date())
   const selectedDate = addDays(weekStartDate, day)
@@ -56,6 +50,13 @@ export default function MobileDayView({ shifts, staff, holidays, weekStartDate, 
     [dayShifts],
   )
 
+  // "Right now" glance — only meaningful while looking at today.
+  const nowNext = useMemo(() => {
+    if (!isToday) return null
+    const now = new Date()
+    return getNowNext(shifts, staffMap, day, now.getHours() * 60 + now.getMinutes())
+  }, [isToday, shifts, staffMap, day])
+
   return (
     <div className="lg:hidden space-y-3 pb-24">
       {/* Day tabs */}
@@ -66,7 +67,7 @@ export default function MobileDayView({ shifts, staff, holidays, weekStartDate, 
           const isTod = formatDateISO(d) === todayStr
           const cnt = shifts.filter(s => s.dayOfWeek === di && !s.isRecommended).length
           return (
-            <button key={di} onClick={() => setDay(di)}
+            <button key={di} onClick={() => onDayChange(di)}
               aria-label={`${name} ${d.getDate()}, ${cnt} shifts`}
               className={`flex-1 min-w-[46px] flex flex-col items-center gap-0.5 py-2.5 rounded-2xl transition-all active:scale-95 ${
                 isSel
@@ -80,6 +81,38 @@ export default function MobileDayView({ shifts, staff, holidays, weekStartDate, 
           )
         })}
       </div>
+
+      {/* "Right now" live card — today only */}
+      {nowNext && (nowNext.onNow.length > 0 || nowNext.next) && (
+        <div className="rounded-2xl bg-gradient-to-br from-[#17C5B0]/[0.10] to-[#1A8FD6]/[0.06] border border-[#17C5B0]/25 p-3.5">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Radio size={13} className="text-[#17C5B0] animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-wide text-[#17C5B0]">On now</span>
+            <span className="text-[12px] font-semibold text-[#F5F5F7]/80 ml-auto">{nowNext.onNow.length} working</span>
+          </div>
+          {nowNext.onNow.length > 0 ? (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {nowNext.onNow.map(({ shift, member }) => (
+                <span key={shift.id} className="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full bg-[#0A0A0B]/40 border border-[#1F1F23]">
+                  <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold"
+                    style={{ backgroundColor: `${member?.color ?? '#A1A1A8'}22`, color: member?.color ?? '#A1A1A8' }}>
+                    {member ? initials(member.name) : '?'}
+                  </span>
+                  <span className="text-[12px] font-semibold text-[#F5F5F7]">{member?.name?.split(' ')[0] ?? 'Open'}</span>
+                  <span className="text-[10px] text-[#A1A1A8]/60">til {fmtTime(shift.endTime)}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px] text-[#A1A1A8]/70">No one's on the clock right now.</p>
+          )}
+          {nowNext.next && (
+            <p className="text-[12px] text-[#A1A1A8] mt-2 pt-2 border-t border-[#17C5B0]/15">
+              Next up: <span className="font-semibold text-[#F5F5F7]">{nowNext.next.member?.name?.split(' ')[0] ?? 'Open shift'}</span> at <span className="font-semibold text-[#F5F5F7]">{fmtTime(nowNext.next.shift.startTime)}</span>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Day header + summary */}
       <div className="flex items-end justify-between px-1">
