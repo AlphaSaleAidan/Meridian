@@ -587,6 +587,28 @@ async def _fetch_merchant_config(phone_number: str) -> dict | None:
     return None
 
 
+async def _fetch_merchant_config_by_id(merchant_id: str) -> dict | None:
+    """Same as _fetch_merchant_config but keyed by merchant_id — used by the
+    outbound test-call path (which dials OUT, so there's no inbound DID to resolve
+    the merchant from). Returns None if not found."""
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
+    if not supabase_url or not supabase_key or not merchant_id:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            res = await client.get(
+                f"{supabase_url}/rest/v1/phone_agent_config",
+                params={"merchant_id": f"eq.{merchant_id}", "select": "*"},
+                headers={"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"},
+            )
+            if res.status_code == 200 and res.json():
+                return res.json()[0]
+    except Exception as e:
+        logger.warning("Failed to fetch merchant config by id %s: %s", merchant_id, e)
+    return None
+
+
 def _menu_text_from(menu_items: list[dict]) -> str:
     lines = []
     for item in menu_items:
@@ -772,9 +794,20 @@ async def twilio_voice(request: Request):
     # the live path takes orders against the merchant's own menu/greeting.
     config_row = None
     merchant_id = None
-    if twilio_number:
+    # Outbound TEST calls dial OUT (no inbound merchant DID to resolve from), so the
+    # placement script passes ?merchant_id= to target a specific merchant. This
+    # override is the only behavior change for outbound; inbound calls (no query
+    # param) resolve by the dialed number exactly as before.
+    override_merchant = request.query_params.get("merchant_id")
+    if override_merchant:
+        merchant_id = override_merchant
+        if override_merchant != DEMO_MERCHANT_ID:
+            config_row = await _fetch_merchant_config_by_id(override_merchant)
+        logger.info("Outbound/override merchant_id=%s (config %s)",
+                    override_merchant, "found" if config_row else "demo-defaults")
+    if not config_row and not override_merchant and twilio_number:
         config_row = await _fetch_merchant_config(twilio_number)
-    if config_row:
+    if config_row and not merchant_id:
         merchant_id = config_row.get("merchant_id")
     if not merchant_id:
         merchant_id = DEMO_MERCHANT_ID
