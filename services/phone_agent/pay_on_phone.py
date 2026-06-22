@@ -199,17 +199,25 @@ async def mark_order_paid(
     caller_phone: str = "",
     pos_order_id: str = "",
     simulate: bool = False,
+    method: str = "",
+    card_brand: str = "",
+    card_last4: str = "",
+    payment_txn_id: str = "",
 ) -> dict:
     """Payment confirmed → flip the held order to paid AND release the kitchen
     ticket. Matches by pos_order_id when known (most precise), else by
     merchant+phone (latest). Idempotent.
 
+    `method`/`card_*`/`payment_txn_id` record HOW it was paid (e.g. the
+    card-on-phone keypad fallback) so the order/receipt shows brand + last-4.
+    Only the last-4 is ever stored — never the full PAN.
+
     Returns {"released": bool, "matched_by": str}.
     """
     if not SUPABASE_URL or not SUPABASE_KEY:
         logger.info(
-            "mark_order_paid (no Supabase): merchant=%s phone=%s pos_order=%s simulate=%s",
-            merchant_id, caller_phone, pos_order_id, simulate,
+            "mark_order_paid (no Supabase): merchant=%s phone=%s pos_order=%s simulate=%s method=%s",
+            merchant_id, caller_phone, pos_order_id, simulate, method or "link",
         )
         return {"released": True, "matched_by": "none"}
 
@@ -231,6 +239,14 @@ async def mark_order_paid(
         "status": "paid",
         "kitchen_released": True,
     }
+    if method:
+        patch["payment_method"] = method
+    if card_brand:
+        patch["card_brand"] = card_brand
+    if card_last4:
+        patch["card_last4"] = card_last4
+    if payment_txn_id:
+        patch["payment_txn_id"] = payment_txn_id
     if simulate:
         patch["payment_note"] = "simulated (demo)"
     try:
