@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy, Percent } from 'lucide-react'
+import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy, Percent, CalendarPlus } from 'lucide-react'
 import {
   generateScheduleStaff, generateScheduleShifts,
   generatePeakHourHeatmap, getHolidaysForWeek,
@@ -17,6 +17,7 @@ import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import MobileDayView from '@/components/schedule/MobileDayView'
 import WeekCoverageStrip from '@/components/schedule/WeekCoverageStrip'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
+import QuickBuildSheet, { type QuickShiftSpec } from '@/components/schedule/QuickBuildSheet'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
 import { ROLE_GROUPS, getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
@@ -159,6 +160,7 @@ export default function SchedulePage() {
   // Mobile day selection is lifted here so the coverage strip and day view stay in sync.
   const [mobileDay, setMobileDay] = useState(() => indexOfTodayInWeek(getMonday(new Date())))
   const [showAddStaff, setShowAddStaff] = useState(false)
+  const [showQuickBuild, setShowQuickBuild] = useState(false)
   const [selectedShift, setSelectedShift] = useState<ScheduleShift | null>(null)
   const [isPublished, setIsPublished] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -412,6 +414,37 @@ export default function SchedulePage() {
     }
   }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
 
+  const handleQuickCreate = useCallback(async (specs: QuickShiftSpec[]) => {
+    if (specs.length === 0) return
+    const ws = formatDateISO(weekStartDate)
+    const optimistic: ScheduleShift[] = specs.map((sp, i) => ({
+      id: `shift-qb-${Date.now()}-${i}`,
+      staffMemberId: sp.staffMemberId,
+      dayOfWeek: sp.dayOfWeek,
+      shiftDate: formatDateISO(addDays(weekStartDate, sp.dayOfWeek)),
+      startTime: sp.startTime, endTime: sp.endTime,
+      role: sp.role, breakMinutes: sp.breakMinutes,
+      notes: '', status: 'draft', isRecommended: false,
+    }))
+    setShifts(prev => [...prev, ...optimistic])
+    setIsPublished(false)
+    showToast(`Added ${optimistic.length} shift${optimistic.length === 1 ? '' : 's'}`)
+    if (!liveMode) return
+    try {
+      const portal = portalContext as 'us' | 'ca'
+      const results = await Promise.all(optimistic.map(s =>
+        api.scheduleCreateShift(shiftToApiCreate(s, merchantId, portal, ws))))
+      const saved = results.map(r => shiftFromApi(r.shift))
+      const tempIds = new Set(optimistic.map(o => o.id))
+      setShifts(prev => [...prev.filter(s => !tempIds.has(s.id)), ...saved])
+    } catch (e) {
+      console.warn('quick build persist failed:', e)
+      const refresh = await api.scheduleShifts(merchantId, ws).catch(() => null)
+      if (refresh) setShifts(refresh.shifts.map(shiftFromApi))
+      showToast('Some shifts failed to save — refreshed from server')
+    }
+  }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
+
   const handleShiftSave = useCallback(async (u: ScheduleShift) => {
     const prevShift = shifts.find(s => s.id === u.id)
     setShifts(prev => prev.map(s => (s.id === u.id ? u : s)))
@@ -584,20 +617,27 @@ export default function SchedulePage() {
               <p className="text-[12px] text-[#A1A1A8] mt-0.5">AI-powered staff scheduling</p>
             </div>
           </div>
-          {/* Actions — on mobile: a prominent primary row (Generate/Publish) above a
-              secondary row (Staff/Copy/PDF). On desktop they collapse into one row. */}
+          {/* Actions — on mobile: a prominent primary row (Build/Publish) above a
+              secondary row (Staff/Copy/Generate/PDF). On desktop they collapse to one row. */}
           <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
             {/* Secondary actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => setShowAddStaff(true)}
                 aria-label="Add staff member" title="Add staff"
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <Plus size={15} /><span>Staff</span>
               </button>
               <button onClick={handleCopyPrevWeek}
                 aria-label="Copy shifts from previous week" title="Copy shifts from previous week"
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <Copy size={15} /><span>Copy</span>
+              </button>
+              <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
+                aria-label={isGenerating ? 'Generating schedule' : 'Auto-generate schedule with AI'}
+                title={isGenerating ? 'Generating...' : 'Auto-fill with AI'}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all disabled:opacity-40">
+                <Sparkles size={15} className={isGenerating ? 'animate-spin text-[#17C5B0]' : 'text-[#17C5B0]'} />
+                <span>{isGenerating ? 'Generating…' : 'AI fill'}</span>
               </button>
               <button onClick={handleDownloadPdf}
                 aria-label="Download schedule as PDF" title="Download PDF"
@@ -607,12 +647,10 @@ export default function SchedulePage() {
             </div>
             {/* Primary actions */}
             <div className="flex items-center gap-2">
-              <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
-                aria-label={isGenerating ? 'Generating schedule' : 'Generate schedule'}
-                title={isGenerating ? 'Generating...' : 'Generate'}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#17C5B0]/20 hover:shadow-[#17C5B0]/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-40">
-                <Sparkles size={15} className={isGenerating ? 'animate-spin' : ''} />
-                <span>{isGenerating ? 'Generating…' : 'Generate'}</span>
+              <button onClick={() => setShowQuickBuild(true)} disabled={staff.length === 0}
+                aria-label="Quick build shifts" title="Quick build"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#1A8FD6]/20 hover:shadow-[#1A8FD6]/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-40">
+                <CalendarPlus size={15} /><span>Build</span>
               </button>
               <button onClick={handlePublish}
                 disabled={realShifts.length === 0 || isPublished}
@@ -689,7 +727,7 @@ export default function SchedulePage() {
       </ScrollReveal>
 
       {/* Week-at-a-glance coverage — ties scheduled staff to predicted demand */}
-      {!isGenerating && staff.length > 0 && (
+      {!isGenerating && realShifts.length > 0 && (
         <ScrollReveal variant="fadeUp" delay={0.035}>
           <WeekCoverageStrip
             weekStartDate={weekStartDate}
@@ -731,22 +769,40 @@ export default function SchedulePage() {
         </div>
       </ScrollReveal>
 
-      {/* Empty-state hint — empty calendar still renders below */}
+      {/* Friendly illustrated empty states */}
       {!isGenerating && staff.length === 0 && (
         <ScrollReveal variant="fadeUp" delay={0.045}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-lg bg-[#111113] border border-[#1F1F23]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center shrink-0">
-                <Users size={14} className="text-[#1A8FD6]" />
-              </div>
-              <p className="text-[12px] text-[#A1A1A8]">
-                Your calendar is empty. Add staff to start building this week&apos;s schedule.
-              </p>
+          <div className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]">
+            <img src="/schedule-illustration.png" alt="" className="w-28 h-28 object-contain drop-shadow-[0_8px_24px_rgba(23,197,176,0.25)]" />
+            <div>
+              <h3 className="text-base font-bold text-[#F5F5F7]">Let&apos;s set up your schedule</h3>
+              <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Add your team, then build the week in a few taps — or let AI fill it for you.</p>
             </div>
             <button onClick={() => setShowAddStaff(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors self-start sm:self-auto shrink-0">
-              <Plus size={13} /> Add Staff
+              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 active:scale-[0.98] transition-all">
+              <Plus size={15} /> Add your team
             </button>
+          </div>
+        </ScrollReveal>
+      )}
+      {!isGenerating && staff.length > 0 && realShifts.length === 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.045}>
+          <div className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]">
+            <img src="/schedule-illustration.png" alt="" className="w-28 h-28 object-contain drop-shadow-[0_8px_24px_rgba(23,197,176,0.25)]" />
+            <div>
+              <h3 className="text-base font-bold text-[#F5F5F7]">Your week is a blank canvas</h3>
+              <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Build it in a few taps — pick a shift, who works it, and which days.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowQuickBuild(true)}
+                className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 active:scale-[0.98] transition-all">
+                <CalendarPlus size={15} /> Build my week
+              </button>
+              <button onClick={handleGenerate}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <Sparkles size={14} className="text-[#17C5B0]" /> AI fill
+              </button>
+            </div>
           </div>
         </ScrollReveal>
       )}
@@ -814,6 +870,8 @@ export default function SchedulePage() {
 
       <AddStaffModal open={showAddStaff} onClose={() => setShowAddStaff(false)}
         onSave={handleAddStaff} businessType={businessType} />
+      <QuickBuildSheet open={showQuickBuild} staff={staff} defaultDay={mobileDay}
+        onClose={() => setShowQuickBuild(false)} onCreate={handleQuickCreate} />
       <ShiftEditPopover shift={selectedShift} staff={staff} onClose={() => setSelectedShift(null)}
         onSave={handleShiftSave} onDelete={handleShiftDelete} onSplitShift={handleSplitShift} />
     </div>
