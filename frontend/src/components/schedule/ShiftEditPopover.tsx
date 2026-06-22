@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
-import { X, Trash2, Scissors, DollarSign } from 'lucide-react'
+import { X, Trash2, Scissors, DollarSign, Clock } from 'lucide-react'
 import type { ScheduleShift, ScheduleStaffMember } from '@/lib/agent-data'
-import { ROLE_GROUPS, timeToMinutes } from './schedule-helpers'
+import { ROLE_GROUPS, timeToMinutes, fmtTime } from './schedule-helpers'
 
 interface Props {
   shift: ScheduleShift | null
@@ -13,6 +13,14 @@ interface Props {
 }
 
 const ALL_ROLES = ROLE_GROUPS.flatMap(g => g.roles.map(r => ({ role: r, group: g.label })))
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+// iOS Safari zooms the viewport when focusing an input whose font-size < 16px.
+// Every field here is text-base (16px) so the sheet never jumps on focus.
+const FIELD =
+  'w-full px-3.5 py-3 rounded-xl bg-[#1F1F23] border border-[#1F1F23] text-base text-[#F5F5F7] ' +
+  'focus:border-[#1A8FD6]/50 focus:ring-2 focus:ring-[#1A8FD6]/15 focus:outline-none transition-colors'
+const FIELD_LABEL = 'text-[11px] font-semibold uppercase tracking-wide text-[#A1A1A8]/60 block mb-1.5'
 
 export default function ShiftEditPopover({ shift, staff, onClose, onSave, onDelete, onSplitShift }: Props) {
   const [staffMemberId, setStaffMemberId] = useState('')
@@ -33,19 +41,33 @@ export default function ShiftEditPopover({ shift, staff, onClose, onSave, onDele
     }
   }, [shift])
 
+  // Close on Escape; lock background scroll while the sheet is open.
+  useEffect(() => {
+    if (!shift) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [shift, onClose])
+
   const selectedMember = useMemo(
     () => staff.find(s => s.id === staffMemberId),
     [staff, staffMemberId],
   )
 
-  // Calculate shift cost
+  // Shift duration (net of break) + cost.
+  const durMins = useMemo(
+    () => timeToMinutes(endTime) - timeToMinutes(startTime) - (parseInt(breakMinutes) || 0),
+    [startTime, endTime, breakMinutes],
+  )
   const shiftCost = useMemo(() => {
-    if (!selectedMember) return null
-    const durMins = timeToMinutes(endTime) - timeToMinutes(startTime) - (parseInt(breakMinutes) || 0)
-    if (durMins <= 0) return null
-    const hrs = durMins / 60
-    return Math.round(selectedMember.hourlyRate * hrs)
-  }, [selectedMember, startTime, endTime, breakMinutes])
+    if (!selectedMember || durMins <= 0) return null
+    return Math.round(selectedMember.hourlyRate * (durMins / 60))
+  }, [selectedMember, durMins])
 
   if (!shift) return null
 
@@ -88,29 +110,49 @@ export default function ShiftEditPopover({ shift, staff, onClose, onSave, onDele
   }
 
   const canSplit = (timeToMinutes(endTime) - timeToMinutes(startTime)) >= 240 // at least 4 hours
+  const durLabel = durMins > 0 ? `${(durMins / 60).toFixed(durMins % 60 === 0 ? 0 : 1)}h` : '—'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-sm bg-[#0A0A0B] border border-[#1F1F23] rounded-xl shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[#1F1F23]">
-          <h3 className="text-sm font-semibold text-[#F5F5F7]">Edit Shift</h3>
-          <button aria-label="Close shift editor" onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8]">
-            <X size={16} />
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center sm:p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose} />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Edit shift"
+        className="relative w-full sm:max-w-md bg-[#0A0A0B] border-t sm:border border-[#1F1F23]
+                   rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[92vh]
+                   animate-in slide-in-from-bottom sm:zoom-in-95 sm:fade-in duration-300"
+      >
+        {/* Mobile grab handle */}
+        <div className="sm:hidden flex justify-center pt-2.5 pb-1">
+          <div className="w-10 h-1.5 rounded-full bg-[#2A2A30]" />
+        </div>
+
+        {/* Header — shows which day + the live duration for context */}
+        <div className="flex items-center gap-2 px-5 pt-2 pb-3 sm:py-4 border-b border-[#1F1F23]">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-[#F5F5F7]">Edit shift</h3>
+            <p className="text-[12px] text-[#A1A1A8]/70 mt-0.5 truncate">
+              {DAY_NAMES[currentShift.dayOfWeek] ?? 'Shift'} · {fmtTime(startTime)}–{fmtTime(endTime)}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 shrink-0">
+            <Clock size={12} className="text-[#1A8FD6]" />
+            <span className="text-[12px] font-semibold text-[#1A8FD6]">{durLabel}</span>
+          </div>
+          <button aria-label="Close shift editor" onClick={onClose}
+            className="p-2 -mr-1 rounded-xl hover:bg-[#1F1F23] text-[#A1A1A8] active:scale-95 transition-all shrink-0">
+            <X size={18} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="px-4 py-3 space-y-3">
+        {/* Body (scrolls if it gets tall) */}
+        <div className="px-5 py-4 space-y-4 overflow-y-auto">
           {/* Staff member */}
           <div>
-            <label className="text-[10px] font-medium text-[#A1A1A8]/60 block mb-1">Staff Member</label>
-            <select
-              value={staffMemberId}
-              onChange={(e) => handleStaffChange(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#1F1F23] text-sm text-[#F5F5F7] focus:border-[#1A8FD6]/40 focus:outline-none"
-            >
+            <label className={FIELD_LABEL}>Staff member</label>
+            <select value={staffMemberId} onChange={(e) => handleStaffChange(e.target.value)} className={FIELD}>
               <option value="">Unassigned</option>
               {staff.map(s => (
                 <option key={s.id} value={s.id}>{s.name} ({s.role.replace(/_/g, ' ')})</option>
@@ -118,116 +160,88 @@ export default function ShiftEditPopover({ shift, staff, onClose, onSave, onDele
             </select>
           </div>
 
-          {/* Role dropdown */}
+          {/* Role */}
           <div>
-            <label className="text-[10px] font-medium text-[#A1A1A8]/60 block mb-1">Role</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#1F1F23] text-sm text-[#F5F5F7] focus:border-[#1A8FD6]/40 focus:outline-none capitalize"
-            >
-              <option value="">Select role...</option>
+            <label className={FIELD_LABEL}>Role</label>
+            <select value={role} onChange={(e) => setRole(e.target.value)} className={`${FIELD} capitalize`}>
+              <option value="">Select role…</option>
               {ALL_ROLES.map(({ role: r, group }) => (
-                <option key={r} value={r}>
-                  {r.replace(/_/g, ' ')} ({group})
-                </option>
+                <option key={r} value={r}>{r.replace(/_/g, ' ')} ({group})</option>
               ))}
             </select>
           </div>
 
           {/* Time */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] font-medium text-[#A1A1A8]/60 block mb-1">Start</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#1F1F23] text-sm text-[#F5F5F7] focus:border-[#1A8FD6]/40 focus:outline-none"
-              />
+              <label className={FIELD_LABEL}>Start</label>
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={FIELD} />
             </div>
             <div>
-              <label className="text-[10px] font-medium text-[#A1A1A8]/60 block mb-1">End</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#1F1F23] text-sm text-[#F5F5F7] focus:border-[#1A8FD6]/40 focus:outline-none"
-              />
+              <label className={FIELD_LABEL}>End</label>
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={FIELD} />
             </div>
           </div>
 
           {/* Break */}
           <div>
-            <label className="text-[10px] font-medium text-[#A1A1A8]/60 block mb-1">Break (minutes)</label>
-            <input
-              type="number" min="0" step="5"
-              value={breakMinutes}
-              onChange={(e) => setBreakMinutes(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#1F1F23] text-sm text-[#F5F5F7] focus:border-[#1A8FD6]/40 focus:outline-none"
-            />
+            <label className={FIELD_LABEL}>Break (minutes)</label>
+            <input type="number" min="0" step="5" inputMode="numeric"
+              value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} className={FIELD} />
           </div>
 
           {/* Shift cost */}
           {shiftCost !== null && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#17C5B0]/5 border border-[#17C5B0]/15">
-              <DollarSign size={13} className="text-[#17C5B0]" />
-              <div className="flex-1">
-                <span className="text-[10px] text-[#A1A1A8]/50">Shift Cost</span>
-                <div className="text-[13px] font-bold text-[#17C5B0] font-mono">
-                  ${(shiftCost / 100).toFixed(2)}
-                </div>
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-[#17C5B0]/[0.07] border border-[#17C5B0]/20">
+              <div className="w-9 h-9 rounded-full bg-[#17C5B0]/15 flex items-center justify-center shrink-0">
+                <DollarSign size={16} className="text-[#17C5B0]" />
               </div>
-              <span className="text-[9px] text-[#A1A1A8]/30 font-mono">
-                ${(selectedMember!.hourlyRate / 100).toFixed(0)}/hr
+              <div className="flex-1">
+                <span className="text-[11px] text-[#A1A1A8]/60">Shift cost</span>
+                <div className="text-[15px] font-bold text-[#17C5B0]">${(shiftCost / 100).toFixed(2)}</div>
+              </div>
+              <span className="text-[11px] text-[#A1A1A8]/40">
+                {durLabel} · ${(selectedMember!.hourlyRate / 100).toFixed(0)}/hr
               </span>
             </div>
           )}
 
           {/* Notes */}
           <div>
-            <label className="text-[10px] font-medium text-[#A1A1A8]/60 block mb-1">Notes</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 rounded-lg bg-[#1F1F23] border border-[#1F1F23] text-sm text-[#F5F5F7] focus:border-[#1A8FD6]/40 focus:outline-none resize-none"
-              placeholder="Optional notes..."
-            />
+            <label className={FIELD_LABEL}>Notes</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
+              className={`${FIELD} resize-none`} placeholder="Optional notes…" />
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[#1F1F23]">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleDelete}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-red-400 hover:bg-red-500/10 transition-colors"
-            >
-              <Trash2 size={12} />Delete
+        {/* Footer — sticky, thumb-sized, safe-area aware */}
+        <div className="border-t border-[#1F1F23] px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4 space-y-3">
+          {/* Destructive / split row */}
+          <div className="flex items-center gap-2">
+            <button onClick={handleDelete}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-semibold
+                         text-red-400 bg-red-500/[0.06] hover:bg-red-500/10 active:scale-[0.98] transition-all">
+              <Trash2 size={14} />Delete
             </button>
             {canSplit && onSplitShift && (
-              <button
-                onClick={handleSplit}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-medium text-[#9B7FD4] hover:bg-[#9B7FD4]/10 transition-colors"
-                title="Split into two shifts with a break"
-              >
-                <Scissors size={12} />Split
+              <button onClick={handleSplit} title="Split into two shifts with a break"
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[13px] font-semibold
+                           text-[#9B7FD4] bg-[#9B7FD4]/[0.06] hover:bg-[#9B7FD4]/10 active:scale-[0.98] transition-all">
+                <Scissors size={14} />Split
               </button>
             )}
           </div>
+          {/* Primary row */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
-            >
+            <button onClick={onClose}
+              className="px-5 py-3 rounded-xl text-sm font-semibold text-[#A1A1A8] hover:text-[#F5F5F7]
+                         hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
               Cancel
             </button>
-            <button
-              onClick={handleSave}
-              className="px-4 py-1.5 rounded-lg text-[11px] font-medium bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-all"
-            >
-              Save
+            <button onClick={handleSave}
+              className="flex-1 py-3 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-all
+                         bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110">
+              Save shift
             </button>
           </div>
         </div>

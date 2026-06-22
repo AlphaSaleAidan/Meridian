@@ -1,13 +1,22 @@
 import { useState, useMemo } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, ChevronRight, CalendarDays, Coffee } from 'lucide-react'
 import type { ScheduleShift, ScheduleStaffMember } from '@/lib/agent-data'
-import { fmtTime } from './schedule-helpers'
+import { fmtTime, timeToMinutes } from './schedule-helpers'
 
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function formatDateISO(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
 function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
 
 const MOBILE_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/)
+  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?'
+}
+function hoursLabel(mins: number) {
+  if (mins <= 0) return '0h'
+  return `${(mins / 60).toFixed(mins % 60 === 0 ? 0 : 1)}h`
+}
 
 interface Props {
   shifts: ScheduleShift[]
@@ -40,10 +49,17 @@ export default function MobileDayView({ shifts, staff, holidays, weekStartDate, 
     [shifts, day],
   )
 
+  // Day-level summary so the merchant sees the shape of the day at a glance.
+  const dayMinutes = useMemo(
+    () => dayShifts.reduce((sum, s) =>
+      sum + Math.max(0, timeToMinutes(s.endTime) - timeToMinutes(s.startTime) - s.breakMinutes), 0),
+    [dayShifts],
+  )
+
   return (
     <div className="lg:hidden space-y-3 pb-24">
       {/* Day tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
         {MOBILE_DAYS.map((name, di) => {
           const d = addDays(weekStartDate, di)
           const isSel = di === day
@@ -51,58 +67,92 @@ export default function MobileDayView({ shifts, staff, holidays, weekStartDate, 
           const cnt = shifts.filter(s => s.dayOfWeek === di && !s.isRecommended).length
           return (
             <button key={di} onClick={() => setDay(di)}
-              className={`flex-1 min-w-[44px] flex flex-col items-center py-2 rounded-lg transition-all ${
-                isSel ? 'bg-[#17C5B0]/10 border border-[#17C5B0]/30' : 'border border-transparent hover:bg-[#1F1F23]'
+              aria-label={`${name} ${d.getDate()}, ${cnt} shifts`}
+              className={`flex-1 min-w-[46px] flex flex-col items-center gap-0.5 py-2.5 rounded-2xl transition-all active:scale-95 ${
+                isSel
+                  ? 'bg-gradient-to-b from-[#17C5B0]/20 to-[#1A8FD6]/10 border border-[#17C5B0]/40 shadow-lg shadow-[#17C5B0]/10'
+                  : 'border border-[#1F1F23] hover:bg-[#1F1F23]'
               }`}>
-              <span className={`text-[10px] font-bold uppercase ${isSel ? 'text-[#17C5B0]' : isTod ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60'}`}>{name}</span>
-              <span className={`text-[13px] font-semibold ${isSel ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]/40'}`}>{d.getDate()}</span>
-              {cnt > 0 && <div className={`mt-0.5 w-1.5 h-1.5 rounded-full ${isSel ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/25'}`} />}
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${isSel ? 'text-[#17C5B0]' : isTod ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/55'}`}>{name}</span>
+              <span className={`text-[15px] font-bold leading-none ${isSel ? 'text-[#F5F5F7]' : isTod ? 'text-[#F5F5F7]/80' : 'text-[#A1A1A8]/40'}`}>{d.getDate()}</span>
+              <div className={`mt-0.5 h-1.5 transition-all ${cnt > 0 ? 'w-1.5 rounded-full' : 'w-0'} ${isSel ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/30'}`} />
             </button>
           )
         })}
       </div>
 
-      {/* Day header */}
-      <div className="flex items-center justify-between px-1">
-        <div>
-          <span className="text-sm font-semibold text-[#F5F5F7]">
-            {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-          </span>
-          {isToday && <span className="ml-2 text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 px-1.5 py-0.5 rounded">Today</span>}
-          {holiday && <span className="ml-2 text-[10px] font-medium text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">{holiday.name}</span>}
+      {/* Day header + summary */}
+      <div className="flex items-end justify-between px-1">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[15px] font-bold text-[#F5F5F7]">
+              {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+            </span>
+            {isToday && <span className="text-[10px] font-semibold text-[#1A8FD6] bg-[#1A8FD6]/10 px-2 py-0.5 rounded-full">Today</span>}
+            {holiday && <span className="text-[10px] font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full">{holiday.name}</span>}
+          </div>
         </div>
-        <span className="text-[11px] text-[#A1A1A8]/40 font-mono">{dayShifts.length} shifts</span>
+        <div className="text-right shrink-0">
+          <div className="text-[13px] font-bold text-[#F5F5F7]">{hoursLabel(dayMinutes)}</div>
+          <div className="text-[10px] text-[#A1A1A8]/50">{dayShifts.length} shift{dayShifts.length === 1 ? '' : 's'}</div>
+        </div>
       </div>
 
       {/* Shift cards */}
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {dayShifts.map(shift => {
           const member = shift.staffMemberId ? staffMap.get(shift.staffMemberId) : null
           const color = member?.color || '#A1A1A8'
+          const mins = Math.max(0, timeToMinutes(shift.endTime) - timeToMinutes(shift.startTime) - shift.breakMinutes)
+          const roleLabel = (member?.role || shift.role || 'any').replace(/_/g, ' ')
           return (
             <button key={shift.id} onClick={() => onShiftClick(shift)}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[#111113] border border-[#1F1F23] hover:bg-[#1A1A1D] transition-colors text-left">
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+              className="group w-full flex items-center gap-3 p-3 rounded-2xl bg-[#111113] border border-[#1F1F23]
+                         hover:border-[#2A2A30] hover:bg-[#16161A] active:scale-[0.99] transition-all text-left
+                         relative overflow-hidden">
+              {/* color spine */}
+              <span className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: color }} />
+              {/* avatar */}
+              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 text-[12px] font-bold ml-1"
+                style={{ backgroundColor: `${color}22`, color, border: `1px solid ${color}40` }}>
+                {member ? initials(member.name) : '+'}
+              </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-[#F5F5F7] truncate">{member?.name || 'Unassigned'}</div>
-                <div className="text-[11px] text-[#A1A1A8]/50 capitalize">{member?.role?.replace(/_/g, ' ') || shift.role}</div>
+                <div className="text-[14px] font-bold text-[#F5F5F7] truncate">{member?.name || 'Unassigned'}</div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-[11px] font-medium capitalize px-1.5 py-0.5 rounded-md"
+                    style={{ backgroundColor: `${color}1A`, color }}>{roleLabel}</span>
+                  {shift.breakMinutes > 0 && (
+                    <span className="flex items-center gap-0.5 text-[10px] text-[#A1A1A8]/45">
+                      <Coffee size={10} />{shift.breakMinutes}m
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="text-right flex-shrink-0">
-                <div className="text-[12px] font-mono text-[#F5F5F7]/80">{fmtTime(shift.startTime)}-{fmtTime(shift.endTime)}</div>
+              <div className="text-right shrink-0">
+                <div className="text-[13px] font-semibold text-[#F5F5F7]/90 tabular-nums">{fmtTime(shift.startTime)}–{fmtTime(shift.endTime)}</div>
+                <div className="text-[11px] text-[#17C5B0]/80 font-medium">{hoursLabel(mins)}</div>
               </div>
+              <ChevronRight size={16} className="text-[#A1A1A8]/25 group-hover:text-[#A1A1A8]/50 transition-colors shrink-0 -ml-1" />
             </button>
           )
         })}
 
         {dayShifts.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-sm text-[#A1A1A8]/30">No shifts scheduled</p>
+          <div className="flex flex-col items-center text-center py-10 px-6 rounded-2xl border border-dashed border-[#1F1F23]">
+            <div className="w-12 h-12 rounded-2xl bg-[#1A8FD6]/10 flex items-center justify-center mb-3">
+              <CalendarDays size={22} className="text-[#1A8FD6]/70" />
+            </div>
+            <p className="text-sm font-semibold text-[#F5F5F7]/80">Nothing scheduled yet</p>
+            <p className="text-[12px] text-[#A1A1A8]/50 mt-1">Tap below to add the first shift for this day.</p>
           </div>
         )}
 
         <button onClick={() => onSlotClick(day, 9)}
-          className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border border-dashed border-[#1F1F23] text-xs text-[#A1A1A8]/50 hover:text-[#A1A1A8] hover:border-[#333] transition-colors">
-          <Plus size={14} /> Add shift
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-dashed border-[#2A2A30]
+                     text-[13px] font-semibold text-[#A1A1A8]/70 hover:text-[#17C5B0] hover:border-[#17C5B0]/40
+                     hover:bg-[#17C5B0]/[0.04] active:scale-[0.99] transition-all">
+          <Plus size={16} /> Add shift
         </button>
       </div>
     </div>

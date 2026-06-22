@@ -571,41 +571,46 @@ export default function SchedulePage() {
               <p className="text-[12px] text-[#A1A1A8] mt-0.5">AI-powered staff scheduling</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowAddStaff(true)}
-              aria-label="Add staff member"
-              title="Add staff"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
-              <Plus size={13} /><span className="hidden sm:inline">Staff</span>
-            </button>
-            <button onClick={handleCopyPrevWeek}
-              aria-label="Copy shifts from previous week"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
-              title="Copy shifts from previous week">
-              <Copy size={13} /><span className="hidden sm:inline">Copy Week</span>
-            </button>
-            <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
-              aria-label={isGenerating ? 'Generating schedule' : 'Generate schedule'}
-              title={isGenerating ? 'Generating...' : 'Generate'}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#17C5B0]/20 hover:shadow-[#17C5B0]/30 hover:brightness-110 disabled:opacity-40">
-              <Sparkles size={14} className={isGenerating ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">{isGenerating ? 'Generating...' : 'Generate'}</span>
-            </button>
-            <button onClick={handlePublish}
-              disabled={realShifts.length === 0 || isPublished}
-              aria-label={isPublished ? 'Schedule published' : 'Publish schedule'}
-              title={isPublished ? 'Published' : 'Publish'}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${isPublished
-                ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
-                : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-30'}`}>
-              <Send size={13} /><span className="hidden sm:inline">{isPublished ? 'Published' : 'Publish'}</span>
-            </button>
-            <button onClick={handleDownloadPdf}
-              aria-label="Download schedule as PDF"
-              title="Download PDF"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
-              <FileDown size={13} />
-            </button>
+          {/* Actions — on mobile: a prominent primary row (Generate/Publish) above a
+              secondary row (Staff/Copy/PDF). On desktop they collapse into one row. */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+            {/* Secondary actions */}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowAddStaff(true)}
+                aria-label="Add staff member" title="Add staff"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <Plus size={15} /><span>Staff</span>
+              </button>
+              <button onClick={handleCopyPrevWeek}
+                aria-label="Copy shifts from previous week" title="Copy shifts from previous week"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <Copy size={15} /><span>Copy</span>
+              </button>
+              <button onClick={handleDownloadPdf}
+                aria-label="Download schedule as PDF" title="Download PDF"
+                className="flex items-center justify-center px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <FileDown size={15} />
+              </button>
+            </div>
+            {/* Primary actions */}
+            <div className="flex items-center gap-2">
+              <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
+                aria-label={isGenerating ? 'Generating schedule' : 'Generate schedule'}
+                title={isGenerating ? 'Generating...' : 'Generate'}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#17C5B0]/20 hover:shadow-[#17C5B0]/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-40">
+                <Sparkles size={15} className={isGenerating ? 'animate-spin' : ''} />
+                <span>{isGenerating ? 'Generating…' : 'Generate'}</span>
+              </button>
+              <button onClick={handlePublish}
+                disabled={realShifts.length === 0 || isPublished}
+                aria-label={isPublished ? 'Schedule published' : 'Publish schedule'}
+                title={isPublished ? 'Published' : 'Publish'}
+                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all active:scale-[0.98] ${isPublished
+                  ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
+                  : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-30'}`}>
+                <Send size={14} /><span>{isPublished ? 'Published' : 'Publish'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </ScrollReveal>
@@ -620,46 +625,50 @@ export default function SchedulePage() {
 
       {/* Week nav + stats bar */}
       <ScrollReveal variant="fadeUp" delay={0.03}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-1">
-          <div className="flex items-center gap-2">
-            <button onClick={handlePrevWeek}
-              className="p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] transition-colors">
-              <ChevronLeft size={16} />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-1">
+          {/* Week nav — full-width pill on mobile, easy chevron targets */}
+          <div className="flex items-center justify-between sm:justify-start gap-1 sm:gap-2 rounded-xl border border-[#1F1F23] sm:border-0 px-1 py-1 sm:p-0">
+            <button onClick={handlePrevWeek} aria-label="Previous week"
+              className="p-2.5 sm:p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] active:scale-95 transition-all">
+              <ChevronLeft size={18} />
             </button>
-            <span className="text-sm font-semibold text-[#F5F5F7] min-w-[200px] text-center">
+            <span className="text-[14px] font-semibold text-[#F5F5F7] min-w-[180px] sm:min-w-[200px] text-center">
               {weekLabel}
             </span>
-            <button onClick={handleNextWeek}
-              className="p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] transition-colors">
-              <ChevronRight size={16} />
+            <button onClick={handleNextWeek} aria-label="Next week"
+              className="p-2.5 sm:p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] active:scale-95 transition-all">
+              <ChevronRight size={18} />
             </button>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <Users size={13} className="text-[#A1A1A8]/50" />
-              <span className="text-[12px] font-mono text-[#A1A1A8]">{staffScheduled}/{staff.length} staff</span>
+          {/* Stats — friendly labeled pills, horizontally scrollable on narrow screens */}
+          <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible pb-0.5 sm:pb-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#111113] border border-[#1F1F23] shrink-0">
+              <Users size={14} className="text-[#A1A1A8]/60" />
+              <span className="text-[13px] font-semibold text-[#F5F5F7] tabular-nums">{staffScheduled}/{staff.length}</span>
+              <span className="text-[11px] text-[#A1A1A8]/50">staff</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Clock size={13} className="text-[#A1A1A8]/50" />
-              <span className="text-[12px] font-mono text-[#A1A1A8]">{totalHours}h</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#111113] border border-[#1F1F23] shrink-0">
+              <Clock size={14} className="text-[#A1A1A8]/60" />
+              <span className="text-[13px] font-semibold text-[#F5F5F7] tabular-nums">{totalHours}h</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <DollarSign size={13} className="text-[#A1A1A8]/50" />
-              <span className="text-[12px] font-mono text-[#A1A1A8]">{totalLaborCents > 0 ? formatCents(totalLaborCents) : '--'}</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#111113] border border-[#1F1F23] shrink-0">
+              <DollarSign size={14} className="text-[#A1A1A8]/60" />
+              <span className="text-[13px] font-semibold text-[#F5F5F7] tabular-nums">{totalLaborCents > 0 ? formatCents(totalLaborCents) : '--'}</span>
             </div>
             {laborPct !== null && totalLaborCents > 0 && (
               <div
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border shrink-0"
                 style={{
                   borderColor: laborTone ? `${laborTone.fg}40` : '#1F1F23',
                   backgroundColor: laborTone ? `${laborTone.bg}15` : 'transparent',
                 }}
                 title={`Labor cost vs ${(effectiveRevenueCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} projected weekly revenue. Floor ${laborTarget.floorPct}% • Target ${laborTarget.targetPct}% • Warn ${laborTarget.warningPct}%.`}
               >
-                <Percent size={11} style={{ color: laborTone?.fg }} />
-                <span className="text-[12px] font-mono font-semibold" style={{ color: laborTone?.fg }}>
+                <Percent size={12} style={{ color: laborTone?.fg }} />
+                <span className="text-[13px] font-semibold tabular-nums" style={{ color: laborTone?.fg }}>
                   {laborPct.toFixed(1)}%
                 </span>
+                <span className="text-[11px] hidden sm:inline" style={{ color: `${laborTone?.fg}99` }}>labor</span>
               </div>
             )}
           </div>
