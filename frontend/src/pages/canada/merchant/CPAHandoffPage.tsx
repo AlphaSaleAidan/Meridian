@@ -34,6 +34,10 @@ const CATEGORY_LABEL: Record<string, string> = {
   payroll: 'Payroll', marketing: 'Marketing', equipment: 'Equipment', fees: 'Fees', other: 'Other',
 }
 
+// Per-category bar colors (owner-readable breakdown). Cycles if there are more
+// categories than colors.
+const CATEGORY_COLORS = ['#1A8FD6', '#17C5B0', '#7C5CFF', '#F97316', '#22C55E', '#E0457B', '#EAB308', '#06B6D4', '#A1A1A8']
+
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 function monthLabel(month: string): string {
@@ -41,8 +45,10 @@ function monthLabel(month: string): string {
   return MONTH_LABELS[mm - 1] ?? month
 }
 
+type CategorySlice = { category: string; label: string; cents: number; pct: number }
+
 // Build a CPA-ready CSV client-side (demo path — no backend round-trip).
-function buildCsv(summary: any, expenses: CpaExpense[]): string {
+function buildCsv(summary: any, expenses: CpaExpense[], byCategory: CategorySlice[] = []): string {
   const esc = (v: unknown) => {
     const s = String(v ?? '')
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
@@ -58,6 +64,12 @@ function buildCsv(summary: any, expenses: CpaExpense[]): string {
   lines.push(row(['Order count', summary.order_count]))
   lines.push(row(['Expenses total', (summary.expenses_total_cents / 100).toFixed(2)]))
   lines.push(row(['Net (revenue - expenses)', (summary.net_cents / 100).toFixed(2)]))
+  lines.push('')
+  lines.push(row(['Deductible spend by category']))
+  lines.push(row(['Category', 'Amount', '% of spend']))
+  for (const c of byCategory) {
+    lines.push(row([c.label, (c.cents / 100).toFixed(2), `${c.pct}%`]))
+  }
   lines.push('')
   lines.push(row(['Monthly breakdown']))
   lines.push(row(['Month', 'Revenue', 'Sales tax collected', 'Orders', 'Expenses']))
@@ -158,6 +170,37 @@ export default function CPAHandoffPage() {
 
   const connected = connections[0]
 
+  // ── Deductible spend by category (owner-readable "where your money went") ──
+  // Same numbers that build expenses_total — manual expenses + card debits
+  // (excluding transfers) — sliced by category so an owner sees their biggest
+  // costs at a glance, not just the CPA. Computed client-side so demo + authed
+  // always match what's on screen.
+  const spendByCategory = useMemo(() => {
+    const totals: Record<string, number> = {}
+    for (const e of expenses) {
+      totals[e.category] = (totals[e.category] || 0) + e.amount_cents
+    }
+    for (const t of transactions) {
+      if (t.direction !== 'debit') continue
+      const cat = demoCategories[t.id] ?? t.suggested_category ?? 'other'
+      if (cat === 'transfer') continue
+      totals[cat] = (totals[cat] || 0) + t.amount_cents
+    }
+    const grand = Object.values(totals).reduce((a, b) => a + b, 0) || 1
+    return Object.entries(totals)
+      .filter(([, c]) => c > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([category, cents]) => ({
+        category,
+        label: CATEGORY_LABEL[category] ?? category,
+        cents,
+        pct: Math.round((cents * 1000) / grand) / 10,
+      }))
+  }, [expenses, transactions, demoCategories])
+
+  const totalDeductibleCents = spendByCategory.reduce((sum, c) => sum + c.cents, 0)
+  const topCategory = spendByCategory[0]
+
   // ── Mutations (branch on isDemo) ──
   const [addForm, setAddForm] = useState<ExpenseInput>({
     expense_date: `${year}-01-01`, category: 'supplies', vendor: '', amount_cents: 0, note: '',
@@ -236,13 +279,13 @@ export default function CPAHandoffPage() {
   async function handleExport(fmt: 'csv' | 'html') {
     if (isDemo) {
       if (fmt === 'csv') {
-        downloadBlob(buildCsv(s, expenses), `meridian-cpa-${year}.csv`, 'text/csv')
+        downloadBlob(buildCsv(s, expenses, spendByCategory), `meridian-cpa-${year}.csv`, 'text/csv')
       } else {
         // Demo printable report: open the synthetic CSV's data as a simple
         // printable HTML page in a new tab.
         const win = window.open('', '_blank')
         if (win) {
-          win.document.write(buildDemoReportHtml(s, expenses))
+          win.document.write(buildDemoReportHtml(s, expenses, spendByCategory))
           win.document.close()
         }
       }
@@ -305,6 +348,55 @@ export default function CPAHandoffPage() {
         <StatCard icon={Wallet} color="#F97316" label="Expenses" value={formatCentsCompact(s.expenses_total_cents)} />
         <StatCard icon={TrendingUp} color="#22C55E" label="Net (rev − exp)" value={formatCentsCompact(s.net_cents)} />
       </StaggerContainer>
+
+      {/* Where your money went — owner-readable deductible spend by category */}
+      <ScrollReveal variant="fadeUp" delay={0.03}>
+        <div className="card p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <h3 className="text-base font-semibold text-[#F5F5F7]">Where your money went</h3>
+            <span className="text-xs text-[#A1A1A8]">
+              Deductible spend · <span className="font-mono text-[#F97316]">{formatCents(totalDeductibleCents)}</span>
+            </span>
+          </div>
+          {spendByCategory.length === 0 ? (
+            <p className="text-sm text-[#A1A1A8] mt-2">
+              No expenses recorded yet for {year}. Connect your bank or add expenses below and your
+              biggest costs will show up here.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-[#A1A1A8] leading-relaxed mt-1 mb-4">
+                You recorded <span className="text-[#F5F5F7] font-semibold">{formatCents(totalDeductibleCents)}</span> in
+                deductible business spending{topCategory && (
+                  <>. Your biggest cost is{' '}
+                  <span className="text-[#F5F5F7] font-semibold">{topCategory.label}</span>{' '}
+                  at <span className="text-[#F5F5F7] font-semibold">{formatCents(topCategory.cents)}</span>{' '}
+                  ({topCategory.pct}% of spend)</>
+                )}. Every dollar here lowers the income your CPA reports.
+              </p>
+              <div className="space-y-3">
+                {spendByCategory.map((c, i) => (
+                  <div key={c.category}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-[#F5F5F7]">{c.label}</span>
+                      <span className="text-[#A1A1A8]">
+                        <span className="font-mono text-[#F5F5F7]">{formatCents(c.cents)}</span>
+                        <span className="ml-2 text-xs">{c.pct}%</span>
+                      </span>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-[#1F1F23] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.max(c.pct, 1.5)}%`, backgroundColor: CATEGORY_COLORS[i % CATEGORY_COLORS.length] }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </ScrollReveal>
 
       {/* Export buttons */}
       <ScrollReveal variant="fadeUp" delay={0.05}>
@@ -553,8 +645,11 @@ export default function CPAHandoffPage() {
 
 // Minimal self-contained printable report for the demo path (the authed path
 // fetches the backend's HTMLResponse instead).
-function buildDemoReportHtml(summary: any, expenses: CpaExpense[]): string {
+function buildDemoReportHtml(summary: any, expenses: CpaExpense[], byCategory: CategorySlice[] = []): string {
   const money = (c: number) => 'CA$' + (c / 100).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const totalDeductible = byCategory.reduce((s, c) => s + c.cents, 0)
+  const categoryRows = byCategory.map(c =>
+    `<tr><td>${c.label}</td><td>${money(c.cents)}</td><td><div class="bar"><span style="width:${c.pct}%"></span></div> ${c.pct}%</td></tr>`).join('')
   const monthlyRows = (summary.monthly ?? []).map((m: any) =>
     `<tr><td>${monthLabel(m.month)}</td><td>${money(m.revenue_cents)}</td><td>${money(m.sales_tax_collected_cents)}</td><td>${m.order_count}</td><td>${money(m.expenses_total_cents)}</td></tr>`).join('')
   const expenseRows = expenses.map(e =>
@@ -567,11 +662,17 @@ function buildDemoReportHtml(summary: any, expenses: CpaExpense[]): string {
   table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13px}
   th,td{border:1px solid #ddd;padding:6px 8px;text-align:left} th{background:#f0f0f0}
   td:nth-child(n+2){text-align:right} h2{font-size:15px;margin:20px 0 4px}
+  .bar{display:inline-block;width:120px;height:9px;background:#eee;border-radius:5px;overflow:hidden;vertical-align:middle;margin-right:6px}
+  .bar span{display:block;height:100%;background:#1a8fd6}
+  .lead{font-size:13px;color:#222;margin:4px 0 12px;line-height:1.5}
   @media print{body{margin:0} .disc{background:#fff}}
 </style></head><body>
   <h1>Meridian CPA Handoff</h1>
   <p class="sub">Year ${summary.year} · Currency CAD</p>
   <div class="disc">${CPA_DISCLAIMER}</div>
+  ${byCategory.length ? `<h2>Where your money went — deductible spend by category</h2>
+  <p class="lead">You recorded <b>${money(totalDeductible)}</b> in deductible business spending${byCategory[0] ? `. Your biggest cost was <b>${byCategory[0].label}</b> at ${money(byCategory[0].cents)} (${byCategory[0].pct}% of spend)` : ''}. Every dollar here lowers the income your CPA reports.</p>
+  <table><thead><tr><th>Category</th><th>Amount</th><th>Share of spend</th></tr></thead><tbody>${categoryRows}</tbody></table>` : ''}
   <h2>Summary</h2>
   <table>
     <tr><th>Revenue</th><td>${money(summary.revenue_cents)}</td></tr>
