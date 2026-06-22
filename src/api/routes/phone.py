@@ -938,6 +938,36 @@ async def twilio_gather(request: Request):
             order_result = await _dispatch_order(call_sid, session, tool["input"])
             order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
 
+            # PAY ON THE PHONE (keypad backup): when enabled + the merchant takes
+            # payment up front, collect the card on the call before confirming, so
+            # the kitchen only ever sees a paid order (anti-scam). Gated by
+            # PHONE_CARD_PAYMENT — default off, so live behavior is unchanged.
+            try:
+                from card_on_phone import CARD_PAYMENT_ENABLED, start_capture
+            except ImportError:
+                CARD_PAYMENT_ENABLED = False
+            payment_mode = session.get("payment_mode", "pay_now")
+            if CARD_PAYMENT_ENABLED and payment_mode == "pay_now":
+                amount_cents = 0
+                for i in tool["input"].get("items", []):
+                    amount_cents += int(round(float(i.get("price", 0) or 0) * 100)) * int(i.get("quantity", 1) or 1)
+                start_capture(
+                    call_sid,
+                    order_ref=order_id,
+                    merchant_id=session.get("merchant_id", ""),
+                    amount_cents=amount_cents,
+                    caller_phone=session.get("caller_phone", ""),
+                )
+                await _log_call_end(call_sid, "order_placed_awaiting_card", tool["input"])
+                # Keep the session alive through the payment IVR.
+                say = (f"Great — that's {order_summary}, order number {order_id}. "
+                       f"Now let's take payment to lock it in.")
+                return Response(content=f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Redirect method="POST">/twilio/pay/start</Redirect>
+</Response>""", media_type=TWIML)
+
             confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
             await _log_call_end(call_sid, "order_placed", tool["input"])
@@ -1390,3 +1420,168 @@ async def phone_payment_webhook(request: Request):
     )
     return {"ok": True, "released": result.get("released", False),
             "matched_by": result.get("matched_by", "")}
+
+
+# ─── CARD ON THE PHONE: keypad (DTMF) backup payment IVR ─────────────────────
+# When the SMS pay-link can't be delivered (landline / send failed), the agent
+# takes the card on the call by keypad, charges it, and tells the caller approved
+# or declined before they hang up. Multi-step gather: number → expiry → CVV → ZIP
+# → charge. Card data lives only in card_on_phone's in-memory capture (never
+# logged, never persisted; only the last-4 is stored on the order).
+#
+# Gated by PHONE_CARD_PAYMENT (default off) so wiring it into submit_order never
+# changes live behavior unreviewed. PCI: production must use a DTMF-masking
+# capture — see card_on_phone.py header.
+
+def _pay_gather(say: str, action: str, reprompt: str, num_digits: str = "",
+                finish: str = "#", timeout: int = 9) -> str:
+    """A single DTMF capture step. On no input, re-posts to `reprompt`."""
+    nd = f' numDigits="{num_digits}"' if num_digits else ""
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Gather input="dtmf" action="{action}" method="POST" finishOnKey="{finish}" timeout="{timeout}"{nd}>
+    <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  </Gather>
+  <Say voice="Polly.Joanna">I didn't get that.</Say>
+  <Redirect method="POST">{reprompt}</Redirect>
+</Response>"""
+
+
+@router.post("/pay/start")
+async def pay_start(request: Request):
+    """Entry into the keypad payment flow. Ensures a capture exists for the call
+    (seeded from the live session when present) and asks for the card number."""
+    form = await request.form()
+    call_sid = form.get("CallSid", "")
+    try:
+        from card_on_phone import get_capture, start_capture
+    except ImportError:
+        return Response(content=_hangup("Card payments aren't available right now."), media_type=TWIML)
+
+    if not get_capture(call_sid):
+        sess = _sessions.get(call_sid, {})
+        start_capture(
+            call_sid,
+            order_ref=sess.get("pending_pay_order_ref", ""),
+            merchant_id=sess.get("merchant_id", ""),
+            amount_cents=int(sess.get("pending_pay_amount_cents", 0) or 0),
+            caller_phone=sess.get("caller_phone", "") or form.get("From", ""),
+        )
+    say = ("To pay by card, enter your card number using the keypad, then press pound. "
+           "Your card information stays private and is never read aloud.")
+    return Response(content=_pay_gather(say, "/twilio/pay/number", "/twilio/pay/start"),
+                    media_type=TWIML)
+
+
+@router.post("/pay/number")
+async def pay_number(request: Request):
+    form = await request.form()
+    call_sid = form.get("CallSid", "")
+    digits = form.get("Digits", "")
+    from card_on_phone import get_capture, luhn_ok
+    cap = get_capture(call_sid)
+    if not cap:
+        return Response(content=_hangup("Let's start over — please call back to pay."), media_type=TWIML)
+    if not luhn_ok(digits):
+        return Response(content=_pay_gather(
+            "That card number didn't check out. Please enter it again, then press pound.",
+            "/twilio/pay/number", "/twilio/pay/start"), media_type=TWIML)
+    cap.pan = digits
+    return Response(content=_pay_gather(
+        "Got it. Now enter the card's expiration as four digits — two for the month, two for the year — then pound.",
+        "/twilio/pay/expiry", "/twilio/pay/number", num_digits="4"), media_type=TWIML)
+
+
+@router.post("/pay/expiry")
+async def pay_expiry(request: Request):
+    form = await request.form()
+    call_sid = form.get("CallSid", "")
+    digits = form.get("Digits", "")
+    from card_on_phone import get_capture, parse_expiry, expiry_in_future
+    cap = get_capture(call_sid)
+    if not cap:
+        return Response(content=_hangup("Let's start over — please call back to pay."), media_type=TWIML)
+    exp = parse_expiry(digits)
+    if not exp or not expiry_in_future(*exp):
+        return Response(content=_pay_gather(
+            "That expiration didn't look right. Enter the month and year as four digits, then pound.",
+            "/twilio/pay/expiry", "/twilio/pay/expiry", num_digits="4"), media_type=TWIML)
+    cap.expiry = digits
+    return Response(content=_pay_gather(
+        "Now enter the three or four digit security code from the card, then press pound.",
+        "/twilio/pay/cvv", "/twilio/pay/expiry"), media_type=TWIML)
+
+
+@router.post("/pay/cvv")
+async def pay_cvv(request: Request):
+    form = await request.form()
+    call_sid = form.get("CallSid", "")
+    digits = form.get("Digits", "")
+    from card_on_phone import get_capture, valid_cvv
+    cap = get_capture(call_sid)
+    if not cap:
+        return Response(content=_hangup("Let's start over — please call back to pay."), media_type=TWIML)
+    if not valid_cvv(digits):
+        return Response(content=_pay_gather(
+            "That code didn't look right. Enter the three or four digit security code, then pound.",
+            "/twilio/pay/cvv", "/twilio/pay/cvv"), media_type=TWIML)
+    cap.cvv = digits
+    return Response(content=_pay_gather(
+        "Last step — enter the billing postal or zip code, then press pound.",
+        "/twilio/pay/zip", "/twilio/pay/cvv"), media_type=TWIML)
+
+
+@router.post("/pay/zip")
+async def pay_zip(request: Request):
+    """Final step: run the card and tell the caller approved or declined."""
+    form = await request.form()
+    call_sid = form.get("CallSid", "")
+    digits = form.get("Digits", "")
+    from card_on_phone import (
+        get_capture, clear_capture, charge, attempts_exhausted,
+    )
+    cap = get_capture(call_sid)
+    if not cap:
+        return Response(content=_hangup("Let's start over — please call back to pay."), media_type=TWIML)
+    cap.postal = digits
+
+    result = await charge(
+        cap.pan, cap.expiry, cap.cvv, cap.postal, cap.amount_cents,
+        merchant_id=cap.merchant_id,
+    )
+
+    if result.approved:
+        try:
+            from pay_on_phone import mark_order_paid
+            await mark_order_paid(
+                merchant_id=cap.merchant_id,
+                caller_phone=cap.caller_phone,
+                pos_order_id=cap.order_ref,
+                method="card_on_phone",
+                card_brand=result.brand,
+                card_last4=result.last4,
+                payment_txn_id=result.txn_id,
+            )
+        except Exception as e:
+            logger.error("card pay: mark_order_paid failed: %s", e)
+        clear_capture(call_sid)
+        if call_sid in _sessions:
+            await _log_call_end(call_sid, "order_paid_card")
+            _sessions.pop(call_sid, None)
+        return Response(content=_hangup(result.spoken + " Thank you, and enjoy!"),
+                        media_type=TWIML)
+
+    # Declined — count the attempt and let them retry, else bow out gracefully.
+    cap.attempts += 1
+    cap.pan = cap.cvv = cap.expiry = cap.postal = ""  # wipe the failed card
+    if attempts_exhausted(cap):
+        clear_capture(call_sid)
+        if call_sid in _sessions:
+            await _log_call_end(call_sid, "payment_failed")
+            _sessions.pop(call_sid, None)
+        return Response(content=_hangup(
+            "I wasn't able to process a card today. Your order isn't confirmed — "
+            "please call back to try again. Thanks for your patience."), media_type=TWIML)
+    return Response(content=_pay_gather(
+        result.spoken + " Let's try again — enter the card number, then press pound.",
+        "/twilio/pay/number", "/twilio/pay/start"), media_type=TWIML)
