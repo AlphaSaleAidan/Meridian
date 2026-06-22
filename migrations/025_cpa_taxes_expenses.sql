@@ -18,9 +18,11 @@
 -- privileges, so user-JWT calls 500 with Postgres error 42501. RLS decides
 -- WHICH rows; GRANT decides whether the role may touch the table AT ALL.
 --
--- FK target `organizations(id)` matches the 010 convention. If `organizations`
--- is an alias/view of `businesses` in this schema, change the three FKs to
--- `REFERENCES businesses(id)` before applying. The backend writes via the
+-- FK target is `businesses(id)` (TEXT): the app's org_id IS businesses.id
+-- (verified against auth.py::_check_org_membership, which authorizes by
+-- businesses.id == org_id / business_users.business_id == org_id, and against
+-- phone_orders.merchant_id which is also TEXT). organizations.id (uuid) is a
+-- different key and is NOT what the API passes. The backend writes via the
 -- service role, so member-RLS only governs future direct user-JWT access.
 
 -- Shared updated_at trigger fn (idempotent).
@@ -42,7 +44,7 @@ $$ LANGUAGE plpgsql;
 -- ═══════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS cpa_expenses (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id        UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    org_id        TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
 
     expense_date  DATE NOT NULL,
     category      TEXT NOT NULL DEFAULT 'other',   -- supplies|cogs|rent|utilities|payroll|marketing|equipment|fees|other
@@ -109,7 +111,7 @@ CREATE TRIGGER trg_cpa_expenses_updated_at
 -- ═══════════════════════════════════════════════════════════════
 CREATE TABLE IF NOT EXISTS cpa_bank_connections (
     id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id            UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    org_id            TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
 
     provider          TEXT NOT NULL DEFAULT 'plaid',   -- plaid|demo
     access_ref        TEXT,                             -- opaque access token ref (encrypt in prod); 'demo' for the demo provider
@@ -156,7 +158,7 @@ CREATE TRIGGER trg_cpa_bank_conn_updated_at
 CREATE TABLE IF NOT EXISTS cpa_transactions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     connection_id   UUID NOT NULL REFERENCES cpa_bank_connections(id) ON DELETE CASCADE,
-    org_id          UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,  -- denormalized for RLS + org-scoped queries
+    org_id          TEXT NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,  -- denormalized for RLS + org-scoped queries
 
     account_id      TEXT,
     card_last4      TEXT,                              -- per-card breakdown key
