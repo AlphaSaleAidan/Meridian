@@ -16,7 +16,6 @@ import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import PositionsBoard, { type AssignTarget } from '@/components/schedule/PositionsBoard'
 import { positionsForType, buildPositionSchedule, dayDemand } from '@/components/schedule/schedule-positions'
-import WeekCoverageStrip from '@/components/schedule/WeekCoverageStrip'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
 import { ROLE_GROUPS, getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
@@ -741,19 +740,6 @@ export default function SchedulePage() {
           </div>
         </div>
       </ScrollReveal>
-
-      {/* Week-at-a-glance coverage — ties scheduled staff to predicted demand */}
-      {!isGenerating && realShifts.length > 0 && (
-        <ScrollReveal variant="fadeUp" delay={0.035}>
-          <WeekCoverageStrip
-            weekStartDate={weekStartDate}
-            shifts={shifts}
-            peaks={peakHours}
-            selectedDay={mobileDay}
-            onSelectDay={setMobileDay}
-          />
-        </ScrollReveal>
-      )}
 
       {/* Friendly illustrated empty states */}
       {!isGenerating && staff.length === 0 && (

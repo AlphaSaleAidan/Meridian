@@ -7,7 +7,7 @@ import {
 import { X, UserPlus, Check, AlertTriangle, GripVertical } from 'lucide-react'
 import type { ScheduleShift, ScheduleStaffMember } from '@/lib/agent-data'
 import { fmtTime, timeToMinutes, isStaffAvailable, getStaffWeeklyHours, getRoleColor } from './schedule-helpers'
-import { positionsForType, requiredSlotsForDay, type PositionDef } from './schedule-positions'
+import { positionsForType, requiredSlotsForDay, dayDemand, type PositionDef } from './schedule-positions'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
@@ -19,6 +19,18 @@ function initials(name: string) {
   const p = name.trim().split(/\s+/)
   return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || '?'
 }
+
+/** Expected-traffic tier from sales-history demand (0..1). */
+function trafficTier(demand: number): { color: string; label: string } {
+  if (demand > 0.6) return { color: '#17C5B0', label: 'High' }
+  if (demand > 0.33) return { color: '#D4A843', label: 'Med' }
+  return { color: '#E06B5E', label: 'Low' }
+}
+const TRAFFIC_KEY = [
+  { color: '#17C5B0', label: 'High' },
+  { color: '#D4A843', label: 'Med' },
+  { color: '#E06B5E', label: 'Low' },
+]
 
 /** Where an assignment lands: an existing shift, or a brand-new position slot. */
 export type AssignTarget =
@@ -173,14 +185,14 @@ export default function PositionsBoard({
     return { rows, filled: filledCount, needed: neededCount }
   }, [shifts, defs, day, peaks])
 
-  // group rows by position for display
+  // group rows by position, ordered earliest shift → latest
   const groups = useMemo(() => {
     const m = new Map<string, { def: PositionDef; rows: Row[] }>()
     for (const r of rows) {
       if (!m.has(r.def.key)) m.set(r.def.key, { def: r.def, rows: [] })
       m.get(r.def.key)!.rows.push(r)
     }
-    return [...m.values()]
+    return [...m.values()].sort((a, b) => timeToMinutes(a.def.start) - timeToMinutes(b.def.start))
   }, [rows])
 
   // staff available for the picked slot's day (not double-booked at that time)
@@ -212,18 +224,32 @@ export default function PositionsBoard({
       onDragStart={(e: DragStartEvent) => setActiveStaffId(e.active.data.current?.staffId ?? null)}
       onDragEnd={handleDragEnd} onDragCancel={() => setActiveStaffId(null)}>
 
-      {/* Day tabs */}
+      {/* Expected-traffic key */}
+      <div className="flex items-center justify-end gap-2.5 mb-1.5 px-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#A1A1A8]/50">Expected traffic</span>
+        {TRAFFIC_KEY.map(t => (
+          <span key={t.label} className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
+            <span className="text-[10px] text-[#A1A1A8]/60">{t.label}</span>
+          </span>
+        ))}
+      </div>
+
+      {/* Day tabs — each carries its forecast tier */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
         {DAYS.map((name, di) => {
           const d = new Date(weekStartDate); d.setDate(d.getDate() + di)
           const isSel = di === day
+          const tier = trafficTier(dayDemand(di, peaks))
           return (
             <button key={di} onClick={() => onDayChange(di)}
-              className={`flex-1 min-w-[46px] flex flex-col items-center gap-0.5 py-2.5 rounded-2xl transition-all active:scale-95 ${
+              className={`flex-1 min-w-[46px] flex flex-col items-center gap-1 py-2.5 rounded-2xl transition-all active:scale-95 ${
                 isSel ? 'bg-gradient-to-b from-[#17C5B0]/20 to-[#1A8FD6]/10 border border-[#17C5B0]/40' : 'border border-[#1F1F23] hover:bg-[#1F1F23]'
               }`}>
               <span className={`text-[10px] font-bold uppercase tracking-wide ${isSel ? 'text-[#17C5B0]' : 'text-[#A1A1A8]/55'}`}>{name}</span>
               <span className={`display text-[17px] font-bold leading-none ${isSel ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]/40'}`}>{d.getDate()}</span>
+              <span className="w-5 h-1.5 rounded-full" style={{ backgroundColor: tier.color, opacity: isSel ? 1 : 0.85 }}
+                title={`Expected traffic: ${tier.label}`} />
             </button>
           )
         })}

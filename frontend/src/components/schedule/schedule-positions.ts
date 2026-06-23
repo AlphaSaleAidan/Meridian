@@ -61,14 +61,18 @@ export function positionsForType(businessType: string): PositionDef[] {
   return POSITIONS_BY_TYPE[businessType] || POSITIONS_BY_TYPE.coffee_shop
 }
 
-/** Normalized 0..1 demand for a day, from sales-history peak intensity. */
+/** Expected traffic for a day, 0..1, scaled ACROSS the week (min-max) so the
+ *  forecast spreads red→green instead of clustering — a day's mean sales
+ *  intensity relative to the slowest/busiest day. */
 export function dayDemand(day: number, peaks: { day: number; hour: number; intensity: number }[]): number {
   if (peaks.length === 0) return 0.5
-  const maxI = Math.max(...peaks.map(p => p.intensity), 1)
-  const dayPeaks = peaks.filter(p => p.day === day)
-  if (dayPeaks.length === 0) return 0.3
-  const avg = dayPeaks.reduce((s, p) => s + p.intensity, 0) / dayPeaks.length
-  return Math.min(1, avg / maxI)
+  const avgFor = (d: number) => {
+    const dp = peaks.filter(p => p.day === d)
+    return dp.length ? dp.reduce((s, p) => s + p.intensity, 0) / dp.length : 0
+  }
+  const avgs = [0, 1, 2, 3, 4, 5, 6].map(avgFor)
+  const mn = Math.min(...avgs), mx = Math.max(...avgs)
+  return mx > mn ? (avgFor(day) - mn) / (mx - mn) : 0.5
 }
 
 /** How many extra flex slots a demand level warrants (sales-history driven). */
