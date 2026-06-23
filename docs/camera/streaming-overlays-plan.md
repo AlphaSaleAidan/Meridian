@@ -183,4 +183,41 @@ This is the existing vision stack — flagging so it's a conscious decision befo
 - ⏳ **AGPL licensing** (YOLO/boxmot) — needs Aidan/Enoch decision (new flag from this audit).
 - ⏳ Overlay disclosure (re-ID/basket tags merchant-visible?) · Canada data residency · retention 60d-strictest default.
 
+---
+
+## AGPL licensing — what each does, do we need it, permissive swaps (verified)
+
+Goal: get off network-copyleft (AGPL) for a hosted commercial product, without losing function.
+Licenses confirmed via each project's LICENSE (Nov 2026).
+
+| Lib | Does | Used in code? | License | Verdict |
+|-----|------|---------------|---------|---------|
+| `ultralytics` YOLO11 | person detection + pose | **yes** — detector.py, people_counter.py, edge_agent.py, export_onnx.py, edge Dockerfile base | **AGPL-3.0** | **replace** |
+| `boxmot` | MOT trackers + ReID | barely — 1 optional import in edge_agent.py (fallback already "tracking disabled"); main pipeline uses `sv.ByteTrack` | **AGPL-3.0** | **drop** |
+| `supervision` | tracking (ByteTrack), zones, annot | yes — detector.py / pipeline.py | MIT | keep ✅ |
+| `fastreid` | appearance Re-ID embeddings | yes — person_reid_service.py (lazy) | Apache-2.0 | keep ✅ |
+| `deepface` | optional VIP demographics (faces) | edge_agent.py (opt-in only) | MIT | keep (not anonymous overlay) |
+
+**Permissive replacements (all verified current):**
+- **Detection (replace YOLO):** **RF-DETR** (Apache-2.0 — base pkg + Apache weights; *avoid* RF-DETR-XL/
+  "Plus" weights = PML-1.0 restricted) · **YOLOX** (Apache-2.0) · **RTMDet** (Apache-2.0). All export
+  to ONNX, so the opencv/onnxruntime inference path barely changes. RF-DETR is the natural pick — same
+  vendor as `supervision`, pairs cleanly.
+- **Tracking (replace boxmot):** `supervision` ByteTrack (MIT, already in) or Roboflow **`trackers`**
+  (Apache-2.0, purpose-built to bolt onto any detector). → delete boxmot.
+- **Re-ID:** already `fastreid` (Apache-2.0); `torchreid`/OSNet (MIT) is an alt. No change needed.
+- **Pose (replace yolo11n-pose):** **RTMPose**/MMPose (Apache-2.0) or **MediaPipe** (Apache-2.0,
+  the existing skellytracker path).
+
+**Effort:**
+- **boxmot → drop:** trivial (one import + the fallback already exists). Quick cleanup PR.
+- **YOLO → RF-DETR/YOLOX:** moderate — swap the model class + weights in 4 files + the edge Dockerfile
+  base image + `export_onnx.py`; person detection on COCO-pretrained weights is commodity, so accuracy
+  holds. The overlay layers don't change (they consume boxes, not the model).
+- **yolo11n-pose → RTMPose/MediaPipe:** only if the Pose overlay (Layer 2) is enabled.
+
+**Alternative:** buy an **Ultralytics Enterprise license** and keep YOLO as-is (fastest, costs $).
+Recommendation: drop boxmot now (free win); decide YOLO→RF-DETR swap vs Ultralytics-Enterprise with
+Aidan/Enoch — both fully resolve the AGPL exposure.
+
 ## Definition of done — see brief §11 (unchanged).
