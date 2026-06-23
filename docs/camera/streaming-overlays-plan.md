@@ -138,4 +138,49 @@ the auto-purge floor (never below provincial minimum); surface "Compliant retent
   storage region for footage? (Phase 0 will flag if Law 25 forces it.)
 - **Retention "strictest-if-unknown = 60d" default** OK?
 
+---
+
+## Analytics audit per overlay toggle (verified against code + manifests)
+
+The heavy models run on the **edge/GPU node** (`edge/requirements.txt`), not the cloud — the
+Railway app deliberately ships **no torch/ultralytics** (`requirements.txt` comments them out,
+"~2GB OOM"). So the overlay feed *consumes* analytics output; it never runs the models.
+
+| # | Toggle | Repo / lib | Manifest | Runtime today | Overlay-ready |
+|---|--------|------------|----------|---------------|---------------|
+| 1 | Detections | `ultralytics` YOLO11 + `supervision` | edge ✓ | real (edge) | ✅ boxes + tracker_id + conf |
+| 2 | Pose / skeleton | `skellytracker`→`mediapipe` | commented / lazy | **OFF unless installed** | ⚠️ install mediapipe (CPU-OK) |
+| 3 | Identity (cross-cam Re-ID) | `fastreid` (Apache-2.0) | **not in any manifest** | **OFF → tracker-id only** | ⚠️ needs fastreid on the **GPU box** (or boxmot ReID) — this is the GPU-gated layer |
+| 4 | Journey trails | `journey_tracker.py` (pure) + `boxmot` tracks | boxmot ✓ | real | ✅ |
+| 5 | Zones & counts | `supervision` (MIT) | edge ✓ | real | ✅ |
+| 6 | Heatmap | derived from people_counter/journey dwell | n/a | real | ✅ derive grid |
+| 7 | POS x-ref | `cross_ref/*` agents → `cross_reference_insights` | pure ✓ | real | ✅ table |
+| 8 | Exceptions | `pyod` + `luminol` + anomaly agents | ml ✓ | real | ✅ alerts |
+
+**Takeaways**
+- **6 of 8 layers (1,4,5,6,7,8) are ready to surface today.** Pose (2) just needs mediapipe
+  installed; cross-camera Identity (3) is the only one truly inactive — `fastreid` isn't installed,
+  so re-ID currently falls back to single-camera tracker-id. (3) is exactly the **GPU-gated** layer,
+  which matches the GPU strategy above — light up on your GPU box / cloud-route.
+- **Per-frame output gap:** detection/pose/zone/journey output is consumed in-memory and today only
+  persisted as **15-min aggregates**. For live overlays the feed (Phase 3) must tap the pipeline's
+  **per-frame** output and publish it (Supabase realtime/WS) tagged with `frame_ts` — emit from the
+  existing pipeline, don't add a parallel one. x-ref (7) + exceptions (8) already persist to tables,
+  so those layers read straight from Supabase.
+
+**⚠️ LICENSING — confirm with Aidan/Enoch (pre-existing, not introduced here):**
+`ultralytics` YOLO (Layer 1) and `boxmot` (Layers 3/4 tracking) are **AGPL-3.0** (network-copyleft).
+Using them in a hosted commercial product typically needs an Ultralytics commercial license (or a
+non-AGPL detector/tracker). `supervision`/`fastreid`/`mediapipe`/`pyod`/`luminol` are permissive.
+This is the existing vision stack — flagging so it's a conscious decision before we scale cameras.
+
+---
+
+## Confirmations status
+- ✅ **Connector software-only** — confirmed by Aidan.
+- ✅ **Design tokens** — match existing portal.
+- ✅ **GPU** — CPU-first; Re-ID/Identity is the GPU-gated layer (Aidan's GPU box → on-site node, or cloud-route).
+- ⏳ **AGPL licensing** (YOLO/boxmot) — needs Aidan/Enoch decision (new flag from this audit).
+- ⏳ Overlay disclosure (re-ID/basket tags merchant-visible?) · Canada data residency · retention 60d-strictest default.
+
 ## Definition of done — see brief §11 (unchanged).
