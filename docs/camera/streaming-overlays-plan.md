@@ -225,4 +225,50 @@ Licenses confirmed via each project's LICENSE (Nov 2026).
 higher at multi-tenant scale, recurring. The RF-DETR swap is a ~1-day one-time change folded into work
 we're already doing → recommended over the recurring license. Both fully clear AGPL exposure.
 
+---
+
+## How to run it — recommended runtime topology (researched)
+
+The decoupled pattern below is the validated one: a real surveillance deployment ran exactly this
+stack (RTSP→WebRTC + YOLO via MediaMTX) for 300+ hours at ~500ms latency. MediaMTX is a **pure
+stream router — it does not use the GPU**; inference is a separate pipeline that pulls RTSP
+independently, so analysis never degrades the operator's live video and scales on its own.
+
+```
+CUSTOMER SITE (existing PC, behind NAT)        CLOUD — Contabo (LIGHT, no inference)         GPU BOX (Aidan's, behind NAT)
+  cameras ──► meridian-connector  ──outbound──► MediaMTX (router)  ──┬── WHEP/LL-HLS ─► phone     pulls RTSP outbound ◄─┐
+            (CPU only: ONVIF                     coturn (TURN relay) │                                 runs vision swarm   │
+             discover + publish video)           FastAPI + Supabase  └── RTSP ──────────────────────► (RF-DETR, pose,    │
+                                                                                                       reid, x-ref…) ─────┘
+                                                 overlays ◄── Supabase realtime ◄── writes detections/insights (frame_ts)
+```
+
+**Where each piece runs + why:**
+- **Customer site → connector only (CPU).** Discovers cameras, publishes each outbound. No inference,
+  no hardware, no router changes. Software-only (confirmed).
+- **Contabo → the light layer only:** MediaMTX + coturn + FastAPI + Supabase. **No inference on
+  Contabo** — this is deliberate (box-stability): the gateway is CPU-cheap; the load is *bandwidth*,
+  not compute. Run both as resource-capped PM2 services with health checks.
+- **GPU box (Aidan's) → all heavy inference.** It **pulls RTSP from MediaMTX outbound-initiated**, so
+  it works behind Aidan's NAT too (same dial-out trick as the connector — no port-forwarding). One
+  GPU box serves many cameras/customers centrally; frame-level access stays on hardware we control;
+  zero per-frame cloud-GPU egress. Writes detections/insights to Supabase → overlays render from
+  realtime, time-synced by `frame_ts`.
+- **Phone → WHEP from MediaMTX** (sub-second) + overlay feed from Supabase realtime; HLS.js fallback.
+
+**Bandwidth is the real cost/limit (not CPU):**
+- Each camera publishes to Contabo 24/7. **Run analytics off the camera SUB-stream** (~720p, ~1–2
+  Mbps) and only pull the full-res MAIN stream **on-demand when someone is watching** (MediaMTX
+  on-demand) — keeps ingest + inference cheap.
+- coturn relay only engages for cellular viewers without a P2P path; viewing is occasional, so relay
+  volume stays modest. Self-hosted coturn = predictable cost but uses Contabo egress — monitor it.
+- If camera count outgrows Contabo's bandwidth, the `StreamGateway` interface (MediaMtxGateway →
+  KvsGateway stub) lets us offload ingest/TURN to AWS KVS without touching anything above the gateway.
+
+**Until the GPU box is set up (MVP start):** run **CPU-first** on the connector or a small cloud
+worker for the 6 CPU-OK layers (detection at reduced FPS, zones, counts, heatmap, journeys, POS
+x-ref, exceptions); leave cross-camera Re-ID (Layer 3) off until the GPU box pulls streams. Nothing
+about the topology changes when the GPU box comes online — it just subscribes and the Identity layer
+lights up.
+
 ## Definition of done — see brief §11 (unchanged).
