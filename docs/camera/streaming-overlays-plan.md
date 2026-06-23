@@ -107,11 +107,16 @@ retention). Fills the ⚠️ per-province retention rows from our docs, not web 
 (tenant-scoped overlay stream via Supabase realtime/WS), `POST /gateway/auth` (internal). All
 tenant-scoped; cross-tenant → 404.
 
-**Phase 4 — Software-only connector.** Extend `edge/edge_agent.py` → `meridian-connector` Docker
-image (one-line `docker run` / small Windows installer). Pairing code → scoped device token →
-go2rtc ONVIF discovery → register cameras → publish each outbound (WHIP/RTSP-over-TLS). Camera creds
-stay on the connector only. Auto-reconnect, local buffer on drop, heartbeat. No hardware, no router
-changes. gitleaks pattern for `rtsp://user:pass@`.
+**Phase 4 — Software-only connector + detector de-AGPL.** Extend `edge/edge_agent.py` →
+`meridian-connector` Docker image (one-line `docker run` / small Windows installer). Pairing code →
+scoped device token → go2rtc ONVIF discovery → register cameras → publish each outbound
+(WHIP/RTSP-over-TLS). Camera creds stay on the connector only. Auto-reconnect, local buffer on drop,
+heartbeat. No hardware, no router changes. gitleaks pattern for `rtsp://user:pass@`.
+**Also in this phase:** swap `ultralytics` YOLO → **RF-DETR (Apache-2.0)** across detector.py,
+people_counter.py, edge_agent.py, export_onnx.py, and the edge Dockerfile base image (commodity
+person detection on COCO weights; ONNX path unchanged; overlays unchanged). This is folded here
+because we're already rewriting the edge image/connector — near-zero incremental cost vs a standalone
+swap. (Pose swap yolo11n-pose → RTMPose/MediaPipe only if Layer 2 is enabled.)
 
 **Phase 5 — Live view + overlay manager (portal).** Onboarding "Connect your cameras" step
 (pairing code/QR + connector download + realtime-populating list). Live grid → WHEP player + HLS.js
@@ -209,15 +214,15 @@ Licenses confirmed via each project's LICENSE (Nov 2026).
 - **Pose (replace yolo11n-pose):** **RTMPose**/MMPose (Apache-2.0) or **MediaPipe** (Apache-2.0,
   the existing skellytracker path).
 
-**Effort:**
-- **boxmot → drop:** trivial (one import + the fallback already exists). Quick cleanup PR.
-- **YOLO → RF-DETR/YOLOX:** moderate — swap the model class + weights in 4 files + the edge Dockerfile
-  base image + `export_onnx.py`; person detection on COCO-pretrained weights is commodity, so accuracy
-  holds. The overlay layers don't change (they consume boxes, not the model).
+**Status / effort:**
+- **boxmot → ✅ DROPPED** (this branch): `edge_agent.py` now tracks via `supervision` ByteTrack (MIT,
+  same as the main pipeline); removed from `edge/requirements.txt`. Zero references remain.
+- **YOLO → RF-DETR → scheduled in Phase 4** (Aidan's call): folded into the edge-image rewrite, so
+  near-zero incremental cost. Apache-2.0; overlays unchanged.
 - **yolo11n-pose → RTMPose/MediaPipe:** only if the Pose overlay (Layer 2) is enabled.
 
-**Alternative:** buy an **Ultralytics Enterprise license** and keep YOLO as-is (fastest, costs $).
-Recommendation: drop boxmot now (free win); decide YOLO→RF-DETR swap vs Ultralytics-Enterprise with
-Aidan/Enoch — both fully resolve the AGPL exposure.
+**Cost context:** Ultralytics Enterprise (to keep YOLO) has no public price — reported ~$5k/yr floor,
+higher at multi-tenant scale, recurring. The RF-DETR swap is a ~1-day one-time change folded into work
+we're already doing → recommended over the recurring license. Both fully clear AGPL exposure.
 
 ## Definition of done — see brief §11 (unchanged).
