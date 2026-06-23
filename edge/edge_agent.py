@@ -90,11 +90,13 @@ class CameraProcessor:
         self.current_bucket["vip_sightings"] = []
 
     def _init_tracker(self):
+        # ByteTrack via supervision (MIT) — same tracker the main pipeline uses
+        # (src/camera/detector.py). Replaces boxmot (AGPL); we only need track IDs.
         try:
-            from boxmot import BYTETracker
-            self.tracker = BYTETracker()
+            import supervision as sv
+            self.tracker = sv.ByteTrack()
         except ImportError:
-            logger.warning("boxmot not available — tracking disabled")
+            logger.warning("supervision not available — tracking disabled")
 
     def _init_depth(self):
         try:
@@ -230,9 +232,16 @@ class CameraProcessor:
         tracked_ids = set()
         if self.tracker and detections:
             try:
-                dets = np.array(detections)
-                tracks = self.tracker.update(dets, frame)
-                tracked_ids = {int(t[4]) for t in tracks if len(t) > 4}
+                import supervision as sv
+                arr = np.array(detections, dtype=float)
+                dets_sv = sv.Detections(
+                    xyxy=arr[:, :4],
+                    confidence=arr[:, 4],
+                    class_id=np.zeros(len(arr), dtype=int),
+                )
+                tracked = self.tracker.update_with_detections(dets_sv)
+                if tracked.tracker_id is not None:
+                    tracked_ids = {int(t) for t in tracked.tracker_id}
             except Exception as e:
                 logger.debug(f"Tracking failed: {e}")
 
