@@ -1,0 +1,17 @@
+/* Warm & approachable identity, scoped to the Schedule surface only.
+   ponytail: scoped to .sched so the global Inter design system is untouched. */
+.sched, .sched input, .sched select, .sched textarea, .sched button {
+  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+}
+/* Rounded display face for headings + numbers — the distinctive bit. */
+.sched h1, .sched h2, .sched h3, .sched .display {
+  font-family: 'Quicksand', 'Nunito', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+/* Pill button — soft, bouncy, friendly. */
+.sched .pill {
+  border-radius: 9999px;
+  font-weight: 700;
+  transition: transform .12s ease, filter .12s ease, background-color .12s ease;
+}
+.sched .pill:active:not(:disabled) { transform: scale(.96); }

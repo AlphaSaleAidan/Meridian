@@ -11,11 +11,11 @@ import ScrollReveal from '@/components/ScrollReveal'
 import AnalyzingDataState from '@/components/AnalyzingDataState'
 import { useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
-import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
+import '@/components/schedule/schedule-theme.css'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import PositionsBoard, { type AssignTarget } from '@/components/schedule/PositionsBoard'
-import { positionsForType, buildPositionSchedule } from '@/components/schedule/schedule-positions'
+import { positionsForType, buildPositionSchedule, dayDemand } from '@/components/schedule/schedule-positions'
 import WeekCoverageStrip from '@/components/schedule/WeekCoverageStrip'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
@@ -534,14 +534,19 @@ export default function SchedulePage() {
     // history (peak-hour intensity), busiest days first.
     const defs = positionsForType(businessType)
     const opt = buildPositionSchedule(staff, defs, peakHours, weekStartDate)
+    // Name the busiest day the optimizer prioritized (revenue-driven), so the
+    // toast reads like the agent explaining itself. ponytail: derived, no extra state.
+    const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    const busiest = DAY_FULL[[0, 1, 2, 3, 4, 5, 6].sort((a, b) => dayDemand(b, peakHours) - dayDemand(a, peakHours))[0]]
+    const fillMsg = (total: number, open: number) =>
+      open > 0
+        ? `Built around your busiest day (${busiest}) — ${total - open} positions filled, ${open} still open`
+        : `Built around your busiest day (${busiest}) — all ${total} positions filled`
     if (!liveMode) {
       // Demo: cosmetic delay + local set.
       await new Promise(r => setTimeout(r, 1200))
       setShifts(opt); setIsPublished(false); setIsGenerating(false)
-      const open = opt.filter(s => !s.staffMemberId).length
-      showToast(open > 0
-        ? `Filled ${opt.length - open} positions · ${open} still open`
-        : `All ${opt.length} positions filled`)
+      showToast(fillMsg(opt.length, opt.filter(s => !s.staffMemberId).length))
       return
     }
     // Live: wipe this week's draft shifts, then bulk-create the optimal set.
@@ -558,10 +563,7 @@ export default function SchedulePage() {
       ))
       const saved = results.map(r => shiftFromApi(r.shift))
       setShifts(saved)
-      const open = saved.filter(s => !s.staffMemberId).length
-      showToast(open > 0
-        ? `Filled ${saved.length - open} positions · ${open} still open`
-        : `All ${saved.length} positions filled`)
+      showToast(fillMsg(saved.length, saved.filter(s => !s.staffMemberId).length))
     } catch (e) {
       console.warn('generate persist failed:', e)
       const refresh = await api.scheduleShifts(merchantId, ws).catch(() => null)
@@ -624,7 +626,7 @@ export default function SchedulePage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="sched space-y-4">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -644,17 +646,17 @@ export default function SchedulePage() {
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={handleCopyPrevWeek}
                 aria-label="Copy shifts from previous week" title="Copy shifts from previous week"
-                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                className="flex items-center justify-center gap-1.5 pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <Copy size={15} /><span>Copy</span>
               </button>
               <button onClick={handleDownloadPdf}
                 aria-label="Download schedule as PDF" title="Download PDF"
-                className="flex items-center justify-center px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                className="flex items-center justify-center pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <FileDown size={15} />
               </button>
               <button onClick={() => setShowAddStaff(true)}
                 aria-label="Manage staff" title="Manage staff"
-                className="flex items-center justify-center px-3 py-2.5 rounded-xl border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                className="flex items-center justify-center pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <Users size={15} />
               </button>
             </div>
@@ -663,14 +665,14 @@ export default function SchedulePage() {
               <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
                 aria-label={isGenerating ? 'Filling positions' : 'Auto-fill positions from sales history'}
                 title={isGenerating ? 'Filling…' : 'Auto-fill positions'}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#1A8FD6]/20 hover:shadow-[#1A8FD6]/30 hover:brightness-110 active:scale-[0.98] disabled:opacity-40">
+                className="pill flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#1A8FD6]/25 hover:brightness-110 disabled:opacity-40">
                 <Sparkles size={15} className={isGenerating ? 'animate-spin' : ''} /><span>{isGenerating ? 'Filling…' : 'Auto-fill'}</span>
               </button>
               <button onClick={handlePublish}
                 disabled={realShifts.length === 0 || isPublished}
                 aria-label={isPublished ? 'Schedule published' : 'Publish schedule'}
                 title={isPublished ? 'Published' : 'Publish'}
-                className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[13px] font-semibold transition-all active:scale-[0.98] ${isPublished
+                className={`pill flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold transition-all ${isPublished
                   ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
                   : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-30'}`}>
                 <Send size={14} /><span>{isPublished ? 'Published' : 'Publish'}</span>
@@ -753,36 +755,6 @@ export default function SchedulePage() {
         </ScrollReveal>
       )}
 
-      {/* Role filter bar */}
-      <ScrollReveal variant="fadeUp" delay={0.04}>
-        <div
-          className="flex items-center gap-1.5 px-1 pr-6 overflow-x-auto pb-1"
-          style={{
-            maskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
-          }}
-        >
-          {FILTER_OPTIONS.map(opt => {
-            const isActive = roleFilter === opt.key
-            const color = 'color' in opt ? opt.color : undefined
-            return (
-              <button
-                key={opt.key}
-                onClick={() => setRoleFilter(opt.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-[#1A8FD6]/15 text-[#1A8FD6] border border-[#1A8FD6]/30'
-                    : 'text-[#A1A1A8]/60 border border-[#1F1F23] hover:text-[#A1A1A8] hover:bg-[#1F1F23]/50'
-                }`}
-              >
-                {color && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />}
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-      </ScrollReveal>
-
       {/* Friendly illustrated empty states */}
       {!isGenerating && staff.length === 0 && (
         <ScrollReveal variant="fadeUp" delay={0.045}>
@@ -793,7 +765,7 @@ export default function SchedulePage() {
               <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Add your team, then build the week in a few taps — or let AI fill it for you.</p>
             </div>
             <button onClick={() => setShowAddStaff(true)}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 active:scale-[0.98] transition-all">
+              className="pill flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 transition-all">
               <Plus size={15} /> Add your team
             </button>
           </div>
@@ -808,7 +780,7 @@ export default function SchedulePage() {
               <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Auto-fill every position from your sales history, then drag staff into any slot below.</p>
             </div>
             <button onClick={handleGenerate} disabled={isGenerating}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-[13px] font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-40">
+              className="pill flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 transition-all disabled:opacity-40">
               <Sparkles size={15} /> Auto-fill positions
             </button>
           </div>
@@ -826,24 +798,10 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {/* Desktop grid */}
+      {/* Positions board — day-first, drag from the staff pool or tap a slot.
+          Now the primary view on every width (the staff-row grid is retired). */}
       {!isGenerating && (
-        <ScrollReveal variant="fadeUp" delay={0.05}>
-          <div className="hidden lg:block overflow-x-auto">
-            <WeeklyCalendarGrid
-              shifts={shifts} staff={staff} peakHours={peakHours}
-              holidays={holidays} onShiftClick={handleShiftClick}
-              onSlotClick={handleSlotClick} onShiftMove={handleShiftMove}
-              weekStartDate={weekStartDate} businessType={businessType}
-              roleFilter={roleFilter}
-            />
-          </div>
-        </ScrollReveal>
-      )}
-
-      {/* Mobile positions board — drag from the staff pool, or tap a slot */}
-      {!isGenerating && (
-        <div className="lg:hidden">
+        <div className="lg:max-w-3xl">
           <PositionsBoard
             shifts={shifts} staff={staff} businessType={businessType}
             peaks={peakHours} weekStartDate={weekStartDate}

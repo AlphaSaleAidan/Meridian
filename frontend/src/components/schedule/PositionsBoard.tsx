@@ -223,7 +223,7 @@ export default function PositionsBoard({
                 isSel ? 'bg-gradient-to-b from-[#17C5B0]/20 to-[#1A8FD6]/10 border border-[#17C5B0]/40' : 'border border-[#1F1F23] hover:bg-[#1F1F23]'
               }`}>
               <span className={`text-[10px] font-bold uppercase tracking-wide ${isSel ? 'text-[#17C5B0]' : 'text-[#A1A1A8]/55'}`}>{name}</span>
-              <span className={`text-[15px] font-bold leading-none ${isSel ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]/40'}`}>{d.getDate()}</span>
+              <span className={`display text-[17px] font-bold leading-none ${isSel ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]/40'}`}>{d.getDate()}</span>
             </button>
           )
         })}
@@ -231,7 +231,7 @@ export default function PositionsBoard({
 
       {/* Fill summary */}
       <div className="flex items-center justify-between mt-3 mb-2 px-1">
-        <span className="text-[13px] font-bold text-[#F5F5F7]">Positions</span>
+        <span className="display text-[16px] font-bold text-[#F5F5F7]">Positions</span>
         {needed > 0 ? (
           <span className="flex items-center gap-1 text-[11px] font-semibold text-[#D4A843] bg-[#D4A843]/10 px-2 py-0.5 rounded-full">
             <AlertTriangle size={11} />{needed} to fill
@@ -249,7 +249,7 @@ export default function PositionsBoard({
           <div key={g.def.key}>
             <div className="flex items-center gap-2 mb-1.5">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: getRoleColor(g.def.role) }} />
-              <span className="text-[12px] font-bold text-[#F5F5F7]">{g.def.label}</span>
+              <span className="display text-[13px] font-bold text-[#F5F5F7]">{g.def.label}</span>
               <span className="text-[11px] text-[#A1A1A8]/45">{fmtTime(g.def.start)}–{fmtTime(g.def.end)}</span>
               <span className="text-[11px] text-[#A1A1A8]/40 ml-auto">{g.rows.filter(r => r.shift?.staffMemberId).length}/{g.rows.length}</span>
             </div>
