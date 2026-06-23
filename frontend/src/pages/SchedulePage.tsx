@@ -18,7 +18,7 @@ import PositionsBoard, { type AssignTarget } from '@/components/schedule/Positio
 import { positionsForType, buildPositionSchedule, dayDemand } from '@/components/schedule/schedule-positions'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
-import { ROLE_GROUPS, getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
+import { getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
 import {
   isUuid, shiftFromApi, shiftToApiCreate, shiftToApiUpdate,
@@ -43,107 +43,6 @@ function indexOfTodayInWeek(weekStart: Date): number {
   return 0
 }
 
-const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-
-function buildOptimalSchedule(
-  staff: ScheduleStaffMember[],
-  peaks: { day: number; hour: number; intensity: number }[],
-  weekStart: Date,
-): ScheduleShift[] {
-  const maxI = Math.max(...peaks.map(p => p.intensity), 1)
-  const demand = new Map<string, number>()
-  for (const c of peaks) {
-    const r = c.intensity / maxI
-    const need = r > 0.75 ? 3 : r > 0.5 ? 2 : r > 0.25 ? 1 : 0
-    if (need > 0) demand.set(`${c.day}-${c.hour}`, need)
-  }
-  // Track minutes already assigned per staff member during this generation.
-  const minutesAssigned = new Map<string, number>()
-  staff.forEach(s => minutesAssigned.set(s.id, 0))
-  const asgn = new Map<string, Map<number, Set<number>>>()
-  staff.forEach(s => asgn.set(s.id, new Map()))
-  const slots = [...demand.entries()]
-    .map(([k, need]) => {
-      const [d, h] = k.split('-').map(Number)
-      return { day: d, hour: h, need, intensity: peaks.find(p => p.day === d && p.hour === h)?.intensity ?? 0 }
-    })
-    .sort((a, b) => b.intensity - a.intensity)
-  const OVERTIME_THRESHOLD_MIN = 40 * 60
-  for (const slot of slots) {
-    // Sort candidates by (least-loaded first, then cheapest). This
-    // distributes hours evenly AND prefers cheaper labor for equivalent staff.
-    const candidates = [...staff].sort((a, b) => {
-      const ma = minutesAssigned.get(a.id) ?? 0
-      const mb = minutesAssigned.get(b.id) ?? 0
-      if (ma !== mb) return ma - mb
-      return a.hourlyRate - b.hourlyRate
-    })
-    let filled = 0
-    for (const m of candidates) {
-      if (filled >= slot.need) break
-      const av = m.availability[DAY_KEYS[slot.day]]
-      if (!av?.available || slot.hour < parseInt(av.start) || slot.hour >= parseInt(av.end)) continue
-      const dm = asgn.get(m.id)!
-      // Skip if already assigned this exact hour on this day.
-      if (dm.get(slot.day)?.has(slot.hour)) continue
-      // Overtime guard: skip if adding this hour would push past 40h/week,
-      // UNLESS no cheaper candidate is available later in this loop.
-      const currentMins = minutesAssigned.get(m.id) ?? 0
-      if (currentMins + 60 > OVERTIME_THRESHOLD_MIN) {
-        const cheaperAvailable = candidates.some(other => {
-          if (other.id === m.id) return false
-          if (other.hourlyRate >= m.hourlyRate) return false
-          const otherMins = minutesAssigned.get(other.id) ?? 0
-          if (otherMins + 60 > OVERTIME_THRESHOLD_MIN) return false
-          const oav = other.availability[DAY_KEYS[slot.day]]
-          if (!oav?.available || slot.hour < parseInt(oav.start) || slot.hour >= parseInt(oav.end)) return false
-          const odm = asgn.get(other.id)!
-          if (odm.get(slot.day)?.has(slot.hour)) return false
-          return true
-        })
-        if (cheaperAvailable) continue
-      }
-      if (!dm.has(slot.day)) dm.set(slot.day, new Set())
-      dm.get(slot.day)!.add(slot.hour)
-      minutesAssigned.set(m.id, currentMins + 60)
-      filled++
-    }
-  }
-  const shifts: ScheduleShift[] = []
-  let sid = 1
-  for (const [staffId, dayMap] of asgn) {
-    const member = staff.find(s => s.id === staffId)
-    if (!member) continue
-    for (const [day, hrs] of dayMap) {
-      if (hrs.size === 0) continue
-      const sorted = [...hrs].sort((a, b) => a - b)
-      const groups: number[][] = []
-      let g = [sorted[0]]
-      for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i] === g[g.length - 1] + 1) g.push(sorted[i])
-        else { groups.push(g); g = [sorted[i]] }
-      }
-      groups.push(g)
-      for (const grp of groups) {
-        const sH = grp[0], eH = grp[grp.length - 1] + 1
-        shifts.push({
-          id: `shift-opt-${sid++}`, staffMemberId: staffId, dayOfWeek: day,
-          shiftDate: formatDateISO(addDays(weekStart, day)),
-          startTime: `${pad2(sH)}:00`, endTime: `${pad2(eH)}:00`,
-          role: member.role, breakMinutes: eH - sH > 5 ? 30 : 0,
-          notes: '', status: 'draft', isRecommended: false,
-        })
-      }
-    }
-  }
-  return shifts
-}
-
-/** Role filter pills for 7shifts-style filtering */
-const FILTER_OPTIONS = [
-  { key: 'all', label: 'All Roles' },
-  ...ROLE_GROUPS.map(g => ({ key: g.key, label: g.label, color: g.color })),
-]
 
 export default function SchedulePage() {
   const isDemo = useIsDemo()
@@ -163,7 +62,6 @@ export default function SchedulePage() {
   const [isPublished, setIsPublished] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [roleFilter, setRoleFilter] = useState('all')
   // Only seed synthetic staff/shifts on explicit demo routes (/demo, /canada/demo).
   // The real Canada merchant portal (/canada/merchant) must start empty and pull
   // live data — never the old generated fake schedule.
@@ -385,33 +283,6 @@ export default function SchedulePage() {
     }
   }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
 
-  const handleSlotClick = useCallback(async (day: number, hour: number) => {
-    const d = addDays(weekStartDate, day)
-    const tempId = `shift-new-${Date.now()}`
-    const ns: ScheduleShift = {
-      id: tempId, staffMemberId: null, dayOfWeek: day,
-      shiftDate: formatDateISO(d), startTime: `${pad2(hour)}:00`,
-      endTime: `${pad2(Math.min(hour + 4, 23))}:00`, role: 'any',
-      breakMinutes: 0, notes: '', status: 'draft', isRecommended: false,
-    }
-    setShifts(prev => [...prev, ns]); setSelectedShift(ns)
-    if (!liveMode) return
-    try {
-      const portal = portalContext as 'us' | 'ca'
-      const res = await api.scheduleCreateShift(
-        shiftToApiCreate(ns, merchantId, portal, formatDateISO(weekStartDate)),
-      )
-      const saved = shiftFromApi(res.shift)
-      setShifts(prev => prev.map(s => (s.id === tempId ? saved : s)))
-      setSelectedShift(prev => (prev?.id === tempId ? saved : prev))
-    } catch (e) {
-      console.warn('createShift failed:', e)
-      setShifts(prev => prev.filter(s => s.id !== tempId))
-      setSelectedShift(prev => (prev?.id === tempId ? null : prev))
-      showToast('Could not create shift')
-    }
-  }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
-
   // Assign a staff member to a position slot. The slot is either an existing
   // shift (just set its staffMemberId) or a brand-new required position (create
   // the shift, already assigned). Passing staffId=null unassigns/empties it.
@@ -498,34 +369,6 @@ export default function SchedulePage() {
     setShifts(prev => prev.map(s => (s.id === original.id ? first : s)).concat(second))
     showToast('Shift split into two parts')
   }, [showToast])
-
-  const handleShiftMove = useCallback(async (shiftId: string, newDay: number, newStartHour: number) => {
-    const prevShifts = shifts
-    let moved: ScheduleShift | null = null
-    setShifts(prev => prev.map(s => {
-      if (s.id !== shiftId) return s
-      const dur = parseInt(s.endTime) - parseInt(s.startTime)
-      const eH = Math.min(newStartHour + dur, 23)
-      const next = { ...s, dayOfWeek: newDay, shiftDate: formatDateISO(addDays(weekStartDate, newDay)),
-        startTime: `${pad2(newStartHour)}:00`, endTime: `${pad2(eH)}:00` }
-      moved = next
-      return next
-    }))
-    if (!liveMode || !isUuid(shiftId) || !moved) return
-    try {
-      // dayOfWeek + shiftDate aren't in our PUT schema; emulate via delete+create.
-      const portal = portalContext as 'us' | 'ca'
-      const created = await api.scheduleCreateShift(
-        shiftToApiCreate(moved, merchantId, portal, formatDateISO(weekStartDate)),
-      )
-      await api.scheduleDeleteShift(shiftId).catch(() => {})
-      setShifts(prev => prev.map(s => (s.id === shiftId ? shiftFromApi(created.shift) : s)))
-    } catch (e) {
-      console.warn('moveShift failed:', e)
-      setShifts(prevShifts)
-      showToast('Could not move shift')
-    }
-  }, [liveMode, merchantId, portalContext, weekStartDate, shifts, showToast])
 
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true)
