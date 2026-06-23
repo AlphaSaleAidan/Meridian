@@ -11,12 +11,14 @@ import ScrollReveal from '@/components/ScrollReveal'
 import AnalyzingDataState from '@/components/AnalyzingDataState'
 import { useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
-import WeeklyCalendarGrid from '@/components/schedule/WeeklyCalendarGrid'
+import '@/components/schedule/schedule-theme.css'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
-import MobileDayView from '@/components/schedule/MobileDayView'
+import PositionsBoard, { type AssignTarget } from '@/components/schedule/PositionsBoard'
+import { positionsForType, buildPositionSchedule, dayDemand } from '@/components/schedule/schedule-positions'
+import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
-import { ROLE_GROUPS, getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
+import { getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
 import {
   isUuid, shiftFromApi, shiftToApiCreate, shiftToApiUpdate,
@@ -34,108 +36,13 @@ function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDat
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
 function formatDateISO(d: Date) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
 function timeToMinutes(t: string) { const [h, m] = t.split(':').map(Number); return h * 60 + (m || 0) }
-
-const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-
-function buildOptimalSchedule(
-  staff: ScheduleStaffMember[],
-  peaks: { day: number; hour: number; intensity: number }[],
-  weekStart: Date,
-): ScheduleShift[] {
-  const maxI = Math.max(...peaks.map(p => p.intensity), 1)
-  const demand = new Map<string, number>()
-  for (const c of peaks) {
-    const r = c.intensity / maxI
-    const need = r > 0.75 ? 3 : r > 0.5 ? 2 : r > 0.25 ? 1 : 0
-    if (need > 0) demand.set(`${c.day}-${c.hour}`, need)
-  }
-  // Track minutes already assigned per staff member during this generation.
-  const minutesAssigned = new Map<string, number>()
-  staff.forEach(s => minutesAssigned.set(s.id, 0))
-  const asgn = new Map<string, Map<number, Set<number>>>()
-  staff.forEach(s => asgn.set(s.id, new Map()))
-  const slots = [...demand.entries()]
-    .map(([k, need]) => {
-      const [d, h] = k.split('-').map(Number)
-      return { day: d, hour: h, need, intensity: peaks.find(p => p.day === d && p.hour === h)?.intensity ?? 0 }
-    })
-    .sort((a, b) => b.intensity - a.intensity)
-  const OVERTIME_THRESHOLD_MIN = 40 * 60
-  for (const slot of slots) {
-    // Sort candidates by (least-loaded first, then cheapest). This
-    // distributes hours evenly AND prefers cheaper labor for equivalent staff.
-    const candidates = [...staff].sort((a, b) => {
-      const ma = minutesAssigned.get(a.id) ?? 0
-      const mb = minutesAssigned.get(b.id) ?? 0
-      if (ma !== mb) return ma - mb
-      return a.hourlyRate - b.hourlyRate
-    })
-    let filled = 0
-    for (const m of candidates) {
-      if (filled >= slot.need) break
-      const av = m.availability[DAY_KEYS[slot.day]]
-      if (!av?.available || slot.hour < parseInt(av.start) || slot.hour >= parseInt(av.end)) continue
-      const dm = asgn.get(m.id)!
-      // Skip if already assigned this exact hour on this day.
-      if (dm.get(slot.day)?.has(slot.hour)) continue
-      // Overtime guard: skip if adding this hour would push past 40h/week,
-      // UNLESS no cheaper candidate is available later in this loop.
-      const currentMins = minutesAssigned.get(m.id) ?? 0
-      if (currentMins + 60 > OVERTIME_THRESHOLD_MIN) {
-        const cheaperAvailable = candidates.some(other => {
-          if (other.id === m.id) return false
-          if (other.hourlyRate >= m.hourlyRate) return false
-          const otherMins = minutesAssigned.get(other.id) ?? 0
-          if (otherMins + 60 > OVERTIME_THRESHOLD_MIN) return false
-          const oav = other.availability[DAY_KEYS[slot.day]]
-          if (!oav?.available || slot.hour < parseInt(oav.start) || slot.hour >= parseInt(oav.end)) return false
-          const odm = asgn.get(other.id)!
-          if (odm.get(slot.day)?.has(slot.hour)) return false
-          return true
-        })
-        if (cheaperAvailable) continue
-      }
-      if (!dm.has(slot.day)) dm.set(slot.day, new Set())
-      dm.get(slot.day)!.add(slot.hour)
-      minutesAssigned.set(m.id, currentMins + 60)
-      filled++
-    }
-  }
-  const shifts: ScheduleShift[] = []
-  let sid = 1
-  for (const [staffId, dayMap] of asgn) {
-    const member = staff.find(s => s.id === staffId)
-    if (!member) continue
-    for (const [day, hrs] of dayMap) {
-      if (hrs.size === 0) continue
-      const sorted = [...hrs].sort((a, b) => a - b)
-      const groups: number[][] = []
-      let g = [sorted[0]]
-      for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i] === g[g.length - 1] + 1) g.push(sorted[i])
-        else { groups.push(g); g = [sorted[i]] }
-      }
-      groups.push(g)
-      for (const grp of groups) {
-        const sH = grp[0], eH = grp[grp.length - 1] + 1
-        shifts.push({
-          id: `shift-opt-${sid++}`, staffMemberId: staffId, dayOfWeek: day,
-          shiftDate: formatDateISO(addDays(weekStart, day)),
-          startTime: `${pad2(sH)}:00`, endTime: `${pad2(eH)}:00`,
-          role: member.role, breakMinutes: eH - sH > 5 ? 30 : 0,
-          notes: '', status: 'draft', isRecommended: false,
-        })
-      }
-    }
-  }
-  return shifts
+/** Index (0=Mon..6=Sun) of today within the displayed week, or 0 if not in it. */
+function indexOfTodayInWeek(weekStart: Date): number {
+  const todayStr = formatDateISO(new Date())
+  for (let i = 0; i < 7; i++) if (formatDateISO(addDays(weekStart, i)) === todayStr) return i
+  return 0
 }
 
-/** Role filter pills for 7shifts-style filtering */
-const FILTER_OPTIONS = [
-  { key: 'all', label: 'All Roles' },
-  ...ROLE_GROUPS.map(g => ({ key: g.key, label: g.label, color: g.color })),
-]
 
 export default function SchedulePage() {
   const isDemo = useIsDemo()
@@ -148,12 +55,13 @@ export default function SchedulePage() {
   const portalContext = isCanadaPath() ? 'ca' : 'us'
   const country = portalContext === 'ca' ? 'CA' : 'US'
   const [weekStartDate, setWeekStartDate] = useState(() => getMonday(new Date()))
+  // Mobile day selection is lifted here so the coverage strip and day view stay in sync.
+  const [mobileDay, setMobileDay] = useState(() => indexOfTodayInWeek(getMonday(new Date())))
   const [showAddStaff, setShowAddStaff] = useState(false)
   const [selectedShift, setSelectedShift] = useState<ScheduleShift | null>(null)
   const [isPublished, setIsPublished] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [roleFilter, setRoleFilter] = useState('all')
   // Only seed synthetic staff/shifts on explicit demo routes (/demo, /canada/demo).
   // The real Canada merchant portal (/canada/merchant) must start empty and pull
   // live data — never the old generated fake schedule.
@@ -222,6 +130,9 @@ export default function SchedulePage() {
   const holidays = useMemo(
     () => getHolidaysForWeek(weekStartDate, country as 'US' | 'CA'),
     [weekStartDate, country])
+
+  // When the week changes, jump the mobile day view to today (or Monday).
+  useEffect(() => { setMobileDay(indexOfTodayInWeek(weekStartDate)) }, [weekStartDate])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg); setTimeout(() => setToast(null), 4000)
@@ -372,32 +283,50 @@ export default function SchedulePage() {
     }
   }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
 
-  const handleSlotClick = useCallback(async (day: number, hour: number) => {
-    const d = addDays(weekStartDate, day)
-    const tempId = `shift-new-${Date.now()}`
-    const ns: ScheduleShift = {
-      id: tempId, staffMemberId: null, dayOfWeek: day,
-      shiftDate: formatDateISO(d), startTime: `${pad2(hour)}:00`,
-      endTime: `${pad2(Math.min(hour + 4, 23))}:00`, role: 'any',
-      breakMinutes: 0, notes: '', status: 'draft', isRecommended: false,
+  // Assign a staff member to a position slot. The slot is either an existing
+  // shift (just set its staffMemberId) or a brand-new required position (create
+  // the shift, already assigned). Passing staffId=null unassigns/empties it.
+  const handleAssign = useCallback(async (target: AssignTarget, staffId: string | null) => {
+    const ws = formatDateISO(weekStartDate)
+    const portal = portalContext as 'us' | 'ca'
+
+    if (target.kind === 'shift') {
+      const existing = shifts.find(s => s.id === target.shiftId)
+      if (!existing) return
+      const updated = { ...existing, staffMemberId: staffId }
+      setShifts(prev => prev.map(s => (s.id === existing.id ? updated : s)))
+      setIsPublished(false)
+      if (!liveMode || !isUuid(existing.id)) return
+      try { await api.scheduleUpdateShift(existing.id, shiftToApiUpdate(updated)) }
+      catch (e) {
+        console.warn('assign failed:', e)
+        setShifts(prev => prev.map(s => (s.id === existing.id ? existing : s)))
+        showToast('Could not save assignment')
+      }
+      return
     }
-    setShifts(prev => [...prev, ns]); setSelectedShift(ns)
+
+    // new position slot → create an assigned shift
+    const tempId = `shift-pos-${Date.now()}`
+    const ns: ScheduleShift = {
+      id: tempId, staffMemberId: staffId, dayOfWeek: target.dayOfWeek,
+      shiftDate: formatDateISO(addDays(weekStartDate, target.dayOfWeek)),
+      startTime: target.start, endTime: target.end, role: target.role,
+      breakMinutes: target.breakMinutes, notes: '', status: 'draft', isRecommended: false,
+    }
+    setShifts(prev => [...prev, ns])
+    setIsPublished(false)
     if (!liveMode) return
     try {
-      const portal = portalContext as 'us' | 'ca'
-      const res = await api.scheduleCreateShift(
-        shiftToApiCreate(ns, merchantId, portal, formatDateISO(weekStartDate)),
-      )
+      const res = await api.scheduleCreateShift(shiftToApiCreate(ns, merchantId, portal, ws))
       const saved = shiftFromApi(res.shift)
       setShifts(prev => prev.map(s => (s.id === tempId ? saved : s)))
-      setSelectedShift(prev => (prev?.id === tempId ? saved : prev))
     } catch (e) {
-      console.warn('createShift failed:', e)
+      console.warn('create position shift failed:', e)
       setShifts(prev => prev.filter(s => s.id !== tempId))
-      setSelectedShift(prev => (prev?.id === tempId ? null : prev))
-      showToast('Could not create shift')
+      showToast('Could not assign to position')
     }
-  }, [liveMode, merchantId, portalContext, weekStartDate, showToast])
+  }, [liveMode, merchantId, portalContext, weekStartDate, shifts, showToast])
 
   const handleShiftSave = useCallback(async (u: ScheduleShift) => {
     const prevShift = shifts.find(s => s.id === u.id)
@@ -441,43 +370,25 @@ export default function SchedulePage() {
     showToast('Shift split into two parts')
   }, [showToast])
 
-  const handleShiftMove = useCallback(async (shiftId: string, newDay: number, newStartHour: number) => {
-    const prevShifts = shifts
-    let moved: ScheduleShift | null = null
-    setShifts(prev => prev.map(s => {
-      if (s.id !== shiftId) return s
-      const dur = parseInt(s.endTime) - parseInt(s.startTime)
-      const eH = Math.min(newStartHour + dur, 23)
-      const next = { ...s, dayOfWeek: newDay, shiftDate: formatDateISO(addDays(weekStartDate, newDay)),
-        startTime: `${pad2(newStartHour)}:00`, endTime: `${pad2(eH)}:00` }
-      moved = next
-      return next
-    }))
-    if (!liveMode || !isUuid(shiftId) || !moved) return
-    try {
-      // dayOfWeek + shiftDate aren't in our PUT schema; emulate via delete+create.
-      const portal = portalContext as 'us' | 'ca'
-      const created = await api.scheduleCreateShift(
-        shiftToApiCreate(moved, merchantId, portal, formatDateISO(weekStartDate)),
-      )
-      await api.scheduleDeleteShift(shiftId).catch(() => {})
-      setShifts(prev => prev.map(s => (s.id === shiftId ? shiftFromApi(created.shift) : s)))
-    } catch (e) {
-      console.warn('moveShift failed:', e)
-      setShifts(prevShifts)
-      showToast('Could not move shift')
-    }
-  }, [liveMode, merchantId, portalContext, weekStartDate, shifts, showToast])
-
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true)
-    const opt = buildOptimalSchedule(staff, peakHours, weekStartDate)
+    // Position-based optimizer: fill every required position, scaled by sales
+    // history (peak-hour intensity), busiest days first.
+    const defs = positionsForType(businessType)
+    const opt = buildPositionSchedule(staff, defs, peakHours, weekStartDate)
+    // Name the busiest day the optimizer prioritized (revenue-driven), so the
+    // toast reads like the agent explaining itself. ponytail: derived, no extra state.
+    const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    const busiest = DAY_FULL[[0, 1, 2, 3, 4, 5, 6].sort((a, b) => dayDemand(b, peakHours) - dayDemand(a, peakHours))[0]]
+    const fillMsg = (total: number, open: number) =>
+      open > 0
+        ? `Built around your busiest day (${busiest}) — ${total - open} positions filled, ${open} still open`
+        : `Built around your busiest day (${busiest}) — all ${total} positions filled`
     if (!liveMode) {
       // Demo: cosmetic delay + local set.
       await new Promise(r => setTimeout(r, 1200))
       setShifts(opt); setIsPublished(false); setIsGenerating(false)
-      const used = new Set(opt.map(s => s.staffMemberId).filter(Boolean)).size
-      showToast(`Schedule generated — ${opt.length} shifts across ${used} staff`)
+      showToast(fillMsg(opt.length, opt.filter(s => !s.staffMemberId).length))
       return
     }
     // Live: wipe this week's draft shifts, then bulk-create the optimal set.
@@ -494,8 +405,7 @@ export default function SchedulePage() {
       ))
       const saved = results.map(r => shiftFromApi(r.shift))
       setShifts(saved)
-      const used = new Set(saved.map(s => s.staffMemberId).filter(Boolean)).size
-      showToast(`Schedule generated — ${saved.length} shifts across ${used} staff`)
+      showToast(fillMsg(saved.length, saved.filter(s => !s.staffMemberId).length))
     } catch (e) {
       console.warn('generate persist failed:', e)
       const refresh = await api.scheduleShifts(merchantId, ws).catch(() => null)
@@ -504,7 +414,7 @@ export default function SchedulePage() {
     } finally {
       setIsGenerating(false)
     }
-  }, [liveMode, merchantId, portalContext, staff, peakHours, weekStartDate, shifts, showToast])
+  }, [liveMode, merchantId, portalContext, staff, peakHours, weekStartDate, shifts, businessType, showToast])
 
   const handlePublish = useCallback(async () => {
     setIsPublished(true)
@@ -558,7 +468,7 @@ export default function SchedulePage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="sched space-y-4">
       {/* Header */}
       <ScrollReveal variant="fadeUp">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -571,41 +481,45 @@ export default function SchedulePage() {
               <p className="text-[12px] text-[#A1A1A8] mt-0.5">AI-powered staff scheduling</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowAddStaff(true)}
-              aria-label="Add staff member"
-              title="Add staff"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
-              <Plus size={13} /><span className="hidden sm:inline">Staff</span>
-            </button>
-            <button onClick={handleCopyPrevWeek}
-              aria-label="Copy shifts from previous week"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors"
-              title="Copy shifts from previous week">
-              <Copy size={13} /><span className="hidden sm:inline">Copy Week</span>
-            </button>
-            <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
-              aria-label={isGenerating ? 'Generating schedule' : 'Generate schedule'}
-              title={isGenerating ? 'Generating...' : 'Generate'}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#17C5B0]/20 hover:shadow-[#17C5B0]/30 hover:brightness-110 disabled:opacity-40">
-              <Sparkles size={14} className={isGenerating ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">{isGenerating ? 'Generating...' : 'Generate'}</span>
-            </button>
-            <button onClick={handlePublish}
-              disabled={realShifts.length === 0 || isPublished}
-              aria-label={isPublished ? 'Schedule published' : 'Publish schedule'}
-              title={isPublished ? 'Published' : 'Publish'}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${isPublished
-                ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
-                : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-30'}`}>
-              <Send size={13} /><span className="hidden sm:inline">{isPublished ? 'Published' : 'Publish'}</span>
-            </button>
-            <button onClick={handleDownloadPdf}
-              aria-label="Download schedule as PDF"
-              title="Download PDF"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#1F1F23] text-xs text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
-              <FileDown size={13} />
-            </button>
+          {/* Actions — primary row (Auto-fill/Publish) above a de-emphasized
+              secondary row (Copy/PDF/Staff). On desktop they collapse to one row. */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+            {/* Secondary actions — Staff is intentionally low-key (icon only) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={handleCopyPrevWeek}
+                aria-label="Copy shifts from previous week" title="Copy shifts from previous week"
+                className="flex items-center justify-center gap-1.5 pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <Copy size={15} /><span>Copy</span>
+              </button>
+              <button onClick={handleDownloadPdf}
+                aria-label="Download schedule as PDF" title="Download PDF"
+                className="flex items-center justify-center pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <FileDown size={15} />
+              </button>
+              <button onClick={() => setShowAddStaff(true)}
+                aria-label="Manage staff" title="Manage staff"
+                className="flex items-center justify-center pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <Users size={15} />
+              </button>
+            </div>
+            {/* Primary actions */}
+            <div className="flex items-center gap-2">
+              <button onClick={handleGenerate} disabled={isGenerating || staff.length === 0}
+                aria-label={isGenerating ? 'Filling positions' : 'Auto-fill positions from sales history'}
+                title={isGenerating ? 'Filling…' : 'Auto-fill positions'}
+                className="pill flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold transition-all bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] text-white shadow-lg shadow-[#1A8FD6]/25 hover:brightness-110 disabled:opacity-40">
+                <Sparkles size={15} className={isGenerating ? 'animate-spin' : ''} /><span>{isGenerating ? 'Filling…' : 'Auto-fill'}</span>
+              </button>
+              <button onClick={handlePublish}
+                disabled={realShifts.length === 0 || isPublished}
+                aria-label={isPublished ? 'Schedule published' : 'Publish schedule'}
+                title={isPublished ? 'Published' : 'Publish'}
+                className={`pill flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold transition-all ${isPublished
+                  ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
+                  : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-30'}`}>
+                <Send size={14} /><span>{isPublished ? 'Published' : 'Publish'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </ScrollReveal>
@@ -620,97 +534,83 @@ export default function SchedulePage() {
 
       {/* Week nav + stats bar */}
       <ScrollReveal variant="fadeUp" delay={0.03}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-1">
-          <div className="flex items-center gap-2">
-            <button onClick={handlePrevWeek}
-              className="p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] transition-colors">
-              <ChevronLeft size={16} />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-1">
+          {/* Week nav — full-width pill on mobile, easy chevron targets */}
+          <div className="flex items-center justify-between sm:justify-start gap-1 sm:gap-2 rounded-xl border border-[#1F1F23] sm:border-0 px-1 py-1 sm:p-0">
+            <button onClick={handlePrevWeek} aria-label="Previous week"
+              className="p-2.5 sm:p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] active:scale-95 transition-all">
+              <ChevronLeft size={18} />
             </button>
-            <span className="text-sm font-semibold text-[#F5F5F7] min-w-[200px] text-center">
+            <span className="text-[14px] font-semibold text-[#F5F5F7] min-w-[180px] sm:min-w-[200px] text-center">
               {weekLabel}
             </span>
-            <button onClick={handleNextWeek}
-              className="p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] transition-colors">
-              <ChevronRight size={16} />
+            <button onClick={handleNextWeek} aria-label="Next week"
+              className="p-2.5 sm:p-1.5 rounded-lg hover:bg-[#1F1F23] text-[#A1A1A8] active:scale-95 transition-all">
+              <ChevronRight size={18} />
             </button>
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <Users size={13} className="text-[#A1A1A8]/50" />
-              <span className="text-[12px] font-mono text-[#A1A1A8]">{staffScheduled}/{staff.length} staff</span>
+          {/* Stats — friendly labeled pills, horizontally scrollable on narrow screens */}
+          <div className="flex items-center gap-2 overflow-x-auto sm:overflow-visible pb-0.5 sm:pb-0">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#111113] border border-[#1F1F23] shrink-0">
+              <Users size={14} className="text-[#A1A1A8]/60" />
+              <span className="text-[13px] font-semibold text-[#F5F5F7] tabular-nums">{staffScheduled}/{staff.length}</span>
+              <span className="text-[11px] text-[#A1A1A8]/50">staff</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Clock size={13} className="text-[#A1A1A8]/50" />
-              <span className="text-[12px] font-mono text-[#A1A1A8]">{totalHours}h</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#111113] border border-[#1F1F23] shrink-0">
+              <Clock size={14} className="text-[#A1A1A8]/60" />
+              <span className="text-[13px] font-semibold text-[#F5F5F7] tabular-nums">{totalHours}h</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <DollarSign size={13} className="text-[#A1A1A8]/50" />
-              <span className="text-[12px] font-mono text-[#A1A1A8]">{totalLaborCents > 0 ? formatCents(totalLaborCents) : '--'}</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#111113] border border-[#1F1F23] shrink-0">
+              <DollarSign size={14} className="text-[#A1A1A8]/60" />
+              <span className="text-[13px] font-semibold text-[#F5F5F7] tabular-nums">{totalLaborCents > 0 ? formatCents(totalLaborCents) : '--'}</span>
             </div>
             {laborPct !== null && totalLaborCents > 0 && (
               <div
-                className="flex items-center gap-1.5 px-2 py-0.5 rounded-full border"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border shrink-0"
                 style={{
                   borderColor: laborTone ? `${laborTone.fg}40` : '#1F1F23',
                   backgroundColor: laborTone ? `${laborTone.bg}15` : 'transparent',
                 }}
                 title={`Labor cost vs ${(effectiveRevenueCents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} projected weekly revenue. Floor ${laborTarget.floorPct}% • Target ${laborTarget.targetPct}% • Warn ${laborTarget.warningPct}%.`}
               >
-                <Percent size={11} style={{ color: laborTone?.fg }} />
-                <span className="text-[12px] font-mono font-semibold" style={{ color: laborTone?.fg }}>
+                <Percent size={12} style={{ color: laborTone?.fg }} />
+                <span className="text-[13px] font-semibold tabular-nums" style={{ color: laborTone?.fg }}>
                   {laborPct.toFixed(1)}%
                 </span>
+                <span className="text-[11px] hidden sm:inline" style={{ color: `${laborTone?.fg}99` }}>labor</span>
               </div>
             )}
           </div>
         </div>
       </ScrollReveal>
 
-      {/* Role filter bar */}
-      <ScrollReveal variant="fadeUp" delay={0.04}>
-        <div
-          className="flex items-center gap-1.5 px-1 pr-6 overflow-x-auto pb-1"
-          style={{
-            maskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
-            WebkitMaskImage: 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)',
-          }}
-        >
-          {FILTER_OPTIONS.map(opt => {
-            const isActive = roleFilter === opt.key
-            const color = 'color' in opt ? opt.color : undefined
-            return (
-              <button
-                key={opt.key}
-                onClick={() => setRoleFilter(opt.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${
-                  isActive
-                    ? 'bg-[#1A8FD6]/15 text-[#1A8FD6] border border-[#1A8FD6]/30'
-                    : 'text-[#A1A1A8]/60 border border-[#1F1F23] hover:text-[#A1A1A8] hover:bg-[#1F1F23]/50'
-                }`}
-              >
-                {color && <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />}
-                {opt.label}
-              </button>
-            )
-          })}
-        </div>
-      </ScrollReveal>
-
-      {/* Empty-state hint — empty calendar still renders below */}
+      {/* Friendly illustrated empty states */}
       {!isGenerating && staff.length === 0 && (
         <ScrollReveal variant="fadeUp" delay={0.045}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-lg bg-[#111113] border border-[#1F1F23]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center shrink-0">
-                <Users size={14} className="text-[#1A8FD6]" />
-              </div>
-              <p className="text-[12px] text-[#A1A1A8]">
-                Your calendar is empty. Add staff to start building this week&apos;s schedule.
-              </p>
+          <div className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]">
+            <img src="/schedule-illustration.png" alt="" className="w-28 h-28 object-contain drop-shadow-[0_8px_24px_rgba(23,197,176,0.25)]" />
+            <div>
+              <h3 className="text-base font-bold text-[#F5F5F7]">Let&apos;s set up your schedule</h3>
+              <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Add your team, then build the week in a few taps — or let AI fill it for you.</p>
             </div>
             <button onClick={() => setShowAddStaff(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors self-start sm:self-auto shrink-0">
-              <Plus size={13} /> Add Staff
+              className="pill flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 transition-all">
+              <Plus size={15} /> Add your team
+            </button>
+          </div>
+        </ScrollReveal>
+      )}
+      {!isGenerating && staff.length > 0 && realShifts.length === 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.045}>
+          <div className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]">
+            <img src="/schedule-illustration.png" alt="" className="w-28 h-28 object-contain drop-shadow-[0_8px_24px_rgba(23,197,176,0.25)]" />
+            <div>
+              <h3 className="text-base font-bold text-[#F5F5F7]">Your week is a blank canvas</h3>
+              <p className="text-[13px] text-[#A1A1A8]/70 mt-1 max-w-xs mx-auto">Auto-fill every position from your sales history, then drag staff into any slot below.</p>
+            </div>
+            <button onClick={handleGenerate} disabled={isGenerating}
+              className="pill flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 transition-all disabled:opacity-40">
+              <Sparkles size={15} /> Auto-fill positions
             </button>
           </div>
         </ScrollReveal>
@@ -727,28 +627,24 @@ export default function SchedulePage() {
         </div>
       )}
 
-      {/* Desktop grid */}
+      {/* Positions board — day-first, drag from the staff pool or tap a slot.
+          Now the primary view on every width (the staff-row grid is retired). */}
       {!isGenerating && (
-        <ScrollReveal variant="fadeUp" delay={0.05}>
-          <div className="hidden lg:block overflow-x-auto">
-            <WeeklyCalendarGrid
-              shifts={shifts} staff={staff} peakHours={peakHours}
-              holidays={holidays} onShiftClick={handleShiftClick}
-              onSlotClick={handleSlotClick} onShiftMove={handleShiftMove}
-              weekStartDate={weekStartDate} businessType={businessType}
-              roleFilter={roleFilter}
-            />
-          </div>
-        </ScrollReveal>
+        <div className="lg:max-w-3xl">
+          <PositionsBoard
+            shifts={shifts} staff={staff} businessType={businessType}
+            peaks={peakHours} weekStartDate={weekStartDate}
+            day={mobileDay} onDayChange={setMobileDay}
+            onAssign={handleAssign} onShiftClick={handleShiftClick}
+          />
+        </div>
       )}
 
-      {/* Mobile day view */}
-      {!isGenerating && (
-        <MobileDayView
-          shifts={shifts} staff={staff} holidays={holidays}
-          weekStartDate={weekStartDate}
-          onShiftClick={handleShiftClick} onSlotClick={handleSlotClick}
-        />
+      {/* Team this week — weekly hours + overtime watch */}
+      {!isGenerating && staff.length > 0 && (
+        <ScrollReveal variant="fadeUp" delay={0.055}>
+          <TeamHoursPanel staff={staff} shifts={shifts} />
+        </ScrollReveal>
       )}
 
       {/* AI Recommendations — surfaces uncovered peak windows */}

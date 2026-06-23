@@ -139,6 +139,41 @@ export const DEMO_WEEKLY_REVENUE_CENTS: Record<string, number> = {
   smoke_shop:  15_000_00,
 }
 
+/* ------------------------------------------------------------------ *
+ * "Right now" — who's on the clock and who's up next (mobile glance).
+ * ------------------------------------------------------------------ */
+
+export interface NowNext {
+  onNow: { shift: ScheduleShift; member: ScheduleStaffMember | null }[]
+  next: { shift: ScheduleShift; member: ScheduleStaffMember | null } | null
+}
+
+export function getNowNext(
+  shifts: ScheduleShift[],
+  staffMap: Map<string, ScheduleStaffMember>,
+  dayIndex: number,
+  nowMinutes: number,
+): NowNext {
+  const todays = shifts
+    .filter(s => s.dayOfWeek === dayIndex && !s.isRecommended)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime))
+  const onNow = todays
+    .filter(s => timeToMinutes(s.startTime) <= nowMinutes && timeToMinutes(s.endTime) > nowMinutes)
+    .map(s => ({ shift: s, member: s.staffMemberId ? staffMap.get(s.staffMemberId) ?? null : null }))
+  const upcoming = todays.find(s => timeToMinutes(s.startTime) > nowMinutes)
+  const next = upcoming
+    ? { shift: upcoming, member: upcoming.staffMemberId ? staffMap.get(upcoming.staffMemberId) ?? null : null }
+    : null
+  return { onNow, next }
+}
+
+/** Weekly overtime watch tone for a staff member's total hours. */
+export function overtimeTone(hours: number): { fg: string; label: 'over' | 'near' | 'ok' } | null {
+  if (hours >= 40) return { fg: '#E06B5E', label: 'over' }
+  if (hours >= 36) return { fg: '#D4A843', label: 'near' }
+  return null
+}
+
 /** Sum labor cost (cents) over real (non-recommended) shifts. */
 export function computeWeeklyLaborCents(
   shifts: ScheduleShift[],
