@@ -1,0 +1,41 @@
+# MediaMTX gateway for Meridian camera streaming (Phase 2).
+# MediaMTX is a PURE ROUTER (no GPU). One publish per camera is exposed on every
+# enabled protocol, so the SAME path serves: phones via WebRTC/WHEP + LL-HLS, and
+# the inference box via RTSP (the "frame fork" — no special tee needed).
+#
+# NOT started on the live box by this PR. Deploy is gated (see README.md).
+# Secrets come from the environment — never commit creds here.
+
+logLevel: info
+logDestinations: [stdout]
+
+# ---- Ingest (connector publishes outbound, behind NAT) ----
+rtsp: yes
+rtspAddress: :8554
+webrtc: yes
+webrtcAddress: :8889            # WHIP ingest + WHEP egress
+webrtcLocalUDPAddress: :8189
+# TURN/STUN for cellular viewers (coturn, rotating secret via env)
+webrtcICEServers2:
+  - url: turn:${MERIDIAN_TURN_HOST}:3478
+    username: ${MERIDIAN_TURN_USER}
+    password: ${MERIDIAN_TURN_PASS}
+
+# ---- Egress ----
+hls: yes
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsAlwaysRemux: no              # on-demand: only remux when a viewer is watching
+
+# ---- Auth: every publish/read is authorized by FastAPI (internal hook) ----
+authMethod: http
+authHTTPAddress: http://127.0.0.1:8000/gateway/auth
+authHTTPExclude: []            # authorize everything, no public paths
+
+# ---- Paths ----
+# Cameras publish to cam/<camera_id>. source: publisher = pushed in by the connector.
+# Pull analytics off the SUB-stream; the main stream is on-demand for live viewing.
+paths:
+  all_others:
+    source: publisher
+    # runOnDemand left unset: connector publishes continuously (sub-stream).
