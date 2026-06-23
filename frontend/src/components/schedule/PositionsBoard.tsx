@@ -20,16 +20,17 @@ function initials(name: string) {
   return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || '?'
 }
 
-/** Expected-traffic tier from sales-history demand (0..1). */
+/** Expected-traffic tier from sales-history demand (0..1).
+ *  Busy day = red (needs the most staff), easy day = green. */
 function trafficTier(demand: number): { color: string; label: string } {
-  if (demand > 0.6) return { color: '#17C5B0', label: 'High' }
+  if (demand > 0.6) return { color: '#E06B5E', label: 'Busy' }
   if (demand > 0.33) return { color: '#D4A843', label: 'Med' }
-  return { color: '#E06B5E', label: 'Low' }
+  return { color: '#17C5B0', label: 'Easy' }
 }
 const TRAFFIC_KEY = [
-  { color: '#17C5B0', label: 'High' },
+  { color: '#E06B5E', label: 'Busy' },
   { color: '#D4A843', label: 'Med' },
-  { color: '#E06B5E', label: 'Low' },
+  { color: '#17C5B0', label: 'Easy' },
 ]
 
 /** Where an assignment lands: an existing shift, or a brand-new position slot. */
