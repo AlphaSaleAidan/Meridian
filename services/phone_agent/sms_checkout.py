@@ -32,15 +32,22 @@ async def send_checkout_sms(
         logger.warning("No phone number for checkout SMS")
         return {"sent": False, "method": "none", "reason": "no_phone"}
 
-    message = _format_checkout_sms(order, payment_link, business_name)
+    return await send_sms(phone, _format_checkout_sms(order, payment_link, business_name))
 
+
+async def send_sms(to: str, body: str) -> dict:
+    """Generic SMS send (staff alerts, notifications) — same gateway selection
+    as the customer checkout SMS: Twilio → Supabase edge function → none.
+
+    Returns {"sent": bool, "method": "twilio"|"supabase"|"none", ...}.
+    """
+    if not to or not body:
+        return {"sent": False, "method": "none", "reason": "missing_to_or_body"}
     if TWILIO_SID and TWILIO_TOKEN and TWILIO_FROM:
-        return await _send_via_twilio(phone, message)
-
+        return await _send_via_twilio(to, body)
     if SUPABASE_URL and SUPABASE_KEY:
-        return await _send_via_supabase_function(phone, message)
-
-    logger.info("No SMS gateway configured — checkout SMS not sent to %s", phone)
+        return await _send_via_supabase_function(to, body)
+    logger.info("No SMS gateway configured — SMS not sent to %s", to)
     return {"sent": False, "method": "none", "reason": "no_gateway"}
 
 

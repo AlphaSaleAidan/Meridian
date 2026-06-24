@@ -177,4 +177,17 @@ async def _update_order_payment(
 
 
 async def _send_sms_notification(phone: str, message: str):
-    logger.info("SMS notification to %s (merchant staff alert)", phone)
+    """Text the merchant's staff line the order ticket. Best-effort: a send
+    failure must never break order routing (the order is already in the POS)."""
+    if not phone:
+        return
+    try:
+        from sms_checkout import send_sms
+
+        result = await send_sms(phone, message)
+        if result.get("sent"):
+            logger.info("Staff alert SMS sent to %s via %s", phone, result.get("method"))
+        else:
+            logger.info("Staff alert SMS not sent to %s: %s", phone, result.get("reason"))
+    except Exception as e:  # noqa: BLE001 — never break routing on an SMS error
+        logger.warning("Staff alert SMS failed for %s: %s", phone, e)
