@@ -59,8 +59,7 @@ def _coerce_price(raw) -> float | None:
     """Best-effort dollars-as-float; tolerate "$12.50", "12,50", "" -> None."""
     if raw is None:
         return None
-    if isinstance(raw, (int, float)):
-        return round(float(raw), 2) if raw >= 0 else None
+    # str() handles int/float too (no "$"/"," in their repr), so one path covers all.
     s = str(raw).strip().replace("$", "").replace(",", ".")
     if not s:
         return None

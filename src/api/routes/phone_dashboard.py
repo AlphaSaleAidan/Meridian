@@ -368,9 +368,12 @@ async def scan_menu_photo(
         limit=1,
     )
     existing = (config_rows[0].get("menu_items") if config_rows else None) or []
-    before = len(existing) if isinstance(existing, list) else 0
-    menu = scanned if replace else merge_menu_items(existing, scanned)
-    added = len(menu) - (0 if replace else before)
+    if replace:
+        menu, added = scanned, len(scanned)
+    else:
+        before = len(existing) if isinstance(existing, list) else 0
+        menu = merge_menu_items(existing, scanned)
+        added = len(menu) - before
 
     payload = {"menu_items": menu, "updated_at": datetime.now(timezone.utc).isoformat()}
     if config_rows:
