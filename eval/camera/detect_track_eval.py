@@ -27,11 +27,7 @@ import time
 from pathlib import Path
 
 # Apply the np.asfarray shim (for motmetrics) by importing the metrics module.
-from eval.camera.eval_metrics import (
-    average_precision,
-    detection_pr,
-    tracking_metrics,
-)
+from eval.camera.eval_metrics import detection_pr, tracking_metrics
 
 REPORTS_DIR = Path(__file__).resolve().parent / "reports"
 _IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp"}
@@ -149,10 +145,7 @@ def run(
         empty = {"ids": [], "boxes": [], "scores": []}
         gt_seq = [gt_by_frame.get(f, {"ids": [], "boxes": []}) for f in frames]
         hyp_seq = [hyp_by_frame.get(f, empty) for f in frames]
-        report["detection"] = {
-            **detection_pr(gt_seq, hyp_seq, iou_thresh),
-            "ap50": average_precision(gt_seq, hyp_seq, iou_thresh),
-        }
+        report["detection"] = detection_pr(gt_seq, hyp_seq, iou_thresh)
         report["tracking"] = tracking_metrics(gt_seq, hyp_seq, iou_thresh)
         report["mode"] = "accuracy"
     else:
@@ -183,7 +176,7 @@ def write_report(report: dict) -> tuple[Path, Path]:
         lines += [
             "",
             "## Detection (IoU 0.5)",
-            f"- Precision **{d['precision']}** · Recall **{d['recall']}** · F1 **{d['f1']}** · AP@0.5 **{d['ap50']}**",
+            f"- Precision **{d['precision']}** · Recall **{d['recall']}** · F1 **{d['f1']}**",
             f"- TP {d['tp']} · FP {d['fp']} · FN {d['fn']}",
             "",
             "## Tracking",

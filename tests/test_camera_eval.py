@@ -8,9 +8,7 @@ footage:
   2. A hand-built sequence with exactly 1 FP, 1 miss, 1 ID-switch over 4 gt
      objects → MOTA = 1 - 3/4 = 0.25, and each error count matches.
   3. detection_pr greedy matching gives the expected TP/FP/FN.
-  4. average_precision = 1.0 for perfect ranked detections; -1.0 when scores
-     are absent.
-  5. Consistency: our tracking_metrics MOTA on the py-motmetrics bundled
+  4. Consistency: our tracking_metrics MOTA on the py-motmetrics bundled
      TUD-Campus sequence equals motmetrics computed directly (skipped if the
      bundled data isn't present).
 """
@@ -23,7 +21,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from eval.camera.eval_metrics import (  # noqa: E402
-    average_precision,
     detection_pr,
     iou_xywh,
     tracking_metrics,
@@ -80,14 +77,6 @@ def test_detection_pr_counts():
     d = detection_pr(gt, hyp)
     assert (d["tp"], d["fp"], d["fn"]) == (1, 1, 1)
     assert d["precision"] == 0.5 and d["recall"] == 0.5 and d["f1"] == 0.5
-
-
-def test_average_precision():
-    gt = [{"ids": [1, 2], "boxes": [A, B]}]
-    hyp = [{"ids": [1, 2], "boxes": [A, B], "scores": [0.9, 0.8]}]
-    assert average_precision(gt, hyp) == pytest.approx(1.0)
-    # no scores -> sentinel
-    assert average_precision(gt, [{"ids": [1, 2], "boxes": [A, B]}]) == -1.0
 
 
 def test_consistency_with_motmetrics_on_bundled_tud():

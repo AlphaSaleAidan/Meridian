@@ -95,50 +95,6 @@ def detection_pr(gt_seq, hyp_seq, iou_thresh: float = 0.5) -> dict:
     }
 
 
-def average_precision(gt_seq, hyp_seq, iou_thresh: float = 0.5) -> float:
-    """Confidence-ranked AP@IoU (single class, 11-point-free, all-points interp).
-
-    Requires ``scores`` on the hyp frames; returns -1.0 if absent.
-    """
-    dets: list[tuple[float, int]] = []  # (score, is_tp)
-    total_gt = 0
-    for gt, hyp in zip(gt_seq, hyp_seq):
-        scores = hyp.get("scores")
-        if scores is None:
-            return -1.0
-        gt_boxes = gt["boxes"]
-        total_gt += len(gt_boxes)
-        order = sorted(range(len(hyp["boxes"])), key=lambda i: -scores[i])
-        matched: set[int] = set()
-        for h in order:
-            best_iou, best_g = iou_thresh, -1
-            for g in range(len(gt_boxes)):
-                if g in matched:
-                    continue
-                v = iou_xywh(gt_boxes[g], hyp["boxes"][h])
-                if v >= best_iou:
-                    best_iou, best_g = v, g
-            is_tp = 1 if best_g >= 0 else 0
-            if is_tp:
-                matched.add(best_g)
-            dets.append((scores[h], is_tp))
-    if total_gt == 0 or not dets:
-        return 0.0
-    dets.sort(key=lambda d: -d[0])
-    tp = np.cumsum([d[1] for d in dets])
-    fp = np.cumsum([1 - d[1] for d in dets])
-    recalls = tp / total_gt
-    precisions = tp / np.maximum(tp + fp, 1e-9)
-    # all-points interpolation (area under monotonic-max precision curve)
-    mrec = np.concatenate(([0.0], recalls, [1.0]))
-    mpre = np.concatenate(([0.0], precisions, [0.0]))
-    for i in range(len(mpre) - 1, 0, -1):
-        mpre[i - 1] = max(mpre[i - 1], mpre[i])
-    idx = np.where(mrec[1:] != mrec[:-1])[0]
-    ap = float(np.sum((mrec[idx + 1] - mrec[idx]) * mpre[idx + 1]))
-    return round(ap, 4)
-
-
 # ---------------------------------------------------------------------------
 # Tracking metrics (motmetrics)
 # ---------------------------------------------------------------------------
@@ -167,11 +123,11 @@ def tracking_metrics(gt_seq, hyp_seq, iou_thresh: float = 0.5) -> dict:
     ]
     summary = mh.compute(acc, metrics=names, name="seq")
     row = summary.loc["seq"]
-    # motmetrics' motp is a distance (1-IoU); report it and a friendlier IoU form.
-    motp_dist = float(row["motp"]) if not np.isnan(row["motp"]) else float("nan")
+    # motmetrics' motp is a distance (1-IoU); report a friendlier IoU form.
+    motp_dist = float(row["motp"])
     return {
         "mota": round(float(row["mota"]), 4),
-        "motp_iou": round(1.0 - motp_dist, 4) if motp_dist == motp_dist else None,
+        "motp_iou": round(1.0 - motp_dist, 4) if not np.isnan(motp_dist) else None,
         "idf1": round(float(row["idf1"]), 4),
         "id_switches": int(row["num_switches"]),
         "false_positives": int(row["num_false_positives"]),

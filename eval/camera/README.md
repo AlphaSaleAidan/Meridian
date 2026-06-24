@@ -7,7 +7,7 @@ reports standard metrics.
 
 ## What it measures
 
-- **Detection** (IoU 0.5): precision, recall, F1, AP@0.5.
+- **Detection** (IoU 0.5): precision, recall, F1.
 - **Tracking**: MOTA, MOTP (as IoU), IDF1, ID-switches, FP, misses — via
   [`motmetrics`](https://github.com/cheind/py-motmetrics).
 
@@ -39,7 +39,7 @@ Reports are written to `eval/camera/reports/<name>.{json,md}`.
 | Run | Frames | Detection | Tracking |
 |-----|--------|-----------|----------|
 | `taproom-smoke` | 193 | — (no GT) | 14 unique tracks, 10.3 det/frame |
-| `MOT17-09-150f` | 150 | P 0.74 · R 0.72 · F1 0.73 · AP@0.5 0.68 | MOTA 0.46 · IDF1 0.71 · MOTP(IoU) 0.84 · 10 IDSW |
+| `MOT17-09-150f` | 150 | P 0.74 · R 0.72 · F1 0.73 | MOTA 0.46 · IDF1 0.71 · MOTP(IoU) 0.84 · 10 IDSW |
 
 These were produced on the **CPU-only** Contabo box with the **`yolo11n` (nano)**
 model — the smallest detector. They prove the pipeline + harness work end to end

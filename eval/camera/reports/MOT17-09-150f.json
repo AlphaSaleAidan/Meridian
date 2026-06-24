@@ -5,7 +5,7 @@
   "total_detections": 1086,
   "unique_tracks": 21,
   "avg_detections_per_frame": 7.24,
-  "fps_cpu": 7.54,
+  "fps_cpu": 5.97,
   "confidence": 0.35,
   "model": "yolo11n + ByteTrack",
   "detection": {
@@ -14,8 +14,7 @@
     "f1": 0.7322,
     "tp": 804,
     "fp": 282,
-    "fn": 306,
-    "ap50": 0.6787
+    "fn": 306
   },
   "tracking": {
     "mota": 0.4613,
