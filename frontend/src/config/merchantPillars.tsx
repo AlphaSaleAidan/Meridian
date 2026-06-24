@@ -30,6 +30,7 @@ const PeakHoursPage = lazyRetry(() => import('@/pages/PeakHoursPage'))
 const StaffPage = lazyRetry(() => import('@/pages/StaffPage'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
 const CameraIntelligencePage = lazyRetry(() => import('@/pages/seo/CameraIntelligencePage'))
+const LiveCamerasPage = lazyRetry(() => import('@/pages/LiveCamerasPage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
 
@@ -91,7 +92,10 @@ export const merchantPillars: Pillar[] = [
     label: 'Camera',
     icon: Video,
     secondary: true,
-    segments: [{ view: 'intelligence', label: 'Camera', Component: CameraIntelligencePage }],
+    segments: [
+      { view: 'intelligence', label: 'Camera', Component: CameraIntelligencePage },
+      { view: 'live', label: 'Live', Component: LiveCamerasPage },
+    ],
   },
   {
     path: 'settings',

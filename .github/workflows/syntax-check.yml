@@ -52,3 +52,27 @@ jobs:
 
       - name: TypeScript check
         run: cd frontend && npx tsc --noEmit
+
+  camera-tenancy:
+    # Executes the camera cross-tenant RLS denial test against a real Postgres.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install test deps
+        run: pip install "psycopg[binary]" pytest --quiet
+      - name: Cross-tenant denial test
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: pytest tests/e2e/test_camera_tenancy_rls.py -q
