@@ -35,24 +35,29 @@ export default function CameraDemo() {
     const cv = cvRef.current, vid = vidRef.current
     if (!cv || !vid || !data) return
     const ctx = cv.getContext('2d'); if (!ctx) return
-    let raf = 0, heat: { g: number[][]; cols: number; rows: number; mx: number } | null = null
-    const buildHeat = () => {
+    let raf = 0
+    // Heatmap is derived from the (immutable) clip data — build once, not per frame.
+    const heat = (() => {
       const cols = 24, rows = 14, g = Array.from({ length: rows }, () => new Array(cols).fill(0))
       data.frames.forEach(f => f.boxes.forEach(b => { g[Math.min(rows - 1, (b.y + b.h) * rows | 0)][Math.min(cols - 1, (b.x + b.w / 2) * cols | 0)]++ }))
-      let mx = 1; g.forEach(r => r.forEach(v => mx = Math.max(mx, v))); heat = { g, cols, rows, mx }
-    }
+      let mx = 1; g.forEach(r => r.forEach(v => mx = Math.max(mx, v))); return { g, cols, rows, mx }
+    })()
     const rr = (x: number, y: number, w: number, h: number, r: number) => { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath() }
     const pill = (px: number, py: number, text: string, bg: string, fg: string) => { ctx.font = '700 12px Inter'; const tw = ctx.measureText(text).width, p = 6, h = 20; ctx.fillStyle = bg; rr(px, py - h, tw + p * 2, h, 6); ctx.fill(); ctx.fillStyle = fg; ctx.textBaseline = 'middle'; ctx.fillText(text, px + p, py - h / 2 + 1); ctx.textBaseline = 'alphabetic' }
     const poly = (pts: number[][], X: (n: number) => number, Y: (n: number) => number, stroke: string, fill: string) => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]) }
     const grade = data.summary.staff[0]?.grade ?? ''
+    const fps = data.summary.fps
     const draw = () => {
       raf = requestAnimationFrame(draw)
-      const w = cv.width = cv.clientWidth, h = cv.height = cv.clientHeight; ctx.clearRect(0, 0, w, h)
-      if (!heat) buildHeat()
-      const X = (n: number) => n * w, Y = (n: number) => n * h, fps = data.summary.fps
+      // Assigning canvas.width/height flushes the bitmap + resets all ctx state, so
+      // only do it on an actual resize; clearRect handles the per-frame wipe.
+      if (cv.width !== cv.clientWidth) cv.width = cv.clientWidth
+      if (cv.height !== cv.clientHeight) cv.height = cv.clientHeight
+      const w = cv.width, h = cv.height; ctx.clearRect(0, 0, w, h)
+      const X = (n: number) => n * w, Y = (n: number) => n * h
       const k = Math.min(data.frames.length - 1, Math.round(vid.currentTime * fps) % data.frames.length)
-      const fr = data.frames[k]; setOcc(fr.boxes.length)
-      if (layers.heatmap && heat) for (let r = 0; r < heat.rows; r++) for (let q = 0; q < heat.cols; q++) { const v = heat.g[r][q] / heat.mx; if (v > .05) { ctx.fillStyle = `rgba(240,140,70,${Math.min(.5, v * .7)})`; ctx.fillRect(q * w / heat.cols, r * h / heat.rows, w / heat.cols, h / heat.rows) } }
+      const fr = data.frames[k]; setOcc(prev => prev === fr.boxes.length ? prev : fr.boxes.length)
+      if (layers.heatmap) for (let r = 0; r < heat.rows; r++) for (let q = 0; q < heat.cols; q++) { const v = heat.g[r][q] / heat.mx; if (v > .05) { ctx.fillStyle = `rgba(240,140,70,${Math.min(.5, v * .7)})`; ctx.fillRect(q * w / heat.cols, r * h / heat.rows, w / heat.cols, h / heat.rows) } }
       if (layers.zones) { poly(data.summary.zones.staff, X, Y, 'rgba(23,197,176,.9)', 'rgba(23,197,176,.10)'); poly(data.summary.zones.bar_front, X, Y, 'rgba(26,143,214,.9)', 'rgba(26,143,214,.08)'); pill(X(data.summary.zones.staff[0][0]), Y(data.summary.zones.staff[0][1]), 'Staff zone', '#17C5B0', '#04211c') }
       if (layers.journey) { ctx.strokeStyle = 'rgba(26,143,214,.8)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; const hist: Record<number, number[][]> = {}; for (let j = Math.max(0, k - 26); j <= k; j++) data.frames[j].boxes.forEach(b => { (hist[b.id] = hist[b.id] || []).push([b.x + b.w / 2, b.y + b.h]) }); Object.values(hist).forEach(tr => { if (tr.length < 2) return; ctx.beginPath(); tr.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke() }) }
       fr.boxes.forEach(b => {
