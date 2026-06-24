@@ -713,6 +713,19 @@ def _credits_paused_twiml() -> str:
 </Response>"""
 
 
+def _after_hours_twiml(message: str) -> str:
+    """TwiML for a call that lands outside the merchant's business hours.
+
+    Speaks the merchant's after-hours message (or a default) once, then hangs
+    up. Logged with status 'after_hours' so it shows in the dashboard.
+    """
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">{_escape(message)}</Say>
+  <Hangup />
+</Response>"""
+
+
 async def _charge_for_call(merchant_id: str, call_sid: str, duration_seconds: int) -> None:
     """Post-call: deduct the metered cost. Logs but does not raise on failure."""
     cost = cost_for_phone_call(duration_seconds)
@@ -814,6 +827,23 @@ async def twilio_voice(request: Request):
         logger.info("No merchant found for %s — using demo merchant %s", twilio_number, DEMO_MERCHANT_ID)
 
     await _log_call_start(call_sid, caller_phone, merchant_id=merchant_id)
+
+    # After-hours gate: if the merchant has configured BOTH business hours and a
+    # timezone and we're currently outside them, play their after-hours message
+    # and hang up instead of taking an order. Only non-demo merchants who opted
+    # in (both fields set) are gated — is_open_now returns True otherwise, so the
+    # default and unconfigured merchants are unchanged.
+    if merchant_id != DEMO_MERCHANT_ID and config_row:
+        from merchant_config import is_open_now
+
+        if not is_open_now(config_row.get("business_hours"), config_row.get("business_timezone")):
+            logger.info("Call %s after-hours for merchant %s — playing closed message", call_sid, merchant_id)
+            await _log_call_end(call_sid, "after_hours")
+            msg = (config_row.get("after_hours_message") or "").strip() or (
+                f"Thanks for calling {config_row.get('business_name') or 'us'}. "
+                "We're currently closed. Please call back during our business hours."
+            )
+            return Response(content=_after_hours_twiml(msg), media_type=TWIML)
 
     # Pre-call gate: refuse if the merchant can't cover even one minute.
     # Demo merchant bypasses (the canonical test number always works).

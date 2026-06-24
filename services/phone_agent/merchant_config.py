@@ -41,6 +41,10 @@ class MerchantPhoneConfig:
     # PAY ON THE PHONE: pay_now (DEFAULT, anti-scam — kitchen only sees PAID
     # tickets), pay_at_pickup (legacy OPEN/unpaid), or optional (caller chooses).
     payment_mode: str = "pay_now"
+    # IANA tz (e.g. "America/Toronto") used to evaluate business_hours. The
+    # after-hours gate only enforces when BOTH business_hours and this are set,
+    # so merchants without a timezone are never mis-gated.
+    business_timezone: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -100,6 +104,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 tax_rate=row.get("tax_rate", 0.13),
                 # Default to pay_now if the column is missing/null (anti-scam default).
                 payment_mode=_norm_payment_mode(row.get("payment_mode")),
+                business_timezone=(row.get("business_timezone") or "").strip(),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
@@ -130,24 +135,45 @@ async def get_merchant_by_phone(phone_number: str) -> Optional[str]:
     return None
 
 
-def is_within_business_hours(config: MerchantPhoneConfig) -> bool:
-    if not config.business_hours:
+def is_open_now(business_hours: dict | None, tz_name: str | None, now: datetime | None = None) -> bool:
+    """Is the business open right now, per its configured hours + timezone?
+
+    Returns True (do not gate) unless we can confidently say it's closed:
+      - no business_hours configured        → True  (merchant hasn't opted in)
+      - no/invalid timezone configured       → True  (can't evaluate safely; the
+        old code compared local hours to UTC, which mis-gated — we refuse to
+        guess rather than tell an open merchant they're closed)
+      - today missing / marked closed        → False
+      - current local time outside open–close → False
+
+    ``now`` is injectable for testing (must be tz-aware if provided).
+    """
+    if not business_hours:
+        return True
+    if not tz_name:
+        return True
+    try:
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo(tz_name)
+    except Exception:  # noqa: BLE001 — unknown tz → don't gate
         return True
 
-    now = datetime.now(timezone.utc)
-    day_name = now.strftime("%A").lower()
-    hours = config.business_hours.get(day_name)
-
-    if not hours:
-        return False
-    if hours.get("closed"):
+    local = now.astimezone(tz) if now else datetime.now(tz)
+    day_name = local.strftime("%A").lower()
+    hours = business_hours.get(day_name)
+    if not hours or hours.get("closed"):
         return False
 
     open_time = hours.get("open", "00:00")
     close_time = hours.get("close", "23:59")
-    current_time = now.strftime("%H:%M")
-
+    current_time = local.strftime("%H:%M")
     return open_time <= current_time <= close_time
+
+
+def is_within_business_hours(config: MerchantPhoneConfig) -> bool:
+    """Back-compat wrapper around is_open_now using the config's tz."""
+    return is_open_now(config.business_hours, getattr(config, "business_timezone", "") or None)
 
 
 def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
