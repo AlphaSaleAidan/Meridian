@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 import warnings
@@ -9,24 +10,51 @@ import numpy as np
 
 try:
     import supervision as sv
-    from ultralytics import YOLO
     warnings.filterwarnings("ignore", message=".*ByteTrack.*deprecated.*")
 except ImportError:
     sv = None
-    YOLO = None
 
 logger = logging.getLogger("meridian.camera.detector")
 
-PERSON_CLASS = 0
+# Backend chosen at runtime: 'yolo' (ultralytics, AGPL — default) or 'rfdetr'
+# (Apache-2.0). Flip DETECTOR_BACKEND=rfdetr to drop the AGPL dep once verified on the
+# GPU box; tracking/zones/output below are backend-agnostic. ponytail: one extraction
+# method branches, nothing else changes.
+DETECTOR_BACKEND = os.environ.get("DETECTOR_BACKEND", "yolo").lower()
+# COCO person id differs by backend (YOLO person=0; RF-DETR's 91-class COCO person=1).
+PERSON_CLASS = int(os.environ.get("PERSON_CLASS_ID", 1 if DETECTOR_BACKEND == "rfdetr" else 0))
 
 
 class MeridianDetector:
 
     def __init__(self, model_size: str = "yolo11n", confidence: float = 0.35) -> None:
-        self._model = YOLO(model_size)
+        self._backend = DETECTOR_BACKEND
+        if self._backend == "rfdetr":
+            from rfdetr import RFDETRBase  # Apache-2.0; lazy
+            self._model = RFDETRBase()
+            logger.info("detector backend=rfdetr (Apache-2.0)")
+        else:
+            from ultralytics import YOLO  # AGPL; lazy
+            self._model = YOLO(model_size)
+            logger.info("detector backend=yolo")
         self._tracker = sv.ByteTrack()
         self._confidence = confidence
         self._polygon_zone_cache: dict[str, Any] = {}
+
+    def _persons(self, frame: np.ndarray) -> "sv.Detections":
+        """Backend-specific person detection → supervision Detections (xyxy/conf)."""
+        if self._backend == "rfdetr":
+            det = self._model.predict(frame, threshold=self._confidence)  # returns sv.Detections
+            return det[det.class_id == PERSON_CLASS]
+        results = self._model(frame, verbose=False)[0]
+        boxes = results.boxes
+        mask = boxes.cls.cpu().numpy().astype(int) == PERSON_CLASS
+        person_boxes = boxes[mask]
+        return sv.Detections(
+            xyxy=person_boxes.xyxy.cpu().numpy(),
+            confidence=person_boxes.conf.cpu().numpy(),
+            class_id=person_boxes.cls.cpu().numpy().astype(int),
+        )
 
     def process_frame(
         self,
@@ -35,18 +63,7 @@ class MeridianDetector:
         camera_id: str,
         zone_map: dict[str, list[list[float]]] | None = None,
     ) -> dict[str, Any]:
-        results = self._model(frame, verbose=False)[0]
-
-        boxes = results.boxes
-        mask = boxes.cls.cpu().numpy().astype(int) == PERSON_CLASS
-        person_boxes = boxes[mask]
-
-        detections = sv.Detections(
-            xyxy=person_boxes.xyxy.cpu().numpy(),
-            confidence=person_boxes.conf.cpu().numpy(),
-            class_id=person_boxes.cls.cpu().numpy().astype(int),
-        )
-
+        detections = self._persons(frame)
         detections = detections[detections.confidence >= self._confidence]
         detections = self._tracker.update_with_detections(detections)
 

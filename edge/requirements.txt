@@ -8,3 +8,5 @@ numpy>=1.26
 torch>=2.1.0
 torchvision>=0.16.0
 transformers>=4.40.0
+# RF-DETR (Apache-2.0) — set DETECTOR_BACKEND=rfdetr to drop ultralytics/AGPL once verified
+rfdetr>=1.0.0

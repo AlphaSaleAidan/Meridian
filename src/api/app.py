@@ -81,6 +81,8 @@ from .routes.inventory_docs import router as inventory_docs_router
 from .routes.analytics import router as analytics_router
 from .routes.content import router as content_router
 from .routes.portal import router as portal_router
+from .routes.gateway import router as gateway_router
+from .routes.camera_streaming import router as camera_streaming_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -218,6 +220,8 @@ app.add_middleware(RateLimitMiddleware)
 app.include_router(oauth_router)
 app.include_router(clover_oauth_router)
 app.include_router(webhook_router)
+app.include_router(gateway_router)
+app.include_router(camera_streaming_router)
 app.include_router(dashboard_router)
 app.include_router(payouts_router)
 app.include_router(onboarding_router)
