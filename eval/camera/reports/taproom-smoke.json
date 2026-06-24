@@ -1,0 +1,12 @@
+{
+  "name": "taproom-smoke",
+  "source": "/root/meridian-camera/frontend/public/camera-demo/tap-room.mp4",
+  "frames": 193,
+  "total_detections": 1980,
+  "unique_tracks": 14,
+  "avg_detections_per_frame": 10.26,
+  "fps_cpu": 4.5,
+  "confidence": 0.35,
+  "model": "yolo11n + ByteTrack",
+  "mode": "smoke (no ground truth \u2014 counts only)"
+}
