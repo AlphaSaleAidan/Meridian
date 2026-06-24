@@ -182,12 +182,15 @@ def _order_receipt_text(order: dict, merchant_config) -> str:
     return body + "\nThanks for ordering by phone!"
 
 
-async def _send_order_sms(to: str, text: str) -> None:
+async def _send_order_sms(to: str, text: str, frm: str = "") -> None:
     """Best-effort: text the caller their order receipt via Telnyx (the voice
     provider). Never raises — a failed text must not affect the call or order.
+    `frm` is the sending number — pass the merchant's own DID so a CA caller gets
+    the text from the (domestic) number they called; falls back to the env number.
     ponytail: Telnyx-only here (the sidecar's provider, env already set); the
     full Telnyx+Twilio client in src/sms isn't importable from this process."""
-    key, frm = os.getenv("TELNYX_API_KEY", ""), os.getenv("TELNYX_PHONE_NUMBER", "")
+    key = os.getenv("TELNYX_API_KEY", "")
+    frm = frm or os.getenv("TELNYX_PHONE_NUMBER", "")
     if not (to and key and frm):
         return
     payload = {"from": frm, "to": to, "text": text}
@@ -421,7 +424,9 @@ async def run_call_bot(
         # the spoken confirmation.
         receipt_to = args.get("caller_phone") or caller_info.get("phone", "")
         if receipt_to:
-            asyncio.create_task(_send_order_sms(receipt_to, _order_receipt_text(normalized, merchant_config)))
+            asyncio.create_task(_send_order_sms(
+                receipt_to, _order_receipt_text(normalized, merchant_config),
+                merchant_config.phone_number))
         await params.result_callback({"success": True, "say": _confirmation(normalized, pos_result)})
 
     async def _on_transfer(params: FunctionCallParams):
