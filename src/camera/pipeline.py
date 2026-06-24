@@ -9,6 +9,7 @@ import supervision as sv
 from .detector import MeridianDetector
 from .line_counter import EntryExitCounter
 from .people_counter import MeridianPeopleCounter
+from .streaming.overlay_emitter import broadcast_overlay, build_overlay_frame
 from .rtsp_handler import RTSPStreamHandler
 from .supabase_writer import CameraDataWriter
 from .zone_loader import load_zones_for_camera, load_entry_lines
@@ -98,6 +99,8 @@ class CameraPipeline:
                 zone_map=zone_map,
             )
             all_tracking.append(detection_result)
+            # Live overlay feed (flagged off by default; no-op unless OVERLAY_FEED_ENABLED).
+            broadcast_overlay(cam_id, build_overlay_frame(detection_result))
 
             frame_h, frame_w = frame.shape[:2]
             detections = self._build_sv_detections(detection_result)
