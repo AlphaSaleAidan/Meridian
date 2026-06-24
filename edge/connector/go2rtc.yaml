@@ -1,0 +1,25 @@
+# go2rtc — ONVIF discovery + RTSP->WebRTC publish for meridian-connector (Phase 4).
+# go2rtc is off-the-shelf (Apache-2.0). It auto-discovers ONVIF cameras on the LAN and
+# republishes each outbound to the cloud gateway via WHIP. Camera creds live ONLY here.
+#
+# The connector supervisor reads discovered streams from the local API and registers them.
+api:
+  listen: "127.0.0.1:1984"
+
+# ONVIF auto-discovery on the local network (no manual RTSP in the happy path).
+onvif:
+  discovery: true
+
+# streams: populated by ONVIF discovery; manual RTSP only as an advanced fallback, e.g.:
+# streams:
+#   register: "rtsp://user:pass@192.168.1.50:554/stream1"   # creds stay on-box
+
+# Publish every stream OUTBOUND to the gateway (WHIP). ${...} injected at run time.
+webrtc:
+  listen: ":8555"
+  ice_servers:
+    - urls: ["stun:${MERIDIAN_TURN_HOST}:3478"]
+
+# Outbound publish target (the connector pushes to MediaMTX WHIP ingest).
+# go2rtc publishes via the configured WHIP endpoint per stream:
+#   ${GATEWAY}/cam/<camera_id>/whip   (auth: GATEWAY_PUBLISH_SECRET)

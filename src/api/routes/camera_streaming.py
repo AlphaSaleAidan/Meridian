@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from ..auth import require_org_access, require_service_auth
 from ...db import get_db
 from ...camera.streaming import get_gateway
-from ...camera.streaming.tokens import mint_stream_token
+from ...camera.streaming.tokens import mint_stream_token, verify_pairing_code
 
 logger = logging.getLogger("meridian.api.camera_streaming")
 router = APIRouter(prefix="/api", tags=["camera-streaming"])
@@ -68,6 +68,30 @@ class CameraRegister(BaseModel):
 
 
 # ─────────────────────────── endpoints ────────────────────────
+class PairBody(BaseModel):
+    code: str
+
+
+@router.post("/connector/pair")
+async def connector_pair(body: PairBody):
+    """Connector exchanges a wizard pairing code for a device token + its site/org.
+    The pairing code itself is the credential (stateless HMAC, short-lived)."""
+    info = verify_pairing_code(body.code)
+    if not info:
+        raise HTTPException(401, "Invalid or expired pairing code")
+    device_token = os.environ.get("VISION_INGEST_TOKEN", "")
+    if not device_token:
+        raise HTTPException(503, "Connector pairing not configured")
+    # ponytail: returns the shared device token for now; per-device scoped tokens are a
+    # hardening follow-up (the connector already only registers within its paired site).
+    return {
+        "device_token": device_token,
+        "org_id": info["org"],
+        "site_id": info["site"],
+        "gateway": os.environ.get("MEDIA_STREAM_HOST", "stream.meridian.tips"),
+    }
+
+
 @router.post("/sites/{site_id}/cameras", dependencies=[Depends(require_device_token)])
 async def register_camera(site_id: str, body: CameraRegister):
     """Connector registers a discovered camera under a site (device-token auth)."""

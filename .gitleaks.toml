@@ -1,0 +1,23 @@
+# Gitleaks config — extends defaults with camera-streaming secret patterns (Phase 4).
+[extend]
+useDefault = true
+
+[[rules]]
+id = "rtsp-credentials"
+description = "RTSP URL with embedded user:pass (camera credentials must never be committed)"
+regex = '''rtsp://[^:/\s]+:[^@/\s]+@'''
+tags = ["camera", "credentials"]
+
+[[rules]]
+id = "turn-static-auth-secret"
+description = "coturn static-auth-secret value committed inline"
+regex = '''static-auth-secret\s*=\s*\S+'''
+tags = ["turn", "secret"]
+
+[rules.allowlist]
+# our docs/configs intentionally show the PLACEHOLDER forms, never real creds
+regexes = [
+  '''rtsp://user:pass@''',
+  '''static-auth-secret=<INJECTED''',
+  '''static-auth-secret=\$MERIDIAN_TURN_SECRET''',
+]

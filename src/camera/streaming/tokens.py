@@ -37,6 +37,35 @@ def mint_stream_token(camera_id: str, *, ttl_seconds: int = 60, subject: str | N
     return f"{body}.{sig}"
 
 
+def mint_pairing_code(org_id: str, site_id: str, *, ttl_seconds: int = 900) -> str:
+    """Wizard-shown pairing code (stateless HMAC; default 15 min). The connector exchanges
+    it at /api/connector/pair for a device token. ponytail: no pairings table needed."""
+    secret = _secret()
+    if not secret:
+        raise RuntimeError("GATEWAY_JWT_SECRET not configured")
+    payload = {"org": org_id, "site": site_id, "exp": int(time.time()) + int(ttl_seconds)}
+    body = _b64(json.dumps(payload, separators=(",", ":")).encode())
+    sig = _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())
+    return f"{body}.{sig}"
+
+
+def verify_pairing_code(code: str) -> dict | None:
+    """Return {org, site} if the pairing code is valid + unexpired, else None."""
+    secret = _secret()
+    if not secret or not code or "." not in code:
+        return None
+    try:
+        body, sig = code.split(".", 1)
+        if not hmac.compare_digest(sig, _b64(hmac.new(secret, body.encode(), hashlib.sha256).digest())):
+            return None
+        payload = json.loads(_unb64(body))
+        if payload.get("exp", 0) < time.time():
+            return None
+        return {"org": payload["org"], "site": payload["site"]}
+    except Exception:
+        return None
+
+
 def verify_stream_token(token: str, camera_id: str) -> bool:
     """True only if signature valid, not expired, and scoped to camera_id."""
     secret = _secret()
