@@ -93,8 +93,8 @@ export const merchantPillars: Pillar[] = [
     icon: Video,
     secondary: true,
     segments: [
-      { view: 'intelligence', label: 'Camera', Component: CameraIntelligencePage },
       { view: 'live', label: 'Live', Component: LiveCamerasPage },
+      { view: 'intelligence', label: 'Analytics', Component: CameraIntelligencePage },
     ],
   },
   {

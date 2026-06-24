@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useOrgId } from '@/hooks/useOrg'
+import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import LiveCamera from '@/components/camera/LiveCamera'
+import CameraDemo from '@/components/camera/CameraDemo'
 import type { OverlayFrame } from '@/components/camera/overlay-layers'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -16,7 +17,11 @@ interface Cam { id: string; name: string }
  * Surface it via a route or the Camera pillar (1-line wiring follow-up).
  */
 export default function LiveCamerasPage() {
+  const isDemo = useIsDemo()
   const orgId = useOrgId()
+  // Demo surface (/canada/demo): replay a real YOLO+ByteTrack analysis over a CCTV clip
+  // so business owners see the working tech without a connected camera.
+  if (isDemo) return <CameraDemo />
   const [cams, setCams] = useState<Cam[]>([])
   const tokenRef = useRef<string | null>(null)
 
