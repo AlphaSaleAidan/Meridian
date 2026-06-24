@@ -120,6 +120,35 @@ export const phoneService = {
     }
     return res.json()
   },
+
+  // Supplementary menu builder: upload a photo of a paper menu; the backend
+  // runs a vision model and MERGES the extracted items onto the existing menu.
+  async scanMenuPhoto(merchantId: string, file: File, replace = false): Promise<MenuScanResult> {
+    const form = new FormData()
+    form.append('photo', file)
+    // Strip Content-Type so the browser sets the multipart boundary itself.
+    const { 'Content-Type': _ct, ...headers } = await getAuthHeaders()
+    const res = await fetch(
+      `${API_BASE}/api/phone/menu/scan-photo/${merchantId}?replace=${replace}`,
+      { method: 'POST', headers, body: form },
+    )
+    if (!res.ok) {
+      let detail = `scan failed: ${res.status}`
+      try { detail = (await res.json()).detail || detail } catch { /* noop */ }
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+}
+
+export interface MenuScanResult {
+  scanned: boolean
+  added: number
+  scanned_count?: number
+  item_count: number
+  mode?: 'merge' | 'replace'
+  reason?: string
+  sample?: { name: string; price?: number; category?: string }[]
 }
 
 export interface ProvisionNumberResponse {

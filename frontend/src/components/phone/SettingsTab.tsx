@@ -13,6 +13,7 @@ import {
 import { phoneService } from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
 import MenuBuildStatus from '@/components/menu/MenuBuildStatus'
+import MenuPhotoScanner from '@/components/menu/MenuPhotoScanner'
 
 const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
 
@@ -233,6 +234,9 @@ export default function SettingsTab({ biz, onReconfigure, connectedPos, onConnec
 
       {/* Auto menu-builder progress — populates from the connected POS catalog. */}
       <MenuBuildStatus />
+
+      {/* Supplementary builder — scan a paper menu / specials board into the menu. */}
+      <MenuPhotoScanner />
 
       {/* Save + Reconfigure */}
       <button onClick={handleSave} disabled={saving}

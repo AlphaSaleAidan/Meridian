@@ -15,7 +15,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from ..auth import require_service_auth
@@ -312,6 +312,87 @@ async def get_menu_status(merchant_id: str, _auth=Depends(require_service_auth))
         "item_count": item_count,
         "updated_at": row.get("updated_at"),
         "sample": sample,
+    }
+
+
+# Max upload accepted for a menu photo (vision models cap input size anyway).
+_MAX_MENU_PHOTO_BYTES = 12 * 1024 * 1024  # 12 MB
+
+
+@router.post("/menu/scan-photo/{merchant_id}")
+async def scan_menu_photo(
+    merchant_id: str,
+    photo: UploadFile = File(...),
+    replace: bool = Query(False),
+    _auth=Depends(require_service_auth),
+):
+    """Supplementary menu builder: digitize a photo of a paper/printed menu.
+
+    The image is sent to a vision model, parsed into the agent's
+    ``{name, price?, category?}`` shape, and **merged onto** the merchant's
+    existing ``menu_items`` (POS-synced or hand-entered) so the phone agent
+    picks the new items up. Pass ``?replace=true`` to overwrite instead of
+    merge (e.g. a full reprint). The image itself is never stored.
+    """
+    from ...services.menu_vision import (
+        MenuVisionError,
+        extract_menu_from_image,
+        merge_menu_items,
+    )
+
+    _validate_merchant_id(merchant_id)
+
+    image_bytes = await photo.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="empty upload")
+    if len(image_bytes) > _MAX_MENU_PHOTO_BYTES:
+        raise HTTPException(status_code=413, detail="image too large (max 12 MB)")
+
+    try:
+        scanned = await extract_menu_from_image(image_bytes, photo.content_type or "")
+    except MenuVisionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if not scanned:
+        return {
+            "scanned": True,
+            "added": 0,
+            "item_count": 0,
+            "reason": "no menu items detected in the image",
+        }
+
+    db = get_db()
+    config_rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{merchant_id}"},
+        limit=1,
+    )
+    existing = (config_rows[0].get("menu_items") if config_rows else None) or []
+    before = len(existing) if isinstance(existing, list) else 0
+    menu = scanned if replace else merge_menu_items(existing, scanned)
+    added = len(menu) - (0 if replace else before)
+
+    payload = {"menu_items": menu, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if config_rows:
+        await db.update(
+            "phone_agent_config",
+            payload,
+            filters={"merchant_id": f"eq.{merchant_id}"},
+        )
+    else:
+        await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
+
+    logger.info(
+        "Scanned %d menu items from photo for %s (%s, +%d, total %d)",
+        len(scanned), merchant_id, "replace" if replace else "merge", added, len(menu),
+    )
+    return {
+        "scanned": True,
+        "added": added,
+        "scanned_count": len(scanned),
+        "item_count": len(menu),
+        "mode": "replace" if replace else "merge",
+        "sample": scanned[:5],
     }
 
 
