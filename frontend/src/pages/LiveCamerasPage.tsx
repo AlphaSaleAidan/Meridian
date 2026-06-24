@@ -17,11 +17,14 @@ interface Cam { id: string; name: string }
  * Surface it via a route or the Camera pillar (1-line wiring follow-up).
  */
 export default function LiveCamerasPage() {
-  const isDemo = useIsDemo()
-  const orgId = useOrgId()
   // Demo surface (/canada/demo): replay a real YOLO+ByteTrack analysis over a CCTV clip
-  // so business owners see the working tech without a connected camera.
-  if (isDemo) return <CameraDemo />
+  // so business owners see the working tech without a connected camera. Thin wrapper so the
+  // demo branch never sits before hooks (keeps hook order stable — Rules of Hooks).
+  return useIsDemo() ? <CameraDemo /> : <LiveCameraGrid />
+}
+
+function LiveCameraGrid() {
+  const orgId = useOrgId()
   const [cams, setCams] = useState<Cam[]>([])
   const tokenRef = useRef<string | null>(null)
 

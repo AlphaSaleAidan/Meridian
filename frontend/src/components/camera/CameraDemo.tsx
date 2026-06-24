@@ -12,7 +12,8 @@ type Staff = { id: string; score: number; grade: string; coverage_pct: number; c
 type Data = { summary: { fps: number; duration_s: number; unique_people: number; peak_occupancy: number; entries: number; customers_served: number; staff: Staff[]; zones: { staff: number[][]; bar_front: number[][] } }; frames: Frame[] }
 
 const STAFF_NAMES: Record<number, string> = { 7: 'Maria L.' } // demo roster; customers stay anonymous
-const LAYERS: [string, string][] = [['detections', 'Detections'], ['identity', 'Identity'], ['journey', 'Journey'], ['zones', 'Zones'], ['heatmap', 'Heatmap'], ['staff', 'Staff'], ['pos_xref', 'POS x-ref'], ['exceptions', 'Exceptions']]
+// `illustrative: true` => layer is a synthetic value-prop teaser, not real model output (POS x-ref, exceptions).
+const LAYERS: [string, string, boolean?][] = [['detections', 'Detections'], ['identity', 'Identity'], ['journey', 'Journey'], ['zones', 'Zones'], ['heatmap', 'Heatmap'], ['staff', 'Staff'], ['pos_xref', 'POS x-ref', true], ['exceptions', 'Exceptions', true]]
 const PRESETS: Record<string, string[]> = { Operations: ['detections', 'zones', 'heatmap'], 'Staff review': ['detections', 'staff', 'identity', 'zones'], 'Loss Prevention': ['detections', 'identity', 'pos_xref', 'exceptions'], All: LAYERS.map(l => l[0]), Raw: [] }
 
 export default function CameraDemo() {
@@ -90,11 +91,13 @@ export default function CameraDemo() {
             {Object.keys(PRESETS).map(n => <button key={n} onClick={() => setPreset(n)} className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-all">{n}</button>)}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
-            {LAYERS.map(([k, lab]) => (
+            {LAYERS.map(([k, lab, illustrative]) => (
               <button key={k} onClick={() => setLayers(p => ({ ...p, [k]: !p[k] }))}
+                title={illustrative ? 'Illustrative — sample data, not live model output' : undefined}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all ${layers[k] ? 'bg-[#17C5B0]/15 border border-[#17C5B0]/40' : 'border border-[#1F1F23] hover:bg-[#1F1F23]'}`}>
                 <span className={`w-2 h-2 rounded-full ${layers[k] ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/30'}`} />
                 <span className={`text-[12px] font-semibold ${layers[k] ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]'}`}>{lab}</span>
+                {illustrative && <span className="ml-auto text-[9px] font-bold uppercase tracking-wide text-[#F0B35B]/80 px-1 py-0.5 rounded bg-[#F0B35B]/10">demo</span>}
               </button>
             ))}
           </div>
