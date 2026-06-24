@@ -18,6 +18,22 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY
 
 TOAST_API_BASE = os.getenv("TOAST_API_BASE_URL", "https://ws-api.toasttab.com")
 
+
+def clover_api_base() -> str:
+    """Region/sandbox-aware Clover API host (mirrors src/config CloverConfig).
+    Canada is region 'na' → api.clover.com. CLOVER_API_BASE overrides everything."""
+    override = os.getenv("CLOVER_API_BASE", "")
+    if override:
+        return override.rstrip("/")
+    if os.getenv("CLOVER_ENVIRONMENT", "sandbox") != "production":
+        return "https://apisandbox.dev.clover.com"
+    region = os.getenv("CLOVER_REGION", "na").lower()
+    return {
+        "na": "https://api.clover.com",
+        "eu": "https://api.eu.clover.com",
+        "la": "https://api.la.clover.com",
+    }.get(region, "https://api.clover.com")
+
 DIRECT_API_SYSTEMS = {"square", "toast", "clover"}
 
 OAUTH_SYSTEMS = {
@@ -210,46 +226,50 @@ async def _create_toast_order(
 async def _create_clover_order(
     order: dict, access_token: str, merchant_id: str
 ) -> dict:
-    line_items_payload = []
-    for item in order.get("items", []):
-        line_items_payload.append({
-            "name": item["name"],
-            "price": int(item.get("unit_price", 0) * 100),
-            "note": item.get("special_instructions", ""),
-        })
+    """Create an order in Clover (write) + add its line items. Requires the
+    Clover app to have ORDERS/INVENTORY write permissions (granted at the app
+    level in the Clover dashboard, then a fresh OAuth)."""
+    base = clover_api_base()
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15) as client:
         res = await client.post(
-            f"https://api.clover.com/v3/merchants/{merchant_id}/orders",
+            f"{base}/v3/merchants/{merchant_id}/orders",
             json={
                 "state": "open",
-                "manualTransaction": False,
                 "note": f"Phone order for {order.get('customer_name', '')} via Meridian AI",
             },
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            },
-            timeout=10,
+            headers=headers,
         )
-        if res.status_code in (200, 201):
-            clover_order = res.json()
-            order_id = clover_order.get("id", "")
-
-            for li in line_items_payload:
-                await client.post(
-                    f"https://api.clover.com/v3/merchants/{merchant_id}/orders/{order_id}/line_items",
-                    json=li,
-                    headers={
-                        "Authorization": f"Bearer {access_token}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=10,
-                )
-
-            return {"success": True, "pos_order_id": order_id, "pos_system": "clover"}
-        else:
+        if res.status_code not in (200, 201):
+            logger.warning("Clover order create failed %s: %s", res.status_code, res.text[:300])
             return {"success": False, "reason": "clover_api_error", "status": res.status_code}
+
+        order_id = res.json().get("id", "")
+
+        # One line item per unit so quantity is reflected (the previous code added
+        # each item once regardless of quantity → undercharged multi-qty orders).
+        added, failed = 0, 0
+        for item in order.get("items", []):
+            qty = max(1, int(item.get("quantity", 1) or 1))
+            price_cents = int(round(float(item.get("unit_price", item.get("price", 0)) or 0) * 100))
+            li = {"name": item.get("name", "Item"), "price": price_cents,
+                  "note": item.get("special_instructions", "")}
+            for _ in range(qty):
+                r = await client.post(
+                    f"{base}/v3/merchants/{merchant_id}/orders/{order_id}/line_items",
+                    json=li, headers=headers,
+                )
+                if r.status_code in (200, 201):
+                    added += 1
+                else:
+                    failed += 1
+                    logger.warning("Clover line-item add failed %s: %s", r.status_code, r.text[:200])
+
+        if added == 0 and failed > 0:
+            return {"success": False, "reason": "clover_line_items_failed", "pos_order_id": order_id}
+        return {"success": True, "pos_order_id": order_id, "pos_system": "clover",
+                "line_items_added": added, "line_items_failed": failed}
 
 
 def _toast_dining_option(order_type: str) -> str:
