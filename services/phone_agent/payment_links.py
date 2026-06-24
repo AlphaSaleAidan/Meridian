@@ -16,6 +16,146 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
 MERIDIAN_CHECKOUT_BASE = os.getenv("MERIDIAN_CHECKOUT_URL", "https://pay.meridian.ai")
 
+# UNIFIED PAYMENTS (Stripe Connect): one processor across any POS. Gated off by
+# default so the live per-POS payment-link flow is unchanged until this is
+# validated in Stripe test mode and turned on.
+UNIFIED_PAYMENTS_ENABLED = os.getenv("UNIFIED_PAYMENTS_ENABLED", "0") == "1"
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+# Meridian's platform fee in basis points (100 = 1%). Default 0 = no fee.
+PLATFORM_FEE_BPS = int(os.getenv("MERIDIAN_PLATFORM_FEE_BPS", "0") or 0)
+SUCCESS_URL = os.getenv("CHECKOUT_SUCCESS_URL", "https://meridian.tips/pay/success")
+
+
+def _stripe():
+    """Lazy stripe client so the module imports with no SDK/key present."""
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+    return stripe
+
+
+def _order_amount_cents(order: dict[str, Any]) -> int:
+    """Total in cents — prefer the order total, else sum item prices."""
+    total = order.get("total")
+    if total:
+        return int(round(float(total) * 100))
+    cents = 0
+    for i in order.get("items", []):
+        price = i.get("unit_price", i.get("price", 0)) or 0
+        cents += int(round(float(price) * 100)) * int(i.get("quantity", 1) or 1)
+    return cents
+
+
+def _stripe_line_items(order: dict[str, Any], currency: str) -> list[dict]:
+    """Itemized Stripe line_items when items carry prices; else a single
+    order-total line (charges the correct amount either way)."""
+    items, ok = [], True
+    for i in order.get("items", []):
+        price = i.get("unit_price", i.get("price"))
+        if price is None:
+            ok = False
+            break
+        name = i.get("name", "Item")
+        if i.get("size"):
+            name += f" ({i['size']})"
+        items.append({
+            "quantity": int(i.get("quantity", 1) or 1),
+            "price_data": {
+                "currency": currency,
+                "unit_amount": int(round(float(price) * 100)),
+                "product_data": {"name": name},
+            },
+        })
+    if ok and items:
+        return items
+    return [{
+        "quantity": 1,
+        "price_data": {
+            "currency": currency,
+            "unit_amount": _order_amount_cents(order),
+            "product_data": {"name": "Phone order"},
+        },
+    }]
+
+
+async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: str = "") -> dict:
+    """Preferred checkout entry point. Routes a paying order through the UNIFIED
+    Stripe Connect processor when the merchant is onboarded for it; otherwise
+    falls back to the existing per-POS payment link. Same return shape
+    ({url, method, ...}) so callers/SMS are unchanged."""
+    if (
+        UNIFIED_PAYMENTS_ENABLED
+        and STRIPE_SECRET_KEY
+        and getattr(merchant_config, "stripe_account_id", "")
+        and getattr(merchant_config, "stripe_charges_enabled", False)
+    ):
+        try:
+            return await _stripe_connect_payment_link(order, merchant_config, pos_order_id)
+        except Exception as e:  # noqa: BLE001 — never strand the order; fall back
+            logger.error("Stripe Connect checkout failed, falling back to POS link: %s", e)
+    return await create_payment_link(
+        order,
+        getattr(merchant_config, "pos_system", "") or "",
+        pos_order_id,
+        getattr(merchant_config, "pos_access_token", "") or "",
+        getattr(merchant_config, "pos_location_id", "") or "",
+    )
+
+
+async def _stripe_connect_payment_link(order: dict[str, Any], merchant_config, pos_order_id: str) -> dict:
+    """Stripe Checkout (hosted) with a destination charge to the merchant's
+    connected account + Meridian application fee. POS-agnostic — works no matter
+    which POS the merchant runs."""
+    stripe = _stripe()
+    currency = (order.get("currency") or "cad").lower()
+    amount = _order_amount_cents(order)
+    acct = merchant_config.stripe_account_id
+
+    pi_data: dict[str, Any] = {"transfer_data": {"destination": acct}}
+    if PLATFORM_FEE_BPS > 0:
+        pi_data["application_fee_amount"] = int(round(amount * PLATFORM_FEE_BPS / 10000))
+
+    session = stripe.checkout.Session.create(
+        mode="payment",
+        line_items=_stripe_line_items(order, currency),
+        payment_intent_data=pi_data,
+        success_url=SUCCESS_URL,
+        client_reference_id=pos_order_id or order.get("merchant_id", ""),
+        metadata={
+            "merchant_id": order.get("merchant_id", ""),
+            "pos_order_id": pos_order_id,
+            "caller_phone": order.get("caller_phone", ""),
+        },
+    )
+    await _record_checkout_session(order, merchant_config, pos_order_id, session, amount, currency)
+    logger.info("Stripe Connect checkout %s for merchant %s ($%.2f)",
+                session.get("id"), order.get("merchant_id"), amount / 100)
+    return {"url": session["url"], "method": "stripe", "link_id": session["id"], "session_id": session["id"]}
+
+
+async def _record_checkout_session(order, merchant_config, pos_order_id, session, amount, currency) -> None:
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                f"{SUPABASE_URL}/rest/v1/checkout_sessions",
+                json={
+                    "merchant_id": order.get("merchant_id", ""),
+                    "pos_order_id": pos_order_id,
+                    "provider": "stripe",
+                    "provider_ref": session.get("id"),
+                    "amount_cents": amount,
+                    "currency": currency,
+                    "status": "created",
+                    "checkout_url": session.get("url"),
+                    "caller_phone": order.get("caller_phone", ""),
+                },
+                headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",
+                         "Content-Type": "application/json", "Prefer": "return=minimal"},
+            )
+    except Exception as e:  # noqa: BLE001 — recording is best-effort
+        logger.warning("checkout_sessions insert failed: %s", e)
+
 
 async def create_payment_link(
     order: dict[str, Any],

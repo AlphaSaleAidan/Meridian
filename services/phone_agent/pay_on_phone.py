@@ -21,7 +21,7 @@ from typing import Any
 import httpx
 
 from merchant_config import MerchantPhoneConfig
-from payment_links import create_payment_link
+from payment_links import create_checkout
 from sms_checkout import send_checkout_sms
 from order_router import route_order
 
@@ -100,12 +100,10 @@ async def collect_pay_now(
     phone = caller_info.get("phone") or order.get("caller_phone", "")
     order["caller_phone"] = phone
 
-    payment_result = await create_payment_link(
-        order=order,
-        pos_system=config.pos_system,
-        pos_order_id=pos_result.get("pos_order_id", ""),
-        access_token=config.pos_access_token,
-        location_id=config.pos_location_id,
+    # Unified entry: routes to Stripe Connect when the merchant is onboarded for
+    # it (flag-gated), else falls back to the per-POS payment link unchanged.
+    payment_result = await create_checkout(
+        order, config, pos_result.get("pos_order_id", ""),
     )
 
     sms_result: dict = {}

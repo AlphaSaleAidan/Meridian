@@ -43,7 +43,7 @@ class Spy:
             self.pos_calls.append(order)
             return {"success": True, "pos_order_id": "POS-ABC-123", "pos_system": pos_system}
 
-        async def fake_create_payment_link(order, pos_system, pos_order_id, access_token, location_id):
+        async def fake_create_checkout(order, config, pos_order_id=""):
             self.link_calls.append({"order": order, "pos_order_id": pos_order_id})
             return {"url": "https://sq.link/pay/xyz", "link_id": "PL-1", "method": "square"}
 
@@ -71,7 +71,7 @@ class Spy:
             self.patched.append(("route_order", {"kitchen_released": True}))
             return {"pos": pos_result}
 
-        monkeypatch.setattr(pay_on_phone, "create_payment_link", fake_create_payment_link)
+        monkeypatch.setattr(pay_on_phone, "create_checkout", fake_create_checkout)
         monkeypatch.setattr(pay_on_phone, "send_checkout_sms", fake_send_checkout_sms)
         monkeypatch.setattr(pay_on_phone, "_save_held_order", fake_save_held)
         monkeypatch.setattr(pay_on_phone, "mark_order_paid", fake_mark_paid)

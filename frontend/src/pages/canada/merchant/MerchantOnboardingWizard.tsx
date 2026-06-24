@@ -7,6 +7,7 @@ import {
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import StripeConnectStep from './StripeConnectStep'
 
 // ── Canada theme (mirrors CanadaCustomerOnboardingWizard) ──
 const T = {
@@ -34,13 +35,14 @@ const PROVINCES = [
   'Quebec', 'Saskatchewan', 'Yukon',
 ]
 
-type Step = 'welcome' | 'connect' | 'sync' | 'confirm' | 'done'
+type Step = 'welcome' | 'connect' | 'sync' | 'confirm' | 'payments' | 'done'
 
 const STEPS: { key: Step; label: string }[] = [
   { key: 'welcome', label: 'Welcome' },
   { key: 'connect', label: 'Connect POS' },
   { key: 'sync', label: 'First Sync' },
   { key: 'confirm', label: 'Confirm' },
+  { key: 'payments', label: 'Payments' },
 ]
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -279,7 +281,7 @@ export default function MerchantOnboardingWizard() {
         }
       }
       try { if (progressKey) localStorage.removeItem(progressKey) } catch { /* ignore */ }
-      setStep('done')
+      setStep('payments')
     } catch (err: any) {
       setError(err?.message || 'Could not save your details — please try again.')
     } finally {
@@ -597,6 +599,10 @@ export default function MerchantOnboardingWizard() {
                   </button>
                 </div>
               </div>
+            )}
+
+            {step === 'payments' && (
+              <StripeConnectStep orgId={orgId} onDone={() => setStep('done')} />
             )}
 
             {/* ═══ Done ═══ */}
