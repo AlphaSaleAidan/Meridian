@@ -5,7 +5,7 @@ Pulls merchant settings from Supabase for phone agent behavior.
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
 logger = logging.getLogger("meridian.phone_agent.config")
@@ -173,7 +173,7 @@ def is_open_now(business_hours: dict | None, tz_name: str | None, now: datetime 
 
 def is_within_business_hours(config: MerchantPhoneConfig) -> bool:
     """Back-compat wrapper around is_open_now using the config's tz."""
-    return is_open_now(config.business_hours, getattr(config, "business_timezone", "") or None)
+    return is_open_now(config.business_hours, config.business_timezone or None)
 
 
 def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
