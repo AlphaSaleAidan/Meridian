@@ -20,20 +20,15 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => {
   return `${i - 12}p`
 })
 
-// Colours + thresholds match the Schedule "Expected traffic" key
-// (PositionsBoard trafficTier) so the two legends read as one language.
-const EMPTY = '#1F1F23'
-const TIERS = [
-  { color: '#E06B5E', label: 'Busy' },  // > 0.6
-  { color: '#D4A843', label: 'Med' },   // > 0.33
-  { color: '#17C5B0', label: 'Easy' },  // > 0
-]
+// Peak-hours intensity ramp: quiet = blue, busy = teal (low → high).
+const LEGEND = ['#1F1F23', 'rgba(26, 143, 214, 0.15)', 'rgba(26, 143, 214, 0.35)', 'rgba(23, 197, 176, 0.5)', 'rgba(23, 197, 176, 0.8)']
 
-function tierColor(normalized: number): string {
-  if (normalized <= 0) return EMPTY
-  if (normalized > 0.6) return TIERS[0].color
-  if (normalized > 0.33) return TIERS[1].color
-  return TIERS[2].color
+function cellColor(normalized: number): string {
+  if (normalized <= 0) return LEGEND[0]
+  if (normalized < 0.25) return LEGEND[1]
+  if (normalized < 0.5) return LEGEND[2]
+  if (normalized < 0.75) return LEGEND[3]
+  return LEGEND[4]
 }
 
 function tipFor(cell: HeatmapCell | undefined, dayLabel: string, hour: number, normalized: number): string {
@@ -43,24 +38,23 @@ function tipFor(cell: HeatmapCell | undefined, dayLabel: string, hour: number, n
     : `${dayLabel} ${hourLabels[hour]}: ${Math.round(normalized * 100)}% of peak`
 }
 
-function Legend() {
+function GradientLegend() {
   return (
-    <div className="flex items-center justify-center gap-3 mt-3">
-      {TIERS.map(t => (
-        <span key={t.label} className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: t.color }} />
-          <span className="text-[9px] text-[#A1A1A8]/50">{t.label}</span>
-        </span>
-      ))}
+    <div className="flex items-center justify-center gap-2 mt-4">
+      <span className="text-[9px] text-[#A1A1A8]/40">Low</span>
+      <div className="flex gap-px">
+        {LEGEND.map((c, i) => <div key={i} className="w-6 h-3 rounded-sm" style={{ backgroundColor: c }} />)}
+      </div>
+      <span className="text-[9px] text-[#A1A1A8]/40">High</span>
     </div>
   )
 }
 
-/** Shared demand heatmap, in the Busy/Med/Easy palette of the Schedule traffic
- *  key. Two modes:
+/** Shared demand heatmap. Two modes:
  *   - week grid (default): 7 days × 24h — the Peak Hours analytics page.
- *   - single day (`day` set): one 24h strip for the selected day, so it fits
- *     beside the Schedule board and rotates as you change the day. */
+ *   - single day (`day` set): a VERTICAL list of the selected day's 24 hours
+ *     (hour label + bar), so it fits a narrow column beside the Schedule board
+ *     and rotates as you change the day. */
 export default function PeakHoursHeatmap({
   cells,
   title = 'Weekly Transaction Heatmap',
@@ -72,7 +66,7 @@ export default function PeakHoursHeatmap({
   title?: string
   caption?: string
   compact?: boolean
-  /** When set (0=Mon..6=Sun), render only that day's 24h strip. */
+  /** When set (0=Mon..6=Sun), render only that day's 24h as a vertical list. */
   day?: number
 }) {
   const single = day != null
@@ -80,34 +74,29 @@ export default function PeakHoursHeatmap({
   if (single) {
     const dayCells = cells.filter(c => c.day === day)
     const max = Math.max(0, ...dayCells.map(c => c.intensity))
+    // Only show the hours the business is actually open (non-zero demand) so the
+    // list stays short — fall back to all 24 if a day has no data at all.
+    const active = Array.from({ length: 24 }, (_, h) => h).filter(h => (dayCells.find(c => c.hour === h)?.intensity || 0) > 0)
+    const hours = active.length ? active : Array.from({ length: 24 }, (_, h) => h)
     const heading = `${title}${title.includes('—') ? '' : ' —'} ${dayFull[day] ?? ''}`.trim()
     return (
       <div className="card p-4 sm:p-5" data-walkthrough="peak-heatmap">
         <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">{heading}</h3>
         {caption && <p className="text-[11px] text-[#A1A1A8]/60 mb-3">{caption}</p>}
-        <div className="flex items-end gap-px mb-1">
-          {hourLabels.map((h, i) => (
-            <div key={i} className="flex-1 text-center text-[8px] text-[#A1A1A8]/30">{i % 3 === 0 ? h : ''}</div>
-          ))}
-        </div>
-        <div className="flex items-center gap-px">
-          {Array.from({ length: 24 }, (_, hour) => {
+        <div className="space-y-0.5">
+          {hours.map(hour => {
             const cell = dayCells.find(c => c.hour === hour)
             const normalized = max > 0 ? (cell?.intensity || 0) / max : 0
             const tip = tipFor(cell, dayNames[day], hour, normalized)
             return (
-              <div key={hour} className="flex-1 h-7 rounded-[2px] group relative cursor-default"
-                style={{ backgroundColor: tierColor(normalized) }}>
-                {tip && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-[#0A0A0B] border border-[#1F1F23] rounded text-[10px] text-[#F5F5F7] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    {tip}
-                  </div>
-                )}
+              <div key={hour} className="flex items-center gap-2" title={tip}>
+                <span className="w-7 flex-shrink-0 text-right text-[9px] text-[#A1A1A8]/50">{hourLabels[hour]}</span>
+                <div className="flex-1 h-3 rounded-[3px]" style={{ backgroundColor: cellColor(normalized) }} />
               </div>
             )
           })}
         </div>
-        <Legend />
+        <GradientLegend />
       </div>
     )
   }
@@ -136,7 +125,7 @@ export default function PeakHoursHeatmap({
                   const tip = tipFor(cell, dn, hour, normalized)
                   return (
                     <div key={hour} className="flex-1 aspect-[2/1] rounded-[2px] group relative cursor-default"
-                      style={{ backgroundColor: tierColor(normalized) }}>
+                      style={{ backgroundColor: cellColor(normalized) }}>
                       {tip && (
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-[#0A0A0B] border border-[#1F1F23] rounded text-[10px] text-[#F5F5F7] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                           {tip}
@@ -148,7 +137,7 @@ export default function PeakHoursHeatmap({
               </div>
             ))}
           </div>
-          <Legend />
+          <GradientLegend />
         </div>
       </div>
     </div>

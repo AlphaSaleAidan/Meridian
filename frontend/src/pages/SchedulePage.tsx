@@ -632,7 +632,7 @@ export default function SchedulePage() {
           Now the primary view on every width (the staff-row grid is retired). */}
       {!isGenerating && (
         <div className="flex flex-col xl:flex-row xl:items-start gap-4">
-          <div className="w-full xl:max-w-3xl xl:flex-shrink-0">
+          <div className="w-full xl:flex-1 xl:min-w-0 xl:max-w-3xl">
             <PositionsBoard
               shifts={shifts} staff={staff} businessType={businessType}
               peaks={peakHours} weekStartDate={weekStartDate}
@@ -641,8 +641,8 @@ export default function SchedulePage() {
             />
           </div>
           {/* Peak Hours side-by-side: the same demand signal Auto-fill optimizes
-              against, visible while you build the week. */}
-          <div className="w-full xl:flex-1 xl:min-w-0">
+              against, visible while you build the week. Slim fixed rail. */}
+          <div className="w-full xl:w-60 xl:flex-shrink-0">
             <PeakHoursHeatmap
               cells={peakHours}
               title="Peak Hours"
