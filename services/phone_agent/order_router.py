@@ -10,7 +10,7 @@ from typing import Any
 import httpx
 
 from merchant_config import MerchantPhoneConfig
-from payment_links import create_payment_link
+from payment_links import create_checkout
 from sms_checkout import send_checkout_sms
 
 logger = logging.getLogger("meridian.phone_agent.router")
@@ -38,12 +38,12 @@ async def route_order(
     sms_result = {}
     if config.sms_checkout_enabled and order.get("caller_phone"):
         pos_order_id = pos_result.get("pos_order_id", "")
-        payment_result = await create_payment_link(
+        # Unified checkout: Stripe (CAD, card+Apple/Google Pay) when enabled +
+        # configured, else falls back to the per-POS link inside create_checkout.
+        payment_result = await create_checkout(
             order=order,
-            pos_system=config.pos_system,
+            merchant_config=config,
             pos_order_id=pos_order_id,
-            access_token=config.pos_access_token,
-            location_id=config.pos_location_id,
         )
 
         if payment_result.get("url"):
