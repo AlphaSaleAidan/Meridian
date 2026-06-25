@@ -78,20 +78,23 @@ def _stripe_line_items(order: dict[str, Any], currency: str) -> list[dict]:
 
 
 async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: str = "") -> dict:
-    """Preferred checkout entry point. Routes a paying order through the UNIFIED
-    Stripe Connect processor when the merchant is onboarded for it; otherwise
-    falls back to the existing per-POS payment link. Same return shape
-    ({url, method, ...}) so callers/SMS are unchanged."""
-    if (
-        UNIFIED_PAYMENTS_ENABLED
-        and STRIPE_SECRET_KEY
-        and getattr(merchant_config, "stripe_account_id", "")
-        and getattr(merchant_config, "stripe_charges_enabled", False)
-    ):
+    """Preferred checkout entry point. When unified payments are on and a Stripe
+    key is configured, ALWAYS produce a real Stripe hosted-checkout link:
+      • merchant onboarded for Connect → destination charge to their account
+        (+ Meridian application fee);
+      • not onboarded yet (demo / pre-Connect) → direct charge on Meridian's own
+        platform account, so the customer can still pay now (no dead link).
+    Stripe supports CAD, so this is the rail that actually works for Canada — the
+    per-POS fallback below stranded CAD orders on a non-existent checkout page.
+    Same return shape ({url, method, ...}) so callers/SMS are unchanged."""
+    if UNIFIED_PAYMENTS_ENABLED and STRIPE_SECRET_KEY:
         try:
-            return await _stripe_connect_payment_link(order, merchant_config, pos_order_id)
+            acct = getattr(merchant_config, "stripe_account_id", "")
+            charges_ok = getattr(merchant_config, "stripe_charges_enabled", False)
+            connect_account = acct if (acct and charges_ok) else ""
+            return await _stripe_checkout(order, merchant_config, pos_order_id, connect_account)
         except Exception as e:  # noqa: BLE001 — never strand the order; fall back
-            logger.error("Stripe Connect checkout failed, falling back to POS link: %s", e)
+            logger.error("Stripe checkout failed, falling back to POS link: %s", e)
     return await create_payment_link(
         order,
         getattr(merchant_config, "pos_system", "") or "",
@@ -101,23 +104,20 @@ async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: 
     )
 
 
-async def _stripe_connect_payment_link(order: dict[str, Any], merchant_config, pos_order_id: str) -> dict:
-    """Stripe Checkout (hosted) with a destination charge to the merchant's
-    connected account + Meridian application fee. POS-agnostic — works no matter
-    which POS the merchant runs."""
+async def _stripe_checkout(
+    order: dict[str, Any], merchant_config, pos_order_id: str, connect_account: str = ""
+) -> dict:
+    """Stripe hosted Checkout (POS-agnostic). With `connect_account` → a
+    destination charge to that connected account + Meridian application fee.
+    Without one → a direct charge on Meridian's platform account so unboarded
+    merchants (and the demo) can still take payment immediately."""
     stripe = _stripe()
     currency = (order.get("currency") or "cad").lower()
     amount = _order_amount_cents(order)
-    acct = merchant_config.stripe_account_id
 
-    pi_data: dict[str, Any] = {"transfer_data": {"destination": acct}}
-    if PLATFORM_FEE_BPS > 0:
-        pi_data["application_fee_amount"] = int(round(amount * PLATFORM_FEE_BPS / 10000))
-
-    session = stripe.checkout.Session.create(
+    kwargs: dict[str, Any] = dict(
         mode="payment",
         line_items=_stripe_line_items(order, currency),
-        payment_intent_data=pi_data,
         success_url=SUCCESS_URL,
         client_reference_id=pos_order_id or order.get("merchant_id", ""),
         metadata={
@@ -126,9 +126,19 @@ async def _stripe_connect_payment_link(order: dict[str, Any], merchant_config, p
             "caller_phone": order.get("caller_phone", ""),
         },
     )
+    if connect_account:
+        pi_data: dict[str, Any] = {"transfer_data": {"destination": connect_account}}
+        if PLATFORM_FEE_BPS > 0:
+            pi_data["application_fee_amount"] = int(round(amount * PLATFORM_FEE_BPS / 10000))
+        kwargs["payment_intent_data"] = pi_data
+
+    session = stripe.checkout.Session.create(**kwargs)
+    # Stripe SDK objects are NOT dicts — use subscript access, not .get()
+    # (.get raises AttributeError on a StripeObject).
     await _record_checkout_session(order, merchant_config, pos_order_id, session, amount, currency)
-    logger.info("Stripe Connect checkout %s for merchant %s ($%.2f)",
-                session.get("id"), order.get("merchant_id"), amount / 100)
+    logger.info("Stripe checkout %s (%s) for merchant %s ($%.2f %s)",
+                session["id"], "connect" if connect_account else "platform",
+                order.get("merchant_id"), amount / 100, currency.upper())
     return {"url": session["url"], "method": "stripe", "link_id": session["id"], "session_id": session["id"]}
 
 
@@ -143,11 +153,11 @@ async def _record_checkout_session(order, merchant_config, pos_order_id, session
                     "merchant_id": order.get("merchant_id", ""),
                     "pos_order_id": pos_order_id,
                     "provider": "stripe",
-                    "provider_ref": session.get("id"),
+                    "provider_ref": session["id"],
                     "amount_cents": amount,
                     "currency": currency,
                     "status": "created",
-                    "checkout_url": session.get("url"),
+                    "checkout_url": session["url"],
                     "caller_phone": order.get("caller_phone", ""),
                 },
                 headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",

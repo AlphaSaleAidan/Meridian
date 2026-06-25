@@ -41,6 +41,17 @@ def _cfg(**kw):
     return SimpleNamespace(**base)
 
 
+class _StripeObj:
+    """Mimics a real Stripe SDK object: subscript access only, NO .get() —
+    accessing .get raises AttributeError just like StripeObject, so code that
+    calls session.get(...) is caught by tests (it shipped broken once)."""
+    def __init__(self, **d):
+        self._d = d
+
+    def __getitem__(self, k):
+        return self._d[k]
+
+
 class _FakeStripe:
     captured: dict = {}
 
@@ -49,7 +60,7 @@ class _FakeStripe:
             @staticmethod
             def create(**kwargs):
                 _FakeStripe.captured = kwargs
-                return {"id": "cs_test_123", "url": "https://checkout.stripe.com/pay/cs_test_123"}
+                return _StripeObj(id="cs_test_123", url="https://checkout.stripe.com/pay/cs_test_123")
 
 
 def test_amount_prefers_total():
@@ -77,20 +88,30 @@ def test_line_items_single_total_when_unpriced():
 
 
 @aio
-async def test_create_checkout_falls_back_when_not_onboarded(monkeypatch):
+async def test_create_checkout_platform_direct_when_not_onboarded(monkeypatch):
+    # Key present but merchant has no connected Stripe account (demo / pre-Connect):
+    # must STILL produce a real Stripe link — a direct charge on the platform
+    # account — NOT fall back to the per-POS link (which strands CAD on a dead page).
     monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
     monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_test")
-    called = {}
+    monkeypatch.setattr(pl, "_stripe", lambda: _FakeStripe)
 
-    async def fake_link(order, pos_system, pos_order_id, token, loc):
-        called["pos"] = pos_system
-        return {"url": "https://square/pay", "method": "square"}
+    async def no_record(*a, **k):
+        return None
 
-    monkeypatch.setattr(pl, "create_payment_link", fake_link)
-    # merchant has no stripe account → must fall back to per-POS
+    monkeypatch.setattr(pl, "_record_checkout_session", no_record)
+
+    async def fail_link(*a, **k):
+        raise AssertionError("must not fall back to per-POS link when Stripe is ready")
+
+    monkeypatch.setattr(pl, "create_payment_link", fail_link)
+
     out = await pl.create_checkout(ORDER, _cfg(), "ord_1")
-    assert out["method"] == "square"
-    assert called["pos"] == "square"
+    assert out["method"] == "stripe"
+    assert out["url"].startswith("https://checkout.stripe.com")
+    # platform-direct => NO destination transfer / application fee
+    assert "payment_intent_data" not in _FakeStripe.captured
+    assert _FakeStripe.captured["line_items"][0]["price_data"]["currency"] == "cad"
 
 
 @aio
