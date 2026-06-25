@@ -41,11 +41,11 @@ function tipFor(cell: HeatmapCell | undefined, dayLabel: string, hour: number, n
 function GradientLegend() {
   return (
     <div className="flex items-center justify-center gap-2 mt-4">
-      <span className="text-[9px] text-[#A1A1A8]/40">Low</span>
+      <span className="text-[11px] text-[#A1A1A8]/50">Low</span>
       <div className="flex gap-px">
-        {LEGEND.map((c, i) => <div key={i} className="w-6 h-3 rounded-sm" style={{ backgroundColor: c }} />)}
+        {LEGEND.map((c, i) => <div key={i} className="w-6 h-2.5 rounded-sm" style={{ backgroundColor: c }} />)}
       </div>
-      <span className="text-[9px] text-[#A1A1A8]/40">High</span>
+      <span className="text-[11px] text-[#A1A1A8]/50">High</span>
     </div>
   )
 }
@@ -81,17 +81,17 @@ export default function PeakHoursHeatmap({
     const heading = `${title}${title.includes('—') ? '' : ' —'} ${dayFull[day] ?? ''}`.trim()
     return (
       <div className="card p-4 sm:p-5" data-walkthrough="peak-heatmap">
-        <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">{heading}</h3>
-        {caption && <p className="text-[11px] text-[#A1A1A8]/60 mb-3">{caption}</p>}
-        <div className="space-y-0.5">
+        <h3 className="text-base font-semibold text-[#F5F5F7] mb-1">{heading}</h3>
+        {caption && <p className="text-xs text-[#A1A1A8]/60 mb-3">{caption}</p>}
+        <div className="space-y-1.5">
           {hours.map(hour => {
             const cell = dayCells.find(c => c.hour === hour)
             const normalized = max > 0 ? (cell?.intensity || 0) / max : 0
             const tip = tipFor(cell, dayNames[day], hour, normalized)
             return (
-              <div key={hour} className="flex items-center gap-2" title={tip}>
-                <span className="w-7 flex-shrink-0 text-right text-[9px] text-[#A1A1A8]/50">{hourLabels[hour]}</span>
-                <div className="flex-1 h-3 rounded-[3px]" style={{ backgroundColor: cellColor(normalized) }} />
+              <div key={hour} className="flex items-center gap-2.5" title={tip}>
+                <span className="w-9 flex-shrink-0 text-right text-xs font-medium text-[#A1A1A8]/70 tabular-nums">{hourLabels[hour]}</span>
+                <div className="flex-1 h-1.5 rounded-full" style={{ backgroundColor: cellColor(normalized) }} />
               </div>
             )
           })}
