@@ -141,9 +141,10 @@ async def _clover_payment_link(
         },
     }
 
+    from pos_connector import clover_api_base
     async with httpx.AsyncClient() as client:
         res = await client.post(
-            f"https://api.clover.com/v3/merchants/{merchant_id}/pay_links",
+            f"{clover_api_base()}/v3/merchants/{merchant_id}/pay_links",
             json=payload,
             headers={
                 "Authorization": f"Bearer {access_token}",
