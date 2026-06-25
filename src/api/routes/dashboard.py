@@ -23,6 +23,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Query, HTTPException, Depends
+from pydantic import BaseModel
 
 from ..auth import require_admin, require_org_access
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
@@ -843,3 +844,183 @@ async def flush_cache(
     """Flush dashboard cache for an organization."""
     dashboard_cache.invalidate_org(org_id)
     return {"flushed": True, "org_id": org_id}
+
+
+# ── Reconcile 2026-06-25: routes that live on fix/canada-insights-currency but
+# were missed by the Jun-19 frontend unify — the portal frontend (now on main)
+# calls these, so main's backend must serve them too. ──
+
+@router.get("/open-orders")
+async def get_open_orders(
+    org_id: OrgId,
+    db=Depends(_get_db),
+):
+    """Unpaid OPEN + DRAFT orders pulled live from the POS — the merchant's
+    pipeline (quotes / open tickets). These are NOT revenue (no payment taken)
+    so they're excluded from the sales numbers; surfaced separately here."""
+    cache_key = dashboard_cache.make_key("open_orders", org_id)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    empty = {"orders": [], "summary": {"open_count": 0, "draft_count": 0, "total_cents": 0}, "provider": None}
+
+    conns = await db.select(
+        "pos_connections",
+        filters={"org_id": f"eq.{org_id}", "provider": "eq.square", "status": "eq.connected"},
+        limit=1,
+    )
+    if not conns:
+        return empty
+    conn = conns[0]
+
+    try:
+        from ...security.encryption import decrypt_token
+        from ...square.client import SquareClient
+        creds = conn.get("credentials_encrypted") or {}
+        token = decrypt_token(creds.get("access_token", "") or conn.get("access_token_enc", ""))
+        if not token:
+            return empty
+
+        orders = []
+        async with SquareClient(access_token=token) as client:
+            locs = await client.list_locations()
+            loc_ids = [l["id"] for l in (locs or [])]
+            raw = await client.search_all_orders(location_ids=loc_ids, states=["OPEN", "DRAFT"])
+            for o in raw:
+                line_items = o.get("line_items") or []
+                orders.append({
+                    "id": o.get("id"),
+                    "state": o.get("state"),
+                    "created_at": o.get("created_at"),
+                    "updated_at": o.get("updated_at"),
+                    "total_cents": (o.get("total_money") or {}).get("amount", 0) or 0,
+                    "item_count": len(line_items),
+                    "items": [li.get("name", "Item") for li in line_items[:4]],
+                    "reference_id": o.get("reference_id"),
+                })
+    except Exception as e:
+        logger.warning("open-orders fetch failed for org=%s: %s", org_id, e)
+        return empty
+
+    orders.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    result = {
+        "orders": orders,
+        "summary": {
+            "open_count": sum(1 for o in orders if o["state"] == "OPEN"),
+            "draft_count": sum(1 for o in orders if o["state"] == "DRAFT"),
+            "total_cents": sum(o["total_cents"] for o in orders),
+        },
+        "provider": "square",
+    }
+    dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
+
+
+@router.get("/revenue/annual")
+async def get_annual_revenue(
+    org_id: OrgId,
+    db=Depends(_get_db),
+):
+    """Historical revenue by calendar year + a monthly series, so merchants can
+    see prior-year revenue. Backed by the ~18 months the initial backfill pulls."""
+    cache_key = dashboard_cache.make_key("annual", org_id)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # ~25 months so the current and previous full year both have coverage.
+    daily = await db.get_daily_revenue(org_id, days=760)
+
+    by_year: dict[str, dict] = {}
+    by_month: dict[str, dict] = {}
+    for r in daily:
+        bucket = r.get("day_bucket") or ""
+        if len(bucket) < 7:
+            continue
+        year, month = bucket[:4], bucket[:7]
+        rev = r.get("total_revenue_cents", 0) or 0
+        txns = r.get("transaction_count", 0) or 0
+        for key, agg in ((year, by_year), (month, by_month)):
+            slot = agg.setdefault(key, {"revenue_cents": 0, "transaction_count": 0})
+            slot["revenue_cents"] += rev
+            slot["transaction_count"] += txns
+
+    years = [
+        {
+            "year": int(y),
+            "revenue_cents": v["revenue_cents"],
+            "transaction_count": v["transaction_count"],
+            "avg_ticket_cents": (v["revenue_cents"] // v["transaction_count"]) if v["transaction_count"] else 0,
+        }
+        for y, v in sorted(by_year.items())
+    ]
+    monthly = [
+        {"month": m, "revenue_cents": v["revenue_cents"], "transaction_count": v["transaction_count"]}
+        for m, v in sorted(by_month.items())
+    ]
+
+    current_year = years[-1] if years else None
+    prior_year = years[-2] if len(years) >= 2 else None
+    yoy_pct = None
+    if current_year and prior_year and prior_year["revenue_cents"] > 0:
+        yoy_pct = round(
+            (current_year["revenue_cents"] - prior_year["revenue_cents"]) / prior_year["revenue_cents"] * 100, 1
+        )
+
+    result = {
+        "years": years,
+        "monthly": monthly,
+        "current_year": current_year,
+        "prior_year": prior_year,
+        "yoy_pct": yoy_pct,
+    }
+    dashboard_cache.set(cache_key, result, TTL_SLOW)
+    return result
+
+
+
+
+class ProductCostUpdate(BaseModel):
+    cost_cents: int | None = None
+    price_cents: int | None = None
+
+
+@router.patch("/products/{product_id}")
+async def update_product_cost(
+    product_id: str,
+    body: ProductCostUpdate,
+    org_id: OrgId = None,
+    db=Depends(_get_db),
+):
+    """Set a product's unit cost (and optionally price) — powers inline cost
+    entry on the Products page so margins can compute. Cost-of-goods isn't in
+    the POS feed, so the merchant supplies it here once."""
+    rows = await db.select(
+        "products",
+        filters={"id": f"eq.{product_id}", "org_id": f"eq.{org_id}"},
+        limit=1,
+    )
+    if not rows:
+        raise HTTPException(404, "Product not found")
+
+    fields: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.cost_cents is not None:
+        if body.cost_cents < 0:
+            raise HTTPException(422, "cost_cents must be >= 0")
+        fields["cost_cents"] = body.cost_cents
+    if body.price_cents is not None:
+        if body.price_cents < 0:
+            raise HTTPException(422, "price_cents must be >= 0")
+        fields["price_cents"] = body.price_cents
+    if len(fields) == 1:
+        raise HTTPException(422, "Provide cost_cents and/or price_cents")
+
+    await db.update("products", fields, filters={"id": f"eq.{product_id}"})
+    dashboard_cache.invalidate_org(org_id)  # margins/products recompute on next read
+    return {"ok": True, "product_id": product_id,
+            "cost_cents": fields.get("cost_cents"), "price_cents": fields.get("price_cents")}
+
+
+# ─── Insights ─────────────────────────────────────────────
+
