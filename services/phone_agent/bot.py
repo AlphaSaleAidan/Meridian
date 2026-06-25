@@ -417,13 +417,14 @@ async def run_call_bot(
         pos_result = await create_pos_order(
             normalized, merchant_config.pos_system, pos_token, pos_location,
         )
-        await route_order(normalized, merchant_config, caller_info, pos_result)
+        routed = await route_order(normalized, merchant_config, caller_info, pos_result)
         await _log_call(merchant_id, session_ref, caller_info, "order_placed",
                         order_data=normalized, pos_result=pos_result)
-        # Text the caller their order receipt — fire-and-forget so it never delays
-        # the spoken confirmation.
+        # One text, not two: route_order already sends a checkout SMS (order
+        # summary + pay link) when payments are on. Only send the plain receipt
+        # as a fallback when no pay-link SMS went out (pay-at-pickup merchants).
         receipt_to = args.get("caller_phone") or caller_info.get("phone", "")
-        if receipt_to:
+        if receipt_to and not routed.get("sms_sent"):
             asyncio.create_task(_send_order_sms(
                 receipt_to, _order_receipt_text(normalized, merchant_config),
                 merchant_config.phone_number))
