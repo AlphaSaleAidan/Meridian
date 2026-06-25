@@ -90,8 +90,8 @@ def test_timezone_actually_matters():
 
 @aio
 async def test_send_sms_no_gateway(monkeypatch):
-    monkeypatch.setattr(sms_checkout, "TWILIO_SID", "")
-    monkeypatch.setattr(sms_checkout, "SUPABASE_URL", "")
+    monkeypatch.delenv("TELNYX_API_KEY", raising=False)
+    monkeypatch.delenv("TELNYX_PHONE_NUMBER", raising=False)
     res = await sms_checkout.send_sms("+15551234567", "hi")
     assert res == {"sent": False, "method": "none", "reason": "no_gateway"}
 
@@ -103,19 +103,18 @@ async def test_send_sms_missing_args():
 
 
 @aio
-async def test_send_sms_uses_twilio_when_configured(monkeypatch):
-    monkeypatch.setattr(sms_checkout, "TWILIO_SID", "AC1")
-    monkeypatch.setattr(sms_checkout, "TWILIO_TOKEN", "tok")
-    monkeypatch.setattr(sms_checkout, "TWILIO_FROM", "+15550000000")
+async def test_send_sms_uses_telnyx_when_configured(monkeypatch):
+    monkeypatch.setenv("TELNYX_API_KEY", "KEY_test")
+    monkeypatch.setenv("TELNYX_PHONE_NUMBER", "+15550000000")
     calls = {}
 
-    async def fake_twilio(to, body):
+    async def fake_telnyx(to, body):
         calls["to"], calls["body"] = to, body
-        return {"sent": True, "method": "twilio", "message_sid": "SM1"}
+        return {"sent": True, "method": "telnyx", "message_sid": "msg1"}
 
-    monkeypatch.setattr(sms_checkout, "_send_via_twilio", fake_twilio)
+    monkeypatch.setattr(sms_checkout, "_send_via_telnyx", fake_telnyx)
     res = await sms_checkout.send_sms("+15551234567", "order up")
-    assert res["sent"] and res["method"] == "twilio"
+    assert res["sent"] and res["method"] == "telnyx"
     assert calls == {"to": "+15551234567", "body": "order up"}
 
 

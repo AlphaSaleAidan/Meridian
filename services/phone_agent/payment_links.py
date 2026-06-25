@@ -23,10 +23,16 @@ UNIFIED_PAYMENTS_ENABLED = os.getenv("UNIFIED_PAYMENTS_ENABLED", "0") == "1"
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 # Meridian's platform fee in basis points (100 = 1%). Default 0 = no fee.
 PLATFORM_FEE_BPS = int(os.getenv("MERIDIAN_PLATFORM_FEE_BPS", "0") or 0)
-SUCCESS_URL = os.getenv("CHECKOUT_SUCCESS_URL", "https://meridian.tips/pay/success")
 # Base for the branded short pay link (<base>/p/<code> -> Stripe checkout URL).
 # Served by the backend /p/{code} redirect route.
 PUBLIC_PAY_BASE = os.getenv("PUBLIC_PAY_BASE", "https://api.meridian.tips").rstrip("/")
+# Post-checkout pages are served by the backend (api.meridian.tips), NOT the
+# frontend SPA — the old default pointed at meridian.tips/pay/success which has
+# no route, so the SPA served the home page after payment. {CHECKOUT_SESSION_ID}
+# is substituted by Stripe so the success page can show the CAD amount paid.
+SUCCESS_URL = os.getenv(
+    "CHECKOUT_SUCCESS_URL", f"{PUBLIC_PAY_BASE}/pay/success?session_id={{CHECKOUT_SESSION_ID}}")
+CANCEL_URL = os.getenv("CHECKOUT_CANCEL_URL", f"{PUBLIC_PAY_BASE}/pay/cancel")
 
 
 def _stripe():
@@ -122,6 +128,7 @@ async def _stripe_checkout(
         mode="payment",
         line_items=_stripe_line_items(order, currency),
         success_url=SUCCESS_URL,
+        cancel_url=CANCEL_URL,
         client_reference_id=pos_order_id or order.get("merchant_id", ""),
         metadata={
             "merchant_id": order.get("merchant_id", ""),

@@ -184,3 +184,24 @@ async def test_create_checkout_uses_stripe_when_ready(monkeypatch):
     assert cap["payment_intent_data"]["transfer_data"]["destination"] == "acct_merchant"
     assert cap["payment_intent_data"]["application_fee_amount"] == 22  # 1% of 2250c = 22.5 -> 22 (round half-to-even)
     assert cap["metadata"]["pos_order_id"] == "ord_42"
+
+
+@aio
+async def test_checkout_sets_backend_return_urls(monkeypatch):
+    # success/cancel must point at the backend (api.meridian.tips) — the old
+    # meridian.tips/pay/success default fell through to the SPA home page.
+    monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
+    monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_test")
+    monkeypatch.setattr(pl, "SUCCESS_URL", "https://api.meridian.tips/pay/success?session_id={CHECKOUT_SESSION_ID}")
+    monkeypatch.setattr(pl, "CANCEL_URL", "https://api.meridian.tips/pay/cancel")
+    monkeypatch.setattr(pl, "_stripe", lambda: _FakeStripe)
+
+    async def no_record(*a, **k):
+        return None
+
+    monkeypatch.setattr(pl, "_record_checkout_session", no_record)
+    await pl.create_checkout(ORDER, _cfg(), "ord_r")
+    cap = _FakeStripe.captured
+    assert cap["success_url"].startswith("https://api.meridian.tips/pay/success")
+    assert "{CHECKOUT_SESSION_ID}" in cap["success_url"]
+    assert cap["cancel_url"] == "https://api.meridian.tips/pay/cancel"
