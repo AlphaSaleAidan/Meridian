@@ -27,7 +27,7 @@ async def pay_redirect(code: str):
     if not (4 <= len(code) <= 32 and code.isalnum()):
         raise HTTPException(404, "Unknown payment link")
 
-    db = await get_db()
+    db = get_db()
     rows = await db.select(
         "checkout_sessions",
         columns="checkout_url,status",
