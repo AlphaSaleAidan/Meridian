@@ -21,16 +21,17 @@ function initials(name: string) {
 }
 
 /** Expected-traffic tier from sales-history demand (0..1).
- *  Busy day = red (needs the most staff), easy day = green. */
+ *  Uses the Peak Hours blue→teal ramp: busy = teal (high demand), easy = blue
+ *  (quiet) — so the two keys read as one. */
 function trafficTier(demand: number): { color: string; label: string } {
-  if (demand > 0.6) return { color: '#E06B5E', label: 'Busy' }
-  if (demand > 0.33) return { color: '#D4A843', label: 'Med' }
-  return { color: '#17C5B0', label: 'Easy' }
+  if (demand > 0.6) return { color: '#17C5B0', label: 'Busy' }
+  if (demand > 0.33) return { color: '#18AAC3', label: 'Med' }
+  return { color: '#1A8FD6', label: 'Easy' }
 }
 const TRAFFIC_KEY = [
-  { color: '#E06B5E', label: 'Busy' },
-  { color: '#D4A843', label: 'Med' },
-  { color: '#17C5B0', label: 'Easy' },
+  { color: '#17C5B0', label: 'Busy' },
+  { color: '#18AAC3', label: 'Med' },
+  { color: '#1A8FD6', label: 'Easy' },
 ]
 
 /** Where an assignment lands: an existing shift, or a brand-new position slot. */

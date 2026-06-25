@@ -18,6 +18,7 @@ import PositionsBoard, { type AssignTarget } from '@/components/schedule/Positio
 import { positionsForType, buildPositionSchedule, dayDemand } from '@/components/schedule/schedule-positions'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
+import PeakHoursHeatmap from '@/components/PeakHoursHeatmap'
 import { getLaborTarget, laborPctTone, DEMO_WEEKLY_REVENUE_CENTS } from '@/components/schedule/schedule-helpers'
 import { api } from '@/lib/api'
 import {
@@ -630,13 +631,25 @@ export default function SchedulePage() {
       {/* Positions board — day-first, drag from the staff pool or tap a slot.
           Now the primary view on every width (the staff-row grid is retired). */}
       {!isGenerating && (
-        <div className="lg:max-w-3xl">
-          <PositionsBoard
-            shifts={shifts} staff={staff} businessType={businessType}
-            peaks={peakHours} weekStartDate={weekStartDate}
-            day={mobileDay} onDayChange={setMobileDay}
-            onAssign={handleAssign} onShiftClick={handleShiftClick}
-          />
+        <div className="flex flex-col xl:flex-row xl:items-start gap-4">
+          <div className="w-full xl:flex-1 xl:min-w-0 xl:max-w-3xl">
+            <PositionsBoard
+              shifts={shifts} staff={staff} businessType={businessType}
+              peaks={peakHours} weekStartDate={weekStartDate}
+              day={mobileDay} onDayChange={setMobileDay}
+              onAssign={handleAssign} onShiftClick={handleShiftClick}
+            />
+          </div>
+          {/* Peak Hours side-by-side: the same demand signal Auto-fill optimizes
+              against, visible while you build the week. Slim fixed rail. */}
+          <div className="w-full xl:w-80 xl:flex-shrink-0">
+            <PeakHoursHeatmap
+              cells={peakHours}
+              title="Peak Hours"
+              caption="Demand for the selected day — Auto-fill staffs against this. Tap a day above to rotate."
+              day={mobileDay}
+            />
+          </div>
         </div>
       )}
 

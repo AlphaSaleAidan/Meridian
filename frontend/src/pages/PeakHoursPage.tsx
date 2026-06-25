@@ -1,6 +1,6 @@
 import { Clock, TrendingUp, Users, Zap } from 'lucide-react'
 import { generatePeakHourHeatmap, type PeakHourCell } from '@/lib/agent-data'
-import { formatCents } from '@/lib/format'
+import PeakHoursHeatmap from '@/components/PeakHoursHeatmap'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
@@ -16,67 +16,6 @@ const hourLabels = Array.from({ length: 24 }, (_, i) => {
   if (i === 12) return '12p'
   return `${i - 12}p`
 })
-
-function HeatmapGrid({ cells }: { cells: PeakHourCell[] }) {
-  const maxIntensity = Math.max(...cells.map(c => c.intensity))
-
-  return (
-    <div className="card p-4 sm:p-5" data-walkthrough="peak-heatmap">
-      <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Weekly Transaction Heatmap</h3>
-      <div className="overflow-x-auto">
-        <div className="min-w-[700px]">
-          <div className="flex items-end gap-px mb-1 pl-10">
-            {hourLabels.map((h, i) => (
-              <div key={i} className="flex-1 text-center text-[8px] text-[#A1A1A8]/30">{i % 2 === 0 ? h : ''}</div>
-            ))}
-          </div>
-          <div className="space-y-px">
-            {dayNames.map((day, dayIdx) => (
-              <div key={day} className="flex items-center gap-px">
-                <div className="w-10 text-right pr-2 text-[10px] text-[#A1A1A8]/50 flex-shrink-0">{day}</div>
-                {Array.from({ length: 24 }, (_, hour) => {
-                  const cell = cells.find(c => c.day === dayIdx && c.hour === hour)
-                  const intensity = cell?.intensity || 0
-                  const normalized = maxIntensity > 0 ? intensity / maxIntensity : 0
-
-                  let bg: string
-                  if (normalized === 0) bg = '#1F1F23'
-                  else if (normalized < 0.25) bg = 'rgba(26, 143, 214, 0.15)'
-                  else if (normalized < 0.5) bg = 'rgba(26, 143, 214, 0.35)'
-                  else if (normalized < 0.75) bg = 'rgba(23, 197, 176, 0.5)'
-                  else bg = 'rgba(23, 197, 176, 0.8)'
-
-                  return (
-                    <div
-                      key={hour}
-                      className="flex-1 aspect-[2/1] rounded-[2px] group relative cursor-default"
-                      style={{ backgroundColor: bg }}
-                    >
-                      {cell && cell.intensity > 0 && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-[#0A0A0B] border border-[#1F1F23] rounded text-[10px] text-[#F5F5F7] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                          {day} {hourLabels[hour]}: {cell.transactions} txns, {formatCents(cell.revenue)}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <span className="text-[9px] text-[#A1A1A8]/40">Low</span>
-            <div className="flex gap-px">
-              {['#1F1F23', 'rgba(26, 143, 214, 0.15)', 'rgba(26, 143, 214, 0.35)', 'rgba(23, 197, 176, 0.5)', 'rgba(23, 197, 176, 0.8)'].map((c, i) => (
-                <div key={i} className="w-6 h-3 rounded-sm" style={{ backgroundColor: c }} />
-              ))}
-            </div>
-            <span className="text-[9px] text-[#A1A1A8]/40">High</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
 
 export default function PeakHoursPage() {
   const orgId = useOrgId()
@@ -206,7 +145,7 @@ export default function PeakHoursPage() {
       </StaggerContainer>
 
       <ScrollReveal variant="fadeUp" delay={0.1}>
-        <HeatmapGrid cells={cells} />
+        <PeakHoursHeatmap cells={cells} />
       </ScrollReveal>
 
       {!awaitingData && (
