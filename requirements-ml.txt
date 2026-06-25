@@ -34,8 +34,6 @@ lifetimes>=0.11.0
 pymc-marketing>=0.10,<0.12
 
 # Wave 1A — panel price elasticity (OLS + DoubleML).
-statsmodels>=0.14
-econml>=0.15
 
 # Wave 1D — XGBoost/LightGBM + CalibratedClassifierCV for churn classifier.
 # (lightgbm is already declared above; xgboost is new.)

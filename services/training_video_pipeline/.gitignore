@@ -1,6 +1,0 @@
-output/
-.env
-__pycache__/
-*.pyc
-assets/presenter/*.jpg
-assets/presenter/*.png

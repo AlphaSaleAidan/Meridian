@@ -27,10 +27,8 @@ scipy>=1.14
 pyyaml>=6.0
 
 # Analytics
-duckdb>=1.0.0
 
 # LLM Observability
-langfuse>=2.40.0
 
 # Multi-Model LLM Routing
 litellm>=1.40.0
@@ -40,4 +38,3 @@ sentry-sdk[fastapi]>=2.0.0
 posthog>=3.0.0
 
 # AI Generation
-fal-client>=1.0.0
