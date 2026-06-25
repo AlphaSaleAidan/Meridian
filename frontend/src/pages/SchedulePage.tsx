@@ -642,7 +642,7 @@ export default function SchedulePage() {
           </div>
           {/* Peak Hours side-by-side: the same demand signal Auto-fill optimizes
               against, visible while you build the week. Slim fixed rail. */}
-          <div className="w-full xl:w-60 xl:flex-shrink-0">
+          <div className="w-full xl:w-80 xl:flex-shrink-0">
             <PeakHoursHeatmap
               cells={peakHours}
               title="Peak Hours"
