@@ -75,6 +75,10 @@ async def onboard(merchant_id: str, _auth=Depends(require_service_auth)):
                 email=(row.get("merchant_email") or None),
                 capabilities={"card_payments": {"requested": True}, "transfers": {"requested": True}},
                 business_profile={"name": row.get("business_name") or None},
+                # Pay the merchant out DAILY — after we auto-take the service fee
+                # (application_fee on each destination charge), Stripe settles the
+                # remainder to them on a daily schedule.
+                settings={"payouts": {"schedule": {"interval": "daily"}}},
                 metadata={"merchant_id": merchant_id},
             )
         except Exception as e:  # noqa: BLE001

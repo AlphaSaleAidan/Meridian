@@ -23,6 +23,11 @@ UNIFIED_PAYMENTS_ENABLED = os.getenv("UNIFIED_PAYMENTS_ENABLED", "0") == "1"
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 # Meridian's platform fee in basis points (100 = 1%). Default 0 = no fee.
 PLATFORM_FEE_BPS = int(os.getenv("MERIDIAN_PLATFORM_FEE_BPS", "0") or 0)
+# Flat per-order service fee in cents (e.g. the premium voice-agent fee). Taken
+# as the Stripe application fee on the destination charge — it lands in
+# Meridian's balance and the merchant is auto-paid the remainder (Stripe payout
+# schedule, set to daily at onboarding). Combined with PLATFORM_FEE_BPS if both set.
+SERVICE_FEE_CENTS = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
 # Base for the branded short pay link (<base>/p/<code> -> Stripe checkout URL).
 # Served by the backend /p/{code} redirect route.
 PUBLIC_PAY_BASE = os.getenv("PUBLIC_PAY_BASE", "https://api.meridian.tips").rstrip("/")
@@ -138,8 +143,12 @@ async def _stripe_checkout(
     )
     if connect_account:
         pi_data: dict[str, Any] = {"transfer_data": {"destination": connect_account}}
-        if PLATFORM_FEE_BPS > 0:
-            pi_data["application_fee_amount"] = int(round(amount * PLATFORM_FEE_BPS / 10000))
+        # Auto-take our fee at charge time: flat service fee + optional %. Stripe
+        # routes this to Meridian and pays the merchant the remainder (daily).
+        # Capped below the order so we never try to take more than was charged.
+        fee = SERVICE_FEE_CENTS + int(round(amount * PLATFORM_FEE_BPS / 10000))
+        if fee > 0:
+            pi_data["application_fee_amount"] = min(fee, max(amount - 1, 0))
         kwargs["payment_intent_data"] = pi_data
 
     session = stripe.checkout.Session.create(**kwargs)
