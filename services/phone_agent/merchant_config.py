@@ -45,6 +45,11 @@ class MerchantPhoneConfig:
     # after-hours gate only enforces when BOTH business_hours and this are set,
     # so merchants without a timezone are never mis-gated.
     business_timezone: str = ""
+    # UNIFIED PAYMENTS (Stripe Connect): the merchant's connected-account id and
+    # whether Stripe says it can take charges. When both are set (+ the flag),
+    # checkout goes through Stripe regardless of which POS the merchant runs.
+    stripe_account_id: str = ""
+    stripe_charges_enabled: bool = False
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -105,6 +110,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 # Default to pay_now if the column is missing/null (anti-scam default).
                 payment_mode=_norm_payment_mode(row.get("payment_mode")),
                 business_timezone=(row.get("business_timezone") or "").strip(),
+                stripe_account_id=(row.get("stripe_account_id") or "").strip(),
+                stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
