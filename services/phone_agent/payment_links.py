@@ -24,6 +24,9 @@ STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 # Meridian's platform fee in basis points (100 = 1%). Default 0 = no fee.
 PLATFORM_FEE_BPS = int(os.getenv("MERIDIAN_PLATFORM_FEE_BPS", "0") or 0)
 SUCCESS_URL = os.getenv("CHECKOUT_SUCCESS_URL", "https://meridian.tips/pay/success")
+# Base for the branded short pay link (<base>/p/<code> -> Stripe checkout URL).
+# Served by the backend /p/{code} redirect route.
+PUBLIC_PAY_BASE = os.getenv("PUBLIC_PAY_BASE", "https://api.meridian.tips").rstrip("/")
 
 
 def _stripe():
@@ -135,19 +138,30 @@ async def _stripe_checkout(
     session = stripe.checkout.Session.create(**kwargs)
     # Stripe SDK objects are NOT dicts — use subscript access, not .get()
     # (.get raises AttributeError on a StripeObject).
-    await _record_checkout_session(order, merchant_config, pos_order_id, session, amount, currency)
-    logger.info("Stripe checkout %s (%s) for merchant %s ($%.2f %s)",
+    # Branded short link so the texted URL is "<pay base>/p/<code>" instead of
+    # Stripe's ~400-char URL. Only used if we can persist the mapping; otherwise
+    # the customer still gets the full (always-working) Stripe URL.
+    short_code = uuid.uuid4().hex[:8]
+    recorded = await _record_checkout_session(
+        order, merchant_config, pos_order_id, session, amount, currency, short_code)
+    url = f"{PUBLIC_PAY_BASE}/p/{short_code}" if recorded else session["url"]
+    logger.info("Stripe checkout %s (%s) for merchant %s ($%.2f %s) -> %s",
                 session["id"], "connect" if connect_account else "platform",
-                order.get("merchant_id"), amount / 100, currency.upper())
-    return {"url": session["url"], "method": "stripe", "link_id": session["id"], "session_id": session["id"]}
+                order.get("merchant_id"), amount / 100, currency.upper(), url)
+    return {"url": url, "checkout_url": session["url"], "method": "stripe",
+            "link_id": session["id"], "session_id": session["id"], "short_code": short_code}
 
 
-async def _record_checkout_session(order, merchant_config, pos_order_id, session, amount, currency) -> None:
+async def _record_checkout_session(order, merchant_config, pos_order_id, session, amount, currency,
+                                   short_code: str = "") -> bool:
+    """Persist the session so the /p/<short_code> redirect can resolve it.
+    Returns True only if the row was written — the caller only hands out the
+    branded short link when this succeeds (else it uses the full Stripe URL)."""
     if not (SUPABASE_URL and SUPABASE_KEY):
-        return
+        return False
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
+            res = await client.post(
                 f"{SUPABASE_URL}/rest/v1/checkout_sessions",
                 json={
                     "merchant_id": order.get("merchant_id", ""),
@@ -158,13 +172,19 @@ async def _record_checkout_session(order, merchant_config, pos_order_id, session
                     "currency": currency,
                     "status": "created",
                     "checkout_url": session["url"],
+                    "short_code": short_code or None,
                     "caller_phone": order.get("caller_phone", ""),
                 },
                 headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",
                          "Content-Type": "application/json", "Prefer": "return=minimal"},
             )
+        if res.status_code in (200, 201, 204):
+            return True
+        logger.warning("checkout_sessions insert HTTP %s: %s", res.status_code, res.text[:200])
+        return False
     except Exception as e:  # noqa: BLE001 — recording is best-effort
         logger.warning("checkout_sessions insert failed: %s", e)
+        return False
 
 
 async def create_payment_link(

@@ -128,6 +128,42 @@ async def test_create_checkout_falls_back_when_flag_off(monkeypatch):
 
 
 @aio
+async def test_checkout_returns_branded_short_link_when_recorded(monkeypatch):
+    # When the session is persisted, the customer-facing url must be the short
+    # branded link (<base>/p/<code>), NOT Stripe's ~400-char URL.
+    monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
+    monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_test")
+    monkeypatch.setattr(pl, "PUBLIC_PAY_BASE", "https://api.meridian.tips")
+    monkeypatch.setattr(pl, "_stripe", lambda: _FakeStripe)
+
+    async def recorded(*a, **k):
+        return True
+
+    monkeypatch.setattr(pl, "_record_checkout_session", recorded)
+    out = await pl.create_checkout(ORDER, _cfg(), "ord_x")
+    assert out["method"] == "stripe"
+    assert out["url"] == f"https://api.meridian.tips/p/{out['short_code']}"
+    assert len(out["short_code"]) == 8
+    # the full Stripe URL is still kept for the redirect target
+    assert out["checkout_url"].startswith("https://checkout.stripe.com")
+
+
+@aio
+async def test_checkout_falls_back_to_full_url_when_not_recorded(monkeypatch):
+    monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
+    monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_test")
+    monkeypatch.setattr(pl, "_stripe", lambda: _FakeStripe)
+
+    async def not_recorded(*a, **k):
+        return False
+
+    monkeypatch.setattr(pl, "_record_checkout_session", not_recorded)
+    out = await pl.create_checkout(ORDER, _cfg(), "ord_y")
+    # persistence failed -> customer still gets a working (full) Stripe link
+    assert out["url"].startswith("https://checkout.stripe.com")
+
+
+@aio
 async def test_create_checkout_uses_stripe_when_ready(monkeypatch):
     monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
     monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_test")

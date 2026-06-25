@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS checkout_sessions (
     currency        TEXT NOT NULL DEFAULT 'cad',
     status          TEXT NOT NULL DEFAULT 'created',   -- created | paid | expired | failed
     checkout_url    TEXT,
+    short_code      TEXT,                              -- branded short link: <pay base>/p/<code> -> checkout_url
     caller_phone    TEXT,
     -- legacy meridian-hosted-checkout columns (back-compat with _create_meridian_checkout)
     customer_name   TEXT,
@@ -49,5 +50,9 @@ CREATE TABLE IF NOT EXISTS checkout_sessions (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- legacy DBs that already have checkout_sessions need the new column added
+ALTER TABLE checkout_sessions ADD COLUMN IF NOT EXISTS short_code TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_checkout_sessions_merchant ON checkout_sessions (merchant_id);
 CREATE INDEX IF NOT EXISTS idx_checkout_sessions_provider_ref ON checkout_sessions (provider_ref);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_checkout_sessions_short_code ON checkout_sessions (short_code) WHERE short_code IS NOT NULL;
