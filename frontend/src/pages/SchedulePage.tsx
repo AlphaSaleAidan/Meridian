@@ -647,6 +647,7 @@ export default function SchedulePage() {
               cells={peakHours}
               title="Peak Hours — your demand"
               caption="Auto-fill staffs against this. Brighter = busier."
+              compact
             />
           </div>
         </div>

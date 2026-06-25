@@ -36,22 +36,27 @@ export default function PeakHoursHeatmap({
   cells,
   title = 'Weekly Transaction Heatmap',
   caption,
+  compact = false,
 }: {
   cells: HeatmapCell[]
   title?: string
   caption?: string
+  /** Fit all 24h into a narrow column (no horizontal scroll) — for the
+   *  side-by-side panel on the Schedule page. */
+  compact?: boolean
 }) {
   const maxIntensity = Math.max(0, ...cells.map(c => c.intensity))
+  const labelEvery = compact ? 6 : 2
 
   return (
     <div className="card p-4 sm:p-5" data-walkthrough="peak-heatmap">
       <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">{title}</h3>
       {caption && <p className="text-[11px] text-[#A1A1A8]/60 mb-3">{caption}</p>}
-      <div className="overflow-x-auto">
-        <div className="min-w-[700px]">
+      <div className={compact ? '' : 'overflow-x-auto'}>
+        <div className={compact ? '' : 'min-w-[700px]'}>
           <div className="flex items-end gap-px mb-1 pl-10">
             {hourLabels.map((h, i) => (
-              <div key={i} className="flex-1 text-center text-[8px] text-[#A1A1A8]/30">{i % 2 === 0 ? h : ''}</div>
+              <div key={i} className="flex-1 text-center text-[8px] text-[#A1A1A8]/30">{i % labelEvery === 0 ? h : ''}</div>
             ))}
           </div>
           <div className="space-y-px">
