@@ -59,6 +59,7 @@ from order_normalizer import normalize_order
 from pos_connector import create_pos_order
 from order_router import route_order  # noqa: F401  (kept for back-compat imports)
 from pay_on_phone import dispatch_order, resolve_mode
+from sms_receipt import order_receipt_text, send_order_sms
 from caller_memory import build_memory_block_for
 
 logger = logging.getLogger("meridian.phone_agent.bot")
@@ -440,6 +441,16 @@ async def run_call_bot(
 
         await _log_call(merchant_id, session_ref, caller_info, log_status,
                         order_data=normalized, pos_result=pos_result, payment_mode=mode)
+        # Text the caller their order receipt — fire-and-forget so it never delays
+        # the spoken confirmation. Only in pay_at_pickup mode; pay_now already
+        # texts a secure payment link (see _pay_now_confirmation), so a receipt
+        # here would double-text. Sent from the merchant's own DID when set.
+        if mode != "pay_now":
+            receipt_to = args.get("caller_phone") or caller_info.get("phone", "")
+            if receipt_to:
+                asyncio.create_task(send_order_sms(
+                    receipt_to, order_receipt_text(normalized, merchant_config),
+                    merchant_config.phone_number))
         await params.result_callback({"success": True, "say": say})
 
     async def _on_transfer(params: FunctionCallParams):
