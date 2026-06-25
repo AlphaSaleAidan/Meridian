@@ -70,6 +70,7 @@ from .routes.phone import router as phone_router
 from .routes.phone_dashboard import router as phone_dashboard_router
 from .routes.stripe_connect import router as stripe_connect_router
 from .routes.pay_redirect import router as pay_redirect_router
+from .routes.vapi_webhook import router as vapi_router
 from .routes.sms import router as sms_router
 from .routes.credits import router as credits_router
 from .routes.pos_connections import router as pos_connections_router
@@ -242,6 +243,7 @@ app.include_router(phone_router)
 app.include_router(phone_dashboard_router)
 app.include_router(stripe_connect_router)
 app.include_router(pay_redirect_router)
+app.include_router(vapi_router)
 app.include_router(sms_router)
 app.include_router(credits_router)
 app.include_router(pos_connections_router)
