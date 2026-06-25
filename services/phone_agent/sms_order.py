@@ -30,7 +30,7 @@ from fastapi.responses import Response
 from merchant_config import MerchantPhoneConfig, get_merchant_config, get_merchant_by_phone
 from order_normalizer import normalize_order
 from pos_connector import create_pos_order
-from payment_links import create_payment_link
+from payment_links import create_checkout
 from sms_checkout import send_checkout_sms
 
 # Credit metering lives in src/credits/. Add the project root to sys.path so
@@ -278,12 +278,12 @@ async def _handle_order_submission(
     payment_link_result: dict = {}
     if config.sms_checkout_enabled:
         pos_order_id = pos_result.get("pos_order_id", "")
-        payment_link_result = await create_payment_link(
+        # Unified checkout: Stripe (CAD, card+Apple/Google Pay) when enabled +
+        # configured, else falls back to the per-POS link inside create_checkout.
+        payment_link_result = await create_checkout(
             order=normalized,
-            pos_system=config.pos_system,
+            merchant_config=config,
             pos_order_id=pos_order_id,
-            access_token=config.pos_access_token,
-            location_id=config.pos_location_id,
         )
 
     await _log_sms_order(normalized, pos_result, customer_phone)
