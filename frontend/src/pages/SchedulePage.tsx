@@ -645,9 +645,9 @@ export default function SchedulePage() {
           <div className="w-full xl:flex-1 xl:min-w-0">
             <PeakHoursHeatmap
               cells={peakHours}
-              title="Peak Hours — your demand"
-              caption="Auto-fill staffs against this. Brighter = busier."
-              compact
+              title="Peak Hours"
+              caption="Demand for the selected day — Auto-fill staffs against this. Tap a day above to rotate."
+              day={mobileDay}
             />
           </div>
         </div>
