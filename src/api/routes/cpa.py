@@ -768,6 +768,29 @@ async def bank_connect(
     }
 
 
+@router.post("/bank/connect-demo")
+async def bank_connect_demo(
+    org_id: OrgId,
+    year: int = _YEAR,
+    db=Depends(_get_db),
+):
+    """Connect a synthetic demo bank (no Plaid Link required). The portal's
+    Taxes & Expenses "connect bank" button calls this; it mirrors /bank/connect
+    with a seeded token so the section works end-to-end without a live Plaid
+    integration (the underlying bank_connect already seeds demo transactions
+    when no Plaid key is configured)."""
+    return await bank_connect(
+        org_id=org_id,
+        req=BankConnectRequest(
+            org_id=org_id,
+            public_token="demo-public-token",
+            institution_name="Demo Bank",
+        ),
+        year=year,
+        db=db,
+    )
+
+
 @router.get("/bank/connections")
 async def bank_connections(
     org_id: OrgId,
