@@ -18,7 +18,7 @@ const GUIDES = [
   },
   {
     label: 'Where Does Your POS Data Live?',
-    blurb: 'Data residency talking points — "your data stays in Canada" closes deals.',
+    blurb: 'Canadian privacy talking points — PIPEDA & Law 25 alignment, consent, and encryption build trust.',
     path: '/guides/pos-data-residency-canada',
   },
 ]
