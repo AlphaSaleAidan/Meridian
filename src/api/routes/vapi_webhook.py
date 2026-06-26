@@ -52,10 +52,15 @@ def _caller_number(msg: dict) -> str:
 
 
 async def _resolve_config(dialed: str):
-    """MerchantPhoneConfig for the dialed DID; demo config if unmapped."""
-    from merchant_config import get_merchant_by_phone, get_merchant_config
+    """MerchantPhoneConfig for the dialed DID; demo config if unmapped.
+
+    NB: in prod Supabase IS configured, so get_merchant_config("demo") returns
+    None (no 'demo' row) rather than the demo fallback — guard against that
+    explicitly or submit_order crashes on a None config."""
+    from merchant_config import get_merchant_by_phone, get_merchant_config, _demo_config
     merchant_id = (await get_merchant_by_phone(dialed)) if dialed else None
-    return await get_merchant_config(merchant_id or "demo")
+    cfg = await get_merchant_config(merchant_id) if merchant_id else None
+    return cfg or _demo_config(merchant_id or "demo")
 
 
 def _system_prompt(config) -> str:
@@ -145,6 +150,10 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
     if caller_phone and not args.get("caller_phone"):
         args["caller_phone"] = caller_phone
     normalized = normalize_order(args, config)
+    # route_order only texts the pay link when the order carries caller_phone —
+    # force it from the call's caller id so the SMS always fires.
+    if caller_phone:
+        normalized["caller_phone"] = caller_phone
     pos_token = getattr(config, "pos_access_token", "") or ""
     pos_loc = getattr(config, "pos_location_id", "") or ""
     if getattr(config, "pos_system", "") == "square" and not pos_token:
@@ -152,8 +161,8 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
         pos_loc = pos_loc or os.getenv("SQUARE_LOCATION_ID", "")
     pos_result = await create_pos_order(normalized, getattr(config, "pos_system", "") or "", pos_token, pos_loc)
     routed = await route_order(normalized, config, {"phone": caller_phone}, pos_result)
-    logger.info("VAPI order placed: merchant=%s items=%d pos=%s sms=%s",
-                config.merchant_id, len(normalized.get("items", [])),
+    logger.info("VAPI order placed: merchant=%s caller=%s items=%d pos=%s sms=%s",
+                config.merchant_id, caller_phone or "?", len(normalized.get("items", [])),
                 pos_result.get("success"), routed.get("sms_sent"))
     return _confirm(args, routed or {})
 
