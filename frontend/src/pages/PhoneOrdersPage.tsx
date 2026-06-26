@@ -5,6 +5,7 @@ import {
   CheckCircle2, TrendingUp, MessageSquare, X, Search, ChevronRight,
   Clock, DollarSign, Link2, Copy, Info,
   CreditCard, SendHorizontal, AlertCircle, PhoneForwarded, Zap,
+  Banknote, ExternalLink, ArrowRight,
 } from 'lucide-react'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
@@ -15,6 +16,7 @@ import {
   type PhoneCallEntry, type PhoneBizConfig, type CallStatus, type PaymentStatus,
 } from '@/lib/phone-orders-demo-data'
 import { phoneService, type PhoneConfig } from '@/lib/phone-service'
+import { getAuthHeaders } from '@/lib/supabase'
 import {
   LiveCallsBanner, RecordingPlayback, SetupWizard, SettingsTab,
 } from '@/components/phone'
@@ -368,8 +370,224 @@ function TextOrderingTab({ biz, isDemo }: { biz: PhoneBizConfig; isDemo: boolean
   )
 }
 
+/* ---------- Money-flow fee constants ---------- */
+const MERIDIAN_FEE = 2.50          // flat per order
+const STRIPE_PCT   = 0.029         // 2.9 %
+const STRIPE_FIXED = 0.30          // + $0.30 per transaction
+
+function calcSplit(total: number): { meridianFee: number; stripeFee: number; net: number } {
+  const stripeFee = Math.round((total * STRIPE_PCT + STRIPE_FIXED) * 100) / 100
+  const net       = Math.round((total - MERIDIAN_FEE - stripeFee) * 100) / 100
+  return { meridianFee: MERIDIAN_FEE, stripeFee, net }
+}
+
+/* ---------- Get Paid Tab ---------- */
+function GetPaidTab({ calls, biz, orgId, isDemo }: {
+  calls: PhoneCallEntry[]
+  biz: PhoneBizConfig
+  orgId: string
+  isDemo: boolean
+}) {
+  const apiBase = (import.meta.env.VITE_API_URL || '') as string
+  const [connectStatus, setConnectStatus] = useState<'loading' | 'connected' | 'not_connected' | 'error'>('loading')
+  const [connectLoading, setConnectLoading] = useState(false)
+
+  const orderCalls = calls.filter(c => c.status === 'order_placed' && c.total > 0)
+
+  useEffect(() => {
+    if (isDemo) { setConnectStatus('not_connected'); return }
+    if (!orgId) { setConnectStatus('not_connected'); return }
+    fetch(`${apiBase}/api/stripe/connect/status/${orgId}`, {})
+      .then(r => r.ok ? (r.json() as Promise<{ connected: boolean }>) : null)
+      .then(data => { setConnectStatus(data?.connected ? 'connected' : 'not_connected') })
+      .catch(() => setConnectStatus('not_connected'))
+  }, [orgId, isDemo, apiBase])
+
+  async function handleConnect() {
+    if (isDemo || connectLoading) return
+    setConnectLoading(true)
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${apiBase}/api/stripe/connect/onboard/${orgId}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+      })
+      if (res.ok) {
+        const data = (await res.json()) as { onboarding_url?: string }
+        if (data.onboarding_url) { window.location.href = data.onboarding_url }
+      }
+    } catch { /* noop — leave status as-is */ }
+    finally { setConnectLoading(false) }
+  }
+
+  const totals = useMemo(() => orderCalls.reduce(
+    (acc, c) => {
+      const { meridianFee, stripeFee, net } = calcSplit(c.total)
+      return {
+        gross:        acc.gross + c.total,
+        meridianFees: acc.meridianFees + meridianFee,
+        stripeFees:   acc.stripeFees + stripeFee,
+        net:          acc.net + net,
+        paid:         acc.paid + (c.paymentStatus === 'paid' ? 1 : 0),
+        total:        acc.total + 1,
+      }
+    },
+    { gross: 0, meridianFees: 0, stripeFees: 0, net: 0, paid: 0, total: 0 },
+  ), [orderCalls])
+
+  return (
+    <div className="space-y-5">
+
+      {/* ── Connect Stripe card ── */}
+      <div className={clsx('card p-5', connectStatus === 'connected' ? 'border-[#17C5B0]/20' : 'border-[#1A8FD6]/15')}>
+        <div className="flex items-start gap-4">
+          <div className={clsx('w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0', connectStatus === 'connected' ? 'bg-[#17C5B0]/10' : 'bg-[#1A8FD6]/10')}>
+            <Banknote size={20} className={connectStatus === 'connected' ? 'text-[#17C5B0]' : 'text-[#1A8FD6]'} />
+          </div>
+          <div className="flex-1 min-w-0">
+            {connectStatus === 'connected' ? (
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-[#F5F5F7]">Payouts connected</h2>
+                  <CheckCircle2 size={14} className="text-[#17C5B0]" />
+                </div>
+                <p className="text-xs text-[#A1A1A8] mt-1">Your Stripe account is linked — earnings are deposited daily.</p>
+              </div>
+            ) : (
+              <div>
+                <h2 className="text-base font-bold text-[#F5F5F7]">Connect to get paid</h2>
+                <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+                  Link your bank account via Stripe Connect (uses Plaid) to receive daily payouts of your net revenue.
+                  Your earnings are deposited automatically after each completed order.
+                </p>
+              </div>
+            )}
+          </div>
+          {connectStatus !== 'connected' && (
+            <button
+              onClick={isDemo ? undefined : handleConnect}
+              disabled={connectLoading || isDemo}
+              className={clsx(
+                'flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                isDemo
+                  ? 'bg-[#1A8FD6]/30 text-[#1A8FD6]/60 cursor-not-allowed'
+                  : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90',
+              )}
+            >
+              {connectLoading
+                ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : <ExternalLink size={14} />
+              }
+              {connectLoading ? 'Redirecting…' : 'Connect payouts'}
+            </button>
+          )}
+        </div>
+        {connectStatus !== 'connected' && (
+          <div className="mt-4 bg-[#111113] border border-[#1F1F23] rounded-lg px-4 py-3 flex items-start gap-2">
+            <Info size={12} className="text-[#A1A1A8] mt-0.5 flex-shrink-0" />
+            <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
+              Long AI calls (&gt;3 min) add <strong className="text-[#F5F5F7]">$0.45/min</strong> billed separately.
+              Stripe processing is ~2.9% + $0.30 per transaction. Meridian charges a flat $2.50 service fee per order.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* ── Totals summary ── */}
+      {totals.total > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Gross Collected',    value: fmtMoney(totals.gross, biz.currency),        color: 'text-amber-400' },
+            { label: 'Meridian Fees',      value: `−${fmtMoney(totals.meridianFees, biz.currency)}`, color: 'text-red-400' },
+            { label: 'Stripe Fees (est.)', value: `−${fmtMoney(totals.stripeFees, biz.currency)}`,   color: 'text-red-400' },
+            { label: 'You Receive',        value: fmtMoney(Math.max(totals.net, 0), biz.currency),   color: 'text-[#17C5B0]' },
+          ].map(card => (
+            <div key={card.label} className="card px-4 py-3">
+              <p className="text-[10px] text-[#A1A1A8]">{card.label}</p>
+              <p className={clsx('text-lg font-bold font-mono mt-0.5', card.color)}>{card.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {totals.total > 0 && (
+        <p className="text-[10px] text-[#A1A1A8]">
+          {totals.paid} of {totals.total} order{totals.total !== 1 ? 's' : ''} paid &middot;
+          Stripe fees are estimated (2.9% + $0.30). Long AI calls (&gt;3 min) add $0.45/min billed separately.
+        </p>
+      )}
+
+      {/* ── Per-order table ── */}
+      {orderCalls.length === 0 ? (
+        <div className="card py-14 text-center">
+          <DollarSign size={28} className="text-[#1F1F23] mx-auto mb-3" />
+          <p className="text-sm font-medium text-[#A1A1A8]">No completed orders yet</p>
+          <p className="text-[10px] text-[#A1A1A8]/60 mt-1">Revenue from phone orders will appear here once customers place and pay.</p>
+        </div>
+      ) : (
+        <div className="card overflow-hidden">
+          <div className="px-4 py-3 border-b border-[#1F1F23] flex items-center gap-2">
+            <DollarSign size={14} className="text-amber-400" />
+            <h3 className="text-sm font-semibold text-[#F5F5F7]">Order Money Flow</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="pm-table min-w-[700px]">
+              <thead>
+                <tr>
+                  <th className="text-left">Order</th>
+                  <th className="text-right">Customer Pays</th>
+                  <th className="text-right">−Meridian Fee</th>
+                  <th className="text-right">−Stripe Fee</th>
+                  <th className="text-right">You Receive</th>
+                  <th className="text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderCalls.slice(0, 50).map(call => {
+                  const { meridianFee, stripeFee, net } = calcSplit(call.total)
+                  const pc = call.paymentStatus !== 'none' ? PAYMENT_CFG[call.paymentStatus] : null
+                  return (
+                    <tr key={call.id}>
+                      <td>
+                        <p className="text-[#F5F5F7] font-medium">{call.name || 'Unknown'}</p>
+                        <p className="text-[10px] text-[#A1A1A8] font-mono">{timeAgo(call.createdAt)}</p>
+                      </td>
+                      <td className="text-right font-mono text-amber-400">{fmtMoney(call.total, biz.currency)}</td>
+                      <td className="text-right font-mono text-red-400">−{fmtMoney(meridianFee, biz.currency)}</td>
+                      <td className="text-right font-mono text-red-400">−{fmtMoney(stripeFee, biz.currency)}</td>
+                      <td className="text-right font-mono text-[#17C5B0] font-semibold">{net > 0 ? fmtMoney(net, biz.currency) : '—'}</td>
+                      <td>
+                        {pc
+                          ? <span className={clsx('inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full', pc.bg, pc.color)}><pc.icon size={10} /> {pc.label}</span>
+                          : <span className="text-[10px] text-[#A1A1A8]/40">—</span>
+                        }
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {orderCalls.length > 50 && (
+            <div className="px-4 py-3 border-t border-[#1F1F23] text-center text-[10px] text-[#A1A1A8]">
+              Showing 50 of {orderCalls.length} orders
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4 text-[10px] text-[#A1A1A8]">
+        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-amber-400" /> Customer pays full order total</span>
+        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Meridian flat fee: $2.50/order</span>
+        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Stripe processing: ~2.9% + $0.30</span>
+        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-[#17C5B0]" /> Net deposited to your account</span>
+      </div>
+    </div>
+  )
+}
+
 /* ========== Main Page ========== */
-type Tab = 'overview' | 'calls' | 'text_orders' | 'settings'
+type Tab = 'overview' | 'calls' | 'text_orders' | 'get_paid' | 'settings'
 
 export default function PhoneOrdersPage() {
   const orgId = useOrgId()
@@ -439,13 +657,20 @@ export default function PhoneOrdersPage() {
         </div>
       </div>
       <div className="period-toggle">
-        {([{ key: 'overview' as const, label: 'Overview' }, { key: 'calls' as const, label: 'Call Log' }, ...(flags.textToOrder ? [{ key: 'text_orders' as const, label: 'Text Orders' }] : []), { key: 'settings' as const, label: 'Settings' }]).map(t => (
+        {([
+          { key: 'overview' as const, label: 'Overview' },
+          { key: 'calls' as const, label: 'Call Log' },
+          ...(flags.textToOrder ? [{ key: 'text_orders' as const, label: 'Text Orders' }] : []),
+          { key: 'get_paid' as const, label: 'Get Paid' },
+          { key: 'settings' as const, label: 'Settings' },
+        ]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} className={tab === t.key ? 'period-btn-active' : 'period-btn-inactive'}>{t.label}</button>
         ))}
       </div>
       {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
       {tab === 'text_orders' && flags.textToOrder && <TextOrderingTab biz={business} isDemo={isDemo} />}
+      {tab === 'get_paid' && <GetPaidTab calls={calls} biz={business} orgId={orgId} isDemo={isDemo} />}
       {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} orgId={orgId} />}
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}
       {showConnect && <ConnectPhoneModal biz={business} onClose={() => setShowConnect(false)} />}
