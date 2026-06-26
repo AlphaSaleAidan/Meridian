@@ -36,6 +36,11 @@ PLATFORM_FEE_BPS = int(os.getenv("MERIDIAN_PLATFORM_FEE_BPS", "0") or 0)
 # Meridian's balance and the merchant is auto-paid the remainder (Stripe payout
 # schedule, set to daily at onboarding). Combined with PLATFORM_FEE_BPS if both set.
 SERVICE_FEE_CENTS = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
+# Demo test-charge override: when set, orders for a demo merchant charge this flat
+# amount (clamped to Stripe's $0.50 CAD minimum) instead of the real total, so
+# test runs cost ~$0.50 rather than full price. Real merchants are never touched.
+DEMO_TEST_CHARGE_CENTS = int(os.getenv("MERIDIAN_DEMO_TEST_CHARGE_CENTS", "0") or 0)
+_DEMO_MERCHANT_IDS = {"demo", "demo-merchant", "demo-tryout"}
 # Base for the branded short pay link (<base>/p/<code> -> Stripe checkout URL).
 # Served by the backend /p/{code} redirect route.
 PUBLIC_PAY_BASE = os.getenv("PUBLIC_PAY_BASE", "https://api.meridian.tips").rstrip("/")
@@ -137,9 +142,20 @@ async def _stripe_checkout(
     currency = (order.get("currency") or "cad").lower()
     amount = _order_amount_cents(order)
 
+    # Demo test-charge override → flat ~$0.50 line instead of the real total.
+    if DEMO_TEST_CHARGE_CENTS and order.get("merchant_id", "") in _DEMO_MERCHANT_IDS:
+        amount = max(50, DEMO_TEST_CHARGE_CENTS)  # Stripe CAD minimum is 50¢
+        line_items = [{"quantity": 1, "price_data": {
+            "currency": currency, "unit_amount": amount,
+            "product_data": {"name": "Demo test charge"}}}]
+        logger.info("DEMO test-charge override: charging %d¢ (merchant=%s)",
+                    amount, order.get("merchant_id"))
+    else:
+        line_items = _stripe_line_items(order, currency)
+
     kwargs: dict[str, Any] = dict(
         mode="payment",
-        line_items=_stripe_line_items(order, currency),
+        line_items=line_items,
         success_url=SUCCESS_URL,
         cancel_url=CANCEL_URL,
         client_reference_id=pos_order_id or order.get("merchant_id", ""),
