@@ -166,4 +166,18 @@ async def connect_webhook(request: Request):
         except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
             logger.error("mark_order_paid failed for %s: %s", merchant_id, e)
 
+        # Credit our service-fee revenue to this merchant's voice ledger. Only on
+        # checkout.session.completed (the one canonical event per order — the
+        # session id is a stable idempotency ref); payment_intent.succeeded fires
+        # for the same order and would double-post under a different ref.
+        if etype == "checkout.session.completed" and merchant_id:
+            fee_cents = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
+            if fee_cents > 0:
+                try:
+                    from ...services.voice_ledger import credit
+                    await credit(merchant_id, fee_cents, source="stripe_fee",
+                                 ref=str(obj.get("id") or txn), note=pos_order_id or None)
+                except Exception as e:  # noqa: BLE001 — ledger never blocks the webhook
+                    logger.error("voice_ledger credit failed for %s: %s", merchant_id, e)
+
     return {"received": True}
