@@ -41,6 +41,14 @@ async def require_device_token(x_device_token: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid device token")
 
 
+# Per-camera tracking toggles the edge agent honors. Privacy-sensitive analyses
+# (demographics, VIP face-matching, depth) and live-view default OFF.
+DEFAULT_CAMERA_FEATURES = {
+    "detection": True, "zones": True,
+    "demographics": False, "vip": False, "depth": False, "live_view": False,
+}
+
+
 class CameraRegisterRequest(BaseModel):
     org_id: str
     location_id: Optional[str] = None
@@ -50,6 +58,7 @@ class CameraRegisterRequest(BaseModel):
     compliance_mode: str = "anonymous"
     active_hours: dict = {"start": "07:00", "end": "22:00"}
     edge_device_id: Optional[str] = None
+    features: dict = {}
 
 
 class CameraUpdateRequest(BaseModel):
@@ -58,6 +67,7 @@ class CameraUpdateRequest(BaseModel):
     compliance_mode: Optional[str] = None
     active_hours: Optional[dict] = None
     status: Optional[str] = None
+    features: Optional[dict] = None
 
 
 class HeartbeatRequest(BaseModel):
@@ -135,6 +145,7 @@ async def register_camera(req: CameraRegisterRequest):
         "active_hours": json_mod.dumps(req.active_hours),
         "edge_device_id": req.edge_device_id,
         "status": "offline",
+        "features": json_mod.dumps({**DEFAULT_CAMERA_FEATURES, **(req.features or {})}),
     }
     try:
         result = await db.insert("vision_cameras", row)
@@ -169,6 +180,9 @@ async def update_camera(camera_id: str, req: CameraUpdateRequest):
         updates["zone_config"] = json_mod.dumps(updates["zone_config"])
     if "active_hours" in updates:
         updates["active_hours"] = json_mod.dumps(updates["active_hours"])
+    if "features" in updates:
+        # Merge over defaults so a partial toggle payload can't drop keys.
+        updates["features"] = json_mod.dumps({**DEFAULT_CAMERA_FEATURES, **updates["features"]})
 
     try:
         result = await db.update("vision_cameras", updates, filters={"id": f"eq.{camera_id}"})
