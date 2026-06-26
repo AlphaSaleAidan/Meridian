@@ -84,32 +84,79 @@ async def _resolve_config(dialed: str):
 
 
 def _system_prompt(config) -> str:
-    """Mirror of build_system_prompt (bot.py is pipecat-heavy, can't import)."""
-    menu = ""
+    """Build a polished, money-flow-showcasing call script for any merchant.
+
+    Improvements over the previous version:
+    - Renders size_prices correctly so per-size items (e.g. pizzas) show real
+      prices instead of $0.00.
+    - Adds ONE suggestive upsell if the caller hasn't added a drink or side.
+    - Explicitly collects the delivery address when order_type == delivery.
+    - Instructs the assistant to read back the complete order with the total
+      before calling submit_order.
+    - Tells the caller about the pay-by-text link + receipt after the order
+      is placed, making the full money flow visible in every demo call.
+    """
+    menu_lines: list[str] = []
     if getattr(config, "menu_items", None):
-        lines = []
         for it in config.menu_items:
-            sizes = ", ".join(it.get("sizes", []))
-            line = f"- {it['name']}: ${it.get('price', 0):.2f}"
-            if sizes:
-                line += f" (sizes: {sizes})"
-            if it.get("modifications"):
-                line += f" [options: {', '.join(it['modifications'])}]"
-            lines.append(line)
-        menu = "\n\nMENU:\n" + "\n".join(lines)
+            name = it.get("name", "item")
+            size_prices: dict = it.get("size_prices") or {}
+            price = it.get("price")
+            topping_price = it.get("topping_price")
+            sizes: list = it.get("sizes") or []
+            modifications: list = it.get("modifications") or []
+
+            if size_prices:
+                # Per-size pricing (e.g. pizzas): "medium $14 / large $18 (+$2/topping)"
+                price_parts = [
+                    f"{s} ${size_prices[s]:.0f}"
+                    for s in sizes
+                    if s in size_prices
+                ]
+                line = f"- {name}: {' / '.join(price_parts)}"
+                if topping_price:
+                    line += f" (+${topping_price:.0f}/topping)"
+            elif price:
+                line = f"- {name}: ${float(price):.2f}"
+                if sizes:
+                    line += f" (sizes: {', '.join(sizes)})"
+            else:
+                line = f"- {name}"
+                if sizes:
+                    line += f" (sizes: {', '.join(sizes)})"
+
+            if modifications:
+                line += f" [options: {', '.join(modifications)}]"
+            menu_lines.append(line)
+
+    menu = ("\n\nMENU:\n" + "\n".join(menu_lines)) if menu_lines else ""
     order_types = ", ".join(getattr(config, "order_types", ["pickup", "delivery"]))
+    business = config.business_name
+
     return (
-        f"You are the AI phone assistant for {config.business_name}.\n"
-        "Keep replies SHORT — 1-2 sentences. Warm and natural, not robotic. This is a phone call.\n\n"
-        "RULES:\n"
-        f"- Greet warmly: \"{config.greeting}\"\n"
-        "- Take the order item by item; confirm name + size + quantity + modifications.\n"
-        "- Read back the full order before submitting.\n"
-        "- Only call submit_order AFTER the customer confirms it's correct.\n"
-        f"- Order types: {order_types}.\n"
-        "- If an item isn't on the menu, say so politely and suggest an alternative.\n"
-        "- If the caller sounds frustrated, STOP, briefly apologize, ask them to repeat ONLY the wrong "
-        "part, read it back, never argue."
+        f"You are the AI phone order-taker for {business}.\n"
+        "Keep every reply to 1-2 sentences — warm, friendly, phone-natural. Never robotic.\n\n"
+        "CALL FLOW (follow this order every time):\n"
+        f"1. Greet: \"{config.greeting}\"\n"
+        "2. Take the order item by item. For each item confirm: name, size (if applicable), "
+        "quantity, and any extra toppings or modifications.\n"
+        "3. Once the caller finishes ordering, check whether they have added a drink or a side. "
+        "If not, offer ONE natural upsell — e.g. 'Can I throw in a drink or a side for you?' "
+        "Do this ONCE only; move on if they decline.\n"
+        "4. Ask: pickup or delivery? Get their name.\n"
+        "5. If delivery: ask for their delivery address before proceeding.\n"
+        "6. Calculate the total (size price + per-topping charge × number of toppings for each "
+        "item, then add sides and drinks). Read back the COMPLETE order — every item, size, "
+        "and toppings — with the total, then ask 'Does that all look right?'\n"
+        "7. Call submit_order ONLY after the customer confirms the order is correct.\n"
+        "8. After submit_order returns, tell the caller: 'I've sent a secure payment link to "
+        "your phone — you'll get a receipt once it goes through.'\n\n"
+        "GUARD RULES:\n"
+        f"- Available order types: {order_types}.\n"
+        "- Delivery without an address → ask for the address before calling submit_order.\n"
+        "- Off-menu items → say so warmly and suggest a similar item.\n"
+        "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
+        "- Frustrated caller → brief apology, repeat back only the unclear part, ask once to clarify."
         f"{menu}"
     )
 
@@ -158,8 +205,12 @@ def _confirm(args: dict, routed: dict) -> str:
     otype = (args.get("order_type") or "pickup").replace("_", " ")
     base = f"Thanks {who}! Your {otype} order — {n} item{'s' if n != 1 else ''} — is in."
     if routed.get("sms_sent"):
-        return base + " I've texted you a secure link to pay. See you soon!"
-    return base + " It'll be ready shortly. See you soon!"
+        return (
+            base
+            + " I've sent a secure payment link to your phone"
+            + " — you'll get a receipt once it goes through. See you soon!"
+        )
+    return base + " We'll have it ready for you shortly — see you soon!"
 
 
 async def _place_order(args: dict, config, caller_phone: str) -> str:
