@@ -13,7 +13,15 @@ import httpx
 logger = logging.getLogger("meridian.phone_agent.payments")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+# Server-side writes (checkout_sessions for the branded /p/<code> short link) must
+# use the service-role key — the anon role lacks INSERT (→ 401 "permission
+# denied"), which silently dropped the short link and texted the long Stripe URL.
+# Matches src/db get_db()'s key selection; anon kept only as a last-resort fallback.
+SUPABASE_KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    or os.getenv("SUPABASE_SERVICE_KEY", "")
+    or os.getenv("SUPABASE_ANON_KEY", "")
+)
 MERIDIAN_CHECKOUT_BASE = os.getenv("MERIDIAN_CHECKOUT_URL", "https://pay.meridian.ai")
 
 # UNIFIED PAYMENTS (Stripe Connect): one processor across any POS. Gated off by
