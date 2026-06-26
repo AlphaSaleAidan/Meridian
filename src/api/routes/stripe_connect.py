@@ -166,6 +166,27 @@ async def connect_webhook(request: Request):
         except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
             logger.error("mark_order_paid failed for %s: %s", merchant_id, e)
 
+        # Text the customer a paid receipt. Only on checkout.session.completed
+        # (canonical, fires once) so payment_intent.succeeded can't double-send.
+        if etype == "checkout.session.completed" and caller_phone:
+            try:
+                from merchant_config import get_merchant_config, _demo_config
+                from sms_checkout import send_sms
+                cfg = (await get_merchant_config(merchant_id)) if merchant_id else None
+                cfg = cfg or _demo_config(merchant_id or "demo")
+                biz = getattr(cfg, "business_name", "") or "the restaurant"
+                cents = obj.get("amount_total")
+                cur = (obj.get("currency") or "cad").upper()
+                name = ((obj.get("customer_details") or {}).get("name") or "").split(" ")[0]
+                hi = f" {name}" if name else ""
+                amt = f" — {cur} ${cents/100:.2f}" if isinstance(cents, (int, float)) else ""
+                body = (f"Payment received ✓ Thanks{hi}! Your order at {biz} is "
+                        f"confirmed and paid{amt}. We'll have it ready shortly.")
+                res = await send_sms(caller_phone, body)
+                logger.info("Receipt SMS to %s: sent=%s", caller_phone, res.get("sent"))
+            except Exception as e:  # noqa: BLE001 — receipt never blocks the webhook
+                logger.error("receipt SMS failed for %s: %s", merchant_id, e)
+
         # Credit our service-fee revenue to this merchant's voice ledger. Only on
         # checkout.session.completed (the one canonical event per order — the
         # session id is a stable idempotency ref); payment_intent.succeeded fires
