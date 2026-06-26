@@ -24,6 +24,8 @@ import httpx
 import numpy as np
 from ultralytics import YOLO
 
+from live_publisher import LivePublisher
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(name)-25s | %(levelname)-5s | %(message)s",
@@ -33,6 +35,10 @@ logger = logging.getLogger("meridian.edge")
 API_URL = os.environ.get("MERIDIAN_API_URL", "http://localhost:8000")
 API_KEY = os.environ.get("MERIDIAN_API_KEY", "")
 ORG_ID = os.environ.get("MERIDIAN_ORG_ID", "")
+# Device token for edge-only endpoints (ingest + live-state). Matches the
+# server's VISION_INGEST_TOKEN; sent as X-Device-Token.
+DEVICE_TOKEN = os.environ.get("MERIDIAN_DEVICE_TOKEN", os.environ.get("VISION_INGEST_TOKEN", ""))
+LIVE_POLL_INTERVAL = int(os.environ.get("LIVE_POLL_INTERVAL", "5"))
 COMPREFACE_URL = os.environ.get("COMPREFACE_URL", "http://localhost:8000")
 COMPREFACE_API_KEY = os.environ.get("COMPREFACE_API_KEY", "")
 
@@ -343,9 +349,27 @@ class EdgeAgent:
         self.running = True
         self.http = httpx.AsyncClient(
             base_url=API_URL,
-            headers={"Authorization": f"Bearer {API_KEY}"},
+            headers={"Authorization": f"Bearer {API_KEY}", "X-Device-Token": DEVICE_TOKEN},
             timeout=30,
         )
+        self._publishers: dict[str, LivePublisher] = {}
+
+    async def live_publish_loop(self):
+        """Poll each camera's live-state; WHIP-publish on-demand while a viewer watches."""
+        while self.running:
+            for cam in self.cameras:
+                try:
+                    r = await self.http.get(f"/api/vision/cameras/{cam.camera_id}/live-state")
+                    st = r.json() if r.status_code == 200 else {}
+                except Exception as e:  # noqa: BLE001
+                    logger.debug("live-state poll failed cam=%s: %s", cam.camera_id, e)
+                    st = {}
+                pub = self._publishers.get(cam.camera_id)
+                if pub is None:
+                    pub = LivePublisher(cam.camera_id, cam.rtsp_url)
+                    self._publishers[cam.camera_id] = pub
+                await pub.ensure(bool(st.get("publish")), st.get("whip_url"))
+            await asyncio.sleep(LIVE_POLL_INTERVAL)
 
     async def load_config(self):
         config_path = Path("config/cameras.json")
@@ -435,6 +459,7 @@ class EdgeAgent:
 
         tasks = [
             asyncio.create_task(self.heartbeat_loop()),
+            asyncio.create_task(self.live_publish_loop()),
         ]
         for cam in self.cameras:
             tasks.append(asyncio.create_task(self.process_camera(cam)))
