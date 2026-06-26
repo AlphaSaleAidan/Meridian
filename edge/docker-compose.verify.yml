@@ -1,0 +1,10 @@
+# Laptop verification of the live-camera path (no GPU/portal needed).
+#   docker compose -f docker-compose.verify.yml run --rm verify
+#   docker compose -f docker-compose.verify.yml run --rm verify --rtsp rtsp://CAM
+services:
+  verify:
+    build:
+      context: .
+      dockerfile: Dockerfile.verify
+    env_file: verify.env
+    network_mode: host   # so it can reach a camera on your LAN (Linux); on Mac use --rtsp with a routable host
