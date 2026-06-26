@@ -239,10 +239,14 @@ LIVE_REQUEST_TTL_SEC = int(os.getenv("CAMERA_LIVE_TTL_SEC", "30") or 30)
 
 
 @router.post("/cameras/{camera_id}/live", dependencies=[Depends(require_org_access)])
-async def request_live_view(camera_id: str):
+async def request_live_view(camera_id: str, org_id: str = Query(...)):
     """Viewer asks to watch a camera live. Ensures a Cloudflare Live Input exists,
     marks the stream requested (edge starts publishing on-demand), returns the WHEP
-    URL for the browser to play. Re-call every ~15s while watching to keep it alive."""
+    URL for the browser to play. Re-call every ~15s while watching to keep it alive.
+
+    org_id is required so the router's require_org_access enforces the caller is a
+    member of that org; we then confirm the camera belongs to it (the path is
+    camera_id, which org_access can't gate on its own)."""
     from ...services import cloudflare_stream as cf
     db = _get_db()
     if not db:
@@ -251,6 +255,8 @@ async def request_live_view(camera_id: str):
     if not rows:
         raise HTTPException(status_code=404, detail="Camera not found")
     cam = rows[0]
+    if str(cam.get("org_id") or "") != org_id:
+        raise HTTPException(status_code=403, detail="Camera does not belong to this org")
     feats = cam.get("features") or {}
     if isinstance(feats, str):
         import json as _j
