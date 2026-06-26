@@ -66,6 +66,18 @@ class CameraProcessor:
         self.compliance_mode = camera_config.get("compliance_mode", "anonymous")
         self.zone_config = camera_config.get("zone_config", {})
         self.active_hours = camera_config.get("active_hours", {"start": "07:00", "end": "22:00"})
+        # Per-camera feature toggles set by the merchant in the portal (vision_cameras.features).
+        # The merchant's choice is authoritative: a disabled analysis is skipped even if
+        # globally enabled. detection is core (always on); privacy-sensitive ones default off.
+        _f = camera_config.get("features") or {}
+        self.features = {
+            "detection": _f.get("detection", True),
+            "zones": _f.get("zones", True),
+            "demographics": _f.get("demographics", False),
+            "vip": _f.get("vip", False),
+            "depth": _f.get("depth", False),
+            "live_view": _f.get("live_view", False),
+        }
 
         model_path = camera_config.get("model_path", os.environ.get("YOLO_MODEL", "yolo11n.pt"))
         self.model = YOLO(model_path)
@@ -236,10 +248,11 @@ class CameraProcessor:
             except Exception as e:
                 logger.debug(f"Tracking failed: {e}")
 
-        self._analyze_demographics(frame, detections)
+        if self.features["demographics"]:
+            self._analyze_demographics(frame, detections)
         self.current_bucket["occupancy_samples"].append(person_count)
 
-        queue_zone = self.zone_config.get("checkout", {})
+        queue_zone = self.zone_config.get("checkout", {}) if self.features["zones"] else {}
         if queue_zone and detections:
             qx1 = queue_zone.get("x1", 0)
             qy1 = queue_zone.get("y1", 0)
@@ -252,7 +265,7 @@ class CameraProcessor:
             self.current_bucket["queue_samples"].append(in_queue)
 
         # Depth estimation (additive — never blocks existing pipeline)
-        if self.depth_processor and detections:
+        if self.features["depth"] and self.depth_processor and detections:
             try:
                 depth_map = self.depth_processor.estimate_depth(frame)
 
