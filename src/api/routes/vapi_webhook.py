@@ -16,12 +16,14 @@ Phone-agent modules live in a sibling dir (same sys.path trick as
 stripe_connect). They're dep-light (no pipecat), so the backend can import them.
 build_system_prompt lives in pipecat-heavy bot.py, so the prompt is rebuilt here.
 """
+import hmac
 import logging
 import os
 import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("meridian.api.vapi")
 
@@ -38,6 +40,13 @@ WEBHOOK_URL = os.getenv("PUBLIC_PAY_BASE", "https://api.meridian.tips").rstrip("
 # usage). Vapi's own card-on-file handles the GLOBAL float; this is the
 # per-merchant policy gate. Disabled unless BOTH env vars are set — default is
 # fail-open (always serve via Vapi).
+# Shared secret Vapi sends as the `x-vapi-secret` header on every server request
+# (set as server.secret on the assistant/phone-number). When set here, every
+# inbound webhook must present it or it's rejected — closes the open-order hole.
+# Unset → not enforced (safe rollout: deploy code, configure Vapi + this env,
+# then enforcement turns on without a gap).
+VAPI_SERVER_SECRET = os.getenv("VAPI_SERVER_SECRET", "").strip()
+
 TELNYX_FALLBACK_NUMBER = os.getenv("TELNYX_FALLBACK_NUMBER", "").strip()
 # Only forward when balance is at/below this many cents (negative = underwater).
 # Unset → no gate. e.g. -2000 forwards once a merchant is $20 in the red.
@@ -180,6 +189,14 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
 
 @router.post("/webhook")
 async def vapi_webhook(request: Request):
+    # Auth: reject anyone who can't present Vapi's shared secret. Fail-closed
+    # only when the secret is configured (so the live line never breaks during
+    # rollout). Without this, the order-placing webhook is open to the internet.
+    if VAPI_SERVER_SECRET:
+        presented = request.headers.get("x-vapi-secret", "")
+        if not hmac.compare_digest(presented, VAPI_SERVER_SECRET):
+            logger.warning("vapi_webhook rejected: missing/invalid x-vapi-secret")
+            return JSONResponse(status_code=401, content={"error": "unauthorized"})
     try:
         payload = await request.json()
     except Exception:

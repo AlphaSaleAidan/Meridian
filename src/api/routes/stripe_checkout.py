@@ -265,16 +265,15 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
+    # Fail closed: never process an unverified payment event. Without the signing
+    # secret a spoofed event could mark a subscription paid.
+    if not STRIPE_WEBHOOK_SECRET:
+        logger.error("STRIPE_WEBHOOK_SECRET not set — refusing Stripe webhook (fail closed)")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
     try:
-        if STRIPE_WEBHOOK_SECRET:
-            event = stripe.Webhook.construct_event(
-                payload, sig_header, STRIPE_WEBHOOK_SECRET
-            )
-        else:
-            # Dev mode — parse without verification
-            import json
-            event = json.loads(payload)
-            logger.warning("Stripe webhook signature verification skipped (no secret configured)")
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
     except Exception as e:
         logger.error(f"Webhook signature verification failed: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")

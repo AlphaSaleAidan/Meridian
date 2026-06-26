@@ -126,13 +126,13 @@ async def connect_webhook(request: Request):
     stripe = _stripe()
     payload = await request.body()
     sig = request.headers.get("stripe-signature", "")
+    # Fail closed: a spoofed checkout.session.completed could mark a CAD order
+    # paid and release it. Never process an unverified Connect event.
+    if not CONNECT_WEBHOOK_SECRET:
+        logger.error("STRIPE_CONNECT_WEBHOOK_SECRET not set — refusing Connect webhook (fail closed)")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
     try:
-        if CONNECT_WEBHOOK_SECRET:
-            event = stripe.Webhook.construct_event(payload, sig, CONNECT_WEBHOOK_SECRET)
-        else:
-            import json
-            event = json.loads(payload)
-            logger.warning("Connect webhook signature check skipped (no secret set)")
+        event = stripe.Webhook.construct_event(payload, sig, CONNECT_WEBHOOK_SECRET)
     except Exception as e:  # noqa: BLE001
         logger.error("Connect webhook verify failed: %s", e)
         raise HTTPException(status_code=400, detail="Invalid signature")
