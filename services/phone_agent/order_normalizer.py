@@ -72,16 +72,26 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
     tax = round(subtotal * tax_rate, 2)
     total = round(subtotal + tax, 2)
 
+    # A delivery order with no address is invalid — the LLM/ASR sometimes sets
+    # "delivery" without collecting an address. Fall back to pickup so we never
+    # produce a broken delivery order or text the customer the wrong fulfillment.
+    order_type = (raw_order.get("order_type") or "pickup").strip().lower()
+    delivery_address = (raw_order.get("delivery_address") or "").strip()
+    if order_type == "delivery" and not delivery_address:
+        logger.info("delivery order with no address → pickup (order from %s)",
+                    raw_order.get("customer_name", "?"))
+        order_type = "pickup"
+
     return {
         "merchant_id": config.merchant_id,
         "business_name": config.business_name,
         "customer_name": raw_order.get("customer_name", ""),
-        "order_type": raw_order.get("order_type", "pickup"),
+        "order_type": order_type,
         "items": items,
         "subtotal": round(subtotal, 2),
         "tax": tax,
         "total": total,
-        "delivery_address": raw_order.get("delivery_address", ""),
+        "delivery_address": delivery_address,
         "special_requests": raw_order.get("special_requests", ""),
         "caller_phone": raw_order.get("caller_phone", ""),
         "source": "phone_agent",

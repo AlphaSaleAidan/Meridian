@@ -142,6 +142,11 @@ async def _stripe_checkout(
         line_items=_stripe_line_items(order, currency),
         success_url=SUCCESS_URL,
         cancel_url=CANCEL_URL,
+        # Show the promo-code field on Checkout — lets us apply a discount code on
+        # test runs and supports real merchant promotions. (Stripe's minimum live
+        # charge is $0.50 CAD, so a code can reduce the total to $0.50, or to $0
+        # for a fully-free comp; it cannot settle a real charge below $0.50.)
+        allow_promotion_codes=True,
         client_reference_id=pos_order_id or order.get("merchant_id", ""),
         metadata={
             "merchant_id": order.get("merchant_id", ""),
