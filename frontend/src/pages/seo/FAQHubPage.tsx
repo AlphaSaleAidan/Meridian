@@ -83,10 +83,10 @@ const categories: { title: string; id: string; items: FAQ[] }[] = [
     title: 'Canada-Specific',
     id: 'canada',
     items: [
-      { q: 'Does Meridian work for Canadian businesses?', a: 'Yes. Meridian has a dedicated Canadian portal at meridian.tips/canada with Canadian POS support (Moneris, Alice POS, Lightspeed), CAD pricing (starting at CA$339/month), and full compliance with PIPEDA and Quebec Law 25. All Canadian data is stored and processed in Canadian data centres.' },
+      { q: 'Does Meridian work for Canadian businesses?', a: 'Yes. Meridian has a dedicated Canadian portal at meridian.tips/canada with Canadian POS support (Moneris, Alice POS, Lightspeed), CAD pricing (starting at CA$339/month), and a platform built around PIPEDA and Quebec Law 25 — privacy-by-design, explicit consent, documented retention, and encryption.' },
       { q: 'What is PIPEDA and does Meridian comply?', a: 'PIPEDA (Personal Information Protection and Electronic Documents Act) is Canada\'s federal privacy law governing how private-sector organizations collect, use, and disclose personal information. Meridian is fully PIPEDA compliant — we obtain proper consent, limit data collection to what is necessary, and protect all data with bank-level encryption.' },
       { q: 'Does Meridian comply with Quebec Law 25?', a: 'Yes. Quebec\'s Law 25 (Bill 64) is Canada\'s strictest provincial privacy legislation, requiring explicit consent, data portability, and privacy impact assessments. Meridian meets all Law 25 requirements including consent management, data minimization, and the right to data deletion.' },
-      { q: 'Does Canadian data stay in Canada?', a: 'Yes. All data from Canadian businesses is stored and processed exclusively in Canadian data centres. Your merchant and customer information never leaves the country. This meets both PIPEDA and Law 25 data residency requirements.' },
+      { q: 'How does Meridian handle Canadian data and privacy?', a: 'Meridian is built around Canadian privacy law — PIPEDA and Quebec Law 25. That means privacy-by-design, explicit (opt-in) consent handling for Quebec, documented data retention, role-based access controls, and encryption in transit and at rest. Meridian\'s infrastructure runs on major cloud providers in US regions, and we are transparent about that with appropriate contractual cross-border data-transfer safeguards in place. Meridian never sees raw payment card numbers.' },
     ],
   },
   {

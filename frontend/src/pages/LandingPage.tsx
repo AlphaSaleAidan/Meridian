@@ -526,7 +526,7 @@ export default function LandingPage() {
                 </h3>
                 <p className="mt-4 text-[#A1A1A8] text-[15px] leading-relaxed max-w-md">
                   CAD pricing, Moneris &amp; Alice POS integration, aligned with Quebec Law 25.
-                  Canadian data stays in Canada.
+                  Built for Canadian privacy law — consent, retention, and encryption by design.
                 </p>
                 <div className="mt-6 flex flex-wrap items-center gap-4">
                   <MagneticButton

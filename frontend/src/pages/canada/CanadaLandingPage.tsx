@@ -317,7 +317,7 @@ export default function CanadaLandingPage() {
               Built for <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">Canada</em>
             </h2>
             <p className="mt-4 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
-              Full compliance with Canadian privacy laws. Your data stays in Canada.
+              Built around Canadian privacy law — PIPEDA and Quebec Law 25 — with privacy-by-design, explicit consent, and encryption.
             </p>
           </ScrollReveal>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
@@ -334,8 +334,8 @@ export default function CanadaLandingPage() {
               },
               {
                 icon: Lock,
-                title: 'Canadian Data Residency',
-                desc: 'All data stored and processed in Canadian data centres. Your merchant and customer information never leaves the country.',
+                title: 'Built for Canadian Privacy Law',
+                desc: 'Privacy-by-design and aligned with PIPEDA and Quebec Law 25 — explicit (opt-in) consent for Quebec, documented retention, role-based access, and encryption in transit and at rest.',
               },
             ].map((item, i) => (
               <ScrollReveal key={item.title} delay={i * 0.12}>
@@ -352,7 +352,7 @@ export default function CanadaLandingPage() {
           <ScrollReveal className="mt-8 flex justify-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#1F1F23] bg-[#111113]/80 text-[#A1A1A8] text-[12px]">
               <MapPin size={14} className="text-[#17C5B0]" />
-              <span>CAD pricing &middot; Moneris &amp; Alice POS support &middot; Canadian data centres</span>
+              <span>CAD pricing &middot; Moneris &amp; Alice POS support &middot; PIPEDA &amp; Law 25 aligned</span>
             </div>
           </ScrollReveal>
         </div>
