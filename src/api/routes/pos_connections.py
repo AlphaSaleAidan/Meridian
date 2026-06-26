@@ -308,6 +308,26 @@ async def connect_pos(
     if req.pos_system in ("clover", "square") and encrypted_creds.get("access_token"):
         token_column["access_token_enc"] = encrypted_creds["access_token"]
 
+    # Ensure the organizations row exists BEFORE any pos_connections write —
+    # pos_connections.org_id FKs to organizations.id. Customers live in the
+    # `businesses` table, so the parallel organizations row is often missing and
+    # the insert below would hit pos_connections_org_id_fkey (409 23503), failing
+    # the whole connect. Create it with the NOT-NULL `vertical` (refined to the
+    # detected business type by the organizations update further down).
+    existing_org = await db.select(
+        "organizations", filters={"id": f"eq.{req.org_id}"}, limit=1,
+    )
+    if not existing_org:
+        await db.insert("organizations", {
+            "id": req.org_id,
+            "name": f"Org {req.org_id}",
+            "slug": req.org_id.lower().replace(" ", "-"),
+            "vertical": "other",
+            "created_at": now,
+            "updated_at": now,
+        })
+        logger.info(f"Created organizations row for {req.org_id} (pos/connect)")
+
     existing = await db.select(
         "pos_connections",
         filters={
@@ -362,9 +382,10 @@ async def connect_pos(
                 logger.warning(f"Square business type detection failed: {e}")
 
     await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
-    # Open BOTH halves of the dashboard gate (businesses.pos_connected is the
-    # primary gate; businesses-based customers have no org status to fall back
-    # on). Mirrors the OAuth callback path and is symmetric with disconnect.
+    # Open BOTH halves of the dashboard gate. businesses.pos_connected is the
+    # primary gate; businesses-based customers have no pos_connection_status
+    # column to fall back on. Mirrors the OAuth callback path and is symmetric
+    # with disconnect.
     await db.update("businesses", {"pos_connected": True}, filters={"id": f"eq.{req.org_id}"})
 
     if req.pos_system == "toast":
@@ -388,13 +409,17 @@ async def connect_pos(
         # the identical initial backfill so the lifecycle advances PENDING →
         # COMPLETE (or → FAILED on a bad token) and the connection becomes
         # eligible for incremental sync — rather than sitting PENDING forever.
-        from ...workers.backfill import run_backfill
-        background_tasks.add_task(
-            run_backfill,
-            access_token=req.credentials.get("access_token", ""),
-            org_id=req.org_id,
-            connection_id=connection_id,
-        )
+        # Guard on a present token so an empty manual paste doesn't kick a
+        # backfill that would only fail.
+        token = req.credentials.get("access_token", "")
+        if token:
+            from ...workers.backfill import run_backfill
+            background_tasks.add_task(
+                run_backfill,
+                access_token=token,
+                org_id=req.org_id,
+                connection_id=connection_id,
+            )
     else:
         api_config = get_connector_config(req.pos_system)
         if api_config and api_config.get("auth_type") != "csv_only":
@@ -863,6 +888,11 @@ async def disconnect_pos(req: DisconnectRequest, user: dict = Depends(require_jw
         except Exception as e:
             logger.warning(f"Square token revocation failed: {e}")
 
+    # Fully tear down via the shared helper: drops the stored token, resets the
+    # import flag, and closes BOTH halves of the dashboard gate (the gate is
+    #   businesses.pos_connected OR organizations.pos_connection_status == 'connected'
+    # — clearing only the org status left businesses.pos_connected true, so the
+    # dashboard stayed unlocked with stale data after disconnect).
     await teardown_connection(db, conn["id"], req.org_id)
 
     return {"success": True, "message": f"{req.pos_system.title()} disconnected."}

@@ -187,6 +187,13 @@ async def rep_signup(req: RepSignupRequest):
     }
 
 
+def _generate_temp_password() -> str:
+    """Generate a readable temporary password like 'Mer-7kX9pQ2m'."""
+    import secrets
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
+    return "Mer-" + "".join(secrets.choice(chars) for _ in range(8))
+
+
 @router.post("/create-customer")
 async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(require_jwt)):
     """Create a Supabase Auth user for a Canada customer.

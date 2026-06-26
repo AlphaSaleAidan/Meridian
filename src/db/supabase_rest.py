@@ -471,11 +471,49 @@ class SupabaseREST:
         return await self.get_recent_transactions(org_id, days, limit)
 
     async def get_inventory_current(self, org_id: str) -> list[dict]:
-        """Get current inventory levels for an org."""
-        return await self.select(
-            "inventory",
+        """Latest on-hand quantity per product, from `inventory_snapshots` (the
+        table POS sync actually writes) joined to the product catalog.
+
+        The old `inventory` table this read from is never populated by any sync —
+        so the Inventory page was permanently empty. Stock here is real; reorder
+        point / daily usage / trend aren't tracked yet, so they default (the page
+        shows on-hand levels without predictions until that's built)."""
+        snapshots = await self.select(
+            "inventory_snapshots",
             filters={"org_id": f"eq.{org_id}"},
+            order="snapshot_at.desc",
+            limit=5000,
         )
+        if not snapshots:
+            return []
+
+        # Keep the most recent snapshot per product (rows are newest-first).
+        latest: dict[str, dict] = {}
+        for s in snapshots:
+            pid = s.get("product_id")
+            if pid and pid not in latest:
+                latest[pid] = s
+
+        products = await self.select("products", filters={"org_id": f"eq.{org_id}"})
+        pmap = {p["id"]: p for p in products}
+
+        items = []
+        for pid, snap in latest.items():
+            p = pmap.get(pid, {})
+            items.append({
+                "id": pid,
+                "product_name": p.get("name", "Unknown"),
+                "sku": p.get("sku", ""),
+                "category": "",
+                "current_stock": snap.get("quantity_on_hand", 0) or 0,
+                "unit": "units",
+                "reorder_point": 0,
+                "predicted_daily_usage": 0,
+                "trend": "stable",
+                "trend_pct": 0,
+                "last_updated": snap.get("snapshot_at", ""),
+            })
+        return items
 
     async def save_insights(self, insights: list[dict]) -> int:
         """Persist AI-generated insights."""

@@ -50,6 +50,10 @@ class MerchantPhoneConfig:
     # checkout goes through Stripe regardless of which POS the merchant runs.
     stripe_account_id: str = ""
     stripe_charges_enabled: bool = False
+    # When true, create_pos_order returns logs-only regardless of token
+    # state. Demo / test merchants set this to keep live POS calls off
+    # the demo path even after the merchant completes Square OAuth.
+    demo_safe: bool = False
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -112,6 +116,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 business_timezone=(row.get("business_timezone") or "").strip(),
                 stripe_account_id=(row.get("stripe_account_id") or "").strip(),
                 stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
+                demo_safe=bool(row.get("demo_safe", False)),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

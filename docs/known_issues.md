@@ -210,3 +210,137 @@ implementation work is preserved behind the flag and can be revisited
 without re-implementing.
 
 ---
+
+## 4. POS beta-gate (P0+P1) verified only on synthetic payloads
+
+**Discovered:** 2026-06-03, immediately after the P0+P1 beta gate.
+**Owner:** TBD — first real-merchant connection is the load test.
+**Severity:** Beta-blocker risk surface. Code paths verified, but a
+real Square / Clover / Toast merchant has not yet been connected.
+
+### What
+
+The P0 schema migration (`supabase/migrations/20260603_pos_beta_wiring.sql`)
++ P1 application wiring were verified end-to-end on **synthetic
+order payloads**, not against a live merchant token, because:
+
+1. The only Square production token on this box is the operator's own
+   dev/test Square account (1 location, 56 orders, 0% `customer_id`
+   coverage — Stage A recon
+   `eval/reports/square_recon_2026-06-03.md`). Useless as an
+   identity-persistence test.
+2. No Clover or Toast credentials are on the box at all.
+3. The Meridian production transactions table itself still has 3
+   rows (Phase 1 recon).
+
+### What was actually tested
+
+- `Square DataMapper.map_transaction` — fed a synthetic
+  `{id, location_id, customer_id, total_money:{currency:'CAD'}, ...}`
+  payload; verified output keys include `customer_id`,
+  `customer_email`, `currency`.
+- `Toast ToastDataMapper.map_order` — fed a synthetic order with
+  `checks[0].customer = {guid, email}`; verified the same three keys
+  populate.
+- `Clover CloverDataMapper.map_order_to_transaction` — fed a
+  synthetic order with `customers.elements[0].id`; verified.
+- `normalize_transaction` (GenericREST) — fed synthetic payloads with
+  inline + caller-default currency variants; verified.
+- Production DB columns + FK + indexes — verified via
+  `information_schema` query after the management-API apply.
+- Frontend type-check (`tsc --noEmit`) passed on every edited file
+  plus the 7 `connectPos` callers.
+- Production smoke test (a real Square merchant credential-pasting
+  into the wizard and watching the backfill land on the
+  `transactions` table with `customer_id` + `currency` populated)
+  has **NOT** been run.
+
+### What we still don't know
+
+- Whether Square's `/v2/orders/search` response shape on a real
+  merchant matches what the mapper expects (esp. tender shapes,
+  void/cancel state mapping, line-item line-discount handling on
+  large orders).
+- Whether Clover's `/orders` response shape on a real bank-channel
+  rebrand (PNC POS, Wells Fargo POS, etc.) deserialises the same
+  way as canonical Clover.
+- Whether Toast's `client_id` / `client_secret` exchange round-trip
+  works under our actual partner-program credentials (we don't
+  have a Toast partner token).
+- Whether `db.batch_upsert` (Supabase REST PostgREST under the
+  hood) rejects unknown columns silently or noisily if a sync
+  engine accidentally emits one — we haven't observed a row land
+  in `transactions` from a real backfill yet.
+
+### What unblocks each of these
+
+The **first real beta merchant** unblocks them all at once:
+connect, watch the backfill complete (or fail), then inspect
+`transactions` for `customer_id` + `currency` + `customer_email`
+populated rows and `pos_connections.connected_by_rep_id` written.
+If anything is dropped silently, the gap shows up as a column
+returning NULL where the upstream payload had a value.
+
+Until that happens, treat P0+P1 as "code is in place, contract
+not yet observed in production".
+
+---
+
+## 5. P4 — Clover mapper fixes (FIXED-BUT-UNVERIFIED)
+
+**Discovered:** 2026-06-03, during the P4 mapper-vs-schema audit
+triggered by the e2e Square backfill test.
+**Fixed in commit:** the P4 mapper-fix commit (`src/clover/mappers.py`
++ `src/clover/sync_engine.py`).
+**Severity:** Code is now correct. Live verification still pending
+the first real Clover merchant connection — no Clover token exists
+on this VPS so end-to-end exercise is not yet possible.
+
+### What was wrong
+
+The Clover sync engine's mapper output had several column-name and
+required-field mismatches against the destination tables. Every
+mismatch was silent — PostgREST drops unknown columns and only
+fails when a NOT NULL column ends up NULL after the drop. Net
+effect: a real Clover merchant connecting today would have hit
+NOT NULL violations on `transactions.transaction_at` and
+`transaction_items.{transaction_at, product_name}` on the first
+batch upsert, and the backfill would have aborted with zero rows
+landed (same failure shape Square hit before P4).
+
+Specifically:
+
+| Mapper | Bug | Fix |
+|---|---|---|
+| `map_merchant_to_location` | `postal_code` → silent drop | renamed to `zip_code` (the actual column) |
+| `map_order_to_transaction` | `transaction_time` → silent drop → `transactions.transaction_at NOT NULL` violation | renamed to `transaction_at` |
+| `map_order_to_transaction` | `status` → silent drop (not a column) | replaced with `type` (`sale` / `void`, derived from Clover's `state`) |
+| `map_line_item` | `transaction_time` → silent drop → `transaction_items.transaction_at NOT NULL` violation | renamed to `transaction_at`; sync engine call sites updated to pass the new kwarg name |
+| `map_line_item` | `name` → silent drop → `transaction_items.product_name NOT NULL` violation | renamed to `product_name` |
+
+A few decorative fields (`pos_type`, `country`, `timezone`,
+`currency` on locations; `is_online`, `source`, `created_at` on
+transactions) are still emitted by the mapper and still silently
+dropped by PostgREST. They're harmless — kept so a trace of the
+upstream-Clover shape is observable in the raw mapper output. The
+real upsert payload that PostgREST writes is now schema-compatible.
+
+### What's still pending
+
+End-to-end run against a real Clover merchant — the same
+contract awaiting a real Square merchant for `customer_id`
+persistence verification.
+
+Until a Clover token is on this box, treat the fix as "code is
+correct, contract not yet observed in production." Once a Clover
+beta merchant connects:
+
+1. Confirm the full `locations → products → transactions → items`
+   chain lands rows for them, parallel to the Square e2e run.
+2. Confirm `customer_id` populates from
+   `order.customers.elements[0].id` (verified inline in the mapper
+   but the e2e contract still awaits real data).
+3. Confirm `currency` populates from `merchant.defaultCurrency` (also
+   verified inline; awaits a real account where Clover sets it).
+
+---
