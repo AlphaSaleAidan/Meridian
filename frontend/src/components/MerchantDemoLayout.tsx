@@ -22,6 +22,9 @@ export default function MerchantDemoLayout() {
         path="/canada/demo"
         noindex
       />
+      {/* First-visit vertical picker + persistent "Switch" badge so viewers can
+          choose / change which business type the demo renders (data refetches
+          automatically — useApi keys on businessType). */}
       <BusinessTypeSelector />
       <DemoHeaderBadge />
       <WalkthroughEngine />

@@ -82,12 +82,14 @@ async def run_backfill(
             on_conflict="org_id,external_id",
         )
 
-    # Categories persist to `product_categories` (the real table — same target
-    # the credential-paste/sync_repo path and live_pipeline use). The earlier
-    # code upserted to a non-existent table literally named `categories`, which
-    # failed; dropping it left products with category_id values that resolve to
-    # nothing. Mapper emits {id, org_id, name, external_id, parent_id, is_active}
-    # — matches product_categories; on_conflict mirrors sync_repo (org_id,external_id).
+    # Sweep §3.1 / fork: the bare `categories` table does NOT exist in the
+    # production schema — the original upsert to a table literally named
+    # `categories` failed. The real table is `product_categories` (the same
+    # target the credential-paste/sync_repo path and live_pipeline use), so we
+    # persist there instead of dropping categories entirely (dropping left
+    # products with category_id values that resolve to nothing).
+    # Mapper emits {id, org_id, name, external_id, parent_id, is_active} —
+    # matches product_categories; on_conflict mirrors sync_repo (org_id,external_id).
     if result.categories:
         await db.batch_upsert(
             "product_categories",

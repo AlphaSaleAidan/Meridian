@@ -184,19 +184,31 @@ class SyncEngine:
             except Exception as e:
                 logger.warning(f"Failed to load lookups from DB: {e}")
 
+        # P0: fetch per-location currency for the order mapper.
+        # On the incremental path we don't have the _sync_locations
+        # cache from the initial backfill, so build one inline.
+        # Cheap — one /v2/locations call.
+        sq_locations_for_currency = await self.client.list_locations()
+        location_currency = {
+            loc["id"]: loc.get("currency")
+            for loc in sq_locations_for_currency
+            if loc.get("currency")
+        }
+
         mapper = DataMapper(
             org_id=self.org_id,
             location_lookup=location_lookup,
             product_lookup=product_lookup,
             employee_cache=employee_cache,
             pos_connection_id=self.pos_connection_id,
+            location_currency=location_currency,
         )
 
         try:
             # Fetch locations if not provided
             if not location_ids:
-                sq_locations = await self.client.list_locations()
-                location_ids = [loc["id"] for loc in sq_locations]
+                # Reuse the list we just fetched for currency.
+                location_ids = [loc["id"] for loc in sq_locations_for_currency]
 
             # Fetch updated orders
             logger.info(f"Incremental sync: fetching orders since {since_str}")
@@ -241,17 +253,24 @@ class SyncEngine:
     async def _sync_locations(self, result: SyncResult) -> list[dict]:
         """Phase 1: Sync all merchant locations."""
         sq_locations = await self.client.list_locations()
-        
+
         mapper = DataMapper(org_id=self.org_id, pos_connection_id=self.pos_connection_id)
-        
+
         for i, sq_loc in enumerate(sq_locations):
             loc = mapper.map_location(sq_loc)
             if i > 0:
                 loc["is_primary"] = False
             result.locations.append(loc)
-            
+
             # Build location lookup
             mapper.location_lookup[sq_loc["id"]] = loc["id"]
+            # P0: capture per-location ISO 4217 currency so the order
+            # mapper can fill `transactions.currency` from the right
+            # source (per-order total_money.currency, falling back to
+            # the location currency).
+            cur = sq_loc.get("currency")
+            if cur:
+                mapper.location_currency[sq_loc["id"]] = cur
 
         # Store for other phases
         self._mapper = mapper

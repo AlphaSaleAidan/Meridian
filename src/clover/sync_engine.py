@@ -115,6 +115,10 @@ class CloverSyncEngine:
                 pos_connection_id=self.pos_connection_id,
                 order_type_lookup=order_type_lookup,
                 tender_lookup=tender_lookup,
+                # P0: pin currency from merchant.defaultCurrency so
+                # map_order_to_transaction can fill transactions.currency.
+                # Clover orders don't carry currency inline.
+                currency=merchant.get("defaultCurrency"),
             )
             result.locations = [mapper.map_merchant_to_location(merchant)]
             logger.info(f"Merchant: {merchant.get('name', 'Unknown')}")
@@ -195,7 +199,8 @@ class CloverSyncEngine:
                             li_row = mapper.map_line_item(
                                 li,
                                 transaction_id=txn["id"],
-                                transaction_time=txn["transaction_at"],
+                                # P4: mapper now uses transaction_at.
+                                transaction_at=txn["transaction_at"],
                             )
                             result.transaction_items.append(li_row)
 
@@ -297,12 +302,21 @@ class CloverSyncEngine:
                     logger.warning("Clover incremental: failed to load product lookup: %s", e)
 
             order_type_lookup, tender_lookup = await self._fetch_config_lookups()
+
+            # P0: fetch merchant once for currency. Clover orders don't carry
+            # currency inline, so we pin it on the mapper at construction. One
+            # extra API call per incremental run is cheap relative to the order
+            # pagination cost.
+            merchant = await self.client.get_merchant()
+            currency = merchant.get("defaultCurrency") if merchant else None
+
             mapper = CloverDataMapper(
                 org_id=self.org_id,
                 product_lookup=product_lookup,
                 pos_connection_id=self.pos_connection_id,
                 order_type_lookup=order_type_lookup,
                 tender_lookup=tender_lookup,
+                currency=currency,
             )
 
             orders = await self.client.list_orders(
@@ -318,7 +332,8 @@ class CloverSyncEngine:
                     li_row = mapper.map_line_item(
                         li,
                         transaction_id=txn["id"],
-                        transaction_time=txn["transaction_at"],
+                        # P4: mapper now uses transaction_at.
+                        transaction_at=txn["transaction_at"],
                     )
                     result.transaction_items.append(li_row)
 

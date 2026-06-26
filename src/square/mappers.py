@@ -42,6 +42,7 @@ class DataMapper:
         category_lookup: dict[str, str] | None = None,     # square_category_id → meridian_category_uuid
         employee_cache: dict[str, str] | None = None,      # square_employee_id → "First Last"
         pos_connection_id: str | None = None,
+        location_currency: dict[str, str] | None = None,   # square_location_id → ISO 4217 currency
     ):
         self.org_id = org_id
         self.location_lookup = location_lookup or {}
@@ -49,30 +50,46 @@ class DataMapper:
         self.category_lookup = category_lookup or {}
         self.employee_cache = employee_cache or {}
         self.pos_connection_id = pos_connection_id
+        # Per-location currency cache populated from Square /v2/locations
+        # at the start of sync. Square orders carry total_money.currency
+        # inline too, but the location map is the authoritative source
+        # when a CAD location is misconfigured.
+        self.location_currency = location_currency or {}
 
     # ─── Location Mapper ──────────────────────────────────────
 
     def map_location(self, sq_location: dict) -> dict[str, Any]:
         """
         Square Location → Meridian locations table.
-        
+
         Mapping:
-          location.id                   → external_id (via pos_connections)
+          location.id                   → external_id (persisted to row)
+                                          AND _external_id (synonym
+                                          kept for sync_engine's
+                                          internal lookup extraction)
           location.name                 → name
           location.address.*            → address fields
           location.coordinates.*        → latitude, longitude
           location.phone_number         → phone
           location.business_hours       → business_hours (JSONB)
           location.status = "ACTIVE"    → is_active
+
+        P4: Square location id is now persisted on the row via the
+        `external_id` column (P4 migration). Keep `_external_id` as
+        a synonym so `sync_engine.run_initial_backfill` and friends
+        that read `loc["_external_id"]` to build the
+        square_id → meridian_uuid lookup continue working unchanged.
+        Both fields carry the same value.
         """
         address = sq_location.get("address", {})
         coords = sq_location.get("coordinates", {})
-        
+
         # Parse Square business hours into our format
         business_hours = self._parse_business_hours(
             sq_location.get("business_hours", {})
         )
 
+        external_id = sq_location.get("id")
         return {
             "id": str(uuid4()),
             "org_id": self.org_id,
@@ -87,7 +104,9 @@ class DataMapper:
             "phone": sq_location.get("phone_number", ""),
             "business_hours": business_hours,
             "is_active": sq_location.get("status") == "ACTIVE",
-            "_external_id": sq_location.get("id"),  # stored in pos_connections
+            # P4: persist + keep the legacy synonym.
+            "external_id": external_id,
+            "_external_id": external_id,
         }
 
     # ─── Category Mapper ──────────────────────────────────────
@@ -240,6 +259,11 @@ class DataMapper:
         sq_location_id = sq_order.get("location_id")
         location_id = self.location_lookup.get(sq_location_id)
 
+        # Currency: prefer the order's total_money.currency (per-order
+        # truth), fall back to the location's currency. ISO 4217.
+        order_currency = (sq_order.get("total_money") or {}).get("currency")
+        currency = order_currency or self.location_currency.get(sq_location_id)
+
         return {
             # Deterministic from the order's natural key so a re-sync updates
             # this row instead of churning the PK / orphaning its line items.
@@ -259,6 +283,15 @@ class DataMapper:
             "employee_name": employee_name,
             "employee_external_id": employee_id,
             "transaction_at": sq_order.get("created_at"),
+            # P0: identity + currency persistence.
+            # customer_id is the Square Customers-API id when the order
+            # was attached to a customer profile. customer_email needs
+            # a separate Customers-API lookup; left NULL here so this
+            # inline mapper stays cheap. Sync engines that prefetch the
+            # directory should patch it in afterwards.
+            "customer_id": sq_order.get("customer_id"),
+            "customer_email": None,
+            "currency": currency,
             "metadata": self._extract_order_metadata(sq_order, tenders),
         }
 

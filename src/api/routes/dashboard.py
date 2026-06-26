@@ -75,8 +75,12 @@ async def get_overview(
     if cached is not None:
         return cached
 
+    # Pull ~13 months so we can report all-time figures alongside the trailing
+    # 30d. A freshly-connected merchant whose backfilled history is all older
+    # than 30 days would otherwise see a $0 hero ("connected but nothing shows")
+    # even though the data is present — surface the history instead.
     daily, money_left, connection = await asyncio.gather(
-        db.get_daily_revenue(org_id, days=60),
+        db.get_daily_revenue(org_id, days=400),
         db.select(
             "money_left_scores",
             filters={"org_id": f"eq.{org_id}"},
@@ -91,7 +95,8 @@ async def get_overview(
     cutoff = (now - timedelta(days=30)).isoformat()
 
     current = [r for r in daily if r.get("day_bucket", "") >= cutoff]
-    prior = [r for r in daily if r.get("day_bucket", "") < cutoff]
+    prior_window = (now - timedelta(days=60)).isoformat()
+    prior = [r for r in daily if prior_window <= r.get("day_bucket", "") < cutoff]
 
     current_revenue = sum(r.get("total_revenue_cents", 0) or 0 for r in current)
     prior_revenue = sum(r.get("total_revenue_cents", 0) or 0 for r in prior)
@@ -102,11 +107,24 @@ async def get_overview(
     if prior_revenue > 0:
         change_pct = round((current_revenue - prior_revenue) / prior_revenue * 100, 1)
 
+    # All-time (within the ~13mo pull) so history is always visible.
+    days_with_data = [r for r in daily if (r.get("total_revenue_cents") or r.get("transaction_count"))]
+    lifetime_revenue = sum(r.get("total_revenue_cents", 0) or 0 for r in daily)
+    lifetime_txns = sum(r.get("transaction_count", 0) or 0 for r in daily)
+    buckets = sorted(r.get("day_bucket", "") for r in days_with_data if r.get("day_bucket"))
+
     result = {
         "revenue_cents_30d": current_revenue,
         "revenue_change_pct": change_pct,
         "transaction_count_30d": current_txns,
         "avg_ticket_cents": avg_ticket,
+        # All-time fields — the frontend falls back to these when the 30d window
+        # is empty so backfilled history is still shown.
+        "lifetime_revenue_cents": lifetime_revenue,
+        "lifetime_transaction_count": lifetime_txns,
+        "lifetime_avg_ticket_cents": (lifetime_revenue // lifetime_txns) if lifetime_txns else 0,
+        "first_activity_at": buckets[0] if buckets else None,
+        "last_activity_at": buckets[-1] if buckets else None,
         "money_left_score": money_left[0] if money_left else None,
         "connection": {
             "status": connection.get("status", "disconnected") if connection else "disconnected",
@@ -114,6 +132,7 @@ async def get_overview(
             "last_sync_at": connection.get("last_sync_at", None) if connection else None,
         },
         "days_with_data": len(current),
+        "lifetime_days_with_data": len(days_with_data),
     }
     dashboard_cache.set(cache_key, result, TTL_FAST)
     return result
@@ -146,31 +165,163 @@ async def get_revenue(
     )
 
     result = {
+        # `or 0` (not .get(...,0)) — aggregate rows can carry an explicit NULL
+        # (e.g. void-only days have total_revenue_cents=null), which would reach
+        # the frontend charts/sparklines as null → NaN.
         "daily": [
             {
                 "date": r.get("day_bucket"),
-                "revenue_cents": r.get("total_revenue_cents", 0),
-                "transactions": r.get("transaction_count", 0),
-                "avg_ticket_cents": r.get("avg_ticket_cents", 0),
-                "refund_cents": r.get("refund_total_cents", 0),
-                "tax_cents": r.get("total_tax_cents", 0),
-                "tip_cents": r.get("total_tip_cents", 0),
-                "discount_cents": r.get("total_discount_cents", 0),
-                "customers": r.get("unique_customers", 0),
+                "revenue_cents": r.get("total_revenue_cents") or 0,
+                "transactions": r.get("transaction_count") or 0,
+                "avg_ticket_cents": r.get("avg_ticket_cents") or 0,
+                "refund_cents": r.get("refund_total_cents") or 0,
+                "tax_cents": r.get("total_tax_cents") or 0,
+                "tip_cents": r.get("total_tip_cents") or 0,
+                "discount_cents": r.get("total_discount_cents") or 0,
+                "customers": r.get("unique_customers") or 0,
             }
             for r in daily
         ],
         "weekly": [
             {
                 "week": r.get("week_bucket"),
-                "revenue_cents": r.get("total_revenue_cents", 0),
-                "transactions": r.get("transaction_count", 0),
-                "avg_ticket_cents": r.get("avg_ticket_cents", 0),
+                "revenue_cents": r.get("total_revenue_cents") or 0,
+                "transactions": r.get("transaction_count") or 0,
+                "avg_ticket_cents": r.get("avg_ticket_cents") or 0,
             }
             for r in weekly
         ],
     }
     dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
+
+
+@router.get("/open-orders")
+async def get_open_orders(
+    org_id: OrgId,
+    db=Depends(_get_db),
+):
+    """Unpaid OPEN + DRAFT orders pulled live from the POS — the merchant's
+    pipeline (quotes / open tickets). These are NOT revenue (no payment taken)
+    so they're excluded from the sales numbers; surfaced separately here."""
+    cache_key = dashboard_cache.make_key("open_orders", org_id)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    empty = {"orders": [], "summary": {"open_count": 0, "draft_count": 0, "total_cents": 0}, "provider": None}
+
+    conns = await db.select(
+        "pos_connections",
+        filters={"org_id": f"eq.{org_id}", "provider": "eq.square", "status": "eq.connected"},
+        limit=1,
+    )
+    if not conns:
+        return empty
+    conn = conns[0]
+
+    try:
+        from ...security.encryption import decrypt_token
+        from ...square.client import SquareClient
+        creds = conn.get("credentials_encrypted") or {}
+        token = decrypt_token(creds.get("access_token", "") or conn.get("access_token_enc", ""))
+        if not token:
+            return empty
+
+        orders = []
+        async with SquareClient(access_token=token) as client:
+            locs = await client.list_locations()
+            loc_ids = [l["id"] for l in (locs or [])]
+            raw = await client.search_all_orders(location_ids=loc_ids, states=["OPEN", "DRAFT"])
+            for o in raw:
+                line_items = o.get("line_items") or []
+                orders.append({
+                    "id": o.get("id"),
+                    "state": o.get("state"),
+                    "created_at": o.get("created_at"),
+                    "updated_at": o.get("updated_at"),
+                    "total_cents": (o.get("total_money") or {}).get("amount", 0) or 0,
+                    "item_count": len(line_items),
+                    "items": [li.get("name", "Item") for li in line_items[:4]],
+                    "reference_id": o.get("reference_id"),
+                })
+    except Exception as e:
+        logger.warning("open-orders fetch failed for org=%s: %s", org_id, e)
+        return empty
+
+    orders.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    result = {
+        "orders": orders,
+        "summary": {
+            "open_count": sum(1 for o in orders if o["state"] == "OPEN"),
+            "draft_count": sum(1 for o in orders if o["state"] == "DRAFT"),
+            "total_cents": sum(o["total_cents"] for o in orders),
+        },
+        "provider": "square",
+    }
+    dashboard_cache.set(cache_key, result, TTL_FAST)
+    return result
+
+
+@router.get("/revenue/annual")
+async def get_annual_revenue(
+    org_id: OrgId,
+    db=Depends(_get_db),
+):
+    """Historical revenue by calendar year + a monthly series, so merchants can
+    see prior-year revenue. Backed by the ~18 months the initial backfill pulls."""
+    cache_key = dashboard_cache.make_key("annual", org_id)
+    cached = dashboard_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    # ~25 months so the current and previous full year both have coverage.
+    daily = await db.get_daily_revenue(org_id, days=760)
+
+    by_year: dict[str, dict] = {}
+    by_month: dict[str, dict] = {}
+    for r in daily:
+        bucket = r.get("day_bucket") or ""
+        if len(bucket) < 7:
+            continue
+        year, month = bucket[:4], bucket[:7]
+        rev = r.get("total_revenue_cents", 0) or 0
+        txns = r.get("transaction_count", 0) or 0
+        for key, agg in ((year, by_year), (month, by_month)):
+            slot = agg.setdefault(key, {"revenue_cents": 0, "transaction_count": 0})
+            slot["revenue_cents"] += rev
+            slot["transaction_count"] += txns
+
+    years = [
+        {
+            "year": int(y),
+            "revenue_cents": v["revenue_cents"],
+            "transaction_count": v["transaction_count"],
+            "avg_ticket_cents": (v["revenue_cents"] // v["transaction_count"]) if v["transaction_count"] else 0,
+        }
+        for y, v in sorted(by_year.items())
+    ]
+    monthly = [
+        {"month": m, "revenue_cents": v["revenue_cents"], "transaction_count": v["transaction_count"]}
+        for m, v in sorted(by_month.items())
+    ]
+
+    current_year = years[-1] if years else None
+    prior_year = years[-2] if len(years) >= 2 else None
+    yoy_pct = None
+    if current_year and prior_year and prior_year["revenue_cents"] > 0:
+        yoy_pct = round(
+            (current_year["revenue_cents"] - prior_year["revenue_cents"]) / prior_year["revenue_cents"] * 100, 1
+        )
+
+    result = {
+        "years": years,
+        "monthly": monthly,
+        "current_year": current_year,
+        "prior_year": prior_year,
+        "yoy_pct": yoy_pct,
+    }
+    dashboard_cache.set(cache_key, result, TTL_SLOW)
     return result
 
 
@@ -192,13 +343,13 @@ async def get_hourly_revenue(
         "hourly": [
             {
                 "hour": r.get("hour_bucket"),
-                "revenue_cents": r.get("total_revenue_cents", 0),
-                "sales": r.get("sale_count", 0),
-                "refunds": r.get("refund_count", 0),
-                "avg_ticket_cents": r.get("avg_ticket_cents", 0),
-                "customers": r.get("unique_customers", 0),
-                "cash_count": r.get("cash_count", 0),
-                "credit_count": r.get("credit_count", 0),
+                "revenue_cents": r.get("total_revenue_cents") or 0,
+                "sales": r.get("sale_count") or 0,
+                "refunds": r.get("refund_count") or 0,
+                "avg_ticket_cents": r.get("avg_ticket_cents") or 0,
+                "customers": r.get("unique_customers") or 0,
+                "cash_count": r.get("cash_count") or 0,
+                "credit_count": r.get("credit_count") or 0,
             }
             for r in hourly
         ],
@@ -246,24 +397,48 @@ async def get_products(
         agg["times_sold"] += row.get("times_sold", 0) or 0
         agg["daily"].append({
             "date": row.get("day_bucket"),
-            "revenue_cents": row.get("total_revenue_cents", 0),
-            "quantity": row.get("total_quantity", 0),
+            "revenue_cents": row.get("total_revenue_cents") or 0,
+            "quantity": row.get("total_quantity") or 0,
         })
 
-    # Merge product info
-    result = []
-    for pid, perf in perf_by_product.items():
-        product = product_map.get(pid, {})
-        result.append({
+    # List the FULL catalog — every active product appears, even with no sales
+    # in the window. Otherwise a freshly-connected merchant whose only data is
+    # older than `days` sees an empty product list while total_products > 0
+    # (the "connected but nothing shows" symptom). cost_cents is included so the
+    # UI can show true margin where a cost exists (and "needs cost" where null).
+    def _row(perf: dict, product: dict) -> dict:
+        return {
             **perf,
             "name": product.get("name", "Unknown"),
             "sku": product.get("sku"),
             "category_id": product.get("category_id"),
             "price_cents": product.get("price_cents"),
-        })
+            "cost_cents": product.get("cost_cents"),
+        }
 
-    # Sort by revenue descending
-    result.sort(key=lambda x: x["total_revenue_cents"], reverse=True)
+    result = []
+    seen_pids = set()
+    for product in products:
+        pid = product["id"]
+        seen_pids.add(pid)
+        perf = perf_by_product.get(pid) or {
+            "product_id": pid,
+            "total_revenue_cents": 0,
+            "total_quantity": 0,
+            "times_sold": 0,
+            "daily": [],
+        }
+        result.append(_row(perf, product))
+
+    # Keep performance for products no longer in the active catalog
+    # (deleted/inactive) so historical sales aren't silently dropped.
+    for pid, perf in perf_by_product.items():
+        if pid in seen_pids:
+            continue
+        result.append(_row(perf, product_map.get(pid, {})))
+
+    # Sort by revenue descending, then name so the catalog has a stable order
+    result.sort(key=lambda x: (-(x["total_revenue_cents"] or 0), x["name"] or ""))
 
     response = {
         "products": result,
@@ -272,6 +447,47 @@ async def get_products(
     }
     dashboard_cache.set(cache_key, response, TTL_FAST)
     return response
+
+
+class ProductCostUpdate(BaseModel):
+    cost_cents: int | None = None
+    price_cents: int | None = None
+
+
+@router.patch("/products/{product_id}")
+async def update_product_cost(
+    product_id: str,
+    body: ProductCostUpdate,
+    org_id: OrgId = None,
+    db=Depends(_get_db),
+):
+    """Set a product's unit cost (and optionally price) — powers inline cost
+    entry on the Products page so margins can compute. Cost-of-goods isn't in
+    the POS feed, so the merchant supplies it here once."""
+    rows = await db.select(
+        "products",
+        filters={"id": f"eq.{product_id}", "org_id": f"eq.{org_id}"},
+        limit=1,
+    )
+    if not rows:
+        raise HTTPException(404, "Product not found")
+
+    fields: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.cost_cents is not None:
+        if body.cost_cents < 0:
+            raise HTTPException(422, "cost_cents must be >= 0")
+        fields["cost_cents"] = body.cost_cents
+    if body.price_cents is not None:
+        if body.price_cents < 0:
+            raise HTTPException(422, "price_cents must be >= 0")
+        fields["price_cents"] = body.price_cents
+    if len(fields) == 1:
+        raise HTTPException(422, "Provide cost_cents and/or price_cents")
+
+    await db.update("products", fields, filters={"id": f"eq.{product_id}"})
+    dashboard_cache.invalidate_org(org_id)  # margins/products recompute on next read
+    return {"ok": True, "product_id": product_id,
+            "cost_cents": fields.get("cost_cents"), "price_cents": fields.get("price_cents")}
 
 
 # ─── Insights ─────────────────────────────────────────────
@@ -569,6 +785,8 @@ async def get_connection(
                 "provider": r.get("provider"),
                 "status": r.get("status"),
                 "external_merchant_id": r.get("external_merchant_id"),
+                # Alias the frontend (SettingsPage / ConnectionInfo) reads.
+                "merchant_id": r.get("external_merchant_id"),
                 "external_location_id": r.get("external_location_id"),
                 "last_sync_at": r.get("last_sync_at"),
                 "sync_cursor": r.get("sync_cursor"),
@@ -627,16 +845,19 @@ async def get_day_transactions(
         "transactions",
         filters={
             "org_id": f"eq.{org_id}",
-            "created_at": f"gte.{date}T00:00:00Z",
+            # Use transaction_at (when the sale happened), NOT created_at (row
+            # insert time) — backfilled historical sales all get a recent
+            # created_at, so filtering on it hid every drilled-into day.
+            "transaction_at": f"gte.{date}T00:00:00Z",
         },
-        order="created_at.asc",
+        order="transaction_at.asc",
         limit=500,
     )
 
     # Filter to same-day only (Supabase gte doesn't have lte in same filter easily)
     day_txns = [
         t for t in transactions
-        if t.get("created_at", "")[:10] == date
+        if t.get("transaction_at", "")[:10] == date
     ]
 
     # Load line items for each transaction
@@ -682,7 +903,7 @@ async def get_day_transactions(
 
         result_txns.append({
             "id": tx_id,
-            "created_at": t.get("created_at", ""),
+            "created_at": t.get("transaction_at", ""),
             "total_cents": t.get("total_cents", 0) or 0,
             "tip_cents": t.get("tip_cents", 0) or 0,
             "discount_cents": t.get("discount_cents", 0) or 0,
@@ -844,183 +1065,3 @@ async def flush_cache(
     """Flush dashboard cache for an organization."""
     dashboard_cache.invalidate_org(org_id)
     return {"flushed": True, "org_id": org_id}
-
-
-# ── Reconcile 2026-06-25: routes that live on fix/canada-insights-currency but
-# were missed by the Jun-19 frontend unify — the portal frontend (now on main)
-# calls these, so main's backend must serve them too. ──
-
-@router.get("/open-orders")
-async def get_open_orders(
-    org_id: OrgId,
-    db=Depends(_get_db),
-):
-    """Unpaid OPEN + DRAFT orders pulled live from the POS — the merchant's
-    pipeline (quotes / open tickets). These are NOT revenue (no payment taken)
-    so they're excluded from the sales numbers; surfaced separately here."""
-    cache_key = dashboard_cache.make_key("open_orders", org_id)
-    cached = dashboard_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    empty = {"orders": [], "summary": {"open_count": 0, "draft_count": 0, "total_cents": 0}, "provider": None}
-
-    conns = await db.select(
-        "pos_connections",
-        filters={"org_id": f"eq.{org_id}", "provider": "eq.square", "status": "eq.connected"},
-        limit=1,
-    )
-    if not conns:
-        return empty
-    conn = conns[0]
-
-    try:
-        from ...security.encryption import decrypt_token
-        from ...square.client import SquareClient
-        creds = conn.get("credentials_encrypted") or {}
-        token = decrypt_token(creds.get("access_token", "") or conn.get("access_token_enc", ""))
-        if not token:
-            return empty
-
-        orders = []
-        async with SquareClient(access_token=token) as client:
-            locs = await client.list_locations()
-            loc_ids = [l["id"] for l in (locs or [])]
-            raw = await client.search_all_orders(location_ids=loc_ids, states=["OPEN", "DRAFT"])
-            for o in raw:
-                line_items = o.get("line_items") or []
-                orders.append({
-                    "id": o.get("id"),
-                    "state": o.get("state"),
-                    "created_at": o.get("created_at"),
-                    "updated_at": o.get("updated_at"),
-                    "total_cents": (o.get("total_money") or {}).get("amount", 0) or 0,
-                    "item_count": len(line_items),
-                    "items": [li.get("name", "Item") for li in line_items[:4]],
-                    "reference_id": o.get("reference_id"),
-                })
-    except Exception as e:
-        logger.warning("open-orders fetch failed for org=%s: %s", org_id, e)
-        return empty
-
-    orders.sort(key=lambda x: x.get("created_at") or "", reverse=True)
-    result = {
-        "orders": orders,
-        "summary": {
-            "open_count": sum(1 for o in orders if o["state"] == "OPEN"),
-            "draft_count": sum(1 for o in orders if o["state"] == "DRAFT"),
-            "total_cents": sum(o["total_cents"] for o in orders),
-        },
-        "provider": "square",
-    }
-    dashboard_cache.set(cache_key, result, TTL_FAST)
-    return result
-
-
-@router.get("/revenue/annual")
-async def get_annual_revenue(
-    org_id: OrgId,
-    db=Depends(_get_db),
-):
-    """Historical revenue by calendar year + a monthly series, so merchants can
-    see prior-year revenue. Backed by the ~18 months the initial backfill pulls."""
-    cache_key = dashboard_cache.make_key("annual", org_id)
-    cached = dashboard_cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    # ~25 months so the current and previous full year both have coverage.
-    daily = await db.get_daily_revenue(org_id, days=760)
-
-    by_year: dict[str, dict] = {}
-    by_month: dict[str, dict] = {}
-    for r in daily:
-        bucket = r.get("day_bucket") or ""
-        if len(bucket) < 7:
-            continue
-        year, month = bucket[:4], bucket[:7]
-        rev = r.get("total_revenue_cents", 0) or 0
-        txns = r.get("transaction_count", 0) or 0
-        for key, agg in ((year, by_year), (month, by_month)):
-            slot = agg.setdefault(key, {"revenue_cents": 0, "transaction_count": 0})
-            slot["revenue_cents"] += rev
-            slot["transaction_count"] += txns
-
-    years = [
-        {
-            "year": int(y),
-            "revenue_cents": v["revenue_cents"],
-            "transaction_count": v["transaction_count"],
-            "avg_ticket_cents": (v["revenue_cents"] // v["transaction_count"]) if v["transaction_count"] else 0,
-        }
-        for y, v in sorted(by_year.items())
-    ]
-    monthly = [
-        {"month": m, "revenue_cents": v["revenue_cents"], "transaction_count": v["transaction_count"]}
-        for m, v in sorted(by_month.items())
-    ]
-
-    current_year = years[-1] if years else None
-    prior_year = years[-2] if len(years) >= 2 else None
-    yoy_pct = None
-    if current_year and prior_year and prior_year["revenue_cents"] > 0:
-        yoy_pct = round(
-            (current_year["revenue_cents"] - prior_year["revenue_cents"]) / prior_year["revenue_cents"] * 100, 1
-        )
-
-    result = {
-        "years": years,
-        "monthly": monthly,
-        "current_year": current_year,
-        "prior_year": prior_year,
-        "yoy_pct": yoy_pct,
-    }
-    dashboard_cache.set(cache_key, result, TTL_SLOW)
-    return result
-
-
-
-
-class ProductCostUpdate(BaseModel):
-    cost_cents: int | None = None
-    price_cents: int | None = None
-
-
-@router.patch("/products/{product_id}")
-async def update_product_cost(
-    product_id: str,
-    body: ProductCostUpdate,
-    org_id: OrgId = None,
-    db=Depends(_get_db),
-):
-    """Set a product's unit cost (and optionally price) — powers inline cost
-    entry on the Products page so margins can compute. Cost-of-goods isn't in
-    the POS feed, so the merchant supplies it here once."""
-    rows = await db.select(
-        "products",
-        filters={"id": f"eq.{product_id}", "org_id": f"eq.{org_id}"},
-        limit=1,
-    )
-    if not rows:
-        raise HTTPException(404, "Product not found")
-
-    fields: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    if body.cost_cents is not None:
-        if body.cost_cents < 0:
-            raise HTTPException(422, "cost_cents must be >= 0")
-        fields["cost_cents"] = body.cost_cents
-    if body.price_cents is not None:
-        if body.price_cents < 0:
-            raise HTTPException(422, "price_cents must be >= 0")
-        fields["price_cents"] = body.price_cents
-    if len(fields) == 1:
-        raise HTTPException(422, "Provide cost_cents and/or price_cents")
-
-    await db.update("products", fields, filters={"id": f"eq.{product_id}"})
-    dashboard_cache.invalidate_org(org_id)  # margins/products recompute on next read
-    return {"ok": True, "product_id": product_id,
-            "cost_cents": fields.get("cost_cents"), "price_cents": fields.get("price_cents")}
-
-
-# ─── Insights ─────────────────────────────────────────────
-

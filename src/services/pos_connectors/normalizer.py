@@ -43,6 +43,8 @@ MERIDIAN_TRANSACTION_SCHEMA = {
     ],
     "customer_name": "string",
     "customer_id": "string",
+    "customer_email": "string",
+    "currency": "string",
     "employee_name": "string",
     "employee_id": "string",
     "table_number": "string",
@@ -74,6 +76,7 @@ def normalize_transaction(
     system_key: str,
     org_id: str = "",
     location_id: str = "",
+    currency: str | None = None,
 ) -> dict:
     normalized: dict[str, Any] = {
         "source_system": system_key,
@@ -96,6 +99,19 @@ def normalize_transaction(
     normalized["items"] = _extract_items(raw)
     normalized["customer_name"] = _extract_string(raw, _CUSTOMER_KEYS)
     normalized["customer_id"] = _extract_string(raw, ["customer_id", "customerId", "guestId", "patron_id"])
+    # P0: persist customer_email + currency on the transactions row.
+    # Email: many tier-3 POSes inline an email/phone on the order
+    # payload; pull it via the usual wide-key lookup. NULL when absent.
+    # Currency: prefer an inline tag on the raw payload (ISO 4217),
+    # fall back to the connector-level default passed in from the
+    # caller (e.g. merchant.defaultCurrency).
+    normalized["customer_email"] = _extract_string(
+        raw, ["customer_email", "customerEmail", "email", "Email", "guest_email"],
+    )
+    inline_currency = _extract_string(
+        raw, ["currency", "Currency", "currency_code", "currencyCode", "iso_currency"],
+    )
+    normalized["currency"] = (inline_currency or currency) or None
     normalized["employee_name"] = _extract_string(raw, _EMPLOYEE_KEYS)
     normalized["employee_id"] = _extract_string(raw, ["employee_id", "employeeId", "staffId", "server_id"])
     normalized["table_number"] = _extract_string(raw, ["table", "tableNumber", "table_number", "table_name"])
