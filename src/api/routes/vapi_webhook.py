@@ -53,6 +53,15 @@ TELNYX_FALLBACK_NUMBER = os.getenv("TELNYX_FALLBACK_NUMBER", "").strip()
 _floor_raw = os.getenv("VOICE_BALANCE_FLOOR_CENTS", "").strip()
 VOICE_BALANCE_FLOOR_CENTS = int(_floor_raw) if _floor_raw.lstrip("-").isdigit() else None
 
+# Per-order fee = flat MERIDIAN_SERVICE_FEE_CENTS ($2.50). On top of that, calls
+# longer than VOICE_INCLUDED_MIN minutes of AI time bill an overage of
+# VOICE_OVERAGE_CENTS_PER_MIN ($0.45) per minute over the included block. The
+# overage is computed at end-of-call (the order's Stripe fee is locked mid-call,
+# before the duration is known), so it's tracked per-merchant in the voice ledger
+# as billable revenue rather than added to the customer's order charge.
+VOICE_INCLUDED_MIN = int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3)
+VOICE_OVERAGE_CENTS_PER_MIN = int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45)
+
 
 # ── merchant resolution ──────────────────────────────────────────────
 
@@ -264,21 +273,36 @@ async def vapi_webhook(request: Request):
         return {"result": "ok"}
 
     if mtype == "end-of-call-report":
+        import math
         ended = msg.get("endedReason")
-        # Vapi reports the all-in call cost (USD) on the report message.
+        # Vapi reports the all-in call cost (USD) + duration on the report message.
         call = msg.get("call", {}) or {}
         cost = msg.get("cost", call.get("cost"))
         call_id = call.get("id") or msg.get("callId") or ""
-        logger.info("VAPI end-of-call: ended=%s cost=%s call=%s", ended, cost, call_id)
+        dur_sec = (msg.get("durationSeconds") or call.get("durationSeconds")
+                   or (msg.get("durationMinutes") or 0) * 60 or 0)
+        dur_min = float(dur_sec) / 60.0
+        logger.info("VAPI end-of-call: ended=%s cost=%s dur=%.1fmin call=%s",
+                    ended, cost, dur_min, call_id)
         try:
+            config = await _resolve_config(_dialed_number(msg))
+            merchant_id = getattr(config, "merchant_id", "") or "demo"
+            from ...services.voice_ledger import credit, debit
+            # Our cost (Vapi) — debit.
             cents = int(round(float(cost) * 100)) if cost is not None else 0
             if cents > 0:
-                config = await _resolve_config(_dialed_number(msg))
-                from ...services.voice_ledger import debit
-                await debit(getattr(config, "merchant_id", "") or "demo", cents,
-                            source="vapi_call", ref=call_id or None,
-                            note=str(ended or ""))
+                await debit(merchant_id, cents, source="vapi_call",
+                            ref=call_id or None, note=str(ended or ""))
+            # Duration overage we bill the merchant: $0.45/min over 3 min (billed
+            # per whole minute over the included block). Credit = billable revenue.
+            over_min = max(0, math.ceil(dur_min) - VOICE_INCLUDED_MIN)
+            overage = over_min * VOICE_OVERAGE_CENTS_PER_MIN
+            if overage > 0:
+                await credit(merchant_id, overage, source="duration_overage",
+                             ref=call_id or None, note=f"{over_min}min over @ {dur_min:.1f}min")
+                logger.info("Duration overage billed: merchant=%s %dmin over → %d¢",
+                            merchant_id, over_min, overage)
         except Exception as e:  # noqa: BLE001 — accounting never affects the call
-            logger.error("voice_ledger debit failed: %s", e)
+            logger.error("voice_ledger end-of-call failed: %s", e)
 
     return {"received": True}
