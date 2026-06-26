@@ -33,6 +33,17 @@ if _PHONE_AGENT_DIR not in sys.path:
 
 WEBHOOK_URL = os.getenv("PUBLIC_PAY_BASE", "https://api.meridian.tips").rstrip("/") + "/api/vapi/webhook"
 
+# Telnyx fallback: an existing Telnyx/Pipecat agent DID that Vapi forwards the
+# call to when a merchant's voice ledger is underwater (revenue hasn't covered
+# usage). Vapi's own card-on-file handles the GLOBAL float; this is the
+# per-merchant policy gate. Disabled unless BOTH env vars are set — default is
+# fail-open (always serve via Vapi).
+TELNYX_FALLBACK_NUMBER = os.getenv("TELNYX_FALLBACK_NUMBER", "").strip()
+# Only forward when balance is at/below this many cents (negative = underwater).
+# Unset → no gate. e.g. -2000 forwards once a merchant is $20 in the red.
+_floor_raw = os.getenv("VOICE_BALANCE_FLOOR_CENTS", "").strip()
+VOICE_BALANCE_FLOOR_CENTS = int(_floor_raw) if _floor_raw.lstrip("-").isdigit() else None
+
 
 # ── merchant resolution ──────────────────────────────────────────────
 
@@ -180,6 +191,19 @@ async def vapi_webhook(request: Request):
     if mtype == "assistant-request":
         try:
             config = await _resolve_config(_dialed_number(msg))
+            # Voice-ledger gate: if this merchant is underwater past the floor,
+            # forward the call to the Telnyx/Pipecat agent instead of burning
+            # Vapi minutes. Fail-open — any error/None balance serves via Vapi.
+            if TELNYX_FALLBACK_NUMBER and VOICE_BALANCE_FLOOR_CENTS is not None:
+                try:
+                    from ...services.voice_ledger import balance_cents
+                    bal = await balance_cents(getattr(config, "merchant_id", "") or "")
+                    if bal is not None and bal <= VOICE_BALANCE_FLOOR_CENTS:
+                        logger.info("VAPI fallback→Telnyx: merchant=%s balance=%d¢ floor=%d¢",
+                                    config.merchant_id, bal, VOICE_BALANCE_FLOOR_CENTS)
+                        return {"destination": {"type": "number", "number": TELNYX_FALLBACK_NUMBER}}
+                except Exception as e:  # noqa: BLE001 — fallback check never strands the call
+                    logger.error("voice-ledger fallback check failed: %s", e)
             return {"assistant": _assistant_for(config)}
         except Exception as e:  # noqa: BLE001 — never strand the call
             logger.error("assistant-request failed: %s", e)
@@ -223,6 +247,21 @@ async def vapi_webhook(request: Request):
         return {"result": "ok"}
 
     if mtype == "end-of-call-report":
-        logger.info("VAPI end-of-call: ended=%s", msg.get("endedReason"))
+        ended = msg.get("endedReason")
+        # Vapi reports the all-in call cost (USD) on the report message.
+        call = msg.get("call", {}) or {}
+        cost = msg.get("cost", call.get("cost"))
+        call_id = call.get("id") or msg.get("callId") or ""
+        logger.info("VAPI end-of-call: ended=%s cost=%s call=%s", ended, cost, call_id)
+        try:
+            cents = int(round(float(cost) * 100)) if cost is not None else 0
+            if cents > 0:
+                config = await _resolve_config(_dialed_number(msg))
+                from ...services.voice_ledger import debit
+                await debit(getattr(config, "merchant_id", "") or "demo", cents,
+                            source="vapi_call", ref=call_id or None,
+                            note=str(ended or ""))
+        except Exception as e:  # noqa: BLE001 — accounting never affects the call
+            logger.error("voice_ledger debit failed: %s", e)
 
     return {"received": True}
