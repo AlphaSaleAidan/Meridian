@@ -132,10 +132,12 @@ def mercury_transfer(from_id: str, to_id: str, cents: int, idem: str, note: str)
         raise RuntimeError("both MERCURY_RECONCILE_ENABLED and MERCURY_TRANSFER_CONFIRMED must be 1")
     token = os.environ["MERCURY_API_TOKEN"]
     base = os.environ["MERCURY_API_BASE"]
-    # Mercury send-money/transfer: amount is in DOLLARS. idempotencyKey dedupes retries.
+    # Confirmed 2026-06-26 with a $1 test: POST /transfer, amount in DOLLARS,
+    # InternalTransferAPIRequest = {sourceAccountId, destinationAccountId, amount,
+    # idempotencyKey, note}. Returns {creditTransaction, debitTransaction}.
     body = {
-        "fromAccountId": from_id,
-        "toAccountId": to_id,
+        "sourceAccountId": from_id,
+        "destinationAccountId": to_id,
         "amount": round(cents / 100, 2),
         "idempotencyKey": idem,
         "note": note,
@@ -211,8 +213,9 @@ def main() -> int:
     try:
         res = mercury_transfer(frm, to, plan["amount_cents"], idem,
                                note=f"Meridian voice-cost {plan['action']} {day}")
+        tx = (res.get("debitTransaction") or {}) if isinstance(res, dict) else {}
         print(f"EXECUTED {plan['action']} ${plan['amount_cents']/100:.2f}: "
-              f"{res.get('id') or res.get('status') or 'ok'}")
+              f"txn={tx.get('id') or 'ok'} status={tx.get('status') or '?'}")
         return 0
     except urllib.error.HTTPError as e:
         print(f"TRANSFER FAILED ({e.code}): {e.read().decode()[:300]}")
