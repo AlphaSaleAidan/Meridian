@@ -30,7 +30,6 @@ from merchant_config import MerchantPhoneConfig, get_merchant_config, get_mercha
 from order_normalizer import normalize_order
 from pos_connector import create_pos_order
 from payment_links import create_checkout
-from sms_checkout import send_checkout_sms
 
 # Credit metering lives in src/credits/. Add the project root to sys.path so
 # this sidecar file can import it whether running standalone (python main.py)
@@ -55,7 +54,6 @@ from src.services.llm_client import LLMClient
 from casl_compliance import (
     classify_keyword,
     is_canadian_number,
-    fetch_optout_status,
     record_optout,
     record_optin,
     stamp_last_inbound,
@@ -283,9 +281,9 @@ async def _handle_order_submission(
         reply += f"\nPay here: {pay_url}\n"
 
     if order_type == "pickup":
-        reply += f"\nYour order will be ready in 15-20 min."
+        reply += "\nYour order will be ready in 15-20 min."
     elif order_type == "delivery":
-        reply += f"\nEstimated delivery: 35-45 min."
+        reply += "\nEstimated delivery: 35-45 min."
 
     reply += f"\n\nThank you! — {config.business_name}"
 
