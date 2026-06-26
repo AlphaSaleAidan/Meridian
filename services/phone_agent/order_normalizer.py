@@ -24,20 +24,36 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
 
         menu_match = _find_menu_item(item_name, config.menu_items)
 
+        modifier_total = 0.0
         if menu_match:
             resolved_name = menu_match["name"]
-            unit_price = menu_match.get("price", 0.0)
 
-            available_sizes = [s.lower() for s in menu_match.get("sizes", [])]
+            # Per-size pricing: `size_prices` ({size: price}) takes precedence over
+            # a flat `price`. Sizes default to size_prices keys when not listed.
+            size_prices = {str(k).lower(): float(v)
+                           for k, v in (menu_match.get("size_prices") or {}).items()}
+            available_sizes = [s.lower() for s in (menu_match.get("sizes") or list(size_prices))]
             if size and size not in available_sizes and available_sizes:
                 size = available_sizes[0]
             elif not size and available_sizes:
                 size = available_sizes[0]
+
+            if size_prices:
+                unit_price = size_prices.get(size, next(iter(size_prices.values())))
+            else:
+                unit_price = float(menu_match.get("price", 0.0))
+
+            # Topping/add-on surcharge: `topping_price` × number of modifications
+            # (e.g. pizza toppings at +$2 each). Items without it treat
+            # modifications as free options.
+            topping_price = float(menu_match.get("topping_price", 0.0))
+            if topping_price:
+                modifier_total = topping_price * len(modifications)
         else:
             resolved_name = item_name
             unit_price = 0.0
 
-        line_total = unit_price * quantity
+        line_total = round((unit_price + modifier_total) * quantity, 2)
         subtotal += line_total
 
         items.append({
@@ -45,6 +61,7 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
             "quantity": quantity,
             "size": size,
             "unit_price": unit_price,
+            "modifier_total": round(modifier_total, 2),
             "line_total": line_total,
             "modifications": modifications,
             "special_instructions": special,
