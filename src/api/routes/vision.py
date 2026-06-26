@@ -231,6 +231,80 @@ async def camera_heartbeat(camera_id: str, req: HeartbeatRequest):
     return {"status": "ok", "camera_id": camera_id}
 
 
+# ── Live view (Cloudflare Stream WHIP/WHEP, on-demand) ───────────────
+# How many seconds a viewer "request" keeps the edge publishing. The browser
+# re-pings POST /live while watching; when pings stop, the edge sees the request
+# go stale and stops publishing → we pay Cloudflare only while someone watches.
+LIVE_REQUEST_TTL_SEC = int(os.getenv("CAMERA_LIVE_TTL_SEC", "30") or 30)
+
+
+@router.post("/cameras/{camera_id}/live", dependencies=[Depends(require_org_access)])
+async def request_live_view(camera_id: str):
+    """Viewer asks to watch a camera live. Ensures a Cloudflare Live Input exists,
+    marks the stream requested (edge starts publishing on-demand), returns the WHEP
+    URL for the browser to play. Re-call every ~15s while watching to keep it alive."""
+    from ...services import cloudflare_stream as cf
+    db = _get_db()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    rows = await db.select("vision_cameras", filters={"id": f"eq.{camera_id}"}, limit=1)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    cam = rows[0]
+    feats = cam.get("features") or {}
+    if isinstance(feats, str):
+        import json as _j
+        try: feats = _j.loads(feats)
+        except Exception: feats = {}
+    if not feats.get("live_view"):
+        raise HTTPException(status_code=403, detail="Live view is turned off for this camera")
+
+    whep = cam.get("live_whep_url")
+    whip = cam.get("live_whip_url")
+    uid = cam.get("live_input_uid")
+    if not (uid and whep and whip):
+        created = await cf.create_live_input(f"meridian:{cam.get('name','camera')}", creator=str(cam.get('org_id','')))
+        if not created or not created.get("whep_url"):
+            raise HTTPException(status_code=503, detail="Live streaming unavailable")
+        uid, whip, whep = created["uid"], created["whip_url"], created["whep_url"]
+
+    now = datetime.now(timezone.utc).isoformat()
+    await db.update("vision_cameras", {
+        "live_input_uid": uid, "live_whip_url": whip, "live_whep_url": whep,
+        "live_requested_at": now, "updated_at": now,
+    }, filters={"id": f"eq.{camera_id}"})
+    return {"camera_id": camera_id, "whep_url": whep, "ttl_sec": LIVE_REQUEST_TTL_SEC}
+
+
+@router.get("/cameras/{camera_id}/live-state", dependencies=[Depends(require_device_token)])
+async def live_state(camera_id: str):
+    """Edge polls this: should I be WHIP-publishing this camera right now? True only
+    while live_view is on AND a viewer requested within the TTL (on-demand)."""
+    db = _get_db()
+    if not db:
+        return {"publish": False}
+    rows = await db.select("vision_cameras", filters={"id": f"eq.{camera_id}"}, limit=1)
+    if not rows:
+        return {"publish": False}
+    cam = rows[0]
+    feats = cam.get("features") or {}
+    if isinstance(feats, str):
+        import json as _j
+        try: feats = _j.loads(feats)
+        except Exception: feats = {}
+    req_at = cam.get("live_requested_at")
+    fresh = False
+    if req_at:
+        try:
+            ts = datetime.fromisoformat(str(req_at).replace("Z", "+00:00"))
+            fresh = (datetime.now(timezone.utc) - ts).total_seconds() <= LIVE_REQUEST_TTL_SEC
+        except Exception:
+            fresh = False
+    publish = bool(feats.get("live_view") and fresh and cam.get("live_whip_url"))
+    return {"publish": publish, "whip_url": cam.get("live_whip_url") if publish else None,
+            "rtsp_url": cam.get("rtsp_url") if publish else None}
+
+
 @router.post("/ingest/traffic", dependencies=[Depends(require_device_token)])
 async def ingest_traffic(req: TrafficIngestRequest):
     db = _get_db()
