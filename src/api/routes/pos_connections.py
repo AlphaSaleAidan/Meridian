@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 
 from ..auth import require_org_access, require_jwt, require_org_member
+from ...config import clover as cl_config
 from ...security.encryption import encrypt_token, decrypt_token
 from ...services.pos_connectors import (
     GenericRESTConnector,
@@ -249,6 +250,13 @@ def _canonical_clover_creds(credentials: dict) -> dict:
 
 
 async def _test_clover(credentials: dict) -> dict:
+    # Coherent gate: mirror the OAuth/connect behavior. If Clover isn't enabled
+    # on this server, fail gracefully instead of attempting a live call.
+    if not cl_config.is_enabled:
+        return {
+            "success": False,
+            "message": "Clover isn't enabled on this server yet.",
+        }
     credentials = _canonical_clover_creds(credentials)
     access_token = credentials.get("access_token", "")
     merchant_id = credentials.get("merchant_id", "")
@@ -284,6 +292,15 @@ async def connect_pos(
         raise HTTPException(503, "Database not available")
 
     if req.pos_system == "clover":
+        # Coherent gate: manual /connect must honor the same enablement check as
+        # the OAuth /authorize path (which 503s when unconfigured). Without this
+        # the manual paste path was wide open while OAuth was gated.
+        if not cl_config.is_enabled:
+            raise HTTPException(
+                503,
+                "Clover isn't enabled on this server yet. Set POS_CLOVER_ENABLED=true "
+                "or configure Clover credentials.",
+            )
         req.credentials = _canonical_clover_creds(req.credentials)
 
     encrypted_creds = {}

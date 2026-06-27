@@ -90,6 +90,13 @@ def _set_member(monkeypatch, is_member: bool):
     monkeypatch.setattr(auth, "_check_org_membership", _check)
 
 
+def _enable_clover(monkeypatch):
+    """Flip the coherent Clover gate on for the manual-connect path. cl_config is
+    a frozen dataclass, so swap the module-level reference the route reads."""
+    from types import SimpleNamespace
+    monkeypatch.setattr(pc_mod, "cl_config", SimpleNamespace(is_enabled=True))
+
+
 def _patch_extractor(monkeypatch, items, counter):
     """Patch the menu_extractor.extract_menu_items the helper imports lazily."""
     from src.services.pos_connectors import menu_extractor
@@ -105,6 +112,7 @@ def _patch_extractor(monkeypatch, items, counter):
 
 def test_connect_schedules_menu_autobuild(monkeypatch):
     _set_member(monkeypatch, True)
+    _enable_clover(monkeypatch)
     db = FakeDB()
     db_mod._db_instance = db
     bt = BackgroundTasks()
@@ -235,6 +243,7 @@ def test_connect_succeeds_even_if_autobuild_would_fail(monkeypatch):
     """Connect returns success regardless of the menu build outcome — the build
     is a scheduled background task, decoupled from the connect response."""
     _set_member(monkeypatch, True)
+    _enable_clover(monkeypatch)
     db = FakeDB()
     db_mod._db_instance = db
     bt = BackgroundTasks()

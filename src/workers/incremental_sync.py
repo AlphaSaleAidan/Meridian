@@ -47,7 +47,12 @@ async def run_incremental_sync(
     if result.transactions:
         await db.batch_upsert("transactions", result.transactions, on_conflict="org_id,external_id")
     if result.transaction_items:
-        await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="transaction_id,external_id")
+        # `transaction_items` has NO `external_id` column — the old
+        # (transaction_id,external_id) key raised Postgres 42P10 on the first
+        # conflicting write, breaking BOTH Clover and Square incremental syncs.
+        # The real upsert key (id deterministic, transaction_at present) matches
+        # the backfill worker, the credential-paste path, and the webhook path.
+        await db.batch_upsert("transaction_items", result.transaction_items, on_conflict="id,transaction_at")
 
     logger.info(f"Incremental sync complete: {result.summary}")
     return result.summary

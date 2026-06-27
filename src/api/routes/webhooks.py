@@ -289,6 +289,13 @@ async def clover_webhook(
         logger.info(f"Clover webhook verificationCode received: {verification_code}")
         return Response(status_code=200)
 
+    # ── Coherent gate: don't process Clover events unless Clover is enabled on
+    #    this server (explicit flag or any configured credential) — mirrors the
+    #    OAuth/connect gating so all Clover entry points behave consistently. ──
+    if not cl_config.is_enabled:
+        logger.warning("Clover webhook received but Clover is not enabled on this server — ignoring")
+        return Response(status_code=503)
+
     # ── Authenticate real events: X-Clover-Auth carries the static Clover Auth
     #    Code verbatim — compare (constant-time), do NOT HMAC the payload. ──
     if not cl_config.webhook_auth_code:
