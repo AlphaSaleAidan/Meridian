@@ -349,7 +349,12 @@ import src.api.routes.webhooks as wh_mod  # noqa: E402
 
 def _set_auth_code(monkeypatch, code: str):
     # cl_config is a frozen dataclass — swap the module-level reference instead.
-    monkeypatch.setattr(wh_mod, "cl_config", SimpleNamespace(webhook_auth_code=code))
+    # is_enabled=True so the coherent-gating check passes; these tests exercise
+    # the auth-code logic specifically (the fail-closed-without-code test sets
+    # code="" and still expects 503 from the auth-code check, not the gate).
+    monkeypatch.setattr(
+        wh_mod, "cl_config", SimpleNamespace(webhook_auth_code=code, is_enabled=True)
+    )
 
 
 def _webhook_request(body: bytes, headers: dict) -> Request:

@@ -108,7 +108,17 @@ class CloverSyncEngine:
             self.progress.update("merchant", "Fetching merchant profile...", 5)
             self._emit_progress()
 
-            merchant = await self.client.get_merchant()
+            # get_merchant feeds the location record AND the currency pin, but
+            # it's a single non-critical lookup — a failure must NOT abort the
+            # whole backfill (matches the employees/categories best-effort style
+            # below). Fall back to an empty merchant + default currency so the
+            # rest of the sync still runs.
+            try:
+                merchant = await self.client.get_merchant()
+            except Exception as e:
+                logger.warning(f"Could not fetch merchant profile (non-fatal): {e}")
+                result.errors.append(f"merchant: {e}")
+                merchant = {}
             order_type_lookup, tender_lookup = await self._fetch_config_lookups()
             mapper = CloverDataMapper(
                 org_id=self.org_id,
@@ -117,8 +127,10 @@ class CloverSyncEngine:
                 tender_lookup=tender_lookup,
                 # P0: pin currency from merchant.defaultCurrency so
                 # map_order_to_transaction can fill transactions.currency.
-                # Clover orders don't carry currency inline.
-                currency=merchant.get("defaultCurrency"),
+                # Clover orders don't carry currency inline. Default to USD
+                # (the locations mapper's own fallback) if the merchant fetch
+                # failed or omitted it.
+                currency=merchant.get("defaultCurrency") or "USD",
             )
             result.locations = [mapper.map_merchant_to_location(merchant)]
             logger.info(f"Merchant: {merchant.get('name', 'Unknown')}")
@@ -306,9 +318,16 @@ class CloverSyncEngine:
             # P0: fetch merchant once for currency. Clover orders don't carry
             # currency inline, so we pin it on the mapper at construction. One
             # extra API call per incremental run is cheap relative to the order
-            # pagination cost.
-            merchant = await self.client.get_merchant()
-            currency = merchant.get("defaultCurrency") if merchant else None
+            # pagination cost. This is the ONLY use of the merchant here, so a
+            # failure must fall back to a default currency rather than abort the
+            # whole incremental sync (matches the config-lookup best-effort style).
+            try:
+                merchant = await self.client.get_merchant()
+                currency = merchant.get("defaultCurrency") if merchant else None
+            except Exception as e:
+                logger.warning(f"Could not fetch merchant for currency (non-fatal): {e}")
+                currency = None
+            currency = currency or "USD"
 
             mapper = CloverDataMapper(
                 org_id=self.org_id,

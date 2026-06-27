@@ -86,6 +86,13 @@ def _set_member(monkeypatch, is_member: bool):
     monkeypatch.setattr(auth, "_check_org_membership", _check)
 
 
+def _enable_clover(monkeypatch):
+    """Flip the coherent Clover gate on for the manual-connect path. cl_config is
+    a frozen dataclass, so swap the module-level reference the route reads."""
+    from types import SimpleNamespace
+    monkeypatch.setattr(pc_mod, "cl_config", SimpleNamespace(is_enabled=True))
+
+
 # ── 1. Tenancy guard ────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("provider", PROVIDERS)
@@ -113,6 +120,8 @@ def test_disconnect_rejects_non_member(monkeypatch, provider):
 @pytest.mark.parametrize("provider", PROVIDERS)
 def test_connect_stores_connection_and_opens_gate(monkeypatch, provider):
     _set_member(monkeypatch, True)
+    if provider == "clover":
+        _enable_clover(monkeypatch)
     db = FakeDB()
     db_mod._db_instance = db
     # clover carries a token (exercises the access_token_enc mirror); square
@@ -165,6 +174,7 @@ def test_manual_square_key_entry_dispatches_backfill_and_mirrors_token(monkeypat
 
 def test_manual_clover_key_entry_dispatches_backfill(monkeypatch):
     _set_member(monkeypatch, True)
+    _enable_clover(monkeypatch)
     db = FakeDB()
     db_mod._db_instance = db
     bt = BackgroundTasks()

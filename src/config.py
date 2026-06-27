@@ -96,6 +96,32 @@ class CloverConfig:
     enabled: bool = os.getenv("POS_CLOVER_ENABLED", "false").lower() == "true"
 
     @property
+    def has_oauth_credentials(self) -> bool:
+        """1-click OAuth genuinely requires BOTH the server-side app id+secret."""
+        return bool(self.app_id and self.app_secret)
+
+    @property
+    def has_credentials(self) -> bool:
+        """Any Clover credential configured server-side (OAuth app, static token,
+        merchant id, or webhook auth code)."""
+        return bool(
+            self.app_id or self.app_secret or self.access_token
+            or self.merchant_id or self.webhook_auth_code
+        )
+
+    @property
+    def is_enabled(self) -> bool:
+        """Single coherent gate for whether this server offers Clover as a POS
+        provider. True when explicitly enabled via POS_CLOVER_ENABLED, OR when
+        any Clover credential is configured — mirroring Square, which is simply
+        "on" once its credentials exist. Every Clover entry point (OAuth connect,
+        manual connect, test-connection, webhook) reads this so they behave
+        consistently: configured → works end-to-end; unconfigured → fails the
+        same way everywhere instead of 503-on-OAuth / open-on-manual-connect.
+        """
+        return self.enabled or self.has_credentials
+
+    @property
     def base_url(self) -> str:
         if self.environment == "production":
             return _CLOVER_PROD_WEB.get(self.region, _CLOVER_PROD_WEB["na"])

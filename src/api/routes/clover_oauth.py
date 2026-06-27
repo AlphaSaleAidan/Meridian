@@ -114,7 +114,7 @@ async def authorize(request: Request, org_id: str | None = None, return_to: str 
     """
     if not org_id:
         raise HTTPException(400, "org_id is required")
-    if not (clover_config.app_id and clover_config.app_secret):
+    if not clover_config.has_oauth_credentials:
         raise HTTPException(
             503,
             "Clover 1-click connect isn't configured on this server yet — "
@@ -313,9 +313,15 @@ async def callback(
 async def connection_status(org_id: str):
     """Quick check if org has an active Clover connection + whether 1-click is available."""
     from ...db import _db_instance
-    oauth_available = bool(clover_config.app_id and clover_config.app_secret)
+    oauth_available = clover_config.has_oauth_credentials
+    clover_available = clover_config.is_enabled
     if not _db_instance:
-        return {"connected": False, "reason": "db_unavailable", "oauth_available": oauth_available}
+        return {
+            "connected": False,
+            "reason": "db_unavailable",
+            "oauth_available": oauth_available,
+            "clover_available": clover_available,
+        }
 
     conns = await _db_instance.select(
         "pos_connections",
@@ -331,5 +337,10 @@ async def connection_status(org_id: str):
             "last_sync_at": conn.get("last_sync_at"),
             "historical_import_complete": conn.get("historical_import_complete", False),
             "oauth_available": oauth_available,
+            "clover_available": clover_available,
         }
-    return {"connected": False, "oauth_available": oauth_available}
+    return {
+        "connected": False,
+        "oauth_available": oauth_available,
+        "clover_available": clover_available,
+    }
