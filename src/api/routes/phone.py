@@ -999,6 +999,24 @@ async def twilio_gather(request: Request):
             order_summary = ", ".join(f"{i['quantity']}x {i['name']}" for i in items)
 
             order_result = await _dispatch_order(call_sid, session, tool["input"])
+
+            # Order integrity: never confirm an order that didn't actually reach
+            # the merchant. If dispatch failed, tell the caller honestly and flag
+            # it for staff instead of reading back a fabricated order number.
+            if not getattr(order_result, "success", False):
+                logger.error(
+                    "submit_order FAILED call=%s reason=%s items=%s",
+                    call_sid, getattr(order_result, "fallback_reason", "") or "unknown", order_summary,
+                )
+                await _log_call_end(call_sid, "order_failed", tool["input"])
+                _sessions.pop(call_sid, None)
+                apology = (
+                    "I'm so sorry — I'm having trouble sending your order to the "
+                    "kitchen right now. I've flagged it for the team. Please try "
+                    "calling back in a few minutes and we'll get you taken care of."
+                )
+                return Response(content=_hangup(apology), media_type=TWIML)
+
             order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
 
             # PAY ON THE PHONE (keypad backup): when enabled + the merchant takes
@@ -1151,8 +1169,11 @@ async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> Or
         return await create_pos_order(system_key, order_data, config=pos["pos_config"])
     except Exception as e:
         logger.error(f"Order dispatch failed for {system_key}: {e}")
+        # A real POS that threw is a FAILURE — do not report success with a
+        # fabricated order id, or the caller is told the order is placed while
+        # nothing reaches the kitchen. (The no-POS demo path above stays success.)
         return OrderResult(
-            success=True,
+            success=False,
             order_id=f"MRD-{abs(hash(call_sid)) % 9000 + 1000}",
             pos_system=system_key,
             fallback_used=True,
