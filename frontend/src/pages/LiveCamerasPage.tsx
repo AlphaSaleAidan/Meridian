@@ -3,6 +3,7 @@ import { Video, VideoOff, Loader2, Wifi } from 'lucide-react'
 import { useIsDemo, useOrgId } from '@/hooks/useOrg'
 import { getAuthHeaders } from '@/lib/supabase'
 import CameraDemo from '@/components/camera/CameraDemo'
+import CameraAnalyticsShowcase from '@/components/camera/CameraAnalyticsShowcase'
 
 /**
  * Camera → Live tab.
@@ -124,23 +125,35 @@ export default function LiveCamerasPage() {
     return () => { alive = false }
   }, [isDemo, orgId])
 
-  if (isDemo) return <CameraDemo />
+  // Demo: the overlay-toggle live demo + the analytics value gallery.
+  if (isDemo) return (
+    <div className="space-y-8">
+      <CameraDemo />
+      <CameraAnalyticsShowcase connected />
+    </div>
+  )
 
   if (cams === null) {
     return <div className="py-12 text-center"><Loader2 className="animate-spin mx-auto text-[#1A8FD6]" size={22} /></div>
   }
   if (cams.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-[#1F1F23] py-12 text-center">
-        <Video className="mx-auto text-[#A1A1A8] mb-2" size={24} />
-        <p className="text-[13px] text-[#A1A1A8]">No cameras connected yet.</p>
-        <p className="text-[12px] text-[#A1A1A8]/60 mt-1">Add a camera in settings to view it live from anywhere.</p>
+      <div className="space-y-8">
+        <div className="rounded-2xl border border-dashed border-[#1F1F23] py-12 text-center">
+          <Video className="mx-auto text-[#A1A1A8] mb-2" size={24} />
+          <p className="text-[13px] text-[#A1A1A8]">No cameras connected yet.</p>
+          <p className="text-[12px] text-[#A1A1A8]/60 mt-1">Add a camera in settings to view it live from anywhere.</p>
+        </div>
+        <CameraAnalyticsShowcase connected={false} />
       </div>
     )
   }
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-      {cams.map(c => <LiveTile key={c.id} cam={c} orgId={orgId} />)}
+    <div className="space-y-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {cams.map(c => <LiveTile key={c.id} cam={c} orgId={orgId} />)}
+      </div>
+      <CameraAnalyticsShowcase connected />
     </div>
   )
 }
