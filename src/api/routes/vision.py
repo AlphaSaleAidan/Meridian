@@ -159,11 +159,26 @@ async def register_camera(req: CameraRegisterRequest):
         raise HTTPException(status_code=500, detail="Failed to register camera")
 
 
+async def _camera_in_org_or_403(db, camera_id: str, org_id: str) -> dict:
+    """Load a camera and confirm it belongs to org_id (the router's
+    require_org_access already verified the caller is a member of org_id).
+    Path-only routes can't be gated by org_access alone, so we check ownership
+    here — mirrors request_live_view."""
+    rows = await db.select("vision_cameras", filters={"id": f"eq.{camera_id}"}, limit=1)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    cam = rows[0]
+    if str(cam.get("org_id") or "") != org_id:
+        raise HTTPException(status_code=403, detail="Camera does not belong to this org")
+    return cam
+
+
 @router.patch("/cameras/{camera_id}")
-async def update_camera(camera_id: str, req: CameraUpdateRequest):
+async def update_camera(camera_id: str, req: CameraUpdateRequest, org_id: str = Query(...)):
     db = _get_db()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
+    await _camera_in_org_or_403(db, camera_id, org_id)
 
     updates = {k: v for k, v in req.model_dump().items() if v is not None}
     if not updates:
@@ -197,10 +212,11 @@ async def update_camera(camera_id: str, req: CameraUpdateRequest):
 
 
 @router.delete("/cameras/{camera_id}")
-async def delete_camera(camera_id: str):
+async def delete_camera(camera_id: str, org_id: str = Query(...)):
     db = _get_db()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
+    await _camera_in_org_or_403(db, camera_id, org_id)
 
     try:
         await db.delete("vision_cameras", filters={"id": f"eq.{camera_id}"})
@@ -209,7 +225,7 @@ async def delete_camera(camera_id: str):
     return {"deleted": True, "camera_id": camera_id}
 
 
-@router.post("/cameras/{camera_id}/heartbeat")
+@router.post("/cameras/{camera_id}/heartbeat", dependencies=[Depends(require_device_token)])
 async def camera_heartbeat(camera_id: str, req: HeartbeatRequest):
     db = _get_db()
     if not db:

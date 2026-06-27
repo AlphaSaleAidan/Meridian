@@ -256,21 +256,70 @@ async def require_org_member(user: dict, org_id: str) -> None:
 async def require_service_auth(
     admin_key: str = Depends(_admin_key_header),
     auth_header: str = Depends(_auth_header),
-):
-    """Accept X-Admin-Key, MERIDIAN_SERVICE_TOKEN, or a valid Supabase session token."""
+) -> dict:
+    """Accept X-Admin-Key, MERIDIAN_SERVICE_TOKEN, or a valid Supabase session token.
+
+    Returns a principal describing who authenticated:
+        {"kind": "admin"}                       — X-Admin-Key
+        {"kind": "service"}                     — MERIDIAN_SERVICE_TOKEN
+        {"kind": "user", "user": {...}}         — Supabase session
+
+    NOTE (security): this dependency authenticates but does NOT authorize against a
+    specific org. Endpoints that take a merchant_id/org_id and return tenant data
+    MUST additionally call ``enforce_service_member(principal, org_id)`` to prevent
+    a logged-in user from reading another tenant's data (BOLA). Routes that only
+    expose global/admin data should use ``require_admin_auth`` instead.
+    """
     admin_expected = os.environ.get("MERIDIAN_ADMIN_KEY", "")
     service_token = os.environ.get("MERIDIAN_SERVICE_TOKEN", "")
 
     if admin_key and admin_expected and admin_key == admin_expected:
-        return
+        return {"kind": "admin"}
     if auth_header:
         token = auth_header.removeprefix("Bearer ").strip()
         if service_token and token == service_token:
-            return
+            return {"kind": "service"}
         user = await _verify_supabase_token(token)
         if user:
-            return
+            return {"kind": "user", "user": user}
     raise HTTPException(403, "Authentication required")
+
+
+async def require_admin_auth(
+    admin_key: str = Depends(_admin_key_header),
+    auth_header: str = Depends(_auth_header),
+) -> dict:
+    """Strict machine-only auth: accept ONLY X-Admin-Key, MERIDIAN_SERVICE_TOKEN, or
+    a user whose email is in ADMIN_EMAILS. Use for global/cross-tenant admin
+    surfaces (e.g. the payout ledger) that must never be exposed to an ordinary
+    logged-in merchant user."""
+    admin_expected = os.environ.get("MERIDIAN_ADMIN_KEY", "")
+    service_token = os.environ.get("MERIDIAN_SERVICE_TOKEN", "")
+
+    if admin_key and admin_expected and admin_key == admin_expected:
+        return {"kind": "admin"}
+    if auth_header:
+        token = auth_header.removeprefix("Bearer ").strip()
+        if service_token and token == service_token:
+            return {"kind": "service"}
+        user = await _verify_supabase_token(token)
+        if user:
+            email = (user.get("email") or "").lower()
+            if email and email in [e.lower() for e in ADMIN_EMAILS]:
+                return {"kind": "user", "user": user}
+    raise HTTPException(403, "Admin authentication required")
+
+
+async def enforce_service_member(principal: dict, org_id: str) -> None:
+    """Authorize a ``require_service_auth`` principal against a specific org.
+
+    No-op for machine principals (admin/service) and ADMIN_EMAILS users; for an
+    ordinary session user, requires verified org membership (same rules as
+    require_org_member). Honors TENANCY_ENFORCEMENT_DISABLED for rollback."""
+    if not principal or principal.get("kind") in ("admin", "service"):
+        return
+    user = principal.get("user") or {}
+    await require_org_member(user, org_id)
 
 
 PRIVATE_NETWORKS = [

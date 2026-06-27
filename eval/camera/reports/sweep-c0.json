@@ -1,0 +1,31 @@
+{
+  "name": "sweep-c0.40",
+  "source": "/tmp/mot17-09/img1",
+  "frames": 150,
+  "total_detections": 1013,
+  "unique_tracks": 19,
+  "avg_detections_per_frame": 6.75,
+  "fps_cpu": 0.57,
+  "confidence": 0.4,
+  "model": "yolo11n + ByteTrack",
+  "detection": {
+    "precision": 0.7769,
+    "recall": 0.709,
+    "f1": 0.7414,
+    "tp": 787,
+    "fp": 226,
+    "fn": 323
+  },
+  "tracking": {
+    "mota": 0.4991,
+    "motp_iou": 0.8402,
+    "idf1": 0.7339,
+    "id_switches": 7,
+    "false_positives": 226,
+    "misses": 323,
+    "gt_objects": 1110,
+    "precision": 0.7769,
+    "recall": 0.709
+  },
+  "mode": "accuracy"
+}

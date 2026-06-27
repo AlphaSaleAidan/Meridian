@@ -12,10 +12,13 @@ Routes:
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..auth import require_service_auth
+from ..auth import require_admin_auth
 
 logger = logging.getLogger("meridian.api.payouts")
-router = APIRouter(prefix="/api/payouts", tags=["payouts"])
+# Whole-ledger admin surface: aggregates earnings/balances across ALL reps with no
+# org scoping. Lock to machine/admin auth so an ordinary logged-in merchant user
+# can't read the global commission ledger (was require_service_auth = any session).
+router = APIRouter(prefix="/api/payouts", tags=["payouts"], dependencies=[Depends(require_admin_auth)])
 
 
 def _get_db():
@@ -25,7 +28,7 @@ def _get_db():
     return _db_instance
 
 
-@router.get("/summary", dependencies=[Depends(require_service_auth)])
+@router.get("/summary")
 async def payout_summary():
     """Aggregate payout summary across all reps."""
     db = _get_db()
@@ -44,7 +47,7 @@ async def payout_summary():
     }
 
 
-@router.get("/reps", dependencies=[Depends(require_service_auth)])
+@router.get("/reps")
 async def list_reps():
     """List all sales reps with their earnings."""
     db = _get_db()
@@ -52,7 +55,7 @@ async def list_reps():
     return {"reps": reps}
 
 
-@router.get("/reps/{rep_id}/commissions", dependencies=[Depends(require_service_auth)])
+@router.get("/reps/{rep_id}/commissions")
 async def rep_commissions(rep_id: str, limit: int = 50):
     """Get commission history for a rep."""
     db = _get_db()
@@ -68,7 +71,7 @@ async def rep_commissions(rep_id: str, limit: int = 50):
     return {"commissions": commissions}
 
 
-@router.get("/balances", dependencies=[Depends(require_service_auth)])
+@router.get("/balances")
 async def all_balances():
     """Get what's owed to each rep."""
     db = _get_db()
@@ -89,7 +92,7 @@ async def all_balances():
     return {"balances": balances}
 
 
-@router.get("/history", dependencies=[Depends(require_service_auth)])
+@router.get("/history")
 async def payout_history(limit: int = 50):
     """Get payout history across all reps."""
     db = _get_db()
