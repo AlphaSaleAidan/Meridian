@@ -353,17 +353,18 @@ async def toast_webhook(
     body = await request.body()
 
     # ── Fail closed: require the webhook secret to be configured ──
-    # No verification helper exists in src/toast/ yet, so the actual
-    # signature check is a marked follow-up — but we no longer process
-    # arbitrary unsigned payloads when the secret isn't even set.
     toast_secret = os.environ.get("TOAST_WEBHOOK_SECRET", "")
     if not toast_secret:
         logger.error("TOAST_WEBHOOK_SECRET not configured — refusing to process Toast webhook (fail closed)")
         return Response(status_code=503)
 
-    # TODO(follow-up): verify the Toast webhook signature against
-    # toast_secret. See: https://doc.toasttab.com/openapi/webhooks/
-    logger.warning("Toast webhook accepted WITHOUT signature verification — helper pending in src/toast/")
+    # Verify the HMAC-SHA256 signature Toast sends in the Toast-Signature header.
+    # https://doc.toasttab.com/openapi/webhooks/ — reject forged/unsigned payloads.
+    from ...toast.webhook_verify import verify_signature
+    provided_sig = request.headers.get("Toast-Signature") or request.headers.get("toast-signature")
+    if not verify_signature(toast_secret, body, provided_sig):
+        logger.warning("Toast webhook rejected: missing/invalid Toast-Signature")
+        return Response(status_code=401)
 
     try:
         event = json.loads(body)
