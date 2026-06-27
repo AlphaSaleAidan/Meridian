@@ -60,10 +60,12 @@ class WebhookProcessor:
         await processor.handle(event_type, event_data, merchant_id)
     """
 
-    # In-process webhook dedupe window. NOTE: this only dedupes within a
-    # single process — a DB-backed `webhook_events` table (insert-or-conflict
-    # on event_id) is needed for dedupe across restarts/workers; no such
-    # table exists yet (requires a migration).
+    # In-process dedupe is now only a FAST-PATH cache in front of the durable,
+    # cross-worker `webhook_events` table (see the `record_webhook_event`
+    # callback + migration 032). The DB is the source of truth: it dedupes
+    # across the 4 uvicorn workers and survives restarts. The in-memory set
+    # still short-circuits same-worker repeats without a DB round-trip, and is
+    # the sole fallback when no DB-backed callback is wired (tests / DB outage).
     DEDUPE_TTL_SECONDS = 24 * 60 * 60
     DEDUPE_MAX_ENTRIES = 50_000
 
@@ -75,10 +77,17 @@ class WebhookProcessor:
         upsert_inventory: Callable | None = None,
         disconnect_merchant: Callable | None = None,
         send_notification: Callable | None = None,
+        record_webhook_event: Callable | None = None,
     ):
         """
         Inject database/notification callbacks.
         In production, these would be bound to your Supabase client.
+
+        `record_webhook_event(event_id, provider) -> bool | None` is the durable
+        dedupe primitive: it atomically records the event id and returns True if
+        the row was newly inserted (first delivery), False if it already existed
+        (duplicate), or None if the DB is unavailable (fall back to the
+        in-process cache). When omitted, dedupe is in-process only.
         """
         self._get_connection = get_connection
         self._upsert_transaction = upsert_transaction
@@ -86,6 +95,7 @@ class WebhookProcessor:
         self._upsert_inventory = upsert_inventory
         self._disconnect_merchant = disconnect_merchant
         self._send_notification = send_notification
+        self._record_webhook_event = record_webhook_event
 
         # event_id → first-seen unix timestamp (insertion-ordered, oldest first)
         self._seen_events: dict[str, float] = {}
@@ -100,31 +110,66 @@ class WebhookProcessor:
             "oauth.authorization.revoked": self._handle_auth_revoked,
         }
 
-    async def is_duplicate(self, event_id: str) -> bool:
-        """
-        Check whether this webhook event_id was already seen, and mark it seen.
+    def _seen_in_memory(self, event_id: str) -> bool:
+        """Return True if event_id is in the in-process fast-path cache.
 
-        In-process bounded TTL set: entries expire after DEDUPE_TTL_SECONDS
-        and the set is capped at DEDUPE_MAX_ENTRIES (oldest evicted first).
+        Also prunes entries older than DEDUPE_TTL_SECONDS from the front
+        (insertion order == time order). Read-only otherwise — does NOT record.
         """
         now = time.time()
-
-        # Prune expired entries from the front (insertion order == time order)
         while self._seen_events:
             oldest_id = next(iter(self._seen_events))
             if now - self._seen_events[oldest_id] <= self.DEDUPE_TTL_SECONDS:
                 break
             del self._seen_events[oldest_id]
+        return event_id in self._seen_events
 
-        if event_id in self._seen_events:
-            return True
-
-        # Enforce size cap — evict oldest
+    def _remember_in_memory(self, event_id: str) -> None:
+        """Record event_id in the in-process cache, enforcing the size cap."""
         while len(self._seen_events) >= self.DEDUPE_MAX_ENTRIES:
             del self._seen_events[next(iter(self._seen_events))]
+        self._seen_events[event_id] = time.time()
 
-        self._seen_events[event_id] = now
-        return False
+    async def is_duplicate(self, event_id: str, provider: str = "square") -> bool:
+        """
+        Return True if this webhook event has already been seen (skip it).
+
+        Dedupe is durable and cross-worker: the `record_webhook_event` callback
+        atomically inserts the event id into the `webhook_events` table and
+        reports whether it was newly recorded. A small in-process TTL cache sits
+        in front as a fast path. When no DB-backed callback is wired (tests / DB
+        outage) it degrades to in-process-only dedupe — the legacy behaviour.
+        """
+        if not event_id:
+            # Nothing to key on — can't dedupe; let it process.
+            return False
+
+        # Fast path: this worker already recorded it (no DB round-trip).
+        if self._seen_in_memory(event_id):
+            return True
+
+        # Source of truth: durable, cross-worker dedupe table.
+        inserted: bool | None = None
+        if self._record_webhook_event is not None:
+            try:
+                inserted = await self._record_webhook_event(event_id, provider)
+            except Exception as e:  # noqa: BLE001 — never let dedupe crash the webhook
+                logger.warning(
+                    f"webhook_events dedupe insert failed ({e}); "
+                    f"falling back to in-process dedupe for event_id={event_id}"
+                )
+                inserted = None
+
+        # Cache it locally either way (fast-path for any same-worker repeat).
+        self._remember_in_memory(event_id)
+
+        if inserted is None:
+            # No DB-backed dedupe available: in-process check already passed
+            # above, so for this worker it's a first sighting.
+            return False
+
+        # DB is authoritative: inserted == first delivery, else duplicate.
+        return not inserted
 
     async def handle(
         self,
