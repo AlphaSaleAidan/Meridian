@@ -6,6 +6,17 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
+// E.164: a leading '+' then 8–15 digits, first digit non-zero. This is the
+// format the live phone agent dials when warm-transferring a caller to a human
+// (see phone.py transfer_call). Used to validate the wizard's transfer-number
+// field before it's persisted as `transfer_number`.
+const E164_RE = /^\+[1-9]\d{7,14}$/
+
+/** True when `value` is a syntactically valid E.164 phone number. */
+export function isValidE164(value: string): boolean {
+  return E164_RE.test(value.trim())
+}
+
 export interface PhoneConfig {
   exists: boolean
   merchant_id: string
