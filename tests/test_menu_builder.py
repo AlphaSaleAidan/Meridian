@@ -163,13 +163,13 @@ def test_status_building_then_ready(monkeypatch):
     db = FakeDB(config_row={"merchant_id": ORG})
     db_mod._db_instance = db
 
-    s0 = _run(get_menu_status(ORG))
+    s0 = _run(get_menu_status(ORG, principal={"kind": "admin"}))
     assert s0["state"] == "idle" and s0["item_count"] == 0
 
     # While a build is in flight the in-process set marks it 'building'.
     pd_mod._MENU_BUILDING.add(ORG)
     try:
-        s1 = _run(get_menu_status(ORG))
+        s1 = _run(get_menu_status(ORG, principal={"kind": "admin"}))
         assert s1["state"] == "building"
     finally:
         pd_mod._MENU_BUILDING.discard(ORG)
@@ -184,7 +184,7 @@ def test_status_building_then_ready(monkeypatch):
         ],
         "updated_at": "2026-06-21T00:00:00Z",
     }
-    s2 = _run(get_menu_status(ORG))
+    s2 = _run(get_menu_status(ORG, principal={"kind": "admin"}))
     assert s2["state"] == "ready"
     assert s2["item_count"] == 3
     assert s2["sample"][:3] == ["Espresso", "Latte", "Cold Brew"]
@@ -202,10 +202,10 @@ def test_status_clears_building_after_sync(monkeypatch):
     calls: list = []
     _patch_extractor(monkeypatch, [{"name": "Soda"}], calls)
 
-    _run(sync_menu_from_pos(ORG))  # manual endpoint uses the same shared impl
+    _run(sync_menu_from_pos(ORG, principal={"kind": "admin"}))  # manual endpoint uses the same shared impl
     assert ORG not in pd_mod._MENU_BUILDING
 
-    s = _run(get_menu_status(ORG))
+    s = _run(get_menu_status(ORG, principal={"kind": "admin"}))
     assert s["state"] == "ready" and s["item_count"] == 1
 
 
@@ -234,7 +234,7 @@ def test_autobuild_swallows_extractor_error(monkeypatch):
 def test_sync_no_credentials_returns_unsynced():
     db = FakeDB(config_row={"merchant_id": ORG})  # no creds, no connection
     db_mod._db_instance = db
-    out = _run(sync_menu_from_pos(ORG))
+    out = _run(sync_menu_from_pos(ORG, principal={"kind": "admin"}))
     assert out["synced"] is False
     assert out["item_count"] == 0
 

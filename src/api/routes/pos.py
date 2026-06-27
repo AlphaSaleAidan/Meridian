@@ -1,7 +1,7 @@
 """POS system selection, connection status, and waitlist API routes."""
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from ..auth import require_admin, require_service_auth
+from ..auth import enforce_service_member, require_admin, require_admin_auth, require_service_auth
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -22,8 +22,9 @@ class WaitlistRequest(BaseModel):
 
 
 @router.post("/select")
-async def select_pos(req: POSSelectRequest, _auth=Depends(require_service_auth)):
+async def select_pos(req: POSSelectRequest, principal=Depends(require_service_auth)):
     """Record a merchant's POS system selection and connection status."""
+    await enforce_service_member(principal, req.org_id)
     from ...db import _db_instance as db
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
@@ -86,7 +87,7 @@ async def pos_coverage():
 
 
 @router.patch("/status")
-async def update_pos_status(pos_system: str, new_status: str, _auth=Depends(require_service_auth)):
+async def update_pos_status(pos_system: str, new_status: str, _auth=Depends(require_admin_auth)):
     """Admin: toggle a POS system status (e.g. coming_soon -> integrated).
 
     This is a lightweight admin action — the actual system registry lives

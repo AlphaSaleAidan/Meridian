@@ -18,7 +18,7 @@ import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
-from ..auth import require_service_auth
+from ..auth import enforce_service_member, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.phone_dashboard")
@@ -57,8 +57,9 @@ def _validate_merchant_id(merchant_id: str):
 
 
 @router.get("/config/{merchant_id}")
-async def get_phone_config(merchant_id: str, _auth=Depends(require_service_auth)):
+async def get_phone_config(merchant_id: str, principal=Depends(require_service_auth)):
     """Return phone agent config for a merchant. Returns {exists: false} if none."""
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     db = get_db()
 
@@ -77,8 +78,9 @@ async def get_phone_config(merchant_id: str, _auth=Depends(require_service_auth)
 
 
 @router.post("/config")
-async def save_phone_config(req: PhoneConfigRequest, _auth=Depends(require_service_auth)):
+async def save_phone_config(req: PhoneConfigRequest, principal=Depends(require_service_auth)):
     """Create or update phone agent configuration."""
+    await enforce_service_member(principal, req.merchant_id)
     _validate_merchant_id(req.merchant_id)
     db = get_db()
 
@@ -264,14 +266,15 @@ async def auto_build_menu_on_connect(merchant_id: str) -> None:
 
 
 @router.post("/menu/sync/{merchant_id}")
-async def sync_menu_from_pos(merchant_id: str, _auth=Depends(require_service_auth)):
+async def sync_menu_from_pos(merchant_id: str, principal=Depends(require_service_auth)):
     """Manual trigger: pull the merchant's menu from their connected POS."""
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     return await _sync_menu_from_pos_impl(merchant_id, get_db())
 
 
 @router.get("/menu/status/{merchant_id}")
-async def get_menu_status(merchant_id: str, _auth=Depends(require_service_auth)):
+async def get_menu_status(merchant_id: str, principal=Depends(require_service_auth)):
     """Menu-build progress for the customer account UI.
 
     state:
@@ -280,6 +283,7 @@ async def get_menu_status(merchant_id: str, _auth=Depends(require_service_auth))
       error    → config row carries a menu_sync_error (best-effort; reserved)
       idle     → nothing stored and nothing in flight
     """
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     db = get_db()
 
@@ -324,7 +328,7 @@ async def scan_menu_photo(
     merchant_id: str,
     photo: UploadFile = File(...),
     replace: bool = Query(False),
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
 ):
     """Supplementary menu builder: digitize a photo of a paper/printed menu.
 
@@ -340,6 +344,7 @@ async def scan_menu_photo(
         merge_menu_items,
     )
 
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
 
     image_bytes = await photo.read()
@@ -402,11 +407,12 @@ async def scan_menu_photo(
 @router.get("/calls/{merchant_id}")
 async def get_phone_calls(
     merchant_id: str,
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     """Return call logs for a merchant, newest first."""
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     db = get_db()
 
@@ -424,11 +430,12 @@ async def get_phone_calls(
 @router.get("/orders/{merchant_id}")
 async def get_phone_orders(
     merchant_id: str,
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
     """Return phone orders for a merchant, newest first."""
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     db = get_db()
 
@@ -446,10 +453,11 @@ async def get_phone_orders(
 @router.get("/stats/{merchant_id}")
 async def get_phone_stats(
     merchant_id: str,
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     days: int = Query(7, ge=1, le=90),
 ):
     """Return aggregated phone stats for a merchant over N days."""
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     db = get_db()
 
@@ -547,10 +555,11 @@ def _build_test_prompt(req: TestChatRequest) -> str:
 
 
 @router.post("/test-chat")
-async def phone_test_chat(req: TestChatRequest, _auth=Depends(require_service_auth)):
+async def phone_test_chat(req: TestChatRequest, principal=Depends(require_service_auth)):
     """Interactive in-app test call. Runs the real agent brain (SambaNova →
     Qwen fallback) against the merchant's own menu so the wizard's test call
     responds to live speech instead of replaying a canned script."""
+    await enforce_service_member(principal, req.merchant_id)
     _validate_merchant_id(req.merchant_id)
 
     # Reuse the production agent brain + parser from the Twilio route module.
@@ -712,10 +721,11 @@ async def _telnyx_purchase(phone_number: str) -> dict:
 
 
 @router.post("/provision-number")
-async def provision_number(req: ProvisionNumberRequest, _auth=Depends(require_service_auth)):
+async def provision_number(req: ProvisionNumberRequest, principal=Depends(require_service_auth)):
     """Provision a dedicated phone number for a merchant. Idempotent: if the
     merchant already has a number it is returned unchanged (never double-buys).
     Provider is chosen by PHONE_PROVIDER (telnyx | twilio)."""
+    await enforce_service_member(principal, req.merchant_id)
     _validate_merchant_id(req.merchant_id)
 
     if PHONE_PROVIDER == "telnyx":

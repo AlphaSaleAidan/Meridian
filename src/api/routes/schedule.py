@@ -12,7 +12,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from ..auth import require_service_auth
+from ..auth import enforce_service_member, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.schedule")
@@ -26,6 +26,18 @@ _UUID_RE = re.compile(
 def _validate_uuid(value: str, label: str = "id"):
     if not _UUID_RE.match(value):
         raise HTTPException(400, f"Invalid {label} format")
+
+
+async def _enforce_row_member(principal, table: str, row_id: str) -> None:
+    """BOLA guard for sub-resources keyed by their own id (staff_id/shift_id)
+    rather than merchant_id: resolve the owning merchant_id from the row and
+    authorize the caller against it. No-op for machine principals (admin/service)
+    via enforce_service_member, and a no-op if the row doesn't exist (nothing to
+    leak; the downstream update/delete is itself a no-op)."""
+    db = get_db()
+    rows = await db.select(table, filters={"id": f"eq.{row_id}"}, limit=1)
+    if rows and rows[0].get("merchant_id"):
+        await enforce_service_member(principal, rows[0]["merchant_id"])
 
 
 # ─── Request / Response Models ─────────────────────────────────
@@ -87,7 +99,8 @@ class PublishRequest(BaseModel):
 # ─── Staff Endpoints ──────────────────────────────────────────
 
 @router.get("/staff/{merchant_id}")
-async def list_staff(merchant_id: str, _auth=Depends(require_service_auth)):
+async def list_staff(merchant_id: str, principal=Depends(require_service_auth)):
+    await enforce_service_member(principal, merchant_id)
     _validate_uuid(merchant_id, "merchant_id")
     db = get_db()
     rows = await db.select(
@@ -99,7 +112,8 @@ async def list_staff(merchant_id: str, _auth=Depends(require_service_auth)):
 
 
 @router.post("/staff")
-async def create_staff(body: StaffMemberCreate, _auth=Depends(require_service_auth)):
+async def create_staff(body: StaffMemberCreate, principal=Depends(require_service_auth)):
+    await enforce_service_member(principal, body.merchant_id)
     _validate_uuid(body.merchant_id, "merchant_id")
     db = get_db()
     payload = {
@@ -119,8 +133,9 @@ async def create_staff(body: StaffMemberCreate, _auth=Depends(require_service_au
 
 
 @router.put("/staff/{staff_id}")
-async def update_staff(staff_id: str, body: StaffMemberUpdate, _auth=Depends(require_service_auth)):
+async def update_staff(staff_id: str, body: StaffMemberUpdate, principal=Depends(require_service_auth)):
     _validate_uuid(staff_id, "staff_id")
+    await _enforce_row_member(principal, "schedule_staff", staff_id)
     db = get_db()
     updates = body.model_dump(exclude_none=True)
     if not updates:
@@ -131,8 +146,9 @@ async def update_staff(staff_id: str, body: StaffMemberUpdate, _auth=Depends(req
 
 
 @router.delete("/staff/{staff_id}")
-async def deactivate_staff(staff_id: str, _auth=Depends(require_service_auth)):
+async def deactivate_staff(staff_id: str, principal=Depends(require_service_auth)):
     _validate_uuid(staff_id, "staff_id")
+    await _enforce_row_member(principal, "schedule_staff", staff_id)
     db = get_db()
     await db.update(
         "schedule_staff",
@@ -147,9 +163,10 @@ async def deactivate_staff(staff_id: str, _auth=Depends(require_service_auth)):
 @router.get("/shifts/{merchant_id}")
 async def get_shifts(
     merchant_id: str,
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
 ):
+    await enforce_service_member(principal, merchant_id)
     _validate_uuid(merchant_id, "merchant_id")
     db = get_db()
     filters: dict = {"merchant_id": f"eq.{merchant_id}"}
@@ -162,7 +179,8 @@ async def get_shifts(
 
 
 @router.post("/shifts")
-async def create_shift(body: ShiftCreate, _auth=Depends(require_service_auth)):
+async def create_shift(body: ShiftCreate, principal=Depends(require_service_auth)):
+    await enforce_service_member(principal, body.merchant_id)
     _validate_uuid(body.merchant_id, "merchant_id")
     db = get_db()
     payload = {
@@ -186,8 +204,9 @@ async def create_shift(body: ShiftCreate, _auth=Depends(require_service_auth)):
 
 
 @router.put("/shifts/{shift_id}")
-async def update_shift(shift_id: str, body: ShiftUpdate, _auth=Depends(require_service_auth)):
+async def update_shift(shift_id: str, body: ShiftUpdate, principal=Depends(require_service_auth)):
     _validate_uuid(shift_id, "shift_id")
+    await _enforce_row_member(principal, "schedule_shifts", shift_id)
     db = get_db()
     updates = body.model_dump(exclude_none=True)
     if not updates:
@@ -198,8 +217,9 @@ async def update_shift(shift_id: str, body: ShiftUpdate, _auth=Depends(require_s
 
 
 @router.delete("/shifts/{shift_id}")
-async def delete_shift(shift_id: str, _auth=Depends(require_service_auth)):
+async def delete_shift(shift_id: str, principal=Depends(require_service_auth)):
     _validate_uuid(shift_id, "shift_id")
+    await _enforce_row_member(principal, "schedule_shifts", shift_id)
     db = get_db()
     await db.delete("schedule_shifts", filters={"id": f"eq.{shift_id}"})
     return {"shift_id": shift_id, "deleted": True}
@@ -310,7 +330,8 @@ async def _notify_published_staff(
 
 
 @router.post("/publish")
-async def publish_schedule(body: PublishRequest, _auth=Depends(require_service_auth)):
+async def publish_schedule(body: PublishRequest, principal=Depends(require_service_auth)):
+    await enforce_service_member(principal, body.merchant_id)
     _validate_uuid(body.merchant_id, "merchant_id")
     db = get_db()
     now = datetime.now(timezone.utc).isoformat()
@@ -509,10 +530,11 @@ async def _fetch_peak_hours(merchant_id: str, weeks_back: int) -> list[dict]:
 @router.get("/peak-hours/{merchant_id}")
 async def get_peak_hours(
     merchant_id: str,
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     weeks: int = Query(8, ge=1, le=26),
 ):
     """(day_of_week, hour) intensity heatmap derived from real transactions."""
+    await enforce_service_member(principal, merchant_id)
     _validate_uuid(merchant_id, "merchant_id")
     peaks = await _fetch_peak_hours(merchant_id, weeks)
     return {
@@ -528,7 +550,7 @@ async def get_peak_hours(
 @router.get("/projected-revenue/{merchant_id}")
 async def get_projected_revenue(
     merchant_id: str,
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     weeks: int = Query(8, ge=1, le=26),
 ):
     """Trailing-average weekly revenue from POS transactions.
@@ -536,6 +558,7 @@ async def get_projected_revenue(
     Used by the schedule UI to compute labor cost percentage:
         labor_pct = scheduled_labor_cents / projected_weekly_cents * 100
     """
+    await enforce_service_member(principal, merchant_id)
     _validate_uuid(merchant_id, "merchant_id")
     db = get_db()
     result = await db.rpc(
@@ -678,7 +701,7 @@ async def _gather_weather_by_dow(
 @router.post("/recommend/{merchant_id}")
 async def recommend_shifts(
     merchant_id: str,
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     week_start: str = Query(default="", description="Week start date YYYY-MM-DD"),
     weeks_back: int = Query(8, ge=1, le=26),
     country: str = Query(default="US", description="US or CA — CA enables weather + holiday agent"),
@@ -691,6 +714,7 @@ async def recommend_shifts(
     For ``country=CA`` the agentic engine additionally folds in holidays and
     a best-effort weather forecast. The US path is unchanged: peaks only.
     """
+    await enforce_service_member(principal, merchant_id)
     _validate_uuid(merchant_id, "merchant_id")
     peaks = await _fetch_peak_hours(merchant_id, weeks_back)
 
