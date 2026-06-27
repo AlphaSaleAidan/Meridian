@@ -3,6 +3,7 @@ import { clsx } from 'clsx'
 import {
   Store, Mic, ListOrdered, Route, Zap, Volume2,
   CheckCircle2, ArrowRight, ArrowLeft, Phone, Loader2, Plus, Trash2,
+  AlertTriangle, RefreshCw, PhoneForwarded,
 } from 'lucide-react'
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import TestCallModal from './TestCallModal'
@@ -10,7 +11,8 @@ import {
   VOICE_OPTIONS, DEFAULT_VOICE_SETTINGS,
   type PhoneBizConfig, type VoiceSettings, type PhoneMenuItem,
 } from '@/lib/phone-orders-demo-data'
-import { phoneService } from '@/lib/phone-service'
+import { phoneService, isValidE164 } from '@/lib/phone-service'
+import { api } from '@/lib/api'
 import { posSystems } from '@/data/pos-systems'
 
 const WIZARD_STEPS = [
@@ -22,6 +24,16 @@ const WIZARD_STEPS = [
 ]
 
 const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
+
+// Countries we can self-provision a local voice+SMS number in from the wizard.
+// Canada-first per product doctrine; US is opt-in.
+type ProvisionCountry = 'CA' | 'US'
+const COUNTRY_OPTIONS: { code: ProvisionCountry; label: string }[] = [
+  { code: 'CA', label: 'Canada' },
+  { code: 'US', label: 'United States' },
+]
+
+const PROVISION_TIMEOUT_MS = 30_000
 
 interface Props {
   biz: PhoneBizConfig
@@ -45,6 +57,9 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
     voice: biz.voice,
     orderTypes: [...biz.orderTypes] as string[],
     routing: (connectedPos ? 'pos' : 'sms') as 'pos' | 'webhook' | 'sms' | 'email',
+    // Human warm-transfer fallback number. Optional; persisted as transfer_number
+    // so the live agent can offer "let me put you through to someone".
+    transferNumber: '',
   })
 
   // Editable menu the agent will read back to callers. Seeded from the POS sync
@@ -52,39 +67,86 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
   // self-service number takes orders against their real menu.
   const [menu, setMenu] = useState<PhoneMenuItem[]>(() => biz.menu.map(m => ({ ...m })))
   const [newItem, setNewItem] = useState({ name: '', price: '', category: '' })
+  const [addItemError, setAddItemError] = useState<string | null>(null)
 
   const addMenuItem = () => {
     const name = newItem.name.trim()
     const price = parseFloat(newItem.price)
-    if (!name || Number.isNaN(price)) return
+    // Surface why a row was rejected instead of silently dropping it.
+    if (!name) { setAddItemError('Item name is required.'); return }
+    if (newItem.price.trim() === '' || Number.isNaN(price)) { setAddItemError('Enter a price (e.g. 9.99).'); return }
+    if (price < 0) { setAddItemError('Price cannot be negative.'); return }
     setMenu(prev => [
       ...prev,
       { id: `m-${Date.now()}`, name, price, category: newItem.category.trim() || 'General' },
     ])
     setNewItem({ name: '', price: '', category: '' })
+    setAddItemError(null)
   }
 
-  // Auto-provision a dedicated Twilio number on first mount when the merchant
-  // has none yet. Backend is idempotent; the ref guards React's double-mount.
+  // Items the agent would read back with no price ("a coffee" instead of
+  // "a coffee, three fifty"). Flagged before Activate so nothing ships silently
+  // priced at zero.
+  const zeroPricedItems = menu.filter(m => !(m.price > 0))
+  const transferTrimmed = cfg.transferNumber.trim()
+  const transferValid = transferTrimmed === '' || isValidE164(transferTrimmed)
+
+  // Auto-provision a dedicated number on first mount when the merchant has none
+  // yet. Backend is idempotent; the ref guards React's double-mount.
+  const [country, setCountry] = useState<ProvisionCountry>('CA')
   const [provisioning, setProvisioning] = useState(false)
   const [provisionError, setProvisionError] = useState<string | null>(null)
   const provisionStarted = useRef(false)
 
-  useEffect(() => {
-    if (provisionStarted.current) return
-    if (cfg.phone && cfg.phone.trim()) return
+  const doProvision = (selected: ProvisionCountry) => {
     provisionStarted.current = true
     setProvisioning(true)
     setProvisionError(null)
+    // Soft timeout: telco purchase + webhook wiring can stall (slow carrier,
+    // missing regulatory bundle). Surface a friendly retry instead of an
+    // indefinite spinner. The underlying request may still resolve and fill
+    // the number in afterwards.
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      setProvisioning(false)
+      setProvisionError('This is taking longer than expected. Please try again.')
+    }, PROVISION_TIMEOUT_MS)
     phoneService
-      .provisionNumber({ merchant_id: orgId, country: 'CA', business_name: cfg.businessName })
-      .then(res => setCfg(p => ({ ...p, phone: res.phone_number })))
-      .catch((e: unknown) => setProvisionError(e instanceof Error ? e.message : 'Could not provision a number'))
-      .finally(() => setProvisioning(false))
+      .provisionNumber({ merchant_id: orgId, country: selected, business_name: cfg.businessName })
+      .then(res => { settled = true; setCfg(p => ({ ...p, phone: res.phone_number })); setProvisionError(null) })
+      .catch((e: unknown) => { settled = true; setProvisionError(e instanceof Error ? e.message : 'Could not provision a number') })
+      .finally(() => { settled = true; clearTimeout(timer); setProvisioning(false) })
+  }
+
+  useEffect(() => {
+    if (provisionStarted.current) return
+    if (cfg.phone && cfg.phone.trim()) return
+    doProvision(country)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Credit-balance check, fetched the first time the merchant reaches Activate.
+  // The live agent refuses calls when the balance can't cover a minute
+  // (phone.py credit gate), so a zero-balance "activation" silently fails for
+  // the first real caller. We warn here before that happens.
+  const [balance, setBalance] = useState<{ balance: number; low_balance_threshold: number; is_low: boolean } | null>(null)
+  const [balanceChecked, setBalanceChecked] = useState(false)
+
+  useEffect(() => {
+    if (step !== 4 || balanceChecked || !orgId) return
+    setBalanceChecked(true)
+    api.creditBalance(orgId)
+      .then(b => setBalance({ balance: b.balance, low_balance_threshold: b.low_balance_threshold, is_low: b.is_low }))
+      .catch(() => setBalance(null))
+  }, [step, balanceChecked, orgId])
+
+  const balanceEmpty = balance != null && balance.balance <= 0
+  const balanceLow = balance != null && !balanceEmpty && balance.is_low
+
   const inputCls = 'w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50'
+
+  const hasNumber = Boolean(cfg.phone && cfg.phone.trim()) && !provisioning
 
   return (
     <div className="max-w-xl mx-auto space-y-6">
@@ -125,6 +187,28 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 <label className="text-xs text-[#A1A1A8] block mb-1">Business Name</label>
                 <input className={inputCls} value={cfg.businessName} onChange={e => setCfg(p => ({ ...p, businessName: e.target.value }))} />
               </div>
+
+              {/* Country picker — only relevant while we don't yet have a number.
+                  Once a number is bought it's fixed, so we hide the picker. */}
+              {!hasNumber && (
+                <div>
+                  <label className="text-xs text-[#A1A1A8] block mb-1">Number Country</label>
+                  <div className="flex gap-2">
+                    {COUNTRY_OPTIONS.map(c => (
+                      <button
+                        key={c.code}
+                        type="button"
+                        onClick={() => setCountry(c.code)}
+                        disabled={provisioning}
+                        className={clsx('px-3 py-1.5 rounded-lg border text-xs font-medium transition-all disabled:opacity-40',
+                          country === c.code ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5 text-[#F5F5F7]' : 'border-[#1F1F23] text-[#A1A1A8]')}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs text-[#A1A1A8] block mb-1">Phone Number</label>
                 <div className="relative">
@@ -138,10 +222,19 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                   )}
                 </div>
                 {provisionError ? (
-                  <p className="text-[9px] text-red-400/80 mt-1">{provisionError}</p>
+                  <div className="mt-1.5 space-y-1.5">
+                    <p className="text-[9px] text-red-400/80">{provisionError}</p>
+                    <button
+                      type="button"
+                      onClick={() => doProvision(country)}
+                      disabled={provisioning}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[#1A8FD6]/30 bg-[#1A8FD6]/5 text-[#1A8FD6] text-[10px] font-medium hover:bg-[#1A8FD6]/10 disabled:opacity-40 transition-colors">
+                      <RefreshCw size={11} /> Try again
+                    </button>
+                  </div>
                 ) : (
                   <p className="text-[9px] text-[#A1A1A8]/50 mt-1">
-                    {cfg.phone && !provisioning ? 'Dedicated number assigned to your business' : 'Auto-provisioned for your business'}
+                    {hasNumber ? 'Dedicated number assigned to your business' : 'Auto-provisioned for your business'}
                   </p>
                 )}
               </div>
@@ -216,60 +309,76 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
               {menu.length === 0 && (
                 <p className="text-[10px] text-[#A1A1A8]/60 py-3 text-center">No items yet — add your first below.</p>
               )}
-              {menu.map((item, idx) => (
-                <div key={item.id} className="flex items-center gap-2 px-3 py-2 bg-[#111113] rounded-lg">
-                  <input
-                    className="flex-1 min-w-0 bg-transparent text-xs text-[#F5F5F7] focus:outline-none"
-                    value={item.name}
-                    aria-label="Item name"
-                    onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, name: e.target.value } : m))}
-                  />
-                  <div className="flex items-center text-xs font-mono text-[#17C5B0]">
-                    <span>{biz.currency}</span>
+              {menu.map((item, idx) => {
+                const noPrice = !(item.price > 0)
+                return (
+                  <div key={item.id} className={clsx('flex items-center gap-2 px-3 py-2 rounded-lg',
+                    noPrice ? 'bg-[#111113] ring-1 ring-amber-500/30' : 'bg-[#111113]')}>
                     <input
-                      className="w-14 bg-transparent text-right focus:outline-none"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.price}
-                      aria-label="Item price"
-                      onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, price: parseFloat(e.target.value) || 0 } : m))}
+                      className="flex-1 min-w-0 bg-transparent text-xs text-[#F5F5F7] focus:outline-none"
+                      value={item.name}
+                      aria-label="Item name"
+                      onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, name: e.target.value } : m))}
                     />
+                    <div className={clsx('flex items-center text-xs font-mono', noPrice ? 'text-amber-400' : 'text-[#17C5B0]')}>
+                      <span>{biz.currency}</span>
+                      <input
+                        className="w-14 bg-transparent text-right focus:outline-none"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.price}
+                        aria-label="Item price"
+                        onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, price: parseFloat(e.target.value) || 0 } : m))}
+                      />
+                    </div>
+                    <button
+                      onClick={() => setMenu(prev => prev.filter((_, i) => i !== idx))}
+                      aria-label={`Remove ${item.name}`}
+                      className="text-[#A1A1A8]/50 hover:text-red-400 transition-colors flex-shrink-0">
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setMenu(prev => prev.filter((_, i) => i !== idx))}
-                    aria-label={`Remove ${item.name}`}
-                    className="text-[#A1A1A8]/50 hover:text-red-400 transition-colors flex-shrink-0">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
+                )
+              })}
             </div>
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                className={inputCls + ' flex-1'}
-                placeholder="Item name"
-                value={newItem.name}
-                onChange={e => setNewItem(p => ({ ...p, name: e.target.value }))}
-                onKeyDown={e => { if (e.key === 'Enter') addMenuItem() }}
-              />
-              <input
-                className={inputCls + ' w-20'}
-                placeholder="0.00"
-                type="number"
-                step="0.01"
-                min="0"
-                value={newItem.price}
-                onChange={e => setNewItem(p => ({ ...p, price: e.target.value }))}
-                onKeyDown={e => { if (e.key === 'Enter') addMenuItem() }}
-              />
-              <button
-                onClick={addMenuItem}
-                disabled={!newItem.name.trim() || Number.isNaN(parseFloat(newItem.price))}
-                aria-label="Add menu item"
-                className="flex-shrink-0 p-2 rounded-lg bg-[#1A8FD6]/10 text-[#1A8FD6] hover:bg-[#1A8FD6]/20 disabled:opacity-30 transition-colors">
-                <Plus size={14} />
-              </button>
+            {zeroPricedItems.length > 0 && (
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <AlertTriangle size={12} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                  {zeroPricedItems.length} item{zeroPricedItems.length > 1 ? 's have' : ' has'} no price — callers won't hear a price for {zeroPricedItems.length > 1 ? 'them' : 'it'}.
+                </p>
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  className={inputCls + ' flex-1'}
+                  placeholder="Item name"
+                  value={newItem.name}
+                  onChange={e => { setNewItem(p => ({ ...p, name: e.target.value })); if (addItemError) setAddItemError(null) }}
+                  onKeyDown={e => { if (e.key === 'Enter') addMenuItem() }}
+                />
+                <input
+                  className={inputCls + ' w-20'}
+                  placeholder="0.00"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newItem.price}
+                  onChange={e => { setNewItem(p => ({ ...p, price: e.target.value })); if (addItemError) setAddItemError(null) }}
+                  onKeyDown={e => { if (e.key === 'Enter') addMenuItem() }}
+                />
+                <button
+                  onClick={addMenuItem}
+                  aria-label="Add menu item"
+                  className="flex-shrink-0 p-2 rounded-lg bg-[#1A8FD6]/10 text-[#1A8FD6] hover:bg-[#1A8FD6]/20 disabled:opacity-30 transition-colors">
+                  <Plus size={14} />
+                </button>
+              </div>
+              {addItemError && (
+                <p className="text-[9px] text-red-400/80 mt-1.5">{addItemError}</p>
+              )}
             </div>
           </>
         )}
@@ -317,6 +426,30 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">Send formatted order confirmation via email</p>
               </button>
             </div>
+
+            {/* Human warm-transfer fallback */}
+            <div className="pt-2">
+              <label className="text-xs text-[#A1A1A8] flex items-center gap-1.5 mb-1">
+                <PhoneForwarded size={12} className="text-[#A1A1A8]" /> Transfer to a human at
+                <span className="text-[#A1A1A8]/50">(optional)</span>
+              </label>
+              <input
+                className={clsx(inputCls, transferValid ? '' : 'border-red-400/50 focus:border-red-400/50')}
+                placeholder="+1 555 123 4567"
+                inputMode="tel"
+                value={cfg.transferNumber}
+                onChange={e => setCfg(p => ({ ...p, transferNumber: e.target.value }))}
+              />
+              {transferValid ? (
+                <p className="text-[9px] text-[#A1A1A8]/50 mt-1">
+                  Callers who need a person are warm-transferred here. Leave blank to disable.
+                </p>
+              ) : (
+                <p className="text-[9px] text-red-400/80 mt-1">
+                  Use international format, e.g. +14165551234.
+                </p>
+              )}
+            </div>
           </>
         )}
 
@@ -332,6 +465,7 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 ['Menu Items', String(menu.length)],
                 ['Order Routing', cfg.routing === 'pos' && posInfo ? `${posInfo.name} (Direct API)` : cfg.routing === 'webhook' && posInfo ? `${posInfo.name} (Webhook)` : cfg.routing === 'pos' ? 'POS System' : cfg.routing === 'sms' ? 'SMS Alert' : 'Email'],
                 ['Order Types', cfg.orderTypes.map(t => t.replace('_', ' ')).join(', ')],
+                ['Human Transfer', transferTrimmed || 'Not set'],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between py-2 border-b border-[#1F1F23] last:border-0">
                   <span className="text-[#A1A1A8]">{label}</span>
@@ -339,6 +473,40 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 </div>
               ))}
             </div>
+
+            {/* Credit balance warning — calls are gated when the balance can't
+                cover a minute, so flag an empty/low balance before activation. */}
+            {balanceEmpty && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-500/5 border border-red-500/20 mt-3">
+                <AlertTriangle size={14} className="text-red-400 mt-0.5 flex-shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="text-[11px] text-red-200 font-medium">Your call credit balance is empty.</p>
+                  <p className="text-[10px] text-red-200/70 leading-relaxed">
+                    You can activate, but callers will hear "this account is temporarily paused" until you add credits. Top up from the Billing section to go live.
+                  </p>
+                </div>
+              </div>
+            )}
+            {balanceLow && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 mt-3">
+                <AlertTriangle size={14} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="text-[11px] text-amber-200 font-medium">Low call credit balance ({balance!.balance.toLocaleString()} credits).</p>
+                  <p className="text-[10px] text-amber-200/70 leading-relaxed">
+                    That's only a few minutes of calls. Consider topping up from the Billing section so your line stays live.
+                  </p>
+                </div>
+              </div>
+            )}
+            {zeroPricedItems.length > 0 && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20 mt-3">
+                <AlertTriangle size={14} className="text-amber-400 mt-0.5 flex-shrink-0" />
+                <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                  {zeroPricedItems.length} menu item{zeroPricedItems.length > 1 ? 's have' : ' has'} no price set — callers won't hear a price. You can fix this in the Menu step.
+                </p>
+              </div>
+            )}
+
             <div className="card p-3 border-[#17C5B0]/10 mt-3">
               <div className="flex items-start gap-2">
                 <Mic size={14} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
@@ -371,8 +539,10 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
           <ArrowLeft size={14} /> Back
         </button>
         {step < 4 ? (
-          <button onClick={() => setStep(step + 1)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors">
+          <button
+            onClick={() => setStep(step + 1)}
+            disabled={step === 3 && !transferValid}
+            className="flex items-center gap-1.5 px-4 py-2 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 disabled:opacity-40 transition-colors">
             Next <ArrowRight size={14} />
           </button>
         ) : (
@@ -386,6 +556,7 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 voice: cfg.voice,
                 order_types: cfg.orderTypes,
                 menu_items: menu.map(m => ({ name: m.name, price: m.price, category: m.category })),
+                transfer_number: transferTrimmed || undefined,
                 active: true,
               })
             }
