@@ -22,7 +22,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from ..auth import require_service_auth
+from ..auth import enforce_service_member, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.stripe.connect")
@@ -56,9 +56,10 @@ async def _set_config(db, merchant_id: str, patch: dict) -> None:
 
 
 @router.post("/onboard/{merchant_id}")
-async def onboard(merchant_id: str, _auth=Depends(require_service_auth)):
+async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
     """Create the merchant's Stripe connected account (once) and return a hosted
     onboarding link. Called from the onboarding wizard's Payments step."""
+    await enforce_service_member(principal, merchant_id)
     if not STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe not configured")
     stripe = _stripe()
@@ -97,8 +98,9 @@ async def onboard(merchant_id: str, _auth=Depends(require_service_auth)):
 
 
 @router.get("/status/{merchant_id}")
-async def status(merchant_id: str, _auth=Depends(require_service_auth)):
+async def status(merchant_id: str, principal=Depends(require_service_auth)):
     """Onboarding status for the wizard — refreshes charges_enabled from Stripe."""
+    await enforce_service_member(principal, merchant_id)
     db = get_db()
     rows = await db.select("phone_agent_config", filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
     acct = (rows[0].get("stripe_account_id") if rows else "") or ""

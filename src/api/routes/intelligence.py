@@ -14,7 +14,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth import require_admin, require_service_auth
+from ..auth import enforce_service_member, require_admin, require_service_auth
 
 logger = logging.getLogger("meridian.api.intelligence")
 
@@ -56,10 +56,11 @@ def _check_feature():
 async def get_health_score(
     org_id: str,
     days: int = Query(30, ge=7, le=365),
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     db=Depends(_get_db),
 ):
     """Business health score (0-100) with grade and component breakdown."""
+    await enforce_service_member(principal, org_id)
     _check_feature()
     org_id = _validate_org_id(org_id)
 
@@ -88,10 +89,11 @@ async def get_health_score(
 async def get_financial_ratios(
     org_id: str,
     days: int = Query(30, ge=7, le=365),
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     db=Depends(_get_db),
 ):
     """Financial ratio analysis from POS transaction data."""
+    await enforce_service_member(principal, org_id)
     _check_feature()
     org_id = _validate_org_id(org_id)
 
@@ -120,10 +122,11 @@ async def get_financial_ratios(
 async def get_benchmarks(
     org_id: str,
     days: int = Query(30, ge=7, le=365),
-    _auth=Depends(require_service_auth),
+    principal=Depends(require_service_auth),
     db=Depends(_get_db),
 ):
     """Industry benchmark comparison using NAICS sector data."""
+    await enforce_service_member(principal, org_id)
     _check_feature()
     org_id = _validate_org_id(org_id)
 
