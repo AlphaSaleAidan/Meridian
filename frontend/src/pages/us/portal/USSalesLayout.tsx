@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Target,
   Building2,
-  Wallet,
   GraduationCap,
   Users,
   Menu,
@@ -27,7 +26,6 @@ const salesNavItems = [
   { path: '/us/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/us/portal/leads', icon: Target, label: 'Leads' },
   { path: '/us/portal/accounts', icon: Building2, label: 'Accounts' },
-  { path: '/us/portal/commissions', icon: Wallet, label: 'Commissions' },
   { path: '/us/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/us/portal/team', icon: Users, label: 'Team' },
   { path: '/us/portal/badge', icon: CreditCard, label: 'My Badge' },
@@ -98,7 +96,6 @@ export default function USSalesLayout() {
       void import('./USPortalLeadDetailPage')
       void import('./USPortalCreateCustomerPage')
       void import('./USPortalAccountsPage')
-      void import('./USPortalCommissionsPage')
       void import('./USPortalTrainingPage')
       void import('./USPortalTeamPage')
       void import('./USPortalSettingsPage')

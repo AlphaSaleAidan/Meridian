@@ -4,7 +4,6 @@ import {
   Users,
   DollarSign,
   TrendingUp,
-  CreditCard,
   ArrowRight,
   Plus,
   FileText,
@@ -82,7 +81,6 @@ export default function USPortalDashboardPage() {
   const [overview, setOverview] = useState<SalesOverview | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
   const [clients, setClients] = useState<SalesClient[]>([])
-  const [commissions, setCommissions] = useState<Commission[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
@@ -95,7 +93,6 @@ export default function USPortalDashboardPage() {
     const c = deriveClientsFromLeads(d)
     const cm = deriveCommissionsFromLeads(d)
     setClients(c)
-    setCommissions(cm)
 
     const activePipeline = d.filter((deal: Deal) => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(deal.stage))
     const closedWon = d.filter((deal: Deal) => deal.stage === 'customer_walkthrough' || deal.stage === 'closed_won' || deal.stage === 'pos_connected')
@@ -147,9 +144,6 @@ export default function USPortalDashboardPage() {
   const mrr = Math.max(clientMrr, wonDealsMrr)
   const pipelineDeals = deals.filter(d => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(d.stage))
   const pipelineValue = pipelineDeals.reduce((sum, d) => sum + d.monthly_value, 0)
-  const commissionRate = rep?.commission_rate ?? 70
-  const totalCommEarned = commissions.reduce((s, c) => s + c.commission_amount, 0)
-  const pendingComm = commissions.filter(c => c.status === 'earned' || c.status === 'pending').reduce((s, c) => s + c.commission_amount, 0)
 
   const showFirst30Banner = rep?.created_at && isWithin30Days(rep.created_at) && !bannerDismissed
   const mrrProgress = Math.min((mrr / MONTH1_MRR_GOAL) * 100, 100)
@@ -292,8 +286,8 @@ export default function USPortalDashboardPage() {
         </div>
       )}
 
-      {/* ── Stat Cards (4 across) ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ── Stat Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Active Accounts"
           value={String(activeClients.length)}
@@ -321,16 +315,6 @@ export default function USPortalDashboardPage() {
           iconBg="bg-[#17C5B0]/15"
           bars={[55, 40, 70, 60, 85, 50]}
           barColor="#17C5B0"
-        />
-        <StatCard
-          label="Commissions"
-          value={formatUsd(totalCommEarned)}
-          subtitle={`${commissionRate}% rate | ${formatUsd(pendingComm)} pending`}
-          icon={<CreditCard size={18} className="text-[#f0b429]" />}
-          iconBg="bg-[#f0b429]/15"
-          valueColor="#f0b429"
-          bars={[60, 45, 70, 50, 80, 65]}
-          barColor="#f0b429"
         />
       </div>
 

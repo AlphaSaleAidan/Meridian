@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Target,
   Building2,
-  Wallet,
   GraduationCap,
   FileText,
   Users,
@@ -31,7 +30,6 @@ const salesNavBase = [
   { path: '/canada/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/canada/portal/leads', icon: Target, label: 'Leads' },
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
-  { path: '/canada/portal/commissions', icon: Wallet, label: 'Commissions' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/canada/portal/proposals', icon: FileText, label: 'Proposals' },
 ] as const
@@ -117,7 +115,7 @@ export default function CanadaSalesLayout() {
   }, [])
 
   // Preload sibling portal page chunks on idle. Trimmed in fix #3:
-  // only the 3 most-likely next tabs (Leads, Accounts, Commissions)
+  // only the most-likely next tabs (Leads, Accounts)
   // get eager-imported, and the preload is gated to once per session
   // via sessionStorage so revisiting the layout doesn't re-chew the
   // network on every mount. The remaining tabs lazy-load on click
@@ -132,7 +130,6 @@ export default function CanadaSalesLayout() {
     const preload = () => {
       void import('./CanadaPortalLeadsPage')
       void import('./CanadaPortalAccountsPage')
-      void import('./CanadaPortalCommissionsPage')
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.setItem(PRELOAD_KEY, '1')
       }
