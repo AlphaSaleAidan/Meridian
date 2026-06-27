@@ -4,7 +4,6 @@ import {
   Users,
   DollarSign,
   TrendingUp,
-  CreditCard,
   ArrowRight,
   Plus,
   FileText,
@@ -19,7 +18,6 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import {
   STAGE_CONFIG,
   deriveClientsFromLeads,
-  deriveCommissionsFromLeads,
   type Deal,
   type DealStage,
 } from '@/lib/canada-sales-demo-data'
@@ -77,7 +75,6 @@ export default function CanadaPortalDashboardPage() {
   )
 
   const clients = useMemo(() => deriveClientsFromLeads(deals), [deals])
-  const commissions = useMemo(() => deriveCommissionsFromLeads(deals), [deals])
 
   const activeClients = clients.filter(c => c.is_active && c.pos_connected)
   const clientMrr = activeClients.reduce((sum, c) => sum + c.monthly_revenue, 0)
@@ -85,9 +82,6 @@ export default function CanadaPortalDashboardPage() {
   const mrr = Math.max(clientMrr, wonDealsMrr)
   const pipelineDeals = deals.filter(d => !['customer_walkthrough', 'pos_connected', 'closed_won', 'closed_lost'].includes(d.stage))
   const pipelineValue = pipelineDeals.reduce((sum, d) => sum + d.monthly_value, 0)
-  const commissionRate = rep?.commission_rate ?? 70
-  const totalCommEarned = commissions.reduce((s, c) => s + c.commission_amount, 0)
-  const pendingComm = commissions.filter(c => c.status === 'earned' || c.status === 'pending').reduce((s, c) => s + c.commission_amount, 0)
 
   const showFirst30Banner = rep?.created_at && isWithin30Days(rep.created_at) && !bannerDismissed
   const mrrProgress = Math.min((mrr / MONTH1_MRR_GOAL) * 100, 100)
@@ -235,7 +229,7 @@ export default function CanadaPortalDashboardPage() {
           Rendered OUTSIDE <PortalPage> so a zero-leads account still sees the
           stat cards (zeros) and the empty-state CTA appears BELOW them rather
           than replacing them. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           label="Active Accounts"
           value={String(activeClients.length)}
@@ -263,16 +257,6 @@ export default function CanadaPortalDashboardPage() {
           iconBg="bg-pm-accent/15"
           bars={[55, 40, 70, 60, 85, 50]}
           barClass="bg-pm-accent"
-        />
-        <StatCard
-          label="Commissions"
-          value={formatCad(totalCommEarned)}
-          subtitle={`${commissionRate}% rate | ${formatCad(pendingComm)} pending`}
-          icon={<CreditCard size={18} className="text-pm-amber-gold" />}
-          iconBg="bg-pm-amber-gold/15"
-          valueClass="text-pm-amber-gold"
-          bars={[60, 45, 70, 50, 80, 65]}
-          barClass="bg-pm-amber-gold"
         />
       </div>
 

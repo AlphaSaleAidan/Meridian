@@ -1070,10 +1070,7 @@ export default function CanadaPortalCreateCustomerPage() {
             {rep && (
               <div className="mt-3 pt-3 border-t border-pm-canada-border">
                 <p className="text-2xs text-pm-canada-text-muted">
-                  Rep: <span className="text-white font-medium">{rep.name}</span> ·
-                  Commission: <span className="text-pm-accent font-medium">{rep.commission_rate}%</span> =
-                  <span className="text-pm-accent font-medium"> CA${Math.round(price * (rep.commission_rate / 100))}{interval}</span>
-                  {setupFee > 0 && <span className="text-pm-purple"> + CA${setupFee} setup</span>}
+                  Rep: <span className="text-white font-medium">{rep.name}</span>
                 </p>
               </div>
             )}

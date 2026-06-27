@@ -1009,10 +1009,7 @@ export default function USPortalCreateCustomerPage() {
             {rep && (
               <div className="mt-3 pt-3 border-t border-[#1F1F23]">
                 <p className="text-[11px] text-[#A1A1A8]">
-                  Rep: <span className="text-white font-medium">{rep.name}</span> ·
-                  Commission: <span className="text-[#17C5B0] font-medium">{rep.commission_rate}%</span> =
-                  <span className="text-[#17C5B0] font-medium"> ${Math.round(price * (rep.commission_rate / 100))}{interval}</span>
-                  {setupFee > 0 && <span className="text-[#7c3aed]"> + ${setupFee} setup</span>}
+                  Rep: <span className="text-white font-medium">{rep.name}</span>
                 </p>
               </div>
             )}

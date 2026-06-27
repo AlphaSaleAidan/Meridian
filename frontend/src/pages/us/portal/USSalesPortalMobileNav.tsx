@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
-  LayoutDashboard, Target, Building2, Wallet, MoreHorizontal,
+  LayoutDashboard, Target, Building2, MoreHorizontal,
   GraduationCap, Users, Settings, X, CreditCard,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -11,7 +11,6 @@ const PRIMARY_TABS = [
   { path: '/us/portal/dashboard', icon: LayoutDashboard, label: 'Home' },
   { path: '/us/portal/leads', icon: Target, label: 'Leads' },
   { path: '/us/portal/accounts', icon: Building2, label: 'Accounts' },
-  { path: '/us/portal/commissions', icon: Wallet, label: 'Money' },
 ]
 
 const MORE_ITEMS = [
