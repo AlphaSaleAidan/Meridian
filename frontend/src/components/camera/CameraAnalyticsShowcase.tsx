@@ -44,7 +44,7 @@ function Spark({ points, color }: { points: number[]; color: string }) {
 export default function CameraAnalyticsShowcase({ connected = false }: { connected?: boolean }) {
   const [active, setActive] = useState<string | null>(null)
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="camera-analytics-showcase">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-bold text-[#F5F5F7] flex items-center gap-2">
@@ -70,6 +70,8 @@ export default function CameraAnalyticsShowcase({ connected = false }: { connect
           return (
             <button
               key={m.key}
+              data-testid={`camera-metric-${m.key}`}
+              aria-pressed={on}
               onClick={() => setActive(on ? null : m.key)}
               className={`text-left rounded-2xl border p-4 transition-all ${
                 on ? 'border-[#17C5B0]/50 bg-[#17C5B0]/[0.06]' : 'border-[#1F1F23] bg-[#111113] hover:border-[#1F1F23] hover:bg-[#16161A]'

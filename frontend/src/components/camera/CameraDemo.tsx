@@ -77,7 +77,7 @@ export default function CameraDemo() {
   const setPreset = (name: string) => setLayers(Object.fromEntries(LAYERS.map(l => [l[0], PRESETS[name].includes(l[0])])))
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="camera-demo">
       <div>
         <h1 className="text-xl font-bold text-[#F5F5F7]">Camera intelligence — live</h1>
         <p className="text-[12px] text-[#A1A1A8] mt-0.5">Real-time person detection, tracking, zones &amp; staff grading — computed by the vision model (YOLO + ByteTrack), not mocked.</p>
@@ -92,12 +92,12 @@ export default function CameraDemo() {
             <div className="absolute inset-0 pointer-events-none" style={{ boxShadow: 'inset 0 0 120px 24px rgba(0,0,0,.55)' }} />
             <div className="absolute bottom-2 left-3 font-mono text-[11px] text-white/70">CAM-01 · TAP ROOM</div>
           </div>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {Object.keys(PRESETS).map(n => <button key={n} onClick={() => setPreset(n)} className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-all">{n}</button>)}
+          <div className="flex flex-wrap gap-2 mt-3" data-testid="camera-presets">
+            {Object.keys(PRESETS).map(n => <button key={n} data-testid={`camera-preset-${n}`} onClick={() => setPreset(n)} className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-all">{n}</button>)}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2" data-testid="camera-layers">
             {LAYERS.map(([k, lab, illustrative]) => (
-              <button key={k} onClick={() => setLayers(p => ({ ...p, [k]: !p[k] }))}
+              <button key={k} data-testid={`camera-layer-${k}`} aria-pressed={!!layers[k]} onClick={() => setLayers(p => ({ ...p, [k]: !p[k] }))}
                 title={illustrative ? 'Illustrative — sample data, not live model output' : undefined}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all ${layers[k] ? 'bg-[#17C5B0]/15 border border-[#17C5B0]/40' : 'border border-[#1F1F23] hover:bg-[#1F1F23]'}`}>
                 <span className={`w-2 h-2 rounded-full ${layers[k] ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/30'}`} />
