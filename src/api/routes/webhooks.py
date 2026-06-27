@@ -111,6 +111,38 @@ async def _send_notification(
     })
 
 
+async def _record_webhook_event(event_id: str, provider: str = "square") -> bool | None:
+    """Durable, cross-worker webhook dedupe primitive.
+
+    Atomically records `event_id` in the `webhook_events` table (PRIMARY KEY on
+    event_id). Returns:
+      * True  — row newly inserted → first delivery (process the event)
+      * False — already existed (unique-violation, swallowed as 409) → duplicate
+      * None  — DB unavailable → caller falls back to in-process dedupe
+
+    This is the source of truth that makes idempotency survive restarts and
+    hold across the 4 uvicorn workers (the old in-memory dict did neither).
+    """
+    from ...db import _db_instance
+    if not _db_instance:
+        return None
+
+    try:
+        rows = await _db_instance.insert(
+            "webhook_events",
+            {"event_id": event_id, "provider": provider},
+            return_data=True,
+        )
+    except Exception as e:
+        # Don't let a DB hiccup crash the webhook — degrade to in-process dedupe.
+        logger.warning(f"webhook_events insert failed for {event_id}: {e}")
+        return None
+
+    # PostgREST returns the inserted row(s) on success; on a duplicate-key
+    # conflict the insert is a 409 (swallowed by the REST client) → empty list.
+    return bool(rows)
+
+
 async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
     """Look up an active connection by Square merchant ID."""
     from ...db import _db_instance
@@ -142,6 +174,7 @@ processor = WebhookProcessor(
     upsert_inventory=_upsert_inventory,
     disconnect_merchant=_disconnect_merchant,
     send_notification=_send_notification,
+    record_webhook_event=_record_webhook_event,
 )
 
 
@@ -197,7 +230,7 @@ async def square_webhook(
     event_id = event.get("event_id", "")
 
     # ── Step 2b: Idempotency check ───────────────────────
-    if event_id and await processor.is_duplicate(event_id):
+    if event_id and await processor.is_duplicate(event_id, provider="square"):
         logger.info(f"Duplicate webhook event_id={event_id} — skipping")
         return Response(status_code=200)
     
