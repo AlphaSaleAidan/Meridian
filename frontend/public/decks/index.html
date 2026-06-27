@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meridian — AI Phone Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#06070a; --ink:#f6f8fb; --mut:#8b94a3;
+    --teal:#19e3c6; --teal-d:#0fb9a3; --vio:#8b5cf6; --grn:#43e08a; --amb:#ffb84d;
+    --glass:rgba(255,255,255,.045); --line:rgba(255,255,255,.09);
+    --ease:cubic-bezier(.22,1,.36,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+  canvas#bg{position:fixed;inset:0;z-index:0;display:block}
+  .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;background:radial-gradient(120% 90% at 50% 0%,transparent 40%,rgba(0,0,0,.55) 100%)}
+  #deck{position:fixed;inset:0;z-index:2}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;align-items:center;padding:5vh 6vw;text-align:center}
+  .slide.on{display:flex}
+  /* entrance */
+  .slide.on .anim{opacity:0;transform:translateY(26px) scale(.985);animation:rise .8s var(--ease) forwards}
+  .slide.on .anim:nth-child(2){animation-delay:.06s}
+  .slide.on .anim:nth-child(3){animation-delay:.12s}
+  .slide.on .anim:nth-child(4){animation-delay:.18s}
+  .slide.on .anim:nth-child(5){animation-delay:.24s}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .kick{display:inline-flex;align-items:center;gap:8px;color:var(--teal);font-size:clamp(11px,1.3vw,14px);font-weight:700;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px}
+  .kick::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 12px var(--teal)}
+  h1{font-size:clamp(40px,7.4vw,92px);font-weight:800;line-height:1;letter-spacing:-.035em}
+  h2{font-size:clamp(30px,5vw,60px);font-weight:800;line-height:1.02;letter-spacing:-.03em}
+  .grad{background:linear-gradient(100deg,#fff 10%,var(--teal) 55%,var(--vio) 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--mut);font-size:clamp(15px,2vw,22px);line-height:1.45;margin-top:20px;max-width:680px;font-weight:400}
+  /* number CTA */
+  .cta{margin-top:34px;display:inline-flex;flex-direction:column;align-items:center;gap:4px;text-decoration:none;padding:18px 34px;border-radius:18px;color:#fff;
+       background:linear-gradient(180deg,rgba(25,227,198,.16),rgba(25,227,198,.03));border:1.5px solid rgba(25,227,198,.55);
+       box-shadow:0 0 0 0 rgba(25,227,198,.4),0 20px 60px -20px rgba(25,227,198,.5);animation:glow 2.6s infinite}
+  .cta small{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--teal)}
+  .cta b{font-size:clamp(26px,4.4vw,46px);font-weight:800;letter-spacing:-.01em}
+  @keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(25,227,198,.45),0 20px 60px -20px rgba(25,227,198,.5)}50%{box-shadow:0 0 0 14px rgba(25,227,198,0),0 20px 60px -20px rgba(25,227,198,.5)}}
+  /* screenshot frame w/ 3d tilt */
+  .shot{position:relative;border-radius:16px;overflow:hidden;border:1px solid var(--line);box-shadow:0 40px 120px -40px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.04) inset;will-change:transform;transition:transform .15s ease-out;background:#0b0e13}
+  .shot img{display:block;width:100%;height:auto}
+  .shot::after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,rgba(25,227,198,.10),transparent 40%)}
+  .tilt{perspective:1400px}
+  /* floating chips */
+  .chip{position:absolute;background:rgba(12,16,22,.82);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:14px;padding:12px 16px;text-align:left;box-shadow:0 20px 50px -20px rgba(0,0,0,.8);animation:float 6s ease-in-out infinite}
+  .chip .v{font-size:clamp(18px,2.4vw,26px);font-weight:800;letter-spacing:-.02em}
+  .chip .l{font-size:11px;color:var(--mut);font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+  .chip .v.t{color:var(--teal)} .chip .v.g{color:var(--grn)} .chip .v.a{color:var(--amb)}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  /* layout helpers */
+  .stage{position:relative;display:flex;align-items:center;justify-content:center;gap:48px;flex-wrap:wrap;width:100%;max-width:1180px}
+  .col{flex:1;min-width:300px;text-align:left}
+  .col.r{max-width:560px}
+  /* sms mock */
+  .sms{width:340px;max-width:86vw;background:#0b0f14;border:1px solid var(--line);border-radius:26px;padding:16px;box-shadow:0 50px 120px -40px rgba(0,0,0,.9)}
+  .b{border-radius:16px;padding:11px 14px;font-size:14px;line-height:1.4;margin:8px 2px;max-width:88%}
+  .b.ai{background:#1a2129;color:#dfe5ec;border-bottom-left-radius:5px}
+  .b.me{background:linear-gradient(180deg,var(--teal),var(--teal-d));color:#04201c;margin-left:auto;border-bottom-right-radius:5px;font-weight:600}
+  .b.me a{color:#06342e;font-weight:800;text-decoration:underline}
+  .b.r{opacity:0;animation:pop .5s var(--ease) forwards}
+  .slide.on .b.r:nth-of-type(1){animation-delay:.3s}
+  .slide.on .b.r:nth-of-type(2){animation-delay:.9s}
+  .slide.on .b.r:nth-of-type(3){animation-delay:1.6s}
+  .slide.on .b.r:nth-of-type(4){animation-delay:2.3s}
+  @keyframes pop{from{opacity:0;transform:translateY(10px) scale(.96)}to{opacity:1;transform:none}}
+  /* big stat */
+  .stat{font-size:clamp(80px,17vw,220px);font-weight:900;letter-spacing:-.05em;line-height:.9;background:linear-gradient(180deg,#fff,var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .statrow{display:flex;gap:clamp(20px,5vw,80px);flex-wrap:wrap;justify-content:center;margin-top:10px}
+  .statrow .s .n{font-size:clamp(34px,6vw,64px);font-weight:900;letter-spacing:-.03em;color:var(--teal)}
+  .statrow .s .n.v{color:var(--vio)} .statrow .s .n.g{color:var(--grn)}
+  .statrow .s .c{color:var(--mut);font-size:14px;font-weight:500;margin-top:6px;max-width:200px}
+  /* comparison cards */
+  .cmp{display:flex;gap:22px;flex-wrap:wrap;justify-content:center;margin-top:36px;width:100%;max-width:880px}
+  .cmp .c{flex:1;min-width:270px;background:var(--glass);border:1px solid var(--line);border-radius:18px;padding:24px 22px;text-align:left}
+  .cmp .c.win{border-color:rgba(25,227,198,.5);background:linear-gradient(180deg,rgba(25,227,198,.09),rgba(25,227,198,.02));box-shadow:0 36px 90px -44px rgba(25,227,198,.5)}
+  .cmp .c h4{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:16px}
+  .cmp .c.win h4{color:var(--teal)}
+  .cmp .c .it{display:flex;gap:11px;align-items:flex-start;font-size:clamp(14px,1.6vw,17px);line-height:1.35;margin:13px 0;color:#b9c1cc}
+  .cmp .c .it .x{color:#ff6f6f;font-weight:800;flex:0 0 auto}
+  .cmp .c .it .k{color:var(--teal);font-weight:800;flex:0 0 auto}
+  .cmp .c.win .it{color:#eef2f6}
+  .feat{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:30px;max-width:760px}
+  .feat span{background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:9px 16px;font-size:14px;font-weight:600;color:#cfd6df}
+  .feat span b{color:var(--teal);font-weight:700}
+  /* chrome */
+  .wm{position:fixed;top:22px;left:26px;z-index:6;font-weight:800;letter-spacing:-.02em;font-size:17px}.wm i{color:var(--teal);font-style:normal}
+  .bar{position:fixed;top:0;left:0;height:3px;z-index:6;background:linear-gradient(90deg,var(--teal),var(--vio));width:0;transition:width .5s var(--ease);box-shadow:0 0 14px var(--teal)}
+  .dots{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:9px}
+  .dot{width:8px;height:8px;border-radius:50%;border:none;background:#39414c;cursor:pointer;transition:.3s var(--ease);padding:0}
+  .dot.on{width:26px;border-radius:5px;background:var(--teal)}
+  .count{position:fixed;bottom:20px;right:24px;z-index:6;color:var(--mut);font-size:13px;font-variant-numeric:tabular-nums}
+  .nav{position:fixed;inset:0;z-index:4;display:flex}.nav div{flex:1;cursor:pointer}
+  @media(max-width:760px){.stage{gap:24px}.col{text-align:center}.chip{display:none}}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="vignette"></div>
+<div class="bar" id="bar"></div>
+<div class="wm">Meridian<i>.</i></div>
+<div class="nav"><div onclick="prev()"></div><div onclick="next()"></div></div>
+
+<div id="deck">
+
+  <!-- 1 HERO -->
+  <section class="slide on">
+    <div class="kick anim">AI Phone Agent</div>
+    <h1 class="anim">Never miss<br><span class="grad">an order.</span></h1>
+    <p class="sub anim">An AI answers every call, takes the order, and texts a link to pay — straight into your POS.</p>
+    <a class="cta anim" href="tel:+12368324333"><small>Call the live demo</small><b>+1 (236) 832-4333</b></a>
+  </section>
+
+  <!-- 2 PRODUCT -->
+  <section class="slide">
+    <div class="stage">
+      <div class="col anim">
+        <div class="kick">The product</div>
+        <h2>Your phone,<br>run by AI.</h2>
+        <p class="sub" style="margin-top:14px">Every call answered in under 2 seconds — orders, upsells, and modifications, handled like your best employee.</p>
+      </div>
+      <div class="col r tilt anim">
+        <div class="shot" data-tilt><img src="./phone.jpg" alt="Meridian phone orders dashboard" loading="eager">
+          <div class="chip" style="top:11%;left:3%"><div class="v t">63%</div><div class="l">Conversion</div></div>
+          <div class="chip" style="bottom:13%;right:3%;animation-delay:1.5s"><div class="v g">$3,695</div><div class="l">Revenue · 30d</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 TEXT TO PAY -->
+  <section class="slide">
+    <div class="stage">
+      <div class="col anim">
+        <div class="kick">Text-to-pay</div>
+        <h2>Order placed.<br><span class="grad">Link sent. Paid.</span></h2>
+        <p class="sub" style="margin-top:14px">The moment the order is confirmed, the customer gets a secure SMS link. They tap, pay, done — the kitchen only ever sees a paid order.</p>
+      </div>
+      <div class="col r anim" style="display:flex;justify-content:center">
+        <div class="sms">
+          <div class="b ai r">Thanks for calling! That's 1 large pepperoni + a Coke — <b>$24.50</b> 📲</div>
+          <div class="b me r">Pay here → <a href="#">meridian.tips/p/4QK2</a></div>
+          <div class="b me r">✅ Paid — sent to the kitchen.</div>
+          <div class="b ai r">See you in 15! 🍕</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 MONEY -->
+  <section class="slide">
+    <div class="stage">
+      <div class="col r tilt anim" style="order:1">
+        <div class="shot" data-tilt><img src="./getpaid.jpg" alt="Meridian get paid money flow" loading="eager">
+          <div class="chip" style="top:13%;right:3%"><div class="v t">$9,831</div><div class="l">You receive</div></div>
+        </div>
+      </div>
+      <div class="col anim" style="order:2">
+        <div class="kick">The money</div>
+        <h2>Keep your<br>processor.</h2>
+        <p class="sub" style="margin-top:14px">Money settles to your own account on your normal payouts. Our fee comes out automatically, per order — nothing to invoice, nothing to chase.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 PRICING DIFFERENTIATOR -->
+  <section class="slide">
+    <div class="kick anim">Why Meridian</div>
+    <h2 class="anim">No % of your sales.<br><span class="grad">Just a flat fee.</span></h2>
+    <p class="sub anim">Competitors skim a percentage of every order. Meridian charges one flat fee per order — deducted automatically, so there's nothing to invoice or chase.</p>
+    <div class="cmp anim">
+      <div class="c">
+        <h4>Typical AI phone services</h4>
+        <div class="it"><span class="x">✕</span> A percentage cut of every order</div>
+        <div class="it"><span class="x">✕</span> Extra fees for more phone lines</div>
+        <div class="it"><span class="x">✕</span> Calls queue up or hit a busy signal</div>
+      </div>
+      <div class="c win">
+        <h4>Meridian</h4>
+        <div class="it"><span class="k">✓</span> One flat fee per order — never a cut of sales</div>
+        <div class="it"><span class="k">✓</span> Auto-deducted from each order's payout</div>
+        <div class="it"><span class="k">✓</span> Unlimited lines — every call answered at once</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 CTA -->
+  <section class="slide">
+    <div class="kick anim">Try it yourself</div>
+    <h1 class="anim">Call it<br><span class="grad">right now.</span></h1>
+    <p class="sub anim">Order out loud like a real customer — the pay link hits your phone in seconds.</p>
+    <a class="cta anim" href="tel:+12368324333"><small>Live AI phone agent</small><b>+1 (236) 832-4333</b></a>
+    <p class="sub anim" style="font-size:14px;margin-top:18px">US line +1 (380) 240-9535 · same agent</p>
+  </section>
+
+</div>
+
+<div class="dots" id="dots"></div>
+<div class="count" id="count"></div>
+
+<script>
+/* ---------- slides ---------- */
+const slides=[...document.querySelectorAll('.slide')];
+let i=0;
+const dotsEl=document.getElementById('dots');
+slides.forEach((_,k)=>{const b=document.createElement('button');b.className='dot';b.onclick=()=>go(k);dotsEl.appendChild(b)});
+const dots=[...document.querySelectorAll('.dot')];
+function render(){
+  slides.forEach((s,k)=>s.classList.toggle('on',k===i));
+  dots.forEach((d,k)=>d.classList.toggle('on',k===i));
+  document.getElementById('bar').style.width=(i/(slides.length-1)*100)+'%';
+  document.getElementById('count').textContent=(i+1)+' / '+slides.length;
+  if(slides[i].querySelector('[data-count]'))countUp(slides[i].querySelector('[data-count]'));
+}
+function go(n){i=Math.max(0,Math.min(slides.length-1,n));render()}
+function next(){go(i+1)} function prev(){go(i-1)}
+addEventListener('keydown',e=>{
+  if(['ArrowRight',' ','PageDown'].includes(e.key)){e.preventDefault();next()}
+  if(['ArrowLeft','PageUp'].includes(e.key)){e.preventDefault();prev()}
+  if(e.key==='Home')go(0);if(e.key==='End')go(slides.length-1);
+});
+let tsx=0;addEventListener('touchstart',e=>tsx=e.touches[0].clientX,{passive:true});
+addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tsx;if(dx<-50)next();if(dx>50)prev()},{passive:true});
+
+/* ---------- count up ---------- */
+function countUp(el){
+  if(el._done)return;el._done=1;
+  const to=+el.dataset.count,pre=el.dataset.prefix||'',suf=el.dataset.suffix||'';let t0=null;
+  function step(t){if(!t0)t0=t;const p=Math.min((t-t0)/1100,1);const e=1-Math.pow(1-p,3);
+    el.textContent=pre+Math.round(to*e).toLocaleString()+suf;if(p<1)requestAnimationFrame(step)}
+  requestAnimationFrame(step);
+}
+
+/* ---------- 3D tilt ---------- */
+document.querySelectorAll('[data-tilt]').forEach(el=>{
+  const p=el.parentElement;
+  p.addEventListener('mousemove',e=>{const r=p.getBoundingClientRect();
+    const x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+    el.style.transform=`rotateY(${x*10}deg) rotateX(${ -y*10}deg) translateZ(20px)`});
+  p.addEventListener('mouseleave',()=>el.style.transform='');
+});
+
+/* ---------- animated background (canvas, no libs) ---------- */
+const cv=document.getElementById('bg'),cx=cv.getContext('2d');let W,H,DPR;
+function size(){DPR=Math.min(devicePixelRatio||1,2);W=cv.width=innerWidth*DPR;H=cv.height=innerHeight*DPR;cv.style.width=innerWidth+'px';cv.style.height=innerHeight+'px'}
+size();addEventListener('resize',size);
+const orbs=[
+  {x:.2,y:.3,r:.5,c:[25,227,198],s:.00006,p:0},
+  {x:.8,y:.25,r:.42,c:[139,92,246],s:.00008,p:2},
+  {x:.65,y:.8,r:.46,c:[15,185,163],s:.00005,p:4},
+];
+const pts=Array.from({length:46},()=>({x:Math.random(),y:Math.random(),vx:(Math.random()-.5)*.0004,vy:(Math.random()-.5)*.0004}));
+function draw(t){
+  cx.clearRect(0,0,W,H);
+  cx.globalCompositeOperation='lighter';
+  orbs.forEach(o=>{const cxp=(o.x+Math.sin(t*o.s+o.p)*.06)*W,cyp=(o.y+Math.cos(t*o.s*1.3+o.p)*.06)*H,rr=o.r*Math.min(W,H);
+    const g=cx.createRadialGradient(cxp,cyp,0,cxp,cyp,rr);
+    g.addColorStop(0,`rgba(${o.c[0]},${o.c[1]},${o.c[2]},.16)`);g.addColorStop(1,'rgba(0,0,0,0)');
+    cx.fillStyle=g;cx.fillRect(0,0,W,H)});
+  // constellation
+  cx.globalCompositeOperation='source-over';
+  pts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>1)p.vx*=-1;if(p.y<0||p.y>1)p.vy*=-1});
+  for(let a=0;a<pts.length;a++){for(let b=a+1;b<pts.length;b++){
+    const dx=(pts[a].x-pts[b].x)*W,dy=(pts[a].y-pts[b].y)*H,d=Math.hypot(dx,dy);
+    if(d<140*DPR){cx.strokeStyle=`rgba(25,227,198,${.10*(1-d/(140*DPR))})`;cx.lineWidth=DPR;
+      cx.beginPath();cx.moveTo(pts[a].x*W,pts[a].y*H);cx.lineTo(pts[b].x*W,pts[b].y*H);cx.stroke()}}}
+  pts.forEach(p=>{cx.fillStyle='rgba(25,227,198,.5)';cx.beginPath();cx.arc(p.x*W,p.y*H,1.3*DPR,0,7);cx.fill()});
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+render();
+</script>
+</body>
+</html>
