@@ -3,9 +3,13 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Optional
-from ..auth import require_service_auth
+from ..auth import require_admin_auth
 
-router = APIRouter(prefix="/api/inference", tags=["inference"], dependencies=[Depends(require_service_auth)])
+# Global/cross-tenant ops (ingest/rebuild/generate/search/stats). No rep or merchant
+# frontend calls these endpoints — they are service/cron/admin only — so the router is
+# admin-locked. require_admin_auth still accepts MERIDIAN_SERVICE_TOKEN and the admin
+# key, so any legitimate automation continues to work.
+router = APIRouter(prefix="/api/inference", tags=["inference"], dependencies=[Depends(require_admin_auth)])
 
 
 class InferenceRequest(BaseModel):

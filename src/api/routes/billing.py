@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 
-from ..auth import require_admin, require_jwt, require_service_auth
+from ..auth import require_admin, require_admin_auth, require_jwt, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.billing.routes")
@@ -197,7 +197,10 @@ async def create_invoice(req: InvoiceRequest):
         raise HTTPException(status_code=500, detail="Invoice creation failed")
 
 
-@router.post("/cancel", dependencies=[Depends(require_service_auth)])
+# No rep/merchant frontend calls /cancel (verified: zero callers in frontend/src).
+# Subscription cancellation is a service/admin operation, so it is admin-locked.
+# require_admin_auth still accepts MERIDIAN_SERVICE_TOKEN + admin key for automation.
+@router.post("/cancel", dependencies=[Depends(require_admin_auth)])
 async def cancel_subscription(req: CancelRequest):
     """Cancel a subscription. Stops future auto-renewals."""
     try:

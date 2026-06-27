@@ -14,7 +14,7 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..auth import require_service_auth
+from ..auth import require_admin_auth, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.portal")
@@ -65,7 +65,10 @@ async def resolve_portal_token(token: str):
     }
 
 
-@router.post("/generate", response_model=PortalTokenResponse, dependencies=[Depends(require_service_auth)])
+# Minting a portal access token for an org is a service/admin operation. The frontend
+# only calls GET /resolve/{token} (token consumption) — never /generate (verified: zero
+# callers in frontend/src). Admin-locked; MERIDIAN_SERVICE_TOKEN + admin key still pass.
+@router.post("/generate", response_model=PortalTokenResponse, dependencies=[Depends(require_admin_auth)])
 async def generate_token(req: GenerateTokenRequest):
     """Generate a unique portal token for a customer org, or return existing one."""
     db = get_db()

@@ -13,7 +13,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_jwt, require_service_auth
+from ..auth import require_admin_auth, require_jwt, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.onboarding")
@@ -97,7 +97,10 @@ async def get_checklist(
     }
 
 
-@router.post("/create-account", response_model=CreateAccountResponse, dependencies=[Depends(require_service_auth)])
+# Raw org + admin-user creation. No rep/merchant frontend calls /create-account (verified:
+# zero callers in frontend/src — reps onboard merchants via /provision-customer, which stays
+# require_service_auth). Admin-locked; MERIDIAN_SERVICE_TOKEN + admin key still pass.
+@router.post("/create-account", response_model=CreateAccountResponse, dependencies=[Depends(require_admin_auth)])
 async def create_account(req: CreateAccountRequest):
     """
     Create a new organization and admin user.
