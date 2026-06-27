@@ -49,6 +49,11 @@ class PhoneConfigRequest(BaseModel):
     order_types: list | None = None
     special_instructions_enabled: bool | None = None
     transfer_number: str | None = None
+    # How the wizard routes confirmed orders: 'pos' | 'webhook' | 'sms' | 'email'.
+    # Persisted to phone_agent_config.order_routing (migration 032). Optional and
+    # back-compat: omitting it leaves the stored value untouched (save_phone_config
+    # only writes non-None fields).
+    order_routing: str | None = None
 
 
 def _validate_merchant_id(merchant_id: str):

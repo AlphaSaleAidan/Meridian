@@ -36,6 +36,8 @@ export interface PhoneConfig {
   order_types?: string[]
   special_instructions_enabled?: boolean
   transfer_number?: string
+  // How confirmed orders are routed, chosen in the setup wizard.
+  order_routing?: 'pos' | 'webhook' | 'sms' | 'email'
 }
 
 export interface PhoneStatsResponse {
