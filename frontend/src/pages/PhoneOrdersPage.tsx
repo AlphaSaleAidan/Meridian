@@ -642,7 +642,7 @@ export default function PhoneOrdersPage() {
             </div>
           </div>
         )}
-        <SetupWizard biz={business} onDone={handleWizardDone} connectedPos={connectedPos} orgId={orgId} />
+        <SetupWizard biz={business} onDone={handleWizardDone} connectedPos={connectedPos} orgId={orgId} existingConfig={phoneConfig?.exists ? phoneConfig : undefined} />
       </div>
     )
   }

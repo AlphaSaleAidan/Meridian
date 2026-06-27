@@ -11,7 +11,7 @@ import {
   VOICE_OPTIONS, DEFAULT_VOICE_SETTINGS,
   type PhoneBizConfig, type VoiceSettings, type PhoneMenuItem,
 } from '@/lib/phone-orders-demo-data'
-import { phoneService, isValidE164 } from '@/lib/phone-service'
+import { phoneService, isValidE164, type PhoneConfig } from '@/lib/phone-service'
 import { api } from '@/lib/api'
 import { posSystems } from '@/data/pos-systems'
 
@@ -40,9 +40,13 @@ interface Props {
   onDone: () => void
   connectedPos: string | null
   orgId: string
+  // Persisted config for this merchant, when editing an existing setup. Used to
+  // hydrate the routing / transfer-number / business-hours fields the wizard
+  // collects but PhoneBizConfig doesn't carry.
+  existingConfig?: PhoneConfig
 }
 
-export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props) {
+export default function SetupWizard({ biz, onDone, connectedPos, orgId, existingConfig }: Props) {
   const [step, setStep] = useState(0)
   const [showTestCall, setShowTestCall] = useState(false)
   const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
@@ -56,10 +60,19 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
     greeting: biz.greeting,
     voice: biz.voice,
     orderTypes: [...biz.orderTypes] as string[],
-    routing: (connectedPos ? 'pos' : 'sms') as 'pos' | 'webhook' | 'sms' | 'email',
+    // Hydrate the saved routing choice when re-opening an existing setup, else
+    // default by whether a POS is connected.
+    routing: (existingConfig?.order_routing ?? (connectedPos ? 'pos' : 'sms')) as 'pos' | 'webhook' | 'sms' | 'email',
     // Human warm-transfer fallback number. Optional; persisted as transfer_number
-    // so the live agent can offer "let me put you through to someone".
-    transferNumber: '',
+    // so the live agent can offer "let me put you through to someone". Hydrated
+    // from the saved value so editing an existing setup shows the real number.
+    transferNumber: existingConfig?.transfer_number ?? '',
+    // Business-hours / after-hours messaging. The wizard has no editor for these
+    // yet, but they are carried through so an edit-and-reactivate round-trips
+    // (rather than wipes) whatever the merchant configured. Read by the live
+    // agent's after-hours gate (phone.py).
+    businessHours: existingConfig?.business_hours ?? undefined as Record<string, string> | undefined,
+    afterHoursMessage: existingConfig?.after_hours_message ?? undefined as string | undefined,
   })
 
   // Editable menu the agent will read back to callers. Seeded from the POS sync
@@ -557,6 +570,12 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId }: Props)
                 order_types: cfg.orderTypes,
                 menu_items: menu.map(m => ({ name: m.name, price: m.price, category: m.category })),
                 transfer_number: transferTrimmed || undefined,
+                order_routing: cfg.routing,
+                // Round-trip business-hours / after-hours config so reactivating
+                // an existing setup preserves it. Omitted when unset (the backend
+                // only writes provided fields, so nothing is wiped).
+                business_hours: cfg.businessHours,
+                after_hours_message: cfg.afterHoursMessage,
                 active: true,
               })
             }
