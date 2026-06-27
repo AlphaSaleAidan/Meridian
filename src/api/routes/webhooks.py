@@ -348,6 +348,31 @@ async def clover_webhook(
     return Response(status_code=200)
 
 
+async def _filter_fresh_clover_events(merchant_id: str, events: list[dict]) -> list[dict]:
+    """Persistent, cross-worker dedupe for a merchant's Clover object-events.
+
+    Clover has no single global event id like Square, so we derive a STABLE
+    per-change key `clover:{merchantId}:{objectId}:{ts}` (one key per object
+    change) and record it in the SAME `webhook_events` table used by Square —
+    with provider='clover' — via the shared module `processor`. Events already
+    recorded are dropped; only the fresh ones are returned for processing.
+
+    Fails OPEN exactly like Square: a DB hiccup degrades to in-process dedupe
+    (or processes the event) rather than crashing the webhook. Events with no
+    objectId can't be keyed, so they're kept (processed).
+    """
+    fresh: list[dict] = []
+    for ev in events:
+        object_id = ev.get("objectId", "")
+        ts = ev.get("ts", "")
+        event_key = f"clover:{merchant_id}:{object_id}:{ts}"
+        if object_id and await processor.is_duplicate(event_key, provider="clover"):
+            logger.info(f"Duplicate Clover event {event_key} — skipping")
+            continue
+        fresh.append(ev)
+    return fresh
+
+
 async def _process_clover_webhook(merchants: dict):
     """Process Clover webhook events asynchronously."""
     from ...clover.webhook_handlers import CloverWebhookProcessor
@@ -362,13 +387,19 @@ async def _process_clover_webhook(merchants: dict):
     )
 
     for merchant_id, events in merchants.items():
+        # Persistent cross-worker dedupe: only process object-events we haven't
+        # already recorded (mirrors Square's webhook_events dedupe).
+        fresh_events = await _filter_fresh_clover_events(merchant_id, events)
+        if not fresh_events:
+            continue
+
         connection = await _get_connection_by_provider_merchant("clover", merchant_id)
-        if not connection and events:
+        if not connection:
             logger.warning(f"No Clover connection for merchant {merchant_id}")
             continue
 
         try:
-            results = await clover_processor.handle(merchant_id, events, connection)
+            results = await clover_processor.handle(merchant_id, fresh_events, connection)
             logger.info(f"Clover webhook for {merchant_id}: {len(results)} events processed")
             if connection:
                 from ...db.cache import dashboard_cache
@@ -413,6 +444,15 @@ async def toast_webhook(
 
     event_type = event.get("eventType", "unknown")
     restaurant_guid = event.get("restaurantGuid", "")
+
+    # ── Idempotency check ─────────────────────────────────
+    # Toast carries a unique `webhookId` per delivery; key the shared
+    # webhook_events table on `toast:{webhookId}` (provider='toast') for
+    # persistent cross-worker dedupe, reusing the Square machinery. Fail-open.
+    webhook_id = event.get("webhookId", "")
+    if webhook_id and await processor.is_duplicate(f"toast:{webhook_id}", provider="toast"):
+        logger.info(f"Duplicate Toast webhook webhookId={webhook_id} — skipping")
+        return Response(status_code=200)
 
     logger.info(f"Toast webhook: {event_type} (restaurant={restaurant_guid})")
 
