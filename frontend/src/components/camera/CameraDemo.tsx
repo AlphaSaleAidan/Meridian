@@ -47,8 +47,19 @@ export default function CameraDemo() {
     const poly = (pts: number[][], X: (n: number) => number, Y: (n: number) => number, stroke: string, fill: string) => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]) }
     const grade = data.summary.staff[0]?.grade ?? ''
     const fps = data.summary.fps
-    const draw = () => {
+    // --- Smoothing layer -------------------------------------------------
+    // The clip data is keyframed at 24fps; drawing it raw makes boxes teleport on
+    // any frame-skip and makes labels/counters flicker frame-to-frame. We keep a
+    // per-id "rendered" state and ease it toward the current keyframe each rAF:
+    // positions/size glide, confidence is damped, and boxes fade in/out instead of
+    // popping. Frame-rate independent via exponential smoothing on dt.
+    type RBox = { x: number; y: number; w: number; h: number; conf: number; op: number; live: boolean }
+    const rboxes = new Map<number, RBox>()
+    const ease = (cur: number, target: number, dt: number, tc: number) => cur + (target - cur) * (1 - Math.exp(-dt / tc))
+    let occSmooth = -1, lastOccEmit = 0, last = 0
+    const draw = (now: number) => {
       raf = requestAnimationFrame(draw)
+      const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016; last = now
       // Assigning canvas.width/height flushes the bitmap + resets all ctx state, so
       // only do it on an actual resize; clearRect handles the per-frame wipe.
       if (cv.width !== cv.clientWidth) cv.width = cv.clientWidth
@@ -56,17 +67,35 @@ export default function CameraDemo() {
       const w = cv.width, h = cv.height; ctx.clearRect(0, 0, w, h)
       const X = (n: number) => n * w, Y = (n: number) => n * h
       const k = Math.min(data.frames.length - 1, Math.round(vid.currentTime * fps) % data.frames.length)
-      const fr = data.frames[k]; setOcc(prev => prev === fr.boxes.length ? prev : fr.boxes.length)
+      const fr = data.frames[k]
+      // Ease + throttle the "in frame" counter so it reads as a calm live number
+      // rather than flipping 10↔14 every animation frame.
+      occSmooth = occSmooth < 0 ? fr.boxes.length : ease(occSmooth, fr.boxes.length, dt, 0.6)
+      if (now - lastOccEmit > 1100) { lastOccEmit = now; const v = Math.round(occSmooth); setOcc(prev => prev === v ? prev : v) }
+      // Reconcile rendered boxes against this keyframe's targets.
+      rboxes.forEach(r => { r.live = false })
+      fr.boxes.forEach(b => {
+        let r = rboxes.get(b.id)
+        if (!r) { r = { x: b.x, y: b.y, w: b.w, h: b.h, conf: b.conf, op: 0, live: true }; rboxes.set(b.id, r) }
+        r.live = true
+        r.x = ease(r.x, b.x, dt, 0.07); r.y = ease(r.y, b.y, dt, 0.07)
+        r.w = ease(r.w, b.w, dt, 0.07); r.h = ease(r.h, b.h, dt, 0.07)
+        r.conf = ease(r.conf, b.conf, dt, 0.45)
+        r.op = ease(r.op, 1, dt, 0.12)
+      })
+      rboxes.forEach((r, id) => { if (!r.live) { r.op = ease(r.op, 0, dt, 0.14); if (r.op < 0.02) rboxes.delete(id) } })
       if (layers.heatmap) for (let r = 0; r < heat.rows; r++) for (let q = 0; q < heat.cols; q++) { const v = heat.g[r][q] / heat.mx; if (v > .05) { ctx.fillStyle = `rgba(240,140,70,${Math.min(.5, v * .7)})`; ctx.fillRect(q * w / heat.cols, r * h / heat.rows, w / heat.cols, h / heat.rows) } }
       if (layers.zones) { poly(data.summary.zones.staff, X, Y, 'rgba(23,197,176,.9)', 'rgba(23,197,176,.10)'); poly(data.summary.zones.bar_front, X, Y, 'rgba(26,143,214,.9)', 'rgba(26,143,214,.08)'); pill(X(data.summary.zones.staff[0][0]), Y(data.summary.zones.staff[0][1]), 'Staff zone', '#17C5B0', '#04211c') }
       if (layers.journey) { ctx.strokeStyle = 'rgba(26,143,214,.8)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; const hist: Record<number, number[][]> = {}; for (let j = Math.max(0, k - 26); j <= k; j++) data.frames[j].boxes.forEach(b => { (hist[b.id] = hist[b.id] || []).push([b.x + b.w / 2, b.y + b.h]) }); Object.values(hist).forEach(tr => { if (tr.length < 2) return; ctx.beginPath(); tr.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke() }) }
-      fr.boxes.forEach(b => {
-        const isStaff = staffIds.current.has(b.id), x = X(b.x), y = Y(b.y), bw = X(b.w), bh = Y(b.h)
-        if (layers.staff && isStaff) { ctx.save(); ctx.shadowColor = 'rgba(23,197,176,.7)'; ctx.shadowBlur = 10; ctx.strokeStyle = '#17C5B0'; ctx.lineWidth = 3; rr(x, y, bw, bh, 6); ctx.stroke(); ctx.restore(); pill(x, y - 4, (STAFF_NAMES[b.id] || ('STAFF #' + b.id)) + (grade ? ' · ' + grade : ''), '#17C5B0', '#04211c') }
-        else if (layers.detections) { ctx.save(); ctx.shadowColor = 'rgba(240,179,91,.45)'; ctx.shadowBlur = 5; ctx.strokeStyle = '#F0B35B'; ctx.lineWidth = 2; rr(x, y, bw, bh, 5); ctx.stroke(); ctx.restore(); if (!layers.pos_xref && !layers.identity) pill(x, y - 4, (b.conf * 100 | 0) + '%', 'rgba(0,0,0,.5)', '#F0B35B') }
-        if (layers.identity && !isStaff) pill(x, y + bh + 20, '#' + b.id, '#9B7FD4', '#fff')
-        if (layers.pos_xref && !isStaff && b.id % 4 === 0) pill(x, y - 4, '✓ $' + (18 + b.id % 30) + ' · ' + (1 + b.id % 4), '#17C5B0', '#04211c')
+      rboxes.forEach((r, id) => {
+        const isStaff = staffIds.current.has(id), x = X(r.x), y = Y(r.y), bw = X(r.w), bh = Y(r.h)
+        ctx.globalAlpha = r.op < 0 ? 0 : r.op > 1 ? 1 : r.op
+        if (layers.staff && isStaff) { ctx.save(); ctx.shadowColor = 'rgba(23,197,176,.7)'; ctx.shadowBlur = 10; ctx.strokeStyle = '#17C5B0'; ctx.lineWidth = 3; rr(x, y, bw, bh, 6); ctx.stroke(); ctx.restore(); pill(x, y - 4, (STAFF_NAMES[id] || ('STAFF #' + id)) + (grade ? ' · ' + grade : ''), '#17C5B0', '#04211c') }
+        else if (layers.detections) { ctx.save(); ctx.shadowColor = 'rgba(240,179,91,.45)'; ctx.shadowBlur = 5; ctx.strokeStyle = '#F0B35B'; ctx.lineWidth = 2; rr(x, y, bw, bh, 5); ctx.stroke(); ctx.restore(); if (!layers.pos_xref && !layers.identity) pill(x, y - 4, Math.round(r.conf * 100) + '%', 'rgba(0,0,0,.5)', '#F0B35B') }
+        if (layers.identity && !isStaff) pill(x, y + bh + 20, '#' + id, '#9B7FD4', '#fff')
+        if (layers.pos_xref && !isStaff && id % 4 === 0) pill(x, y - 4, '✓ $' + (18 + id % 30) + ' · ' + (1 + id % 4), '#17C5B0', '#04211c')
       })
+      ctx.globalAlpha = 1
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
