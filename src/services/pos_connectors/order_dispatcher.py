@@ -86,8 +86,18 @@ async def _fallback_order(
             sent_via = "email"
 
     if not sent_via:
-        sent_via = "queued"
-        logger.info(f"[{system_key}] Order {order_id} queued for manual processing")
+        # Nothing actually delivered the order (no API, no merchant SMS/email).
+        # "queued" was a log line with no real queue — report FAILURE so callers
+        # don't confirm an order that vanished. SMS/email paths still succeed.
+        logger.error(f"[{system_key}] Order {order_id} NOT delivered (no API, no SMS/email) — failing")
+        return OrderResult(
+            success=False,
+            order_id=order_id,
+            pos_system=system_key,
+            fallback_used=True,
+            fallback_reason="Undelivered: no POS API and no merchant phone/email on file",
+            raw_response={"delivery_method": "none", "message": message},
+        )
 
     return OrderResult(
         success=True,
