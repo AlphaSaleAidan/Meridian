@@ -27,6 +27,26 @@ holding the (public, frontend-embedded) **anon key** — an anonymous exposure, 
 - **UP:** `phone_agent_config` / `phone_orders` / `phone_call_logs` / `schedule_*` — **anonymous read exposure
   of POS credentials + customer PII** with the public anon key. This is the single most urgent live finding.
 
+## Secondary RLS findings — also verified live (most file-based findings were OVERSTATED)
+| Item (file-based concern) | Live truth | Verdict |
+|---|---|---|
+| `get_user_org_id()` undefined | **defined in prod** (`pg_proc`) | ✅ not an issue |
+| `transactions` exposed | RLS on; `SELECT USING (org_id = get_user_org_id())` | ✅ org-scoped |
+| `subscriptions` | RLS on; `org_id = get_user_org_id()` (+ owner role for writes) | ✅ org-scoped |
+| `pos_connections` (POS tokens) | RLS on, 3 policies, **no anon grant** | ✅ protected |
+| `access_tokens` / `login_attempts` (file said "no RLS") | RLS on with policies (`created_by = auth.uid()` / `id = auth.uid()`) | ✅ has RLS |
+| `square_/clover_/toast_transactions` | **not present in prod** (phase-2 cutover unapplied) | n/a |
+| `cline_*` / `merchant_health` | RLS on, org-scoped (the `business_id = auth.uid()` quirk is a *functionality* edge, not exposure) | 🟡 low |
+
+**Defense-in-depth observation (currently safe, fragile):** many tables (`transactions`, `subscriptions`,
+`cline_*`, `merchant_health`, `access_tokens`, `login_attempts`) grant `SELECT` to **`anon`**. This is safe
+*only* because their RLS is org-scoped (anon's `auth.uid()`/`get_user_org_id()` is null → 0 rows). Recommend
+revoking `anon SELECT` where anon access isn't needed, so security doesn't rest solely on every policy staying
+org-scoped. Lower priority than the phone_/schedule_ fix.
+
+**Net: the only confirmed LIVE RLS exposures are `phone_*` and `schedule_*`.** Financial + PII + POS-token
+tables are properly isolated in prod.
+
 ## Remediation scope (authored, NOT applied — needs Aidan review + DB snapshot)
 `fix_rls_wideopen.sql` is rescoped to the **actually-open** tables (phone_*, schedule_*): drop `USING(true)`,
 add `TO service_role`, and **`REVOKE SELECT ON … FROM anon, authenticated`** (the grant is the actual exposure

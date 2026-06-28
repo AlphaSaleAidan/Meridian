@@ -27,12 +27,12 @@ observation window has not started. A criterion is **not** counted as "ready" un
 
 | Scope | Type I design readiness | Notes |
 |---|---|---|
-| **Security (CC1–CC9)** | **~46%** | Strong change-mgmt & auth foundations; RLS + BOLA + MFA are the holes. |
+| **Security (CC1–CC9)** | **~50%** | R0 raised confidence: financial/PII/biometric/POS-token tables confirmed org-scoped in prod. Open: phone_/schedule_ anon exposure, rep-BOLA model, MFA. |
 | **Availability (A1)** | **~50%** | Backups/archive exist; no tested restore, no DR plan, Contabo SPOF. |
 | **Confidentiality (C1)** | **~45%** | Encryption strong; classification informal; secure-disposal-on-termination unimplemented. |
 | **Processing Integrity (PI1)** | **~40%** | Square reconciliation exists; Clover/Toast none; mismatches log-only. |
 | **Privacy (P1–P8)** | **~48%** | Rich CASL/consent/DSAR intake; deletion automation + resale disclosure are the gaps. |
-| **WEIGHTED OVERALL** | **≈ 46%** | Honest mid-point: good bones, several critical access + privacy gaps before Type I is credible. |
+| **WEIGHTED OVERALL** | **≈ 48%** | Good bones; R0 confirmed the core data is isolated. Remaining critical: phone_/schedule_ anon RLS exposure, rep-BOLA model, PCI/Twilio, privacy resale-disclosure. |
 
 **Headline:** Meridian is roughly **halfway** to Type-I readiness. Two CRITICAL access-control gaps
 (RLS `USING(true)`, C1 BOLA) and the PCI/Twilio finding must close before any auditor accepts the system for
@@ -75,14 +75,15 @@ examination. None require new architecture — the patterns to fix them already 
 |---|---|---|---|---|---|
 | Segregation of duties | Impossible solo | Must document compensating controls | Named in `/controls/CC5-SOD-COMPENSATING.md`: immutable git, mandatory PR review, CI gate, tamper-evident logs | Aidan | 🟢 authored |
 
-### CC6 — Logical & Physical Access — **40%** *(the heavy block)*
+### CC6 — Logical & Physical Access — **48%** *(the heavy block; R0 raised it from 40%)*
 | Item | State | Gap | Remediation | Owner | Status |
 |---|---|---|---|---|---|
 | **RLS least-privilege (LIVE, R0-confirmed)** | `phone_agent_config` (holds `pos_access_token`), `phone_orders`, `phone_call_logs`, `schedule_*` are `USING(true)` **+ `SELECT` granted to `anon`+`authenticated`** → readable with the public anon key (`evidence/CC6.1-RLS/pg_policies_live_20260628.md`) | **CRITICAL — anonymous exposure** | Drop `USING(true)`, add `TO service_role`, **`REVOKE SELECT FROM anon, authenticated`** | Aidan | 🔴 migration authored `/evidence/CC6.1-RLS/fix_rls_wideopen.sql`, **not applied** |
 | Camera RLS (`vision_*`) | **R0: org-scoped in PROD** (member-isolation live) — but fix migration + denial test **absent from main** | MEDIUM — config drift / regression risk | Backport live policy into a migration on main; restore CI denial test | Aidan | 🟡 not a live exposure |
 | **Tenant isolation (API)** | Body-`org_id` bypass remediated (`auth.py:142-225`). Merchant routes (`phone_dashboard`/`schedule`/`website`/`intelligence`/`pos`/`stripe_connect`) **already enforce membership**. **Refined (R2 triage):** the remaining BOLA surface is rep-portal `billing/*` + `onboarding/*` that authorize "any logged-in user" — member-check is the WRONG fix (breaks reps) | **HIGH (C1) — needs rep-auth model** | Define rep↔org authorization (DECISION); add `require_rep_for_org`; see `evidence/CC6.1-TENANT/bola_triage.md` | Aidan | 🟡 R2 — model decision pending |
-| `get_user_org_id()` | Called in `benchmark_snapshots` RLS (`20260501_006:30`) but **never defined** | HIGH — policy errors/denies | Define the function or rewrite policy | Aidan | ⬜ |
-| `cline_*`/`merchant_health` RLS | `business_id = auth.uid()` never matches | MEDIUM — silent deny | Correct to membership lookup | Aidan | ⬜ |
+| `get_user_org_id()` | **R0: defined in prod** (file finding wrong); `transactions`/`subscriptions`/`access_tokens`/`login_attempts`/`pos_connections` all org-scoped live | ✅ cleared | — | — | 🟢 verified safe |
+| `cline_*`/`merchant_health` RLS | RLS on, org-scoped live; `business_id = auth.uid()` is a functionality quirk, not exposure | LOW | tidy when convenient | Aidan | 🟡 |
+| anon `SELECT` grants (defense-in-depth) | Many tables grant `SELECT` to `anon`; safe only because RLS is org-scoped | LOW (fragile) | revoke anon SELECT where unneeded | Aidan | ⬜ |
 | MFA | **No technical enforcement** anywhere | HIGH (CC6.1) | Enable + evidence MFA on Supabase/Railway/GitHub/Cloudflare consoles | Aidan (human) | 🚩 org control |
 | Admin allowlist | `ADMIN_EMAILS` **hardcoded** in `auth.py:25-31` | MEDIUM — no audit trail, deploy-to-change | Move to DB-managed roles w/ RLS | Aidan | ⬜ |
 | Encryption (transit) | Railway/Cloudflare TLS + HSTS (`security_headers.py:13`) | RTSP edge unencrypted; CSP `unsafe-inline/eval` | RTSPS/VPN decision; CSP hardening | Aidan | 🟡 |
