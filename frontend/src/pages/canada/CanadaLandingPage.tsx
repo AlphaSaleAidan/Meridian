@@ -11,6 +11,7 @@ import ScrollReveal from '@/components/landing/ScrollReveal'
 import MagneticButton from '@/components/landing/MagneticButton'
 import CountUp from '@/components/landing/CountUp'
 import BentoGrid from '@/components/landing/CanadaBentoGrid'
+import ScheduleQuote from '@/components/landing/ScheduleQuote'
 
 const MeshGradient = lazy(() => import('@/components/landing/MeshGradient'))
 
@@ -61,7 +62,7 @@ export default function CanadaLandingPage() {
     <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
       <SEO
         title="Meridian Intelligence Canada — AI-Powered POS Analytics | CAD Pricing"
-        description="AI analytics for Canadian restaurants, cafes, and retail. Connect Square, Moneris, or Clover. Built for PIPEDA and Quebec Law 25. Starting at CA$339/month."
+        description="AI analytics for Canadian restaurants, cafes, and retail. Connect Square, Moneris, or Clover. Built for PIPEDA and Quebec Law 25. Schedule a quote — plans from CA$350/mo."
         path="/canada"
       />
       <GrainOverlay />
@@ -307,6 +308,14 @@ export default function CanadaLandingPage() {
           </div>
         </div>
       </section>
+
+      {/* SCHEDULE A QUOTE */}
+      <ScheduleQuote
+        accent="#1A8FD6"
+        accentSecondary="#17C5B0"
+        source="canada-landing"
+        priceNote="Plans from CA$350/mo · billed in CAD"
+      />
 
       {/* CANADIAN COMPLIANCE */}
       <section className="py-24 border-t border-[#1F1F23]/40 relative overflow-hidden">
