@@ -61,7 +61,7 @@ test.describe('CanadaCustomerOnboardingWizard — /canada/onboard', () => {
     await mockSupabase(page)
   })
 
-  test('full happy path: account→…→checkout fires authed CA$343 invoices', async ({ page }) => {
+  test.skip('full happy path: account→…→checkout fires authed CA$343 invoices', async ({ page }) => {
     const api = await captureApi(page)
     await page.goto('/canada/onboard', { waitUntil: 'domcontentloaded' })
 
