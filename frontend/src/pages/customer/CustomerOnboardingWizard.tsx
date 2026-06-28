@@ -419,16 +419,20 @@ export default function CustomerOnboardingWizard() {
     if (staffMembers.length > 0 && supabase && org) {
       setSaving(true)
       try {
+        // Write to schedule_staff — the staff roster the Schedule feature reads
+        // from. merchant_id (not org_id) is the tenant key and hourly_rate is
+        // stored in cents, matching the AddStaffModal / schedule API.
         const rows = staffMembers
           .filter(m => m.name.trim())
           .map(m => ({
-            org_id: org.org_id,
+            merchant_id: org.org_id,
+            portal_context: 'us',
             name: m.name,
             role: m.role || 'Staff',
-            hourly_rate: m.hourlyRate ? parseFloat(m.hourlyRate) : null,
+            hourly_rate: m.hourlyRate ? Math.round(parseFloat(m.hourlyRate) * 100) : 0,
           }))
         if (rows.length > 0) {
-          await supabase.from('users').insert(rows)
+          await supabase.from('schedule_staff').insert(rows)
         }
       } catch (err) { console.warn('Staff save warning:', err) }
       finally { setSaving(false) }
@@ -1077,15 +1081,17 @@ export default function CustomerOnboardingWizard() {
                         <CheckCircle2 size={16} /> Setup Fee Paid
                       </div>
                     ) : !prefill.setupFeeUrl ? (
-                      <button onClick={() => { setSetupFeePaid(true) }}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3.5 text-[14px] font-semibold text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-colors">
-                        <CreditCard size={16} /> Pay Setup Fee — ${setupFee}.00
-                      </button>
+                      <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[12px] flex items-start gap-2">
+                        <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                        <div>
+                          <p className="font-medium">Setup fee payment unavailable</p>
+                          <p className="text-red-400/80 mt-0.5">
+                            A ${setupFee} setup fee is required, but the secure payment link could not be generated.
+                            Please contact your Meridian rep to complete this charge — we can't mark it paid without a real payment.
+                          </p>
+                        </div>
+                      </div>
                     ) : null}
-
-                    {setupFeePaid && !prefill.setupFeeUrl && (
-                      <p className="text-[10px] text-center text-[#A1A1A8]/60">Setup fee confirmed — now pay your subscription below</p>
-                    )}
                   </div>
                 )}
 

@@ -500,6 +500,11 @@ export default function CanadaPortalCreateCustomerPage() {
   const [checkoutSessionId, setCheckoutSessionId] = useState('')
   const [copiedCheckout, setCopiedCheckout] = useState(false)
 
+  // One org id for the whole customer record — generated once so the
+  // create-checkout payment and the provision-customer account reconcile
+  // (a payment must belong to the org we actually provision).
+  const [orgId] = useState(() => uuid())
+
   const [form, setForm] = useState({
     businessName: searchParams.get('name') || '',
     ownerName: searchParams.get('contact') || '',
@@ -582,9 +587,8 @@ export default function CanadaPortalCreateCustomerPage() {
     setCreatingCheckout(true)
     setError(null)
     try {
-      const tempOrgId = uuid()
       const body = {
-        org_id: tempOrgId,
+        org_id: orgId,
         plan: form.plan,
         monthly_price_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
         setup_fee_cents: setupFee * 100,
@@ -634,7 +638,6 @@ export default function CanadaPortalCreateCustomerPage() {
         throw new Error('Customer email is required to create their login')
       }
 
-      const businessId = uuid()
       const token = generateToken()
       const apiUrl = import.meta.env.VITE_API_URL || ''
 
@@ -649,7 +652,7 @@ export default function CanadaPortalCreateCustomerPage() {
           headers: authHeaders,
           signal: controller.signal,
           body: JSON.stringify({
-            org_id: businessId,
+            org_id: orgId,
             email: form.email,
             phone: form.phone || null,
             owner_name: form.ownerName,
@@ -696,7 +699,7 @@ export default function CanadaPortalCreateCustomerPage() {
             vertical: form.vertical || '',
             stage: 'closed_won',
             monthly_value: price,
-            commission_rate: rep?.commission_rate || 70,
+            commission_rate: rep?.commission_rate ?? 70,
             notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
             rep_id: rep?.rep_id || null,
           })

@@ -254,16 +254,18 @@ export default function USCustomerOnboardingWizard() {
       })
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}))
-        // Soft-fail: log the failure but let the customer continue so they're
-        // not stranded mid-onboarding. The rep portal will surface the missing
-        // signature for follow-up.
+        // Do NOT proceed on a failed SLA write — a signature silently vanishing
+        // is a compliance problem. Surface the error and keep the customer on
+        // this step so they can retry.
         console.error('[SLA] persistence failed:', body)
+        setError(body.detail || body.message || 'We could not save your signed agreement. Please try again — if it keeps failing, contact your Meridian rep.')
+        return
       }
       setStep('pos')
     } catch (err: any) {
       console.error('[SLA] error:', err)
-      // Soft-fail same as above — customer continues.
-      setStep('pos')
+      // Block on a failed SLA write — see above.
+      setError(err?.message || 'We could not save your signed agreement. Please check your connection and try again.')
     } finally {
       setSaving(false)
     }
