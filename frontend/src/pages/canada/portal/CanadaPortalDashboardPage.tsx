@@ -60,7 +60,7 @@ function isWithin30Days(dateStr: string): boolean {
   return diffMs <= 30 * 24 * 60 * 60 * 1000
 }
 
-const KANBAN_STAGES: DealStage[] = ['proposal_shown', 'customer_checkout', 'pos_connected']
+const KANBAN_STAGES: DealStage[] = ['proposal_shown', 'customer_checkout', 'customer_walkthrough']
 const MONTH1_MRR_GOAL = 2025
 
 export default function CanadaPortalDashboardPage() {
@@ -160,8 +160,8 @@ export default function CanadaPortalDashboardPage() {
                 <CheckCircle2 size={14} className="text-pm-accent" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">3. Connect a customer</p>
-                <p className="text-xs text-pm-canada-text-muted mt-0.5">Walk your customer through POS setup to activate their dashboard.</p>
+                <p className="text-sm font-semibold text-white">3. Activate your customer</p>
+                <p className="text-xs text-pm-canada-text-muted mt-0.5">Send your customer their login and guide them through the Meridian onboarding to activate their account.</p>
               </div>
             </div>
           </div>

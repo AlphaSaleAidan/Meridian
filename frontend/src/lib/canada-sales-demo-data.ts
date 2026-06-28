@@ -295,7 +295,7 @@ const STAGE_CHECKOUT: StageConfig = {
   textClass: 'text-pm-amber-orange', dotClass: 'bg-pm-amber-orange', softBgClass: 'bg-pm-amber-orange/10',
 }
 const STAGE_POS: StageConfig = {
-  label: 'POS Connected', color: '#F97316', bg: '#F97316/10', border: '#F97316/20',
+  label: 'Active', color: '#F97316', bg: '#F97316/10', border: '#F97316/20',
   textClass: 'text-[#f97316]', dotClass: 'bg-[#f97316]', softBgClass: 'bg-[#f97316]/10',
 }
 const STAGE_WALKTHROUGH: StageConfig = {

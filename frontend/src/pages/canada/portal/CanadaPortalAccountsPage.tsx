@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Wifi, Calendar, ChevronRight, RefreshCw, AlertTriangle, CreditCard, Loader2, Send } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Users, DollarSign, TrendingUp, BarChart3, Search, CheckCircle2, Calendar, ChevronRight, RefreshCw, AlertTriangle, CreditCard, Loader2, Send } from 'lucide-react'
 import { deriveClientsFromLeads, type SalesClient } from '@/lib/canada-sales-demo-data'
 import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -40,27 +40,6 @@ export default function CanadaPortalAccountsPage() {
   const clients: SalesClient[] = useMemo(() => deriveClientsFromLeads(deals), [deals])
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [syncingId, setSyncingId] = useState<string | null>(null)
-  // P2: per-client live POS connection state. Key = client.id, value
-  // = a tagged union: 'none' (org has no pos_connections row),
-  // 'error' (the fetch itself errored), or 'connected' (the first row
-  // from GET /api/pos/connections/{org_id}). Lazy-fetched on
-  // expansion so we don't hammer the API for a long list. Sweep §2.6:
-  // the old shape collapsed 'none' and 'error' to `null`, hiding
-  // backend failures behind a "Not connected" badge.
-  type PosConn = {
-    provider: string | null
-    status: string | null
-    last_sync_at: string | null
-    historical_import_complete: boolean
-  }
-  type PosConnState =
-    | { kind: 'none' }
-    | { kind: 'error' }
-    | { kind: 'connected'; conn: PosConn }
-  const [posByClient, setPosByClient] = useState<Record<string, PosConnState | undefined>>({})
-  const getConn = (s: PosConnState | undefined): PosConn | null =>
-    s?.kind === 'connected' ? s.conn : null
   const [billingStatuses, setBillingStatuses] = useState<Record<string, BillingStatus>>({})
   const [notifyingId, setNotifyingId] = useState<string | null>(null)
   const [notifiedIds, setNotifiedIds] = useState<Set<string>>(new Set())
@@ -107,84 +86,6 @@ export default function CanadaPortalAccountsPage() {
       toast('Failed to send notification', 'error')
     }
     setNotifyingId(null)
-  }
-
-  // P2: lazy fetch the live POS connection for a client when its tile
-  // is expanded. Stores a tagged state in posByClient[client.id] —
-  // 'none' (org has no pos_connections row), 'error' (fetch failed),
-  // or 'connected' (first row from /api/pos/connections/{org_id}).
-  // Auth headers carry the rep's Supabase JWT; backend
-  // `require_org_access` enforces tenancy.
-  async function fetchPosConnection(clientId: string) {
-    if (posByClient[clientId] !== undefined) return
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(
-        `${API_BASE}/api/pos/connections/${clientId}`,
-        { headers },
-      )
-      if (!res.ok) {
-        setPosByClient(prev => ({ ...prev, [clientId]: { kind: 'error' } }))
-        return
-      }
-      const data = await res.json()
-      const conn = (data?.connections || [])[0] || null
-      setPosByClient(prev => ({
-        ...prev,
-        [clientId]: conn
-          ? { kind: 'connected', conn: {
-              provider: conn.provider || null,
-              status: conn.status || null,
-              last_sync_at: conn.last_sync_at || null,
-              historical_import_complete: !!conn.historical_import_complete,
-            } }
-          : { kind: 'none' },
-      }))
-    } catch {
-      setPosByClient(prev => ({ ...prev, [clientId]: { kind: 'error' } }))
-    }
-  }
-
-  useEffect(() => {
-    if (expandedId) fetchPosConnection(expandedId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandedId])
-
-  // P2: real Sync POS handler. POSTs /api/pos/sync/{org_id}/{provider}
-  // and re-fetches the connection so last_sync_at refreshes. No
-  // setTimeout fakery — the button reflects actual server state.
-  async function handleSyncPos(client: SalesClient) {
-    const conn = getConn(posByClient[client.id])
-    const provider = conn?.provider
-    if (!provider) {
-      toast('No connected POS — nothing to sync.', 'error')
-      return
-    }
-    setSyncingId(client.id)
-    try {
-      const headers = await getAuthHeaders()
-      const res = await fetch(
-        `${API_BASE}/api/pos/sync/${client.id}/${provider}`,
-        { method: 'POST', headers },
-      )
-      if (!res.ok) {
-        toast('Sync failed — see backend logs.', 'error')
-      } else {
-        toast('Sync started.', 'success')
-        // Re-fetch the connection a moment later so the displayed
-        // last_sync_at reflects the new sync attempt. The backend
-        // updates last_sync_at on the connection row when the
-        // background sync completes; this refresh shows the change.
-        setTimeout(() => {
-          setPosByClient(prev => { const next = { ...prev }; delete next[client.id]; return next })
-          fetchPosConnection(client.id)
-        }, 1500)
-      }
-    } catch {
-      toast('Could not reach the server.', 'error')
-    } finally {
-      setSyncingId(null)
-    }
   }
 
   async function sendCardUpdate(client: SalesClient) {
@@ -323,18 +224,14 @@ export default function CanadaPortalAccountsPage() {
                     <p className="text-xs text-pm-canada-text-muted">{client.contact_name}</p>
                   </div>
 
-                  {/* POS Badge — P2: live from pos_connections when
-                      we've fetched it (i.e. tile was expanded once),
-                      falls back to canada_leads-derived selection
-                      until first fetch lands. The fallback is honest:
-                      lead's recorded selection is what we have to
-                      show before talking to the backend. */}
-                  <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-pm-canada-border border border-pm-canada-border">
-                    <Wifi size={10} className="text-pm-canada-text-muted" />
-                    <span className="text-2xs text-pm-canada-text-muted font-medium capitalize">
-                      {getConn(posByClient[client.id])?.provider || client.pos_provider || 'N/A'}
-                    </span>
-                  </div>
+                  {/* Read-only sync status: reps see whether the customer has
+                      connected — but cannot trigger or manage the POS connection. */}
+                  {client.is_active && (
+                    <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-pm-accent/10 border border-pm-accent/20">
+                      <CheckCircle2 size={10} className="text-pm-accent" />
+                      <span className="text-2xs text-pm-accent font-medium">Synced successfully ✓</span>
+                    </div>
+                  )}
 
                   {/* Revenue Badge */}
                   <div className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-pm-accent/10 border border-pm-accent/20">
@@ -400,7 +297,7 @@ export default function CanadaPortalAccountsPage() {
                   </div>
 
                   {/* Inline Stats Row */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
                       <p className="text-2xs text-pm-canada-text-faint">Revenue / Plan</p>
                       <p className="text-xs font-semibold text-white">{formatCurrency(client.monthly_revenue)} <span className="text-pm-canada-text-muted capitalize">({client.plan})</span></p>
@@ -408,18 +305,6 @@ export default function CanadaPortalAccountsPage() {
                     <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
                       <p className="text-2xs text-pm-canada-text-faint">Next Billing</p>
                       <p className="text-xs font-semibold text-white">{formatDate(nextBilling)}</p>
-                    </div>
-                    <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
-                      <p className="text-2xs text-pm-canada-text-faint">POS System</p>
-                      <p className="text-xs font-semibold text-white capitalize">
-                        {(() => {
-                          const s = posByClient[client.id]
-                          if (s === undefined) return client.pos_provider || 'Loading…'
-                          if (s.kind === 'error') return 'Couldn’t load'
-                          if (s.kind === 'connected') return s.conn.provider || 'Not connected'
-                          return 'Not connected'
-                        })()}
-                      </p>
                     </div>
                     <div className="bg-pm-canada-surface border border-pm-canada-border rounded-lg px-3 py-2">
                       <p className="text-2xs text-pm-canada-text-faint">Transactions</p>
@@ -513,30 +398,6 @@ export default function CanadaPortalAccountsPage() {
                     )}
                   </div>
 
-                  {/* POS Sync — P2: real last_sync_at from
-                      pos_connections; real POST to /api/pos/sync/...
-                      no more setTimeout theatre. */}
-                  <div className="space-y-3">
-                    <p className="text-2xs text-pm-canada-text-faint">
-                      {(() => {
-                        const s = posByClient[client.id]
-                        if (s === undefined) return 'Last POS sync: loading…'
-                        if (s.kind === 'error') return 'Last POS sync: couldn’t load'
-                        const ts = s.kind === 'connected' ? s.conn.last_sync_at : null
-                        return ts
-                          ? `Last POS sync: ${new Date(ts).toLocaleString('en-CA')}`
-                          : 'Last POS sync: never'
-                      })()}
-                    </p>
-                    <button
-                      onClick={() => handleSyncPos(client)}
-                      disabled={syncingId === client.id || !getConn(posByClient[client.id])?.provider}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-pm-canada-border rounded-xl text-xs text-pm-canada-text-muted hover:border-pm-accent/30 hover:text-pm-accent disabled:opacity-50 transition-colors"
-                    >
-                      <RefreshCw size={12} className={syncingId === client.id ? 'animate-spin' : ''} />
-                      {syncingId === client.id ? 'Syncing...' : 'Sync POS Data'}
-                    </button>
-                  </div>
                 </div>
               )}
             </div>

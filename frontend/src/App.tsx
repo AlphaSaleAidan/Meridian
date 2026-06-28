@@ -95,6 +95,7 @@ const USPortalCreateCustomerPage = lazyRetry(() => import('@/pages/us/portal/USP
 const USPortalOnboardingPage = lazyRetry(() => import('@/pages/us/portal/USPortalOnboardingPage'))
 const USCustomerOnboardingWizard = lazyRetry(() => import('@/pages/us/portal/USCustomerOnboardingWizard'))
 const USPortalBadgePage = lazyRetry(() => import('@/pages/us/portal/USPortalBadgePage'))
+const CanadaPortalBadgePage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalBadgePage'))
 const RepPublicBadgePage = lazyRetry(() => import('@/pages/RepPublicBadgePage'))
 const WalletCardPage = lazyRetry(() => import('@/pages/WalletCardPage'))
 
@@ -502,7 +503,7 @@ export default function App() {
                 <Route path="proposals" element={<Suspense fallback={<InlineFallback />}><CanadaPortalProposalsPage /></Suspense>} />
                 <Route path="team" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTeamPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><CanadaPortalSettingsPage /></Suspense>} />
-                <Route path="badge" element={<Suspense fallback={<InlineFallback />}><USPortalBadgePage /></Suspense>} />
+                <Route path="badge" element={<Suspense fallback={<InlineFallback />}><CanadaPortalBadgePage /></Suspense>} />
               </Route>
 
               {/* ══════════════════════════════════════════════

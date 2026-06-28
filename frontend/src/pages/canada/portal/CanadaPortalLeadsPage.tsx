@@ -36,7 +36,7 @@ const STAGE_TO_STEP: Record<string, number> = {
 const STEP_LABELS: Record<number, string> = {
   1: 'Proposal Shown',
   2: 'Customer Checkout',
-  3: 'POS Connected',
+  3: 'Active Deal',
   4: 'Active Deal',
 }
 
