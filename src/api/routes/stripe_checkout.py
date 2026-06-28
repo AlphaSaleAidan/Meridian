@@ -61,6 +61,7 @@ class CheckoutSessionRequest(BaseModel):
     org_id: Optional[str] = None
     success_url: str = ""
     cancel_url: str = ""
+    currency: str = "usd"               # "cad" for Canada portal
 
 
 class CheckoutSessionResponse(BaseModel):
@@ -132,7 +133,7 @@ async def create_checkout_session(req: CheckoutSessionRequest, request: Request)
             # Create an ad-hoc price for custom amounts
             line_items.append({
                 "price_data": {
-                    "currency": "usd",
+                    "currency": req.currency.lower(),
                     "product_data": {
                         "name": f"Meridian {req.plan.title()} Plan",
                         "description": f"Monthly analytics subscription for {req.business_name}",
@@ -148,7 +149,7 @@ async def create_checkout_session(req: CheckoutSessionRequest, request: Request)
             # Stripe allows mixing subscription + one-time items in subscription mode
             line_items.append({
                 "price_data": {
-                    "currency": "usd",
+                    "currency": req.currency.lower(),
                     "product_data": {
                         "name": "Setup Fee",
                         "description": "One-time account setup and onboarding",

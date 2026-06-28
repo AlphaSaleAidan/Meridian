@@ -82,6 +82,19 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
                     raw_order.get("customer_name", "?"))
         order_type = "pickup"
 
+    # Derive currency from merchant config.  Explicit config.currency wins;
+    # otherwise infer from country/language indicators (CA/fr → cad).
+    _cfg_currency = getattr(config, 'currency', None)
+    if _cfg_currency:
+        order_currency = _cfg_currency.lower()
+    else:
+        _country = (getattr(config, 'country', '') or '').upper()
+        _language = (getattr(config, 'language', '') or '').lower()
+        if _country in ('CA', 'CAN', 'CANADA') or _language == 'fr':
+            order_currency = 'cad'
+        else:
+            order_currency = 'usd'
+
     return {
         "merchant_id": config.merchant_id,
         "business_name": config.business_name,
@@ -91,6 +104,7 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
         "subtotal": round(subtotal, 2),
         "tax": tax,
         "total": total,
+        "currency": order_currency,
         "delivery_address": delivery_address,
         "special_requests": raw_order.get("special_requests", ""),
         "caller_phone": raw_order.get("caller_phone", ""),
