@@ -14,7 +14,7 @@ For each criterion: (1) what would the auditor ask for? (2) does real evidence e
 ### Security — CC6 (Access) — the make-or-break block
 | # | Auditor question | Finding | Grade |
 |---|---|---|---|
-| 1 | Show RLS denies cross-tenant reads on every sensitive table | `vision_*`, `phone_*`, `schedule_*`, `sms_optout_tracking` carry `USING(true)` public policies; camera P0 fix absent from main | **F-Crit** (R-01) |
+| 1 | Show RLS denies cross-tenant reads on every sensitive table | **R0-confirmed live:** `phone_*` + `schedule_*` are `USING(true)` + `anon`/`authenticated` SELECT grant → **anonymous** read of `pos_access_token` + customer PII. (`vision_*` org-scoped in prod = config-drift only.) | **F-Crit** (R-01) |
 | 2 | Prove the denied path with a test | API BOLA test exists (`test_tenant_isolation_bola.py`); **RLS** denial test was deleted from main; new one authored, not yet run in CI | **F-High** |
 | 3 | Is tenant isolation enforced on all service endpoints? | `enforce_service_member` partial (C1) | **F-Crit** (R-02) |
 | 4 | MFA on all admin/privileged access? | none in code; subservice-console MFA unverified | **F-High** (R-09) |

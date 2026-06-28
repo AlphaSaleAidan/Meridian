@@ -24,7 +24,12 @@ Correlated: camera P0 fix migration `20260624_camera_streaming_phase1.sql` + `te
 cross-reference tables via `current_setting('app.current_org_id')` (`20260511:104-114`); credit tables already
 remediated to service-role-only (`20260603_drop_wideopen_policies_subgroup_a.sql`).
 
-## R0 — confirm LIVE state before scoring (read-only, run against Supabase)
+## R0 — DONE 2026-06-28 → see `pg_policies_live_20260628.md`
+Live result: `vision_*` org-scoped in prod (secure); `phone_*`+`schedule_*` `USING(true)` + anon/authenticated
+SELECT grant = anonymous exposure; `sms_optout_tracking` absent from prod catalog. The query below is retained
+for reproducibility.
+
+## R0 query (read-only, run against Supabase)
 Migration files ≠ live DB. The camera fix may have been applied off-main. Run (read-only):
 ```sql
 SELECT tablename, policyname, roles, cmd, qual

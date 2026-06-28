@@ -14,9 +14,12 @@ evidenced *at a point in time*? Type II (operated-over-window) readiness is lowe
 observation window has not started. A criterion is **not** counted as "ready" until its evidence pointer in
 `/compliance/evidence/<ID>/` resolves to a real artifact.
 
-> **Caveat that caps confidence:** several RLS findings are read from migration **files**. The live Supabase
-> `pg_policies` state must be queried before these scores are final. Where live state is unconfirmed, the
-> score reflects the *worst-case* (the migration as written). Confirming live state is remediation task **R0**.
+> **R0 DONE (2026-06-28) — live state confirmed** (read-only `pg_policies` query; see
+> `evidence/CC6.1-RLS/pg_policies_live_20260628.md`). This corrected two severities:
+> **`vision_*` is org-scoped in prod** (the camera fix was applied to live despite being absent from `main`) →
+> reclassified from CRITICAL exposure to **config drift**. **`phone_agent_config`/`phone_orders`/`phone_call_logs`/
+> `schedule_*` are `USING(true)` AND grant `SELECT` to `anon`+`authenticated`** → readable with the **public anon
+> key** (`pos_access_token` + customer PII). That is an *anonymous* live exposure — the single most urgent finding.
 
 ---
 
@@ -75,8 +78,8 @@ examination. None require new architecture — the patterns to fix them already 
 ### CC6 — Logical & Physical Access — **40%** *(the heavy block)*
 | Item | State | Gap | Remediation | Owner | Status |
 |---|---|---|---|---|---|
-| **RLS least-privilege** | **`USING(true)` on `vision_*`, `phone_agent_config`, `phone_call_logs`, `phone_orders`, `sms_optout_tracking`, `schedule_*`** (`supabase/migrations/20260516_*`, `20260507_*`, `20260604_*`, `20260522_*`) — named "service role" but no `TO service_role` → public | **CRITICAL** | Drop wide-open policies; add `TO service_role` + org-scoped authenticated policies; **confirm live `pg_policies`** | Aidan | 🔴 migration authored in `/evidence/CC6.1-RLS/`, **not applied** |
-| Camera P0 fix | Migration `20260624_camera_streaming_phase1.sql` + denial test exist in git history, **absent from main** | CRITICAL — fix may never run via `db push` | Restore migration to main; re-add CI denial test | Aidan | 🔴 R1 |
+| **RLS least-privilege (LIVE, R0-confirmed)** | `phone_agent_config` (holds `pos_access_token`), `phone_orders`, `phone_call_logs`, `schedule_*` are `USING(true)` **+ `SELECT` granted to `anon`+`authenticated`** → readable with the public anon key (`evidence/CC6.1-RLS/pg_policies_live_20260628.md`) | **CRITICAL — anonymous exposure** | Drop `USING(true)`, add `TO service_role`, **`REVOKE SELECT FROM anon, authenticated`** | Aidan | 🔴 migration authored `/evidence/CC6.1-RLS/fix_rls_wideopen.sql`, **not applied** |
+| Camera RLS (`vision_*`) | **R0: org-scoped in PROD** (member-isolation live) — but fix migration + denial test **absent from main** | MEDIUM — config drift / regression risk | Backport live policy into a migration on main; restore CI denial test | Aidan | 🟡 not a live exposure |
 | **Tenant isolation (API)** | Body-`org_id` bypass remediated (`auth.py:142-225`); BOLA layer `enforce_service_member` **partial** | **CRITICAL (C1)** | Thread `enforce_service_member` into every `require_service_auth` tenant handler (`phone_dashboard`, `schedule`, `website`, `intelligence`, `stripe_connect`, `pos`) | Aidan | 🔴 R2 |
 | `get_user_org_id()` | Called in `benchmark_snapshots` RLS (`20260501_006:30`) but **never defined** | HIGH — policy errors/denies | Define the function or rewrite policy | Aidan | ⬜ |
 | `cline_*`/`merchant_health` RLS | `business_id = auth.uid()` never matches | MEDIUM — silent deny | Correct to membership lookup | Aidan | ⬜ |
@@ -144,10 +147,10 @@ examination. None require new architecture — the patterns to fix them already 
 
 | ID | Priority | Item | Type | Owner |
 |---|---|---|---|---|
-| **R0** | P0 | Query live Supabase `pg_policies` to confirm which `USING(true)` policies are actually live | verify | Aidan/agent |
-| **R1** | P0 | Restore camera P0 RLS-fix migration + denial test to main; fix `vision_*` RLS | code (PR) | Aidan |
-| **R2** | P0 | Thread `enforce_service_member` into all tenant-scoped `require_service_auth` handlers (close C1 BOLA) | code (PR) | Aidan |
-| **R3** | P0 | Fix `phone_*`, `schedule_*`, `sms_optout_tracking` RLS (`TO service_role` + org-scoped) | code (PR) | Aidan |
+| **R0** | ✅ DONE | Live `pg_policies` confirmed read-only (`evidence/CC6.1-RLS/pg_policies_live_20260628.md`) | verify | done 2026-06-28 |
+| **R3** | P0 | **Fix the LIVE anon exposure:** `phone_*` + `schedule_*` — drop `USING(true)`, `TO service_role`, **REVOKE SELECT FROM anon/authenticated** (migration authored, not applied) | code (PR) | Aidan |
+| **R2** | P0 | Thread `enforce_service_member` into tenant-scoped `require_service_auth` handlers that lack it (billing.py confirmed gaps) | code (PR) | Aidan |
+| **R1** | P1 | Backport live `vision_*` member-isolation into a migration on main + restore CI denial test (anti-regression) | code (PR) | Aidan |
 | **R4** | P1 | Twilio webhook signature validation; remove raw PAN/CVV from memory (Twilio `<Pay>`) | code (PR) | Aidan |
 | **R5** | P1 | Make CI security scans blocking; pin deps | CI | Aidan |
 | **R6** | P1 | Enable + evidence MFA on all subservice consoles | org | Aidan (human) |

@@ -12,7 +12,15 @@ The API guard (`CC6.1-TENANT`) and RLS must **fail independently** (different co
 on the same assumption, "two layers" is one check with decoration. RLS is the backstop for any direct
 PostgREST / Supabase-JS access carrying a valid `authenticated` JWT.
 
-## Current state (verified against `origin/main`, HEAD 77bbf327)
+## R0 — LIVE STATE CONFIRMED (2026-06-28, read-only)
+See `evidence/CC6.1-RLS/pg_policies_live_20260628.md`. The live DB ≠ the migration files:
+- **`vision_*` is org-scoped in prod** (`*_member_isolation`, `TO authenticated`) — the camera fix was applied
+  to live even though it is absent from `main`. → reclassified to **config drift** (regression risk), not exposure.
+- **`phone_agent_config` (holds `pos_access_token`), `phone_orders`, `phone_call_logs`, `schedule_*`** are
+  `USING(true)` **and grant `SELECT` to `anon`+`authenticated`** → readable with the **public anon key**.
+  This is the most urgent live finding. The fix migration is rescoped to these tables and **REVOKEs** the grant.
+
+## Current state (migration files at `origin/main`, HEAD 77bbf327 — superseded by R0 above for severity)
 
 ### The anti-pattern — wide-open policies still present
 Named "Service role full access" but **missing the `TO service_role` clause**, so they apply to the `public`

@@ -31,8 +31,8 @@ the two heavier criteria are remediated.
 **Full-scope first report (recommended if seed/enterprise deals demand it):** all five. Higher effort; the
 gap analysis below is written for the full five so either path is supported.
 
-**→ Until Aidan overrides, this document assumes the full five-criteria scope.** Items unique to PI1/Privacy
-are tagged so they can be lifted out cleanly if he chooses the minimum-viable path.
+**→ SCOPE SELECTED (2026-06-28): all five criteria (full scope).** Confirmed via the scope-decision prompt.
+Items unique to PI1/Privacy remain tagged so they can still be re-sequenced to a later cycle if priorities change.
 
 ---
 
@@ -116,11 +116,10 @@ These are documented remediated risks; honest write-ups of handled incidents str
 
 ## 7. Known open items at time of writing (see gap-analysis.md for the full list)
 
-- **CC6.1-RLS (CRITICAL):** `vision_*`, `phone_agent_config`, `phone_call_logs`, `phone_orders`,
-  `sms_optout_tracking`, `schedule_*` carry `FOR ALL USING (true)` policies named "Service role full access"
-  but **lacking `TO service_role`** — so they apply to the `public`/`authenticated` role. The camera P0 fix
-  migration and its Postgres-level denial test exist in git history but are **absent from `origin/main`**.
-  *Live `pg_policies` state must be confirmed against Supabase before final scoring.*
+- **CC6.1-RLS (CRITICAL, R0-confirmed live 2026-06-28):** `phone_agent_config` (holds `pos_access_token`),
+  `phone_orders` (customer PII), `phone_call_logs`, `schedule_*` are `USING(true)` **and grant `SELECT` to
+  `anon`+`authenticated`** → readable with the public anon key (anonymous exposure). `vision_*` is org-scoped
+  in prod (config-drift only — fix not in `main`). See `evidence/CC6.1-RLS/pg_policies_live_20260628.md`.
 - **C1 BOLA (CRITICAL):** `require_service_auth` accepts any signed-up merchant session; `enforce_service_member`
   not yet threaded into every tenant-scoped handler.
 - **H2 (HIGH):** no Twilio webhook signature validation; raw PAN/CVV in memory in the phone-pay path (PCI).
