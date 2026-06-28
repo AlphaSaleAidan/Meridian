@@ -57,12 +57,14 @@ For each criterion: (1) what would the auditor ask for? (2) does real evidence e
 |---|---|---|---|
 | 22 | Notice published? | no public privacy page found | **F-Med** |
 | 23 | Consent captured + revocable? | CASL/acceptance/cookie strong; acceptance IP missing | **Pass** (F-Low) |
-| 24 | Purpose disclosed (no undisclosed resale)? | `resale_tier:"premium"` undisclosed in SLA | **F-Crit** (R-04) |
+| 24 | Purpose disclosed (no undisclosed resale)? | Data *labeled* `resale_tier:"premium"` w/ resale intent in docstring, but **no active sale mechanism in code**; SLA permits only anonymized+aggregated. Latent governance gap, not an active violation. | **F-Med** (R-04) |
 | 25 | Subject rights fulfilled (incl. deletion)? | intake yes; deletion not automated; export incomplete | **F-High** |
 | 26 | Biometric lawful basis + PIA? | none; VIP/demographics ready but off | **F-High** latent (R-05) |
 
-## Tally
-F-Crit ×4 · F-High ×7 · F-Med ×9 · F-Low ×4 · Pass ×5 (some with sub-gaps).
+## Tally (after R0 live verification + corrections)
+**F-Crit ×1** (the phone_/schedule_ anon RLS exposure — `pos_access_token` + customer PII readable with the
+public anon key) · F-High ×8 · F-Med ×10 · F-Low ×4 · Pass ×6. R0 retired the other criticals: vision_* and the
+financial/PII tables are isolated in prod; the resale finding is latent (no active sale mechanism), not active.
 
 ## The critical path to ≥85% (in order)
 1. **R0** confirm live `pg_policies` (turns finding #1 from worst-case to actual).
@@ -78,8 +80,10 @@ F-Crit ×4 · F-High ×7 · F-Med ×9 · F-Low ×4 · Pass ×5 (some with sub-ga
 
 ## Honest verdict
 Meridian has **good bones** — real auth, strong change management, genuine privacy/CASL machinery, encrypted
-tokens, and a documented history of handling incidents correctly. It is **not** ready for a CPA examination
-today: four critical findings (two access-control, one PCI, one privacy-disclosure) must close first. None
-require new architecture — the correct patterns already exist in the codebase. Realistic path: close R0–R4
-(weeks, mostly code Aidan merges) → re-score → Type I. Then operate the controls over a 3–6 month window for
-Type II.
+tokens, org-scoped RLS on the core financial/PII/biometric data (R0-confirmed), and a documented history of
+handling incidents correctly. After live verification the picture is **better than the file-based scan
+suggested**: the single live CRITICAL is the `phone_*`/`schedule_*` tables being readable with the public anon
+key (`pos_access_token` + customer PII) — a contained, well-understood fix (R3). The next tier is the PCI/Twilio
+finding (R4) and the rep-authorization model for the billing/onboarding BOLA (R2, needs a product decision).
+None require new architecture. Realistic path: close R3/R4 + decide R2's model (mostly code Aidan merges) →
+re-score (expect ≥70%) → Type I → operate controls over a 3–6 month window → Type II.

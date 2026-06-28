@@ -16,10 +16,13 @@
 | Defaults-off sensitive analytics | `src/api/routes/vision.py:46-50` | P4 (collection limitation) |
 
 ## CRITICAL gaps
-- **P2/P4 — undisclosed secondary purpose:** `cold_storage.py` tags camera/journey/transaction data
-  `resale_tier:"premium"`, but the signed SLA discloses only "anonymized and aggregated…to improve the
-  Services." Resale is not disclosed → PIPEDA Identifying Purposes / Law 25 violation risk (R-04). **Legal
-  decision required before any resale.**
+- **P2/P4 — secondary-use governance gap (latent, R-04):** `cold_storage.py` *labels* camera/journey/transaction
+  tiers `resale_tier:"premium"` and its docstring states resale intent ("resale packaging", "resale-ready"),
+  surfaced via `archives.py`. **Verified: no active data-sale/marketplace mechanism exists in code today.** The
+  SLA (5.3) permits only *anonymized + aggregated* use that cannot identify any individual — but
+  `customer_journeys` (person_id+txn) and camera data are identity-linked, so resale of those tiers, if
+  activated, would exceed the SLA's stated permission. **Action:** legal review + do not activate resale of
+  identity-linked tiers without disclosure; consider renaming the misleading `resale_tier` label.
 - **P4 — retention not enforced:** `cleanup_expired_visitors()` is **unscheduled** (no pg_cron/Celery); R2
   objects never purged; 60-day termination deletion unimplemented (R-06). Posture doc says 30d, schema says
   90d — reconcile.

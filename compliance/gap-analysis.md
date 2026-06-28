@@ -31,7 +31,7 @@ observation window has not started. A criterion is **not** counted as "ready" un
 | **Availability (A1)** | **~50%** | Backups/archive exist; no tested restore, no DR plan, Contabo SPOF. |
 | **Confidentiality (C1)** | **~45%** | Encryption strong; classification informal; secure-disposal-on-termination unimplemented. |
 | **Processing Integrity (PI1)** | **~40%** | Square reconciliation exists; Clover/Toast none; mismatches log-only. |
-| **Privacy (P1–P8)** | **~48%** | Rich CASL/consent/DSAR intake; deletion automation + resale disclosure are the gaps. |
+| **Privacy (P1–P8)** | **~52%** | Rich CASL/consent/DSAR intake; resale finding downgraded to latent (no active sale). Gaps: deletion automation, public notice, biometric PIA. |
 | **WEIGHTED OVERALL** | **≈ 48%** | Good bones; R0 confirmed the core data is isolated. Remaining critical: phone_/schedule_ anon RLS exposure, rep-BOLA model, PCI/Twilio, privacy resale-disclosure. |
 
 **Headline:** Meridian is roughly **halfway** to Type-I readiness. Two CRITICAL access-control gaps
@@ -137,7 +137,7 @@ examination. None require new architecture — the patterns to fix them already 
 |---|---|---|---|---|---|
 | Notice (P1) | No public privacy page found in routes | Publish privacy notice | Page + link | Aidan | ⬜ |
 | Consent (P2/P3) | Strong: CASL guard, SHA-256 acceptance gate, Quebec cookie banner | IP not captured on acceptance; cookie consent localStorage-only | Capture IP; server-side cookie record | Aidan | 🟡 |
-| Collection/use (P4) | **`resale_tier:"premium"` on camera/journey/txn data** (`cold_storage.py`) not disclosed; SLA says only "improve the Services" | **CRITICAL disclosure gap** | Disclose secondary purpose or stop resale classification | Aidan (legal) | 🔴 |
+| Collection/use (P4) | Tiers *labeled* `resale_tier:"premium"` w/ resale intent in docstring (`cold_storage.py`); **no active sale mechanism in code**; SLA permits only anonymized+aggregated. Latent governance gap. | MEDIUM (latent) | Legal review before any resale; don't activate on identity-linked tiers without disclosure; rename label | Aidan (legal) | 🟡 |
 | Retention (P4) | 90-day `expires_at` + delete fn, **unscheduled** | HIGH | Schedule it | Aidan | ⬜ |
 | Access/portability (P5/P6) | DSAR intake covers 6 rights; export omits txn/vision/journeys; deletion not automated | Complete export; automate deletion | Aidan | ⬜ |
 | Camera↔identity (P-all) | VIP face-match (CompreFace) ready but not wired to prod loop; demographics buckets minors (`age_0-17`) | Biometric PIA + consent absent | PIA; jurisdiction/cannabis consent flow before enabling | Aidan (legal) | 🚩🔴 |
