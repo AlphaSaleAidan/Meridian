@@ -63,7 +63,7 @@ BEGIN
   WHERE schemaname='public'
     AND tablename IN ('phone_agent_config','phone_call_logs','phone_orders',
                       'schedule_staff','schedule_shifts','published_schedules')
-    AND qual = 'true' AND roles && ARRAY['public','authenticated','anon'];
+    AND qual = 'true' AND roles && ARRAY['public','authenticated','anon']::name[];
   IF bad > 0 THEN
     RAISE EXCEPTION 'CC6.1-RLS: % wide-open public/authenticated USING(true) policies still present', bad;
   END IF;
