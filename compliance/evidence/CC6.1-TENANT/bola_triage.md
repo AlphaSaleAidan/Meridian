@@ -34,7 +34,14 @@ every rep and break the US/Canada sales portal. The genuine vulnerability is tha
 authorize **"any logged-in user"** with no org binding at all — a rep (or any user) can pass an arbitrary
 `org_id`. The fix is a **rep-authorization** check, which needs the rep↔org model defined.
 
-## DECISION (Aidan) — what authorizes a rep to act on a customer org?
+## DECISION — SELECTED: Option A (ownership link). 2026-06-28
+Aidan deferred the choice ("I don't know what's best"); proceeding with the recommended **Option A** — authorize
+a rep for an org only when an ownership/creation link exists (rep created/owns that org). Next step: confirm the
+data model carries a rep→org link (e.g. `created_by_rep`/`rep_id` on `businesses` or `subscriptions`, or via the
+`sales_reps` provisioning path) and, if missing, stamp it at provisioning. Then implement `require_rep_for_org`.
+This is a separate PR after the data-model confirmation; it is NOT a prod change yet.
+
+## Option menu (for the record) — what authorizes a rep to act on a customer org?
 Pick the binding, then a `require_rep_for_org(principal, org_id)` helper can enforce it:
 - **(A, recommended) Ownership link** — stamp `created_by_rep`/`rep_id` on the business/subscription at
   provisioning (`onboarding/provision-customer`, `us.create_customer` already track `rep_id`), and authorize a

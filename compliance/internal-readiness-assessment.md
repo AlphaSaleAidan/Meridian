@@ -29,7 +29,7 @@ For each criterion: (1) what would the auditor ask for? (2) does real evidence e
 | 9 | Risk assessment with register + threat models? | authored this session (`/risk/`) | **Pass** (needs Aidan sign-off) |
 | 10 | Segregation of duties / compensating controls? | named + independent (`CC5-SOD-COMPENSATING`); CI scans non-blocking weakens it | **F-Low** |
 | 11 | Incident response plan + worked incidents? | IRP authored; real Toast/Clover/CA-1 precedents | **Pass** (alerting gap = F-Med) |
-| 12 | Vulnerability management with SLAs + pen test? | scans non-blocking; no pen test booked | **F-Med** (R-11) + **F-High** (pen test) |
+| 12 | Vulnerability management with SLAs + pen test? | **external pen test passed 2026-06-27** (need report artifact); CI scans still non-blocking | **Pass** (pen test) · **F-Med** (R-11, blocking scans) |
 | 13 | Change management controlled & authorized? | branch→PR→CI→human merge — strong; branch-protection evidence + root-SSH deploy gaps | **Pass** (gaps = F-Med) |
 | 14 | Vendor/subservice management? | register authored; 7→~25 vendors, DPAs/Law25 TRAs incomplete | **F-Med** (R-17) |
 

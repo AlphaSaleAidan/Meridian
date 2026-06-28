@@ -27,12 +27,12 @@ observation window has not started. A criterion is **not** counted as "ready" un
 
 | Scope | Type I design readiness | Notes |
 |---|---|---|
-| **Security (CC1–CC9)** | **~50%** | R0 raised confidence: financial/PII/biometric/POS-token tables confirmed org-scoped in prod. Open: phone_/schedule_ anon exposure, rep-BOLA model, MFA. |
+| **Security (CC1–CC9)** | **~55%** | R0 confirmed core data isolated; **external pen test passed 2026-06-27**; RLS fix in PR #198. Open: apply R3, rep-auth (Option A) impl, MFA, blocking CI scans. |
 | **Availability (A1)** | **~50%** | Backups/archive exist; no tested restore, no DR plan, Contabo SPOF. |
 | **Confidentiality (C1)** | **~45%** | Encryption strong; classification informal; secure-disposal-on-termination unimplemented. |
 | **Processing Integrity (PI1)** | **~40%** | Square reconciliation exists; Clover/Toast none; mismatches log-only. |
 | **Privacy (P1–P8)** | **~52%** | Rich CASL/consent/DSAR intake; resale finding downgraded to latent (no active sale). Gaps: deletion automation, public notice, biometric PIA. |
-| **WEIGHTED OVERALL** | **≈ 48%** | Good bones; R0 confirmed the core data is isolated. Remaining critical: phone_/schedule_ anon RLS exposure, rep-BOLA model, PCI/Twilio, privacy resale-disclosure. |
+| **WEIGHTED OVERALL** | **≈ 52%** | Good bones; core data isolated; pen test passed; RLS fix in review (PR #198). Remaining: apply R3, rep-auth impl (Option A), webhook signatures, MFA, privacy deletion automation. |
 
 **Headline:** Meridian is roughly **halfway** to Type-I readiness. Two CRITICAL access-control gaps
 (RLS `USING(true)`, C1 BOLA) and the PCI/Twilio finding must close before any auditor accepts the system for
@@ -62,12 +62,12 @@ examination. None require new architecture — the patterns to fix them already 
 | Risk register | Now authored | Was absent | `/risk/register.md` (incl. fraud + tenancy isolation) | Aidan | 🟢 authored |
 | Threat models | Now authored (POS, camera) | Was absent | `/risk/threat-model-pos.md`, `/risk/threat-model-camera.md` | Aidan | 🟢 authored |
 
-### CC4 — Monitoring Activities — **35%**
+### CC4 — Monitoring Activities — **50%** *(pen test passed 2026-06-27)*
 | Item | State | Gap | Remediation | Owner | Status |
 |---|---|---|---|---|---|
 | Vuln scanning | Bandit/Safety/npm-audit in CI **but `\|\| true` (non-blocking)** (`.github/workflows/security.yml`) | Advisory only | Make scans blocking (or triage-gated) | Aidan | ⬜ R5 |
 | Dependency audit | Present, non-blocking; deps mostly unpinned upper bounds | Pin + enforce | Lockfile enforcement + Dependabot/Renovate | Aidan | ⬜ |
-| Pen test | None | Annual external pen test is the Type II norm | **Book third-party pen test** | Aidan (human) | 🚩 paid engagement |
+| Pen test | **DONE — site pen-tested 2026-06-27, PASSED** (Aidan) | Obtain the report + remediation log as audit evidence; re-test annually | Collect report into `/evidence/CC7-INCIDENT/`; schedule annual cadence | Aidan | 🟢 passed — need report artifact |
 | Log review cadence | Logs exist (Sentry, `security_events`) | No documented review cadence | Logging & Monitoring policy defines cadence | Aidan | 🟡 |
 
 ### CC5 — Control Activities — **50%**
@@ -149,7 +149,7 @@ examination. None require new architecture — the patterns to fix them already 
 | ID | Priority | Item | Type | Owner |
 |---|---|---|---|---|
 | **R0** | ✅ DONE | Live `pg_policies` confirmed read-only (`evidence/CC6.1-RLS/pg_policies_live_20260628.md`) | verify | done 2026-06-28 |
-| **R3** | P0 | **Fix the LIVE anon exposure:** `phone_*` + `schedule_*` — drop `USING(true)`, `TO service_role`, **REVOKE SELECT FROM anon/authenticated** (migration authored, not applied) | code (PR) | Aidan |
+| **R3** | P0 | **Fix the LIVE anon exposure:** `phone_*` + `schedule_*` — drop `USING(true)`, `TO service_role`, REVOKE SELECT FROM anon/authenticated. **PR #198 OPEN** (verified safe), awaiting apply | code (PR) | Aidan applies |
 | **R2** | P0 | Thread `enforce_service_member` into tenant-scoped `require_service_auth` handlers that lack it (billing.py confirmed gaps) | code (PR) | Aidan |
 | **R1** | P1 | Backport live `vision_*` member-isolation into a migration on main + restore CI denial test (anti-regression) — **migration authored** `evidence/CC6.1-RLS/backport_camera_rls_to_main.sql`, promote to `supabase/migrations/` | code (PR) | Aidan |
 | **R4** | P1 | Twilio webhook signature validation; remove raw PAN/CVV from memory (Twilio `<Pay>`) | code (PR) | Aidan |
@@ -157,7 +157,7 @@ examination. None require new architecture — the patterns to fix them already 
 | **R6** | P1 | Enable + evidence MFA on all subservice consoles | org | Aidan (human) |
 | **R7** | P1 | Schedule retention deletion; implement 60-day termination disposal | code | Aidan |
 | **R8** | P1 | Resolve camera/journey resale-purpose disclosure (legal) | legal | Aidan |
-| **R9** | P2 | Book external pen test; decide cyber/E&O insurance; choose compliance-automation platform | business | Aidan (human) |
+| **R9** | P2 | ~~Book external pen test~~ **DONE (passed 2026-06-27)** — collect the report. Decide cyber/E&O insurance; choose compliance-automation platform; choose CPA firm | business | Aidan (human) |
 
 🚩 = human/organizational, cannot be coded. 🔴 = critical, open. 🟡 = partial. 🟢 = authored this session. ⬜ = not started.
 
