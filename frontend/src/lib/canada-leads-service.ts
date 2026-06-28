@@ -183,13 +183,16 @@ export const canadaLeadsService = {
     return holder.promise
   },
 
-  async getById(id: string): Promise<Deal | null> {
+  async getById(id: string, repId?: string): Promise<Deal | null> {
     if (!supabase) return null
-    const { data, error } = await supabase
+    // Client-side defence: scope to the owning rep so a rep cannot fetch a
+    // lead that belongs to a different rep even if RLS is misconfigured.
+    let query = supabase
       .from('canada_leads')
       .select('*')
       .eq('id', id)
-      .single()
+    if (repId) query = query.eq('rep_id', repId)
+    const { data, error } = await query.single()
     if (error) throw new LeadsServiceError(error.message)
     if (!data) return null
     return rowToDeal(data)
@@ -289,7 +292,14 @@ export const canadaLeadsService = {
       .channel(name)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'canada_leads' },
+        // Scope the realtime subscription to this rep's rows so the
+        // callback does not fire for changes belonging to other reps.
+        {
+          event: '*',
+          schema: 'public',
+          table: 'canada_leads',
+          ...(repId ? { filter: `rep_id=eq.${repId}` } : {}),
+        },
         () => {
           canadaLeadsService.list(repId).then(onChanged).catch(() => {})
         },

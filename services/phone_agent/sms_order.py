@@ -387,9 +387,20 @@ async def handle_inbound_sms(request: Request):
     # a Canadian NANP number for now. When the DID is US-based (current
     # prod), this guard is a no-op for any inbound (all 11-digit +1
     # numbers fall back to allowed by area-code allowlist if Canadian).
+    #
+    # Env bypass: SMS_CA_ONLY_GUARD=0 OR the DEMO merchant disables the
+    # guard so internal testers on non-CA numbers can exercise the full
+    # flow. Default is "1" (guard ON) so prod behaviour is unchanged.
+    is_demo = merchant_id == os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
+    _ca_guard_on = os.getenv("SMS_CA_ONLY_GUARD", "1") != "0"
     if not is_canadian_number(customer_phone):
-        logger.info("Refusing non-Canadian SMS from %s", customer_phone)
-        return _twiml_sms(non_canadian_reply())
+        if _ca_guard_on and not is_demo:
+            logger.info("Refusing non-Canadian SMS from %s", customer_phone)
+            return _twiml_sms(non_canadian_reply())
+        logger.debug(
+            "SMS_CA_ONLY_GUARD bypass: non-CA %s allowed (guard=%s, is_demo=%s)",
+            customer_phone, _ca_guard_on, is_demo,
+        )
 
     # Best-effort touch of last_inbound_at for compliance audit trail.
     await stamp_last_inbound(merchant_id, customer_phone)
@@ -397,7 +408,6 @@ async def handle_inbound_sms(request: Request):
     # Credit metering: one deduction per exchange (1 inbound processed +
     # 1 outbound reply). Multi-segment replies eat the extra cost — fine
     # at our margins, and keeps the merchant's mental model simple.
-    is_demo = merchant_id == os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
     if _CREDITS_AVAILABLE and not is_demo:
         exchange_cost = SMS_INBOUND.credits + SMS_OUTBOUND.credits
         try:
