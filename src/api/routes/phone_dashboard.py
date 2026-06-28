@@ -509,6 +509,84 @@ async def get_phone_stats(
     }
 
 
+@router.get("/insights/{merchant_id}")
+async def get_phone_insights(
+    merchant_id: str,
+    principal=Depends(require_service_auth),
+    days: int = Query(30, ge=1, le=90),
+):
+    """Agent-quality insights over N days: per-call scores from the self-training
+    loop (scripts/phone_realcall_train.py) aggregated into a daily trend, top
+    failure tags, and the most recent scored calls. Read-only; the loop writes
+    phone_call_insights offline and never auto-changes the live agent."""
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+    db = get_db()
+
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    rows = await db.select(
+        "phone_call_insights",
+        filters={
+            "merchant_id": f"eq.{merchant_id}",
+            "judged_at": f"gte.{since}",
+        },
+        order="judged_at.desc",
+        limit=5000,
+    )
+
+    scores = [int(r["score"]) for r in rows if r.get("score") is not None]
+    total = len(scores)
+    avg = round(sum(scores) / total, 2) if total else None
+
+    # daily trend (mean score per day, oldest -> newest)
+    by_day: dict[str, list[int]] = {}
+    for r in rows:
+        d = (r.get("judged_at") or r.get("created_at") or "")[:10]
+        if not d:
+            continue
+        by_day.setdefault(d, []).append(int(r.get("score", 0)))
+    trend = [
+        {"date": d, "avg_score": round(sum(v) / len(v), 2), "calls": len(v)}
+        for d, v in sorted(by_day.items())
+    ]
+
+    # trend direction: 2nd-half mean minus 1st-half mean (+ = improving)
+    trend_delta = None
+    if len(trend) >= 4:
+        mid = len(trend) // 2
+        first = [t["avg_score"] for t in trend[:mid]]
+        second = [t["avg_score"] for t in trend[mid:]]
+        trend_delta = round(sum(second) / len(second) - sum(first) / len(first), 2)
+
+    # top failure tags
+    tag_counts: dict[str, int] = {}
+    for r in rows:
+        for t in (r.get("tags") or []):
+            tag_counts[t] = tag_counts.get(t, 0) + 1
+    top_tags = sorted(tag_counts.items(), key=lambda x: -x[1])[:8]
+
+    return {
+        "merchant_id": merchant_id,
+        "days": days,
+        "judged_calls": total,
+        "avg_score": avg,
+        "trend_delta": trend_delta,
+        "trend": trend,
+        "top_tags": [{"tag": t, "count": c} for t, c in top_tags],
+        "recent": [
+            {
+                "call_sid": r.get("call_sid"),
+                "score": r.get("score"),
+                "tags": r.get("tags") or [],
+                "critique": r.get("critique") or "",
+                "order_placed": bool(r.get("order_placed")),
+                "judged_at": r.get("judged_at"),
+            }
+            for r in rows[:15]
+        ],
+    }
+
+
 class TestChatMessage(BaseModel):
     role: str  # "user" | "assistant"
     content: str

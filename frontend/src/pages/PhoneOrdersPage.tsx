@@ -5,7 +5,7 @@ import {
   CheckCircle2, TrendingUp, MessageSquare, X, Search, ChevronRight,
   Clock, DollarSign, Link2, Copy, Info,
   CreditCard, SendHorizontal, AlertCircle, PhoneForwarded, Zap,
-  Banknote, ExternalLink, ArrowRight,
+  Banknote, ExternalLink, ArrowRight, Sparkles, TrendingDown,
 } from 'lucide-react'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
@@ -15,7 +15,7 @@ import {
   getPhoneDemoData, getPhoneStats, VOICE_OPTIONS,
   type PhoneCallEntry, type PhoneBizConfig, type CallStatus, type PaymentStatus,
 } from '@/lib/phone-orders-demo-data'
-import { phoneService, type PhoneConfig } from '@/lib/phone-service'
+import { phoneService, type PhoneConfig, type PhoneInsightsResponse } from '@/lib/phone-service'
 import { getAuthHeaders } from '@/lib/supabase'
 import {
   LiveCallsBanner, RecordingPlayback, SetupWizard, SettingsTab,
@@ -193,10 +193,128 @@ function ConnectPhoneModal({ biz, onClose }: { biz: PhoneBizConfig; onClose: () 
   )
 }
 
+/* ---------- Agent Quality (self-training insights) ---------- */
+const DEMO_INSIGHTS: PhoneInsightsResponse = {
+  merchant_id: 'demo', days: 30, judged_calls: 142, avg_score: 8.4, trend_delta: 0.6,
+  trend: [
+    { date: '2026-06-01', avg_score: 7.6, calls: 18 }, { date: '2026-06-08', avg_score: 7.9, calls: 31 },
+    { date: '2026-06-15', avg_score: 8.2, calls: 44 }, { date: '2026-06-22', avg_score: 8.7, calls: 49 },
+  ],
+  top_tags: [
+    { tag: 'no_clarify', count: 9 }, { tag: 'too_verbose', count: 6 },
+    { tag: 'ignored_modification', count: 4 }, { tag: 'bad_closing', count: 3 },
+  ],
+  recent: [
+    { call_sid: 'demo-1', score: 9, tags: [], critique: 'Captured a 3-item order with a substitution cleanly and confirmed before submitting.', order_placed: true, judged_at: '2026-06-28T17:00:00Z' },
+    { call_sid: 'demo-2', score: 5, tags: ['no_clarify', 'ignored_modification'], critique: 'Did not confirm "no onions" and read the total back too fast.', order_placed: true, judged_at: '2026-06-28T16:30:00Z' },
+    { call_sid: 'demo-3', score: 7, tags: ['too_verbose'], critique: 'Correct order but over-explained the menu before taking it.', order_placed: true, judged_at: '2026-06-28T16:05:00Z' },
+  ],
+}
+
+function scoreColor(s: number): string {
+  if (s >= 8) return 'text-[#17C5B0]'
+  if (s >= 6) return 'text-amber-400'
+  return 'text-red-400'
+}
+
+function QualitySparkline({ trend }: { trend: { avg_score: number }[] }) {
+  if (trend.length < 2) return null
+  const w = 120, h = 28, max = 10, min = 0
+  const pts = trend.map((t, i) => {
+    const x = (i / (trend.length - 1)) * w
+    const y = h - ((t.avg_score - min) / (max - min)) * h
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  return (
+    <svg width={w} height={h} className="overflow-visible">
+      <polyline points={pts} fill="none" stroke="#7C5CFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function AgentQualityPanel({ merchantId, isDemo, days }: { merchantId: string; isDemo: boolean; days: number }) {
+  const [data, setData] = useState<PhoneInsightsResponse | null | 'loading'>('loading')
+  useEffect(() => {
+    if (isDemo) { setData(DEMO_INSIGHTS); return }
+    if (!merchantId) { setData(null); return }
+    setData('loading')
+    phoneService.getInsights(merchantId, days).then(d => setData(d))
+  }, [merchantId, isDemo, days])
+
+  const Header = (
+    <div className="flex items-center gap-2 mb-3">
+      <Sparkles size={14} className="text-[#7C5CFF]" />
+      <h3 className="text-sm font-semibold text-[#F5F5F7]">Agent Quality</h3>
+      <span className="text-[10px] text-[#A1A1A8] ml-auto">self-training · last {days}d</span>
+    </div>
+  )
+
+  if (data === 'loading') {
+    return <div className="card p-4">{Header}<div className="h-16 animate-pulse bg-[#1F1F23] rounded-lg" /></div>
+  }
+  if (!data || data.judged_calls === 0) {
+    return (
+      <div className="card p-4">{Header}
+        <p className="text-xs text-[#A1A1A8] leading-relaxed">
+          No scored calls yet. The self-training loop scores completed calls, tracks quality over time,
+          and turns weak calls into training examples — proposals are reviewed before any change to the agent.
+        </p>
+      </div>
+    )
+  }
+
+  const delta = data.trend_delta
+  return (
+    <div className="card p-4">{Header}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-[#111113] rounded-lg px-3 py-2">
+          <p className="text-[10px] text-[#A1A1A8]">Avg score</p>
+          <p className={clsx('text-xl font-bold font-mono', scoreColor(data.avg_score ?? 0))}>{data.avg_score?.toFixed(1) ?? '—'}<span className="text-xs text-[#A1A1A8]">/10</span></p>
+        </div>
+        <div className="bg-[#111113] rounded-lg px-3 py-2">
+          <p className="text-[10px] text-[#A1A1A8]">Trend</p>
+          {delta === null ? <p className="text-sm font-bold text-[#A1A1A8] font-mono">—</p> : (
+            <p className={clsx('text-sm font-bold font-mono flex items-center gap-1', delta >= 0 ? 'text-[#17C5B0]' : 'text-red-400')}>
+              {delta >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}{delta >= 0 ? '+' : ''}{delta.toFixed(1)}
+            </p>
+          )}
+          <div className="mt-1"><QualitySparkline trend={data.trend} /></div>
+        </div>
+        <div className="bg-[#111113] rounded-lg px-3 py-2">
+          <p className="text-[10px] text-[#A1A1A8]">Calls scored</p>
+          <p className="text-xl font-bold text-[#F5F5F7] font-mono">{data.judged_calls}</p>
+        </div>
+      </div>
+      {data.top_tags.length > 0 && (
+        <div className="mb-3">
+          <p className="text-[10px] text-[#A1A1A8] mb-1.5">Most common issues</p>
+          <div className="flex flex-wrap gap-1.5">
+            {data.top_tags.map(t => (
+              <span key={t.tag} className="text-[10px] px-2 py-0.5 rounded-full bg-[#1F1F23] text-[#A1A1A8]">{t.tag.replace(/_/g, ' ')} · {t.count}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {data.recent.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-[#A1A1A8]">Recent scored calls</p>
+          {data.recent.slice(0, 5).map(r => (
+            <div key={r.call_sid} className="flex items-start gap-2.5 py-1.5 border-t border-[#1F1F23] first:border-t-0">
+              <span className={clsx('text-xs font-bold font-mono w-7 flex-shrink-0', scoreColor(r.score))}>{r.score}/10</span>
+              <p className="text-[11px] text-[#C7C7CC] leading-snug flex-1 min-w-0">{r.critique || (r.tags.length ? r.tags.join(', ').replace(/_/g, ' ') : 'Clean call.')}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ---------- Overview Tab ---------- */
-function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
-  calls: PhoneCallEntry[]; biz: PhoneBizConfig; period: string; setPeriod: (p: 'today' | '7d' | '30d' | '90d') => void; onViewCall: (c: PhoneCallEntry) => void; onConnect: () => void
+function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect, isDemo }: {
+  calls: PhoneCallEntry[]; biz: PhoneBizConfig; period: string; setPeriod: (p: 'today' | '7d' | '30d' | '90d') => void; onViewCall: (c: PhoneCallEntry) => void; onConnect: () => void; isDemo: boolean
 }) {
+  const insightsDays = period === 'today' ? 1 : period === '7d' ? 7 : period === '90d' ? 90 : 30
   const stats = useMemo(() => getPhoneStats(calls, period as any), [calls, period])
   const liveCalls = calls.filter(c => c.status === 'in_progress')
   const recentCalls = calls.slice(0, 8)
@@ -233,6 +351,7 @@ function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
         </div>
       )}
       <ConversionFunnel calls={calls} />
+      <AgentQualityPanel merchantId={biz.id} isDemo={isDemo} days={insightsDays} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="card p-4 border-[#1A8FD6]/10"><div className="flex items-start gap-2"><div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0"><Mic size={16} className="text-[#1A8FD6]" /></div><div><h3 className="text-sm font-semibold text-[#F5F5F7]">AI Voice Agent</h3><p className="text-[10px] text-[#A1A1A8] mt-1 leading-relaxed">Answers calls 24/7, takes orders conversationally. Included with your plan.</p></div></div></div>
         <div className="card p-4"><div className="flex items-center gap-2 mb-2"><Clock size={12} className="text-[#A1A1A8]" /><span className="text-[10px] text-[#A1A1A8] font-medium">AVG CALL DURATION</span></div><p className="text-xl font-bold text-[#F5F5F7] font-mono">{Math.floor(stats.avgDurationSec / 60)}:{String(stats.avgDurationSec % 60).padStart(2, '0')}</p></div>
@@ -667,7 +786,7 @@ export default function PhoneOrdersPage() {
           <button key={t.key} onClick={() => setTab(t.key)} className={tab === t.key ? 'period-btn-active' : 'period-btn-inactive'}>{t.label}</button>
         ))}
       </div>
-      {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
+      {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} isDemo={isDemo} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
       {tab === 'text_orders' && flags.textToOrder && <TextOrderingTab biz={business} isDemo={isDemo} />}
       {tab === 'get_paid' && <GetPaidTab calls={calls} biz={business} orgId={orgId} isDemo={isDemo} />}

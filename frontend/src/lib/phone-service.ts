@@ -51,6 +51,24 @@ export interface PhoneStatsResponse {
   avg_duration_seconds: number
 }
 
+export interface PhoneInsightsResponse {
+  merchant_id: string
+  days: number
+  judged_calls: number
+  avg_score: number | null
+  trend_delta: number | null
+  trend: { date: string; avg_score: number; calls: number }[]
+  top_tags: { tag: string; count: number }[]
+  recent: {
+    call_sid: string
+    score: number
+    tags: string[]
+    critique: string
+    order_placed: boolean
+    judged_at: string
+  }[]
+}
+
 export const phoneService = {
   async getConfig(merchantId: string): Promise<PhoneConfig> {
     const res = await fetch(
@@ -83,6 +101,15 @@ export const phoneService = {
   async getStats(merchantId: string, days = 7): Promise<PhoneStatsResponse | null> {
     const res = await fetch(
       `${API_BASE}/api/phone/stats/${merchantId}?days=${days}`,
+      { headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return null
+    return res.json()
+  },
+
+  async getInsights(merchantId: string, days = 30): Promise<PhoneInsightsResponse | null> {
+    const res = await fetch(
+      `${API_BASE}/api/phone/insights/${merchantId}?days=${days}`,
       { headers: await getAuthHeaders() },
     )
     if (!res.ok) return null
