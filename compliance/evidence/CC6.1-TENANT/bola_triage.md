@@ -34,12 +34,26 @@ every rep and break the US/Canada sales portal. The genuine vulnerability is tha
 authorize **"any logged-in user"** with no org binding at all — a rep (or any user) can pass an arbitrary
 `org_id`. The fix is a **rep-authorization** check, which needs the rep↔org model defined.
 
-## DECISION — SELECTED: Option A (ownership link). 2026-06-28
-Aidan deferred the choice ("I don't know what's best"); proceeding with the recommended **Option A** — authorize
-a rep for an org only when an ownership/creation link exists (rep created/owns that org). Next step: confirm the
-data model carries a rep→org link (e.g. `created_by_rep`/`rep_id` on `businesses` or `subscriptions`, or via the
-`sales_reps` provisioning path) and, if missing, stamp it at provisioning. Then implement `require_rep_for_org`.
-This is a separate PR after the data-model confirmation; it is NOT a prod change yet.
+## DECISION — 2026-06-28 (Aidan deferred → my call): interim **Option C now**, harden to **Option A** next
+**Schema reality (verified live):** there is **no rep→org ownership link today.** `businesses` has
+`owner_user_id` (the merchant) but **no `rep_id`/`created_by_rep`**; rep linkage exists only in
+`subscriptions.metadata.rep_id` (JSON, set from the request — fragile/spoofable). `sales_reps.org_id` is the
+rep's *own* portal context, not a link to the customer orgs they manage. So Option A is **not directly
+implementable** without a schema addition.
+
+Therefore:
+- **Interim (do now, no schema change): Option C** — replace "any logged-in user" with
+  `require_rep_for_org(principal, org_id)` that allows **(member of org) OR (active rep, `sales_reps.is_active`)**.
+  This closes the actual hole (a random authenticated non-rep user passing an arbitrary `org_id`) with minimal
+  risk and no migration. Residual: any *active rep* can still act on any customer org (acceptable for a small,
+  trusted rep team as an interim).
+- **Hardening (follow-up): Option A** — add `businesses.created_by_rep` (or a `rep_assignments(rep_id, org_id)`
+  table), stamp it at provisioning (`onboarding/provision-customer`, `us.create_customer` — both already receive
+  `rep_id`), backfill from `subscriptions.metadata.rep_id` where present, then tighten `require_rep_for_org` to
+  require the ownership link.
+
+Both ship as reviewed PRs with a per-route negative test, and must be verified against the live rep portal on
+staging before merge (an over-tight check would break the US/Canada sales flow). NOT a prod change yet.
 
 ## Option menu (for the record) — what authorizes a rep to act on a customer org?
 Pick the binding, then a `require_rep_for_org(principal, org_id)` helper can enforce it:
