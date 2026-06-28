@@ -9,6 +9,7 @@ import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSystemPicker from '@/components/POSSystemPicker'
+import { getPlan as getCanadaPlan } from '@/lib/canada-proposal-plans'
 
 // ── Canada Theme ──
 const T = {
@@ -120,7 +121,8 @@ export default function CanadaCustomerOnboardingWizard() {
   const [paymentComplete, setPaymentComplete] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
   // prefill.price comes from the rep portal link and is ALREADY in CAD — do not re-apply CAD_RATE.
-  const monthlyPriceCAD = prefill.price ? parseInt(prefill.price) : 250
+  // Fall back to the CAD Standard plan price (USD 250 × 1.37 = CA$343) rather than a bare 250.
+  const monthlyPriceCAD = prefill.price ? parseInt(prefill.price) : getCanadaPlan('standard').price
 
   // Processing — 20-minute AI analysis timer (persists across page reloads)
   // Hard data (revenue, products, staff, schedules) is available immediately from POS.
@@ -235,18 +237,19 @@ export default function CanadaCustomerOnboardingWizard() {
       })
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}))
-        // Soft-fail: log the failure but let the customer continue so they're
-        // not stranded mid-onboarding. The rep portal will surface the missing
-        // signature for follow-up.
+        // Do NOT proceed on a failed SLA write — a signature silently vanishing
+        // is a compliance problem. Surface the error and keep the customer on
+        // this step so they can retry.
         console.error('[SLA] persistence failed:', body)
+        setError(body.detail || body.message || 'We could not save your signed agreement. Please try again — if it keeps failing, contact your Meridian rep.')
+        return
       }
       setSlaSubmitted(true)
       setStep('pos')
     } catch (err: any) {
       console.error('[SLA] error:', err)
-      // Soft-fail same as above — customer continues.
-      setSlaSubmitted(true)
-      setStep('pos')
+      // Block on a failed SLA write — see above.
+      setError(err?.message || 'We could not save your signed agreement. Please check your connection and try again.')
     } finally {
       setSaving(false)
     }
