@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -26,6 +27,13 @@ from ._oauth_return import safe_return_to as _safe_return_to
 logger = logging.getLogger("meridian.api.oauth")
 
 router = APIRouter(prefix="/api/square", tags=["square-oauth"])
+
+# org_id is a Postgres uuid column; a non-uuid value (demo/edge callers) makes
+# the DB lookup raise an invalid-uuid cast error → 500. Validate the shape first
+# and treat anything else as "not connected" (same regex as phone_dashboard).
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I
+)
 
 # HMAC signing secret — REQUIRED in all environments.
 _STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET", "")
@@ -327,6 +335,10 @@ async def callback(
 async def connection_status(org_id: str):
     """Quick check if org has an active Square connection."""
     from ...db import _db_instance
+    # Guard non-uuid org_id (demo edge) before it reaches the uuid column and
+    # raises a 500 on the invalid cast.
+    if not _UUID_RE.match(org_id or ""):
+        return {"connected": False, "reason": "invalid_org_id"}
     if not _db_instance:
         return {"connected": False, "reason": "db_unavailable"}
 

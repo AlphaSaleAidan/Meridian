@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -30,6 +31,13 @@ from ._oauth_return import safe_return_to as _safe_return_to
 logger = logging.getLogger("meridian.api.clover_oauth")
 
 router = APIRouter(prefix="/api/clover", tags=["clover-oauth"])
+
+# org_id is a Postgres uuid column; a non-uuid value (demo/edge callers) makes
+# the DB lookup raise an invalid-uuid cast error → 500. Validate the shape first
+# and treat anything else as "not connected" (same regex as phone_dashboard).
+_UUID_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I
+)
 
 # HMAC signing secret — reuse the same OAuth state secret as Square so a single
 # env var governs all OAuth CSRF protection.
@@ -315,6 +323,15 @@ async def connection_status(org_id: str):
     from ...db import _db_instance
     oauth_available = clover_config.has_oauth_credentials
     clover_available = clover_config.is_enabled
+    # Guard non-uuid org_id (demo edge) before it reaches the uuid column and
+    # raises a 500 on the invalid cast.
+    if not _UUID_RE.match(org_id or ""):
+        return {
+            "connected": False,
+            "reason": "invalid_org_id",
+            "oauth_available": oauth_available,
+            "clover_available": clover_available,
+        }
     if not _db_instance:
         return {
             "connected": False,

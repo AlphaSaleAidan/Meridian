@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import { clsx } from 'clsx'
+import { getAuthHeaders } from '@/lib/supabase'
 
 type ComplianceMode = 'anonymous' | 'opt_in_identity' | 'disabled'
 
@@ -32,7 +33,6 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
   })
   const [edgeDetected, setEdgeDetected] = useState(false)
   const [connectionTested, setConnectionTested] = useState(false)
-  const [testing, setTesting] = useState(false)
   const [error, setError] = useState('')
   const [consentConfirmed, setConsentConfirmed] = useState(false)
 
@@ -51,22 +51,20 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
 
   const apiBase = (import.meta.env.VITE_API_URL || '') as string
 
-  const testConnection = async () => {
-    setTesting(true)
+  // NOTE: This only validates the RTSP URL *format*. A live reachability test
+  // against the camera happens on the edge agent (it's the only thing on the
+  // local network that can reach the RTSP stream) and is not yet wired here, so
+  // we deliberately do NOT claim the camera is "connected" — see the
+  // coming-soon note rendered next to the button.
+  const testConnection = () => {
     setError('')
-    try {
-      const urlPattern = /^rtsp:\/\/.+/i
-      if (!urlPattern.test(config.rtsp_url)) {
-        setError('Enter a valid RTSP URL (e.g., rtsp://192.168.1.100:554/stream1)')
-        return
-      }
-      await new Promise(r => setTimeout(r, 1500))
-      setConnectionTested(true)
-    } catch {
-      setError('Could not connect to camera. Check the RTSP URL and network.')
-    } finally {
-      setTesting(false)
+    const urlPattern = /^rtsp:\/\/.+/i
+    if (!urlPattern.test(config.rtsp_url)) {
+      setConnectionTested(false)
+      setError('Enter a valid RTSP URL (e.g., rtsp://192.168.1.100:554/stream1)')
+      return
     }
+    setConnectionTested(true)
   }
 
   const handleSubmit = async () => {
@@ -74,7 +72,9 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     try {
       const res = await fetch(`${apiBase}/api/vision/cameras`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // getAuthHeaders() already includes Content-Type; spreading it attaches
+        // the Supabase JWT that require_org_access (CA-1/CA-2) now demands.
+        headers: { ...(await getAuthHeaders()) },
         body: JSON.stringify({
           org_id: orgId,
           name: config.name,
@@ -219,7 +219,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                 <div className="flex items-center gap-2">
                   <button
                     onClick={testConnection}
-                    disabled={testing || !config.rtsp_url}
+                    disabled={!config.rtsp_url}
                     className={clsx(
                       'px-3 py-1.5 text-[11px] rounded-lg font-medium transition-colors',
                       connectionTested
@@ -227,16 +227,17 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                         : 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/20 hover:bg-[#1A8FD6]/20'
                     )}
                   >
-                    {testing ? (
-                      <span className="flex items-center gap-1.5"><Wifi size={11} className="animate-pulse" /> Testing...</span>
-                    ) : connectionTested ? (
-                      <span className="flex items-center gap-1.5"><CheckCircle size={11} /> Connected</span>
+                    {connectionTested ? (
+                      <span className="flex items-center gap-1.5"><CheckCircle size={11} /> URL format valid</span>
                     ) : (
-                      <span className="flex items-center gap-1.5"><Wifi size={11} /> Test Connection</span>
+                      <span className="flex items-center gap-1.5"><Wifi size={11} /> Check URL format</span>
                     )}
                   </button>
                   {error && <span className="text-[10px] text-red-400">{error}</span>}
                 </div>
+                <p className="text-[9px] text-[#A1A1A8]/40">
+                  Live stream reachability is verified by the on-prem edge agent after setup — coming soon.
+                </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Active From</label>

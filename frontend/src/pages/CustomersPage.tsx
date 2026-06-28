@@ -361,7 +361,7 @@ export default function CustomersPage() {
       <DataPageSkeleton title="Customers" layout="table">
         <div className="space-y-6">
           {showCameraWizard && (
-            <CameraSetupWizard orgId="" onComplete={() => setShowCameraWizard(false)} onClose={() => setShowCameraWizard(false)} />
+            <CameraSetupWizard orgId={orgId} onComplete={() => setShowCameraWizard(false)} onClose={() => setShowCameraWizard(false)} />
           )}
           <ScrollReveal variant="fadeUp">
             <div className="flex items-start justify-between gap-4">
@@ -408,7 +408,7 @@ export default function CustomersPage() {
     <div className="space-y-6">
       {showCameraWizard && (
         <CameraSetupWizard
-          orgId=""
+          orgId={orgId}
           onComplete={() => setShowCameraWizard(false)}
           onClose={() => setShowCameraWizard(false)}
         />
