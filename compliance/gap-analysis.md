@@ -151,7 +151,7 @@ examination. None require new architecture — the patterns to fix them already 
 | **R0** | ✅ DONE | Live `pg_policies` confirmed read-only (`evidence/CC6.1-RLS/pg_policies_live_20260628.md`) | verify | done 2026-06-28 |
 | **R3** | P0 | **Fix the LIVE anon exposure:** `phone_*` + `schedule_*` — drop `USING(true)`, `TO service_role`, **REVOKE SELECT FROM anon/authenticated** (migration authored, not applied) | code (PR) | Aidan |
 | **R2** | P0 | Thread `enforce_service_member` into tenant-scoped `require_service_auth` handlers that lack it (billing.py confirmed gaps) | code (PR) | Aidan |
-| **R1** | P1 | Backport live `vision_*` member-isolation into a migration on main + restore CI denial test (anti-regression) | code (PR) | Aidan |
+| **R1** | P1 | Backport live `vision_*` member-isolation into a migration on main + restore CI denial test (anti-regression) — **migration authored** `evidence/CC6.1-RLS/backport_camera_rls_to_main.sql`, promote to `supabase/migrations/` | code (PR) | Aidan |
 | **R4** | P1 | Twilio webhook signature validation; remove raw PAN/CVV from memory (Twilio `<Pay>`) | code (PR) | Aidan |
 | **R5** | P1 | Make CI security scans blocking; pin deps | CI | Aidan |
 | **R6** | P1 | Enable + evidence MFA on all subservice consoles | org | Aidan (human) |
