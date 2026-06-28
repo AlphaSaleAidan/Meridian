@@ -596,7 +596,7 @@ export default function CanadaPortalCreateCustomerPage() {
         customer_email: form.email,
         customer_name: form.ownerName,
         business_name: form.businessName,
-        country: 'CA',
+        currency: 'CAD',
         rep_id: rep?.rep_id || '',
         rep_name: rep?.name || '',
         return_url: `${window.location.origin}/canada/onboard?checkout=success`,

@@ -70,6 +70,7 @@ class InvoiceRequest(BaseModel):
     customer_email: str
     description: str = "Meridian Analytics Subscription"
     due_days: int = 3
+    currency: str = "USD"              # "CAD" for Canada portal
 
     @field_validator("amount_cents")
     @classmethod
@@ -178,6 +179,7 @@ async def create_invoice(req: InvoiceRequest):
             customer_email=req.customer_email,
             description=req.description,
             due_days=req.due_days,
+            currency=req.currency,
         )
 
         if result.success:

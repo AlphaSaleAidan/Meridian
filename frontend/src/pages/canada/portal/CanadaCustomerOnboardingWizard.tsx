@@ -442,6 +442,7 @@ export default function CanadaCustomerOnboardingWizard() {
             customer_email: account.email,
             description: `Meridian Analytics (Canada) - ${planLabel} Plan (Setup Fee)`,
             due_days: 3,
+            currency: 'CAD',
           }),
         }),
         fetch(`${API_BASE}/api/billing/create-invoice`, {
@@ -451,6 +452,7 @@ export default function CanadaCustomerOnboardingWizard() {
             customer_email: account.email,
             description: `Meridian Analytics (Canada) - ${planLabel} Plan (Monthly Recurring)`,
             due_days: 30,
+            currency: 'CAD',
           }),
         }),
       ])

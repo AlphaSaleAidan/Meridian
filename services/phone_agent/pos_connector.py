@@ -139,7 +139,7 @@ async def _create_square_order(
             "quantity": str(item["quantity"]),
             "base_price_money": {
                 "amount": int(item.get("unit_price", 0) * 100),
-                "currency": order.get("currency", "USD"),
+                "currency": order.get("currency", "usd"),
             },
             "note": "; ".join(
                 filter(None, [

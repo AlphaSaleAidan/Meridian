@@ -270,7 +270,7 @@ async def _square_payment_link(
             "quantity": str(item.get("quantity", 1)),
             "base_price_money": {
                 "amount": int(item.get("unit_price", 0) * 100),
-                "currency": order.get("currency", "USD"),
+                "currency": order.get("currency", "usd"),
             },
         })
 
@@ -401,7 +401,7 @@ async def _create_meridian_checkout(order: dict, pos_system: str = "") -> dict:
                         "subtotal": order.get("subtotal", 0),
                         "tax": order.get("tax", 0),
                         "total": order.get("total", 0),
-                        "currency": order.get("currency", "USD"),
+                        "currency": order.get("currency", "usd"),
                         "pos_system": pos_system,
                         "status": "pending",
                         "source": "phone_agent",
