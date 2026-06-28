@@ -12,6 +12,7 @@ import ScrollReveal from '@/components/landing/ScrollReveal'
 import MagneticButton from '@/components/landing/MagneticButton'
 import CountUp from '@/components/landing/CountUp'
 import TiltCard from '@/components/landing/TiltCard'
+import ScheduleQuote from '@/components/landing/ScheduleQuote'
 
 const MeshGradient = lazy(() => import('@/components/landing/MeshGradient'))
 
@@ -578,6 +579,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── SCHEDULE A QUOTE ─────────────────────── */}
+      <ScheduleQuote accent={ACCENT} accentSecondary={ACCENT_CA} source="us-landing" />
+
       {/* ─── FAQ ──────────────────────────────────── */}
       <section className="max-w-3xl mx-auto px-6 py-16">
         <h2 className="text-2xl font-bold text-[#F5F5F7] mb-8">Frequently Asked Questions</h2>
@@ -589,7 +593,7 @@ export default function LandingPage() {
             },
             {
               q: 'How much does Meridian cost?',
-              a: 'Meridian starts at $250 USD per month ($339 CAD) for the Standard plan, with a free first month and no long-term contracts. The Premium plan at $490 USD adds camera intelligence and customer segmentation. The Command plan at $980 USD includes multi-location support.',
+              a: "Pricing is tailored to your business — your POS, number of locations, and the features you need. Schedule a quote and a specialist will call you within 48 hours with a plan and price built for you. Your first month is free, with no long-term contracts.",
             },
             {
               q: 'Which POS systems does Meridian support?',

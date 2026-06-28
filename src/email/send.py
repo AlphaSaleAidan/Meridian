@@ -430,6 +430,103 @@ async def send_update_brief(
     return results
 
 
+def _quote_default_recipients() -> list[str]:
+    """Founders notified on every public quote request.
+
+    Overridable via QUOTE_NOTIFY_EMAILS (comma-separated) so the list isn't
+    hard-locked, but defaults to the two founders.
+    """
+    import os
+    raw = os.environ.get("QUOTE_NOTIFY_EMAILS", "")
+    if raw.strip():
+        return [e.strip() for e in raw.split(",") if e.strip()]
+    return ["aidanpierce72@gmail.com", "cheungenochmgmt@gmail.com"]
+
+
+async def send_quote_request(
+    *,
+    full_name: str,
+    business_name: str,
+    email: str,
+    phone: str,
+    preferred_date: str = "",
+    preferred_window: str = "",
+    notes: str = "",
+    source: str = "",
+    recipients: Optional[list[str]] = None,
+) -> list[dict]:
+    """Notify sales of a new public "Schedule a Quote" lead.
+
+    Goes to the founders (see _quote_default_recipients). Self-contained HTML —
+    these are internal ops notifications, not branded customer mail, so no
+    template module is needed. Reply-To is set to the prospect so a founder can
+    reply straight back. Sent via Resend-first for reliable delivery to inboxes.
+    """
+    import html as _html
+
+    to_list = recipients or _quote_default_recipients()
+
+    def esc(v: str) -> str:
+        return _html.escape(v or "—")
+
+    window_label = {
+        "morning": "Morning (8am–12pm)",
+        "afternoon": "Afternoon (12pm–5pm)",
+        "evening": "Evening (5pm–8pm)",
+    }.get((preferred_window or "").lower(), preferred_window or "—")
+
+    rows = [
+        ("Name", esc(full_name)),
+        ("Business", esc(business_name)),
+        ("Email", esc(email)),
+        ("Phone", esc(phone)),
+        ("Preferred date", esc(preferred_date)),
+        ("Preferred window", esc(window_label)),
+        ("Source", esc(source)),
+    ]
+    row_html = "".join(
+        f'<tr><td style="padding:6px 12px;color:#888;font-size:13px;'
+        f'white-space:nowrap;vertical-align:top">{label}</td>'
+        f'<td style="padding:6px 12px;color:#111;font-size:14px;'
+        f'font-weight:600">{value}</td></tr>'
+        for label, value in rows
+    )
+    notes_html = (
+        f'<p style="margin:16px 0 0;color:#444;font-size:14px;line-height:1.5">'
+        f'<strong style="color:#888;font-weight:600">Anything we should know:</strong><br>'
+        f'{esc(notes)}</p>'
+        if (notes or "").strip()
+        else ""
+    )
+    body = (
+        '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;'
+        'max-width:560px;margin:0 auto;padding:24px">'
+        '<h2 style="margin:0 0 4px;color:#0066FF;font-size:18px">New quote request</h2>'
+        '<p style="margin:0 0 16px;color:#888;font-size:13px">'
+        'A prospect asked for a sales call within their chosen 48-hour window.</p>'
+        f'<table style="border-collapse:collapse;width:100%">{row_html}</table>'
+        f'{notes_html}'
+        '<p style="margin:24px 0 0;color:#aaa;font-size:12px">'
+        'Meridian &middot; public landing-page lead capture</p>'
+        '</div>'
+    )
+    subject = f"New quote request: {business_name}"
+
+    results: list[dict] = []
+    for to in to_list:
+        result = await _client.send(
+            to,
+            subject,
+            body,
+            tag="quote_request",
+            reply_to=email or None,
+            prefer_resend=True,
+        )
+        await _log_send(to, "quote_request", subject, result, tag="quote_request")
+        results.append({"to": to, **result})
+    return results
+
+
 async def fetch_canada_rep_emails() -> list[str]:
     """Fetch active Canadian rep emails from Supabase."""
     import os
