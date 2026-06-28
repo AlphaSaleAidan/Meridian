@@ -55,26 +55,31 @@ function NotificationPreferencesPanel({ orgId }: { orgId: string }) {
 
   useEffect(() => {
     if (!orgId) return
-    fetch(`${API_URL}/api/settings/notifications?org_id=${orgId}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data && typeof data === 'object') {
-          const merged = { ...NOTIF_DEFAULTS, ...data }
-          setPrefs(merged)
-          localStorage.setItem(NOTIF_KEY, JSON.stringify(merged))
-        }
-      })
-      .catch(() => { /* endpoint may not exist yet — localStorage is fine */ })
+    getAuthHeaders().then(headers => {
+      fetch(`${API_URL}/api/settings/notifications?org_id=${orgId}`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data && typeof data === 'object') {
+            const merged = { ...NOTIF_DEFAULTS, ...data }
+            setPrefs(merged)
+            localStorage.setItem(NOTIF_KEY, JSON.stringify(merged))
+          }
+        })
+        .catch(() => { /* endpoint may not exist yet — localStorage is fine */ })
+    })
   }, [orgId])
 
   const toggle = (key: keyof NotifPrefs) => {
     const next = { ...prefs, [key]: !prefs[key] }
     setPrefs(next)
     localStorage.setItem(NOTIF_KEY, JSON.stringify(next))
-    fetch(`${API_URL}/api/settings/notifications`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ org_id: orgId, ...next }),
-    }).catch(() => {})
+    getAuthHeaders().then(headers =>
+      fetch(`${API_URL}/api/settings/notifications`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_id: orgId, ...next }),
+      })
+    ).catch(() => {})
   }
 
   return (

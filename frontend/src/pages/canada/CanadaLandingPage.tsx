@@ -175,14 +175,14 @@ export default function CanadaLandingPage() {
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, ease: EASE, delay: 0.7 }} className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
             <MagneticButton onClick={() => navigate('/canada/onboard')} className="group px-6 py-3 text-[14px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_32px_rgba(26,143,214,0.3)] flex items-center gap-2">
-              Get Started Free <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+              Get a Quote <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
             <MagneticButton onClick={() => navigate('/canada/demo')} className="group px-6 py-3 text-[14px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 flex items-center gap-2">
               See Live Demo <ChevronRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
           </motion.div>
           <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, ease: EASE, delay: 0.9 }} className="mt-4 text-[12px] text-[#A1A1A8]/50 text-center">
-            No credit card required &middot; 45-second setup &middot; Cancel anytime
+            Plans from CA$350/mo &middot; 45-second setup &middot; No long-term contracts
           </motion.p>
 
           {/* Dashboard preview */}
@@ -343,8 +343,8 @@ export default function CanadaLandingPage() {
               },
               {
                 icon: Lock,
-                title: 'Built for Canadian Privacy Law',
-                desc: 'Privacy-by-design and aligned with PIPEDA and Quebec Law 25 — explicit (opt-in) consent for Quebec, documented retention, role-based access, and encryption in transit and at rest.',
+                title: 'Data Residency in Canada',
+                desc: 'Your POS transaction data is stored and processed within Canada. Meridian does not transfer your data to servers outside Canadian jurisdiction.',
               },
             ].map((item, i) => (
               <ScrollReveal key={item.title} delay={i * 0.12}>
@@ -361,7 +361,7 @@ export default function CanadaLandingPage() {
           <ScrollReveal className="mt-8 flex justify-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#1F1F23] bg-[#111113]/80 text-[#A1A1A8] text-[12px]">
               <MapPin size={14} className="text-[#17C5B0]" />
-              <span>CAD pricing &middot; Moneris &amp; Alice POS support &middot; PIPEDA &amp; Law 25 aligned</span>
+              <span>CAD pricing &middot; Square, Clover &amp; Lightspeed &middot; PIPEDA &amp; Law 25 aligned</span>
             </div>
           </ScrollReveal>
         </div>
@@ -377,17 +377,17 @@ export default function CanadaLandingPage() {
               Stop guessing.<br />Start <em className="font-serif italic font-normal bg-gradient-to-r from-[#1A8FD6] to-[#17C5B0] bg-clip-text text-transparent">knowing.</em>
             </h2>
             <p className="mt-6 text-[#A1A1A8] text-[15px] max-w-md mx-auto leading-relaxed">
-              Connect your Square, Clover, or Lightspeed POS and see exactly where your revenue is hiding. First month free — start seeing results in 60 seconds.
+              Connect your Square, Clover, or Lightspeed POS and see exactly where your revenue is hiding. Start seeing results in 60 seconds — plans from CA$350/mo.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
               <MagneticButton onClick={() => navigate('/canada/onboard')} className="group px-8 py-3.5 text-[15px] font-medium text-white bg-[#1A8FD6] rounded-lg transition-all duration-300 hover:shadow-[0_0_40px_rgba(26,143,214,0.35)] inline-flex items-center gap-2">
-                Get Started Free <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+                Get a Quote <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
               </MagneticButton>
               <MagneticButton onClick={() => navigate('/canada/demo')} className="group px-8 py-3.5 text-[15px] font-medium text-[#A1A1A8] border border-[#1F1F23] rounded-lg hover:border-[#2A2A30] hover:text-[#F5F5F7] transition-all duration-300 inline-flex items-center gap-2">
-                Book a Demo <ChevronRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
+                See a Demo <ChevronRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
               </MagneticButton>
             </div>
-            <p className="mt-3 text-[11px] text-[#A1A1A8]/40">No credit card &middot; No contracts &middot; First month free</p>
+            <p className="mt-3 text-[11px] text-[#A1A1A8]/40">Plans from CA$350/mo &middot; Billed in CAD &middot; No long-term contracts</p>
           </ScrollReveal>
         </div>
       </section>

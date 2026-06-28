@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Zap, Layers, Calendar, Phone, Video, Settings, Receipt,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
+import type { ModuleFlags } from '@/config/moduleFlags'
 
 /**
  * Merchant-portal information architecture for the trimmed Canada product.
@@ -32,7 +33,9 @@ const StaffPage = lazyRetry(() => import('@/pages/StaffPage'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
 const PhoneSetupWizard = lazyRetry(() => import('@/pages/canada/merchant/PhoneSetupWizard'))
 const CPAHandoffPage = lazyRetry(() => import('@/pages/canada/merchant/CPAHandoffPage'))
-const CameraIntelligencePage = lazyRetry(() => import('@/pages/seo/CameraIntelligencePage'))
+// Point to the in-app analytics view, NOT the SEO marketing page.
+// The public SEO route (/features/camera-intelligence) keeps seo/CameraIntelligencePage.
+const CameraIntelligencePage = lazyRetry(() => import('@/pages/CameraIntelligencePage'))
 const LiveCamerasPage = lazyRetry(() => import('@/pages/LiveCamerasPage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
@@ -52,6 +55,8 @@ export interface Pillar {
   /** Camera is a secondary tab, grouped apart from the money pillars. */
   secondary?: boolean
   segments: PillarSegment[]
+  /** When set, the pillar is hidden if the corresponding module flag is false. */
+  flag?: keyof ModuleFlags
 }
 
 export const merchantPillars: Pillar[] = [
@@ -65,6 +70,7 @@ export const merchantPillars: Pillar[] = [
     path: 'actions',
     label: 'Top Actions',
     icon: Zap,
+    flag: 'topActions',
     segments: [{ view: 'top', label: 'Top Actions', Component: ActionsPage }],
   },
   {
@@ -103,6 +109,7 @@ export const merchantPillars: Pillar[] = [
     path: 'tax',
     label: 'Taxes & Expenses',
     icon: Receipt,
+    flag: 'taxExpenses',
     segments: [{ view: 'handoff', label: 'CPA Handoff', Component: CPAHandoffPage }],
   },
   {

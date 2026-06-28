@@ -27,6 +27,7 @@ export interface ModuleFlags {
   insights: boolean
   agents: boolean
   topActions: boolean
+  taxExpenses: boolean
   customers: boolean
   myWebsite: boolean
   content: boolean
@@ -45,6 +46,7 @@ export const defaultModuleFlags: ModuleFlags = {
   insights: true,
   agents: true,
   topActions: true,
+  taxExpenses: true,
   customers: true,
   myWebsite: true,
   content: true,
@@ -63,6 +65,7 @@ export const canadaModuleFlags: ModuleFlags = {
   insights: false,
   agents: false,
   topActions: false,
+  taxExpenses: false,
   customers: false,
   myWebsite: false,
   content: false,

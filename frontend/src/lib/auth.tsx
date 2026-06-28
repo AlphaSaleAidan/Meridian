@@ -18,6 +18,10 @@ export interface AuthState {
   ready: boolean
   authenticated: boolean
   isAdmin: boolean
+  /** True when Supabase fired PASSWORD_RECOVERY (email reset link clicked).
+   *  The session is valid but the user should be shown a set-password form,
+   *  NOT auto-logged out. Resets to false on the next normal SIGNED_IN or sign-out. */
+  isRecovery: boolean
   user: { id: string; email: string } | null
   org: OrgProfile | null
   isSalesRep: boolean
@@ -133,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [org, setOrg] = useState<OrgProfile | null>(loadOrg)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isSalesRep, setIsSalesRep] = useState(false)
+  const [isRecovery, setIsRecovery] = useState(false)
   const [pendingBusiness, setPendingBusiness] = useState<{
     id: string; name: string; ownerName: string; email: string
   } | null>(null)
@@ -184,7 +189,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'PASSWORD_RECOVERY') {
+        // User followed an email reset link. The session is valid so they can
+        // call updateUser, but we flag it so the login page doesn't auto-logout.
+        if (session?.user) {
+          setUser({ id: session.user.id, email: session.user.email || '' })
+        }
+        setIsRecovery(true)
+        return
+      }
       if (session?.user) {
+        setIsRecovery(false)
         const u = { id: session.user.id, email: session.user.email || '' }
         setUser(u)
         // Defer Supabase-dependent loads. signInWithPassword awaits every
@@ -202,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsSalesRep(salesRep)
         }, 0)
       } else {
+        setIsRecovery(false)
         setUser(null)
         setOrg(null)
         setIsAdmin(false)
@@ -475,6 +491,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ready,
       authenticated: !!user,
       isAdmin,
+      isRecovery,
       user,
       org,
       isSalesRep,
