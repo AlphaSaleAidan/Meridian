@@ -122,7 +122,9 @@ These are documented remediated risks; honest write-ups of handled incidents str
   in prod (config-drift only — fix not in `main`). See `evidence/CC6.1-RLS/pg_policies_live_20260628.md`.
 - **C1 BOLA (CRITICAL):** `require_service_auth` accepts any signed-up merchant session; `enforce_service_member`
   not yet threaded into every tenant-scoped handler.
-- **H2 (HIGH):** no Twilio webhook signature validation; raw PAN/CVV in memory in the phone-pay path (PCI).
+- **H2 (HIGH, verified):** phone webhooks have **no signature validation** (confirmed — spoofable). Raw PAN/CVV
+  capture exists in code (`phone.py:1573+`) but is **gated** behind `CARD_PAYMENT_ENABLED` (default off) + `pay_now`
+  mode → likely inactive (pay-at-pickup norm); confirm the env flag in prod. (R-03a/R-03b, R4)
 - **MFA:** no technical enforcement; relies on subservice console settings (org control, evidence needed).
 - **Privacy:** retention-deletion function unscheduled; DSAR deletion not automated; `resale_tier:"premium"`
   on camera/journey data not disclosed to merchants in the SLA.
