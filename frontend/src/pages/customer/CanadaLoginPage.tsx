@@ -8,7 +8,7 @@ import { MapPin } from 'lucide-react'
 export default function CanadaLoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { ready, authenticated, org, logout } = useAuth()
+  const { ready, authenticated, org, logout, isRecovery } = useAuth()
 
   const from = (location.state as { from?: string })?.from || '/canada/merchant'
 
@@ -25,6 +25,15 @@ export default function CanadaLoginPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  // When Supabase fires PASSWORD_RECOVERY (user clicked email reset link), show
+  // the set-password form instead of auto-logging the recovery session out.
+  useEffect(() => {
+    if (isRecovery && authenticated && !mustReset && !cleared) {
+      setMustReset(true)
+      setCleared(true) // prevent the auto-logout branch below from racing
+    }
+  }, [isRecovery, authenticated, mustReset, cleared])
+
   useEffect(() => {
     if (!ready) return
     // A sign-in is in flight: signInWithPassword fires onAuthStateChange (which
@@ -32,9 +41,11 @@ export default function CanadaLoginPage() {
     // Without this guard the auto-logout branch below would race in and kill the
     // fresh session mid-login — the "spinner then nothing loads" symptom.
     if (loggingIn) return
-    // Hold on the page while the customer sets a new password on first login —
-    // don't auto-logout (the session is valid) and don't navigate away yet.
+    // Hold on the page while the customer sets a new password on first login or
+    // after clicking an email reset link — the session is valid, don't logout.
     if (mustReset) return
+    // isRecovery: PASSWORD_RECOVERY session — handled by the effect above.
+    if (isRecovery) return
     if (authenticated && !justLoggedIn && !cleared) {
       logout().then(() => setCleared(true))
       return
@@ -45,7 +56,7 @@ export default function CanadaLoginPage() {
       return
     }
     navigate(from, { replace: true })
-  }, [ready, authenticated, org, from, navigate, justLoggedIn, cleared, logout, mustReset, loggingIn])
+  }, [ready, authenticated, org, from, navigate, justLoggedIn, cleared, logout, mustReset, loggingIn, isRecovery])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()

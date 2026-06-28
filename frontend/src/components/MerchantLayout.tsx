@@ -5,10 +5,7 @@ import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { merchantPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
-
-const moneyPillars = merchantPillars.filter(p => !p.secondary && p.path !== 'settings')
-const secondaryPillars = merchantPillars.filter(p => p.secondary)
-const settingsPillar = merchantPillars.find(p => p.path === 'settings')
+import { useModuleFlags } from '@/config/moduleFlags'
 
 function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
   const Icon = pillar.icon
@@ -42,6 +39,15 @@ function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath
 export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { basePath?: string } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const closeSidebar = () => setSidebarOpen(false)
+  const flags = useModuleFlags()
+
+  // Filter pillars by their optional flag — disabled-never-delete pattern.
+  const visiblePillars = merchantPillars.filter(p => !p.flag || flags[p.flag])
+  const moneyPillars = visiblePillars.filter(p => !p.secondary && p.path !== 'settings')
+  const secondaryPillars = visiblePillars.filter(p => p.secondary)
+  const settingsPillar = visiblePillars.find(p => p.path === 'settings')
+  // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no overflow).
+  const mobileNavPillars = [...moneyPillars, ...(settingsPillar ? [settingsPillar] : [])]
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">
@@ -110,10 +116,10 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
         </div>
       </main>
 
-      {/* Mobile pillar bar */}
+      {/* Mobile pillar bar — money pillars + settings only, respects module flags */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]">
         <div className="flex items-stretch justify-around px-2 pb-[max(env(safe-area-inset-bottom),4px)]">
-          {merchantPillars.map(p => {
+          {mobileNavPillars.map(p => {
             const Icon = p.icon
             const to = p.path ? `${basePath}/${p.path}` : basePath
             return (

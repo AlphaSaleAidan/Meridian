@@ -28,6 +28,7 @@ function LiveTile({ cam, orgId }: { cam: Cam; orgId: string }) {
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [state, setState] = useState<'idle' | 'connecting' | 'live' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState<string>('Could not connect')
   const liveView = feats(cam).live_view
 
   const stop = useCallback(() => {
@@ -48,7 +49,11 @@ function LiveTile({ cam, orgId }: { cam: Cam; orgId: string }) {
     setState('connecting')
     try {
       const whep = await requestLive()
-      if (!whep) { setState('error'); return }
+      if (!whep) {
+        setErrorMsg('Stream unavailable — verify the RTSP URL in camera settings')
+        setState('error')
+        return
+      }
       const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }] })
       pcRef.current = pc
       pc.addTransceiver('video', { direction: 'recvonly' })
@@ -56,16 +61,26 @@ function LiveTile({ cam, orgId }: { cam: Cam; orgId: string }) {
       pc.ontrack = (e) => { if (videoRef.current) videoRef.current.srcObject = e.streams[0] }
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected') setState('live')
-        if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) setState('error')
+        if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+          setErrorMsg('WebRTC connection lost — check camera network connectivity')
+          setState('error')
+        }
       }
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
       const ans = await fetch(whep, { method: 'POST', headers: { 'Content-Type': 'application/sdp' }, body: offer.sdp || '' })
-      if (!ans.ok) { setState('error'); return }
+      if (!ans.ok) {
+        setErrorMsg('Edge relay rejected the connection — check Cloudflare stream config')
+        setState('error')
+        return
+      }
       await pc.setRemoteDescription({ type: 'answer', sdp: await ans.text() })
       // keep-alive: re-stamp the request every 15s so the edge keeps publishing
       pingRef.current = setInterval(() => { requestLive().catch(() => {}) }, 15000)
-    } catch { setState('error') }
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Could not connect')
+      setState('error')
+    }
   }, [requestLive])
 
   useEffect(() => stop, [stop])
@@ -80,7 +95,7 @@ function LiveTile({ cam, orgId }: { cam: Cam; orgId: string }) {
               : state === 'error' ? <VideoOff className="text-[#A1A1A8]" size={22} />
               : <Video className="text-[#1A8FD6]" size={22} />}
             <p className="text-[12px] text-[#A1A1A8]">
-              {state === 'connecting' ? 'Connecting…' : state === 'error' ? 'Could not connect' : 'Tap to view live'}
+              {state === 'connecting' ? 'Connecting…' : state === 'error' ? errorMsg : 'Tap to view live'}
             </p>
             {liveView && state !== 'connecting' && (
               <button onClick={start}
@@ -139,10 +154,13 @@ export default function LiveCamerasPage() {
   if (cams.length === 0) {
     return (
       <div className="space-y-8">
-        <div className="rounded-2xl border border-dashed border-[#1F1F23] py-12 text-center">
+        <div className="rounded-2xl border border-dashed border-[#1F1F23] py-12 text-center px-4">
           <Video className="mx-auto text-[#A1A1A8] mb-2" size={24} />
           <p className="text-[13px] text-[#A1A1A8]">No cameras connected yet.</p>
           <p className="text-[12px] text-[#A1A1A8]/60 mt-1">Add a camera in settings to view it live from anywhere.</p>
+          <p className="text-[11px] text-amber-400/80 mt-4 max-w-xs mx-auto leading-relaxed">
+            Under PIPEDA you must post visible signage at all monitored entrances before activating camera monitoring.
+          </p>
         </div>
         <CameraAnalyticsShowcase connected={false} />
       </div>
