@@ -613,8 +613,9 @@ class ScrapeRequest(BaseModel):
 
 
 @router.post("/scrape/website")
-async def scrape_website(req: ScrapeRequest):
+async def scrape_website(req: ScrapeRequest, user: dict = Depends(require_jwt)):
     """Scrape a merchant's website for brand info, logos, meta, and page content."""
+    await require_org_member(user, req.merchantId)
     from bs4 import BeautifulSoup
     from urllib.parse import urljoin, urlparse
 

@@ -22,7 +22,7 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("meridian.api.vapi")
@@ -249,14 +249,16 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
 
 @router.post("/webhook")
 async def vapi_webhook(request: Request):
-    # Auth: reject anyone who can't present Vapi's shared secret. Fail-closed
-    # only when the secret is configured (so the live line never breaks during
-    # rollout). Without this, the order-placing webhook is open to the internet.
-    if VAPI_SERVER_SECRET:
-        presented = request.headers.get("x-vapi-secret", "")
-        if not hmac.compare_digest(presented, VAPI_SERVER_SECRET):
-            logger.warning("vapi_webhook rejected: missing/invalid x-vapi-secret")
-            return JSONResponse(status_code=401, content={"error": "unauthorized"})
+    # Auth: fail-CLOSED — if VAPI_SERVER_SECRET is unset the webhook is not
+    # safe to process (any caller could trigger order placement). Return 503
+    # so Vapi retries rather than accepting unauthenticated calls.
+    if not VAPI_SERVER_SECRET:
+        logger.error("vapi_webhook: VAPI_SERVER_SECRET not configured — refusing unauthenticated webhook")
+        raise HTTPException(status_code=503, detail="Webhook authentication not configured")
+    presented = request.headers.get("x-vapi-secret", "")
+    if not hmac.compare_digest(presented, VAPI_SERVER_SECRET):
+        logger.warning("vapi_webhook rejected: missing/invalid x-vapi-secret")
+        return JSONResponse(status_code=401, content={"error": "unauthorized"})
     try:
         payload = await request.json()
     except Exception:

@@ -22,7 +22,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
-from ..auth import ADMIN_EMAILS, require_admin_jwt
+from ..auth import ADMIN_EMAILS, require_admin_jwt, require_jwt
 
 logger = logging.getLogger("meridian.api.compliance")
 
@@ -144,9 +144,15 @@ async def accept_document(req: AcceptanceRequest):
 
 
 @router.get("/api/compliance/pending/{user_id}")
-async def get_pending_acceptances(user_id: str, user_type: str = "customer", has_camera: bool = False, province: str = ""):
+async def get_pending_acceptances(user_id: str, user_type: str = "customer", has_camera: bool = False, province: str = "", caller: dict = Depends(require_jwt)):
     """Return list of documents this user has not yet accepted."""
     _validate_user_id(user_id)
+    # Verify caller is the subject user themselves or a global admin.
+    caller_id = (caller.get("id") or caller.get("sub") or "").lower()
+    caller_email = (caller.get("email") or "").lower()
+    is_admin = caller_email in [e.lower() for e in ADMIN_EMAILS]
+    if not is_admin and caller_id != user_id.lower():
+        raise HTTPException(403, "Access denied: you can only view your own pending acceptances")
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")

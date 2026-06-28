@@ -19,6 +19,12 @@
 -- NOTE: Apply with a Supabase snapshot in place (the main session manages that).
 -- DO NOT apply directly to prod without coordination.
 
+-- ── Pre-drop any stale policy names that may exist from earlier migrations ───
+-- (Idempotent: safe to run even if these names don't exist yet.)
+DROP POLICY IF EXISTS "canada_leads_read"   ON canada_leads;
+DROP POLICY IF EXISTS "canada_leads_write"  ON canada_leads;
+DROP POLICY IF EXISTS "canada_leads_insert" ON canada_leads;
+
 -- ── SELECT ────────────────────────────────────────────────────────────────────
 DROP POLICY IF EXISTS "Authenticated users can read all leads" ON canada_leads;
 CREATE POLICY "Reps can read own leads"
