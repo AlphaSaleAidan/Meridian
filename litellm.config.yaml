@@ -1,0 +1,118 @@
+# Meridian LiteLLM gateway — single-host on 127.0.0.1:4000.
+#
+# Four model aliases the rest of the stack speaks:
+#   meridian-architect → Kimi K2.6 (planning + critique, swarm lead)
+#   meridian-fixer     → Kimi K2.6 (autonomous server fixer)
+#   meridian-fast      → free/cheap tier (high-volume worker subtasks)
+#   meridian-local     → llama-cpp qwen-server on :8002 (truly free fallback)
+#
+# Fallback chain: K2.6 → fast → local. Swap K2.6 to self-hosted vLLM later by
+# changing only the meridian-architect/meridian-fixer entries to a local
+# openai/* model + api_base. Nothing downstream changes.
+
+model_list:
+  # --- Primary reasoning + swarm lead ---
+  - model_name: "meridian-architect"
+    litellm_params:
+      model: "openrouter/moonshotai/kimi-k2.6"
+      max_tokens: 16384
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      timeout: 600
+      stream_timeout: 600
+
+  # --- Autonomous fixer (agentic coding) ---
+  - model_name: "meridian-fixer"
+    litellm_params:
+      model: "openrouter/moonshotai/kimi-k2.6"
+      max_tokens: 16384
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      timeout: 600
+      stream_timeout: 600
+
+  # --- Fast / cheap tier. Groq + Cerebras keys are stale (401) — disabled until
+  #     refreshed; DeepSeek + SambaNova carry the tier. rpm caps throttle any
+  #     runaway caller (429) regardless of $-budget pricing gaps. ---
+  - model_name: "meridian-fast"
+    litellm_params:
+      model: "deepseek/deepseek-chat"
+      api_key: "os.environ/DEEPSEEK_API_KEY"
+      rpm: 120
+  - model_name: "meridian-fast"
+    litellm_params:
+      model: "openai/Meta-Llama-3.1-405B-Instruct"
+      api_base: "https://api.sambanova.ai/v1"
+      api_key: "os.environ/SAMBANOVA_API_KEY"
+      rpm: 120
+  # Disabled (stale keys) — re-add with rpm when refreshed:
+  #   groq/llama-3.3-70b-versatile (GROQ_API_KEY), cerebras/llama-3.3-70b (CEREBRAS_API_KEY)
+
+  # --- DeepSeek big chat (V3 latest, ~1.6T-class MoE) — dedicated alias ---
+  - model_name: "meridian-deep"
+    litellm_params:
+      model: "deepseek/deepseek-chat"
+      api_key: "os.environ/DEEPSEEK_API_KEY"
+      rpm: 120
+
+  # --- DeepSeek R1 reasoning ---
+  - model_name: "meridian-reason"
+    litellm_params:
+      model: "deepseek/deepseek-reasoner"
+      api_key: "os.environ/DEEPSEEK_API_KEY"
+      rpm: 120
+
+  # --- Local fallback: existing llama-cpp qwen-server on :8002 (OpenAI-compatible) ---
+  - model_name: "meridian-local"
+    litellm_params:
+      model: "openai/Qwen2.5-7B-Instruct"
+      api_base: "http://localhost:8002/v1"
+      api_key: "sk-local-noauth"
+      timeout: 120
+
+router_settings:
+  routing_strategy: "simple-shuffle"
+  num_retries: 2
+  timeout: 600
+  fallbacks:
+    - "meridian-architect": ["meridian-fast", "meridian-local"]
+    - "meridian-fixer": ["meridian-fast", "meridian-local"]
+    - "meridian-deep": ["meridian-fast", "meridian-local"]
+    - "meridian-reason": ["meridian-deep", "meridian-fast", "meridian-local"]
+    - "meridian-fast": ["meridian-local"]
+  redis_host: "localhost"
+  redis_port: 6379
+
+litellm_settings:
+  set_verbose: false
+  drop_params: true
+  cache: true
+  cache_params:
+    type: "redis"
+    host: "localhost"
+    port: 6379
+    ttl: 600
+  # Budget cap on total gateway spend (USD per budget_duration window).
+  # The placeholder is substituted at launch time from .env.litellm:LITELLM_MAX_BUDGET
+  # (see scripts/start-litellm.sh). Doing the swap in shell rather than via
+  # `os.environ/X` because LiteLLM doesn't cast env-var resolved values back
+  # to float — the comparison `current_spend > max_budget` then fails with a
+  # TypeError surfaced as a misleading 401. Edit only LITELLM_MAX_BUDGET in
+  # .env.litellm when funding more credit; committed config stays stable.
+  max_budget: __LITELLM_MAX_BUDGET__
+  budget_duration: "1d"
+
+general_settings:
+  store_model_in_db: false
+  disable_spend_logs: false
+  # Alerts route through the local Garry → Telegram bridge (PM2 entry
+  # garry-litellm-alerts on 127.0.0.1:8005). Budget alerts fire at the
+  # 50%/75%/90%/95%/99% thresholds against max_budget. llm_exceptions
+  # catches upstream auth/quota failures so you find out about a key
+  # rotation before the swarm wedges.
+  alerting: ["webhook"]
+  alert_to_webhook_url:
+    budget_alerts: "http://127.0.0.1:8005/alert"
+    llm_exceptions: "http://127.0.0.1:8005/alert"
+    spend_reports: "http://127.0.0.1:8005/alert"
+  alert_types:
+    - "budget_alerts"
+    - "llm_exceptions"
