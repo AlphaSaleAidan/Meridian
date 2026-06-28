@@ -41,6 +41,29 @@ async def require_device_token(x_device_token: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid device token")
 
 
+def camera_identity_enabled() -> bool:
+    """Gate for the biometric/identity tier (face embeddings + demographics).
+
+    Default OFF: cameras launch LIVE in ANONYMOUS mode only (aggregate counts,
+    dwell, occupancy — no face data). The 'opt_in_identity' compliance mode and
+    demographic estimation stay disabled until the consent-signage flow is
+    enforced (BIPA/PIPEDA require consent for biometric identifiers). Anonymous
+    analytics has no such requirement, so it ships now. Flip
+    CAMERA_IDENTITY_ENABLED=1 once the consent flow is live.
+    """
+    return os.environ.get("CAMERA_IDENTITY_ENABLED", "").lower() in ("1", "true", "yes")
+
+
+def _enforce_anonymous_only(compliance_mode: Optional[str]) -> None:
+    """Reject the biometric identity tier until consent is enforced."""
+    if compliance_mode == "opt_in_identity" and not camera_identity_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Repeat-visitor identity (face data) is releasing soon — "
+                   "use anonymous mode. Biometric identity needs the consent flow first.",
+        )
+
+
 # Per-camera tracking toggles the edge agent honors. Privacy-sensitive analyses
 # (demographics, VIP face-matching, depth) and live-view default OFF.
 DEFAULT_CAMERA_FEATURES = {
@@ -129,6 +152,13 @@ async def list_cameras(org_id: str):
 async def register_camera(req: CameraRegisterRequest):
     if req.compliance_mode not in ("anonymous", "opt_in_identity", "disabled"):
         raise HTTPException(status_code=400, detail="Invalid compliance_mode")
+    # Launch posture: anonymous-only. Block the biometric identity tier + features
+    # until the consent flow is enforced (CAMERA_IDENTITY_ENABLED).
+    _enforce_anonymous_only(req.compliance_mode)
+    feats = {**DEFAULT_CAMERA_FEATURES, **(req.features or {})}
+    if not camera_identity_enabled():
+        feats["demographics"] = False
+        feats["vip"] = False
 
     db = _get_db()
     if not db:
@@ -145,7 +175,7 @@ async def register_camera(req: CameraRegisterRequest):
         "active_hours": json_mod.dumps(req.active_hours),
         "edge_device_id": req.edge_device_id,
         "status": "offline",
-        "features": json_mod.dumps({**DEFAULT_CAMERA_FEATURES, **(req.features or {})}),
+        "features": json_mod.dumps(feats),
     }
     try:
         result = await db.insert("vision_cameras", row)
@@ -189,6 +219,9 @@ async def update_camera(camera_id: str, req: CameraUpdateRequest, org_id: str = 
         "anonymous", "opt_in_identity", "disabled"
     ):
         raise HTTPException(status_code=400, detail="Invalid compliance_mode")
+    # Launch posture: anonymous-only. Block flipping a camera into the biometric
+    # identity tier (or enabling demographics/vip) until consent is enforced.
+    _enforce_anonymous_only(updates.get("compliance_mode"))
 
     import json as json_mod
     if "zone_config" in updates:
@@ -197,7 +230,11 @@ async def update_camera(camera_id: str, req: CameraUpdateRequest, org_id: str = 
         updates["active_hours"] = json_mod.dumps(updates["active_hours"])
     if "features" in updates:
         # Merge over defaults so a partial toggle payload can't drop keys.
-        updates["features"] = json_mod.dumps({**DEFAULT_CAMERA_FEATURES, **updates["features"]})
+        feats = {**DEFAULT_CAMERA_FEATURES, **updates["features"]}
+        if not camera_identity_enabled():
+            feats["demographics"] = False
+            feats["vip"] = False
+        updates["features"] = json_mod.dumps(feats)
 
     try:
         result = await db.update("vision_cameras", updates, filters={"id": f"eq.{camera_id}"})
@@ -333,6 +370,10 @@ async def ingest_traffic(req: TrafficIngestRequest):
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
 
+    # Anonymous-only: drop demographic estimates unless the identity tier is live.
+    if not camera_identity_enabled():
+        req.demographic_breakdown = {}
+
     import json as json_mod
     row = {
         "org_id": req.org_id,
@@ -365,6 +406,13 @@ async def ingest_visits(req: VisitIngestRequest):
     db = _get_db()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
+
+    # Anonymous-only: no repeat-visitor face matching or demographics unless the
+    # identity tier is live. Strip the biometric identifier + demographics so a
+    # visit is recorded anonymously (dwell/zones/conversion only).
+    if not camera_identity_enabled():
+        req.visitor_hash = None
+        req.demographic = {}
 
     import json as json_mod
     visitor_id = None

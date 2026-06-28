@@ -22,6 +22,11 @@ interface CameraSetupWizardProps {
 const STEPS = ['Device', 'Camera', 'Zones', 'Privacy', 'Confirm'] as const
 type Step = (typeof STEPS)[number]
 
+// Cameras launch LIVE in anonymous mode. The biometric identity tier
+// (opt_in_identity) stays disabled until the consent-signage flow ships — mirrors
+// the backend CAMERA_IDENTITY_ENABLED gate (vision.py). Flip to '1' to allow it.
+const CAMERA_IDENTITY_ENABLED = import.meta.env.VITE_CAMERA_IDENTITY === '1'
+
 export default function CameraSetupWizard({ orgId, onComplete, onClose }: CameraSetupWizardProps) {
   const [step, setStep] = useState(0)
   const [config, setConfig] = useState<CameraConfig>({
@@ -329,12 +334,20 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                     badge: '',
                     badgeColor: '',
                   },
-                ]).map(opt => (
+                ]).map(opt => {
+                  // Identity tier is gated until the consent flow ships — show it
+                  // but make it unselectable ("Coming soon") so anonymous launches.
+                  const locked = opt.mode === 'opt_in_identity' && !CAMERA_IDENTITY_ENABLED
+                  const badge = locked ? 'Coming soon' : opt.badge
+                  const badgeColor = locked ? '#A1A1A8' : opt.badgeColor
+                  return (
                   <button
                     key={opt.mode}
-                    onClick={() => setConfig(c => ({ ...c, compliance_mode: opt.mode }))}
+                    disabled={locked}
+                    onClick={() => { if (!locked) setConfig(c => ({ ...c, compliance_mode: opt.mode })) }}
                     className={clsx(
                       'w-full p-3 rounded-lg border text-left transition-all',
+                      locked && 'opacity-50 cursor-not-allowed',
                       config.compliance_mode === opt.mode
                         ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
                         : 'border-[#1F1F23] hover:border-[#A1A1A8]/20 bg-[#0A0A0B]'
@@ -346,16 +359,18 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                         config.compliance_mode === opt.mode ? 'border-[#1A8FD6] bg-[#1A8FD6]' : 'border-[#A1A1A8]/20'
                       )} />
                       <span className="text-xs font-medium text-[#F5F5F7]">{opt.label}</span>
-                      {opt.badge && (
+                      {badge && (
                         <span className="text-[8px] font-bold px-1.5 py-0.5 rounded" style={{
-                          color: opt.badgeColor,
-                          backgroundColor: `${opt.badgeColor}15`,
-                        }}>{opt.badge}</span>
+                          color: badgeColor,
+                          backgroundColor: `${badgeColor}15`,
+                        }}>{badge}</span>
                       )}
                     </div>
-                    <p className="text-[10px] text-[#A1A1A8]/60 mt-1 ml-5">{opt.desc}</p>
+                    <p className="text-[10px] text-[#A1A1A8]/60 mt-1 ml-5">
+                      {locked ? 'Repeat-visitor identity is releasing soon. Anonymous analytics is live now.' : opt.desc}
+                    </p>
                   </button>
-                ))}
+                )})}
               </div>
 
               {config.compliance_mode !== 'disabled' && (
