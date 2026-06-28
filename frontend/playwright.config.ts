@@ -43,5 +43,19 @@ export default defineConfig({
         url: LOCAL_URL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
+        // The wizard e2e suite (e2e/wizards/*) needs a non-null Supabase client so
+        // getAuthHeaders() can attach a real Bearer from a seeded localStorage
+        // session — that is how we prove the #193/#194 auth-header fixes hold.
+        // These are FAKE values (a non-existent host); the wizard specs
+        // page.route-mock every Supabase auth/REST call so no real network ever
+        // happens. The subdomain ("e2ewizard") determines the supabase-js storage
+        // key (sb-e2ewizard-auth-token) that the harness seeds. The pre-existing
+        // local specs (camera/customer-portal) make no authed network calls, so a
+        // non-null-but-unused client does not affect them. See e2e/wizards/_harness.ts.
+        env: {
+          VITE_SUPABASE_URL: 'https://e2ewizard.supabase.co',
+          VITE_SUPABASE_ANON_KEY: 'e2e-fake-anon-key',
+          VITE_API_URL: '',
+        },
       },
 })
