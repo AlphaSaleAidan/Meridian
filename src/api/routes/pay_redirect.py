@@ -64,6 +64,19 @@ async def pay_redirect(code: str):
     if not rows or not rows[0].get("checkout_url"):
         raise HTTPException(404, "Payment link not found or expired")
 
+    # Don't bounce the customer to a dead Stripe page for a finished/expired
+    # session — show a branded status page instead. Stripe checkout_session
+    # statuses: "open" (payable), "complete" (paid), "expired".
+    status = (rows[0].get("status") or "").lower()
+    if status == "complete" or status == "paid":
+        body = ("<h1>Already paid</h1><p>This order has already been paid — "
+                "no further action needed. Thanks!</p>")
+        return HTMLResponse(_page("Already paid", "✓", body), status_code=200)
+    if status in ("expired", "canceled", "cancelled"):
+        body = ("<h1>This payment link has expired</h1><p>Please ask the "
+                "restaurant for a fresh link to complete your order.</p>")
+        return HTMLResponse(_page("Link expired", "⌛", body, accent="#9A6700"), status_code=410)
+
     # 303 so the browser issues a clean GET to Stripe's hosted page.
     return RedirectResponse(url=rows[0]["checkout_url"], status_code=303)
 
