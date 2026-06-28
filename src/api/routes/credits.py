@@ -97,8 +97,10 @@ async def get_credit_balance(merchant_id: str, user: dict = Depends(require_jwt)
 async def get_credit_ledger(
     merchant_id: str,
     limit: int = Query(50, ge=1, le=500),
+    user: dict = Depends(require_jwt),
 ):
     """Recent ledger entries for the dashboard's billing history view."""
+    await require_org_member(user, merchant_id)
     if not SUPABASE_URL or not SUPABASE_KEY:
         return {"entries": []}
 
@@ -165,12 +167,13 @@ async def post_credit_deduct(req: DeductRequest):
 
 
 @router.post("/starter-grant/{merchant_id}", status_code=200)
-async def post_starter_grant(merchant_id: str):
+async def post_starter_grant(merchant_id: str, user: dict = Depends(require_jwt)):
     """Grant the free signup credits if this merchant has never been credited.
 
     Safe to call repeatedly — the ledger check inside ensure_starter_grant
     short-circuits if a starter_grant entry already exists.
     """
+    await require_org_member(user, merchant_id)
     new_balance = await ensure_starter_grant(merchant_id)
     return {
         "merchant_id": merchant_id,

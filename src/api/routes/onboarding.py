@@ -512,7 +512,7 @@ class MarkOnboardedRequest(BaseModel):
     org_id: str
 
 
-@router.post("/mark-onboarded")
+@router.post("/mark-onboarded", dependencies=[Depends(require_service_auth)])
 async def mark_onboarded(req: MarkOnboardedRequest):
     """Mark a business as onboarded. Called after setup wizard completion."""
     import httpx
@@ -551,7 +551,7 @@ class SendInvoiceSmsRequest(BaseModel):
     amount_display: str = "$250/mo"
 
 
-@router.post("/send-invoice-sms")
+@router.post("/send-invoice-sms", dependencies=[Depends(require_service_auth)])
 async def send_invoice_sms_endpoint(req: SendInvoiceSmsRequest):
     """Manual resend: sales rep triggers invoice SMS to customer."""
     from src.sms.client import send_invoice_sms
