@@ -27,6 +27,7 @@ from .templates import (
     schedule_published,
     update_brief,
 )
+from ..compliance.casl_guard import casl_wrapped_send
 
 logger = logging.getLogger("meridian.email.send")
 
@@ -141,7 +142,11 @@ async def send_weekly_report(
         dashboard_url=f"{_FRONTEND}/app",
     )
     subject = f"Weekly Report — {business_name}"
-    result = await _client.send(to, subject, html, tag="weekly_report")
+    # Route through CASL guard — weekly reports are commercial messages.
+    result = await casl_wrapped_send(
+        to, "weekly_digest",
+        _client.send, to, subject, html, tag="weekly_report",
+    )
     await _log_send(to, "weekly_report", subject, result, org_id=org_id, tag="weekly_report")
     return result
 
@@ -424,7 +429,11 @@ async def send_update_brief(
     )
     results = []
     for to in recipients:
-        result = await _client.send(to, subject, html, tag="update_brief", reply_to=reply_to, prefer_resend=True)
+        # Route through CASL guard — update briefs are commercial messages.
+        result = await casl_wrapped_send(
+            to, "newsletter",
+            _client.send, to, subject, html, tag="update_brief", reply_to=reply_to, prefer_resend=True,
+        )
         await _log_send(to, "update_brief", subject, result, tag="update_brief")
         results.append({"to": to, **result})
     return results
