@@ -397,10 +397,14 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
   useEffect(() => {
     if (isDemo) { setConnectStatus('not_connected'); return }
     if (!orgId) { setConnectStatus('not_connected'); return }
-    fetch(`${apiBase}/api/stripe/connect/status/${orgId}`, {})
-      .then(r => r.ok ? (r.json() as Promise<{ connected: boolean }>) : null)
-      .then(data => { setConnectStatus(data?.connected ? 'connected' : 'not_connected') })
-      .catch(() => setConnectStatus('not_connected'))
+    ;(async () => {
+      try {
+        const headers = await getAuthHeaders()
+        const r = await fetch(`${apiBase}/api/stripe/connect/status/${orgId}`, { headers })
+        const data = r.ok ? (await r.json() as { connected: boolean }) : null
+        setConnectStatus(data?.connected ? 'connected' : 'not_connected')
+      } catch { setConnectStatus('not_connected') }
+    })()
   }, [orgId, isDemo, apiBase])
 
   async function handleConnect() {
@@ -486,8 +490,8 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
           <div className="mt-4 bg-[#111113] border border-[#1F1F23] rounded-lg px-4 py-3 flex items-start gap-2">
             <Info size={12} className="text-[#A1A1A8] mt-0.5 flex-shrink-0" />
             <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
-              Long AI calls (&gt;3 min) add <strong className="text-[#F5F5F7]">$0.45/min</strong> billed separately.
-              Stripe processing is ~2.9% + $0.30 per transaction. Meridian charges a flat $2.50 service fee per order.
+              Long AI calls (&gt;3 min) add <strong className="text-[#F5F5F7]">{biz.currency}0.45/min</strong> billed separately.
+              Stripe processing is ~2.9% + {biz.currency}0.30 per transaction. Meridian charges a flat {biz.currency}2.50 service fee per order.
             </p>
           </div>
         )}
@@ -512,7 +516,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
       {totals.total > 0 && (
         <p className="text-[10px] text-[#A1A1A8]">
           {totals.paid} of {totals.total} order{totals.total !== 1 ? 's' : ''} paid &middot;
-          Stripe fees are estimated (2.9% + $0.30). Long AI calls (&gt;3 min) add $0.45/min billed separately.
+          Stripe fees are estimated (2.9% + {biz.currency}0.30). Long AI calls (&gt;3 min) add {biz.currency}0.45/min billed separately.
         </p>
       )}
 
@@ -578,8 +582,8 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-[10px] text-[#A1A1A8]">
         <span className="flex items-center gap-1"><ArrowRight size={10} className="text-amber-400" /> Customer pays full order total</span>
-        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Meridian flat fee: $2.50/order</span>
-        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Stripe processing: ~2.9% + $0.30</span>
+        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Meridian flat fee: {biz.currency}2.50/order</span>
+        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Stripe processing: ~2.9% + {biz.currency}0.30</span>
         <span className="flex items-center gap-1"><ArrowRight size={10} className="text-[#17C5B0]" /> Net deposited to your account</span>
       </div>
     </div>
@@ -617,8 +621,8 @@ export default function PhoneOrdersPage() {
   const business: PhoneBizConfig = useMemo(() => {
     const cad = typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
     const currency = cad ? 'CA$' : '$'
-    if (!isDemo && phoneConfig?.exists) return { id: phoneConfig.merchant_id, name: phoneConfig.business_name || org?.business_name || 'My Business', vertical: phoneConfig.business_type || 'restaurant', country: 'US' as const, currency, taxRate: 0.08, phone: phoneConfig.phone_number || '', greeting: phoneConfig.greeting || '', voice: phoneConfig.voice || 'af_bella', orderTypes: (phoneConfig.order_types || ['pickup', 'delivery']) as any, menu: (phoneConfig.menu_items || []).map((m: any, i: number) => ({ id: m.id || `item-${i}`, name: m.name || '', price: m.price || 0, category: m.category || 'General' })) }
-    if (!isDemo) return { id: orgId || '', name: org?.business_name || 'My Business', vertical: 'restaurant', country: 'US' as const, currency, taxRate: 0.08, phone: '', greeting: '', voice: 'af_bella', orderTypes: ['pickup', 'delivery'] as any, menu: [] }
+    if (!isDemo && phoneConfig?.exists) return { id: phoneConfig.merchant_id, name: phoneConfig.business_name || org?.business_name || 'My Business', vertical: phoneConfig.business_type || 'restaurant', country: (cad ? 'CA' : 'US') as 'CA' | 'US', currency, taxRate: cad ? 0.13 : 0.08, phone: phoneConfig.phone_number || '', greeting: phoneConfig.greeting || '', voice: phoneConfig.voice || 'af_bella', orderTypes: (phoneConfig.order_types || ['pickup', 'delivery']) as any, menu: (phoneConfig.menu_items || []).map((m: any, i: number) => ({ id: m.id || `item-${i}`, name: m.name || '', price: m.price || 0, category: m.category || 'General' })) }
+    if (!isDemo) return { id: orgId || '', name: org?.business_name || 'My Business', vertical: 'restaurant', country: (cad ? 'CA' : 'US') as 'CA' | 'US', currency, taxRate: cad ? 0.13 : 0.08, phone: '', greeting: '', voice: 'af_bella', orderTypes: ['pickup', 'delivery'] as any, menu: [] }
     return demoData.business
   }, [phoneConfig, demoData.business, org?.business_name, isDemo, orgId])
 
@@ -653,7 +657,9 @@ export default function PhoneOrdersPage() {
         <div><h1 className="text-2xl font-bold text-[#F5F5F7]">Phone Orders</h1><p className="text-sm text-[#A1A1A8] mt-1">AI-powered phone ordering for your business</p></div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowConnect(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1A8FD6] text-white text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors"><Phone size={14} /> Connect Phone</button>
-          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#17C5B0]/10 text-[#17C5B0]"><span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0] animate-pulse" />Active</span>
+          {(isDemo || phoneConfig?.active) && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#17C5B0]/10 text-[#17C5B0]"><span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0] animate-pulse" />Active</span>
+          )}
         </div>
       </div>
       <div className="period-toggle">

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
-import { phoneService, type PhoneConfig } from '@/lib/phone-service'
+import { phoneService, isValidE164, type PhoneConfig } from '@/lib/phone-service'
 
 /**
  * "Connect your phone" wizard — a segment under the Phone Calls pillar.
@@ -72,18 +72,28 @@ const STEPS: { key: Step; label: string }[] = [
   { key: 'test', label: 'Test' },
 ]
 
-// Carrier star-codes vary — these are the most common North-American defaults.
+// Carrier star-codes vary. Bell Canada uses *21/*#21 for unconditional forward
+// while Rogers/Telus/Fido use the classic *72/*73 codes.
 const STAR_CODES = [
-  { label: 'Forward all calls', on: '*72', note: 'dial *72 then the Meridian number' },
-  { label: 'Cancel forwarding', on: '*73', note: 'turns forwarding back off' },
+  { label: 'Forward all calls (Rogers · Telus · Fido)', on: '*72', note: 'dial *72 then the Meridian number' },
+  { label: 'Cancel forwarding (Rogers · Telus · Fido)', on: '*73', note: 'turns forwarding back off' },
+  { label: 'Forward all calls (Bell Canada)', on: '*21', note: 'Bell\'s unconditional call-forward code' },
+  { label: 'Cancel forwarding (Bell Canada)', on: '#21', note: 'dial #21 to cancel Bell forwarding' },
   { label: 'Forward when busy', on: '*90', note: 'for the Overflow option' },
   { label: 'Forward on no-answer', on: '*92', note: 'for the Overflow option' },
 ]
 
-// Loose North-American phone validation: 10–15 digits after stripping symbols.
+/** Normalise a raw North-American number to +1XXXXXXXXXX E.164 format. */
+function normalizeToE164(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, '')
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  return raw.trim() // already E.164 or unknown format — pass through as-is
+}
+
+/** E.164 validation: accepts raw input that can be normalised to +1XXXXXXXXXX. */
 function isValidPhone(v: string): boolean {
-  const digits = v.replace(/[^\d]/g, '')
-  return digits.length >= 10 && digits.length <= 15
+  return isValidE164(normalizeToE164(v))
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -153,7 +163,7 @@ export default function PhoneSetupWizard() {
     try {
       const ok = await phoneService.saveConfig({
         merchant_id: orgId,
-        transfer_number: transferNumber.trim(),
+        transfer_number: normalizeToE164(transferNumber.trim()),
       })
       if (!ok) { setError('Could not save the transfer number — please try again.'); return }
       setSaved(true)
@@ -267,7 +277,9 @@ export default function PhoneSetupWizard() {
                     From your business phone, dial the star-code, then the Meridian number above:
                   </p>
                   {STAR_CODES
-                    .filter(sc => mode === 'forward_all' ? sc.on === '*72' || sc.on === '*73' : true)
+                    .filter(sc => mode === 'forward_all'
+                      ? (sc.on === '*72' || sc.on === '*73' || sc.on === '*21' || sc.on === '#21')
+                      : true)
                     .map(sc => (
                       <div key={sc.on} className="flex items-center gap-3 bg-[#111113] border border-[#1F1F23] rounded-lg px-3 py-2">
                         <code className="text-sm font-mono font-semibold text-[#17C5B0] flex-shrink-0">{sc.on}</code>

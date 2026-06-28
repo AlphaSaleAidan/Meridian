@@ -79,6 +79,18 @@ _sessions: dict[str, dict[str, Any]] = {}
 SESSION_TTL = 600
 TWIML = "application/xml"
 
+# ── Polly TTS voice selection by language ──────────────────────────────────────
+# French-Canadian merchants use Chantal (fr-CA) instead of Joanna (en-US) so
+# after-hours messages, greetings, and reprompts are pronounced correctly.
+_EN_VOICE = "Polly.Joanna"   # en-US (default)
+_FR_VOICE = "Polly.Chantal"  # fr-CA
+
+
+def _polly_voice(lang: str) -> str:
+    """Return the Amazon Polly voice name for the given BCP-47 language tag."""
+    return _FR_VOICE if (lang or "en").lower().startswith("fr") else _EN_VOICE
+
+
 DEMO_MENU = [
     {"name": "Cheeseburger", "price": 12.99, "sizes": ["regular", "double"]},
     {"name": "Chicken Sandwich", "price": 11.49},
@@ -217,7 +229,7 @@ def _menu_hints(menu_items: list[dict]) -> str:
     return ", ".join(uniq[:100])
 
 
-def _gather(say: str, timeout: int = 5, speech_timeout: int = 1, hints: str = "") -> str:
+def _gather(say: str, timeout: int = 5, speech_timeout: int = 1, hints: str = "", voice: str = _EN_VOICE) -> str:
     # Telnyx TeXML requires speechTimeout as an INTEGER (seconds of silence after
     # speech ends). The Twilio-ism speechTimeout="auto" is rejected by Telnyx and
     # makes Gather fire its action with an empty SpeechResult -> the reprompt loop.
@@ -233,18 +245,18 @@ def _gather(say: str, timeout: int = 5, speech_timeout: int = 1, hints: str = ""
     hints_attr = f' hints="{_escape(hints)}"' if hints else ""
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Say voice="{voice}">{_escape(say)}</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
     transcriptionEngine="A"{hints_attr} />
-  <Say voice="Polly.Joanna">I didn't catch that. Could you say that again?</Say>
+  <Say voice="{voice}">I didn't catch that. Could you say that again?</Say>
   <Gather input="speech" action="/twilio/gather" method="POST"
     speechTimeout="{speech_timeout}" timeout="{timeout}" language="en-US"
     transcriptionEngine="A"{hints_attr} />
 </Response>"""
 
 
-def _listen(say: str, max_length: int = 15, timeout: int = 1, hints: str = "") -> str:
+def _listen(say: str, max_length: int = 15, timeout: int = 1, hints: str = "", voice: str = _EN_VOICE) -> str:
     # Per-turn capture via <Record> instead of <Gather input="speech">.
     # <Gather input="speech"> reads the default *inbound* track, which on these
     # Telnyx calls carries the bot's own Polly playback — so the caller is never
@@ -270,7 +282,7 @@ def _listen(say: str, max_length: int = 15, timeout: int = 1, hints: str = "") -
     # recording (and therefore the response) out faster.
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Say voice="{voice}">{_escape(say)}</Say>
   <Record action="/twilio/gather" method="POST" playBeep="false"
     maxLength="{max_length}" timeout="{timeout}"
     transcription="true" transcriptionEngine="A" transcriptionLanguage="en-US"
@@ -278,7 +290,7 @@ def _listen(say: str, max_length: int = 15, timeout: int = 1, hints: str = "") -
 </Response>"""
 
 
-def _dial(say: str, number: str) -> str:
+def _dial(say: str, number: str, voice: str = _EN_VOICE) -> str:
     """TeXML to speak a handoff line then bridge the caller to a human.
 
     Telnyx <Dial> connects the inbound caller to the destination number; when
@@ -287,7 +299,7 @@ def _dial(say: str, number: str) -> str:
     """
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Say voice="{voice}">{_escape(say)}</Say>
   <Dial>{_escape(number)}</Dial>
 </Response>"""
 
@@ -349,15 +361,16 @@ def _prompt(say: str, session: dict | None) -> str:
     <Record> + synchronous Telnyx STT path. So a call self-heals to a working
     capture method instead of looping on "I didn't catch that"."""
     hints = (session or {}).get("hints", "")
+    voice = _polly_voice((session or {}).get("lang", "en"))
     if session and session.get("capture") == "record":
-        return _listen(say, hints=hints)
-    return _gather(say, hints=hints)
+        return _listen(say, hints=hints, voice=voice)
+    return _gather(say, hints=hints, voice=voice)
 
 
-def _hangup(say: str) -> str:
+def _hangup(say: str, voice: str = _EN_VOICE) -> str:
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Say voice="{voice}">{_escape(say)}</Say>
   <Hangup />
 </Response>"""
 
@@ -713,15 +726,17 @@ def _credits_paused_twiml() -> str:
 </Response>"""
 
 
-def _after_hours_twiml(message: str) -> str:
+def _after_hours_twiml(message: str, lang: str = "en") -> str:
     """TwiML for a call that lands outside the merchant's business hours.
 
     Speaks the merchant's after-hours message (or a default) once, then hangs
     up. Logged with status 'after_hours' so it shows in the dashboard.
+    `lang` selects the Polly voice (fr → Chantal, else Joanna).
     """
+    voice = _polly_voice(lang)
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">{_escape(message)}</Say>
+  <Say voice="{voice}">{_escape(message)}</Say>
   <Hangup />
 </Response>"""
 
@@ -843,7 +858,7 @@ async def twilio_voice(request: Request):
                 f"Thanks for calling {config_row.get('business_name') or 'us'}. "
                 "We're currently closed. Please call back during our business hours."
             )
-            return Response(content=_after_hours_twiml(msg), media_type=TWIML)
+            return Response(content=_after_hours_twiml(msg, lang=merchant_lang), media_type=TWIML)
 
     # Pre-call gate: refuse if the merchant can't cover even one minute.
     # Demo merchant bypasses (the canonical test number always works).
@@ -914,11 +929,25 @@ async def twilio_voice(request: Request):
         # the SMS/email order ticket when a POS push falls back.
         "merchant_phone": ((config_row or {}).get("transfer_number") or "").strip(),
         "merchant_email": ((config_row or {}).get("merchant_email") or "").strip(),
+        # Language tag for Polly voice selection and CA disclosure.
+        "lang": merchant_lang,
     }
     greeting = (
         (config_row or {}).get("greeting")
         or "Thank you for calling Meridian Demo Restaurant! What can I get for you today?"
     )
+    # Fix CA-2: mandatory PIPEDA/Law 25 AI + recording disclosure for Canadian
+    # merchants. Prepended by the backend so merchants cannot omit it by editing
+    # their greeting. Triggered when language is French (fr*) or Canadian English
+    # (en-ca / en_ca) and the caller is on a real (non-demo) merchant line.
+    is_ca_merchant = merchant_lang.startswith("fr") or "ca" in merchant_lang
+    if is_ca_merchant and merchant_id != DEMO_MERCHANT_ID:
+        biz_name = (config_row or {}).get("business_name") or "this business"
+        ca_disclosure = (
+            f"Hi, you've reached {biz_name}. "
+            "I'm an automated assistant and this call may be recorded."
+        )
+        greeting = ca_disclosure + " " + greeting
     return Response(content=_prompt(greeting, _sessions[call_sid]), media_type=TWIML)
 
 
@@ -978,12 +1007,13 @@ async def twilio_gather(request: Request):
     text, tool = _parse(result)
 
     if tool:
+        _sess_voice = _polly_voice(session.get("lang", "en"))
         if tool["name"] == "transfer_call":
             handoff = tool["input"].get("handoff", "One moment, connecting you now.")
             if transfer_number:
                 await _log_call_end(call_sid, "transferred")
                 del _sessions[call_sid]
-                return Response(content=_dial(handoff, transfer_number), media_type=TWIML)
+                return Response(content=_dial(handoff, transfer_number, voice=_sess_voice), media_type=TWIML)
             # No number on file: don't drop the call — keep the conversation going.
             session["messages"].append({"role": "assistant", "content": handoff})
             return Response(content=_prompt(handoff, session), media_type=TWIML)
@@ -992,7 +1022,7 @@ async def twilio_gather(request: Request):
             farewell = tool["input"].get("farewell", "Thank you for calling Meridian! Have a great day!")
             await _log_call_end(call_sid, "no_order")
             del _sessions[call_sid]
-            return Response(content=_hangup(farewell), media_type=TWIML)
+            return Response(content=_hangup(farewell, voice=_sess_voice), media_type=TWIML)
 
         if tool["name"] == "submit_order":
             items = tool["input"].get("items", [])
@@ -1015,7 +1045,7 @@ async def twilio_gather(request: Request):
                     "kitchen right now. I've flagged it for the team. Please try "
                     "calling back in a few minutes and we'll get you taken care of."
                 )
-                return Response(content=_hangup(apology), media_type=TWIML)
+                return Response(content=_hangup(apology, voice=_sess_voice), media_type=TWIML)
 
             order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
 
@@ -1045,15 +1075,23 @@ async def twilio_gather(request: Request):
                        f"Now let's take payment to lock it in.")
                 return Response(content=f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">{_escape(say)}</Say>
+  <Say voice="{_sess_voice}">{_escape(say)}</Say>
   <Redirect method="POST">/twilio/pay/start</Redirect>
 </Response>""", media_type=TWIML)
 
-            confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
+            # Fix 1: no-POS SMS path tells caller a link was texted instead of
+            # falsely claiming the order hit a kitchen.
+            if getattr(order_result, "pos_system", "") == "sms_link":
+                confirmation = (
+                    f"Got it! I've texted a payment link to your phone for {order_summary}. "
+                    f"Your reference is {order_id}. Check your texts to complete the order!"
+                )
+            else:
+                confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
             await _log_call_end(call_sid, "order_placed", tool["input"])
             del _sessions[call_sid]
-            return Response(content=_hangup(confirmation), media_type=TWIML)
+            return Response(content=_hangup(confirmation, voice=_sess_voice), media_type=TWIML)
 
     reply = text or "Could you repeat that please?"
     session["messages"].append({"role": "assistant", "content": reply})
@@ -1149,10 +1187,72 @@ async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> Or
     pos = await _resolve_pos_for_session(session)
     system_key = pos["pos_system"]
     if not system_key:
+        merchant_id = session.get("merchant_id", "")
+        if merchant_id == DEMO_MERCHANT_ID:
+            # Demo: fabricated order id is intentional — the agent is in demo mode
+            # and no real kitchen exists to receive the order.
+            return OrderResult(
+                success=True,
+                order_id=f"MRD-{abs(hash(call_sid)) % 9000 + 1000}",
+                pos_system="demo",
+            )
+        # Fix 1 — real merchant with no POS configured: never claim success with a
+        # fabricated id. Attempt the SMS pay-link handoff so the caller gets a
+        # payment link by text. Returns success=True only when the SMS was actually
+        # dispatched; otherwise returns failure so the gather handler plays an honest
+        # apology (the caller is told to call back, not given a fake order number).
+        order_id = f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
+        caller_phone = (session.get("caller_phone") or "").strip()
+        sms_sent = False
+        if caller_phone:
+            try:
+                import types as _types
+                from voice_sms_handoff import send_payment_link_to_caller  # sidecar module
+                _conf = _types.SimpleNamespace(
+                    pos_system="",
+                    pos_access_token="",
+                    pos_location_id="",
+                    business_name=session.get("merchant_name") or "",
+                    merchant_id=merchant_id,
+                    menu_items=[],
+                    tax_rate=0.13,
+                    sms_checkout_enabled=True,
+                    demo_safe=False,
+                    stripe_account_id="",
+                    stripe_charges_enabled=False,
+                )
+                sms_result = await send_payment_link_to_caller(
+                    merchant_config=_conf,
+                    order_input=order_input,
+                    caller_phone=caller_phone,
+                    merchant_id=merchant_id,
+                )
+                sms_sent = not sms_result.get("skipped_reason")
+                if not sms_sent:
+                    logger.warning(
+                        "phone no-POS: SMS pay-link skipped (reason=%s merchant=%s)",
+                        sms_result.get("skipped_reason"), merchant_id,
+                    )
+                else:
+                    logger.info(
+                        "phone no-POS: SMS pay-link sent (merchant=%s order=%s)",
+                        merchant_id, order_id,
+                    )
+            except Exception as _sms_err:
+                logger.error(
+                    "phone no-POS: SMS pay-link handoff failed (merchant=%s): %s",
+                    merchant_id, _sms_err,
+                )
+        if sms_sent:
+            return OrderResult(success=True, order_id=order_id, pos_system="sms_link")
+        # SMS could not be sent — honest failure so the caller gets an apology
+        # rather than a fabricated confirmation.
         return OrderResult(
-            success=True,
-            order_id=f"MRD-{abs(hash(call_sid)) % 9000 + 1000}",
-            pos_system="demo",
+            success=False,
+            order_id=order_id,
+            pos_system="",
+            fallback_used=True,
+            fallback_reason="no_pos_no_sms",
         )
 
     order_data = {
