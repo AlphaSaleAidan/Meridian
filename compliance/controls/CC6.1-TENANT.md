@@ -26,11 +26,15 @@ merged via `fix/main-cross-tenant-guard`.
 **Verify:** `tests/api/test_tenant_isolation_bola.py` proves the denied path — non-member → 403, and the
 mutation does **not** run (`assert db.updates == []`).
 
-## Open gap (C1 — CRITICAL, R-02)
-`enforce_service_member` is **not yet threaded into every** tenant-scoped `require_service_auth` handler.
-Per `docs/SECURITY_SWEEP_2026-06-27.md:33-46`, the remaining endpoints span `phone_dashboard.py`,
-`schedule.py`, `website.py`, `intelligence.py`, `stripe_connect.py`, `pos.py`. Until complete, any signed-up
-merchant session can reach those endpoints for another org.
+## Open gap (C1 — refined by R2 triage, see `evidence/CC6.1-TENANT/bola_triage.md`)
+The merchant-facing tenant routes (`phone_dashboard`, `schedule`, `website`, `intelligence`, `pos`,
+`stripe_connect`) **already enforce membership**. The genuine remaining surface is the **rep/sales-portal**
+endpoints (`billing/status`, `billing/create-checkout`, `billing/create-invoice`,
+`billing/update-payment-method`, `billing/invoice-url`, `onboarding/provision-customer`) which authorize only
+"any logged-in user" with no org binding. A **member**-check is the wrong control here — reps are rows in
+`sales_reps`, not `business_users`, so a member-check would break the sales portal. The fix is a
+**rep-authorization** check, gated on a model decision (which orgs a rep may act on). `email/*` and `payouts/*`
+are admin-locked and fine.
 
 Also: `TENANCY_ENFORCEMENT_DISABLED=1` (`auth.py:213`) is an emergency rollback knob that, if set in prod,
 silently allows non-members through (logs `TENANCY_WARN`). **Confirm it is absent/false in production.**

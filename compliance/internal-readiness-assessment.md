@@ -16,7 +16,7 @@ For each criterion: (1) what would the auditor ask for? (2) does real evidence e
 |---|---|---|---|
 | 1 | Show RLS denies cross-tenant reads on every sensitive table | **R0-confirmed live:** `phone_*` + `schedule_*` are `USING(true)` + `anon`/`authenticated` SELECT grant → **anonymous** read of `pos_access_token` + customer PII. (`vision_*` org-scoped in prod = config-drift only.) | **F-Crit** (R-01) |
 | 2 | Prove the denied path with a test | API BOLA test exists (`test_tenant_isolation_bola.py`); **RLS** denial test was deleted from main; new one authored, not yet run in CI | **F-High** |
-| 3 | Is tenant isolation enforced on all service endpoints? | `enforce_service_member` partial (C1) | **F-Crit** (R-02) |
+| 3 | Is tenant isolation enforced on all service endpoints? | Merchant routes covered; **rep-portal `billing/*`+`onboarding/*` authorize "any logged-in user"** (BOLA) — fix needs rep-auth model, not member-check (`evidence/CC6.1-TENANT/bola_triage.md`) | **F-High** (R-02) |
 | 4 | MFA on all admin/privileged access? | none in code; subservice-console MFA unverified | **F-High** (R-09) |
 | 5 | How is admin access granted/revoked + reviewed? | `ADMIN_EMAILS` hardcoded; no quarterly access review | **F-Med** (R-10) |
 | 6 | Encryption in transit & at rest? | TLS+HSTS, AES-256-GCM tokens, Supabase AES-256 — strong | **Pass** (RTSP/CSP = F-Low) |
