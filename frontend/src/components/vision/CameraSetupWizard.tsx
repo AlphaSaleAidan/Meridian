@@ -22,6 +22,11 @@ interface CameraSetupWizardProps {
 const STEPS = ['Device', 'Camera', 'Zones', 'Privacy', 'Confirm'] as const
 type Step = (typeof STEPS)[number]
 
+// Camera analytics ships as "releasing soon" at launch — keep the showcase, but
+// don't let merchants connect a live camera until the consent flow is live.
+// Mirrors the backend CAMERA_LIVE_ENABLED kill-switch (vision.py).
+const CAMERA_LIVE_ENABLED = import.meta.env.VITE_CAMERA_LIVE === '1'
+
 export default function CameraSetupWizard({ orgId, onComplete, onClose }: CameraSetupWizardProps) {
   const [step, setStep] = useState(0)
   const [config, setConfig] = useState<CameraConfig>({
@@ -35,6 +40,31 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
   const [connectionTested, setConnectionTested] = useState(false)
   const [error, setError] = useState('')
   const [consentConfirmed, setConsentConfirmed] = useState(false)
+
+  // Launch gate: live camera connect is paused ("releasing soon"). Show a teaser
+  // instead of the connect steps so no real camera is wired before consent ships.
+  if (!CAMERA_LIVE_ENABLED) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-[#111113] border border-[#1F1F23] rounded-2xl w-full max-w-md mx-4 p-6 text-center">
+          <div className="flex justify-end">
+            <button onClick={onClose} className="text-[#A1A1A8] hover:text-white"><X size={18} /></button>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-[#1A8FD6]/10 flex items-center justify-center mx-auto mb-4">
+            <Camera size={24} className="text-[#1A8FD6]" />
+          </div>
+          <h3 className="text-base font-semibold text-[#F5F5F7]">Camera Analytics — releasing soon</h3>
+          <p className="text-sm text-[#A1A1A8] mt-2 leading-relaxed">
+            Live camera setup is coming shortly. You can explore the analytics showcase now;
+            we'll enable connecting your own cameras once it's ready.
+          </p>
+          <button onClick={onClose} className="mt-5 px-4 py-2 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors">
+            Got it
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const currentStep = STEPS[step]
 

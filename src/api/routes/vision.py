@@ -41,6 +41,26 @@ async def require_device_token(x_device_token: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid device token")
 
 
+def camera_live_enabled() -> bool:
+    """Master switch for live camera connect + ingestion.
+
+    Default OFF: at launch, camera analytics ships as "releasing soon" — the
+    showcase/demo stays visible but no real camera can register or push visit
+    data, so no biometric processing of real customers happens before the
+    consent flow is in place. Flip CAMERA_LIVE_ENABLED=1 to go live.
+    """
+    return os.environ.get("CAMERA_LIVE_ENABLED", "").lower() in ("1", "true", "yes")
+
+
+async def require_camera_live():
+    """Gate live-camera writes/ingest behind camera_live_enabled()."""
+    if not camera_live_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Camera analytics is releasing soon — live cameras are not yet enabled.",
+        )
+
+
 # Per-camera tracking toggles the edge agent honors. Privacy-sensitive analyses
 # (demographics, VIP face-matching, depth) and live-view default OFF.
 DEFAULT_CAMERA_FEATURES = {
@@ -125,7 +145,7 @@ async def list_cameras(org_id: str):
         return {"org_id": org_id, "cameras": [], "total": 0}
 
 
-@router.post("/cameras")
+@router.post("/cameras", dependencies=[Depends(require_camera_live)])
 async def register_camera(req: CameraRegisterRequest):
     if req.compliance_mode not in ("anonymous", "opt_in_identity", "disabled"):
         raise HTTPException(status_code=400, detail="Invalid compliance_mode")
@@ -173,7 +193,7 @@ async def _camera_in_org_or_403(db, camera_id: str, org_id: str) -> dict:
     return cam
 
 
-@router.patch("/cameras/{camera_id}")
+@router.patch("/cameras/{camera_id}", dependencies=[Depends(require_camera_live)])
 async def update_camera(camera_id: str, req: CameraUpdateRequest, org_id: str = Query(...)):
     db = _get_db()
     if not db:
@@ -225,7 +245,7 @@ async def delete_camera(camera_id: str, org_id: str = Query(...)):
     return {"deleted": True, "camera_id": camera_id}
 
 
-@router.post("/cameras/{camera_id}/heartbeat", dependencies=[Depends(require_device_token)])
+@router.post("/cameras/{camera_id}/heartbeat", dependencies=[Depends(require_device_token), Depends(require_camera_live)])
 async def camera_heartbeat(camera_id: str, req: HeartbeatRequest):
     db = _get_db()
     if not db:
@@ -254,7 +274,7 @@ async def camera_heartbeat(camera_id: str, req: HeartbeatRequest):
 LIVE_REQUEST_TTL_SEC = int(os.getenv("CAMERA_LIVE_TTL_SEC", "30") or 30)
 
 
-@router.post("/cameras/{camera_id}/live", dependencies=[Depends(require_org_access)])
+@router.post("/cameras/{camera_id}/live", dependencies=[Depends(require_org_access), Depends(require_camera_live)])
 async def request_live_view(camera_id: str, org_id: str = Query(...)):
     """Viewer asks to watch a camera live. Ensures a Cloudflare Live Input exists,
     marks the stream requested (edge starts publishing on-demand), returns the WHEP
@@ -327,7 +347,7 @@ async def live_state(camera_id: str):
             "rtsp_url": cam.get("rtsp_url") if publish else None}
 
 
-@router.post("/ingest/traffic", dependencies=[Depends(require_device_token)])
+@router.post("/ingest/traffic", dependencies=[Depends(require_device_token), Depends(require_camera_live)])
 async def ingest_traffic(req: TrafficIngestRequest):
     db = _get_db()
     if not db:
@@ -360,7 +380,7 @@ async def ingest_traffic(req: TrafficIngestRequest):
     return {"status": "ok", "bucket": req.bucket}
 
 
-@router.post("/ingest/visits", dependencies=[Depends(require_device_token)])
+@router.post("/ingest/visits", dependencies=[Depends(require_device_token), Depends(require_camera_live)])
 async def ingest_visits(req: VisitIngestRequest):
     db = _get_db()
     if not db:
