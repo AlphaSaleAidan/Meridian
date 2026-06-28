@@ -1,6 +1,6 @@
 # Real-Merchant Pilot Checklist — Launch Readiness
 
-**Goal:** prove the full merchant lifecycle works on the **current** production version with one real merchant, end-to-end, before opening onboarding. Camera analytics is **paused ("releasing soon")** for launch — scope is **phone + POS + payments**.
+**Goal:** prove the full merchant lifecycle works on the **current** production version with one real merchant, end-to-end, before opening onboarding. Scope is **phone + POS + payments + camera analytics (anonymous mode)**. The camera **identity/biometric tier** (`opt_in_identity`, face embeddings, demographics) is **gated off** until the consent-signage flow ships.
 
 **Pilot merchant:** Aidan Nguyen has connected before, but on an **older version** — so this is a re-validation on current prod, not a first run. Use his account (or a fresh test merchant) and walk every step below.
 
@@ -10,7 +10,7 @@
 
 ## 0. Pre-flight (must be true before the pilot)
 - ☑ **#198 applied** — anon RLS exposure closed (verified: 0 anon/authenticated grants, 0 wide-open policies, backend 200). *Done 2026-06-28.*
-- ☐ **Cameras paused** — `CAMERA_LIVE_ENABLED` unset/false in prod backend; `VITE_CAMERA_LIVE` unset in frontend build. Verify `POST /api/vision/cameras` returns **403 "releasing soon"** and the showcase page shows the banner. *(PR: chore/launch-prep-camera-pause — merge + deploy.)*
+- ☐ **Cameras anonymous-only** — `CAMERA_IDENTITY_ENABLED` unset/false in prod backend; `VITE_CAMERA_IDENTITY` unset in frontend build. Verify a camera registers in `anonymous` mode (200) but `opt_in_identity` is rejected **403 "releasing soon"**, and the wizard's Opt-in Identity option shows "Coming soon" (unselectable). *(PR #200.)*
 - ☐ **Final per-order fee set** in config (decision: $1.50 / $1.25 / $2.50) — not the placeholder.
 - ☐ **`UNIFIED_PAYMENTS_ENABLED=1`** confirmed in prod (Railway).
 - ☐ **Stripe** is in the intended mode (live keys for a real charge, or test keys for a dry run) — be deliberate; a real pilot means a real card.
@@ -61,9 +61,9 @@ Stop the launch and fix first if any of these occur during the pilot:
 - Order submitted that the customer didn't confirm, or with wrong items/total.
 - Any merchant or customer data readable with the **public anon key** (re-test post-#198).
 - POS token stored in plaintext or exposed.
-- Camera live endpoints reachable (should be 403).
+- Camera identity tier reachable without consent — `opt_in_identity` must 403, and no `visitor_hash`/`embedding_hash` or demographic rows should appear while `CAMERA_IDENTITY_ENABLED` is off.
 
-**Rollbacks:** payments → flip `UNIFIED_PAYMENTS_ENABLED=0`; cameras → already off; RLS → recreate prior policies + re-grant (snapshot at `/root/meridian-rls-snapshot-20260628.json`).
+**Rollbacks:** payments → flip `UNIFIED_PAYMENTS_ENABLED=0`; cameras → set `CAMERA_IDENTITY_ENABLED=0` (anonymous stays live) or disable the camera; RLS → recreate prior policies + re-grant (snapshot at `/root/meridian-rls-snapshot-20260628.json`).
 
 ## Sign-off
 - ☐ All §1–7 pass on current prod.

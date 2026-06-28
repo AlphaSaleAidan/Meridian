@@ -257,10 +257,6 @@ export default function CameraIntelligencePage() {
       />
 
       <div className="min-h-screen bg-[#0A0A0B] text-[#F5F5F7]">
-        {/* Releasing-soon banner — showcase is live, customer connect is paused */}
-        <div className="bg-[#1A8FD6]/10 border-b border-[#1A8FD6]/20 text-center text-[13px] text-[#7CC4F0] py-2 px-4">
-          📷 Camera Analytics is <span className="font-semibold">releasing soon</span> — explore the showcase below; live camera connect is coming shortly.
-        </div>
         {/* Breadcrumb */}
         <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-24 pb-4">
           <nav className="flex items-center gap-1.5 text-[12px] text-[#6B7280]">
