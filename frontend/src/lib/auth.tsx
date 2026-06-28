@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
-import { supabase } from './supabase'
+import { supabase, getAuthHeaders } from './supabase'
 
 export interface OrgProfile {
   org_id: string
@@ -414,7 +414,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const connectRes = await fetch(`${apiUrl}/api/pos/connect`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        // getAuthHeaders() already includes Content-Type; spreading it attaches
+        // the Supabase JWT that require_org_access (CA-1/CA-2) now reads org_id
+        // from the body and demands. (test-connection above is a no-op-auth path.)
+        headers: { ...(await getAuthHeaders()) },
         body: JSON.stringify({
           org_id: org.org_id,
           pos_system: provider,
