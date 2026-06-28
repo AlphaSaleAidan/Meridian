@@ -38,3 +38,6 @@ services/higgsfield/
 
 # local test venv (worktree-only, do not commit)
 .venv-test/
+
+# LiteLLM gateway secrets (master key, budget) — never commit
+.env.litellm
