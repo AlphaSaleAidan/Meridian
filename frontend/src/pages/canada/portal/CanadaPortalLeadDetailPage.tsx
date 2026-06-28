@@ -60,7 +60,6 @@ const SLA_FILE_ID = 'sla-doc'
 const DEMO_FILES = [
   { id: '1', name: 'proposal_v2.pdf', description: 'Monthly pricing proposal', tag: 'Proposal' },
   { id: '2', name: 'contract_draft.pdf', description: 'Service agreement draft', tag: 'Contract' },
-  { id: '3', name: 'pos_setup_guide.pdf', description: 'POS integration instructions', tag: 'Setup' },
 ]
 
 function HorizontalStepper({ currentStep }: { currentStep: number }) {
@@ -487,7 +486,7 @@ export default function CanadaPortalLeadDetailPage() {
         country: 'CA',
         clientCompanyName: deal.business_name,
         region: deal.province || 'Ontario',
-        posSystem: 'TBD',
+        posSystem: 'N/A',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
@@ -534,7 +533,7 @@ export default function CanadaPortalLeadDetailPage() {
         country: 'CA',
         clientCompanyName: deal.business_name,
         region: deal.province || 'Ontario',
-        posSystem: 'TBD',
+        posSystem: 'N/A',
         repName: rep.name || 'Sales Representative',
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
@@ -1459,7 +1458,7 @@ export default function CanadaPortalLeadDetailPage() {
             <h2 className="text-sm font-semibold text-pm-accent">Create Customer Account Login</h2>
           </div>
           <p className="text-xs text-pm-canada-text-muted">
-            Generate a login for {deal.contact_name} to access the Meridian customer portal. They'll be guided through a walkthrough to verify their POS connection, set up cameras, and explore their dashboard.
+            Generate a login for {deal.contact_name} to access the Meridian customer portal. They'll be guided through an onboarding walkthrough to set up their account, configure cameras, and explore their dashboard.
           </p>
 
           {customerCredentials ? (

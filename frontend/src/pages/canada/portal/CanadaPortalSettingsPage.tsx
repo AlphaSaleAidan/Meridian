@@ -105,10 +105,6 @@ export default function CanadaPortalSettingsPage() {
             <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Phone</label>
             <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className={inputClass} />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Commission Rate <span className="text-pm-canada-text-faint font-normal">(locked)</span></label>
-            <input type="text" value={rep ? `${rep.commission_rate}%` : ''} className={`${inputClass} opacity-60 cursor-not-allowed`} readOnly title="Commission rate is set by your admin." />
-          </div>
         </div>
       </div>
 
