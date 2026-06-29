@@ -114,7 +114,7 @@ export default function USPortalLeadsPage() {
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
     vertical: 'Restaurant', commission_rate: '70', notes: '',
-    source: 'Referral', city: '', province: '', pos_system: '',
+    source: 'Referral', city: '', province: '',
   })
   const [addError, setAddError] = useState('')
   const [adding, setAdding] = useState(false)
@@ -180,7 +180,7 @@ export default function USPortalLeadsPage() {
         toast('Lead added', 'success')
       }
       setShowNew(false)
-      setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '', pos_system: '' })
+      setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '' })
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Failed to add lead')
       toast('Failed to save lead', 'error')
@@ -291,12 +291,6 @@ export default function USPortalLeadsPage() {
                 <option value="">State</option>
                 {['Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware','Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky','Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi','Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico','New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania','Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont','Virginia','Washington','West Virginia','Wisconsin','Wyoming'].map(p => (
                   <option key={p} value={p}>{p}</option>
-                ))}
-              </select>
-              <select required value={newDeal.pos_system} onChange={e => setNewDeal(p => ({ ...p, pos_system: e.target.value }))} className={inputClass}>
-                <option value="">Current POS System *</option>
-                {['Square', 'Clover', 'Toast', 'Moneris', 'Lightspeed', 'Shopify POS', 'TouchBistro', 'Revel', 'Heartland', 'Aloha', 'NCR Silver', 'SpotOn', 'Helcim', 'Dejavoo', 'Poynt', 'Payanywhere', 'SumUp', 'iZettle', 'Vend', 'Hike POS', 'Epos Now', 'Lavu', 'Upserve', 'Talech', 'PayPal Zettle', 'Stripe Terminal', 'None / Paper', 'Other'].map(v => (
-                  <option key={v} value={v.toLowerCase()}>{v}</option>
                 ))}
               </select>
               <textarea value={newDeal.notes} onChange={e => setNewDeal(p => ({ ...p, notes: e.target.value }))} className={inputClass + ' sm:col-span-2 resize-none h-20'} placeholder="Notes (optional)" />
