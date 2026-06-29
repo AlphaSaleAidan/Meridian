@@ -13,12 +13,15 @@ Endpoints:
 
 import logging
 import os
+import secrets
 from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
+
+from ..auth import enforce_service_member, require_service_auth
 
 logger = logging.getLogger("meridian.stripe")
 
@@ -43,6 +46,8 @@ PLAN_PRICES = {
     "premium": 59900,    # $599
     "command": 119900,   # $1,199
 }
+
+PUBLIC_PAY_BASE = os.getenv("PUBLIC_PAY_BASE", "https://meridian.tips")
 
 
 # ── Models ──
@@ -72,6 +77,17 @@ class CheckoutSessionResponse(BaseModel):
     monthly_amount: int
     setup_fee: int
     first_month_free: bool
+
+
+class SubscribeLinkRequest(BaseModel):
+    """Request body for generating a stable subscription short-link + QR."""
+    org_id: Optional[str] = None
+    lead_id: Optional[str] = None
+    monthly_amount_cents: int           # Amount in smallest currency unit (e.g. 49900 = CA$499)
+    currency: str = "cad"
+    business_name: Optional[str] = None
+    setup_fee_cents: int = 0
+    first_month_free: bool = False
 
 
 # ── Helpers ──
@@ -279,10 +295,23 @@ async def stripe_webhook(request: Request):
         logger.error(f"Webhook signature verification failed: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
 
+    event_id = event.get("id", "")
     event_type = event.get("type", "")
     data = event.get("data", {}).get("object", {})
 
-    logger.info(f"Stripe webhook: {event_type}")
+    # ── Idempotency: dedupe via the same webhook_events table used by Square/Clover ──
+    # Returns True (first delivery), False (duplicate), or None (DB unavailable → process).
+    if event_id:
+        try:
+            from .webhooks import _record_webhook_event
+            is_new = await _record_webhook_event(event_id, provider="stripe")
+            if is_new is False:
+                logger.info(f"Duplicate Stripe webhook event_id={event_id} — skipping")
+                return {"status": "ok"}
+        except Exception as _dedup_err:
+            logger.warning(f"Stripe webhook dedup failed ({_dedup_err}) — processing anyway")
+
+    logger.info(f"Stripe webhook: {event_type} (event_id={event_id})")
 
     try:
         from ...db import _db_instance as db
@@ -376,3 +405,59 @@ async def stripe_webhook(request: Request):
         logger.exception(f"Webhook processing error for {event_type}")
 
     return {"status": "ok"}
+
+
+# ── Subscribe-link management ──────────────────────────────────────────────
+
+@router.post("/subscribe-link", dependencies=[Depends(require_service_auth)])
+async def create_subscribe_link(req: SubscribeLinkRequest, principal=Depends(require_service_auth)):
+    """
+    Generate a stable subscription short-link (and QR) for a merchant.
+
+    The returned ``url`` is always ``{PUBLIC_PAY_BASE}/subscribe/{token}``.
+    GET /subscribe/{token}      → creates a fresh Stripe Checkout Session + redirects
+    GET /subscribe/{token}/qr.png → serves a PNG QR code for that URL
+
+    Auth: service-role key or rep JWT (Bearer).  If org_id is present the
+    principal must belong to that org (enforced by enforce_service_member).
+
+    This flow is SEPARATE from the per-order $1.50 Connect fee:
+      - No application_fee_amount / transfer_data
+      - Direct charge to Meridian's Stripe account
+      - mode=subscription, metadata.kind=subscription
+    """
+    if req.org_id:
+        await enforce_service_member(principal, req.org_id)
+
+    if req.monthly_amount_cents <= 0:
+        raise HTTPException(status_code=422, detail="monthly_amount_cents must be > 0")
+
+    token = secrets.token_urlsafe(16)  # ~22 url-safe chars, 128 bits of entropy
+    subscribe_url = f"{PUBLIC_PAY_BASE}/subscribe/{token}"
+
+    try:
+        from ...db import _db_instance as db
+        if not db:
+            raise HTTPException(status_code=503, detail="Database unavailable")
+        await db.insert("subscribe_links", {
+            "token": token,
+            "org_id": req.org_id,
+            "lead_id": req.lead_id,
+            "monthly_amount_cents": req.monthly_amount_cents,
+            "currency": req.currency.lower(),
+            "business_name": req.business_name,
+            "setup_fee_cents": req.setup_fee_cents,
+            "first_month_free": req.first_month_free,
+            "status": "active",
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Failed to create subscribe_link row")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    logger.info(
+        f"Subscribe link created: token={token} org={req.org_id} "
+        f"monthly={req.monthly_amount_cents} currency={req.currency}"
+    )
+    return {"token": token, "url": subscribe_url}
