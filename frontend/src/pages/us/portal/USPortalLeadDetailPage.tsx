@@ -45,11 +45,7 @@ const STEPS = [
   { num: 3, label: 'Customer Walkthrough' },
 ]
 
-const DEMO_FILES = [
-  { id: '1', name: 'proposal_v2.pdf', description: 'Monthly pricing proposal', tag: 'Proposal' },
-  { id: '2', name: 'contract_draft.pdf', description: 'Service agreement draft', tag: 'Contract' },
-  { id: '3', name: 'pos_setup_guide.pdf', description: 'POS integration instructions', tag: 'Setup' },
-]
+interface ProjectFile { id: string; name: string; description: string; tag: string }
 
 function HorizontalStepper({ currentStep }: { currentStep: number }) {
   return (
@@ -744,7 +740,7 @@ export default function USPortalLeadDetailPage() {
   }
 
   // Files state
-  const [files, setFiles] = useState(DEMO_FILES)
+  const [files, setFiles] = useState<ProjectFile[]>([])
 
   useEffect(() => { dealRef.current = deal }, [deal])
 

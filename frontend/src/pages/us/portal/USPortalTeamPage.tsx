@@ -34,12 +34,6 @@ interface Applicant {
   status: 'pending' | 'approved' | 'rejected'
 }
 
-const DEMO_TEAM: TeamMember[] = [
-  { id: '1', name: 'Aidan Pierce', email: 'apierce@alphasale.co', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2025-09-15', role: 'admin', location: 'Cape Coral, FL' },
-  { id: '2', name: 'Enoch Cheung', email: 'cheungenochmgmt@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-03', role: 'admin', location: 'Austin, TX' },
-  { id: '3', name: 'Aidan Nguyen', email: 'aidanvietnguyen@gmail.com', phone: '', commission_rate: 70, deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0, is_active: true, joined: '2026-05-09', role: 'admin', location: 'Miami, FL' },
-]
-
 function normalizeRate(v: number): number {
   return v <= 1 ? Math.round(v * 100) : v
 }
@@ -111,7 +105,7 @@ export default function USPortalTeamPage() {
   const { toast } = useToast()
   const admin = isAdmin(rep?.email)
   const [search, setSearch] = useState('')
-  const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
+  const [team, setTeam] = useState<TeamMember[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
@@ -133,7 +127,7 @@ export default function USPortalTeamPage() {
         const resp = await fetch(`${apiBase}/api/us/team`, { headers })
         if (resp.ok) {
           const { reps, applicants: apps } = await resp.json()
-          if (reps && reps.length > 0) {
+          if (reps) {
             setTeam(reps.map((r: Record<string, unknown>) => {
               const email = (r.email as string) || ''
               const adminRole = isUsAdmin(email)
@@ -167,7 +161,7 @@ export default function USPortalTeamPage() {
           }
         }
       } catch {
-        // fall back to demo data
+        // leave team empty on error — no demo data in production
       }
 
       // Fetch deals for real pipeline calculation
