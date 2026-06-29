@@ -588,6 +588,8 @@ export default function USPortalLeadDetailPage() {
               signed_by: slaSignature,
               signed_date: new Date().toLocaleDateString('en-US'),
               provider_signatory: `${rep.name || 'Meridian Sales'}, Account Representative`,
+              monthly_price: `$${monthlyPrice.toLocaleString()}/mo`,
+              setup_fee: (Number(setupFee) || 0) > 0 ? `$${(Number(setupFee) || 0).toLocaleString()}` : '',
             },
           }),
         })
@@ -620,6 +622,9 @@ export default function USPortalLeadDetailPage() {
             rep_email: rep?.email || '',
             signed_by: slaSignature,
             signed_date: new Date().toLocaleDateString('en-US'),
+            provider_signatory: `${rep?.name || 'Meridian Sales'}, Account Representative`,
+            monthly_price: `$${monthlyPrice.toLocaleString()}/mo`,
+            setup_fee: (Number(setupFee) || 0) > 0 ? `$${(Number(setupFee) || 0).toLocaleString()}` : '',
           },
         }),
       })
@@ -710,6 +715,8 @@ export default function USPortalLeadDetailPage() {
             rep_email: rep?.email || '',
             plan_name: monthlyPrice >= 750 ? 'Command' : monthlyPrice >= 375 ? 'Premium' : 'Standard',
             monthly_price: `$${monthlyPrice.toLocaleString()}`,
+            setup_fee: (Number(setupFee) || 0) > 0 ? `$${(Number(setupFee) || 0).toLocaleString()}` : '',
+            due_today: `$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
           },
         }),
       })

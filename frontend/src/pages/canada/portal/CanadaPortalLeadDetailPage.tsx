@@ -543,6 +543,7 @@ export default function CanadaPortalLeadDetailPage() {
       setShowSlaSign(false)
 
       const API_BASE = import.meta.env.VITE_API_URL || ''
+      const setupFeeNum = Number(setupFee) || 0
       try {
         const emailRes = await fetch(`${API_BASE}/api/email/send`, {
           method: 'POST',
@@ -558,6 +559,8 @@ export default function CanadaPortalLeadDetailPage() {
               signed_by: slaSignature,
               signed_date: new Date().toLocaleDateString('en-CA'),
               provider_signatory: `${rep.name || 'Meridian Sales'}, Account Representative`,
+              monthly_price: `CA$${monthlyPrice.toLocaleString()}/mo`,
+              setup_fee: setupFeeNum > 0 ? `CA$${setupFeeNum.toLocaleString()}` : '',
             },
           }),
         })
@@ -590,6 +593,9 @@ export default function CanadaPortalLeadDetailPage() {
             rep_email: rep?.email || '',
             signed_by: slaSignature,
             signed_date: new Date().toLocaleDateString('en-CA'),
+            provider_signatory: `${rep?.name || 'Meridian Sales'}, Account Representative`,
+            monthly_price: `CA$${monthlyPrice.toLocaleString()}/mo`,
+            setup_fee: (Number(setupFee) || 0) > 0 ? `CA$${(Number(setupFee) || 0).toLocaleString()}` : '',
           },
         }),
       })
@@ -667,6 +673,8 @@ export default function CanadaPortalLeadDetailPage() {
             rep_email: rep?.email || '',
             plan_name: monthlyPrice >= 750 ? 'Command' : monthlyPrice >= 375 ? 'Premium' : 'Standard',
             monthly_price: `CA$${monthlyPrice.toLocaleString()}`,
+            setup_fee: (Number(setupFee) || 0) > 0 ? `CA$${(Number(setupFee) || 0).toLocaleString()}` : '',
+            due_today: `CA$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
           },
         }),
       })
@@ -956,6 +964,26 @@ export default function CanadaPortalLeadDetailPage() {
           </div>
           <span className="text-sm text-white">First month free</span>
         </label>
+
+        {/* Due Today summary — shows whenever a non-zero setup fee is present
+            or when first-month-free is toggled, so the rep and customer both
+            see the exact charge that will hit the card today. */}
+        {((Number(setupFee) || 0) > 0 || firstMonthFree) && (
+          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-pm-canada-bg border border-pm-canada-border">
+            <span className="text-xs text-pm-canada-text-muted">
+              Due today
+              {firstMonthFree && (Number(setupFee) || 0) > 0 && (
+                <span className="ml-1 text-pm-canada-text-faint">(setup fee only — first month free)</span>
+              )}
+              {firstMonthFree && (Number(setupFee) || 0) === 0 && (
+                <span className="ml-1 text-pm-canada-text-faint">(first month free)</span>
+              )}
+            </span>
+            <span className="text-sm font-bold text-pm-accent">
+              CA${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}
+            </span>
+          </div>
+        )}
 
         {/* Buttons */}
         <button
