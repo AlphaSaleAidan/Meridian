@@ -86,7 +86,7 @@ export default function USSetupPage() {
           {(['welcome', 'pos', 'done'] as Step[]).map((s, i) => (
             <div key={s} className="flex items-center">
               <div className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                step === s ? 'bg-[#00d4aa]' : i < ['welcome', 'pos', 'done'].indexOf(step) ? 'bg-[#00d4aa]/50' : 'bg-[#1F1F23]'
+                step === s ? 'bg-[#1A8FD6]' : i < ['welcome', 'pos', 'done'].indexOf(step) ? 'bg-[#1A8FD6]/50' : 'bg-[#1F1F23]'
               }`} />
               {i < 2 && <div className="w-8 h-[1px] bg-[#1F1F23]" />}
             </div>
@@ -100,8 +100,8 @@ export default function USSetupPage() {
         {/* WELCOME */}
         {step === 'welcome' && (
           <div className="card p-6 sm:p-8 border border-[#1F1F23] text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center mx-auto mb-6">
-              <CheckCircle2 size={32} className="text-[#00d4aa]" />
+            <div className="w-16 h-16 rounded-2xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center mx-auto mb-6">
+              <CheckCircle2 size={32} className="text-[#1A8FD6]" />
             </div>
             <h2 className="text-xl font-bold text-[#F5F5F7] mb-2">
               Welcome, {firstName}!
@@ -114,7 +114,7 @@ export default function USSetupPage() {
             </p>
             <button
               onClick={() => setStep('pos')}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#1A8FD6] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#1A8FD6]/90 transition-all"
             >
               Get Started <ArrowRight size={16} />
             </button>
@@ -125,8 +125,8 @@ export default function USSetupPage() {
         {step === 'pos' && (
           <div className="card p-6 sm:p-8 border border-[#1F1F23]">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center">
-                <Wifi size={18} className="text-[#00d4aa]" />
+              <div className="w-10 h-10 rounded-xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center">
+                <Wifi size={18} className="text-[#1A8FD6]" />
               </div>
               <div>
                 <h2 className="text-base font-bold text-[#F5F5F7]">Connect Your POS</h2>
@@ -143,7 +143,7 @@ export default function USSetupPage() {
               />
             </div>
             <button onClick={handleConnectPos} disabled={loading || !posProvider}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 disabled:opacity-50 transition-all">
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#1A8FD6] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#1A8FD6]/90 disabled:opacity-50 transition-all">
               {loading ? <Loader2 size={16} className="animate-spin" /> : <><Wifi size={16} /> Connect</>}
             </button>
             <button onClick={handleSkipPos} className="w-full mt-3 text-center text-[11px] text-[#A1A1A8] hover:text-white transition-colors">
@@ -155,15 +155,15 @@ export default function USSetupPage() {
         {/* DONE */}
         {step === 'done' && (
           <div className="card p-6 sm:p-8 border border-[#1F1F23] text-center">
-            <div className="w-16 h-16 rounded-2xl bg-[#00d4aa]/10 border border-[#00d4aa]/20 flex items-center justify-center mx-auto mb-6">
-              <LayoutDashboard size={32} className="text-[#00d4aa]" />
+            <div className="w-16 h-16 rounded-2xl bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 flex items-center justify-center mx-auto mb-6">
+              <LayoutDashboard size={32} className="text-[#1A8FD6]" />
             </div>
             <h2 className="text-xl font-bold text-[#F5F5F7] mb-2">You're All Set!</h2>
             <p className="text-sm text-[#A1A1A8] mb-6">
               Your dashboard will start populating with insights as your POS data comes in.
             </p>
             <button onClick={handleFinish}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-[#00d4aa] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all">
+              className="w-full flex items-center justify-center gap-2 py-3 bg-[#1A8FD6] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#1A8FD6]/90 transition-all">
               <LayoutDashboard size={16} /> Go to Dashboard
             </button>
           </div>

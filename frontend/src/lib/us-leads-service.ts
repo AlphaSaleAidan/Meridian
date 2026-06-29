@@ -34,6 +34,18 @@ export class LeadsServiceError extends Error {
   }
 }
 
+// Cap every query so a stalled Supabase connection can't hang the UI forever
+// (parity with canada-leads-service, which the US copy had dropped).
+const QUERY_TIMEOUT_MS = 15000
+function withTimeout<T>(p: PromiseLike<T>, label: string): Promise<T> {
+  return Promise.race([
+    Promise.resolve(p),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new LeadsServiceError(`${label} timed out`)), QUERY_TIMEOUT_MS),
+    ),
+  ])
+}
+
 export const usLeadsService = {
   async list(repId?: string): Promise<Deal[]> {
     if (!supabase) return []
@@ -42,7 +54,7 @@ export const usLeadsService = {
       .select('*')
       .order('created_at', { ascending: false })
     if (repId) query = query.eq('rep_id', repId)
-    const { data, error } = await query
+    const { data, error } = await withTimeout(query, 'list')
     if (error) throw new LeadsServiceError(error.message)
     if (!data) return []
     return data.map(rowToDeal)
@@ -50,11 +62,10 @@ export const usLeadsService = {
 
   async getById(id: string): Promise<Deal | null> {
     if (!supabase) return null
-    const { data, error } = await supabase
-      .from('us_leads')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const { data, error } = await withTimeout(
+      supabase.from('us_leads').select('*').eq('id', id).single(),
+      'getById',
+    )
     if (error) throw new LeadsServiceError(error.message)
     if (!data) return null
     return rowToDeal(data)
@@ -62,7 +73,7 @@ export const usLeadsService = {
 
   async create(deal: Deal, repId?: string): Promise<Deal> {
     if (!supabase) return deal
-    const { data, error } = await supabase
+    const builder = supabase
       .from('us_leads')
       .insert({
         id: deal.id,
@@ -83,7 +94,8 @@ export const usLeadsService = {
       })
       .select()
       .single()
-    if (error) throw new Error(error.message)
+    const { data, error } = await withTimeout(Promise.resolve(builder), 'create')
+    if (error) throw new LeadsServiceError(error.message)
     if (data) return rowToDeal(data)
     return deal
   },
@@ -91,26 +103,29 @@ export const usLeadsService = {
   async updateStage(id: string, stage: DealStage): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('us_leads')
-      .update({ stage, updated_at: now })
-      .eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('us_leads').update({ stage, updated_at: now }).eq('id', id),
+      'updateStage',
+    )
     if (error) throw new LeadsServiceError(error.message)
   },
 
   async update(id: string, updates: Partial<Deal>): Promise<void> {
     if (!supabase) return
     const now = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase
-      .from('us_leads')
-      .update({ ...updates, updated_at: now })
-      .eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('us_leads').update({ ...updates, updated_at: now }).eq('id', id),
+      'update',
+    )
     if (error) throw new LeadsServiceError(error.message)
   },
 
   async delete(id: string): Promise<void> {
     if (!supabase) return
-    const { error } = await supabase.from('us_leads').delete().eq('id', id)
+    const { error } = await withTimeout(
+      supabase.from('us_leads').delete().eq('id', id),
+      'delete',
+    )
     if (error) throw new LeadsServiceError(error.message)
   },
 
@@ -127,7 +142,9 @@ export const usLeadsService = {
       .channel(channelName)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'us_leads' },
+        // When scoped to a rep, only react to that rep's rows server-side
+        // instead of refetching all reps' leads on every global change.
+        { event: '*', schema: 'public', table: 'us_leads', ...(repId ? { filter: `rep_id=eq.${repId}` } : {}) },
         () => {
           usLeadsService.list(repId).then(onChanged).catch(() => {})
         },
