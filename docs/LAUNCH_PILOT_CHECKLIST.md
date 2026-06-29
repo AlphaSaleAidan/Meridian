@@ -62,6 +62,16 @@
 ## 9. Quote flow
 - ☐ Public "Schedule a Quote" submits → lands in `quote_requests`; sales gets the lead.
 
+## 10. Monthly subscription (Stripe + QR) — NEW, first live test
+This is the recurring SaaS subscription billing — **separate** from the per-order $1.50 fee.
+- ☐ **Pre-flight:** `STRIPE_WEBHOOK_SECRET` is set in Railway and a Stripe webhook endpoint points at `https://api.meridian.tips/api/stripe/webhook` (subscribed to `checkout.session.completed` + `customer.subscription.*`). *(As of build: NOT yet set — `/api/stripe/webhook` returns 503. Subscriptions will still bill in Stripe, but Meridian won't auto-record "subscribed" until this is wired.)*
+- ☐ Rep generates a **proposal** for the lead with the monthly amount → a **QR code + subscribe link** appears.
+- ☐ Scan the QR (or open the link) → lands on **Stripe Checkout in `subscription` mode, CAD**, showing the correct monthly amount (+ setup fee / trial if set).
+- ☐ Complete checkout with a real card → Stripe shows an **active subscription** on the Meridian Checkout account.
+- ☐ Charge is a **direct** charge (NOT a Connect destination charge) — confirm in Stripe it has `metadata.kind=subscription` and **no** `application_fee`/`transfer_data` (kept separate from the per-order fee).
+- ☐ Webhook fires → the merchant is recorded as subscribed in Meridian (once `STRIPE_WEBHOOK_SECRET` is set).
+- ☐ The subscribe link is **stable** — re-scanning the same QR opens a fresh valid checkout (doesn't 404/expire).
+
 ---
 
 ## Abort / rollback
