@@ -1,6 +1,12 @@
 __pycache__/
 *.pyc
+# Env files — never commit real secrets. Only *.env.example templates are tracked.
 .env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
 *.zip
 *.pdf
 .DS_Store
