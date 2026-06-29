@@ -2,7 +2,7 @@
 
 > Group: **cross-reference**
 > Tier: **Tier 4**
-> Plan: **Premium+**
+> Availability: **Camera intelligence add-on**
 
 ## What it does
 

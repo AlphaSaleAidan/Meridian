@@ -42,7 +42,7 @@ Restaurant suite:
 
 **Opener:** "Are you on SpotOn? Honest answer: their partner program is slow. We file the partner app when we have a real prospect — which you are. While that's processing (30–90 days), we can run analytics on a CSV export so you're not waiting. Then we cut over to live API once approved."
 
-**When to push hard:** SpotOn merchants who are CA$685+ Premium-tier candidates with cameras justify the partner-app effort. Single-location small accounts on SpotOn → consider a CSV-only path or pass.
+**When to push hard:** SpotOn merchants with cameras (camera intelligence add-on candidates) justify the partner-app effort. Single-location small accounts on SpotOn → consider a CSV-only path or pass.
 
 **Why we don't file SpotOn speculatively:** the partner application is slow and merchant-tied; filing without a real account in hand wastes the cycle.
 
@@ -60,5 +60,5 @@ If a SpotOn merchant wants to start now:
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/services/pos_connectors/registry.py (spoton config) + docs/playbook/_status/phase-2-decisions.md (Wave 2 holding list — file on first qualified prospect)_

@@ -71,7 +71,7 @@ Strong retail suite — Lightspeed is built for inventory-heavy multi-SKU retail
 
 **Why Lightspeed merchants are good targets:**
 - Multi-SKU operations → high data volume → richer insights → easier ROI demo
-- Premium tier is natural (CA$685) because of inventory module depth
+- Camera intelligence add-on is natural fit because inventory + zone analytics pair well
 - They already pay for Lightspeed → they value software → less price resistance
 
 **Why this is the wedge:** Lightspeed Retail merchants are high-value Meridian targets — above-average AOV, multi-channel (often have ecom + physical), and they use Lightspeed's reporting heavily, so they already understand analytics ROI. Pitch is "go beyond Lightspeed Insights" with cross-location benchmarking and AI Q&A. Top-3 specialty retail POS alongside Square and Shopify; typical merchant is a 1–10 location boutique, bike shop, sporting goods, pet store, jewelry, CBD/smoke shop, or gift shop.

@@ -2,7 +2,7 @@
 
 > Status: **OFFICIALLY SUPPORTED**
 > Stream: RTSP
-> Required plan: Premium or Command
+> Availability: **Camera intelligence add-on**
 > Recommended budget pick: **RLC-510A** (~$60 PoE camera — our recommended alternative for merchants whose existing cameras aren't supported)
 
 ## What you tell the merchant

@@ -10,15 +10,11 @@ The headline stat you'll lead with: **the average Meridian merchant discovers CA
 
 ## What you actually sell
 
-Meridian uses **custom per-deal pricing** — no published tiers. You set the monthly price during the proposal in the portal. When a prospect asks "how much?", lead with value first: "Let me show you what we typically find in week one, then we'll talk numbers."
+Meridian uses **custom per-deal pricing** — no published price points. You set the monthly price during the proposal in the portal. When a prospect asks "how much?", lead with value first: "Let me show you what we typically find in week one, then we'll talk numbers."
 
-| Plan | Features | Built for |
-|------|----------|-----------|
-| **Standard** | All POS analytics agents | Single-location cafes, smoke shops, small restaurants |
-| **Premium** | Standard + camera intelligence | Restaurants with cameras, multi-register retail |
-| **Command** | Premium + multi-location + API | Multi-location operators, franchise owners |
+**One product, one feature set.** Every merchant gets all 30 POS analytics agents on a month-to-month basis with no setup fee and one-click cancel. Camera intelligence, multi-location rollups, and API access are **add-ons** — line items on the proposal, not a separate plan tier.
 
-All plans: month-to-month, no contract, no setup fee, one-click cancel. Use "Schedule a Quote" framing — do NOT quote specific monthly prices before discovery.
+Use "Schedule a Quote" framing — do NOT quote specific monthly prices before discovery.
 
 ## Your math
 
@@ -37,7 +33,7 @@ These are illustrations — your actual earnings depend on the prices you negoti
 - **00-getting-started/** — you are here
 - **10-pos-integrations/** — every POS we support, what to expect, how the merchant connects
 - **20-camera-integrations/** — supported cameras, unsupported brands, how to handle inbound questions
-- **30-features/** — every AI agent we run, what it does, what data it needs, what tier exposes it
+- **30-features/** — every AI agent we run, what it does, what data it needs, which add-ons unlock additional agents
 - **40-troubleshooting/** — when something breaks, find the symptom, follow the tree
 - **50-cheatsheets/** — vertical playbooks, tier comparison, objection handlers, one-page printable
 
@@ -45,5 +41,5 @@ Read `02-product-overview.md` next, then `03-pricing-commission.md`, then `05-fi
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: services/training_video_pipeline/lesson_content.json (lessons 1.1, 1.3) + docs/playbook/_status/phase-2-decisions.md_

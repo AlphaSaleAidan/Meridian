@@ -48,7 +48,7 @@ CSV path covers the **transaction-level** features but loses some real-time ones
 |---------|-------|-----|
 | Merchant says "I use CAKE" but their export looks different from our template | They're on the older getCAKE admin export vs. the current trycake report | Ask for a screenshot of the export screen, remap columns once |
 | Sysco-channel merchant is confused about logins | Sysco-bundled merchants often had their CAKE account provisioned by the rep and never set their own admin password | Direct them to the **888-979-7225** Sysco-customer support line for credential reset |
-| Daily upload missed | Manual process | Upgrade to automated SFTP (Premium tier) |
+| Daily upload missed | Manual process | SFTP automation add-on available (confirm availability with product team) |
 | Column mapping fails | CAKE export format changed | Re-map in portal; takes 30 seconds |
 | Duplicate transactions | Same date range uploaded twice | We dedupe by `Order ID` automatically |
 
@@ -66,7 +66,7 @@ CSV path covers the **transaction-level** features but loses some real-time ones
 **Operator spotting:** orange "CAKE" logo on the terminal bezel, square-ish all-in-one tablet (often with branded "POS wrap" sleeves), "we got the POS through our Sysco rep," "first station was free."
 
 **How to handle the "I don't want to upload a CSV every day" objection:**
-"That's fair. Two options: (1) Premium plan includes automated daily SFTP — we pull it from CAKE for you. (2) We're building the live API; CSV is the bridge. You're in line for live as soon as it ships."
+"That's fair. Two options: (1) SFTP automation add-on is available — we pull it from CAKE for you. (2) We're building the live API; CSV is the bridge. You're in line for live as soon as it ships."
 
 ## What blocks live status today
 

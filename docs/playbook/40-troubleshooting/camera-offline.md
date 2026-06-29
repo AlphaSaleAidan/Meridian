@@ -90,9 +90,9 @@ Recommend a $60 Reolink alongside what they've got.
 |-----------|--------|
 | Multiple cameras offline at same merchant simultaneously | Network issue, not Meridian — guide them to check their internet, then refer to their IT |
 | Camera worked in VLC last week, still works in VLC, Meridian says offline | Likely Meridian-side; **High ticket** + engineering |
-| Customer threatens cancel over camera issue | Critical ticket; if hardware is the root cause, offer to credit the Premium-tier difference for the month while they resolve |
+| Customer threatens cancel over camera issue | Critical ticket; if hardware is the root cause, offer to credit the camera add-on fee for the month while they resolve |
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/camera/rtsp_handler.py + src/camera/detector.py + docs/playbook/_status/phase-2-decisions.md (supported + not-supported camera list) + recent fix commits (camera step path mismatch — `7d9ea4c fix(tour): camera step path matches the actual route`)_

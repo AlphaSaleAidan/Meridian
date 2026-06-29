@@ -74,7 +74,7 @@ The full rep-facing knowledge base. Everything you need to find a prospect, run 
 
 [20-camera-integrations/_index.md](./20-camera-integrations/_index.md) is the master.
 
-**Premium plan minimum.** Standard does not include cameras.
+Cameras require the **camera intelligence add-on** (see `20-camera-integrations/_index.md` for pricing guidance).
 
 ### Officially supported (5)
 - [hikvision.md](./20-camera-integrations/hikvision.md) — covers LaView/ANNKE/EmpireTech/older Lorex/older Honeywell
@@ -94,8 +94,8 @@ The full rep-facing knowledge base. Everything you need to find a prospect, run 
 [30-features/_index.md](./30-features/_index.md) is the master.
 
 **47 total features documented:**
-- **30 POS analytics agents** (`pos-analytics/`) — Tier 1 through Tier 5, all on Standard+
-- **10 cross-reference agents** (`cross-reference/`) — Premium+, fuses POS × camera
+- **30 POS analytics agents** (`pos-analytics/`) — all included in base product (data complexity tiers 1–5, internal classification)
+- **10 cross-reference agents** (`cross-reference/`) — camera intelligence add-on required; fuses POS × camera
 - **5 vision modules** (`vision/`) — internal pipeline (rtsp_handler, detector, people_counter, line_counter, pipeline)
 - **2 coordination components** (`coordination/`) — cross_reference_orchestrator, swarm_trainer
 
@@ -152,13 +152,13 @@ Items flagged during Phase 3 that need confirmation: [_open-questions.md](./_ope
 
 - Don't pitch deprecated POSes (Upserve, Harbortouch, Leaf Logix, iZettle standalone) as supported
 - Don't promise features that aren't in `src/ai/agents/` — if it's not documented in `30-features/`, it doesn't exist
-- Don't oversell Premium to merchants with unsupported cameras — sell Standard, upsell later
+- Don't oversell camera intelligence to merchants with unsupported cameras — sell base product, upsell camera add-on later when they have a supported camera
 - Don't free-form discount — only annual prepay (2 months free) or referral discount (50% off for 3 active referrals)
 - Don't guarantee specific dollar outcomes — use averages and ranges only (see `50-cheatsheets/objection-handlers.md` for compliance-safe phrasing)
 - Don't ship videos or video scripts from this playbook — it's markdown for the rep portal
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Maintainer: Phase 3 rebuild — see [_open-questions.md](./_open-questions.md) for items that still need Aidan's input._
 _Sourced from: docs/playbook/_status/phase-2-decisions.md + src/services/pos_connectors/registry.py (80 POSes) + src/ai/agents/ (47 features) + src/camera/ + src/errors.py + services/training_video_pipeline/lesson_content.json + docs/customer-sop.md_

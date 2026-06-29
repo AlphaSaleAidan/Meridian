@@ -124,7 +124,7 @@ Check `20-camera-integrations/_index.md`. Then:
 
 ### "My business is too big for this."
 
-> "How big? [Hear them.] If you're a single-vertical multi-location chain under 20 stores, Command tier is built for you. If you're enterprise (50+ stores, multiple verticals), we have an enterprise conversation that goes through a different path — let me set that up."
+> "How big? [Hear them.] If you're a multi-location chain under 20 stores, our multi-location add-on is built for you — cross-store comparison, location analyst, custom AI models. If you're enterprise (50+ stores, multiple verticals), we have an enterprise conversation through a different path — let me set that up."
 
 ---
 
@@ -166,5 +166,5 @@ In all cases: polite no, leave the door open, move on. Walking away from bad-fit
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: services/training_video_pipeline/lesson_content.json (lessons 2.3, 2.4, 3.4, 5.1) + recurring rep field patterns_

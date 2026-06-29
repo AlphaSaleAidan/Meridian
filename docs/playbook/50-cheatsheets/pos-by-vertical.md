@@ -6,7 +6,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 | POS | Status | Notes |
 |-----|--------|-------|
-| **Toast** | LIVE | #1 restaurant pitch; rich data; Premium tier natural |
+| **Toast** | LIVE | #1 restaurant pitch; rich data; camera add-on natural fit (most restaurants have cameras) |
 | **Square** | LIVE | Cafes, small restaurants, food trucks; easiest connect |
 | **Clover** | LIVE | Casual restaurants; token-refresh bug pending |
 | **Lavu** | WAVE 1 BUILDING | Independent restaurants, bars |
@@ -21,7 +21,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Menu engineering matrix, peak hour staffing, food waste tracking, customer churn (regulars).
 
-**Avg deal:** Standard or Premium tier (custom pricing; Premium common with cameras for queue/dwell).
+**Avg deal:** Base product + camera intelligence add-on common where cameras are present (custom pricing).
 
 **Decision maker:** Owner or GM. Franchise = franchisee, never corporate.
 
@@ -42,7 +42,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Waste/shrinkage (anomaly detection on voids), product velocity, inventory intelligence.
 
-**Avg deal:** Standard tier (custom pricing).
+**Avg deal:** Base product (custom pricing).
 
 **Decision maker:** Usually owner-operated.
 
@@ -72,7 +72,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Product velocity (cannabis SKU turn), customer/patient LTV, day-of-week (heavily skewed traffic), promo ROI.
 
-**Avg deal:** Premium or Command tier (custom pricing; cannabis margin pressure makes these merchants Premium/Command-eligible).
+**Avg deal:** Base product + camera intelligence add-on common (custom pricing; cannabis margin pressure justifies the add-on investment).
 
 **Decision maker:** Owner or compliance manager.
 
@@ -92,7 +92,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Customer LTV + churn warning (THE feature for salons), staff performance comparison, basket analysis (service upsells).
 
-**Avg deal:** Standard tier (custom pricing; single location, relationship-driven).
+**Avg deal:** Base product (custom pricing; single location, relationship-driven).
 
 **Decision maker:** Salon owner; sometimes manager with buying authority.
 
@@ -117,7 +117,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Inventory intelligence (demand forecasting), basket analysis, seasonality, pricing power.
 
-**Avg deal:** Standard or Premium tier (custom pricing; multi-SKU retailers often justify Premium).
+**Avg deal:** Base product + camera intelligence add-on for multi-SKU retailers with cameras (custom pricing).
 
 **Decision maker:** Store owner or buyer.
 
@@ -139,7 +139,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Peak hour optimizer (critical for food trucks), revenue forecasting (predict slow days), menu engineering (push items during rush).
 
-**Avg deal:** Standard tier (custom pricing; budget-conscious solo operators).
+**Avg deal:** Base product (custom pricing; budget-conscious solo operators).
 
 **Decision maker:** Almost always the owner.
 
@@ -159,7 +159,7 @@ Vendors: Mitchell1, ALLDATA, NAPA TRACS, TireMaster, R.O. Writer, Protractor, Bo
 
 **Demo emphasis:** Product velocity (parts dead stock), employee performance (technician productivity), revenue forecasting, day-of-week patterns.
 
-**Avg deal:** Standard tier (custom pricing; CSV-only limits depth, so don't push Premium).
+**Avg deal:** Base product (custom pricing; CSV-only limits depth, so don't push camera add-on).
 
 **Decision maker:** Shop owner.
 
@@ -170,12 +170,12 @@ Vendors: Mitchell1, ALLDATA, NAPA TRACS, TireMaster, R.O. Writer, Protractor, Bo
 Regardless of vertical:
 
 1. POS system + version (some have multiple variants)
-2. Number of locations (1 = Standard or Premium; 2+ = Command candidate)
+2. Number of locations (1 = base product ± camera add-on; 2+ = multi-location add-on candidate)
 3. Have they used analytics before? (sets baseline expectations)
 4. Owner vs manager (decision maker confirmation)
-5. Cameras already installed? (Premium upsell signal)
+5. Cameras already installed? (camera intelligence add-on signal)
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: 10-pos-integrations/_index.md + services/training_video_pipeline/lesson_content.json (lessons 4.1–4.5 vertical playbooks) + docs/playbook/_status/phase-2-decisions.md_

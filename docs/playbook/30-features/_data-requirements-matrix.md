@@ -21,7 +21,7 @@ Which features need which data, from which POS systems. Use this to set expectat
 | peak_hours | required | — | — | — | — | — |
 | day_of_week | required | — | — | — | — | — |
 | seasonality | required | — | — | — | — | — |
-| location_analyst | required | — | — | — | — | **required (Command)** |
+| location_analyst | required | — | — | — | — | **required (multi-location add-on)** |
 | loyalty_architect | required | — | helpful | — | — | — |
 | demographic_profiler | — | — | — | — | **required** | — |
 | employee_performance | required | — | — | **required** | helpful | — |
@@ -99,7 +99,7 @@ All 10 cross-reference agents need cameras. Specifically:
 | lost_sale | Camera at entrance |
 | path_to_purchase | Cameras across multiple zones |
 | peak_basket | Camera with wide coverage |
-| posture_purchase | Cameras + skeletal tracking module (Command) |
+| posture_purchase | Cameras + skeletal tracking module (**FLAG [NEEDS AIDAN INPUT]:** confirm whether this is included in camera add-on or separate) |
 | product_placement | Cameras covering product zones |
 | queue_basket | Camera at checkout |
 | return_customer | Cameras + person re-ID service |
@@ -108,9 +108,9 @@ All 10 cross-reference agents need cameras. Specifically:
 
 If a merchant has only one camera (at the entrance), they get: foot_traffic, queue_monitor (if entrance-facing), lost_sale, basic dwell_time. They do NOT get path_to_purchase, product_placement, staff_effect.
 
-**Sales takeaway:** for cross-reference features, recommend 2–3 cameras minimum (entrance, main floor zones, checkout). At $60 each (Reolink), that's $120–$180 in hardware for $239/mo recurring commission to you.
+**Sales takeaway:** for cross-reference features, recommend 2–3 cameras minimum (entrance, main floor zones, checkout). At $60 each (Reolink), that's $120–$180 in hardware. The camera intelligence add-on commission at 70% depends on the custom price you negotiate.
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/ai/agents/ class-level metadata + src/services/pos_connectors/registry.py (per-POS data field coverage) + src/camera/ pipeline modules_

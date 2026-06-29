@@ -42,7 +42,7 @@ Restaurant suite + hospitality extras:
 - Peak hours
 - Customer LTV
 - Employee performance
-- Multi-location rollups (Command tier)
+- Multi-location rollups (multi-location add-on)
 - Order creation supported (`supports_orders: True`)
 
 ## What features they DON'T get
@@ -65,7 +65,7 @@ Restaurant suite + hospitality extras:
 
 **Opener:** "Are you on Lightspeed Restaurant? Hospitality-grade data we can do a lot with — table turn analysis, server-level revenue, menu engineering. Once we're live (this month), most operators find CA$3K+/mo in repeatable wins."
 
-**Best fit:** full-service restaurants, hotels with F&B, multi-location restaurant groups (Command tier — CA$1,370/mo, $959 commission).
+**Best fit:** full-service restaurants, hotels with F&B, multi-location restaurant groups (multi-location add-on; commission at custom price).
 
 **Why this is the wedge:** Lightspeed Restaurant is the consolidated brand for what used to be **four separate POS products** — Kounta (AU), iKentoo (EU), Upserve (US), Breadcrumb. Combined footprint is easily top-10 restaurant POS by merchant count when counting heritage brands. Strong AU + EU presence; US base via Upserve (covered by our existing `upserve` connector). K-Series API is modern and well-documented — the friction is the partner-approval gate, not the tech. **Never promise "instant connect"** — OAuth + partner-gated, expect a 2–4 week stand-up per new merchant until we have partner-level credentials.
 

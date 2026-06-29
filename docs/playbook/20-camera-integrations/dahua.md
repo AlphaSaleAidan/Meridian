@@ -2,7 +2,7 @@
 
 > Status: **OFFICIALLY SUPPORTED**
 > Stream: RTSP
-> Required plan: Premium or Command
+> Availability: **Camera intelligence add-on**
 > OEM coverage: Amcrest (sister-brand), newer Lorex (Dahua acquired Lorex)
 
 ## What you tell the merchant
@@ -35,7 +35,7 @@ Same pipeline as Hikvision: YOLO11n person detection + ByteTrack + per-zone assi
 
 ## Sales angle
 
-**Opener:** "Are you on Dahua, Amcrest, or newer Lorex? All same handler. Plug in the RTSP URL, you'll see foot traffic by end of day. Most retail/restaurant merchants find their dwell-time-to-ticket correlation in week 1 — that's the cross-reference that pays for Premium."
+**Opener:** "Are you on Dahua, Amcrest, or newer Lorex? All same handler. Plug in the RTSP URL, you'll see foot traffic by end of day. Most retail/restaurant merchants find their dwell-time-to-ticket correlation in week 1 — that's the cross-reference that justifies the camera add-on."
 
 ## Common failure modes
 
@@ -47,5 +47,5 @@ Same pipeline as Hikvision: YOLO11n person detection + ByteTrack + per-zone assi
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/camera/rtsp_handler.py + src/camera/detector.py + docs/playbook/_status/phase-2-decisions.md_

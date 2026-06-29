@@ -11,8 +11,8 @@ Ask these BEFORE showing anything. 2–3 minutes total.
    - Confirms supported / wave-1 / CSV-only / unsupported
    - If unsupported, you may want to qualify out early
 2. **"How many locations?"**
-   - 1 → Standard or Premium
-   - 2+ → Command (custom pricing, 70% commission to you — higher volume = larger deal)
+   - 1 → base product (add camera intelligence if cameras present)
+   - 2+ → multi-location add-on (higher volume = larger deal, 70% commission to you)
 3. **"What's your biggest operational headache right now?"**
    - Their answer tells you which feature to LEAD the demo with
    - Common answers: staffing, inventory, knowing what to push, customer retention
@@ -51,9 +51,9 @@ Ask these BEFORE showing anything. 2–3 minutes total.
 - "Have you tested raising prices recently?"
 - "What's your slowest day? Have you tried anything to fix it?"
 
-### Cameras (Premium qualifier)
+### Cameras (camera add-on qualifier)
 
-- "Do you have security cameras already?" (Yes → Premium upsell signal)
+- "Do you have security cameras already?" (Yes → camera intelligence add-on signal)
 - "What brand?" (Hikvision/Dahua/Reolink/UniFi/Axis → easy; Wyze/Nest/Arlo → suggest add-on)
 - "How many cameras and where?"
 - "Have you ever thought about using them for analytics, not just security?"
@@ -122,7 +122,7 @@ Ask these BEFORE showing anything. 2–3 minutes total.
 | Answer | What it means | Action |
 |--------|---------------|--------|
 | "I run my business on cash, no POS" | Can't connect | Polite decline |
-| "I don't really track anything" + small revenue | Low fit, will churn fast | Pass or sell Standard with no upsell |
+| "I don't really track anything" + small revenue | Low fit, will churn fast | Pass or sell base product without camera add-on |
 | "I want a guarantee that I'll make X back" | Wants contractual ROI promise | Decline; we don't guarantee outcomes (compliance issue) |
 | "I want you to build me a custom thing" | Wrong model | Polite no; not a service business |
 | "My partner makes all decisions, I'm just curious" | Not the buyer | Get the partner on a call or move on |
@@ -135,11 +135,11 @@ Ask these BEFORE showing anything. 2–3 minutes total.
 - **2–5 min:** The core 5 questions. Write answers down.
 - **5–10 min:** 2–3 deeper questions in the area they care most about.
 - **10–25 min:** Demo — emphasize the features that match their #3 (biggest headache) and #5 (thing they wish they knew).
-- **25–30 min:** Close. Recommend a plan. Assumptive close: "Which makes more sense — Standard or Premium?"
+- **25–30 min:** Close. Recommend a price. Assumptive close on add-ons: "Do you want to include the camera intelligence add-on from day one, or start with analytics only and add it in month 2 once you've seen the base value?"
 
 Total: 30 minutes. Don't run long. Most demos that go past 45 min lose.
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: services/training_video_pipeline/lesson_content.json (lessons 3.2 discovery framework, 4.1–4.5 vertical playbooks) + 50-cheatsheets/pos-by-vertical.md_

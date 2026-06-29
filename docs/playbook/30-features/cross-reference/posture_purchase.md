@@ -2,7 +2,7 @@
 
 > Group: **cross-reference**
 > Tier: **Tier 4**
-> Plan: **Premium+ (Command for full skeletal tracking)**
+> Availability: **Camera intelligence add-on** (**FLAG [NEEDS AIDAN INPUT]:** skeletal tracking module may be a separate add-on; see `_open-questions.md` Q8)
 
 ## What it does
 
@@ -22,5 +22,5 @@ Source: `src/ai/agents/cross_ref/posture_purchase_agent.py` or `src/camera/postu
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/ai/agents/ + src/camera/ class-level metadata_

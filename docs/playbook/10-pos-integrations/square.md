@@ -51,8 +51,8 @@ See `30-features/_data-requirements-matrix.md` for the full feature × data map.
 
 ## What features they DON'T get
 
-- **Camera intelligence + cross-reference agents** require Premium plan + a supported camera. Not Square-specific.
-- **Multi-location rollups** require Command plan.
+- **Camera intelligence + cross-reference agents** require the camera intelligence add-on + a supported camera. Not Square-specific.
+- **Multi-location rollups** require the multi-location add-on.
 
 ## Common failure modes
 

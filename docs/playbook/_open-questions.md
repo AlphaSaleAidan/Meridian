@@ -72,13 +72,13 @@ Items flagged during Phase 3 content rebuild where the source-of-truth wasn't su
 
 ---
 
-## 8. "Posture purchase" cross-reference agent — Premium vs Command
+## 8. "Posture purchase" cross-reference agent — which add-on?
 
-**File:** `30-features/cross-reference/posture_purchase.md` + `50-cheatsheets/tier-feature-comparison.md`.
+**Files:** `30-features/cross-reference/posture_purchase.md`, `30-features/_data-requirements-matrix.md`, `50-cheatsheets/tier-feature-comparison.md`.
 
-**Context:** I assumed advanced skeletal-tracking-driven posture analysis was Command-only because of the freemocap module dependency. The other 9 cross-reference agents I marked Premium+.
+**Context:** With tiers removed, posture_purchase is documented as part of the camera intelligence add-on alongside the other 9 cross-reference agents. However, it requires a skeletal-tracking module (freemocap dependency) that the others don't. It may be a separate add-on or have additional cost.
 
-**Action needed:** Confirm the actual plan-gating for posture_purchase.
+**Action needed:** Confirm whether posture_purchase is included in the camera intelligence add-on at no extra cost, or is a separate line item. Update `_data-requirements-matrix.md` and `tier-feature-comparison.md` once confirmed.
 
 ---
 
@@ -112,23 +112,19 @@ Items flagged during Phase 3 content rebuild where the source-of-truth wasn't su
 
 ---
 
-## 12. Plan tier dollar amounts (USD vs CAD parity)
+## 12. ~~Plan tier dollar amounts~~ — RESOLVED 2026-06-29
 
-**Files:** `00-getting-started/03-pricing-commission.md` + `50-cheatsheets/tier-feature-comparison.md` + `50-cheatsheets/one-pager-printable.md`.
-
-**Context:** Used Standard $299/CA$343, Premium $599/CA$685, Command $1,199/CA$1,370 per Phase 3 task spec. Implied FX ~0.87 USD/CAD.
-
-**Action needed:** Confirm these are the right pairs. If actual currency strategy is different (e.g., separate pricing not parity-mapped), reconcile.
+**Resolution:** Tiers (Standard/Premium/Command) and their fixed dollar amounts have been removed from all training docs. Pricing is now fully custom per deal. Illustrative examples in commission tables (CA$350/CA$600/CA$1,200) remain to show the commission math at different price points but are not published as prices. No further action needed.
 
 ---
 
-## 13. CSV-only — automated SFTP claim for Premium tier
+## 13. CSV-only — SFTP automation add-on (ship status)
 
 **File:** `10-pos-integrations/_csv-only-systems.md`
 
-**Context:** Claimed Premium tier includes automated SFTP pulls.
+**Context:** Previously documented as a Premium tier feature. With tiers removed, SFTP automation is now framed as an add-on. The script has been updated to say "confirm with product team before promising." However, the underlying question remains.
 
-**Action needed:** Confirm whether SFTP automation is actually shipped on Premium today, or whether it's roadmap. If roadmap, the docs need to be more careful.
+**Action needed:** Confirm whether SFTP automation is actually shipped today, or is still roadmap. If shipped, remove the FLAG note from `_csv-only-systems.md` and let reps sell it confidently. If roadmap, current "confirm first" framing is correct.
 
 ---
 
@@ -165,4 +161,4 @@ All files end with `_Last updated: 2026-05-31_`. Without ownership / refresh cad
 
 _This file collects items flagged with `[NEEDS AIDAN INPUT]` during Phase 3. As items are answered, remove them and update the affected file(s)._
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_

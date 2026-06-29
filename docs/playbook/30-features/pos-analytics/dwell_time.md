@@ -2,7 +2,7 @@
 
 > Group: **pos-analytics**
 > Tier: **Tier 2**
-> Plan: **Premium+**
+> Availability: **Camera intelligence add-on**
 
 ## What it does
 

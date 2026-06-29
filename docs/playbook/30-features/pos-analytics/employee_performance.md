@@ -2,7 +2,7 @@
 
 > Group: **pos-analytics**
 > Tier: **Tier 4**
-> Plan: **Standard+ (richer on Premium with camera-detected staff zones via staff_effect cross-ref agent)**
+> Availability: **Base product; richer with camera intelligence add-on (camera-detected staff zones via staff_effect)**
 
 ## What it does
 

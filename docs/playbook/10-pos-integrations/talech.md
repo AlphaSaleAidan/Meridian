@@ -32,7 +32,7 @@ Required columns:
 
 Token is revocable from the same screen. **No partner program required** — the merchant owns their data and authorizes Meridian directly. Self-serve, takes minutes.
 
-**Tier gate:** API access is tier-gated. Merchants on Mobile (free) or Starter ($29) won't see the "Generate New Token" option — they need Standard ($69) or Premium ($99).
+[**talech's own plan tiers**] API access is tier-gated within talech. Merchants on talech Mobile (free) or talech Starter ($29/mo) won't see the "Generate New Token" option — they need talech Standard ($69/mo) or talech Premium ($99/mo). (These are talech's own plans, not Meridian plans.)
 
 ## What data we pull
 
@@ -52,7 +52,7 @@ API path (when live): adds product velocity, employee performance, customer LTV 
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Merchant on Mobile/Starter tier can't find "Generate New Token" | API access is tier-gated | Upgrade prompt to Standard ($69) or Premium ($99) |
+| Merchant on talech Mobile/Starter can't find "Generate New Token" | API access is talech-tier-gated | Merchant needs to upgrade their talech plan to talech Standard ($69) or talech Premium ($99) |
 | 403 on `api-eu.talech.com` for a US merchant | Wrong region host | Route US to `api.talech.com`, EU/UK/IE to `api-eu.talech.com` |
 | Token works then suddenly 401 | Merchant clicked **Revoke** in Account Settings | Re-issue from the same screen |
 | CSV column names don't match | talech export format varies by account age | Use the column mapping screen in Meridian |
