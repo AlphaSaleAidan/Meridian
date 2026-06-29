@@ -416,7 +416,7 @@ async def create_subscribe_link(req: SubscribeLinkRequest, principal=Depends(req
 
     The returned ``url`` is always ``{PUBLIC_PAY_BASE}/subscribe/{token}``.
     GET /subscribe/{token}      → creates a fresh Stripe Checkout Session + redirects
-    GET /subscribe/{token}/qr.png → serves a PNG QR code for that URL
+    The rep portal renders the QR from this URL client-side (no server QR endpoint).
 
     Auth: service-role key or rep JWT (Bearer).  If org_id is present the
     principal must belong to that org (enforced by enforce_service_member).
