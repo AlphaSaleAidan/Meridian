@@ -289,7 +289,7 @@ export default function USCustomerOnboardingWizard() {
         // P1: connectPos signature changed to credentials object. Pass
         // {} for the selection-only path (credential collection lives
         // in a later step / the rep-facing portal).
-        const err = await connectPos(posProvider, {})
+        const err = await connectPos(posProvider, {}, searchParams.get('rep') || undefined)
         if (err) { setError(err); setSaving(false); return }
       }
       setStep('inventory')
@@ -483,6 +483,7 @@ export default function USCustomerOnboardingWizard() {
               business_name: account.businessName,
               plan: prefill.plan || 'starter',
               monthly_price: monthlyPriceUSD,
+              country: 'US',
               rep_id: searchParams.get('rep') || null,
               rep_name: searchParams.get('rep_name') || null,
             }),
@@ -1158,7 +1159,7 @@ export default function USCustomerOnboardingWizard() {
             <p className={`text-[14px] ${T.muted} text-center max-w-sm mb-8`}>
               Your dashboard is live. We're already analyzing your data and generating insights.
             </p>
-            <button onClick={() => navigate('/us/dashboard')}
+            <button onClick={() => navigate('/app')}
               className={`flex items-center gap-2 px-8 py-3 text-[14px] font-medium text-[#0A0A0B] ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.2)]`}>
               Go to Dashboard <ArrowRight size={16} />
             </button>

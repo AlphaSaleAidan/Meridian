@@ -94,6 +94,8 @@ const USPortalSettingsPage = lazyRetry(() => import('@/pages/us/portal/USPortalS
 const USPortalCreateCustomerPage = lazyRetry(() => import('@/pages/us/portal/USPortalCreateCustomerPage'))
 const USPortalOnboardingPage = lazyRetry(() => import('@/pages/us/portal/USPortalOnboardingPage'))
 const USCustomerOnboardingWizard = lazyRetry(() => import('@/pages/us/portal/USCustomerOnboardingWizard'))
+const USLoginPage = lazyRetry(() => import('@/pages/customer/USLoginPage'))
+const USSetupPage = lazyRetry(() => import('@/pages/customer/USSetupPage'))
 const USPortalBadgePage = lazyRetry(() => import('@/pages/us/portal/USPortalBadgePage'))
 const CanadaPortalBadgePage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalBadgePage'))
 const RepPublicBadgePage = lazyRetry(() => import('@/pages/RepPublicBadgePage'))
@@ -514,6 +516,9 @@ export default function App() {
                   <USCustomerOnboardingWizard />
                 </Suspense>
               } />
+              {/* US — customer auth (returning login + first-login setup) */}
+              <Route path="/us/login" element={<Suspense fallback={<LazyFallback />}><USLoginPage /></Suspense>} />
+              <Route path="/us/setup" element={<Suspense fallback={<LazyFallback />}><USSetupPage /></Suspense>} />
               <Route path="/us/portal/login" element={<Suspense fallback={<LazyFallback />}><USPortalLoginPage /></Suspense>} />
               <Route path="/us/portal/signup" element={<Suspense fallback={<LazyFallback />}><USPortalSignupPage /></Suspense>} />
               <Route path="/us/portal/onboarding" element={
