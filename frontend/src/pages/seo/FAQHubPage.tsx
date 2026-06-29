@@ -128,16 +128,20 @@ function FAQItem({ faq }: { faq: FAQ }) {
         <span className="text-[#F5F5F7] font-medium text-[14px] sm:text-[15px] pr-4">{faq.q}</span>
         <ChevronDown size={18} className={`text-[#6B7280] flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
-        <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-[#1F1F23] pt-4">
-          <p className="text-[#A1A1A8] text-[14px] leading-relaxed">{faq.a}</p>
-          {faq.related && (
-            <Link to={faq.related} className="inline-flex items-center gap-1.5 mt-3 text-[12px] text-[#1A8FD6] font-medium hover:underline">
-              Learn more <ChevronRight size={12} />
-            </Link>
-          )}
+      {/* Answer kept in the DOM at all times (CSS-collapsed, not unmounted) so
+          crawlers and AI engines can read every answer even when visually closed. */}
+      <div className={`grid transition-all duration-200 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-[#1F1F23] pt-4">
+            <p className="text-[#A1A1A8] text-[14px] leading-relaxed">{faq.a}</p>
+            {faq.related && (
+              <Link to={faq.related} className="inline-flex items-center gap-1.5 mt-3 text-[12px] text-[#1A8FD6] font-medium hover:underline">
+                Learn more <ChevronRight size={12} />
+              </Link>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

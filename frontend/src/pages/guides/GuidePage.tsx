@@ -11,16 +11,21 @@ function FAQItem({ q, a }: { q: string; a: string }) {
     <div className="border border-[#1F1F23] rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="w-full flex items-center justify-between p-5 text-left hover:bg-[#111113] transition-colors"
       >
         <span className="text-[#F5F5F7] font-medium text-[15px] pr-4">{q}</span>
         <ChevronDown size={18} className={`text-[#6B7280] flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
       </button>
-      {open && (
-        <div className="px-5 pb-5 text-[#A1A1A8] text-[14px] leading-relaxed border-t border-[#1F1F23] pt-4">
-          {a}
+      {/* Answer stays in the DOM at all times (collapsed via CSS grid, not unmounted)
+          so crawlers and AI engines can read the Q&A text even when visually closed. */}
+      <div className={`grid transition-all duration-200 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+        <div className="overflow-hidden">
+          <div className="px-5 pb-5 text-[#A1A1A8] text-[14px] leading-relaxed border-t border-[#1F1F23] pt-4">
+            {a}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -31,11 +36,21 @@ function buildJsonLd(guide: GuideData) {
       '@type': 'Article',
       headline: guide.seoTitle.replace(' | Meridian', ''),
       description: guide.description,
-      author: { '@type': 'Organization', name: 'Meridian' },
-      publisher: { '@type': 'Organization', name: 'Meridian', url: 'https://meridian.tips' },
+      image: 'https://meridian.tips/og-image.png',
+      inLanguage: guide.slug.includes('canada') || guide.slug.includes('pipeda') || guide.slug.includes('quebec') ? 'en-CA' : 'en-US',
+      author: { '@type': 'Person', name: 'Aidan Pierce', jobTitle: 'Founder & CEO', url: 'https://meridian.tips/about' },
+      publisher: {
+        '@type': 'Organization',
+        name: 'Meridian',
+        url: 'https://meridian.tips/',
+        logo: { '@type': 'ImageObject', url: 'https://meridian.tips/meridian-icon.svg' },
+      },
       datePublished: guide.datePublished,
       dateModified: guide.datePublished,
+      isAccessibleForFree: true,
       mainEntityOfPage: { '@type': 'WebPage', '@id': `https://meridian.tips/guides/${guide.slug}` },
+      // Voice/assistant + AI-answer signal: the headline and self-contained summary.
+      speakable: { '@type': 'SpeakableSpecification', cssSelector: ['h1', '.guide-summary'] },
     },
     {
       '@type': 'FAQPage',
@@ -46,20 +61,9 @@ function buildJsonLd(guide: GuideData) {
       })),
     },
     {
-      '@type': 'HowTo',
-      name: guide.heroTitle + ' ' + guide.heroAccent,
-      description: guide.description,
-      step: guide.sections.map((section, i) => ({
-        '@type': 'HowToStep',
-        position: i + 1,
-        name: section.title,
-        text: section.paragraphs.join(' '),
-      })),
-    },
-    {
       '@type': 'BreadcrumbList',
       itemListElement: [
-        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://meridian.tips' },
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://meridian.tips/' },
         { '@type': 'ListItem', position: 2, name: 'Guides', item: 'https://meridian.tips/guides' },
         { '@type': 'ListItem', position: 3, name: guide.heroTitle + ' ' + guide.heroAccent, item: `https://meridian.tips/guides/${guide.slug}` },
       ],
@@ -99,8 +103,10 @@ export default function GuidePage() {
               {guide.heroAccent}
             </span>
           </h1>
-          <p className="mt-5 text-lg text-[#A1A1A8] leading-relaxed max-w-2xl">{guide.heroDescription}</p>
+          <p className="guide-summary mt-5 text-lg text-[#A1A1A8] leading-relaxed max-w-2xl">{guide.heroDescription}</p>
           <div className="mt-6 flex items-center gap-3 text-[12px] text-[#6B7280]">
+            <span>By <Link to="/about" className="text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">Aidan Pierce</Link>, Founder</span>
+            <span className="w-1 h-1 rounded-full bg-[#6B7280]" />
             <BookOpen size={14} />
             <span>{Math.ceil(guide.sections.length * 1.5)} min read</span>
             <span className="w-1 h-1 rounded-full bg-[#6B7280]" />
@@ -187,6 +193,7 @@ export default function GuidePage() {
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-[12px] text-[#6B7280]">
               <Link to="/" className="hover:text-[#A1A1A8]">Home</Link>
               <Link to="/guides" className="hover:text-[#A1A1A8]">All Guides</Link>
+              <Link to="/about" className="hover:text-[#A1A1A8]">About</Link>
               <Link to="/blog" className="hover:text-[#A1A1A8]">Blog</Link>
               <Link to="/for/restaurants" className="hover:text-[#A1A1A8]">For Restaurants</Link>
               <Link to="/for/coffee-shops" className="hover:text-[#A1A1A8]">For Coffee Shops</Link>

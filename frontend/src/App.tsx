@@ -133,6 +133,7 @@ const RestaurantProfitabilityArticle = lazyRetry(() => import('@/pages/blog/Rest
 const FootTrafficAnalyticsArticle = lazyRetry(() => import('@/pages/blog/FootTrafficAnalyticsArticle'))
 const GuidesIndexPage = lazyRetry(() => import('@/pages/guides/GuidesIndexPage'))
 const GuidePage = lazyRetry(() => import('@/pages/guides/GuidePage'))
+const FounderPage = lazyRetry(() => import('@/pages/about/FounderPage'))
 
 
 function CanadaProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -294,6 +295,10 @@ export default function App() {
               <Route path="/tools/prime-cost-calculator" element={<Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><PrimeCostCalculatorPage /></Suspense>} />
               <Route path="/tools/menu-pricing-calculator" element={<Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><MenuPricingCalculatorPage /></Suspense>} />
               <Route path="/features/phone-agent" element={<Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><PhoneAgentPage /></Suspense>} />
+
+              {/* About / founder — owned entity page for the company + CEO */}
+              <Route path="/about" element={<FounderPage />} />
+              <Route path="/founder" element={<Navigate to="/about" replace />} />
 
               {/* Guides — intent-based SEO content */}
               <Route path="/guides" element={<GuidesIndexPage />} />

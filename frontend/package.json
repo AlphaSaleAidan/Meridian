@@ -8,6 +8,8 @@
     "dev": "vite",
     "prebuild": "node ../scripts/build-playbook-data.mjs",
     "build": "tsc && vite build",
+    "prebuild:seo": "node ../scripts/build-playbook-data.mjs",
+    "build:seo": "tsc && vite build && bash scripts/prerender-all.sh",
     "preview": "vite preview",
     "start": "npx serve dist -s -l ${PORT:-3000}",
     "test": "vitest run",
