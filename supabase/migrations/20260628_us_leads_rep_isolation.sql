@@ -27,11 +27,18 @@
 
 BEGIN;
 
--- Remove the existing wide-open policies from 20260522 and 20260603 ----------
+-- Remove the existing wide-open policies. Prod carried TWO overlapping sets
+-- (Postgres OR's permissive policies, so BOTH must go or the table stays open):
+--   (a) the named "Authenticated users can ..." set, and
+--   (b) the "us_leads_*_authenticated" set (role public, USING auth.uid() IS NOT NULL).
 DROP POLICY IF EXISTS "Authenticated users can read US leads"   ON public.us_leads;
 DROP POLICY IF EXISTS "Authenticated users can insert US leads" ON public.us_leads;
 DROP POLICY IF EXISTS "Authenticated users can update US leads" ON public.us_leads;
 DROP POLICY IF EXISTS "Authenticated users can delete US leads" ON public.us_leads;
+DROP POLICY IF EXISTS us_leads_select_authenticated ON public.us_leads;
+DROP POLICY IF EXISTS us_leads_insert_authenticated ON public.us_leads;
+DROP POLICY IF EXISTS us_leads_update_authenticated ON public.us_leads;
+DROP POLICY IF EXISTS us_leads_delete_authenticated ON public.us_leads;
 
 -- Ensure RLS is still enabled (idempotent) ------------------------------------
 ALTER TABLE public.us_leads ENABLE ROW LEVEL SECURITY;
