@@ -59,7 +59,7 @@ export default function USSetupPage() {
 
   function goToDashboard() {
     markOnboarded()
-    navigate('/app', { replace: true })
+    navigate('/us/dashboard', { replace: true })
   }
 
   function handleSkipPos() { goToDashboard() }
