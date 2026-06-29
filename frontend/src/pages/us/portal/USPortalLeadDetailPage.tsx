@@ -535,6 +535,7 @@ export default function USPortalLeadDetailPage() {
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
+        firstMonthFree,
         startDate: new Date().toISOString().slice(0, 10),
       }
       const blob = await generateSlaDocument(slaInput)
@@ -564,6 +565,7 @@ export default function USPortalLeadDetailPage() {
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
+        firstMonthFree,
         startDate: new Date().toISOString().slice(0, 10),
         clientSignature: slaSignature,
       }
@@ -590,6 +592,8 @@ export default function USPortalLeadDetailPage() {
               provider_signatory: `${rep.name || 'Meridian Sales'}, Account Representative`,
               monthly_price: `$${monthlyPrice.toLocaleString()}/mo`,
               setup_fee: (Number(setupFee) || 0) > 0 ? `$${(Number(setupFee) || 0).toLocaleString()}` : '',
+              first_month_free: firstMonthFree,
+              due_today: `$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
             },
           }),
         })
@@ -625,6 +629,8 @@ export default function USPortalLeadDetailPage() {
             provider_signatory: `${rep?.name || 'Meridian Sales'}, Account Representative`,
             monthly_price: `$${monthlyPrice.toLocaleString()}/mo`,
             setup_fee: (Number(setupFee) || 0) > 0 ? `$${(Number(setupFee) || 0).toLocaleString()}` : '',
+            first_month_free: firstMonthFree,
+            due_today: `$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
           },
         }),
       })
@@ -923,6 +929,24 @@ export default function USPortalLeadDetailPage() {
           </div>
           <span className="text-sm text-white">First month free</span>
         </label>
+
+        {/* First-month-free breakdown — only shown when toggle is on */}
+        {firstMonthFree && (
+          <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[#17C5B0]/5 border border-[#17C5B0]/20">
+            <span className="text-xs text-[#A1A1A8]">First month</span>
+            <span className="text-xs font-semibold text-[#17C5B0]">
+              $0 <span className="text-[#4a5550] font-normal">(free — setup fee still due today)</span>
+            </span>
+          </div>
+        )}
+
+        {/* Due Today — always visible so rep and customer always see the exact charge */}
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
+          <span className="text-xs text-[#A1A1A8]">Due today</span>
+          <span className="text-sm font-bold text-[#17C5B0]">
+            ${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}
+          </span>
+        </div>
 
         {/* Buttons */}
         <button
