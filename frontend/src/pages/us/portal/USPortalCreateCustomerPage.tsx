@@ -552,36 +552,30 @@ export default function USPortalCreateCustomerPage() {
     try {
       const body = {
         org_id: orgId,
-        plan: form.plan,
-        monthly_price_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
+        monthly_amount_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
         setup_fee_cents: setupFee * 100,
         first_month_free: form.firstMonthFree,
-        customer_email: form.email,
-        customer_name: form.ownerName,
         business_name: form.businessName,
-        country: 'US',
-        rep_id: rep?.rep_id || '',
-        rep_name: rep?.name || '',
-        return_url: `${window.location.origin}/us/onboard?checkout=success`,
+        currency: 'USD',
       }
 
       const checkoutHeaders = await getAuthHeaders()
-      const res = await fetch(`${API_URL}/api/billing/create-checkout`, {
+      const res = await fetch(`${API_URL}/api/stripe/subscribe-link`, {
         method: 'POST',
         headers: checkoutHeaders,
         body: JSON.stringify(body),
       })
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Checkout service unavailable' }))
+        const err = await res.json().catch(() => ({ detail: 'Subscribe-link service unavailable' }))
         throw new Error(err.detail || `Server error ${res.status}`)
       }
 
       const data = await res.json()
-      setCheckoutUrl(data.checkout_url)
-      setCheckoutSessionId(data.checkout_id || data.order_id || '')
+      setCheckoutUrl(data.url)
+      setCheckoutSessionId(data.token || '')
     } catch (err: any) {
-      setError(err.message || 'Failed to create checkout session')
+      setError(err.message || 'Failed to create subscription link')
     } finally {
       setCreatingCheckout(false)
     }
@@ -1059,17 +1053,17 @@ export default function USPortalCreateCustomerPage() {
             </div>
           </div>
 
-          {/* Checkout Link section */}
+          {/* Monthly Subscription Link section */}
           <div className="bg-[#111113] rounded-xl p-6 border border-[#1F1F23]">
             <div className="flex items-center gap-2 mb-4">
               <QrCode size={16} className="text-[#7c3aed]" />
-              <h2 className="text-[14px] font-semibold text-white">Payment Checkout Link</h2>
+              <h2 className="text-[14px] font-semibold text-white">Monthly Subscription Link</h2>
             </div>
 
             {!checkoutUrl ? (
               <div>
                 <p className="text-[12px] text-[#A1A1A8] mb-3">
-                  Generate a unique Square checkout link for this customer. Includes the {selectedPlan.label} subscription
+                  Generate a unique Stripe subscription link for this customer. Includes the {selectedPlan.label} plan
                   {setupFee > 0 ? ` + $${setupFee} setup fee` : ''}
                   {form.firstMonthFree ? ' with first month free' : ''}. All amounts in USD.
                 </p>
@@ -1079,16 +1073,16 @@ export default function USPortalCreateCustomerPage() {
                   className="w-full flex items-center justify-center gap-2 px-6 py-3 text-[13px] font-medium text-white bg-[#7c3aed] rounded-lg hover:bg-[#6b2fd4] disabled:opacity-50 transition-colors"
                 >
                   {creatingCheckout ? (
-                    <><Loader2 size={14} className="animate-spin" /> Creating Checkout Session...</>
+                    <><Loader2 size={14} className="animate-spin" /> Creating Subscription Link...</>
                   ) : (
-                    <><QrCode size={14} /> Generate Checkout Link & QR Code</>
+                    <><QrCode size={14} /> Generate Subscription Link & QR Code</>
                   )}
                 </button>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-[13px] text-[#17C5B0]">
-                  <CheckCircle2 size={14} /> Checkout session created!
+                  <CheckCircle2 size={14} /> Subscription link created!
                 </div>
                 <div className="flex justify-center">
                   <div className="relative p-4 bg-white rounded-xl">
@@ -1101,7 +1095,7 @@ export default function USPortalCreateCustomerPage() {
                   </div>
                 </div>
                 <p className="text-center text-[11px] text-[#A1A1A8]">
-                  Customer scans to pay — {selectedPlan.label} ${price}{interval}
+                  Customer scans to start their Monthly Subscription — {selectedPlan.label} ${price}{interval}
                   {setupFee > 0 ? ` + $${setupFee} setup` : ''}
                   {form.firstMonthFree ? ' · 30-day free trial' : ''}
                 </p>

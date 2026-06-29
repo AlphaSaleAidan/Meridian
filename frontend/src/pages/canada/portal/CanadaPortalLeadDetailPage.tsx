@@ -363,30 +363,25 @@ export default function CanadaPortalLeadDetailPage() {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       try {
         const authHdrs = await getAuthHeaders()
-        const checkoutRes = await fetch(`${API_BASE}/api/billing/create-checkout`, {
+        const checkoutRes = await fetch(`${API_BASE}/api/stripe/subscribe-link`, {
           method: 'POST',
           headers: authHdrs,
           body: JSON.stringify({
             org_id: deal.id,
-            plan: planName.toLowerCase(),
-            monthly_price_cents: priceCents,
-            customer_email: deal.contact_email,
-            customer_name: deal.contact_name,
+            lead_id: deal.id,
+            monthly_amount_cents: priceCents,
+            currency: 'CAD',
             business_name: deal.business_name,
-            return_url: `${window.location.origin}/canada/login`,
             setup_fee_cents: setupFeeCents,
             first_month_free: firstMonthFree,
-            rep_id: rep.rep_id || '',
-            rep_name: rep.name,
-            currency: 'CAD',
           }),
         })
         if (checkoutRes.ok) {
           const data = await checkoutRes.json()
-          if (data.checkout_url) checkoutUrl = data.checkout_url
+          if (data.url) checkoutUrl = data.url
         }
       } catch {
-        // Square checkout unavailable — fall back to local invoice URL
+        // Stripe subscribe-link unavailable — fall back to local invoice URL
       }
 
       // Surface the checkout link + an on-screen QR so the customer can scan
@@ -1059,9 +1054,9 @@ export default function CanadaPortalLeadDetailPage() {
               <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-lg bg-pm-canada-bg border border-pm-accent/20">
                 <img src={checkoutQr} alt="Checkout QR code" className="w-28 h-28 rounded-lg shrink-0" />
                 <div className="min-w-0 flex-1 text-center sm:text-left">
-                  <p className="text-sm font-semibold text-white mb-0.5">Scan to pay</p>
+                  <p className="text-sm font-semibold text-white mb-0.5">Monthly Subscription — Scan to Subscribe</p>
                   <p className="text-2xs text-pm-canada-text-muted mb-2.5">
-                    Customer scans this to open the secure CAD checkout — or tap the link below.
+                    Customer scans this to start their monthly CA$ subscription — or tap the link below.
                   </p>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <a
@@ -1070,7 +1065,7 @@ export default function CanadaPortalLeadDetailPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pm-accent text-pm-canada-bg text-xs font-semibold hover:bg-pm-accent/90 active:scale-[0.98] transition-all"
                     >
-                      Open checkout <ExternalLink size={11} />
+                      Open subscribe link <ExternalLink size={11} />
                     </a>
                     <button
                       onClick={async () => {
