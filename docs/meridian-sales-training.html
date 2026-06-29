@@ -216,11 +216,11 @@ td.h{color:#fff;font-weight:600;}
   <div class="g2">
     <div>
       <div class="step"><div class="step-n">1</div><div class="step-c"><h4>Create a Lead</h4><p>Leads → New Lead. Enter business name, contact, phone, email, type.</p></div></div>
-      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>Generate & Show Proposal</h4><p>Select billing ($250/mo or $65/wk). Click "Generate Proposal" — branded with QR code.</p></div></div>
-      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Customer Checkout</h4><p>Customer scans QR code to pay via Square. Click "Customer Agreed."</p></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-c"><h4>Generate & Show Proposal</h4><p>Set a custom monthly price. Click "Generate Proposal" — branded with QR code / subscribe link.</p></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-c"><h4>Customer Checkout</h4><p>Customer subscribes via the Stripe link or QR code. Click "Customer Agreed."</p></div></div>
     </div>
     <div>
-      <div class="step"><div class="step-n">4</div><div class="step-c"><h4>Connect Customer POS</h4><p>Most critical step. Square, Clover, or Toast — see detailed guides.</p></div></div>
+      <div class="step"><div class="step-n">4</div><div class="step-c"><h4>Merchant Connects Their POS</h4><p>The merchant does this themselves from their own dashboard — you do NOT connect their POS for them. Send the onboarding link; they follow the steps.</p></div></div>
       <div class="step"><div class="step-n">5</div><div class="step-c"><h4>Customer Walkthrough</h4><p>Walk them through the dashboard. Show real insights. Click "Complete Onboarding."</p></div></div>
       <div class="tip amber">
         <div class="tip-label">⚠️ DO NOT SKIP THE WALKTHROUGH</div>
@@ -323,8 +323,8 @@ td.h{color:#fff;font-weight:600;}
   <div class="sec-header"><div class="sec-num">05</div><h2>Camera Intelligence — What We Connect</h2><div class="sec-line"></div></div>
 
   <div class="tip cyan" style="margin-bottom:28px;font-size:24px;">
-    <div class="tip-label">✨ FIRST 50 STANDARD CUSTOMERS GET CAMERA INTELLIGENCE FREE</div>
-    Normally comes with Premium ($500/mo) — first 50 Standard plan customers get it at no extra cost.
+    <div class="tip-label">📷 CAMERA INTELLIGENCE</div>
+    Available on Premium and Command plans. Anonymous analytics only — foot traffic counts, queue length, dwell time, zone heatmaps. No facial recognition or identity features.
   </div>
 
   <div class="g3" style="margin-bottom:24px;">
@@ -340,8 +340,8 @@ td.h{color:#fff;font-weight:600;}
     </div>
     <div class="card">
       <h3 style="color:#4FE3C1;">☁️ Cloud Cameras</h3>
-      <p style="font-size:20px;">Smart cameras via API. Customer signs in & authorizes.</p>
-      <div style="margin-top:12px;"><span class="tag tag-c" style="font-size:14px;">Ring</span><span class="tag tag-c" style="font-size:14px;">Nest</span><span class="tag tag-c" style="font-size:14px;">Arlo</span><span class="tag tag-c" style="font-size:14px;">Wyze</span><span class="tag tag-c" style="font-size:14px;">Blink</span><span class="tag tag-c" style="font-size:14px;">Eufy</span></div>
+      <p style="font-size:20px;color:#FF5252;">Ring, Nest, Arlo, Wyze — <strong>NOT supported</strong> (cloud-only encrypted streams). Recommend a $60 Reolink PoE alongside existing cameras.</p>
+      <div style="margin-top:12px;"><span class="tag" style="background:rgba(255,82,82,0.15);color:#FF5252;border:1px solid rgba(255,82,82,0.3);font-size:14px;">Ring ✗</span><span class="tag" style="background:rgba(255,82,82,0.15);color:#FF5252;border:1px solid rgba(255,82,82,0.3);font-size:14px;">Nest ✗</span><span class="tag" style="background:rgba(255,82,82,0.15);color:#FF5252;border:1px solid rgba(255,82,82,0.3);font-size:14px;">Arlo ✗</span><span class="tag" style="background:rgba(255,82,82,0.15);color:#FF5252;border:1px solid rgba(255,82,82,0.3);font-size:14px;">Wyze ✗</span></div>
     </div>
   </div>
   <div class="g2">
@@ -427,14 +427,11 @@ td.h{color:#fff;font-weight:600;}
       <div class="step"><div class="step-n">3</div><div class="step-c"><p style="font-size:18px;">All camera channels appear — select which to import</p></div></div>
     </div>
     <div class="card">
-      <h3>☁️ Cloud Cameras</h3>
-      <p style="font-size:20px;margin-top:12px;">Ring, Nest, Arlo, Wyze, Blink, Eufy</p>
-      <div class="step" style="margin-top:16px;"><div class="step-n">1</div><div class="step-c"><p style="font-size:18px;">Select camera brand in Meridian</p></div></div>
-      <div class="step"><div class="step-n">2</div><div class="step-c"><p style="font-size:18px;">Click "Connect Account" → customer signs in via OAuth</p></div></div>
-      <div class="step"><div class="step-n">3</div><div class="step-c"><p style="font-size:18px;">All cameras appear automatically. No passwords stored.</p></div></div>
-      <div class="tip amber" style="font-size:16px;margin-top:12px;">
-        <div class="tip-label">⚠️ NOTE</div>
-        Cloud cameras sample every 5–15s. For real-time → use local cameras or Bridge.
+      <h3>☁️ Cloud Cameras — NOT Supported</h3>
+      <p style="font-size:20px;margin-top:12px;color:#FF5252;">Ring, Nest, Arlo, Wyze use cloud-only encrypted streams. We cannot connect them.</p>
+      <div class="tip red" style="font-size:16px;margin-top:12px;">
+        <div class="tip-label">⚠️ WHAT TO SAY</div>
+        "Those cameras don't expose the right stream type. The fix is cheap — a $60 Reolink PoE gives you analytics, and your existing camera stays for mobile alerts."
       </div>
     </div>
   </div>
@@ -499,7 +496,7 @@ td.h{color:#fff;font-weight:600;}
       <div class="script rep"><div class="script-l">YOU SAY (SOLUTION)</div><div class="script-t">"We connect to your [POS] and give you a live AI dashboard. 5 minutes to set up. No contract, cancel anytime."</div></div>
     </div>
     <div>
-      <div class="script rep"><div class="script-l">YOU SAY (VALUE)</div><div class="script-t">"Most clients find $2,000+ in missing revenue in month one. It's $250/month — pays for itself 10x over."</div></div>
+      <div class="script rep"><div class="script-l">YOU SAY (VALUE)</div><div class="script-t">"Most clients find $2,000+ in missing revenue in month one — our fee pays for itself 10x over."</div></div>
       <div class="script rep"><div class="script-l">YOU SAY (CLOSE)</div><div class="script-t">"Want me to show you a proposal for [Business Name]? I can pull it up right now."</div></div>
       <div style="margin-top:24px;">
         <h3 style="margin-bottom:16px;">⚡ Power Closes</h3>
@@ -510,7 +507,7 @@ td.h{color:#fff;font-weight:600;}
           <span class="bold vio">Social Proof:</span> <span style="color:#A1A1A8;">"We just onboarded a similar business down the street — $3K in recovered revenue week one."</span>
         </div>
         <div class="card" style="margin-bottom:12px;padding:20px;">
-          <span class="bold cya">Urgency:</span> <span style="color:#A1A1A8;">"First 50 customers get Camera Intelligence free."</span>
+          <span class="bold cya">Urgency:</span> <span style="color:#A1A1A8;">"Camera Intelligence — anonymous foot traffic + queue analytics — comes with Premium. Let me show you what that looks like for your store."</span>
         </div>
         <div class="card" style="padding:20px;">
           <span class="bold cya">Risk Reversal:</span> <span style="color:#A1A1A8;">"Zero risk — no contract, cancel anytime."</span>
@@ -528,7 +525,7 @@ td.h{color:#fff;font-weight:600;}
     <div>
       <div class="obj" style="border-left:3px solid #FF5252;background:rgba(255,82,82,0.04);">
         <div class="obj-q" style="color:#FF5252;">"It's too expensive."</div>
-        <div class="obj-a">"Most clients find $2,000+ in missing revenue month one. That's 10x ROI. No contract — cancel anytime."</div>
+        <div class="obj-a">"Most clients find $2,000+ in missing revenue month one — our fee pays for itself 10x over. No contract — cancel anytime."</div>
       </div>
       <div class="obj" style="border-left:3px solid #FFB74D;background:rgba(255,183,77,0.04);">
         <div class="obj-q" style="color:#FFB74D;">"We already track our sales."</div>
@@ -560,42 +557,44 @@ td.h{color:#fff;font-weight:600;}
 <div class="slide">
   <div class="sec-header"><div class="sec-num">10</div><h2>Pricing Quick Reference</h2><div class="sec-line"></div></div>
 
+  <div class="tip amber" style="margin-bottom:32px;font-size:22px;">
+    <div class="tip-label">⚠️ CUSTOM PRICING — NO PUBLISHED RATES</div>
+    Meridian uses custom per-deal pricing. You set the monthly price in the portal when generating a proposal. Do NOT quote specific prices before discovery. Use "Schedule a Quote" framing.
+  </div>
+
   <div class="g3" style="margin-bottom:40px;">
     <div class="card price">
-      <div class="price-name">Weekly</div>
-      <div class="price-amt">$65<span class="price-int">/week</span></div>
-      <p style="font-size:18px;color:#6B6B73;margin-top:4px;">No commitment</p>
+      <div class="price-name">Standard</div>
+      <div class="price-amt" style="font-size:36px;">Custom<span class="price-int">/mo</span></div>
       <ul class="price-feat">
-        <li>POS analytics dashboard</li>
+        <li>All 30+ POS analytics agents</li>
         <li>Revenue + product insights</li>
-        <li>Anomaly detection</li>
-        <li>Email alerts</li>
-        <li>1 POS integration</li>
+        <li>Peak hours + forecasting</li>
+        <li>Email digest + in-app alerts</li>
+        <li>1 location</li>
       </ul>
     </div>
     <div class="card-glow price" style="position:relative;">
       <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#7C5CFF,#4FE3C1);padding:6px 24px;border-radius:20px;font-size:14px;font-weight:700;letter-spacing:0.1em;">MOST POPULAR</div>
-      <div class="price-name">Standard</div>
-      <div class="price-amt">$250<span class="price-int">/mo</span></div>
-      <p style="font-size:18px;color:#6B6B73;margin-top:4px;">Best value</p>
+      <div class="price-name">Premium</div>
+      <div class="price-amt" style="font-size:36px;">Custom<span class="price-int">/mo</span></div>
       <ul class="price-feat">
-        <li>Everything in Weekly</li>
-        <li>Monthly savings vs. weekly</li>
-        <li>Camera Intelligence (first 50 FREE)</li>
-        <li>Priority onboarding</li>
+        <li>Everything in Standard</li>
+        <li>Camera intelligence (anonymous analytics)</li>
+        <li>Foot traffic + queue + dwell time</li>
+        <li>POS × camera cross-reference</li>
+        <li>Priority support</li>
       </ul>
     </div>
     <div class="card price">
-      <div class="price-name" style="color:#4FE3C1;">Premium</div>
-      <div class="price-amt">$500<span class="price-int">/mo</span></div>
-      <p style="font-size:18px;color:#6B6B73;margin-top:4px;">Full power</p>
+      <div class="price-name" style="color:#4FE3C1;">Command</div>
+      <div class="price-amt" style="font-size:36px;">Custom<span class="price-int">/mo</span></div>
       <ul class="price-feat">
-        <li>Everything in Standard</li>
-        <li>Predictive engine</li>
-        <li>Menu engineering AI</li>
-        <li>Staff optimization</li>
-        <li>Camera intelligence</li>
-        <li>Priority support</li>
+        <li>Everything in Premium</li>
+        <li>Unlimited locations</li>
+        <li>Multi-location rollups</li>
+        <li>Custom AI models</li>
+        <li>API access + dedicated account manager</li>
       </ul>
     </div>
   </div>
@@ -604,11 +603,11 @@ td.h{color:#fff;font-weight:600;}
     <div class="g2" style="align-items:center;">
       <div>
         <h3>💰 Commission Structure</h3>
-        <p>30–60% per rep. Recurring every month the customer stays active.</p>
+        <p><strong>70%</strong> of monthly deal price. Recurring every month the customer stays active.</p>
       </div>
       <div class="tip purple" style="margin:0;font-size:20px;">
         <div class="tip-label">🏆 EXAMPLE</div>
-        30% of $250/mo = $75/mo per deal. Close 10 deals = $750/mo. Close 20 = $1,500/mo. Recurring.
+        70% of CA$600/mo = CA$420/mo per deal. Close 10 deals = CA$4,200/mo. Close 20 = CA$8,400/mo. Recurring.
       </div>
     </div>
   </div>

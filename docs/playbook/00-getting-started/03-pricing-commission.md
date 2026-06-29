@@ -1,12 +1,19 @@
 # Pricing & Commission
 
-## The three plans
+## Pricing model — custom per-deal
 
-| Plan | USD/mo | CAD/mo | Locations | Cameras | Multi-location | API access |
-|------|--------|--------|-----------|---------|----------------|------------|
-| **Standard** | $299 | CA$343 | 1 | — | — | — |
-| **Premium** | $599 | CA$685 | 1 | Yes | — | — |
-| **Command** | $1,199 | CA$1,370 | Unlimited | Yes | Yes | Yes |
+Meridian no longer uses published fixed tier prices. You set a **custom monthly price per deal** in the portal when generating a proposal. Do NOT quote specific monthly prices before discovery.
+
+When a prospect asks "how much?" — lead with value:
+> "We do custom pricing based on what we find. Most merchants see CA$2,800+/mo in found revenue in week one — let me show you that first, then the price question answers itself."
+
+The three plan tiers still define the **feature set** (not a public price):
+
+| Plan | Features | Locations | Cameras | Multi-location | API access |
+|------|----------|-----------|---------|----------------|------------|
+| **Standard** | All POS analytics agents | 1 | — | — | — |
+| **Premium** | Standard + camera intelligence | 1 | Yes | — | — |
+| **Command** | Premium + enterprise features | Unlimited | Yes | Yes | Yes |
 
 All plans:
 - Month-to-month, no contract
@@ -27,6 +34,7 @@ All plans:
 - Canadian merchants → always quote CAD. Use the `CA$` prefix verbally and in writing.
 - US merchants → USD.
 - Never mix. Billing follows the merchant's country.
+- Billing rail: **Stripe** (recurring monthly subscription + QR subscribe link). Not Square.
 
 ## Tax (Canada)
 
@@ -48,14 +56,16 @@ Don't get into tax debates during the sale. Move on.
 
 **70% of monthly subscription revenue, recurring for the lifetime of the account.**
 
-| Plan | MRR | Your monthly cut | Annual (if retained 12mo) |
-|------|-----|-----------------|---------------------------|
-| Standard CA | CA$343 | CA$240 | CA$2,880 |
-| Premium CA | CA$685 | CA$480 | CA$5,760 |
-| Command CA | CA$1,370 | CA$959 | CA$11,508 |
-| Standard US | $299 | $209 | $2,508 |
-| Premium US | $599 | $419 | $5,028 |
-| Command US | $1,199 | $839 | $10,068 |
+Pricing is custom per deal, so your exact cut depends on the price you set. Illustrative examples:
+
+| If deal price is… | Your monthly cut | Annual (if retained 12mo) |
+|-------------------|-----------------|---------------------------|
+| CA$350/mo | CA$245 | CA$2,940 |
+| CA$600/mo | CA$420 | CA$5,040 |
+| CA$1,200/mo | CA$840 | CA$10,080 |
+| $350/mo (US) | $245 | $2,940 |
+| $600/mo (US) | $420 | $5,040 |
+| $1,200/mo (US) | $840 | $10,080 |
 
 Commission paid every month the account stays active. Churn = lost commission. **Retention is your real job after the close.**
 
@@ -63,8 +73,8 @@ Commission paid every month the account stays active. Churn = lost commission. *
 
 | From | To | Trigger | Your uplift |
 |------|----|---------|-------------|
-| Standard | Premium | Merchant has cameras, asks about foot traffic | +CA$239/mo recurring |
-| Premium | Command | Opens a 2nd location | +CA$479/mo recurring |
+| Standard | Premium | Merchant has cameras, asks about foot traffic | depends on custom price delta |
+| Premium | Command | Opens a 2nd location | depends on custom price delta |
 | Single | Multi | Franchise/multi-unit owner | Often jumps straight to Command |
 
 Natural upsell window: **month 2–3**, after they've seen value from Standard. Don't pitch Premium on day one unless cameras came up in discovery.
@@ -73,13 +83,13 @@ Natural upsell window: **month 2–3**, after they've seen value from Standard. 
 
 Never apologize for price. Reframe to ROI:
 
-> "If I show you CA$3,000/mo in revenue you're currently missing, is CA$343 to capture it worth it? That's what our AI typically finds in week one."
+> "If I show you CA$3,000/mo in revenue you're currently missing, is our monthly fee to capture that worth it? That's what our AI typically finds in week one."
 
 If they push harder, see `50-cheatsheets/objection-handlers.md`.
 
 ## What's NOT included in any plan
 
-- Phone agent (separate product, separate pricing — ask if interested, route to product team)
+- Phone agent (separate product — **flat CA$1.50 per phone order**, no percentage of sales; ask if interested, route to product team)
 - Custom integration buildouts (Command tier API access lets the merchant build their own; we don't custom-build for one merchant)
 - Hardware (cameras, edge devices) — merchant supplies their own; we recommend specific PoE models in `20-camera-integrations/`
 

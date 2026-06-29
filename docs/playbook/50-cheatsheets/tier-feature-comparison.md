@@ -4,10 +4,11 @@ Quick side-by-side. Print this. Hand it to a prospect at the close.
 
 ## At a glance
 
+Pricing is **custom per deal** — no published prices. Set the price in the proposal. Use "Schedule a Quote" framing with prospects.
+
 | | Standard | Premium | Command |
 |---|----------|---------|---------|
-| **Price (USD)** | $299/mo | $599/mo | $1,199/mo |
-| **Price (CAD)** | CA$343/mo | CA$685/mo | CA$1,370/mo |
+| **Price** | Custom | Custom | Custom |
 | **Locations** | 1 | 1 | Unlimited |
 | **Contract** | Month-to-month | Month-to-month | Month-to-month |
 | **Setup fee** | None | None | None |
@@ -86,16 +87,18 @@ Quick side-by-side. Print this. Hand it to a prospect at the close.
 
 Critical incidents (dashboard down, etc.) all tiers get 1hr response.
 
-## Your commission per tier
+## Your commission
 
-| Tier | MRR | Your monthly cut | 12-month value |
-|------|-----|-----------------|----------------|
-| Standard CA | CA$343 | **CA$240** | CA$2,880 |
-| Premium CA | CA$685 | **CA$480** | CA$5,760 |
-| Command CA | CA$1,370 | **CA$959** | CA$11,508 |
-| Standard US | $299 | **$209** | $2,508 |
-| Premium US | $599 | **$419** | $5,028 |
-| Command US | $1,199 | **$839** | $10,068 |
+**70% of monthly deal price, recurring.** Pricing is custom per deal — your cut scales with what you negotiate.
+
+| If deal price is… | Your monthly cut | 12-month value |
+|-------------------|-----------------|----------------|
+| CA$350/mo | **CA$245** | CA$2,940 |
+| CA$600/mo | **CA$420** | CA$5,040 |
+| CA$1,200/mo | **CA$840** | CA$10,080 |
+| $350/mo (US) | **$245** | $2,940 |
+| $600/mo (US) | **$420** | $5,040 |
+| $1,200/mo (US) | **$840** | $10,080 |
 
 ## When to recommend each tier
 

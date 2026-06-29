@@ -4,9 +4,9 @@ The most common pushbacks and the exact lines that work.
 
 ## Pricing objections
 
-### "CA$343/month is too expensive."
+### "The monthly fee is too expensive."
 
-> "I understand. Let me ask — if I could show you CA$3,000/month in revenue you're currently missing, would CA$343 to capture that be worth it? That's what our AI typically finds in week one."
+> "I understand. Let me ask — if I could show you CA$3,000/month in revenue you're currently missing, would our monthly fee to capture that be worth it? That's what our AI typically finds in week one."
 
 ### "Can I try it for free?"
 
@@ -146,7 +146,7 @@ Check `20-camera-integrations/_index.md`. Then:
 
 ### "I want a discount."
 
-> "I hear you. Two options: (1) Pay annually upfront — you get 2 months free (so CA$3,430 instead of CA$4,116 for the year). (2) Refer 3 other businesses who close — you get 50% off your monthly rate for as long as all 3 stay active. Which one fits?"
+> "I hear you. Two options: (1) Pay annually upfront — you get 2 months free. (2) Refer 3 other businesses who close — you get 50% off your monthly rate for as long as all 3 stay active. Which one fits?"
 
 **Do not free-form discount.** Annual prepay and referral discounts only. Anything else, escalate to CS Manager.
 

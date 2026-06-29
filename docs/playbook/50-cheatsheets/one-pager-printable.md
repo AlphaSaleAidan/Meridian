@@ -14,8 +14,7 @@
 
 | | Standard | Premium | Command |
 |---|---------|---------|---------|
-| Monthly (USD) | $299 | $599 | $1,199 |
-| Monthly (CAD) | CA$343 | CA$685 | CA$1,370 |
+| Monthly | Custom | Custom | Custom |
 | Locations | 1 | 1 | Unlimited |
 | POS analytics agents (all 30) | ✓ | ✓ | ✓ |
 | Money Left on Table — your headline opportunity | ✓ | ✓ | ✓ |
