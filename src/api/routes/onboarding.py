@@ -160,7 +160,7 @@ async def create_account(req: CreateAccountRequest):
     )
 
 
-@router.post("/send-welcome")
+@router.post("/send-welcome", dependencies=[Depends(require_service_auth)])
 async def send_welcome(req: SendWelcomeRequest):
     """
     Send welcome email with login link and Square connect button.

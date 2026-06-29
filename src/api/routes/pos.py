@@ -1,7 +1,7 @@
 """POS system selection, connection status, and waitlist API routes."""
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from ..auth import enforce_service_member, require_admin, require_admin_auth, require_service_auth
+from ..auth import enforce_service_member, require_admin, require_admin_auth, require_service_auth, rate_limit_signup
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -41,7 +41,7 @@ async def select_pos(req: POSSelectRequest, principal=Depends(require_service_au
         raise HTTPException(status_code=500, detail="Failed to save POS selection")
 
 
-@router.post("/waitlist")
+@router.post("/waitlist", dependencies=[Depends(rate_limit_signup)])
 async def join_waitlist(req: WaitlistRequest):
     """Add an email to the POS integration waitlist."""
     from ...db import _db_instance as db

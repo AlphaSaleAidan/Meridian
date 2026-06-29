@@ -24,6 +24,7 @@ from ..auth import (
     require_service_auth,
     require_jwt,
     require_admin_jwt,
+    rate_limit_signup,
 )
 
 logger = logging.getLogger("meridian.api.us")
@@ -195,7 +196,7 @@ class RepUpdateRequest(BaseModel):
 # ── Endpoints ───────────────────────────────────────────────
 
 
-@router.post("/rep-signup")
+@router.post("/rep-signup", dependencies=[Depends(rate_limit_signup)])
 async def rep_signup(req: RepSignupRequest):
     import httpx
 
