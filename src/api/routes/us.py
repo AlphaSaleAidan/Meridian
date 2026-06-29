@@ -38,7 +38,12 @@ def _validate_rep_id(rep_id: str) -> None:
 
 router = APIRouter(prefix="/api/us", tags=["us"])
 
-US_ORG_ID = "us-org-00000000-0000-0000-0000-000000000001"
+# sales_reps.org_id is a uuid column, so this MUST be a valid UUID. The old
+# "us-org-0000…" placeholder failed the uuid cast, so every US rep-signup
+# created the auth user but then 400'd on the sales_reps insert ("Account
+# created but rep profile failed"). Use the real Meridian org UUID — the same
+# org_id every existing US rep already carries — so new US reps match them.
+US_ORG_ID = "168b6df2-e9af-4b00-8fec-51e51149ff19"
 
 # US portal admin scope is INTENTIONALLY NARROWER than the canada/compliance
 # scope defined in src/api/auth.py:ADMIN_EMAILS. Per business policy, US
