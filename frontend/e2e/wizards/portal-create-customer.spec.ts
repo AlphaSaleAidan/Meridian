@@ -5,11 +5,12 @@
  * CanadaPortalCreateCustomerPage (/canada/portal/new-customer), with focus on
  * the #194 fixes:
  *
- * A. org_id equality: POST /api/billing/create-checkout and
+ * A. org_id equality: POST /api/stripe/subscribe-link and
  *    POST /api/onboarding/provision-customer must carry the SAME org_id value.
  *    The buggy Canada code used `tempOrgId` for checkout and a separate
  *    `businessId` for provision — unreconcilable. The fix generates one
  *    `orgId` via `useState(() => uuid())` and passes it to both endpoints.
+ *    (Note: frontend migrated from /api/billing/create-checkout → /api/stripe/subscribe-link)
  *
  * B. commission_rate ?? 70: with rep seeded at commission_rate=0, the Supabase
  *    us_leads / canada_leads INSERT must send commission_rate=0, not 70.
@@ -89,9 +90,9 @@ test.describe('PortalCreateCustomer — #194 regression guards', () => {
       await page.goto('/canada/portal/new-customer', { waitUntil: 'domcontentloaded' })
       await fillAndAdvanceToPreview(page)
 
-      // ── Step 4: generate checkout first ──
-      // This fires POST /api/billing/create-checkout with { org_id: orgId, ... }.
-      await page.getByRole('button', { name: /generate checkout link & qr code/i }).click()
+      // ── Step 4: generate subscription link first ──
+      // This fires POST /api/stripe/subscribe-link with { org_id: orgId, ... }.
+      await page.getByRole('button', { name: /generate subscription link & qr code/i }).click()
       await expect(page.getByText('Checkout session created!')).toBeVisible()
 
       // ── Then create the customer account ──
@@ -105,22 +106,22 @@ test.describe('PortalCreateCustomer — #194 regression guards', () => {
       await expect(page.getByText(/customer created successfully/i)).toBeVisible()
 
       // ── A. org_id equality (core #194 proof) ──
-      const checkout = api.find('create-checkout')
+      const subscribeLink = api.find('subscribe-link')
       const provision = api.find('provision-customer')
 
-      expect(checkout, 'POST /api/billing/create-checkout must have been captured').toBeTruthy()
+      expect(subscribeLink, 'POST /api/stripe/subscribe-link must have been captured').toBeTruthy()
       expect(provision, 'POST /api/onboarding/provision-customer must have been captured').toBeTruthy()
 
-      const checkoutOrgId: string = checkout!.json.org_id
+      const checkoutOrgId: string = subscribeLink!.json.org_id
       const provisionOrgId: string = provision!.json.org_id
 
-      expect(checkoutOrgId, 'create-checkout body must include a non-empty org_id').toBeTruthy()
+      expect(checkoutOrgId, 'subscribe-link body must include a non-empty org_id').toBeTruthy()
       // This is the regression guard: both endpoints received the SAME org_id.
       // In the pre-fix Canada code they diverged (tempOrgId vs businessId).
       expect(checkoutOrgId).toBe(provisionOrgId)
 
       // Both requests must carry a Bearer JWT (require_org_access family fix).
-      expectBearer(checkout, 'POST /api/billing/create-checkout')
+      expectBearer(subscribeLink, 'POST /api/stripe/subscribe-link')
       expectBearer(provision, 'POST /api/onboarding/provision-customer')
 
       // ── B. commission_rate ?? 70 fix ──
@@ -169,8 +170,8 @@ test.describe('PortalCreateCustomer — #194 regression guards', () => {
       await page.goto('/us/portal/new-customer', { waitUntil: 'domcontentloaded' })
       await fillAndAdvanceToPreview(page)
 
-      // Generate checkout link → POST /api/billing/create-checkout.
-      await page.getByRole('button', { name: /generate checkout link & qr code/i }).click()
+      // Generate subscription link → POST /api/stripe/subscribe-link.
+      await page.getByRole('button', { name: /generate subscription link & qr code/i }).click()
       await expect(page.getByText('Checkout session created!')).toBeVisible()
 
       // Create customer → POST /api/onboarding/provision-customer + us_leads insert.
@@ -180,21 +181,21 @@ test.describe('PortalCreateCustomer — #194 regression guards', () => {
       await expect(page.getByText(/customer created successfully/i)).toBeVisible()
 
       // ── A. org_id equality ──
-      const checkout = api.find('create-checkout')
+      const subscribeLink = api.find('subscribe-link')
       const provision = api.find('provision-customer')
 
-      expect(checkout, 'POST /api/billing/create-checkout must have been captured').toBeTruthy()
+      expect(subscribeLink, 'POST /api/stripe/subscribe-link must have been captured').toBeTruthy()
       expect(provision, 'POST /api/onboarding/provision-customer must have been captured').toBeTruthy()
 
-      const checkoutOrgId: string = checkout!.json.org_id
+      const checkoutOrgId: string = subscribeLink!.json.org_id
       const provisionOrgId: string = provision!.json.org_id
 
-      expect(checkoutOrgId, 'create-checkout body must include a non-empty org_id').toBeTruthy()
+      expect(checkoutOrgId, 'subscribe-link body must include a non-empty org_id').toBeTruthy()
       // US already used a single uuid() for both in the original code; this guards
       // that the fix did not accidentally regress it.
       expect(checkoutOrgId).toBe(provisionOrgId)
 
-      expectBearer(checkout, 'POST /api/billing/create-checkout')
+      expectBearer(subscribeLink, 'POST /api/stripe/subscribe-link')
       expectBearer(provision, 'POST /api/onboarding/provision-customer')
 
       // ── B. commission_rate ?? 70 fix ──

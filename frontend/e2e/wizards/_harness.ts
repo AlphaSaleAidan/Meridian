@@ -361,8 +361,8 @@ function defaultApiResponse(path: string, url: URL): unknown {
   if (path.includes('/api/billing/create-invoice')) {
     return { invoice_id: 'inv_e2e', invoice_url: 'https://squareup.com/pay/e2e', status: 'sent' }
   }
-  if (path.includes('/api/billing/create-checkout')) {
-    return { checkout_url: 'https://checkout.stripe.com/e2e', session_id: 'cs_e2e' }
+  if (path.includes('/api/stripe/subscribe-link')) {
+    return { token: 'e2e-token', url: 'https://meridian.tips/subscribe/e2e-token' }
   }
   if (path.includes('/api/onboarding/provision-customer')) {
     return { success: true, org_id: TEST_ORG_ID, business_id: TEST_ORG_ID }
