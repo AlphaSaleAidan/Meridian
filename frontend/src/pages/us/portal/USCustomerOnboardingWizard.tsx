@@ -71,7 +71,7 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 export default function USCustomerOnboardingWizard() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { signup, connectPos, org } = useAuth()
+  const { signup, connectPos, org, markOnboarded } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const scheduleInputRef = useRef<HTMLInputElement>(null)
 
@@ -484,11 +484,18 @@ export default function USCustomerOnboardingWizard() {
               plan: prefill.plan || 'starter',
               monthly_price: monthlyPriceUSD,
               country: 'US',
+              // Self-serve: the customer already chose their password in the
+              // Account step — don't let provision-customer reset it.
+              preserve_password: true,
               rep_id: searchParams.get('rep') || null,
               rep_name: searchParams.get('rep_name') || null,
             }),
           })
-          if (!provRes.ok) {
+          if (provRes.ok) {
+            // Mark the org onboarded so returning customers land on the
+            // dashboard instead of being bounced back through /us/setup.
+            markOnboarded()
+          } else {
             const provBody = await provRes.json().catch(() => null)
             console.error('Provision failed:', provBody)
             setCheckoutError('Invoices sent but account setup had an issue. Contact support at help@meridian.tips if your dashboard isn\'t ready.')

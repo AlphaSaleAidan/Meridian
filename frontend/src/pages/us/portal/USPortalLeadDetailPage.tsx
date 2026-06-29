@@ -191,6 +191,7 @@ export default function USPortalLeadDetailPage() {
           provider,
           credentials: creds,
           business_name: deal?.business_name,
+          table: 'us_leads',
         }),
       })
 
@@ -207,7 +208,7 @@ export default function USPortalLeadDetailPage() {
       const verifyRes = await fetch(`${API_BASE}/api/onboarding/verify-pos`, {
         method: 'POST',
         headers: authHeaders,
-        body: JSON.stringify({ deal_id: deal?.id, provider }),
+        body: JSON.stringify({ deal_id: deal?.id, provider, table: 'us_leads' }),
       }).catch(() => null)
 
       if (verifyRes && verifyRes.ok) {
