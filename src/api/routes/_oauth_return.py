@@ -18,7 +18,11 @@ ALLOWED_RETURN_PREFIXES = (
     "/canada/onboard",
     "/canada/dashboard",
     "/canada/setup",
-    # US / shared surfaces
+    # US
+    "/us/onboard",
+    "/us/dashboard",
+    "/us/setup",
+    # shared surfaces
     "/onboard",
     "/app",
     "/dashboard",

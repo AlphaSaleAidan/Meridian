@@ -455,7 +455,7 @@ export default function USCustomerOnboardingWizard() {
         fetch(`${API_BASE}/api/billing/create-invoice`, {
           method: 'POST', headers: authHeaders,
           body: JSON.stringify({
-            org_id: org?.org_id, amount_cents: monthlyPriceUSD * 100,
+            org_id: org?.org_id, amount_cents: monthlyPriceUSD * 100, currency: 'USD',
             customer_email: account.email,
             description: `Meridian Analytics (US) - ${planLabel} Plan (Setup Fee)`,
             due_days: 3,
@@ -464,7 +464,7 @@ export default function USCustomerOnboardingWizard() {
         fetch(`${API_BASE}/api/billing/create-invoice`, {
           method: 'POST', headers: authHeaders,
           body: JSON.stringify({
-            org_id: org?.org_id, amount_cents: monthlyPriceUSD * 100,
+            org_id: org?.org_id, amount_cents: monthlyPriceUSD * 100, currency: 'USD',
             customer_email: account.email,
             description: `Meridian Analytics (US) - ${planLabel} Plan (Monthly Recurring)`,
             due_days: 30,
@@ -805,7 +805,7 @@ export default function USCustomerOnboardingWizard() {
                 /app/settings?oauth=success. */}
             {posProvider === 'square' && org?.org_id && (
               <a
-                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/us/dashboard')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
                 className={btnPrimary + ' justify-center w-full'}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -815,7 +815,7 @@ export default function USCustomerOnboardingWizard() {
             )}
             {posProvider === 'clover' && org?.org_id && (
               <a
-                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/us/dashboard')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
                 className={btnPrimary + ' justify-center w-full'}
                 target="_blank"
                 rel="noopener noreferrer"
