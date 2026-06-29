@@ -12,12 +12,11 @@ when the session is created). Stripe's hosted Checkout handles card + Apple Pay
 live on the backend (api.meridian.tips) so they never fall through to the
 frontend SPA home page (the bug the old meridian.tips/pay/success default hit).
 """
-import io
 import logging
 import os
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ...db import get_db
 
@@ -117,7 +116,7 @@ async def pay_cancel():
 #
 # These endpoints are PUBLIC (no auth) — the merchant scans a QR or taps a link.
 # GET /subscribe/{token}      → creates a fresh Stripe subscription Checkout Session, 303 redirect
-# GET /subscribe/{token}/qr.png → renders the subscribe URL as a PNG QR code
+#   (QR is generated client-side from this URL by the rep portal — no server-side QR endpoint)
 #
 # A fresh session is created on every scan so the link/QR never expires.
 # The flow is SEPARATE from the per-order $1.50 Connect fee:
@@ -253,54 +252,3 @@ async def subscribe_redirect(token: str):
 
     logger.info("Subscribe redirect: token=%s session=%s", token, session.id)
     return RedirectResponse(url=session.url, status_code=303)
-
-
-@router.get("/subscribe/{token}/qr.png")
-async def subscribe_qr(token: str):
-    """Return a PNG QR code encoding the subscribe URL for the given token.
-
-    The QR encodes ``{PUBLIC_PAY_BASE}/subscribe/{token}`` so scanning it is
-    identical to tapping the link.  The code is re-generated on every request
-    (cheap, stateless) so no caching table is needed.
-    """
-    if not (8 <= len(token) <= 64):
-        raise HTTPException(404, "Unknown subscription link")
-
-    # Verify token exists and is active before burning a QR (avoids leaking tokens)
-    db = get_db()
-    rows = await db.select(
-        "subscribe_links",
-        columns="status",
-        filters={"token": f"eq.{token}"},
-        limit=1,
-    )
-    if not rows or (rows[0].get("status") or "").lower() != "active":
-        raise HTTPException(404, "Subscription link not found or inactive")
-
-    subscribe_url = f"{_PUBLIC_PAY_BASE}/subscribe/{token}"
-
-    try:
-        import qrcode
-        from qrcode.image.pil import PilImage
-        qr = qrcode.QRCode(
-            version=None,          # auto-size
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(subscribe_url)
-        qr.make(fit=True)
-        img = qr.make_image(image_factory=PilImage)
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        png_bytes = buf.getvalue()
-    except ImportError:
-        raise HTTPException(
-            status_code=501,
-            detail="qrcode[pil] not installed. Run: pip install 'qrcode[pil]'"
-        )
-    except Exception as e:
-        logger.exception("QR generation failed for token=%s", token)
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return Response(content=png_bytes, media_type="image/png")
