@@ -111,6 +111,8 @@ async def send_email(req: SendEmailRequest, principal=Depends(require_service_au
             signed_by=req.extra.get("signed_by", ""),
             signed_date=req.extra.get("signed_date", ""),
             provider_signatory=req.extra.get("provider_signatory", "Aidan Pierce, Founder & CEO"),
+            monthly_price=req.extra.get("monthly_price", ""),
+            setup_fee=req.extra.get("setup_fee", ""),
             org_id=req.org_id,
         ),
         "customer_credentials": lambda: email_send.send_customer_credentials(

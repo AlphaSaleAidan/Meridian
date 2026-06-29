@@ -7,7 +7,15 @@ def render(
     signed_by: str,
     signed_date: str,
     provider_signatory: str = "Aidan Pierce, Founder & CEO",
+    monthly_price: str = "",
+    setup_fee: str = "",
 ) -> str:
+    fee_rows = ""
+    if monthly_price:
+        fee_rows += stat_row("Monthly Service Fee", monthly_price)
+    if setup_fee:
+        fee_rows += stat_row("Setup Fee (one-time, due today)", setup_fee)
+
     return base_template(
         f"""{heading("Your SLA Has Been Signed")}
 {paragraph(f"The Service Level Agreement between Meridian AI Business Solutions and {business_name} has been fully executed.")}
@@ -19,6 +27,7 @@ def render(
 {stat_row("Client Signatory", signed_by)}
 {stat_row("Signed Date", signed_date)}
 {stat_row("Sales Rep", rep_name)}
+{fee_rows}
 </table>
 ''')}
 {paragraph("A copy of the signed agreement is attached to this email. Please retain this for your records.")}
