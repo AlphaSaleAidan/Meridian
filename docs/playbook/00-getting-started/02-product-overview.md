@@ -21,7 +21,7 @@ A platform that connects to a merchant's POS, ingests their transaction history 
 
 ## What we run on the data
 
-Four tiers of AI agents (full inventory in `30-features/`):
+Four categories of AI agents (full inventory in `30-features/`):
 
 1. **POS Analytics** (~31 agents) — revenue, peak hours, customer LTV, inventory, pricing power, money-left-on-table, basket analysis, employee performance, etc. Tiered 1–5 by data dependency.
 2. **Vision** (camera pipeline) — foot traffic counts, queue length, dwell time, zone heatmaps. Anonymous counts only. No facial recognition.
@@ -52,5 +52,5 @@ That's the demo. Everything else is supporting evidence.
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: services/training_video_pipeline/lesson_content.json (lessons 1.2, 2.4) + docs/playbook/_status/phase-2-decisions.md + src/services/pos_connectors/registry.py + src/ai/agents/_

@@ -55,7 +55,7 @@ Cannabis suite:
 
 **Why Flowhub:**
 - Strong regional presence (especially CO and MI)
-- Mid-market dispensaries — natural Premium tier candidates (CA$685 / $599)
+- Mid-market dispensaries — natural camera intelligence add-on candidates
 
 ## What blocks live status today
 
@@ -64,5 +64,5 @@ Cannabis suite:
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/services/pos_connectors/registry.py (flowhub config) + docs/playbook/_status/phase-2-decisions.md (Cannabis #4)_

@@ -1,6 +1,6 @@
 # Camera Integrations — Index
 
-Camera Intelligence is a **Premium** ($599/CA$685) or **Command** ($1,199/CA$1,370) feature. Standard plans cannot connect cameras.
+Camera Intelligence is an **add-on** feature. Contact the product team for pricing when a merchant asks. There is no base plan that excludes cameras — it is simply a line-item add-on on every proposal.
 
 ## What Camera Intelligence does
 
@@ -92,5 +92,5 @@ Key talking point: "This is anonymous analytics, not surveillance. We count peop
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/camera/ (5 modules: detector, line_counter, people_counter, pipeline, rtsp_handler) + docs/playbook/_status/phase-2-decisions.md (camera support list)_

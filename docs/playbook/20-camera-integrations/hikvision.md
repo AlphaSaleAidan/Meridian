@@ -2,7 +2,7 @@
 
 > Status: **OFFICIALLY SUPPORTED**
 > Stream: RTSP
-> Required plan: Premium or Command
+> Availability: **Camera intelligence add-on**
 > OEM coverage: LaView, ANNKE, EmpireTech, older Lorex, older Honeywell — our Hikvision handler works with all of these
 
 ## What you tell the merchant

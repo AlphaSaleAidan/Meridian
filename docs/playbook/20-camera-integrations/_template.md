@@ -2,7 +2,7 @@
 
 > Status: **[OFFICIALLY SUPPORTED / NOT SUPPORTED / IN RESEARCH]**
 > Stream: [RTSP / RTSPS / ONVIF / WebRTC / cloud-only]
-> Required plan: Premium or Command (cameras are Premium+ feature)
+> Availability: **Camera intelligence add-on**
 
 ## What you tell the merchant
 

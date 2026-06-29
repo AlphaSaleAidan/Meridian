@@ -57,7 +57,7 @@ Cannabis suite, full coverage:
 
 **Why Dutchie matters:**
 - US dispensary market leader
-- Multi-state operators (MSOs) → Command tier candidates ($959 commission)
+- Multi-state operators (MSOs) → multi-location add-on candidates (commission at custom price)
 - Cannabis owners are sophisticated buyers — they value real analytics
 
 **Cannabis-specific compliance you must mention:**
@@ -72,5 +72,5 @@ Cannabis suite, full coverage:
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/services/pos_connectors/registry.py (dutchie-pos config) + docs/playbook/_status/phase-2-decisions.md (Cannabis #2, Wave 2 partner table)_

@@ -46,7 +46,7 @@ Full restaurant-focused suite — Toast has the deepest restaurant-specific data
 - Employee performance + tip-out fairness
 - Customer LTV
 - Reservation no-show analysis (if Toast Tables is on)
-- Multi-location rollups (Command tier)
+- Multi-location rollups (multi-location add-on)
 
 ## What features they DON'T get
 
@@ -67,9 +67,9 @@ Full restaurant-focused suite — Toast has the deepest restaurant-specific data
 **Opener:** "Are you on Toast? Most Toast restaurant owners know their revenue but can't tell which menu items actually make them money vs. just sell well. Our Menu Engineering Matrix shows you the stars and the dogs — usually finds 4–6 items costing you margin."
 
 **Why Toast is high-value:**
-- Restaurant owners spend more than retail (CA$685 Premium tier is normal)
+- Restaurant owners with cameras are prime camera intelligence add-on candidates
 - Cameras + Toast = killer combo: queue length + table dwell + revenue cross-reference
-- Multi-location restaurants → Command tier ($959/mo commission to you)
+- Multi-location restaurants → multi-location add-on (commission at custom price)
 
 **Why this is the wedge:** Toast is the largest US restaurant POS by new installs, and restaurant operators on Toast are sophisticated and analytics-hungry — our highest-intent inbound channel. But it's also the integration where reps over-promise most often. Frame onboarding as: "We're a Toast-approved partner, so the integration itself is live and proven — onboarding is a 10-minute click in your Toast admin, but we typically schedule it within 1–2 weeks so we can walk your GM through it."
 

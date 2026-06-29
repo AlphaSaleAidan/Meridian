@@ -26,7 +26,7 @@ Same script as Wyze and Nest — add a cheap PoE camera alongside the consumer c
 
 - Arlo already deployed: $0
 - Reolink alternative: $60 one-time
-- Premium tier upsell: $239/mo commission recurring
+- Camera intelligence add-on: commission at custom price, recurring
 
 ## Watch out
 
@@ -34,11 +34,11 @@ Some merchants invested heavily in Arlo for a whole-business setup (4–8 camera
 
 Honest play:
 
-> "If you're committed to Arlo-only, the analytics piece won't work today. POS analytics still does (Standard plan). I won't sell you Premium if cameras aren't going to deliver — bad for both of us."
+> "If you're committed to Arlo-only, the analytics piece won't work today. POS analytics still work without cameras. I won't sell you the camera add-on if cameras aren't going to deliver — bad for both of us."
 
-Don't sell Premium to an Arlo-only merchant. They'll churn in 30 days and you'll lose the recurring commission anyway. Sell Standard, and if they're open to a single Reolink later, upsell then.
+Don't sell the camera add-on to an Arlo-only merchant. They'll churn in 30 days and you'll lose the recurring commission anyway. Sell base product, and if they're open to a single Reolink later, upsell the camera add-on then.
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: docs/playbook/_status/phase-2-decisions.md (cameras NOT SUPPORTED list — Arlo cloud-only encrypted)_

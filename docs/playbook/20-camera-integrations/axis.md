@@ -2,7 +2,7 @@
 
 > Status: **OFFICIALLY SUPPORTED**
 > Stream: RTSP
-> Required plan: Premium or Command
+> Availability: **Camera intelligence add-on**
 > **Federal/critical-infrastructure qualifier:** NDAA/TAA compliant + CAGE 3DJU8 — the only camera brand we support that's federal-eligible
 
 ## What you tell the merchant

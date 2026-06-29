@@ -1,91 +1,87 @@
-# Tier Feature Comparison — Cheat Sheet
+# Feature & Add-On Overview — Cheat Sheet
 
-Quick side-by-side. Print this. Hand it to a prospect at the close.
+Quick reference. Pricing is **custom per deal** — no published prices. Use "Schedule a Quote" framing with prospects.
 
-## At a glance
+## What every merchant gets (base product)
 
-Pricing is **custom per deal** — no published prices. Set the price in the proposal. Use "Schedule a Quote" framing with prospects.
+| | Included |
+|---|---------|
+| **Contract** | Month-to-month |
+| **Setup fee** | None |
+| **Historical backfill** | 18 months |
+| **POS analytics agents** | All 30 |
+| **Email digest + in-app alerts** | Yes |
+| **One-click cancel** | Yes |
+| **Support** | Standard (24-hr first response) |
 
-| | Standard | Premium | Command |
-|---|----------|---------|---------|
-| **Price** | Custom | Custom | Custom |
-| **Locations** | 1 | 1 | Unlimited |
-| **Contract** | Month-to-month | Month-to-month | Month-to-month |
-| **Setup fee** | None | None | None |
-| **Historical backfill** | 18 months | 18 months | 18 months |
+## POS analytics (30 agents — all included)
 
-## POS analytics (30 agents)
+| Feature | Included |
+|---------|:--------:|
+| Money Left on Table | ✓ |
+| Revenue trend + forecasting | ✓ |
+| Peak hours | ✓ |
+| Day-of-week + seasonality | ✓ |
+| Basket analysis | ✓ |
+| Product velocity | ✓ |
+| Inventory intelligence | ✓ |
+| Category mix | ✓ |
+| Customer LTV + churn (where customer IDs available) | ✓ |
+| Loyalty architect | ✓ |
+| Pricing power | ✓ |
+| Discount + promo ROI | ✓ |
+| Employee performance | ✓ |
+| Staffing optimizer | ✓ |
+| Payment optimizer | ✓ |
+| Waste / shrinkage | ✓ |
+| Cash flow + 30-day forecast | ✓ |
+| Benchmark (you vs industry) | ✓ |
+| Action prioritizer (Top 3 daily) | ✓ |
+| Growth score | ✓ |
 
-| Feature | Standard | Premium | Command |
-|---------|:--------:|:-------:|:-------:|
-| Money Left on Table | ✓ | ✓ | ✓ |
-| Revenue trend + forecasting | ✓ | ✓ | ✓ |
-| Peak hours | ✓ | ✓ | ✓ |
-| Day-of-week + seasonality | ✓ | ✓ | ✓ |
-| Basket analysis | ✓ | ✓ | ✓ |
-| Product velocity | ✓ | ✓ | ✓ |
-| Inventory intelligence | ✓ | ✓ | ✓ |
-| Category mix | ✓ | ✓ | ✓ |
-| Customer LTV + churn (where customer IDs available) | ✓ | ✓ | ✓ |
-| Loyalty architect | ✓ | ✓ | ✓ |
-| Pricing power | ✓ | ✓ | ✓ |
-| Discount + promo ROI | ✓ | ✓ | ✓ |
-| Employee performance | ✓ | ✓ | ✓ |
-| Staffing optimizer | ✓ | ✓ | ✓ |
-| Payment optimizer | ✓ | ✓ | ✓ |
-| Waste / shrinkage | ✓ | ✓ | ✓ |
-| Cash flow + 30-day forecast | ✓ | ✓ | ✓ |
-| Benchmark (you vs industry) | ✓ | ✓ | ✓ |
-| Action prioritizer (Top 3 daily) | ✓ | ✓ | ✓ |
-| Growth score | ✓ | ✓ | ✓ |
+## Camera intelligence add-on
 
-## Camera intelligence
+_Requires at least one supported RTSP-capable camera. Merchant supplies hardware._
 
-| Feature | Standard | Premium | Command |
-|---------|:--------:|:-------:|:-------:|
-| RTSP/RTSPS camera connection | — | ✓ | ✓ |
-| Foot traffic (true counts) | — | ✓ | ✓ |
-| Queue length + wait time | — | ✓ | ✓ |
-| Dwell time per zone | — | ✓ | ✓ |
-| Zone heatmaps | — | ✓ | ✓ |
-| Demographic profiling (anonymous) | — | ✓ | ✓ |
+| Feature | Camera add-on |
+|---------|:-------------:|
+| RTSP/RTSPS camera connection | ✓ |
+| Foot traffic (true counts) | ✓ |
+| Queue length + wait time | ✓ |
+| Dwell time per zone | ✓ |
+| Zone heatmaps | ✓ |
+| Demographic profiling (anonymous counts only) | ✓ |
 
-## Cross-reference (POS × Camera fusion)
+## Cross-reference add-on (POS × Camera fusion)
 
-| Feature | Standard | Premium | Command |
-|---------|:--------:|:-------:|:-------:|
-| Influence zone (which zones lift basket size) | — | ✓ | ✓ |
-| Lost sale (walkaway estimation) | — | ✓ | ✓ |
-| Path to purchase | — | ✓ | ✓ |
-| Peak basket (traffic density × basket) | — | ✓ | ✓ |
-| Product placement optimizer | — | ✓ | ✓ |
-| Queue basket (wait × abandonment) | — | ✓ | ✓ |
-| Return customer journey | — | ✓ | ✓ |
-| Staff effect (presence × conversion) | — | ✓ | ✓ |
-| Zone conversion rates | — | ✓ | ✓ |
-| Posture purchase (advanced gesture analysis) | — | — | ✓ |
+_Requires camera intelligence add-on. Unlocked alongside it._
 
-## Multi-location & enterprise
+| Feature | Camera add-on |
+|---------|:-------------:|
+| Influence zone (which zones lift basket size) | ✓ |
+| Lost sale (walkaway estimation) | ✓ |
+| Path to purchase | ✓ |
+| Peak basket (traffic density × basket) | ✓ |
+| Product placement optimizer | ✓ |
+| Queue basket (wait × abandonment) | ✓ |
+| Return customer journey | ✓ |
+| Staff effect (presence × conversion) | ✓ |
+| Zone conversion rates | ✓ |
+| Posture purchase (advanced gesture analysis) | ✓ |
 
-| Feature | Standard | Premium | Command |
-|---------|:--------:|:-------:|:-------:|
-| Single location | ✓ | ✓ | ✓ |
-| Multiple locations | — | — | ✓ |
-| Location analyst (cross-store comparison) | — | — | ✓ |
-| Custom AI model tuning | — | — | ✓ |
-| Dedicated account manager | — | — | ✓ |
-| API access | — | — | ✓ |
-| Priority support | — | ✓ | ✓ |
+> **FLAG [NEEDS AIDAN INPUT]:** Posture purchase requires an additional skeletal-tracking module. Confirm whether this is included in the camera add-on or is a separate line item.
 
-## Support
+## Multi-location add-on
 
-| Tier | First response SLA | Resolution SLA |
-|------|-------------------|----------------|
-| Standard | 24 hr | 5 business days |
-| Premium | 4 hr | 24 hr |
-| Command | 1 hr | 4 hr |
-
-Critical incidents (dashboard down, etc.) all tiers get 1hr response.
+| Feature | Multi-location add-on |
+|---------|:---------------------:|
+| Single location | Base product |
+| Multiple locations | ✓ |
+| Location analyst (cross-store comparison) | ✓ |
+| Custom AI model tuning | ✓ |
+| Dedicated account manager | ✓ |
+| API access | ✓ |
+| Priority support (4-hr response) | ✓ |
 
 ## Your commission
 
@@ -100,19 +96,19 @@ Critical incidents (dashboard down, etc.) all tiers get 1hr response.
 | $600/mo (US) | **$420** | $5,040 |
 | $1,200/mo (US) | **$840** | $10,080 |
 
-## When to recommend each tier
+## When to propose which add-ons
 
-| Prospect signal | Recommend |
-|-----------------|-----------|
-| Single location, no cameras, "show me what I'm missing" | **Standard** |
-| Single location, already has security cameras, restaurant/retail | **Premium** (cameras unlock the cross-reference wedge) |
-| 2+ locations, owner or franchisee | **Command** |
-| Hesitant on cost, but cameras would help | Standard now, upsell Premium month 2–3 |
-| Multi-location operator who doesn't currently have cameras | Premium with growth path to Command |
+| Prospect signal | Propose |
+|-----------------|---------|
+| Single location, no cameras, "show me what I'm missing" | Base product only |
+| Single location, already has security cameras | Camera intelligence add-on (cameras unlock the cross-reference wedge) |
+| 2+ locations, owner or franchisee | Multi-location add-on |
+| Hesitant on cost | Start with base product; upsell camera add-on at month 2–3 |
+| Multi-location operator with cameras | Camera + multi-location add-ons |
 
-**Don't overcomplicate.** When unsure, recommend Standard and upsell later. Closing > price-tier optimization.
+**Don't overcomplicate.** When unsure, start with the base product and upsell add-ons after value is proven. Closing > add-on optimization.
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: 00-getting-started/03-pricing-commission.md + 30-features/_index.md + 30-features/_data-requirements-matrix.md_

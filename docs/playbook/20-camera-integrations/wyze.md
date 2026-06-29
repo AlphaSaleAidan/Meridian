@@ -33,10 +33,10 @@ Do NOT try to make Wyze work with RTSP firmware flashing in a paying production 
 
 - Wyze cam they already own: $0 sunk
 - Reolink alternative: $60 one-time
-- Premium tier upsell: $342/mo recurring → $239/mo commission for you, every month they stay
+- Camera intelligence add-on: commission at custom price, every month they stay
 - Payback on the $60 in week 1
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: docs/playbook/_status/phase-2-decisions.md (cameras NOT SUPPORTED list — Wyze)_

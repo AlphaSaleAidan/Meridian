@@ -2,7 +2,7 @@
 
 > Group: **pos-analytics**
 > Tier: **Tier 5**
-> Plan: **Standard+**
+> Availability: **Base product (all merchants)**
 
 ## What it does
 

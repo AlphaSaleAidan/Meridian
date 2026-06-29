@@ -2,7 +2,7 @@
 
 > Group: **pos-analytics**
 > Tier: **Tier 5**
-> Plan: **Standard+ (richer on Premium with vision-based return-customer recognition)**
+> Availability: **Base product; richer with camera intelligence add-on (vision-based return-customer recognition)**
 
 ## What it does
 

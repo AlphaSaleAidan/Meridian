@@ -66,7 +66,7 @@ Five days from zero to your first booked demos. Hit every item.
 | Tue–Thu | Run the 5 demos. Target: 2 proposals sent, 1 close by Thursday EOD |
 | Fri | Referral asks on the week-2 close. Pipeline review. Plan week 3. |
 
-By end of month 2 you should have ~4 active accounts paying. That's CA$960+/mo recurring to you, growing every month.
+By end of month 2 you should have ~4 active accounts paying. At a CA$343/mo custom deal price, 4 accounts = CA$960+/mo recurring to you — growing every month as you add clients and retain them.
 
 ## If you stall
 
@@ -81,5 +81,5 @@ Common week-1 stalls and the fix:
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: services/training_video_pipeline/lesson_content.json (lessons 1.5, 4.1–4.5) + docs/playbook/_status/phase-2-decisions.md (Wave 1 live status)_

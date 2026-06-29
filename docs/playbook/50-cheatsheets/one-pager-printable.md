@@ -12,31 +12,31 @@
 
 ### What you get
 
-| | Standard | Premium | Command |
-|---|---------|---------|---------|
-| Monthly | Custom | Custom | Custom |
-| Locations | 1 | 1 | Unlimited |
-| POS analytics agents (all 30) | ✓ | ✓ | ✓ |
-| Money Left on Table — your headline opportunity | ✓ | ✓ | ✓ |
-| Revenue forecasting (7/30/90 day) | ✓ | ✓ | ✓ |
-| Peak hour optimizer | ✓ | ✓ | ✓ |
-| Inventory + product velocity | ✓ | ✓ | ✓ |
-| Customer LTV + churn | ✓ | ✓ | ✓ |
-| Employee performance | ✓ | ✓ | ✓ |
-| Daily Top 3 actions | ✓ | ✓ | ✓ |
-| **Camera intelligence** | — | ✓ | ✓ |
-| Foot traffic counts | — | ✓ | ✓ |
-| Queue length + wait time | — | ✓ | ✓ |
-| Zone heatmaps + dwell time | — | ✓ | ✓ |
-| **Cross-reference (POS × cameras)** | — | ✓ | ✓ |
-| Which zones drive higher tickets | — | ✓ | ✓ |
-| Lost-sale walkaway analysis | — | ✓ | ✓ |
-| Path to purchase | — | ✓ | ✓ |
-| **Multi-location** | — | — | ✓ |
-| Cross-store comparison | — | — | ✓ |
-| API access + custom models | — | — | ✓ |
-| Dedicated account manager | — | — | ✓ |
-| Support response | 24 hr | 4 hr | 1 hr |
+**Every merchant gets all of this:**
+
+| | Included |
+|---|---------|
+| Monthly | Custom (no published price — Schedule a Quote) |
+| Contract | Month-to-month |
+| Setup fee | None |
+| Historical backfill | 18 months |
+| POS analytics agents (all 30) | ✓ |
+| Money Left on Table — your headline opportunity | ✓ |
+| Revenue forecasting (7/30/90 day) | ✓ |
+| Peak hour optimizer | ✓ |
+| Inventory + product velocity | ✓ |
+| Customer LTV + churn | ✓ |
+| Employee performance | ✓ |
+| Daily Top 3 actions | ✓ |
+
+**Optional add-ons (line items, custom pricing):**
+
+| Add-on | What it unlocks |
+|--------|----------------|
+| **Camera intelligence** | Foot traffic counts, queue length, wait time, zone heatmaps |
+| **POS × Camera cross-reference** | Which zones drive higher tickets, lost-sale walkaway, path to purchase |
+| **Multi-location** | Cross-store comparison, location analyst |
+| **API + custom models + dedicated AM** | Developer access, custom AI tuning, dedicated account manager |
 
 ---
 
@@ -75,7 +75,7 @@ POS: __________________________
 
 Cameras: ______________________
 
-Plan recommended: _____________
+Add-ons selected: ______________
 
 Your contact: __________________
 
@@ -95,5 +95,5 @@ _[Your phone] / [Your email]_
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: 50-cheatsheets/tier-feature-comparison.md + 00-getting-started/03-pricing-commission.md + 30-features/_index.md_

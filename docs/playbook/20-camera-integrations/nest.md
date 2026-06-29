@@ -29,18 +29,18 @@ Pitch script:
 Same as Wyze:
 - Nest already there: $0
 - Reolink alternative: $60 one-time
-- Premium tier upsell: $239/mo commission to you, recurring
+- Camera intelligence add-on: commission at custom price, recurring
 - Payback week 1
 
 ## Watch out
 
 If a merchant insists on Nest-only because they have many cameras and don't want to mix systems, the honest answer is:
 
-> "If you're committed to Nest-only, Meridian's camera intelligence isn't going to work for you today. The POS analytics still work (Standard plan). When/if Nest opens up RTSP on current-gen cameras, you'll be first on the list."
+> "If you're committed to Nest-only, Meridian's camera intelligence isn't going to work for you today. The POS analytics still work without cameras. When/if Nest opens up RTSP on current-gen cameras, you'll be first on the list."
 
-Don't oversell — losing the Premium upsell is better than losing the whole account in 60 days when the camera piece doesn't work.
+Don't oversell — losing the camera add-on is better than losing the whole account in 60 days when the camera piece doesn't work.
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: docs/playbook/_status/phase-2-decisions.md (cameras NOT SUPPORTED list — Nest WebRTC + SDM constraints)_

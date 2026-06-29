@@ -33,7 +33,7 @@ Don't skip these. They drive your follow-up and they're what the team lead revie
 |-------|---------------|
 | POS system | Routes the integration path and the objection handler |
 | Vertical | Drives which features you emphasize in demo |
-| Number of locations | Standard vs Command tier |
+| Number of locations | Single vs multi-location (multi-location add-on) |
 | Decision maker | Owner / GM / manager — don't pitch to non-deciders |
 | Pain points | Verbatim quotes from discovery — use these in the demo |
 | Objections raised | Tells you the close blocker |
@@ -56,7 +56,7 @@ Target rhythm if you're full-time:
 - **Proposal → close rate**: target 30%+. Below = pricing/objection handling.
 - **30-day churn**: target <10%. Above = you're closing the wrong fit; check that the POS is one we actually support live (not just "in registry").
 
-A single Standard close = CA$240/mo recurring to you. Four closes/month = CA$960+/mo passive within 60 days.
+Pricing is custom per deal. At a CA$343/mo deal price (70% commission = CA$240/mo), four closes = CA$960+/mo passive within 60 days. Your actual numbers depend on the prices you negotiate.
 
 ## What kills pipelines
 
@@ -69,10 +69,10 @@ A single Standard close = CA$240/mo recurring to you. Four closes/month = CA$960
 
 Mark Closed Lost and move on if:
 - POS is on the deprecated list (Upserve, Harbortouch, Leaf Logix, iZettle as standalone) — we can't actually serve them; lying loses the brand more than the deal is worth. Route them with empathy.
-- Budget is genuinely under CA$150/mo and they won't move — they're not ICP, you'll churn them in 30 days.
+- Deal value is genuinely too low (your custom proposal price is under CA$150/mo and they won't move) — they're not ICP, you'll churn them in 30 days.
 - They want a custom build — not our model. Polite no.
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: services/training_video_pipeline/lesson_content.json (lessons 1.4, 5.4) + docs/playbook/_status/phase-2-decisions.md (deprecate list)_

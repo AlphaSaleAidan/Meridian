@@ -78,7 +78,7 @@ If the merchant disagrees, that's a conversation, not a bug. Show them the under
 | Cause | Fix |
 |-------|-----|
 | Camera offline | See [camera-offline.md](./camera-offline.md) |
-| Zones not configured | Premium feature — merchant must draw zone polygons in dashboard |
+| Zones not configured | Camera add-on feature — merchant must draw zone polygons in dashboard |
 | Less than 7 days of joint camera + POS data | Cross-reference agents need joint data; wait |
 | Camera connected after POS (or vice versa); no joint window yet | Same — needs joint window |
 
@@ -92,5 +92,5 @@ If the merchant disagrees, that's a conversation, not a bug. Show them the under
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/ai/agents/money_left.py (path selection logic) + src/ai/agents/base.py + src/errors.py (DataError) + general per-agent data requirements_

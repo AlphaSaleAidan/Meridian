@@ -2,7 +2,7 @@
 
 > Group: **pos-analytics**
 > Tier: **Tier 3**
-> Plan: **Command**
+> Availability: **Multi-location add-on**
 
 ## What it does
 
@@ -10,7 +10,7 @@ Multi-location comparison, best-practice transfer (what location A does that B d
 
 ## What it needs
 
-2+ locations connected (Command plan only).
+2+ locations connected (multi-location add-on required).
 
 ## Example output
 
@@ -22,5 +22,5 @@ Source: `src/ai/agents/location_analyst.py` or `src/camera/location_analyst.py` 
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/ai/agents/ + src/camera/ class-level metadata_

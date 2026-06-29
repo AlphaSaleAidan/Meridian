@@ -9,7 +9,7 @@ When a merchant uses a POS in this list, the answer is **CSV upload only** (the 
 3. We auto-detect or map columns, ingest, dedupe by transaction ID
 4. Insights refresh within hours of upload (vs hourly poll for live API)
 
-Premium tier supports automated SFTP pulls so the merchant doesn't have to upload manually each day.
+An **SFTP automation add-on** is available so the merchant doesn't have to upload manually each day — confirm availability with the product team before promising it. (**FLAG [NEEDS AIDAN INPUT]:** confirm SFTP automation is shipped and rep-promotable; see `_open-questions.md` Q13.)
 
 ## What CSV path covers vs misses
 
@@ -104,7 +104,7 @@ Per-POS column mappings (the actual export column names) live in `src/services/p
 
 **Opener:** "You're on [POS]. They don't expose an analytics API, so we work via CSV — you export daily, upload to Meridian, and we run all the insights on top. Same agents, daily refresh instead of real-time. Most merchants on [POS] find CA$1,500+/mo in margin gaps within the first 2 weeks."
 
-**If they push back on CSV:** "Two options to make it easier: Premium plan includes automated SFTP pulls — we grab the export from your system, you don't upload anything. Or we set you up to email the CSV to a Meridian inbox; takes 30 seconds a day."
+**If they push back on CSV:** "Two options to make it easier: we offer an SFTP automation add-on — we grab the export from your system, you don't upload anything. Or we set you up to email the CSV to a Meridian inbox; takes 30 seconds a day."
 
 ## What NOT to promise CSV merchants
 
@@ -114,5 +114,5 @@ Per-POS column mappings (the actual export column names) live in `src/services/p
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/services/pos_connectors/registry.py (28 csv_only entries) + docs/playbook/_status/phase-2-decisions.md (Can't-Connect list, Deprecate list)_

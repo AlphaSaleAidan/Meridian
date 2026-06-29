@@ -2,7 +2,7 @@
 
 > Group: **coordination**
 > Tier: **coord**
-> Plan: **Premium+**
+> Availability: **Camera intelligence add-on**
 
 ## What it does
 

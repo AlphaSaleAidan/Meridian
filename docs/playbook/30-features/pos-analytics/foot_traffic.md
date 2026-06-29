@@ -2,7 +2,7 @@
 
 > Group: **pos-analytics**
 > Tier: **Tier 1**
-> Plan: **Standard (estimated) / Premium (true camera-driven counts)**
+> Availability: **Base product (estimated footfall) / Camera add-on (true camera-driven counts)**
 
 ## What it does
 

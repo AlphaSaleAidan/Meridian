@@ -2,7 +2,7 @@
 
 > Status: **OFFICIALLY SUPPORTED**
 > Stream: **RTSPS** (TLS-wrapped RTSP, port **7441**)
-> Required plan: Premium or Command
+> Availability: **Camera intelligence add-on**
 
 ## What you tell the merchant
 
@@ -37,7 +37,7 @@ UniFi is generally acceptable for non-federal use (no Section 889 ban). Not spec
 
 **Opener:** "You're on UniFi — clean install. Slightly more setup than other cameras because you have to enable RTSPS in the Protect UI, but once it's on, it's solid. Most UniFi merchants are tech-comfortable so this isn't a friction point."
 
-**Best fit:** merchants who already invested in the Ubiquiti ecosystem (UDM, switches, APs). They tend to be Premium-tier ready.
+**Best fit:** merchants who already invested in the Ubiquiti ecosystem (UDM, switches, APs). They tend to be camera intelligence add-on candidates.
 
 ## Common failure modes
 
@@ -49,5 +49,5 @@ UniFi is generally acceptable for non-federal use (no Section 889 ban). Not spec
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-06-29_
 _Sourced from: src/camera/rtsp_handler.py + docs/playbook/_status/phase-2-decisions.md (officially supported, RTSPS on 7441)_
