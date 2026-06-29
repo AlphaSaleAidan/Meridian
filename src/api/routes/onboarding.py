@@ -253,6 +253,7 @@ class ProvisionCustomerRequest(BaseModel):
     pos_provider: str | None = None
     setup_fee: int = 0
     first_month_free: bool = False
+    country: str = "CA"
 
 
 class ProvisionCustomerResponse(BaseModel):
@@ -451,7 +452,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
     # 4. Send credentials email via Postal/Resend
     welcome_sent = False
     email_error = None
-    login_url = f"{_FRONTEND_URL}/canada/login"
+    login_url = f"{_FRONTEND_URL}/us/login" if (req.country or "CA").upper() == "US" else f"{_FRONTEND_URL}/canada/login"
     try:
         from ...email.send import send_customer_credentials
         email_result = await send_customer_credentials(
