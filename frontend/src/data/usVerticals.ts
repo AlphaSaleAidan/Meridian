@@ -60,18 +60,18 @@ export const US_GROUP_ORDER: UsGroupKey[] = [
 
 export const US_VERTICALS: UsVerticalDeck[] = [
   // Food & Beverage (8)
-  { slug: 'ca-bar',          title: 'Bars & Pubs',                   group: 'food', blurb: 'Event-night reservations, mis-staffed Thursdays, tap-data analysis.',           avgTicket: '$48',   payback: 'Week 1' },
+  { slug: 'us-bar',          title: 'Bars & Pubs',                   group: 'food', blurb: 'Event-night reservations, mis-staffed Thursdays, tap-data analysis.',           avgTicket: '$48',   payback: 'Week 1' },
   { slug: 'ca-bakery',       title: 'Bakeries',                      group: 'food', blurb: 'Catering pre-order calls, production planning, Saturday rush conversion.',      avgTicket: '$15',   payback: 'First catering order' },
   { slug: 'ca-brewery',      title: 'Craft Breweries & Tap Rooms',   group: 'food', blurb: 'Private-event bookings, keg rotation forecast, brewery tours.',                  avgTicket: '$26',   payback: 'First event booking' },
-  { slug: 'ca-coffee',       title: 'Coffee Shops',                  group: 'food', blurb: 'Open-rush staffing, drive-thru pacing, loyalty data.',                          avgTicket: '$8.50', payback: 'Open-rush staffed' },
+  { slug: 'us-coffee',       title: 'Coffee Shops',                  group: 'food', blurb: 'Open-rush staffing, drive-thru pacing, loyalty data.',                          avgTicket: '$8.50', payback: 'Open-rush staffed' },
   { slug: 'ca-foodtruck',    title: 'Food Trucks',                   group: 'food', blurb: 'Move to demand, forecast event spikes, capture catering calls.',                avgTicket: '$15',   payback: 'First well-routed event' },
   { slug: 'ca-grocery',      title: 'Independent Grocers',           group: 'food', blurb: 'Saturday demand, perishables waste, phone/curbside orders.',                    avgTicket: '$68',   payback: 'First waste cycle' },
   { slug: 'ca-icecream',     title: 'Ice Cream & Dessert Shops',     group: 'food', blurb: 'Weather-driven demand, summer peak staffing, catering pre-orders.',             avgTicket: '$11',   payback: 'Weekend staffed' },
-  { slug: 'ca-qsr',          title: 'Quick-Service Restaurants',     group: 'food', blurb: 'Drive-thru pacing, lunch-rush forecast, direct-order capture.',                 avgTicket: '$13',   payback: 'Lunch rush' },
+  { slug: 'us-qsr',          title: 'Quick-Service Restaurants',     group: 'food', blurb: 'Drive-thru pacing, lunch-rush forecast, direct-order capture.',                 avgTicket: '$13',   payback: 'Lunch rush' },
   // Retail (12)
   { slug: 'ca-bookstore',    title: 'Independent Bookstores',        group: 'retail', blurb: 'Special-orders, event/reading forecasting, genre-section conversion.',       avgTicket: '$28',   payback: 'First special-order capture' },
-  { slug: 'ca-clothing',     title: 'Clothing Boutiques',            group: 'retail', blurb: 'Fitting-room conversion, size mismatch, return-rate analysis.',              avgTicket: '$95',   payback: 'Conversion lift' },
-  { slug: 'ca-dispensary',   title: 'Cannabis Dispensaries',         group: 'retail', blurb: 'State reporting automation, product-velocity intelligence, 4/20 staffing. Bio-data HARD-DISABLED.', avgTicket: '$55',   payback: 'Reporting week 1' },
+  { slug: 'us-clothing',     title: 'Clothing Boutiques',            group: 'retail', blurb: 'Fitting-room conversion, size mismatch, return-rate analysis.',              avgTicket: '$95',   payback: 'Conversion lift' },
+  { slug: 'us-dispensary',   title: 'Cannabis Dispensaries',         group: 'retail', blurb: 'State reporting automation, product-velocity intelligence, 4/20 staffing. Bio-data HARD-DISABLED.', avgTicket: '$55',   payback: 'Reporting week 1' },
   { slug: 'ca-electronics',  title: 'Electronics & Appliance',       group: 'retail', blurb: 'High-ticket inquiry capture, attach-rate uplift, delivery scheduling.',      avgTicket: '$580',  payback: 'Inquiry-to-sale lift' },
   { slug: 'ca-florist',      title: 'Florists',                      group: 'retail', blurb: 'Holiday/event surge, wedding quotes, perishable inventory.',                 avgTicket: '$85',   payback: "Valentine's surge" },
   { slug: 'ca-furniture',    title: 'Furniture & Home',              group: 'retail', blurb: 'Delivery quote calls, showroom dwell vs close, financing window.',           avgTicket: '$1,400', payback: 'Showroom-to-delivery' },
