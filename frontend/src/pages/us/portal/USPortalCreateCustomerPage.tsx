@@ -583,6 +583,7 @@ export default function USPortalCreateCustomerPage() {
 
   const [customerLoginUrl, setCustomerLoginUrl] = useState('')
   const [customerPortalUrl, setCustomerPortalUrl] = useState('')
+  const [customerTempPassword, setCustomerTempPassword] = useState('')
   const [autoSendStatus, setAutoSendStatus] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false })
 
   async function handleCreateCustomer() {
@@ -638,14 +639,12 @@ export default function USPortalCreateCustomerPage() {
       }
 
       const provData = await provRes.json()
-      // Customer sets their own password via a secure Supabase setup link — no plaintext credentials transmitted.
-      if (supabase) {
-        try {
-          await supabase.auth.resetPasswordForEmail(form.email, {
-            redirectTo: `${window.location.origin}/customer/login`,
-          })
-        } catch { /* setup email is best-effort; rep can resend manually */ }
-      }
+      // provision-customer emails the credentials (incl. this temp password) via
+      // the backend Resend path and returns the temp password so the rep has it
+      // as a backup to share directly. The customer is flagged must_reset_password
+      // and sets their own on first login. (The old Supabase resetPasswordForEmail
+      // call was removed — that project has no SMTP, so it never delivered.)
+      setCustomerTempPassword(provData.temporary_password || '')
       setCustomerLoginUrl(provData.login_url || `${window.location.origin}/customer/login`)
       setCustomerPortalUrl(provData.portal_url || '')
 
@@ -1171,8 +1170,18 @@ export default function USPortalCreateCustomerPage() {
                     <span className="text-white font-medium font-mono">{form.email}</span>
                     <span className="text-[#A1A1A8]">Login:</span>
                     <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#17C5B0] font-mono hover:underline truncate">{customerLoginUrl}</a>
+                    {customerTempPassword && (<>
+                      <span className="text-[#A1A1A8]">Temp password:</span>
+                      <span className="flex items-center gap-2">
+                        <span className="text-white font-medium font-mono">{customerTempPassword}</span>
+                        <button onClick={() => { navigator.clipboard.writeText(customerTempPassword); }}
+                          className="text-[#17C5B0] hover:text-white transition-colors" title="Copy temp password">
+                          <Copy size={13} />
+                        </button>
+                      </span>
+                    </>)}
                   </div>
-                  <p className="text-[10px] text-[#A1A1A8] mt-2">A secure setup email has been sent. The customer will click the link to set their own password — no credentials need to be shared.</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-2">{autoSendStatus.email ? 'Credentials were emailed to the customer.' : 'Credentials email could not be sent — share the temp password directly.'} They'll set their own password on first login.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -1196,7 +1205,7 @@ export default function USPortalCreateCustomerPage() {
                   </button>
                   <button onClick={() => {
                     const subject = `Your Meridian Account is Ready!`
-                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up!\n\nEmail: ${form.email}\nLogin: ${customerLoginUrl}\n\nWe've sent you a separate setup email with a secure link to set your password. Check your inbox (and spam folder) for "Reset your password" from Meridian.\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in USD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
+                    const body = `Hi ${form.ownerName.split(' ')[0]},\n\nYour Meridian analytics account is set up!\n\nEmail: ${form.email}\nLogin: ${customerLoginUrl}${customerTempPassword ? `\nTemporary password: ${customerTempPassword}` : ''}\n\nSign in with the temporary password above — you'll be prompted to set your own on first login.\n\n${checkoutUrl ? `To activate your subscription, complete your payment here:\n${checkoutUrl}\n\n` : ''}You'll connect your POS and your dashboard will start lighting up with insights.\n\nAll amounts in USD.\n\nLet me know if you have any questions!\n\n${rep?.name || 'Your Meridian Rep'}${rep?.phone ? '\n' + rep.phone : ''}`
                     window.open(`mailto:${form.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank')
                   }}
                     className="flex items-center justify-center gap-2 px-4 py-3 text-[13px] font-medium text-white bg-[#1F1F23] rounded-lg hover:bg-[#111113] border border-[#1F1F23] transition-colors">
@@ -1218,6 +1227,7 @@ export default function USPortalCreateCustomerPage() {
               setOnboardingLink('')
               setCustomerLoginUrl('')
               setCustomerPortalUrl('')
+              setCustomerTempPassword('')
               setAutoSendStatus({ sms: false, email: false })
               setProposalGenerated(false)
               setShowProposal(false)
@@ -1298,8 +1308,18 @@ export default function USPortalCreateCustomerPage() {
               <span className="text-white font-medium font-mono">{form.email}</span>
               <span className="text-[#A1A1A8]">Login:</span>
               <a href={customerLoginUrl} target="_blank" rel="noopener noreferrer" className="text-[#17C5B0] font-mono hover:underline truncate">{customerLoginUrl}</a>
+              {customerTempPassword && (<>
+                <span className="text-[#A1A1A8]">Temp password:</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-white font-medium font-mono">{customerTempPassword}</span>
+                  <button onClick={() => { navigator.clipboard.writeText(customerTempPassword); }}
+                    className="text-[#17C5B0] hover:text-white transition-colors" title="Copy temp password">
+                    <Copy size={13} />
+                  </button>
+                </span>
+              </>)}
             </div>
-            <p className="text-[11px] text-[#A1A1A8] mt-3">A password-setup email has been sent to the customer.</p>
+            <p className="text-[11px] text-[#A1A1A8] mt-3">{autoSendStatus.email ? 'Credentials were emailed to the customer.' : 'Credentials email could not be sent — share the temp password directly.'} They'll be prompted to set their own password on first login.</p>
           </div>
 
           {/* POS Connection Step */}
@@ -1351,6 +1371,7 @@ export default function USPortalCreateCustomerPage() {
               setOnboardingLink('')
               setCustomerLoginUrl('')
               setCustomerPortalUrl('')
+              setCustomerTempPassword('')
               setProposalGenerated(false)
               setShowProposal(false)
               setCheckoutUrl('')

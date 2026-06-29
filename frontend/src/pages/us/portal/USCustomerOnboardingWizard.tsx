@@ -46,7 +46,7 @@ const STEPS: { key: Step; label: string; icon: typeof Store }[] = [
   { key: 'checkout', label: 'Payment', icon: CreditCard },
 ]
 
-const PROVINCES = [
+const US_STATES = [
   'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware',
   'Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky',
   'Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi',
@@ -124,7 +124,7 @@ export default function USCustomerOnboardingWizard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [paymentComplete, setPaymentComplete] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const monthlyPrice = prefill.price ? parseInt(prefill.price) : 250
+  const monthlyPrice = prefill.price ? parseInt(prefill.price, 10) : 250
   const monthlyPriceUSD = monthlyPrice
 
   // Processing — 20-minute AI analysis timer (persists across page reloads)
@@ -658,7 +658,7 @@ export default function USCustomerOnboardingWizard() {
                 <select value={province} onChange={e => setProvince(e.target.value)}
                   className={inputCls}>
                   <option value="">Select state...</option>
-                  {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                  {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
