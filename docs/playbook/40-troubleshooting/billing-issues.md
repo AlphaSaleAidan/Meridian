@@ -4,14 +4,14 @@ Money problems get heat. Treat all billing tickets as **High severity** by defau
 
 ## Symptom: "I'm in Canada but I was charged USD"
 
-This is a real bug we've fixed before — see recent commit `389f567 fix: charge Canada customers in CAD not USD on Square invoices`.
+This is a real bug we've fixed before (Stripe billing country wasn't set correctly at subscription creation).
 
 | Cause | Fix |
 |-------|-----|
-| Account country wasn't set when subscription created | Update country in Settings → Account, then we re-issue invoice in CAD |
-| Old account from before the fix | Manual re-issue; CS Manager handles |
+| Account country wasn't set when subscription created | Update country in Settings → Account, then we re-issue the Stripe invoice in CAD |
+| Old account from before the fix | Manual re-issue via Stripe; CS Manager handles |
 
-**What to say:** "That was a known bug — fully fixed now. I'll refund the USD charge today and re-issue in CAD. New invoice goes out within 1 business day."
+**What to say:** "That was a known bug — fully fixed now. I'll refund the USD charge today and re-issue in CAD via Stripe. New invoice goes out within 1 business day."
 
 ## Symptom: "I cancelled and was still charged"
 
@@ -94,7 +94,7 @@ When a merchant says they want to cancel, follow:
 
 ## Why this matters for your commission
 
-Cancellations kill recurring commission. If you closed a CA$343/mo deal and they cancel month 4, you've earned CA$960. If they stay 18 months, you've earned CA$4,320. **Retention is your real job** after the close.
+Cancellations kill recurring commission. At 70% recurring, every month a merchant stays active earns you money. **Retention is your real job** after the close.
 
 Most cancellations within the first 90 days trace back to:
 1. Wrong fit (POS wasn't actually supported live)

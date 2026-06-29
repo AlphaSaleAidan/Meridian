@@ -21,7 +21,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Menu engineering matrix, peak hour staffing, food waste tracking, customer churn (regulars).
 
-**Avg deal:** CA$343–CA$685 (Premium common with cameras for queue/dwell).
+**Avg deal:** Standard or Premium tier (custom pricing; Premium common with cameras for queue/dwell).
 
 **Decision maker:** Owner or GM. Franchise = franchisee, never corporate.
 
@@ -42,7 +42,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Waste/shrinkage (anomaly detection on voids), product velocity, inventory intelligence.
 
-**Avg deal:** CA$343–CA$500.
+**Avg deal:** Standard tier (custom pricing).
 
 **Decision maker:** Usually owner-operated.
 
@@ -72,7 +72,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Product velocity (cannabis SKU turn), customer/patient LTV, day-of-week (heavily skewed traffic), promo ROI.
 
-**Avg deal:** CA$685–CA$1,370 (cannabis margin pressure makes them Premium/Command-eligible).
+**Avg deal:** Premium or Command tier (custom pricing; cannabis margin pressure makes these merchants Premium/Command-eligible).
 
 **Decision maker:** Owner or compliance manager.
 
@@ -92,7 +92,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Customer LTV + churn warning (THE feature for salons), staff performance comparison, basket analysis (service upsells).
 
-**Avg deal:** CA$343 (single location, relationship-driven).
+**Avg deal:** Standard tier (custom pricing; single location, relationship-driven).
 
 **Decision maker:** Salon owner; sometimes manager with buying authority.
 
@@ -117,7 +117,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Inventory intelligence (demand forecasting), basket analysis, seasonality, pricing power.
 
-**Avg deal:** CA$343–CA$685 (multi-SKU justifies Premium).
+**Avg deal:** Standard or Premium tier (custom pricing; multi-SKU retailers often justify Premium).
 
 **Decision maker:** Store owner or buyer.
 
@@ -139,7 +139,7 @@ The first question on every cold call should be "what POS are you on?" The secon
 
 **Demo emphasis:** Peak hour optimizer (critical for food trucks), revenue forecasting (predict slow days), menu engineering (push items during rush).
 
-**Avg deal:** CA$343 (budget-conscious solo operators).
+**Avg deal:** Standard tier (custom pricing; budget-conscious solo operators).
 
 **Decision maker:** Almost always the owner.
 
@@ -159,7 +159,7 @@ Vendors: Mitchell1, ALLDATA, NAPA TRACS, TireMaster, R.O. Writer, Protractor, Bo
 
 **Demo emphasis:** Product velocity (parts dead stock), employee performance (technician productivity), revenue forecasting, day-of-week patterns.
 
-**Avg deal:** CA$343 (CSV-only limits depth, so don't push Premium).
+**Avg deal:** Standard tier (custom pricing; CSV-only limits depth, so don't push Premium).
 
 **Decision maker:** Shop owner.
 

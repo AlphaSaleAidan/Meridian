@@ -12,7 +12,7 @@ Ask these BEFORE showing anything. 2–3 minutes total.
    - If unsupported, you may want to qualify out early
 2. **"How many locations?"**
    - 1 → Standard or Premium
-   - 2+ → Command (CA$1,370 / $1,199, $959 commission to you)
+   - 2+ → Command (custom pricing, 70% commission to you — higher volume = larger deal)
 3. **"What's your biggest operational headache right now?"**
    - Their answer tells you which feature to LEAD the demo with
    - Common answers: staffing, inventory, knowing what to push, customer retention

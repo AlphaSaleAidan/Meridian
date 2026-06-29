@@ -214,6 +214,9 @@ export default function CanadaPortalOnboardingPage() {
                 </p>
               </div>
 
+              {/* TODO(training): Income projections below are illustrative. With custom per-deal
+                  pricing, the actual amounts depend on the deal prices reps negotiate. Review
+                  these figures once typical custom deal sizes are established. */}
               {/* Income Projection Cards */}
               <div className="grid grid-cols-3 gap-3">
                 {[

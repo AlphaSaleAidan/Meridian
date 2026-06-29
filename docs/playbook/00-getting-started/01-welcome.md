@@ -10,23 +10,27 @@ The headline stat you'll lead with: **the average Meridian merchant discovers CA
 
 ## What you actually sell
 
-| Plan | Monthly (CAD) | Monthly (USD) | Built for |
-|------|---------------|---------------|-----------|
-| **Standard** | CA$343 | $299 | Single-location cafes, smoke shops, small restaurants |
-| **Premium** | CA$685 | $599 | Restaurants with cameras, multi-register retail |
-| **Command** | CA$1,370 | $1,199 | Multi-location operators, franchise owners |
+Meridian uses **custom per-deal pricing** — no published tiers. You set the monthly price during the proposal in the portal. When a prospect asks "how much?", lead with value first: "Let me show you what we typically find in week one, then we'll talk numbers."
 
-Month-to-month. No contract. No setup fee. One-click cancel.
+| Plan | Features | Built for |
+|------|----------|-----------|
+| **Standard** | All POS analytics agents | Single-location cafes, smoke shops, small restaurants |
+| **Premium** | Standard + camera intelligence | Restaurants with cameras, multi-register retail |
+| **Command** | Premium + multi-location + API | Multi-location operators, franchise owners |
+
+All plans: month-to-month, no contract, no setup fee, one-click cancel. Use "Schedule a Quote" framing — do NOT quote specific monthly prices before discovery.
 
 ## Your math
 
-| Plan | Your cut/mo | 10 active clients = | After 12 months |
-|------|-------------|--------------------|-----------------|
-| Standard | CA$240 | CA$2,400/mo | CA$28,800 |
-| Premium | CA$480 | CA$4,800/mo | CA$57,600 |
-| Command | CA$959 | CA$9,590/mo | CA$115,080 |
+You earn **70% of monthly subscription revenue, recurring for the lifetime of the account.** The exact amount depends on the custom deal price you set in the portal.
 
-Recurring. Compounds with retention. Your job is to close *and* keep clients engaged so they don't churn.
+| If deal price is… | Your monthly cut | 10 active clients = | After 12 months |
+|-------------------|-----------------|---------------------|-----------------|
+| CA$350/mo | CA$245 | CA$2,450/mo | CA$29,400 |
+| CA$600/mo | CA$420 | CA$4,200/mo | CA$50,400 |
+| CA$1,200/mo | CA$840 | CA$8,400/mo | CA$100,800 |
+
+These are illustrations — your actual earnings depend on the prices you negotiate. Recurring. Compounds with retention. Your job is to close *and* keep clients engaged so they don't churn.
 
 ## What's in this playbook
 
