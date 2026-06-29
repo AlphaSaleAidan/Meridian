@@ -385,7 +385,20 @@ export function canAccessPortal(rep: SalesRepProfile | null, portal: 'us' | 'can
   return rep.portal_context === portal
 }
 
+// Fallback portal scope for profiles that have NO explicit portal_context.
+// This is ONLY reached for transient profiles — a local/demo rep, or a
+// signup/RLS fallback — never for a real DB rep: repFromRow uses the row's
+// own portal_context, and every rep row created via /api/{us,canada}/rep-signup
+// carries an explicit 'us'/'canada'. Scope the fallback to the portal the rep
+// is actually authenticating on (was hardcoded 'all', granting both portals)
+// so a US-portal fallback profile can't see Canada and vice-versa. Canada
+// reps are unaffected — they always have an explicit context in the DB.
 function resolvePortalContext(_email: string): PortalContext {
+  if (typeof window !== 'undefined') {
+    const path = window.location.pathname
+    if (path.startsWith('/us/portal')) return 'us'
+    if (path.startsWith('/canada/portal')) return 'canada'
+  }
   return 'all'
 }
 
