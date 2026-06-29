@@ -90,6 +90,7 @@ const USPortalLeadDetailPage = lazyRetry(() => import('@/pages/us/portal/USPorta
 const USPortalAccountsPage = lazyRetry(() => import('@/pages/us/portal/USPortalAccountsPage'))
 const USPortalTeamPage = lazyRetry(() => import('@/pages/us/portal/USPortalTeamPage'))
 const USPortalTrainingPage = lazyRetry(() => import('@/pages/us/portal/USPortalTrainingPage'))
+const USPortalProposalsPage = lazyRetry(() => import('@/pages/us/portal/USPortalProposalsPage'))
 const USPortalSettingsPage = lazyRetry(() => import('@/pages/us/portal/USPortalSettingsPage'))
 const USPortalCreateCustomerPage = lazyRetry(() => import('@/pages/us/portal/USPortalCreateCustomerPage'))
 const USPortalOnboardingPage = lazyRetry(() => import('@/pages/us/portal/USPortalOnboardingPage'))
@@ -558,6 +559,7 @@ export default function App() {
                 <Route path="new-customer" element={<Suspense fallback={<InlineFallback />}><USPortalCreateCustomerPage /></Suspense>} />
                 <Route path="accounts" element={<Suspense fallback={<InlineFallback />}><USPortalAccountsPage /></Suspense>} />
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><USPortalTrainingPage /></Suspense>} />
+                <Route path="proposals" element={<Suspense fallback={<InlineFallback />}><USPortalProposalsPage /></Suspense>} />
                 <Route path="team" element={<Suspense fallback={<InlineFallback />}><USPortalTeamPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><USPortalSettingsPage /></Suspense>} />
                 <Route path="badge" element={<Suspense fallback={<InlineFallback />}><USPortalBadgePage /></Suspense>} />
