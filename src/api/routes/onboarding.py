@@ -254,6 +254,11 @@ class ProvisionCustomerRequest(BaseModel):
     setup_fee: int = 0
     first_month_free: bool = False
     country: str = "CA"
+    # When true (self-serve onboarding wizard), the customer already created
+    # their account with a self-chosen password — do NOT overwrite it with a
+    # temp password or force a reset, and skip the credentials email. Default
+    # false preserves the rep-provisioned behaviour (temp password + email).
+    preserve_password: bool = False
 
 
 class ProvisionCustomerResponse(BaseModel):
@@ -332,15 +337,21 @@ async def provision_customer(req: ProvisionCustomerRequest):
                         auth_user_id = u["id"]
                         break
             if auth_user_id:
+                # preserve_password (self-serve): sync org/role metadata only —
+                # don't reset the password the customer just chose or force a reset.
+                _meta = {"full_name": req.owner_name, "business_name": req.business_name, "org_id": req.org_id, "role": "owner", "must_reset_password": not req.preserve_password}
+                _put_json: dict = {"user_metadata": _meta}
+                if not req.preserve_password:
+                    _put_json["password"] = temp_password
                 pw_resp = await client.put(
                     f"{supabase_url}/auth/v1/admin/users/{auth_user_id}",
                     headers={"Authorization": f"Bearer {service_key}", "apikey": service_key, "Content-Type": "application/json"},
-                    json={"password": temp_password, "user_metadata": {"full_name": req.owner_name, "business_name": req.business_name, "org_id": req.org_id, "role": "owner", "must_reset_password": True}},
+                    json=_put_json,
                 )
                 if pw_resp.status_code == 200:
-                    logger.info(f"Updated password and metadata for existing user {auth_user_id}")
+                    logger.info(f"Updated {'metadata' if req.preserve_password else 'password and metadata'} for existing user {auth_user_id}")
                 else:
-                    logger.warning(f"Password update failed: {pw_resp.status_code}")
+                    logger.warning(f"User update failed: {pw_resp.status_code}")
         else:
             logger.error(f"Auth user creation failed: {resp.status_code} {resp.text}")
             raise HTTPException(400, f"Could not create user account: {resp.json().get('msg', 'Unknown error')}")
@@ -454,30 +465,35 @@ async def provision_customer(req: ProvisionCustomerRequest):
     email_error = None
     login_url = f"{_FRONTEND_URL}/us/login" if (req.country or "CA").upper() == "US" else f"{_FRONTEND_URL}/canada/login"
     try:
-        from ...email.send import send_customer_credentials
-        email_result = await send_customer_credentials(
-            to=req.email,
-            business_name=req.business_name,
-            email=req.email,
-            password=temp_password,
-            login_url=login_url,
-            rep_name=req.rep_name or "",
-            org_id=req.org_id,
-        )
-        welcome_sent = email_result.get("status") == "sent"
-        if not welcome_sent:
-            email_error = email_result.get("error", "Email delivery unsuccessful")
+        if req.preserve_password:
+            # Self-serve customer already has working credentials they chose — no
+            # temp-password email to send. Treat as success (nothing to deliver).
+            welcome_sent = True
+        else:
+            from ...email.send import send_customer_credentials
+            email_result = await send_customer_credentials(
+                to=req.email,
+                business_name=req.business_name,
+                email=req.email,
+                password=temp_password,
+                login_url=login_url,
+                rep_name=req.rep_name or "",
+                org_id=req.org_id,
+            )
+            welcome_sent = email_result.get("status") == "sent"
+            if not welcome_sent:
+                email_error = email_result.get("error", "Email delivery unsuccessful")
 
-        await db.insert("notifications", {
-            "id": str(uuid4()),
-            "org_id": req.org_id,
-            "title": f"Welcome to Meridian — {req.business_name}",
-            "body": f"Credentials email {'sent to' if welcome_sent else 'FAILED for'} {req.email}",
-            "priority": "high",
-            "source_type": "event",
-            "status": "active",
-            "created_at": now,
-        })
+            await db.insert("notifications", {
+                "id": str(uuid4()),
+                "org_id": req.org_id,
+                "title": f"Welcome to Meridian — {req.business_name}",
+                "body": f"Credentials email {'sent to' if welcome_sent else 'FAILED for'} {req.email}",
+                "priority": "high",
+                "source_type": "event",
+                "status": "active",
+                "created_at": now,
+            })
     except Exception as e:
         email_error = str(e)
         logger.error(f"Credentials email failed for {req.email}: {e}", exc_info=True)
@@ -577,16 +593,32 @@ async def send_invoice_sms_endpoint(req: SendInvoiceSmsRequest):
     }
 
 
+# Lead row lives in different tables per market: Canada deals in `deals`,
+# US leads in `us_leads`. Allowlist guards against arbitrary table injection.
+_POS_LEAD_TABLES = {"deals", "us_leads"}
+
+
+def _pos_lead_table(table: str | None) -> str:
+    t = (table or "deals").strip()
+    if t not in _POS_LEAD_TABLES:
+        raise HTTPException(400, "Invalid lead table")
+    return t
+
+
 class ConnectPosRequest(BaseModel):
     deal_id: str | None = None
     provider: str
     credentials: dict
     business_name: str | None = None
+    # Which lead table deal_id belongs to. Default 'deals' keeps existing
+    # callers unchanged; the US lead-detail page passes 'us_leads'.
+    table: str | None = None
 
 
 class VerifyPosRequest(BaseModel):
     deal_id: str | None = None
     provider: str
+    table: str | None = None
 
 
 @router.post("/connect-pos", dependencies=[Depends(require_jwt)])
@@ -610,7 +642,7 @@ async def connect_pos_onboarding(req: ConnectPosRequest):
         db = get_db()
         try:
             await db.update(
-                "deals",
+                _pos_lead_table(req.table),
                 {"pos_system": req.provider, "pos_status": "connected"},
                 filters={"id": f"eq.{req.deal_id}"},
             )
@@ -631,7 +663,7 @@ async def verify_pos_onboarding(req: VerifyPosRequest):
     if req.deal_id:
         db = get_db()
         try:
-            rows = await db.select("deals", filters={"id": f"eq.{req.deal_id}"}, limit=1)
+            rows = await db.select(_pos_lead_table(req.table), filters={"id": f"eq.{req.deal_id}"}, limit=1)
             if rows and rows[0].get("pos_status") == "connected":
                 return {"verified": True, "provider": req.provider}
         except Exception:
