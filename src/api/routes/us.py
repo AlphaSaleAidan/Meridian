@@ -21,9 +21,8 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from ..auth import (
     ADMIN_EMAILS as ALL_ADMIN_EMAILS,
-    require_service_auth,
     require_jwt,
-    require_admin_jwt,
+    rate_limit_signup,
 )
 
 logger = logging.getLogger("meridian.api.us")
@@ -61,9 +60,23 @@ _US_ADMIN_ALLOWLIST = {
     "aidanpierce@meridian.tips",
 }
 ADMIN_EMAILS = [e for e in ALL_ADMIN_EMAILS if e in _US_ADMIN_ALLOWLIST]
-# NOTE: ADMIN_EMAILS is not yet referenced elsewhere in this module — it
-# exists as the policy artifact for when US admin gating gets wired up.
-# A per-scope role-tags refactor is filed as a follow-up issue.
+
+
+async def require_us_admin(user: dict = Depends(require_jwt)) -> dict:
+    """US-admin gate — INTENTIONALLY narrower than auth.require_admin_jwt.
+
+    require_admin_jwt checks the global ADMIN_EMAILS (which includes the
+    Canada/compliance admins), so using it on US rep-management endpoints let
+    Enoch Cheung / Aidan Nguyen approve/reject/remove US reps — contrary to the
+    stated US policy (US admin = Aidan Pierce only). Gate on the US-scoped
+    ADMIN_EMAILS list above instead. This wires in what was previously a
+    documented-but-unreferenced policy artifact.
+    """
+    email = (user.get("email") or "").lower()
+    if email not in [e.lower() for e in ADMIN_EMAILS]:
+        logger.warning("US admin access denied for %s", email)
+        raise HTTPException(403, "US admin access required")
+    return user
 
 
 def _sanitize_text(v: str) -> str:
@@ -200,7 +213,7 @@ class RepUpdateRequest(BaseModel):
 # ── Endpoints ───────────────────────────────────────────────
 
 
-@router.post("/rep-signup")
+@router.post("/rep-signup", dependencies=[Depends(rate_limit_signup)])
 async def rep_signup(req: RepSignupRequest):
     import httpx
 
@@ -253,13 +266,14 @@ async def rep_signup(req: RepSignupRequest):
 
 
 @router.post("/create-customer")
-async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_service_auth)):
+async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(require_jwt)):
     """Create (or reset) a US customer login with a rep-shareable temp password.
 
     Mirrors /api/canada/create-customer: the temp password + must_reset_password
     metadata flag replace the old client-side resetPasswordForEmail flow, which
     silently never delivered (Supabase project has no custom SMTP; built-in
-    mailer is dev-only and rate-limited to 2/hour).
+    mailer is dev-only and rate-limited to 2/hour). Gated on require_jwt (the rep's
+    own token) to match Canada and drop the broader X-Admin-Key/service-token path.
     """
     import httpx
 
@@ -267,6 +281,9 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
 
     supabase_url, service_key = _supabase_creds()
     org_id = str(uuid.uuid4())
+    auth_user_id = None
+
+    logger.info("US create-customer requested by %s for %s", caller.get("email"), req.email)
 
     temp_password = req.password or _generate_temp_password()
 
@@ -342,9 +359,45 @@ async def create_customer(req: CreateCustomerRequest, _auth=Depends(require_serv
                 logger.error("Password/flag reset PUT failed for %s: %s %s", req.email, put_resp.status_code, put_resp.text[:200])
                 raise HTTPException(502, "Could not update customer account password")
             logger.info("Reset OK for %s (id=%s)", req.email, existing_id)
+            auth_user_id = existing_id
         else:
             logger.error("Auth user creation failed: %s %s", resp.status_code, resp.text)
             raise HTTPException(400, "Could not create customer account")
+
+        # Link the customer to a business record so the portal can load their org
+        # on login. Without this row fetchBusinessForUser returns null, org stays
+        # null, and ProtectedRoute bounces the customer back to /us/login even
+        # after a successful login. Mirrors canada.create_customer + provision_customer.
+        if auth_user_id:
+            biz_resp = await client.post(
+                f"{supabase_url}/rest/v1/businesses",
+                headers={
+                    "Authorization": f"Bearer {service_key}",
+                    "apikey": service_key,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal,resolution=merge-duplicates",
+                },
+                json={
+                    "id": org_id,
+                    "owner_user_id": auth_user_id,
+                    "name": req.business_name,
+                    "owner_name": req.contact_name,
+                    "email": req.email,
+                    "phone": req.phone or "",
+                    "plan_tier": "trial",
+                    "business_type": req.vertical or "restaurant",
+                    "pos_connected": False,
+                    "onboarded": False,
+                    "status": "active",
+                },
+            )
+            if biz_resp.status_code not in (200, 201, 204):
+                logger.error(
+                    "businesses upsert failed for %s: %s %s",
+                    req.email, biz_resp.status_code, biz_resp.text[:200],
+                )
+                raise HTTPException(500, "Customer account created but business profile failed to save")
+            logger.info("Linked business %s -> user %s for %s", org_id, auth_user_id, req.email)
 
     return {"ok": True, "org_id": org_id, "temp_password": temp_password}
 
@@ -458,7 +511,7 @@ async def get_team(request: Request, user: dict = Depends(require_jwt)):
 
 
 @router.post("/rep-approve")
-async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
+async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_us_admin)):
     _validate_rep_id(req.rep_id)
 
     import httpx
@@ -529,7 +582,7 @@ async def approve_rep(req: RepActionRequest, admin: dict = Depends(require_admin
 
 
 @router.post("/rep-reject")
-async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
+async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_us_admin)):
     _validate_rep_id(req.rep_id)
 
     import httpx
@@ -549,7 +602,7 @@ async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_admin_
 
 
 @router.post("/rep-update")
-async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_jwt)):
+async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_us_admin)):
     _validate_rep_id(req.rep_id)
 
     import httpx
@@ -578,7 +631,7 @@ async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_admin_
 
 
 @router.post("/rep-remove")
-async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_admin_jwt)):
+async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_us_admin)):
     """Admin removes an active rep from the team — deletes the sales_reps row."""
     _validate_rep_id(req.rep_id)
 
