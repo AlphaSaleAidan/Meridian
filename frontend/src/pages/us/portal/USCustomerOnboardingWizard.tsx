@@ -1185,7 +1185,7 @@ export default function USCustomerOnboardingWizard() {
             <p className={`text-[14px] ${T.muted} text-center max-w-sm mb-8`}>
               Your dashboard is live. We're already analyzing your data and generating insights.
             </p>
-            <button onClick={() => navigate('/app')}
+            <button onClick={() => navigate('/us/dashboard')}
               className={`flex items-center gap-2 px-8 py-3 text-[14px] font-medium text-[#0A0A0B] ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.2)]`}>
               Go to Dashboard <ArrowRight size={16} />
             </button>

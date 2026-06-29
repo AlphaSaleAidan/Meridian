@@ -96,6 +96,7 @@ const USPortalOnboardingPage = lazyRetry(() => import('@/pages/us/portal/USPorta
 const USCustomerOnboardingWizard = lazyRetry(() => import('@/pages/us/portal/USCustomerOnboardingWizard'))
 const USLoginPage = lazyRetry(() => import('@/pages/customer/USLoginPage'))
 const USSetupPage = lazyRetry(() => import('@/pages/customer/USSetupPage'))
+const USLayout = lazyRetry(() => import('@/components/USLayout'))
 const USPortalBadgePage = lazyRetry(() => import('@/pages/us/portal/USPortalBadgePage'))
 const CanadaPortalBadgePage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalBadgePage'))
 const RepPublicBadgePage = lazyRetry(() => import('@/pages/RepPublicBadgePage'))
@@ -519,6 +520,16 @@ export default function App() {
               {/* US — customer auth (returning login + first-login setup) */}
               <Route path="/us/login" element={<Suspense fallback={<LazyFallback />}><USLoginPage /></Suspense>} />
               <Route path="/us/setup" element={<Suspense fallback={<LazyFallback />}><USSetupPage /></Suspense>} />
+              {/* US — dedicated customer dashboard (US-branded, full feature set) */}
+              <Route path="/us/dashboard" element={
+                <ProtectedRoute loginPath="/us/login">
+                  <Suspense fallback={<LazyFallback />}>
+                    <USLayout />
+                  </Suspense>
+                </ProtectedRoute>
+              }>
+                {CustomerDashboardRoutes()}
+              </Route>
               <Route path="/us/portal/login" element={<Suspense fallback={<LazyFallback />}><USPortalLoginPage /></Suspense>} />
               <Route path="/us/portal/signup" element={<Suspense fallback={<LazyFallback />}><USPortalSignupPage /></Suspense>} />
               <Route path="/us/portal/onboarding" element={
