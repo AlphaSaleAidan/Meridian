@@ -1,13 +1,8 @@
 """
-Stripe Checkout API — Dynamic checkout session generator for proposals.
-
-Creates Stripe Checkout Sessions that combine:
-  - Recurring subscription (plan tier)
-  - One-time setup fee (if applicable)
-  - First-month-free trial (if applicable)
+Stripe Checkout API — Subscription link management and webhook handling.
 
 Endpoints:
-  POST /api/stripe/create-checkout  → Create checkout session, return URL
+  POST /api/stripe/subscribe-link   → Generate stable subscription short-link + QR
   POST /api/stripe/webhook          → Handle Stripe webhook events
 """
 
@@ -30,54 +25,10 @@ router = APIRouter(prefix="/api/stripe", tags=["stripe"])
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
-# Plan tier → Stripe Price IDs (set in env after creating products in Stripe)
-# These map to recurring monthly prices
-STRIPE_PRICE_IDS = {
-    "standard": os.getenv("STRIPE_PRICE_STANDARD", ""),
-    "premium": os.getenv("STRIPE_PRICE_PREMIUM", ""),
-    "command": os.getenv("STRIPE_PRICE_COMMAND", ""),
-}
-
-# Plan tier → default price in cents (fallback for ad-hoc prices when env-var price IDs not set).
-# Matches the published USD pricing in rep training: Standard $299, Premium $599, Command $1,199.
-# Canadian merchants are billed in CAD via env-configured CAD price IDs (CA$343 / CA$685 / CA$1,370).
-PLAN_PRICES = {
-    "standard": 29900,   # $299
-    "premium": 59900,    # $599
-    "command": 119900,   # $1,199
-}
-
 PUBLIC_PAY_BASE = os.getenv("PUBLIC_PAY_BASE", "https://meridian.tips")
 
 
 # ── Models ──
-
-class CheckoutSessionRequest(BaseModel):
-    """Request body for creating a Stripe Checkout Session."""
-    plan: str = "premium"                   # standard | premium | command
-    custom_price_cents: Optional[int] = None  # Override monthly price
-    setup_fee_cents: int = 0                # One-time setup fee (rep keeps 100%)
-    first_month_free: bool = False          # Apply trial period
-    customer_email: str
-    customer_name: str
-    business_name: str
-    rep_id: Optional[str] = None
-    rep_name: Optional[str] = None
-    org_id: Optional[str] = None
-    success_url: str = ""
-    cancel_url: str = ""
-    currency: str = "usd"               # "cad" for Canada portal
-
-
-class CheckoutSessionResponse(BaseModel):
-    """Response with checkout session details."""
-    checkout_url: str
-    session_id: str
-    plan: str
-    monthly_amount: int
-    setup_fee: int
-    first_month_free: bool
-
 
 class SubscribeLinkRequest(BaseModel):
     """Request body for generating a stable subscription short-link + QR."""
@@ -105,167 +56,7 @@ def _get_stripe():
         )
 
 
-def _get_monthly_amount(plan: str, custom_price_cents: Optional[int]) -> int:
-    """Resolve the monthly amount in cents."""
-    if custom_price_cents and custom_price_cents > 0:
-        return custom_price_cents
-    return PLAN_PRICES.get(plan, 29900)
-
-
 # ── Routes ──
-
-@router.post("/create-checkout", response_model=CheckoutSessionResponse)
-async def create_checkout_session(req: CheckoutSessionRequest, request: Request):
-    """
-    Create a Stripe Checkout Session.
-
-    Combines subscription + optional one-time setup fee in a single checkout.
-    If first_month_free is True, adds a 30-day trial to the subscription.
-    """
-    if not STRIPE_SECRET_KEY:
-        raise HTTPException(
-            status_code=501,
-            detail="Stripe not configured. Set STRIPE_SECRET_KEY env var."
-        )
-
-    stripe = _get_stripe()
-    monthly_amount = _get_monthly_amount(req.plan, req.custom_price_cents)
-
-    try:
-        line_items = []
-        mode = "subscription"
-        subscription_data = None
-
-        # -- Recurring subscription line item --
-        price_id = STRIPE_PRICE_IDS.get(req.plan)
-
-        if price_id and not req.custom_price_cents:
-            # Use pre-created Stripe Price object
-            line_items.append({
-                "price": price_id,
-                "quantity": 1,
-            })
-        else:
-            # Create an ad-hoc price for custom amounts
-            line_items.append({
-                "price_data": {
-                    "currency": req.currency.lower(),
-                    "product_data": {
-                        "name": f"Meridian {req.plan.title()} Plan",
-                        "description": f"Monthly analytics subscription for {req.business_name}",
-                    },
-                    "unit_amount": monthly_amount,
-                    "recurring": {"interval": "month"},
-                },
-                "quantity": 1,
-            })
-
-        # -- One-time setup fee line item --
-        if req.setup_fee_cents > 0:
-            # Stripe allows mixing subscription + one-time items in subscription mode
-            line_items.append({
-                "price_data": {
-                    "currency": req.currency.lower(),
-                    "product_data": {
-                        "name": "Setup Fee",
-                        "description": "One-time account setup and onboarding",
-                    },
-                    "unit_amount": req.setup_fee_cents,
-                },
-                "quantity": 1,
-            })
-
-        # -- Trial period for first month free --
-        if req.first_month_free:
-            subscription_data = {
-                "trial_period_days": 30,
-                "metadata": {
-                    "first_month_free": "true",
-                    "plan": req.plan,
-                    "business_name": req.business_name,
-                    "rep_id": req.rep_id or "",
-                    "rep_name": req.rep_name or "",
-                },
-            }
-        else:
-            subscription_data = {
-                "metadata": {
-                    "plan": req.plan,
-                    "business_name": req.business_name,
-                    "rep_id": req.rep_id or "",
-                    "rep_name": req.rep_name or "",
-                },
-            }
-
-        # -- Default URLs --
-        base_url = req.success_url.rsplit("/", 1)[0] if req.success_url else "https://meridian.tips"
-        success_url = req.success_url or f"{base_url}/onboard?checkout=success&session_id={{CHECKOUT_SESSION_ID}}"
-        cancel_url = req.cancel_url or f"{base_url}/onboard?checkout=cancelled"
-
-        # -- Create the session --
-        session = stripe.checkout.Session.create(
-            mode=mode,
-            line_items=line_items,
-            subscription_data=subscription_data,
-            customer_email=req.customer_email,
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={
-                "meridian_org_id": req.org_id or "",
-                "meridian_plan": req.plan,
-                "meridian_rep_id": req.rep_id or "",
-                "meridian_rep_name": req.rep_name or "",
-                "business_name": req.business_name,
-                "setup_fee_cents": str(req.setup_fee_cents),
-                "first_month_free": str(req.first_month_free),
-            },
-            allow_promotion_codes=True,
-            billing_address_collection="required",
-            phone_number_collection={"enabled": True},
-        )
-
-        logger.info(
-            f"Checkout session created: {session.id} | "
-            f"plan={req.plan} monthly=${monthly_amount/100:.0f} "
-            f"setup=${req.setup_fee_cents/100:.0f} "
-            f"trial={'30d' if req.first_month_free else 'none'} "
-            f"rep={req.rep_name or 'unknown'}"
-        )
-
-        try:
-            from ...db import _db_instance as db
-            if db:
-                await db.insert("checkout_sessions", {
-                    "id": str(uuid4()),
-                    "stripe_session_id": session.id,
-                    "org_id": req.org_id,
-                    "plan": req.plan,
-                    "monthly_amount_cents": monthly_amount,
-                    "setup_fee_cents": req.setup_fee_cents,
-                    "first_month_free": req.first_month_free,
-                    "customer_email": req.customer_email,
-                    "business_name": req.business_name,
-                    "rep_id": req.rep_id,
-                    "status": "pending",
-                    "checkout_url": session.url,
-                    "created_at": datetime.utcnow().isoformat(),
-                })
-        except Exception as e:
-            logger.warning(f"Failed to record checkout session: {e}")
-
-        return CheckoutSessionResponse(
-            checkout_url=session.url,
-            session_id=session.id,
-            plan=req.plan,
-            monthly_amount=monthly_amount,
-            setup_fee=req.setup_fee_cents,
-            first_month_free=req.first_month_free,
-        )
-
-    except Exception as e:
-        logger.exception("Stripe checkout session creation failed")
-        raise HTTPException(status_code=500, detail=str(e))
-
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request):

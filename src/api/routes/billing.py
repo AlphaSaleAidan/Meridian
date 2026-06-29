@@ -1,8 +1,7 @@
 """
-Billing API routes — Square checkout, invoicing, and subscription management.
+Billing API routes — Square invoicing and subscription management.
 
 Endpoints:
-  POST /api/billing/create-checkout  → Create Square payment link for onboarding/proposals
   POST /api/billing/create-invoice   → Create custom invoice via Square
   POST /api/billing/cancel           → Cancel a subscription
   POST /api/billing/webhook          → Handle Square payment webhooks
@@ -30,39 +29,6 @@ MAX_AMOUNT_CENTS = 10_000_00  # $10,000 safety cap
 
 
 # ── Request/Response Models ──
-
-class CheckoutRequest(BaseModel):
-    org_id: str
-    plan: str = "standard"
-    monthly_price_cents: int = 25000  # $250.00 default
-    customer_email: str
-    customer_name: str
-    business_name: str
-    return_url: str = ""
-    setup_fee_cents: int = 0          # One-time setup fee (rep keeps 100%)
-    first_month_free: bool = False    # Apply 100% discount to first month
-    rep_id: str = ""                  # Sales rep ID for commission tracking
-    rep_name: str = ""                # Sales rep name
-    currency: str = "USD"             # "CAD" for Canada portal
-
-    @field_validator("monthly_price_cents")
-    @classmethod
-    def validate_monthly_price(cls, v: int) -> int:
-        if v <= 0:
-            raise ValueError("monthly_price_cents must be positive")
-        if v > MAX_AMOUNT_CENTS:
-            raise ValueError(f"monthly_price_cents exceeds maximum ({MAX_AMOUNT_CENTS})")
-        return v
-
-    @field_validator("setup_fee_cents")
-    @classmethod
-    def validate_setup_fee(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("setup_fee_cents cannot be negative")
-        if v > MAX_AMOUNT_CENTS:
-            raise ValueError(f"setup_fee_cents exceeds maximum ({MAX_AMOUNT_CENTS})")
-        return v
-
 
 class InvoiceRequest(BaseModel):
     org_id: str
@@ -104,62 +70,6 @@ class PaymentNotifyRequest(BaseModel):
 
 
 # ── Route handlers ──
-
-@router.post("/create-checkout")
-async def create_checkout(req: CheckoutRequest, _user: dict = Depends(require_jwt)):
-    """
-    Create a Square Checkout (Payment Link) for a new customer subscription.
-    Called by the proposal wizard's payment step.
-
-    Supports:
-    - Plan tier selection (standard/premium/command)
-    - Custom setup fee as a one-time line item
-    - First month free via Square discount
-    - Sales rep tracking for commissions
-
-    Returns a checkout_url to redirect the customer to.
-    """
-    try:
-        from src.billing.billing_service import BillingService
-
-        db = get_db()
-        service = BillingService(db)
-
-        result = await service.create_checkout(
-            org_id=req.org_id,
-            amount_cents=req.monthly_price_cents,
-            customer_email=req.customer_email,
-            customer_name=req.customer_name,
-            business_name=req.business_name,
-            plan=req.plan,
-            return_url=req.return_url,
-            setup_fee_cents=req.setup_fee_cents,
-            first_month_free=req.first_month_free,
-            rep_id=req.rep_id,
-            rep_name=req.rep_name,
-            currency=req.currency,
-        )
-
-        if result.success:
-            return {
-                "checkout_url": result.checkout_url,
-                "checkout_id": result.checkout_id,
-                "order_id": result.order_id,
-            }
-        else:
-            raise HTTPException(status_code=400, detail=result.error)
-
-    except ImportError:
-        raise HTTPException(
-            status_code=501,
-            detail="Billing service not yet configured. Set SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID."
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception("Checkout creation failed")
-        raise HTTPException(status_code=500, detail="Checkout creation failed")
-
 
 @router.post("/create-invoice", dependencies=[Depends(require_service_auth)])
 async def create_invoice(req: InvoiceRequest):

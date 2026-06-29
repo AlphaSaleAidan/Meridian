@@ -8,7 +8,6 @@ Routes:
   POST /api/webhooks/square           → Square webhook receiver
   GET  /api/dashboard/*               → Dashboard data endpoints
   */api/vision/*                      → Vision intelligence endpoints
-  POST /api/billing/create-checkout   → Create Square payment link
   POST /api/billing/create-invoice    → Create Square invoice
   GET  /api/billing/status/:org_id    → Subscription status
 """
