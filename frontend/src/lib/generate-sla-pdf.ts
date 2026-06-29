@@ -17,6 +17,8 @@ export interface SlaInput {
   monthlyPriceCents: number
   /** One-time setup fee in minor units (cents) of the local currency. */
   setupFeeCents: number
+  /** When true, inserts a first-month complimentary clause in section 3. */
+  firstMonthFree?: boolean
   startDate: string
   clientSignature?: string
 }
@@ -232,6 +234,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
     <h2>3. Fees and Payment</h2>
     <p>3.1 <strong>Monthly Service Fee.</strong> The Client shall pay a monthly service fee of <strong>${formatMoney(input.country, input.monthlyPriceCents)}</strong> (plus applicable taxes) for the ${input.planName ? `Meridian <strong>${esc(input.planName)}</strong> plan` : 'Services described herein'}.</p>
     <p>3.2 <strong>Setup Fee.</strong> ${input.setupFeeCents > 0 ? `A one-time setup fee of <strong>${formatMoney(input.country, input.setupFeeCents)}</strong> (plus applicable taxes) is payable upon execution of this Agreement.` : 'No setup fee is applicable under this Agreement.'}</p>
+    ${input.firstMonthFree ? `<p>3.2A <strong>First Month Complimentary.</strong> As an introductory offer, the first calendar month of the Monthly Service Fee is waived. The one-time setup fee (where applicable) remains payable upon execution of this Agreement; recurring monthly billing commences at the start of the second calendar month.</p>` : ''}
     <p>3.3 <strong>Payment Terms.</strong> All invoices are due and payable within thirty (30) days. Payments shall be made in ${currencyName}.</p>
     <p>3.4 <strong>Taxes.</strong> ${taxNote}</p>
     <p>3.5 <strong>Late Payment.</strong> Overdue invoices shall bear interest at 1.5% per month (18% per annum) or the maximum rate permitted by law.</p>

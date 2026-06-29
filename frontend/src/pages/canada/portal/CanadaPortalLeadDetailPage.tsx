@@ -486,6 +486,7 @@ export default function CanadaPortalLeadDetailPage() {
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
+        firstMonthFree,
         startDate: new Date().toISOString().slice(0, 10),
       }
       const blob = await generateSlaDocument(slaInput)
@@ -533,6 +534,7 @@ export default function CanadaPortalLeadDetailPage() {
         planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
+        firstMonthFree,
         startDate: new Date().toISOString().slice(0, 10),
         clientSignature: slaSignature,
       }
@@ -561,6 +563,8 @@ export default function CanadaPortalLeadDetailPage() {
               provider_signatory: `${rep.name || 'Meridian Sales'}, Account Representative`,
               monthly_price: `CA$${monthlyPrice.toLocaleString()}/mo`,
               setup_fee: setupFeeNum > 0 ? `CA$${setupFeeNum.toLocaleString()}` : '',
+              first_month_free: firstMonthFree,
+              due_today: `CA$${((firstMonthFree ? 0 : monthlyPrice) + setupFeeNum).toLocaleString()}`,
             },
           }),
         })
@@ -596,6 +600,8 @@ export default function CanadaPortalLeadDetailPage() {
             provider_signatory: `${rep?.name || 'Meridian Sales'}, Account Representative`,
             monthly_price: `CA$${monthlyPrice.toLocaleString()}/mo`,
             setup_fee: (Number(setupFee) || 0) > 0 ? `CA$${(Number(setupFee) || 0).toLocaleString()}` : '',
+            first_month_free: firstMonthFree,
+            due_today: `CA$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
           },
         }),
       })
@@ -965,25 +971,24 @@ export default function CanadaPortalLeadDetailPage() {
           <span className="text-sm text-white">First month free</span>
         </label>
 
-        {/* Due Today summary — shows whenever a non-zero setup fee is present
-            or when first-month-free is toggled, so the rep and customer both
-            see the exact charge that will hit the card today. */}
-        {((Number(setupFee) || 0) > 0 || firstMonthFree) && (
-          <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-pm-canada-bg border border-pm-canada-border">
-            <span className="text-xs text-pm-canada-text-muted">
-              Due today
-              {firstMonthFree && (Number(setupFee) || 0) > 0 && (
-                <span className="ml-1 text-pm-canada-text-faint">(setup fee only — first month free)</span>
-              )}
-              {firstMonthFree && (Number(setupFee) || 0) === 0 && (
-                <span className="ml-1 text-pm-canada-text-faint">(first month free)</span>
-              )}
-            </span>
-            <span className="text-sm font-bold text-pm-accent">
-              CA${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}
+        {/* First-month-free breakdown — only shown when toggle is on */}
+        {firstMonthFree && (
+          <div className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-pm-accent/5 border border-pm-accent/20">
+            <span className="text-xs text-pm-canada-text-muted">First month</span>
+            <span className="text-xs font-semibold text-pm-accent">
+              CA$0 <span className="text-pm-canada-text-faint font-normal">(free — setup fee still due today)</span>
             </span>
           </div>
         )}
+
+        {/* Due Today — always visible so the rep and customer always see the exact
+            charge that will hit the card today, in both toggle states. */}
+        <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-pm-canada-bg border border-pm-canada-border">
+          <span className="text-xs text-pm-canada-text-muted">Due today</span>
+          <span className="text-sm font-bold text-pm-accent">
+            CA${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}
+          </span>
+        </div>
 
         {/* Buttons */}
         <button

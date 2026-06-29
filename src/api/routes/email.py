@@ -113,6 +113,8 @@ async def send_email(req: SendEmailRequest, principal=Depends(require_service_au
             provider_signatory=req.extra.get("provider_signatory", "Aidan Pierce, Founder & CEO"),
             monthly_price=req.extra.get("monthly_price", ""),
             setup_fee=req.extra.get("setup_fee", ""),
+            first_month_free=bool(req.extra.get("first_month_free", False)),
+            due_today=req.extra.get("due_today", ""),
             org_id=req.org_id,
         ),
         "customer_credentials": lambda: email_send.send_customer_credentials(
