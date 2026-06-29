@@ -586,6 +586,117 @@ async def phone_test_chat(req: TestChatRequest, principal=Depends(require_servic
 
 
 # ---------------------------------------------------------------------------
+# Per-restaurant personalization brief
+#
+# Generates (or regenerates) a ≤120-word plain-prose brief for the merchant's
+# phone agent by fetching their website + menu and summarising with the LLM
+# gateway. The result is stored in phone_agent_config.restaurant_brief and read
+# at call time by both the Pipecat streaming path (bot.py) and the turn-based
+# Twilio/Telnyx path (phone.py).
+#
+# This is OPT-IN / manual: nothing runs automatically; the brief is generated
+# once on demand and then just sits in the row. No new hard dependency — calls
+# work fine when restaurant_brief is empty (prompt is unchanged).
+# ---------------------------------------------------------------------------
+
+class BuildBriefRequest(BaseModel):
+    """Optional body for POST /api/phone/build-brief/{merchant_id}.
+
+    website_url: if provided, sets / updates phone_agent_config.website_url
+                 before generating. If omitted, the stored website_url is used.
+    """
+    website_url: str | None = None
+
+
+@router.post("/build-brief/{merchant_id}")
+async def build_restaurant_brief(
+    merchant_id: str,
+    req: BuildBriefRequest | None = None,
+    principal=Depends(require_service_auth),
+):
+    """Generate and persist a personalization brief for the phone agent.
+
+    Fetches the merchant's website + menu via the LLM gateway and stores the
+    result in phone_agent_config.restaurant_brief / brief_updated_at.
+
+    An optional JSON body ``{"website_url": "https://..."}`` sets or updates the
+    stored website URL in the same request.
+
+    Returns:
+        ok, merchant_id, brief (the text), brief_length_words, website_url,
+        generated_at (ISO timestamp).
+    """
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+    db = get_db()
+
+    rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{merchant_id}"},
+        limit=1,
+    )
+    if not rows:
+        raise HTTPException(404, "No phone config found for this merchant — save a config first")
+
+    row = rows[0]
+
+    # Lazy import: the brief builder lives in services/phone_agent so we add
+    # that directory to sys.path the same way phone.py does.
+    import sys
+    from pathlib import Path
+    _phone_agent_dir = str(Path(__file__).resolve().parents[3] / "services" / "phone_agent")
+    if _phone_agent_dir not in sys.path:
+        sys.path.insert(0, _phone_agent_dir)
+    from restaurant_brief import build_brief  # type: ignore[import]
+
+    body = req or BuildBriefRequest()
+    new_website_url = (body.website_url or "").strip()
+    stored_website_url = (row.get("website_url") or "").strip()
+    website_url = new_website_url or stored_website_url
+
+    # Persist a new website_url if the caller supplied one that differs.
+    if new_website_url and new_website_url != stored_website_url:
+        await db.update(
+            "phone_agent_config",
+            {
+                "website_url": new_website_url,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            filters={"merchant_id": f"eq.{merchant_id}"},
+        )
+
+    business_name = (row.get("business_name") or "this restaurant").strip()
+    menu_items = row.get("menu_items") or []
+
+    brief = await build_brief(business_name, website_url, menu_items)
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.update(
+        "phone_agent_config",
+        {
+            "restaurant_brief": brief,
+            "brief_updated_at": now_iso,
+            "updated_at": now_iso,
+        },
+        filters={"merchant_id": f"eq.{merchant_id}"},
+    )
+
+    word_count = len(brief.split()) if brief else 0
+    logger.info(
+        "build_restaurant_brief: stored %d-word brief for merchant %s (website=%s)",
+        word_count, merchant_id, bool(website_url),
+    )
+    return {
+        "ok": True,
+        "merchant_id": merchant_id,
+        "brief": brief,
+        "brief_length_words": word_count,
+        "website_url": website_url,
+        "generated_at": now_iso,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Number provisioning — buys a dedicated number per merchant and wires its
 # voice webhook so inbound calls resolve to this business.
 #

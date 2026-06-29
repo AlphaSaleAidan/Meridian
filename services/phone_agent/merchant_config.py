@@ -54,6 +54,13 @@ class MerchantPhoneConfig:
     # state. Demo / test merchants set this to keep live POS calls off
     # the demo path even after the merchant completes Square OAuth.
     demo_safe: bool = False
+    # PER-RESTAURANT PERSONALIZATION BRIEF ──────────────────────────────
+    # Generated on demand via POST /api/phone/build-brief/{merchant_id}.
+    # Injected into the system prompt for tone/warmth only — the MENU is
+    # still the single source of truth for items and prices.
+    # Empty string = no brief = prompt is byte-for-byte unchanged (no regression).
+    website_url: str = ""
+    restaurant_brief: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -117,6 +124,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 stripe_account_id=(row.get("stripe_account_id") or "").strip(),
                 stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
                 demo_safe=bool(row.get("demo_safe", False)),
+                website_url=(row.get("website_url") or "").strip(),
+                restaurant_brief=(row.get("restaurant_brief") or "").strip(),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

@@ -133,6 +133,17 @@ def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_b
         menu_section = "\n\nMENU:\n" + "\n".join(lines)
     memory_section = f"\n\n{memory_block}" if memory_block else ""
 
+    # Per-restaurant personalization brief — injected ONLY when non-empty so an
+    # unset brief leaves the prompt byte-for-byte identical (no regression).
+    _brief = (getattr(config, "restaurant_brief", "") or "").strip()
+    brief_section = (
+        "\n\nABOUT THIS RESTAURANT:\n"
+        + _brief
+        + "\n\nUse this only for tone, warmth, and recommending items that ARE on the menu. "
+        "The MENU above is the single source of truth for items, sizes, and prices — "
+        "never invent items, prices, hours, or facts from this description."
+    ) if _brief else ""
+
     # PAY ON THE PHONE — tell the agent the payment step for this merchant.
     mode = getattr(config, "payment_mode", "pay_now")
     if mode == "pay_now":
@@ -181,7 +192,7 @@ sounding annoyed:
   part back to confirm before continuing. Never repeat the same mistake or argue.
 - If they're still frustrated after a try or two, or clearly want a person, call
   transfer_to_human().
-{menu_section}
+{menu_section}{brief_section}
 
 CALLER:
 Phone: {caller_info.get('phone', 'unknown')}{memory_section}"""
