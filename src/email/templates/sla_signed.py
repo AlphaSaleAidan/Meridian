@@ -9,12 +9,18 @@ def render(
     provider_signatory: str = "Aidan Pierce, Founder & CEO",
     monthly_price: str = "",
     setup_fee: str = "",
+    first_month_free: bool = False,
+    due_today: str = "",
 ) -> str:
     fee_rows = ""
     if monthly_price:
         fee_rows += stat_row("Monthly Service Fee", monthly_price)
     if setup_fee:
-        fee_rows += stat_row("Setup Fee (one-time, due today)", setup_fee)
+        fee_rows += stat_row("Setup Fee (one-time)", setup_fee)
+    if first_month_free:
+        fee_rows += stat_row("First month", "$0 — free; setup fee still due today")
+    if due_today:
+        fee_rows += stat_row("Due today", due_today)
 
     return base_template(
         f"""{heading("Your SLA Has Been Signed")}

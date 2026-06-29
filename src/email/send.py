@@ -302,6 +302,8 @@ async def send_sla_signed(
     *,
     monthly_price: str = "",
     setup_fee: str = "",
+    first_month_free: bool = False,
+    due_today: str = "",
     org_id: Optional[str] = None,
 ) -> dict:
     html = sla_signed.render(
@@ -312,6 +314,8 @@ async def send_sla_signed(
         provider_signatory=provider_signatory,
         monthly_price=monthly_price,
         setup_fee=setup_fee,
+        first_month_free=first_month_free,
+        due_today=due_today,
     )
     subject = f"Signed SLA — {business_name}"
     result = await _client.send(to, subject, html, tag="sla_signed")

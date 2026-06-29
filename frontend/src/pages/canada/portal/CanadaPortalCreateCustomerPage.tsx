@@ -287,8 +287,8 @@ function ProposalOverlay({
                 )}
                 {firstMonthFree && (
                   <div className="flex justify-between py-2 border-b border-pm-canada-border">
-                    <span className="text-sm-tight text-pm-canada-text-muted">First Month</span>
-                    <span className="text-sm-tight text-pm-purple font-medium">FREE</span>
+                    <span className="text-sm-tight text-pm-canada-text-muted">First month</span>
+                    <span className="text-sm-tight text-pm-accent font-medium">CA$0 <span className="text-pm-canada-text-faint font-normal text-2xs">(free — setup fee still due today)</span></span>
                   </div>
                 )}
                 <div className="flex justify-between py-3 mt-2">
@@ -1055,8 +1055,8 @@ export default function CanadaPortalCreateCustomerPage() {
               )}
               {form.firstMonthFree && (
                 <div className="flex justify-between py-2 border-b border-pm-canada-border">
-                  <span className="text-pm-canada-text-muted">First Month</span>
-                  <span className="text-pm-purple font-medium">FREE</span>
+                  <span className="text-pm-canada-text-muted">First month</span>
+                  <span className="text-pm-accent font-medium">CA$0 <span className="text-pm-canada-text-faint font-normal text-2xs">(free — setup fee still due today)</span></span>
                 </div>
               )}
               <div className="flex justify-between py-3">
