@@ -13,7 +13,7 @@
 import { test, expect, Page } from '@playwright/test'
 import fs from 'node:fs'
 
-const APP_URL = process.env.E2E_APP_URL ?? 'http://127.0.0.1:4173'
+const APP_URL = process.env.E2E_APP_URL ?? 'http://localhost:3000'
 const SHOULD_SUBMIT = process.env.E2E_CUSTOMER_SUBMIT === '1'
 const REPORT_PATH = '/tmp/customer-portal-report.json'
 

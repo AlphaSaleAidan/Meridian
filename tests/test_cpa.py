@@ -266,8 +266,9 @@ def test_export_html_is_valid_with_disclaimer(client):
     assert "CPA Handoff" in html
     # Disclaimer present (first sentence; newlines become <br>).
     assert "We prepare, your CPA files." in html
-    # Five section tables: summary + monthly + per-card + expenses + transactions.
-    assert html.count("<table") == 5
+    # Six section tables: summary + monthly + per-card + expenses + transactions
+    # + deductible spend by category (added in PR #138).
+    assert html.count("<table") == 6
 
 
 def test_export_html_has_all_sections(client):
