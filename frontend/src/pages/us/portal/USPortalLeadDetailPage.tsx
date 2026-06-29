@@ -3,8 +3,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
   FileText, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
-  AlertTriangle, CreditCard, RefreshCw, Send, Eye, ExternalLink,
+  AlertTriangle, CreditCard, RefreshCw, Send, Eye, ExternalLink, Copy,
 } from 'lucide-react'
+import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
@@ -118,6 +119,10 @@ export default function USPortalLeadDetailPage() {
   const [invoiceNumber, setInvoiceNumber] = useState('')
   const [invoiceEmailing, setInvoiceEmailing] = useState(false)
   const [invoiceEmailed, setInvoiceEmailed] = useState(false)
+  // Stripe subscribe-link: URL + client-side QR for the customer to scan at checkout
+  const [checkoutUrl, setCheckoutUrl] = useState('')
+  const [checkoutQr, setCheckoutQr] = useState('')
+  const [checkoutCopied, setCheckoutCopied] = useState(false)
 
   // SLA state
   const [slaBlob, setSlaBlob] = useState<Blob | null>(null)
@@ -401,33 +406,43 @@ export default function USPortalLeadDetailPage() {
       const priceCents = Math.round(monthlyPrice * 100)
       const setupFeeCents = Math.round((Number(setupFee) || 0) * 100)
 
-      let checkoutUrl = generateInvoiceUrl(invNum)
+      let resolvedCheckoutUrl = generateInvoiceUrl(invNum)
 
       const API_BASE = import.meta.env.VITE_API_URL || ''
       try {
-        const checkoutRes = await fetch(`${API_BASE}/api/billing/create-checkout`, {
+        const checkoutRes = await fetch(`${API_BASE}/api/stripe/subscribe-link`, {
           method: 'POST',
           headers: await getAuthHeaders(),
           body: JSON.stringify({
             org_id: deal.id,
-            plan: planName.toLowerCase(),
-            monthly_price_cents: priceCents,
-            customer_email: deal.contact_email,
-            customer_name: deal.contact_name,
+            lead_id: deal.id,
+            monthly_amount_cents: priceCents,
+            currency: 'USD',
             business_name: deal.business_name,
-            return_url: `${window.location.origin}/customer/login`,
             setup_fee_cents: setupFeeCents,
             first_month_free: firstMonthFree,
-            rep_id: rep.rep_id || '',
-            rep_name: rep.name,
           }),
         })
         if (checkoutRes.ok) {
           const data = await checkoutRes.json()
-          if (data.checkout_url) checkoutUrl = data.checkout_url
+          if (data.url) resolvedCheckoutUrl = data.url
         }
       } catch {
-        // Square checkout unavailable — fall back to local invoice URL
+        // Stripe subscribe-link unavailable — fall back to local invoice URL
+      }
+
+      // Surface the subscription link + on-screen QR so the customer can scan
+      // to subscribe right at the checkout step (distinct from per-order phone fee).
+      setCheckoutUrl(resolvedCheckoutUrl)
+      try {
+        const qr = await QRCode.toDataURL(resolvedCheckoutUrl, {
+          width: 240,
+          margin: 1,
+          color: { dark: '#17C5B0', light: '#0A0A0B' },
+        })
+        setCheckoutQr(qr)
+      } catch {
+        setCheckoutQr('')
       }
 
       const input: InvoiceInput = {
@@ -445,7 +460,7 @@ export default function USPortalLeadDetailPage() {
         repName: rep.name,
         repEmail: rep.email,
         recurring: true,
-        invoiceUrl: checkoutUrl,
+        invoiceUrl: resolvedCheckoutUrl,
       }
 
       const blob = await generateInvoicePdf(input)
@@ -1005,8 +1020,48 @@ export default function USPortalLeadDetailPage() {
                 )}
               </button>
             </div>
+            {checkoutQr && (
+              <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-lg bg-[#0A0A0B] border border-[#17C5B0]/20">
+                <img src={checkoutQr} alt="Monthly Subscription QR code" className="w-28 h-28 rounded-lg shrink-0" />
+                <div className="min-w-0 flex-1 text-center sm:text-left">
+                  <p className="text-sm font-semibold text-white mb-0.5">Monthly Subscription — Scan to Subscribe</p>
+                  <p className="text-[10px] text-[#A1A1A8] mb-2.5">
+                    Customer scans this to start their monthly USD subscription — or tap the link below.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <a
+                      href={checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-xs font-semibold hover:bg-[#17C5B0]/90 active:scale-[0.98] transition-all"
+                    >
+                      Open subscribe link <ExternalLink size={11} />
+                    </a>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(checkoutUrl)
+                          setCheckoutCopied(true)
+                          setTimeout(() => setCheckoutCopied(false), 1800)
+                        } catch {
+                          /* clipboard blocked */
+                        }
+                      }}
+                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
+                        checkoutCopied
+                          ? 'border-[#17C5B0]/40 bg-[#17C5B0]/10 text-[#17C5B0]'
+                          : 'border-[#1F1F23] bg-[#111113] text-[#A1A1A8] hover:border-[#17C5B0]/30 hover:text-white active:scale-[0.98]'
+                      }`}
+                    >
+                      {checkoutCopied ? <Check size={11} /> : <Copy size={11} />}
+                      {checkoutCopied ? 'Copied' : 'Copy link'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <p className="text-[10px] text-[#4a5550]">
-              Recurring monthly — customer will be billed ${monthlyPrice.toLocaleString()}/mo automatically.
+              Monthly Subscription — customer will be billed ${monthlyPrice.toLocaleString()}/mo automatically.
             </p>
           </>
         )}

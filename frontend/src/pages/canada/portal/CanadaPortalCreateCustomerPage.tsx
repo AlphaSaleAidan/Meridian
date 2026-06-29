@@ -589,36 +589,30 @@ export default function CanadaPortalCreateCustomerPage() {
     try {
       const body = {
         org_id: orgId,
-        plan: form.plan,
-        monthly_price_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
+        monthly_amount_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
         setup_fee_cents: setupFee * 100,
         first_month_free: form.firstMonthFree,
-        customer_email: form.email,
-        customer_name: form.ownerName,
         business_name: form.businessName,
         currency: 'CAD',
-        rep_id: rep?.rep_id || '',
-        rep_name: rep?.name || '',
-        return_url: `${window.location.origin}/canada/onboard?checkout=success`,
       }
 
       const checkoutHeaders = await getAuthHeaders()
-      const res = await fetch(`${API_URL}/api/billing/create-checkout`, {
+      const res = await fetch(`${API_URL}/api/stripe/subscribe-link`, {
         method: 'POST',
         headers: checkoutHeaders,
         body: JSON.stringify(body),
       })
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: 'Checkout service unavailable' }))
+        const err = await res.json().catch(() => ({ detail: 'Subscribe-link service unavailable' }))
         throw new Error(err.detail || `Server error ${res.status}`)
       }
 
       const data = await res.json()
-      setCheckoutUrl(data.checkout_url)
-      setCheckoutSessionId(data.checkout_id || data.order_id || '')
+      setCheckoutUrl(data.url)
+      setCheckoutSessionId(data.token || '')
     } catch (err: any) {
-      setError(err.message || 'Failed to create checkout session')
+      setError(err.message || 'Failed to create subscription link')
     } finally {
       setCreatingCheckout(false)
     }
@@ -1124,13 +1118,13 @@ export default function CanadaPortalCreateCustomerPage() {
           <div className="bg-pm-canada-surface rounded-xl p-6 border border-pm-canada-border">
             <div className="flex items-center gap-2 mb-4">
               <QrCode size={16} className="text-pm-purple" />
-              <h2 className="text-sm font-semibold text-white">Payment Checkout Link</h2>
+              <h2 className="text-sm font-semibold text-white">Monthly Subscription Link</h2>
             </div>
 
             {!checkoutUrl ? (
               <div>
                 <p className="text-xs text-pm-canada-text-muted mb-3">
-                  Generate a unique Square checkout link for this customer. Includes the {selectedPlan.label} subscription
+                  Generate a unique Stripe subscription link for this customer. Includes the {selectedPlan.label} plan
                   {setupFee > 0 ? ` + CA$${setupFee} setup fee` : ''}
                   {form.firstMonthFree ? ' with first month free' : ''}. All amounts in CAD.
                 </p>
@@ -1140,9 +1134,9 @@ export default function CanadaPortalCreateCustomerPage() {
                   className="w-full flex items-center justify-center gap-2 px-6 py-3 text-sm-tight font-medium text-white bg-pm-purple rounded-lg hover:bg-[#6b2fd4] disabled:opacity-50 transition-colors"
                 >
                   {creatingCheckout ? (
-                    <><Loader2 size={14} className="animate-spin" /> Creating Checkout Session...</>
+                    <><Loader2 size={14} className="animate-spin" /> Creating Subscription Link...</>
                   ) : (
-                    <><QrCode size={14} /> Generate Checkout Link & QR Code</>
+                    <><QrCode size={14} /> Generate Subscription Link & QR Code</>
                   )}
                 </button>
               </div>
@@ -1162,7 +1156,7 @@ export default function CanadaPortalCreateCustomerPage() {
                   </div>
                 </div>
                 <p className="text-center text-2xs text-pm-canada-text-muted">
-                  Customer scans to pay — {selectedPlan.label} CA${price}{interval}
+                  Customer scans to start their Monthly Subscription — {selectedPlan.label} CA${price}{interval}
                   {setupFee > 0 ? ` + CA$${setupFee} setup` : ''}
                   {form.firstMonthFree ? ' · 30-day free trial' : ''}
                 </p>
