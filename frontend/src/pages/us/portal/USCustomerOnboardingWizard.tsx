@@ -790,6 +790,32 @@ export default function USCustomerOnboardingWizard() {
               portalContext="us"
               currency="USD"
             />
+            {/* Real OAuth for Square/Clover (parity with Canada wizard): when
+                the account exists, surface a "Connect with <Provider>" button
+                that redirects to the region-agnostic backend authorize endpoint.
+                The state token signs org_id + rep_id (from `?rep=…`) so the
+                callback can attribute the connection. Round-trip ends at
+                /app/settings?oauth=success. */}
+            {posProvider === 'square' && org?.org_id && (
+              <a
+                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                className={btnPrimary + ' justify-center w-full'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Connect with Square (OAuth)
+              </a>
+            )}
+            {posProvider === 'clover' && org?.org_id && (
+              <a
+                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                className={btnPrimary + ' justify-center w-full'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Connect with Clover (OAuth)
+              </a>
+            )}
             <div className="flex justify-between">
               <button onClick={() => setStep('sla')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <button onClick={handlePosNext} disabled={saving || !posProvider} className={btnPrimary}>
