@@ -649,16 +649,33 @@ def _build_merchant_prompt(config: dict) -> str:
 
     Falls back to the demo menu text when the merchant has no menu_items yet so
     the agent always has something to work with.
+
+    When the row contains a non-empty ``restaurant_brief``, an "ABOUT THIS
+    RESTAURANT" section is appended after the menu with a guard instructing the
+    agent to use it only for tone/warmth — the MENU remains the single source of
+    truth for items and prices. An empty/absent brief leaves the prompt unchanged.
     """
     business = config.get("business_name") or "our restaurant"
     menu_items = config.get("menu_items") or []
     order_types = config.get("order_types") or ["pickup", "delivery"]
     menu = _menu_text_from(menu_items) if menu_items else _menu_text()
+
+    # Per-restaurant personalization brief — injected ONLY when non-empty so an
+    # unset brief leaves the prompt byte-for-byte identical (no regression).
+    _brief = (config.get("restaurant_brief") or "").strip()
+    brief_section = (
+        "\n\nABOUT THIS RESTAURANT:\n"
+        + _brief
+        + "\n\nUse this only for tone, warmth, and recommending items that ARE on the menu. "
+        "The MENU above is the single source of truth for items, sizes, and prices — "
+        "never invent items, prices, hours, or facts from this description."
+    ) if _brief else ""
+
     return f"""You are a friendly AI phone ordering assistant for {business}.
 Keep responses SHORT - 1-2 sentences. Sound warm and natural, not robotic. This is a phone call.
 
 MENU:
-{menu}
+{menu}{brief_section}
 
 RULES:
 - Help the customer build their order item by item.
