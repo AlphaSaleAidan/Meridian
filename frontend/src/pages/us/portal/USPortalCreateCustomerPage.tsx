@@ -618,6 +618,7 @@ export default function USPortalCreateCustomerPage() {
             first_month_free: form.firstMonthFree,
             business_type: form.vertical || null,
             pos_provider: form.pos || null,
+            country: 'US',
             rep_id: rep?.rep_id || null,
             rep_name: rep?.name || null,
           }),
