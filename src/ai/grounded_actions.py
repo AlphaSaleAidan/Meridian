@@ -52,55 +52,20 @@ SYSTEM_PROMPT = (
     "5. DON'T REPEAT REJECTED WORK. The brief lists action types the owner "
     "recently dismissed or completed — do not re-surface those angles.\n"
     "6. Each action: a short imperative `title`, a 1-2 sentence `summary` of WHY "
-    "(with the numbers), and a concrete `action_item` (what to literally do).\n"
-    "Return ONLY the JSON object matching the schema. No prose outside it."
+    "(with the numbers), and a concrete `action_item` (what to literally do).\n\n"
+    "Return ONLY a JSON object of this exact shape (no prose outside it):\n"
+    '{"actions": [{"type": "short_slug", "title": "...", "summary": "...", '
+    '"action_item": "...", "estimated_monthly_impact_cents": 12345 or null, '
+    '"confidence_score": 0.0-1.0, "evidence": [{"signal": "brief.key", '
+    '"detail": "the value you used"}]}]}'
 )
 
-_RESPONSE_FORMAT = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "grounded_actions",
-        "strict": True,
-        "schema": {
-            "type": "object",
-            "properties": {
-                "actions": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "type": {"type": "string"},
-                            "title": {"type": "string"},
-                            "summary": {"type": "string"},
-                            "action_item": {"type": "string"},
-                            "estimated_monthly_impact_cents": {"type": ["integer", "null"]},
-                            "confidence_score": {"type": "number"},
-                            "evidence": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "signal": {"type": "string"},
-                                        "detail": {"type": "string"},
-                                    },
-                                    "required": ["signal", "detail"],
-                                    "additionalProperties": False,
-                                },
-                            },
-                        },
-                        "required": [
-                            "type", "title", "summary", "action_item",
-                            "estimated_monthly_impact_cents", "confidence_score", "evidence",
-                        ],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-            "required": ["actions"],
-            "additionalProperties": False,
-        },
-    },
-}
+# json_object (not strict json_schema): the gateway's default tier is DeepSeek,
+# which rejects json_schema response_format ("This response_format type is
+# unavailable now"). json_object is supported by DeepSeek and OpenAI alike; the
+# exact shape is specified in the prompt and parsing here is defensive
+# (cite-or-drop + field coercion), so a slightly-off envelope degrades safely.
+_RESPONSE_FORMAT = {"type": "json_object"}
 
 
 def _safe_num(v, default=0.0):
