@@ -17,6 +17,7 @@ import {
   useCanadaLead,
   useUpdateCanadaLead,
   useUpdateCanadaLeadStage,
+  useDeleteCanadaLead,
   canadaKeys,
 } from '@/lib/canada-queries'
 import { PortalPage, PortalLoadingSkeleton } from './PortalPage'
@@ -109,6 +110,7 @@ export default function CanadaPortalLeadDetailPage() {
   const qc = useQueryClient()
   const updateLead = useUpdateCanadaLead()
   const updateStage = useUpdateCanadaLeadStage()
+  const deleteLead = useDeleteCanadaLead()
   const { data: dealData, isLoading, error } = useCanadaLead(id)
   const deal = dealData ?? null
   // Convenience helper: optimistically patch the cached deal so the UI
@@ -129,6 +131,7 @@ export default function CanadaPortalLeadDetailPage() {
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', notes: '' })
   const [editSaving, setEditSaving] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
 
   // Step 2 state
   const [monthlyPrice, setMonthlyPrice] = useState(500)
@@ -863,21 +866,31 @@ export default function CanadaPortalLeadDetailPage() {
               {deal.contact_name} &middot; <span className="text-pm-amber-gold font-semibold">CA${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
             </p>
           </div>
-          <button
-            onClick={() => {
-              setEditForm({
-                business_name: deal.business_name,
-                contact_name: deal.contact_name,
-                contact_email: deal.contact_email,
-                contact_phone: deal.contact_phone,
-                notes: deal.notes,
-              })
-              setEditing(true)
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pm-canada-text-muted border border-pm-canada-border rounded-lg hover:text-white hover:border-[#2a3430] transition-colors"
-          >
-            <Pencil size={12} /> Edit
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => {
+                setEditForm({
+                  business_name: deal.business_name,
+                  contact_name: deal.contact_name,
+                  contact_email: deal.contact_email,
+                  contact_phone: deal.contact_phone,
+                  notes: deal.notes,
+                })
+                setEditing(true)
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pm-canada-text-muted border border-pm-canada-border rounded-lg hover:text-white hover:border-[#2a3430] transition-colors"
+            >
+              <Pencil size={12} /> Edit
+            </button>
+            {/* Delete (hard delete — distinct from the soft "Mark as Lost" stage) */}
+            <button
+              onClick={() => setShowDelete(true)}
+              data-testid="delete-lead-detail"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-pm-canada-text-muted border border-pm-canada-border rounded-lg hover:text-red-400 hover:border-red-500/30 transition-colors"
+            >
+              <Trash2 size={12} /> Delete
+            </button>
+          </div>
         </div>
       )}
 
@@ -1573,6 +1586,47 @@ export default function CanadaPortalLeadDetailPage() {
         >
           <X size={16} /> Mark as Lost
         </button>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-pm-canada-surface border border-pm-canada-border rounded-xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-white">Delete lead?</h3>
+              <button onClick={() => setShowDelete(false)} className="p-1.5 rounded-lg hover:bg-pm-canada-border transition-colors">
+                <X size={18} className="text-pm-canada-text-muted" />
+              </button>
+            </div>
+            <p className="text-sm text-pm-canada-text-muted mb-5">
+              This permanently removes &ldquo;{deal.business_name}&rdquo; and can&rsquo;t be undone. Use &ldquo;Mark as Lost&rdquo; instead if you only want to close the deal.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowDelete(false)}
+                className="px-4 py-2 text-sm text-pm-canada-text-muted hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={deleteLead.isPending}
+                onClick={async () => {
+                  try {
+                    await deleteLead.mutateAsync(deal.id)
+                    toast('Lead deleted', 'success')
+                    navigate('/canada/portal/leads')
+                  } catch (err) {
+                    toast(err instanceof Error ? err.message : 'Failed to delete lead', 'error')
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/90 text-white text-sm font-semibold rounded-lg hover:bg-red-500 transition-all disabled:opacity-50"
+              >
+                {deleteLead.isPending && <Loader2 size={14} className="animate-spin" />}
+                {deleteLead.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

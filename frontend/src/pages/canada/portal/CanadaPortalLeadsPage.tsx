@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, WifiOff,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, WifiOff, Trash2, Loader2,
 } from 'lucide-react'
 import { type Deal } from '@/lib/canada-sales-demo-data'
 import {
   useCanadaLeads,
   useCanadaLeadsRealtime,
   useCreateCanadaLead,
+  useDeleteCanadaLead,
   canadaKeys,
 } from '@/lib/canada-queries'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -115,6 +116,8 @@ export default function CanadaPortalLeadsPage() {
   const { data: deals = [], isLoading, error } = useCanadaLeads(rep?.rep_id)
   useCanadaLeadsRealtime(rep?.rep_id)
   const createLead = useCreateCanadaLead(rep?.rep_id)
+  const deleteLead = useDeleteCanadaLead()
+  const [confirmDelete, setConfirmDelete] = useState<Deal | null>(null)
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'leads' | 'active'>('leads')
   const [showNew, setShowNew] = useState(searchParams.get('new') === 'true')
@@ -187,6 +190,17 @@ export default function CanadaPortalLeadsPage() {
     }
   }
   const adding = createLead.isPending
+
+  async function handleDeleteLead() {
+    if (!confirmDelete) return
+    try {
+      await deleteLead.mutateAsync(confirmDelete.id)
+      toast('Lead deleted', 'success')
+      setConfirmDelete(null)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to delete lead', 'error')
+    }
+  }
 
   const inputClass = 'w-full px-3 py-2 bg-pm-canada-surface border border-pm-canada-border rounded-lg text-sm text-white placeholder-pm-canada-text-muted focus:outline-none focus:border-pm-accent/50 focus:ring-1 focus:ring-pm-accent/20 transition-colors'
 
@@ -305,6 +319,39 @@ export default function CanadaPortalLeadsPage() {
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-pm-canada-surface border border-pm-canada-border rounded-xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-white">Delete lead?</h3>
+              <button onClick={() => setConfirmDelete(null)} className="p-1.5 rounded-lg hover:bg-pm-canada-border transition-colors">
+                <X size={18} className="text-pm-canada-text-muted" />
+              </button>
+            </div>
+            <p className="text-sm text-pm-canada-text-muted mb-5">
+              This permanently removes &ldquo;{confirmDelete.business_name}&rdquo; and can&rsquo;t be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 text-sm text-pm-canada-text-muted hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteLead}
+                disabled={deleteLead.isPending}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/90 text-white text-sm font-semibold rounded-lg hover:bg-red-500 transition-all disabled:opacity-50"
+              >
+                {deleteLead.isPending && <Loader2 size={14} className="animate-spin" />}
+                {deleteLead.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Lead Cards */}
       <PortalPage isLoading={isLoading} error={error} isEmpty={deals.length === 0} emptyState={emptyState}>
       <div className="space-y-3">
@@ -351,9 +398,22 @@ export default function CanadaPortalLeadsPage() {
                   </p>
                 </div>
 
-                {/* Step pill + arrow */}
+                {/* Step pill + delete + arrow */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <span data-testid="lead-stage-badge"><StepPill step={step} /></span>
+                  <button
+                    type="button"
+                    aria-label="Delete lead"
+                    data-testid={`delete-lead-${deal.id}`}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setConfirmDelete(deal)
+                    }}
+                    className="p-1.5 rounded-lg text-pm-canada-text-faint hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                   <ChevronRight size={16} className="text-pm-canada-text-faint group-hover:text-pm-canada-text-muted transition-colors" />
                 </div>
               </div>

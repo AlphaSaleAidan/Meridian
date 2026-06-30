@@ -122,11 +122,20 @@ export const usLeadsService = {
 
   async delete(id: string): Promise<void> {
     if (!supabase) return
-    const { error } = await withTimeout(
-      supabase.from('us_leads').delete().eq('id', id),
+    // `.select()` returns the rows actually removed. PostgREST returns 200/204
+    // with zero rows when an RLS DELETE policy filters the row out, so without
+    // this we'd report success on a silent no-op. Treat 0 rows as a hard
+    // failure so the UI never claims a lead was deleted when it wasn't.
+    const { data, error } = await withTimeout(
+      supabase.from('us_leads').delete().eq('id', id).select('id'),
       'delete',
     )
     if (error) throw new LeadsServiceError(error.message)
+    if (!data || data.length === 0) {
+      throw new LeadsServiceError(
+        'Lead could not be deleted — you may not have permission to remove it.',
+      )
+    }
   },
 
   subscribe(
