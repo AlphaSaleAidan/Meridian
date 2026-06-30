@@ -97,6 +97,9 @@ export default function CanadaCustomerOnboardingWizard() {
 
   // POS
   const [posProvider, setPosProvider] = useState<string | null>(null)
+  // Whether Clover 1-click OAuth is configured server-side. Default false so we
+  // never surface a button that 503s; flipped on once /api/clover/status confirms.
+  const [cloverOAuthAvailable, setCloverOAuthAvailable] = useState(false)
 
   // SLA (Service Agreement)
   const [slaSignature, setSlaSignature] = useState('')
@@ -169,6 +172,19 @@ export default function CanadaCustomerOnboardingWizard() {
       window.history.replaceState({}, '', `${window.location.pathname}${cleaned.toString() ? '?' + cleaned.toString() : ''}`)
     }
   }, [searchParams])
+
+  // Probe whether Clover 1-click is configured (CLOVER_APP_ID/SECRET set), so we
+  // only show the OAuth button when it would actually work instead of leading the
+  // merchant to a 503.
+  useEffect(() => {
+    if (!org?.org_id) return
+    let cancelled = false
+    fetch(`${API_BASE}/api/clover/status?org_id=${encodeURIComponent(org.org_id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d) setCloverOAuthAvailable(!!d.oauth_available) })
+      .catch(() => { /* leave false — manual path still available downstream */ })
+    return () => { cancelled = true }
+  }, [org?.org_id])
 
   function updateAccount(key: string, value: string) {
     setAccount(a => ({ ...a, [key]: value }))
@@ -808,15 +824,21 @@ export default function CanadaCustomerOnboardingWizard() {
                 Connect with Square (OAuth)
               </a>
             )}
-            {posProvider === 'clover' && org?.org_id && (
+            {posProvider === 'clover' && org?.org_id && cloverOAuthAvailable && (
               <a
-                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/canada/dashboard')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
                 className={btnPrimary + ' justify-center w-full'}
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 Connect with Clover (OAuth)
               </a>
+            )}
+            {posProvider === 'clover' && org?.org_id && !cloverOAuthAvailable && (
+              <p className="text-xs text-pm-canada-text-muted">
+                One-click Clover isn&rsquo;t available right now — continue, then connect
+                Clover from your merchant dashboard once you&rsquo;re set up.
+              </p>
             )}
             <div className="flex justify-between">
               <button onClick={() => setStep('account')} className={btnBack}><ArrowLeft size={14} /> Back</button>

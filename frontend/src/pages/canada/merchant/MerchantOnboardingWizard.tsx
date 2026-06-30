@@ -135,6 +135,20 @@ export default function MerchantOnboardingWizard() {
         }
         return
       }
+      // Token was obtained but the connection failed to save. The backend sends
+      // the reason in `warning` — surface it (it was previously swallowed) and
+      // keep the merchant on the connect step so they can retry.
+      if (oauth === 'partial') {
+        if (!cancelled) {
+          setError(
+            searchParams.get('warning')
+            || 'Clover authorized, but we could not finish saving the connection. Please try connecting again.'
+          )
+          setStep('connect')
+          setBootstrapped(true)
+        }
+        return
+      }
 
       // Probe both live providers so we resume correctly regardless of which one
       // (Square OAuth, Clover OAuth, or Clover manual paste) was used.
