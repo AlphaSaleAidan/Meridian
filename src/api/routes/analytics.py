@@ -739,6 +739,10 @@ async def get_actions(
         impact = ins.get("estimated_monthly_impact_cents", 0) or 0
         total_impact += impact
 
+        details = ins.get("details") or {}
+        meta = ins.get("metadata") or {}
+        is_grounded = bool(meta.get("grounded")) or (ins.get("type") or "").startswith("grounded")
+
         actions.append({
             "id": ins.get("id"),
             "type": ins.get("type"),
@@ -750,7 +754,15 @@ async def get_actions(
             "priority": _compute_priority(impact, ins.get("confidence_score", 0)),
             "valid_until": ins.get("valid_until"),
             "created_at": ins.get("created_at"),
+            # Grounded-engine extras (null for legacy rule-based insights).
+            "grounded": is_grounded,
+            "action_item": details.get("action_item"),
+            "evidence": details.get("evidence"),
         })
+
+    # Surface grounded, data-cited actions first; then by dollar impact. When the
+    # grounded engine is off there are none, so ordering is unchanged.
+    actions.sort(key=lambda a: (a["grounded"], a["impact_cents"]), reverse=True)
 
     result = {
         "actions": actions,

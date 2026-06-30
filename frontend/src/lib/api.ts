@@ -371,10 +371,25 @@ function adaptAction(raw: any, idx: number): TopAction {
   // Top of the impact-sorted list = strategic weekly move; rest = daily wins.
   const effort: TopAction['effort'] = idx === 0 ? 'High' : 'Low'
 
+  // Grounded engine: cites the merchant's own multi-source data. Use the real
+  // evidence + concrete next step instead of the synthesized generic line.
+  const grounded = raw.grounded === true
+  const evidence: Array<{ signal?: string; detail?: string }> = Array.isArray(raw.evidence) ? raw.evidence : []
+  const actionItem = typeof raw.action_item === 'string' ? raw.action_item : undefined
+
+  const evidenceRawData = grounded
+    ? evidence.reduce<Record<string, string>>((acc, e, i) => {
+        if (e?.detail) acc[e.signal || `signal ${i + 1}`] = e.detail
+        return acc
+      }, {})
+    : {}
+
   const reasoning: ReasoningChain = {
     observation: description || raw.title || 'Signal detected in your data.',
-    reasoning: `Estimated to recover ${formatCents(impactCents)}/mo at ${confidence}% confidence.`,
-    conclusion: raw.title ?? '',
+    reasoning: grounded && evidence.length
+      ? evidence.map(e => e?.detail).filter(Boolean).join(' · ')
+      : `Estimated to recover ${formatCents(impactCents)}/mo at ${confidence}% confidence.`,
+    conclusion: (grounded && actionItem) ? actionItem : (raw.title ?? ''),
     impact: expectedImpact,
     confidence,
     priority,
@@ -383,9 +398,10 @@ function adaptAction(raw: any, idx: number): TopAction {
       confidence: `${confidence}%`,
       priority,
       status: String(raw.action_status ?? 'pending'),
+      ...evidenceRawData,
     },
     agentId: String(raw.type ?? 'insight'),
-    agentName,
+    agentName: grounded ? 'Grounded Analyst' : agentName,
   }
 
   return {
@@ -398,8 +414,10 @@ function adaptAction(raw: any, idx: number): TopAction {
     confidence,
     priority,
     agentSource: String(raw.type ?? 'insight'),
-    model: '',
+    model: grounded ? 'Grounded multi-source reasoning' : '',
     reasoning,
+    grounded,
+    actionItem,
   }
 }
 
