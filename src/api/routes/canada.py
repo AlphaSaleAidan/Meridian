@@ -14,6 +14,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from ..auth import ADMIN_EMAILS, require_jwt, require_admin_jwt, rate_limit_signup
 from .careers import submit_application, CareerApplication
+from ._supabase_admin import delete_auth_user_by_email
 
 logger = logging.getLogger("meridian.api.canada")
 
@@ -569,19 +570,31 @@ async def reject_rep(req: RepActionRequest, request: Request, admin: dict = Depe
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        # return=representation gives us the deleted row (incl. email) so we can
+        # also tear down the Supabase auth login — without it a rejected
+        # applicant could sign in again and re-create their rep row.
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
                 "Authorization": f"Bearer {service_key}",
                 "apikey": service_key,
+                "Prefer": "return=representation",
             },
         )
         if resp.status_code not in (200, 204):
             logger.error("Rep reject failed: %s %s", resp.status_code, resp.text)
             raise HTTPException(500, "Could not reject rep")
 
-    return {"ok": True, "rep_id": req.rep_id}
+        deleted = resp.json() if (resp.status_code == 200 and resp.text) else []
+        rep_email = deleted[0].get("email", "") if deleted else ""
+        login_removed, login_detail = False, "no_email"
+        if rep_email:
+            login_removed, login_detail = await delete_auth_user_by_email(
+                client, supabase_url, service_key, rep_email, protected_emails=ADMIN_EMAILS,
+            )
+
+    return {"ok": True, "rep_id": req.rep_id, "login_removed": login_removed, "login_detail": login_detail}
 
 
 class RepUpdateRequest(BaseModel):
@@ -630,7 +643,14 @@ async def update_rep(req: RepUpdateRequest, request: Request, admin: dict = Depe
 
 @router.post("/rep-remove")
 async def remove_rep(req: RepActionRequest, request: Request, admin: dict = Depends(require_admin_jwt)):
-    """Admin removes an active rep from the team — deletes the sales_reps row."""
+    """Admin removes a rep from the team.
+
+    Deletes the sales_reps row AND the underlying Supabase auth login (best
+    effort) so the account cannot reappear on next sign-in. Real merchant-owner
+    accounts are protected automatically: their auth user can't be deleted while
+    a `businesses.owner_user_id` FK still references it, so the auth delete fails
+    gracefully and only the rep row is removed.
+    """
     _validate_rep_id(req.rep_id)
 
     import httpx
@@ -639,20 +659,29 @@ async def remove_rep(req: RepActionRequest, request: Request, admin: dict = Depe
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
             headers={
                 "Authorization": f"Bearer {service_key}",
                 "apikey": service_key,
+                "Prefer": "return=representation",
             },
         )
         if resp.status_code not in (200, 204):
             logger.error("Rep remove failed: %s %s", resp.status_code, resp.text)
             raise HTTPException(500, "Could not remove rep")
 
-    logger.info("Rep removed: %s by %s", req.rep_id, req.admin_email)
-    return {"ok": True, "rep_id": req.rep_id}
+        deleted = resp.json() if (resp.status_code == 200 and resp.text) else []
+        rep_email = deleted[0].get("email", "") if deleted else ""
+        login_removed, login_detail = False, "no_email"
+        if rep_email:
+            login_removed, login_detail = await delete_auth_user_by_email(
+                client, supabase_url, service_key, rep_email, protected_emails=ADMIN_EMAILS,
+            )
+
+    logger.info("Rep removed: %s by %s (login_removed=%s, %s)", req.rep_id, req.admin_email, login_removed, login_detail)
+    return {"ok": True, "rep_id": req.rep_id, "login_removed": login_removed, "login_detail": login_detail}
 
 
 @router.get("/leads")

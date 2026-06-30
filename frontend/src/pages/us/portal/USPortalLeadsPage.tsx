@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2, WifiOff,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2, WifiOff, Trash2,
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
@@ -118,6 +118,8 @@ export default function USPortalLeadsPage() {
   })
   const [addError, setAddError] = useState('')
   const [adding, setAdding] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<Deal | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (searchParams.get('new') === 'true') setShowNew(true)
@@ -186,6 +188,21 @@ export default function USPortalLeadsPage() {
       toast('Failed to save lead', 'error')
     } finally {
       setAdding(false)
+    }
+  }
+
+  async function handleDeleteLead() {
+    if (!confirmDelete) return
+    setDeleting(true)
+    try {
+      await usLeadsService.delete(confirmDelete.id)
+      setDeals(prev => prev.filter(d => d.id !== confirmDelete.id))
+      toast('Lead deleted', 'success')
+      setConfirmDelete(null)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to delete lead', 'error')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -304,6 +321,39 @@ export default function USPortalLeadsPage() {
         </div>
       )}
 
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-[#111113] border border-[#1F1F23] rounded-xl p-6 shadow-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-white">Delete lead?</h3>
+              <button onClick={() => setConfirmDelete(null)} className="p-1.5 rounded-lg hover:bg-[#1F1F23] transition-colors">
+                <X size={18} className="text-[#A1A1A8]" />
+              </button>
+            </div>
+            <p className="text-sm text-[#A1A1A8] mb-5">
+              This permanently removes &ldquo;{confirmDelete.business_name}&rdquo; and can&rsquo;t be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 text-sm text-[#A1A1A8] hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteLead}
+                disabled={deleting}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/90 text-white text-sm font-semibold rounded-lg hover:bg-red-500 transition-all disabled:opacity-50"
+              >
+                {deleting && <Loader2 size={14} className="animate-spin" />}
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Lead Cards */}
       <div className="space-y-3">
         {displayed.map(deal => {
@@ -348,9 +398,22 @@ export default function USPortalLeadsPage() {
                   </p>
                 </div>
 
-                {/* Step pill + arrow */}
+                {/* Step pill + delete + arrow */}
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <StepPill step={step} />
+                  <button
+                    type="button"
+                    aria-label="Delete lead"
+                    data-testid={`delete-lead-${deal.id}`}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setConfirmDelete(deal)
+                    }}
+                    className="p-1.5 rounded-lg text-[#4a5550] hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                   <ChevronRight size={16} className="text-[#4a5550] group-hover:text-[#A1A1A8] transition-colors" />
                 </div>
               </div>

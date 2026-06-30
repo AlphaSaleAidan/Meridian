@@ -258,7 +258,7 @@ export default function CanadaPortalTeamPage() {
   }
 
   async function handleRemoveMember(member: TeamMember) {
-    if (!confirm(`Remove ${member.name} from the team? This will delete their rep profile.`)) return
+    if (!confirm(`Remove ${member.name} from the team? This deletes their rep profile and their login — they can't sign back in.`)) return
     setRemoving(true)
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
@@ -273,6 +273,12 @@ export default function CanadaPortalTeamPage() {
         alert(err.detail || 'Failed to remove rep')
         setRemoving(false)
         return
+      }
+      const data = await resp.json().catch(() => ({}))
+      // login_removed=false usually means the account still owns a business
+      // (a real merchant, not a disposable test rep), so the login is preserved.
+      if (data.login_removed === false) {
+        alert('Rep removed — login kept (account still owns a business).')
       }
     } catch {
       alert('Network error — please try again')

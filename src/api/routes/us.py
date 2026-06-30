@@ -24,6 +24,7 @@ from ..auth import (
     require_jwt,
     rate_limit_signup,
 )
+from ._supabase_admin import delete_auth_user_by_email
 
 logger = logging.getLogger("meridian.api.us")
 
@@ -589,16 +590,27 @@ async def reject_rep(req: RepActionRequest, admin: dict = Depends(require_us_adm
 
     supabase_url, service_key = _supabase_creds()
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        # return=representation gives us the deleted row (incl. email) so we can
+        # also tear down the Supabase auth login below — without it a rejected
+        # applicant could just sign in again and re-create their rep row.
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
-            headers=_headers(service_key),
+            headers={**_headers(service_key), "Prefer": "return=representation"},
         )
         if resp.status_code not in (200, 204):
             logger.error("US rep reject failed: %s %s", resp.status_code, resp.text)
             raise HTTPException(500, "Could not reject rep")
 
-    return {"ok": True, "rep_id": req.rep_id}
+        deleted = resp.json() if (resp.status_code == 200 and resp.text) else []
+        rep_email = deleted[0].get("email", "") if deleted else ""
+        login_removed, login_detail = False, "no_email"
+        if rep_email:
+            login_removed, login_detail = await delete_auth_user_by_email(
+                client, supabase_url, service_key, rep_email, protected_emails=ALL_ADMIN_EMAILS,
+            )
+
+    return {"ok": True, "rep_id": req.rep_id, "login_removed": login_removed, "login_detail": login_detail}
 
 
 @router.post("/rep-update")
@@ -632,24 +644,39 @@ async def update_rep(req: RepUpdateRequest, admin: dict = Depends(require_us_adm
 
 @router.post("/rep-remove")
 async def remove_rep(req: RepActionRequest, admin: dict = Depends(require_us_admin)):
-    """Admin removes an active rep from the team — deletes the sales_reps row."""
+    """Admin removes a rep from the team.
+
+    Deletes the sales_reps row AND the underlying Supabase auth login (best
+    effort) so the account cannot reappear on next sign-in. Real merchant-owner
+    accounts are protected automatically: their auth user can't be deleted while
+    a `businesses.owner_user_id` FK still references it, so the auth delete
+    fails gracefully and only the rep row is removed.
+    """
     _validate_rep_id(req.rep_id)
 
     import httpx
 
     supabase_url, service_key = _supabase_creds()
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.delete(
             f"{supabase_url}/rest/v1/sales_reps?id=eq.{req.rep_id}",
-            headers=_headers(service_key),
+            headers={**_headers(service_key), "Prefer": "return=representation"},
         )
         if resp.status_code not in (200, 204):
             logger.error("US rep remove failed: %s %s", resp.status_code, resp.text)
             raise HTTPException(500, "Could not remove rep")
 
-    logger.info("US rep removed: %s by %s", req.rep_id, req.admin_email)
-    return {"ok": True, "rep_id": req.rep_id}
+        deleted = resp.json() if (resp.status_code == 200 and resp.text) else []
+        rep_email = deleted[0].get("email", "") if deleted else ""
+        login_removed, login_detail = False, "no_email"
+        if rep_email:
+            login_removed, login_detail = await delete_auth_user_by_email(
+                client, supabase_url, service_key, rep_email, protected_emails=ALL_ADMIN_EMAILS,
+            )
+
+    logger.info("US rep removed: %s by %s (login_removed=%s, %s)", req.rep_id, req.admin_email, login_removed, login_detail)
+    return {"ok": True, "rep_id": req.rep_id, "login_removed": login_removed, "login_detail": login_detail}
 
 
 @router.get("/leads")

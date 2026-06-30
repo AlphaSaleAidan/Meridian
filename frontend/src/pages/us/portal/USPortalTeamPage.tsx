@@ -236,7 +236,7 @@ export default function USPortalTeamPage() {
   }
 
   async function handleRemoveMember(member: TeamMember) {
-    if (!confirm(`Remove ${member.name} from the team? This will delete their rep profile.`)) return
+    if (!confirm(`Remove ${member.name} from the team? This deletes their rep profile and their login — they can't sign back in.`)) return
     setRemoving(true)
     const apiBase = import.meta.env.VITE_API_URL || ''
     try {
@@ -251,6 +251,14 @@ export default function USPortalTeamPage() {
         toast(err.detail || 'Failed to remove rep', 'error')
         setRemoving(false)
         return
+      }
+      const data = await resp.json().catch(() => ({}))
+      // login_removed=false here usually means the account still owns a business
+      // (a real merchant, not a disposable test rep), so the login is preserved.
+      if (data.login_removed === false) {
+        toast('Rep removed — login kept (account still owns a business)', 'warning')
+      } else {
+        toast('Rep and login removed', 'success')
       }
     } catch {
       toast('Network error — please try again', 'error')
