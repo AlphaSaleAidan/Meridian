@@ -366,8 +366,8 @@ def _tip_retention(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your best earners are scheduled into your lowest-tip shifts",
         observation=f"Tip-per-hour varies {X}x by shift; {X} of your strongest {v.staff_role}s work the low-tip {X} block and turn over at {X}x the rate.",
-        reasoning=f"Tip income is a retention driver you don't control directly but can schedule around; joining tip data to the {v.staff_role} roster and turnover exposes that you're parking top talent in low-tip windows — a self-inflicted churn risk on the people you most need, invisible until tips and the schedule are crossed.",
-        conclusion=f"Rotate strong {v.staff_role}s through high-tip shifts equitably and watch retention on the historically low-tip block.",
+        reasoning=f"Tip income is a retention driver you can't set directly but can schedule around, so joining tip-per-hour to the {v.staff_role} roster and turnover exposes top talent parked in low-tip windows — a self-inflicted churn risk that stays invisible until tips and the schedule are crossed, and which costs you re-hiring the very staff you most need.",
+        conclusion=f"Redistribute high-tip shifts so strong {v.staff_role}s rotate through them equitably, and flag any top performer stuck on the low-tip {X} block for the next schedule.",
         expected_effect=f"Reducing avoidable turnover among top {v.staff_role}s is worth ~${X}/mo in re-hire and ramp cost.",
         recommend_when={"state": "tip_inequity_churn", "min_signal": "tips"},
         tags=("fusion", "tips", "retention", v.family),
@@ -418,11 +418,66 @@ def _capacity_revenue(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your peak revenue is capped by the room, not by demand",
         observation=f"At peak, occupancy holds at {X}% of capacity for {X} minutes while entries flatten and revenue plateaus despite rising passerby demand.",
-        reasoning=f"Joining vision occupancy, a capacity constant, and revenue shows a hard ceiling: the store fills, turns customers away, and revenue stops climbing even though demand outside is still growing. This is a throughput-limited ceiling — distinct from a conversion problem — and it tells you the lever is faster turnover or more capacity, not more marketing.",
-        conclusion=f"Lift the ceiling at peak (faster turns, a second service point, or extended peak hours) rather than driving more traffic into a full room.",
+        reasoning=f"Joining vision occupancy, a capacity constant, and revenue reveals a hard ceiling: the room fills, turns customers away, and revenue stops climbing while passerby demand outside is still rising — which signals a throughput-limited ceiling, not a conversion gap, so the lever is faster turnover or more capacity rather than more marketing into a room that's already full.",
+        conclusion=f"Add a second service point or extend peak hours to lift throughput at the saturated window rather than buying traffic that lands in a full room, then re-test demand once the ceiling moves.",
         expected_effect=f"Raising the peak throughput ceiling is worth ~${X}/mo of demand currently turned away.",
         recommend_when={"state": "capacity_revenue_ceiling", "min_signal": "vision_traffic"},
         tags=("fusion", "occupancy", "revenue", v.family),
+    )
+
+
+# ── 31. Weather × bookings → adverse-day no-shows ─────────────────────────
+def _weather_noshow(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"Bad weather spikes your no-shows — and you don't see it coming",
+        observation=f"On {X} weather days, appointment no-shows rise to {X}% versus {X}% on clear days, yet the schedule and reminders are identical across conditions.",
+        reasoning=f"Weather is a no-show driver that lives in a feed you don't join to bookings, so adverse-day cancellations look random when they're actually predictable — crossing the forecast with historical no-show outcomes turns tomorrow's weather into a per-slot risk score, which lets you defend capacity instead of absorbing the empty chairs.",
+        conclusion=f"Trigger extra confirmations and a standby/overbook buffer on slots that fall on an adverse-weather forecast, and require a deposit on the riskiest.",
+        expected_effect=f"Backfilling weather-driven no-shows recovers ~${X}/mo of otherwise-idle {v.staff_role} capacity.",
+        recommend_when={"state": "weather_drives_noshow", "min_signal": "bookings"},
+        tags=("fusion", "weather", "no_show", v.family),
+    )
+
+
+# ── 32. Product margin × sales velocity → menu engineering ────────────────
+def _menu_engineering(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Your menu has stars and dogs you're treating the same",
+        observation=f"Crossing sales count with margin, {X}% of {unit}s are high-margin/high-sales 'stars' while {X}% are low-margin/low-sales 'dogs' that still occupy menu and prep space.",
+        reasoning=f"Popularity and profit are different axes, so a sales-rank list alone hides which items earn their place — joining unit margin to sales velocity sorts the menu into stars, plowhorses, puzzles, and dogs, which tells you exactly what to promote, reprice, or cut rather than guessing from volume.",
+        conclusion=f"Promote and feature the stars, reprice or reformulate the popular-but-thin plowhorses, and cut the dogs to free menu and prep space.",
+        expected_effect=f"Re-engineering the menu mix lifts blended margin for ~${X}/mo at the same traffic.",
+        recommend_when={"state": "menu_engineering_gap", "min_signal": "product_performance"},
+        tags=("fusion", "margin", "mix", v.family),
+    )
+
+
+# ── 33. Vision dwell × conversion → high-dwell dead zones ─────────────────
+def _dwell_conversion(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"High-dwell zones that don't convert are silent dead space",
+        observation=f"Vision shows {X}% of dwell time concentrates in the {X} zone, but that zone sources only {X}% of {unit}s — browsers linger and leave.",
+        reasoning=f"Dwell proves interest and POS proves the sale, so a zone with high dwell and low conversion signals a merchandising or coverage gap exactly where attention already exists — without the join you'd never learn your best-trafficked spot is your weakest seller, which is the cheapest conversion fix because the demand is already standing there.",
+        conclusion=f"Add a {v.staff_role} prompt and a clear price/CTA in the high-dwell zone, merchandise a proven seller into it, and re-test zone conversion in {X} weeks.",
+        expected_effect=f"Converting even part of the high-dwell traffic is worth ~${X}/mo at zero added footfall.",
+        recommend_when={"state": "dwell_no_conversion", "min_signal": "vision_traffic"},
+        tags=("fusion", "dwell", "conversion", v.family),
+    )
+
+
+# ── 34. Basket affinity × physical placement ──────────────────────────────
+def _basket_affinity_layout(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Items that sell together are placed apart",
+        observation=f"{X} and {X} land in the same {unit} {X}% of the time, yet they sit in separate zones, so the cross-sell depends on the customer remembering both.",
+        reasoning=f"Market-basket affinity lives in the transaction log while physical placement lives in the floor plan, so joining them surfaces high-affinity pairs that aren't co-located — proximity drives attach, which means co-placing affine items captures add-on sales that scattered placement quietly leaks.",
+        conclusion=f"Bundle the top affinity pairs and add a shelf or {v.staff_role} prompt at the primary item pointing to its partner, so the pairing no longer depends on memory.",
+        expected_effect=f"Capturing the affinity-driven attach is worth ~${X}/mo at the same traffic.",
+        recommend_when={"state": "affinity_placement_gap", "min_signal": "transactions"},
+        tags=("fusion", "basket", "merchandising", v.family),
     )
 
 
@@ -696,5 +751,44 @@ register(
         applies_families=FLOOR_FAMILIES, exclude_keys=NO_GHOST,
         swarm_capability=SwarmCapability.PARTIAL,
         swarm_upgrade="CapacityRevenueAgent: join vision_traffic.occupancy + a capacity constant + hourly_revenue → detect minutes where occupancy saturates while revenue plateaus and entries flatten → emit 'throughput_revenue_ceiling' (occupancy + revenue exist; the saturation-plateau join is new).",
+    ),
+    # ── new cross-domain joins ──
+    Archetype(
+        key="fusion_weather_noshow", domain="fusion", name="Weather drives no-shows",
+        build=_weather_noshow, situations=("baseline", "seasonal_trough"),
+        required_signals=("weather_feed", "bookings"),
+        required_agents=("WeatherNoShowAgent",),
+        applies_flags=("appointment_based",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="WeatherNoShowAgent: ingest the weather forecast and join it to each booking's kept/no-show outcome on date/location, fit no-show probability on conditions → emit a per-slot weather no-show risk score driving confirmations/overbooking (no weather feed ingested yet).",
+    ),
+    Archetype(
+        key="fusion_menu_engineering", domain="fusion", name="Menu engineering quadrants",
+        build=_menu_engineering, situations=("baseline",),
+        required_signals=("product_performance", "product_margin"),
+        required_agents=("MenuEngineeringAgent",),
+        applies_flags=("inventory_heavy",),
+        applies_families=("food_service",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="MenuEngineeringAgent: join per-item sales velocity (product_performance) to unit margin (product_margin) → classify every item into star/plowhorse/puzzle/dog and emit the promote/reprice/cut action per quadrant (product_margin table not yet ingested).",
+    ),
+    Archetype(
+        key="fusion_dwell_conversion", domain="fusion", name="Dwell without conversion",
+        build=_dwell_conversion, situations=("baseline",),
+        required_signals=("vision_traffic", "transactions"),
+        required_agents=("DwellConversionAgent",),
+        applies_families=FLOOR_FAMILIES, exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="DwellConversionAgent: join per-zone vision dwell time to zone-attributed transactions → emit high-dwell/low-conversion zones and the merchandising/coverage fix (zone-level dwell + zone↔sale attribution not yet captured).",
+    ),
+    Archetype(
+        key="fusion_basket_affinity_layout", domain="fusion", name="Affinity vs placement",
+        build=_basket_affinity_layout, situations=("baseline",),
+        required_signals=("transactions", "store_layout"),
+        required_agents=("BasketAffinityAgent",),
+        applies_flags=("inventory_heavy",),
+        applies_families=("food_service", "retail"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="BasketAffinityAgent: market-basket co-purchase lift is computable from transactions today, but ranking pairs by 'high affinity yet far apart' needs a store_layout/planogram adjacency map joined in (layout map not yet ingested).",
     ),
 )

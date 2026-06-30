@@ -215,8 +215,8 @@ def _attach_addon_underpriced(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your highest-attach add-on is priced too timidly",
         observation=f"{X} attaches to {X}% of {unit}s — clearly a want — yet it's priced at only {X}% of the base {unit}.",
-        reasoning=f"An add-on customers reach for almost reflexively has pricing power the base item doesn't; a small lift on a high-attach extra compounds across nearly every {unit}.",
-        conclusion=f"Lift {X} by {X}%; at its attach rate the volume risk is low and the per-{unit} margin gain is broad.",
+        reasoning=f"An add-on customers reach for almost reflexively carries pricing power the base item doesn't, because the decision to buy it is already made and a few cents won't reverse it — so a small lift drops almost entirely to margin and, since it rides on {X}% of {unit}s, that per-extra gain compounds across nearly the whole book.",
+        conclusion=f"Raise {X} by {X}%; at its attach rate the volume risk is low and the per-{unit} margin gain is broad.",
         expected_effect=f"A {X}% lift across {X}% attach is worth ~${X}/mo in incremental margin.",
         recommend_when={"state": "addon_underpriced", "min_signal": "transactions"},
         tags=("pricing", "attach", v.family),
@@ -325,8 +325,8 @@ def _gift_card_breakage(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Gift-card breakage isn't being recognized or worked",
         observation=f"${X} in gift cards issued over {X} months has {X}% still unredeemed past {X} months — a quiet liability with predictable breakage.",
-        reasoning=f"Aged unredeemed balances are near-certain margin once breakage policy/period is set, and active gift-card sale is pre-paid, full-margin revenue with a redemption upside on attach.",
-        conclusion=f"Recognize breakage on balances older than {X} months per policy, and push gift-card sales at {v.sale_unit} checkout to grow the float.",
+        reasoning=f"Aged unredeemed balances convert to near-certain margin once a breakage policy and period are set, because cards unredeemed past a long window almost never come back — and a sold gift card is pre-paid, full-margin float that costs you nothing to hold and drives an attach upsell when it is finally redeemed.",
+        conclusion=f"Set a breakage policy that recognizes balances older than {X} months, and promote gift-card sales at {v.sale_unit} checkout to grow the float.",
         expected_effect=f"Recognized breakage plus float growth is worth ~${X} over the next {X} months.",
         recommend_when={"state": "giftcard_breakage", "min_signal": "gift_card_ledger"},
         tags=("pricing", "gift_card", "cashflow", v.family),
@@ -356,6 +356,58 @@ def _volume_discount_unprofitable(v: Vertical, situation: str) -> Built:
         expected_effect=f"Re-flooring the volume tier stops ~${X}/mo of below-cost selling.",
         recommend_when={"state": "volume_discount_below_breakeven", "min_signal": "item_costs"},
         tags=("pricing", "discount", "margin", v.family),
+    )
+
+
+# ── New reasoning patterns ───────────────────────────────────────────────────
+def _no_show_fee(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"No-shows burn a fixed slot you can't resell",
+        observation=f"{X}% of booked {unit}s no-show or late-cancel and {X}% of those slots go unfilled — lost capacity at ~${X} per slot.",
+        reasoning=f"An appointment slot is perishable capacity, so a no-show with no fee costs you the whole slot because it's too late to rebook it — which means the absent customer pays nothing while you eat the idle {v.staff_role} time, and without a deposit there's no incentive keeping the calendar honest.",
+        conclusion=f"Require a card-on-file deposit or a {X}% late-cancel fee on {unit} bookings, waived only with {X}h notice so the slot can be resold.",
+        expected_effect=f"Recovering even half the no-show slots is worth ~${X}/mo in otherwise-dead capacity.",
+        recommend_when={"state": "no_show_no_fee", "min_signal": "bookings"},
+        tags=("pricing", "no_show", "deposit", v.family),
+    )
+
+
+def _payment_fee_small_ticket(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Card fees turn your smallest tickets into losers",
+        observation=f"{X}% of {unit}s fall under ${X}, where the fixed-plus-percent card fee eats {X}% of the ticket — more than its margin on the thinnest ones.",
+        reasoning=f"Card processing carries a fixed per-transaction cost on top of the percentage, so the fee's share rises as the ticket shrinks — which means below a break-even size the processor takes more than you make, and a high count of tiny card {unit}s loses money one swipe at a time.",
+        conclusion=f"Set a card minimum (or a small-ticket surcharge) at the break-even ticket and steer sub-threshold {unit}s to cash or a larger basket.",
+        expected_effect=f"Clearing the fee on sub-break-even tickets recovers ~${X}/mo currently paid to the processor.",
+        recommend_when={"state": "card_fee_small_ticket", "min_signal": "transactions"},
+        tags=("pricing", "fees", "threshold", v.family),
+    )
+
+
+def _free_addon_real_cost(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"A 'free' add-on with real cost is quietly subsidized",
+        observation=f"You give away {X} (delivery, setup, extras, refills) on {X}% of {unit}s, but it carries ~${X} of real {v.staff_role}/material cost each time.",
+        reasoning=f"A complimentary extra that costs you money behaves exactly like a discount, because every unit handed out leaks that cost straight from margin — and since customers already value it enough to expect it, pricing it or gating it to a spend threshold recovers the cost without killing demand.",
+        conclusion=f"Set a price on the add-on as a paid line, or waive it only above a ${X} spend threshold, so it stops bleeding margin on small {unit}s.",
+        expected_effect=f"Pricing or gating the giveaway recovers ~${X}/mo of currently-subsidized cost.",
+        recommend_when={"state": "free_addon_real_cost", "min_signal": "item_costs"},
+        tags=("pricing", "addon", "margin", v.family),
+    )
+
+
+def _annual_prepay_missing(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"All members pay monthly — no annual prepay to lock them in",
+        observation=f"{X}% of members pay month-to-month and {X}% churn within {X} months, yet there's no annual-prepay option to anchor them.",
+        reasoning=f"Month-to-month billing leaves the exit door open every cycle, so a member churns the moment motivation dips — whereas an annual prepay collects the year's cash upfront and removes the monthly decision, which funds working capital now and drives retention because a paid-through year rarely cancels.",
+        conclusion=f"Offer an annual-prepay plan at a modest discount to the monthly run-rate and convert your most tenured members first.",
+        expected_effect=f"Converting {X}% of monthly members to annual prepay locks ~${X} of cash upfront and cuts churn ~{X} points.",
+        recommend_when={"state": "no_annual_prepay", "min_signal": "membership_ledger"},
+        tags=("pricing", "membership", "cashflow", v.family),
     )
 
 
@@ -565,5 +617,40 @@ register(
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="PlatformPayoutAgent: ingest third-party delivery payout statements to attribute commission per order and compute net delivery margin; payout feed not ingested today.",
         applies_flags=("delivery_capable",),
+    ),
+    # ── new reasoning patterns ──
+    Archetype(
+        key="no_show_cancellation_fee", domain="pricing", name="No-show / cancellation fee",
+        build=_no_show_fee, situations=("baseline",),
+        required_signals=("bookings", "transactions"),
+        required_agents=("BookingAnalyzer", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="NoShowAgent: separate completed from no-show/late-cancel bookings and measure unfilled-slot loss (no-show status not consistently captured on the booking feed).",
+        applies_flags=("appointment_based",),
+    ),
+    Archetype(
+        key="payment_fee_small_ticket", domain="pricing", name="Card fee on small tickets",
+        build=_payment_fee_small_ticket, situations=("baseline",),
+        required_signals=("transactions",),
+        required_agents=("RevenueAnalyzer", "MarginAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="ProcessingFeeAgent: ticket-size distribution is in transactions, but the per-swipe break-even needs the processor fee schedule (fixed + %), which is not ingested today.",
+    ),
+    Archetype(
+        key="free_addon_real_cost", domain="pricing", name="Subsidized free add-on",
+        build=_free_addon_real_cost, situations=("baseline",),
+        required_signals=("item_costs", "transactions"),
+        required_agents=("MarginAnalyzer", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CostBasisAgent (shared): valuing a complimentary add-on needs its per-unit material/labor cost; cost basis is not ingested today.",
+    ),
+    Archetype(
+        key="annual_prepay_missing", domain="pricing", name="No annual-prepay option",
+        build=_annual_prepay_missing, situations=("baseline",),
+        required_signals=("membership_ledger", "transactions"),
+        required_agents=("MembershipAgent", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="ChurnCohortAgent: month-to-month vs prepay split and churn timing need member billing-cadence history; cadence is not retained per member today.",
+        applies_flags=("membership",),
     ),
 )

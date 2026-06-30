@@ -253,8 +253,8 @@ def _overorder_pre_slow(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Over-ordering perishables right before your slow period",
         observation=f"Going into your weekly/seasonal lull, perishable receipts stay flat at peak-period levels, so {X}% of the last pre-lull order is wasted.",
-        reasoning=f"Demand drops on a known schedule, but the order ahead of it doesn't. With {life}, perishables bought for a peak that's ending can't carry into the lull — they spoil. This is a timing miss specific to the demand cliff, not chronic over-ordering.",
-        conclusion=f"Step perishable pars DOWN on the order immediately before each known lull, then back up ahead of the next peak.",
+        reasoning=f"Demand falls on a known schedule but the order ahead of it doesn't, so peak-sized receipts land just as sell-through collapses — and because shelf life here is {life}, that stock can't bridge to the next peak, which means it spoils rather than carrying over. The leak is the timing against the demand cliff, not chronic over-ordering.",
+        conclusion=f"Cut perishable pars on the order immediately before each known lull, then raise them back ahead of the next peak.",
         expected_effect=f"Tapering the pre-lull order avoids ~${X}/mo of predictable end-of-period spoilage.",
         recommend_when={"state": "overorder_before_lull", "min_signal": "inventory"},
         tags=("inventory", "waste", "timing", v.family),
@@ -339,9 +339,9 @@ def _cycle_count_neglect(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Counts are stale — record accuracy is drifting",
         observation=f"{X}% of {s}s haven't been counted in {X}+ days; audited lines show an average {X}% record-vs-actual gap.",
-        reasoning=f"Inventory records drift continuously from small errors; without regular cycle counts the gap grows until every downstream decision (reordering, valuation, availability) runs on bad numbers. Annual-only counts let error accumulate all year.",
-        conclusion=f"Stand up ABC-weighted cycle counting — count your A-items every {X} days, B/C less often — so accuracy stays current without a full shutdown.",
-        expected_effect=f"Continuous counting keeps records accurate, preventing the stockouts and waste bad data causes.",
+        reasoning=f"Records drift continuously because every mis-scan, unlogged damage, and miscount compounds, so without regular cycle counts the record-vs-actual gap widens until reordering, valuation, and availability all run on numbers that are wrong — which means an annual-only count lets a year of error accumulate before anyone catches it.",
+        conclusion=f"Schedule ABC-weighted cycle counts — count A-items every {X} days, B/C items less often — so accuracy stays current without a full shutdown.",
+        expected_effect=f"Holding the record-vs-actual gap under {X}% prevents the bad-data stockouts and overbuys, worth ~${X}/mo recovered.",
         recommend_when={"state": "stale_counts", "min_signal": "inventory"},
         tags=("inventory", "accuracy", "cycle_count", v.family),
     )
@@ -382,8 +382,8 @@ def _supplier_concentration_risk(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"One supplier controls too much of your stock",
         observation=f"A single supplier provides {X}% of your {s}s, including {X} of your top sellers, with no qualified backup.",
-        reasoning=f"Single-sourcing is a concentration risk priced at zero until it isn't: one outage, price hike, or quality lapse from that supplier hits a huge slice of your availability at once, with no fallback to switch to.{extra}",
-        conclusion=f"Qualify a secondary supplier for the critical {s}s now, even at slightly worse terms, so a single failure can't empty your shelves.",
+        reasoning=f"Single-sourcing reads as free until it fails, because one outage, price hike, or quality lapse at that supplier hits a huge slice of your availability at once — and with no qualified backup you can't switch, so a single disruption drives simultaneous stockouts across your top sellers instead of a contained gap.{extra}",
+        conclusion=f"Add a qualified secondary supplier for the critical {s}s now, even at slightly worse terms, so a single failure can't empty your shelves.",
         expected_effect=f"A backup source de-risks ~{X}% of stock currently dependent on one supplier.",
         recommend_when={"state": "supplier_concentration", "min_signal": "inventory"},
         tags=("inventory", "supply", "concentration", "risk", v.family),
@@ -448,6 +448,59 @@ def _seasonal_carryover(v: Vertical, situation: str) -> Built:
         expected_effect=f"Eliminating carryover frees ~${X} of capital and prevents it recurring next season.",
         recommend_when={"state": "seasonal_carryover", "min_signal": "inventory"},
         tags=("inventory", "seasonal", "carryover", v.family),
+    )
+
+
+# ── New reasoning patterns ───────────────────────────────────────────────────
+def _space_to_sales_mismatch(v: Vertical, situation: str) -> Built:
+    s = _stock(v)
+    return Built(
+        title=f"Shelf space doesn't match where sales come from",
+        observation=f"Your top-selling {X}% of {s}s get only {X}% of facings while a slow category holds {X}% of the space — allocation is inverted from demand.",
+        reasoning=f"Shelf space is a fixed, scarce asset, so facings handed to slow {s}s starve your fast movers — which drives avoidable on-shelf stockouts on the winners and leaves dead {s}s occupying room that would otherwise turn, meaning the layout caps sales no amount of buying can fix.",
+        conclusion=f"Reallocate facings in proportion to each {s}'s sales velocity — expand the movers, shrink the slow tail — and re-plan the planogram.",
+        expected_effect=f"Matching space to velocity cuts winner stockouts and lifts category sales ~{X}%, ~${X}/mo.",
+        recommend_when={"state": "space_to_sales_mismatch", "min_signal": "inventory"},
+        tags=("inventory", "space", "allocation", v.family),
+    )
+
+
+def _freight_order_consolidation(v: Vertical, situation: str) -> Built:
+    s = _stock(v)
+    return Built(
+        title=f"Frequent small orders are racking up freight and fees",
+        observation=f"You place ~{X} sub-${X} POs/month to the same supplier, each carrying a ${X} freight/handling charge that adds {X}% to landed cost.",
+        reasoning=f"Freight and small-order fees are fixed per shipment, so splitting demand across many tiny POs multiplies that fixed cost — which inflates landed cost on every unit and erodes margin, even though the unit price on the invoice never moved.",
+        conclusion=f"Batch orders to that supplier into fewer, larger drops above the free-freight threshold, combining the slow {s}s onto the mover orders.",
+        expected_effect=f"Hitting free-freight thresholds trims landed cost ~{X}%, ~${X}/mo saved.",
+        recommend_when={"state": "freight_fragmented_orders", "min_signal": "inventory"},
+        tags=("inventory", "purchasing", "freight", v.family),
+    )
+
+
+def _returns_not_restocked(v: Vertical, situation: str) -> Built:
+    s = _stock(v)
+    return Built(
+        title=f"Sellable returns aren't making it back to the floor",
+        observation=f"{X}% of returned {s}s sit in a returns bin for {X}+ days before restocking — or get written off — while the same {s}s read as out-of-stock.",
+        reasoning=f"A sellable return that never re-enters stock costs you twice, because the system still counts it as gone so it won't reorder, and the physical unit ages unsold in the back — which manufactures a false stockout and an avoidable write-off out of inventory you already paid for.",
+        conclusion=f"Set a same-day restock routine for sellable returns and reconcile the returns bin weekly so good units rejoin available stock.",
+        expected_effect=f"Restocking returns within a day recovers ~${X}/mo of false-stockout sales and avoided write-offs.",
+        recommend_when={"state": "returns_not_restocked", "min_signal": "inventory"},
+        tags=("inventory", "returns", "availability", v.family),
+    )
+
+
+def _consignment_slow_capital(v: Vertical, situation: str) -> Built:
+    s = _stock(v)
+    return Built(
+        title=f"Slow high-value {s}s are freezing cash you could shift to the vendor",
+        observation=f"{X} high-value {s}s turn under {X}x a year yet tie up ${X} of owned inventory — capital frozen on stock that barely moves.",
+        reasoning=f"Owning slow, expensive {s}s outright means you finance their idle months, so the cash sits frozen and exposed to obsolescence instead of working — whereas consignment or vendor-managed terms shift that carrying cost and risk to the supplier, which frees your capital without dropping the assortment.",
+        conclusion=f"Move the slow high-value {s}s to consignment or pay-on-scan terms so you stock the range without owning the idle capital.",
+        expected_effect=f"Shifting these to consignment frees ~${X} of working capital and removes their obsolescence risk.",
+        recommend_when={"state": "consignment_candidate", "min_signal": "inventory"},
+        tags=("inventory", "capital", "consignment", v.family),
     )
 
 
@@ -709,5 +762,40 @@ register(
         required_agents=("InventoryAnalyzer", "ProductAnalyzer"),
         swarm_capability=SwarmCapability.PARTIAL,
         swarm_upgrade="DeadstockAgent (shared): identify prior-season SKUs carried past their demand window from snapshot history.",
+    ),
+    # new reasoning patterns
+    Archetype(
+        key="space_to_sales_mismatch", domain="inventory", name="Space vs sales mismatch",
+        build=_space_to_sales_mismatch, situations=("baseline",),
+        applies_flags=("inventory_heavy",),
+        required_signals=("inventory", "product_performance"),
+        required_agents=("InventoryAnalyzer", "ProductAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="PlanogramAgent: join per-SKU facing/space allocation to sales velocity (shelf-space data is not captured today) to flag inverted space-to-sales.",
+    ),
+    Archetype(
+        key="freight_order_consolidation", domain="inventory", name="Fragmented orders, freight drag",
+        build=_freight_order_consolidation, situations=("baseline",),
+        applies_flags=("inventory_heavy",),
+        required_signals=("inventory",),
+        required_agents=("InventoryAnalyzer",),
+        swarm_capability=SwarmCapability.MISSING, swarm_upgrade=_SUPPLY_INGEST,
+    ),
+    Archetype(
+        key="returns_not_restocked", domain="inventory", name="Returns not restocked",
+        build=_returns_not_restocked, situations=("baseline",),
+        applies_flags=("inventory_heavy",),
+        required_signals=("inventory",),
+        required_agents=("InventoryAnalyzer",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ReturnsLedgerAgent: ingest return/RMA events and restock timestamps (returns are not tracked against on-hand today) to surface sellable units stranded in the returns bin.",
+    ),
+    Archetype(
+        key="consignment_slow_capital", domain="inventory", name="Consignment candidate",
+        build=_consignment_slow_capital, situations=("baseline",),
+        applies_flags=("inventory_heavy",),
+        required_signals=("inventory", "product_performance"),
+        required_agents=("InventoryAnalyzer", "ProductAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING, swarm_upgrade=_SUPPLY_INGEST,
     ),
 )

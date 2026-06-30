@@ -209,8 +209,8 @@ def _checkout_friction(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Checkout/payment friction is the sour note at the end of the visit",
         observation=f"{X}% of feedback cites slow or confusing checkout, and the payment step averages {X} extra minutes on {X}.",
-        reasoning=f"The last moment of the visit weighs heavily on the overall memory — friction at checkout undoes an otherwise good experience and is among the easiest things to fix.",
-        conclusion=f"Streamline the {X} payment path (pre-auth, tap, at-{v.staff_role} settle) to remove the end-of-visit drag.",
+        reasoning=f"The last moment of the visit weighs most heavily on the remembered experience, so checkout friction erodes an otherwise good {sale} right at the peak-end point customers grade you on — which drags down repeat intent even when the service itself was fine, and it is among the cheapest things to fix.",
+        conclusion=f"Cut the {X} payment path to a tap: enable pre-auth or at-{v.staff_role} settle, drop the extra confirmation step, and set the fastest method as default.",
         expected_effect=f"Smoothing checkout protects ~${X}/mo in experience-driven repeat {sale}s.",
         recommend_when={"state": "checkout_friction", "min_signal": "service_timing"},
         tags=("experience", "checkout", v.family),
@@ -345,7 +345,73 @@ def _expectation_setting_gap(v: Vertical, situation: str) -> Built:
     )
 
 
+def _appointment_reminder_gap(v: Vertical, situation: str) -> Built:
+    sale = v.sale_unit
+    return Built(
+        title=f"No-shows pile up because nobody reminds customers of their {sale}",
+        observation=f"{X}% of booked {sale}s end in a no-show or last-minute cancel, yet no automated reminder goes out ahead of the appointment.",
+        reasoning=f"Most no-shows are forgotten, not deliberate, so the absence of a reminder means a {v.name.lower()} loses a held slot to simple memory failure — and a forgotten appointment costs you twice, since the empty slot can't be resold on short notice and the customer feels no nudge to rebook.",
+        conclusion=f"Trigger an automated reminder {X} hours before each {sale} (text + email) with one-tap confirm/reschedule, and send a waitlist offer the moment a slot frees.",
+        expected_effect=f"Cutting the no-show rate by {X}pts recovers ~${X}/mo of slots that currently go empty.",
+        recommend_when={"state": "appointment_reminder_gap", "min_signal": "bookings"},
+        tags=("experience", "no_show", "communication", v.family),
+    )
+
+
+def _wait_communication_gap(v: Vertical, situation: str) -> Built:
+    sale = v.sale_unit
+    return Built(
+        title=f"Customers wait without ever being told how long",
+        observation=f"During the {X} rush, {X}% of waiting customers get no time estimate or status update, even when the wait runs past {X} minutes.",
+        reasoning=f"Uncertain waiting feels far longer than a known wait, so silence during a backup erodes the experience more than the minutes themselves — which means an unquoted wait drives walkouts and bad reviews even when your actual service speed is fine.",
+        conclusion=f"Quote an honest wait time on arrival and update it at set intervals (board, text, or a {v.staff_role} check-in) so the wait feels managed, not abandoned.",
+        expected_effect=f"Communicating the wait cuts perceived-wait complaints and protects ~${X}/mo in {sale}s that otherwise walk.",
+        recommend_when={"state": "wait_communication_gap", "min_signal": "service_observation"},
+        tags=("experience", "wait", "communication", v.family),
+    )
+
+
+def _staff_turnover_experience_drag(v: Vertical, situation: str) -> Built:
+    role = v.staff_role
+    sale = v.sale_unit
+    return Built(
+        title=f"High {role} turnover keeps resetting the experience to beginner level",
+        observation=f"{X}% of your {role}s have under {X} months tenure, and satisfaction/repeat rate runs lower on shifts staffed by the newest {role}s.",
+        reasoning=f"Front-line skill and customer rapport are built over months, so constant {role} churn means every departure resets service quality to novice level and erases the regulars' relationships — which steadily drags down the experience and the repeat revenue that rides on it.",
+        conclusion=f"Cut the turnover driver first (onboarding, scheduling, pay), then standardize a fast ramp so a new {role} reaches the experience bar in weeks, not months.",
+        expected_effect=f"Stabilizing the {role} bench lifts average experience and protects ~${X}/mo in turnover-driven repeat loss.",
+        recommend_when={"state": "staff_turnover_experience_drag", "min_signal": "schedule_shifts"},
+        tags=("experience", "turnover", "consistency", v.family),
+    )
+
+
 register(
+    Archetype(
+        key="appointment_reminder_gap", domain="experience", name="Appointment reminder gap",
+        build=_appointment_reminder_gap, situations=("baseline", "leaking"),
+        applies_flags=("appointment_based",),
+        required_signals=("bookings",),
+        required_agents=("BookingReminderAgent",),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="BookingReminderAgent: read the booking calendar to flag no-show/late-cancel rate and the absence of a pre-appointment reminder touch; booking data is partially available per provider.",
+    ),
+    Archetype(
+        key="wait_communication_gap", domain="experience", name="Wait communication gap",
+        build=_wait_communication_gap, situations=("baseline", "declining"),
+        applies_flags=("walk_in_heavy",),
+        required_signals=("service_observation",),
+        required_agents=("ExperienceSignalAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ExperienceSignalAgent (shared): capture whether arriving customers receive a wait estimate/status (observation or mystery-shopper input) to separate perceived-wait from actual wait.",
+    ),
+    Archetype(
+        key="staff_turnover_experience_drag", domain="experience", name="Turnover resets experience",
+        build=_staff_turnover_experience_drag, situations=("baseline", "concentrated"),
+        required_signals=("schedule_shifts", "experience_flag"),
+        required_agents=("StaffAttributionAgent", "ExperienceSignalAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="StaffAttributionAgent: derive per-worker tenure from schedule history and correlate satisfaction/repeat outcomes to new-hire shifts (needs employee_id + an experience signal).",
+    ),
     Archetype(
         key="wait_time_drives_walkout", domain="experience", name="Wait drives walkout",
         build=_wait_walkout, situations=("baseline", "declining", "anomaly"),

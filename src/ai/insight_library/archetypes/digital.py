@@ -197,8 +197,8 @@ def _online_photos_quality(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your online photos undersell the {v.sale_unit}",
         observation=f"Your site/listing leads with {X} low-quality or outdated images, and the {v.sale_unit} that drives choice has no strong representative shot.",
-        reasoning=f"For a visually-decided purchase, the photo IS the pitch: a searcher comparing a {v.name.lower()} judges quality from images in seconds; weak or stale photos make a good business look mediocre and hand the click to a competitor whose photos look better, regardless of who's actually better.",
-        conclusion=f"Replace the hero images with current, well-lit shots of your best {v.sale_unit}s and the space, and lead every surface with them.",
+        reasoning=f"For a visually-decided purchase the photo is the pitch, so when a searcher comparing a {v.name.lower()} judges quality from images in seconds, weak or stale shots drive the click to a competitor whose photos simply look better — which costs you the visit regardless of who actually does the better work.",
+        conclusion=f"Replace the hero images: stage and upload {X} current, well-lit shots of your best {v.sale_unit}s and the space, and set them as the lead image on every surface.",
         expected_effect=f"Stronger photography lifts both listing and site click-through, worth ~${X}/mo of better-converting discovery.",
         recommend_when={"state": "photos_weak", "min_signal": "gbp_profile"},
         tags=("digital", "photos", "conversion", v.family),
@@ -209,8 +209,8 @@ def _social_to_site_dropoff(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your social following doesn't make it to a booking or order",
         observation=f"Social profiles drive {X} link clicks/month but only {X}% reach a conversion action; the link-in-bio path leaks almost everyone.",
-        reasoning=f"Social earns attention but rarely closes inside the app; for a {v.name.lower()}, the handoff from profile to your own book/order surface is where intent is won or lost, and a cluttered or dead-end landing path wastes the audience you already built — the followers are there, the bridge isn't.",
-        conclusion=f"Point the social link at a single-purpose landing page whose only job is the primary action, not a generic homepage.",
+        reasoning=f"Social earns attention but rarely closes inside the app, so the handoff from a {v.name.lower()}'s profile to your own book/order surface is where intent converts or leaks; a cluttered or dead-end link-in-bio path drives the followers you already paid to build straight back out without acting.",
+        conclusion=f"Build a single-purpose landing page whose only job is the primary action, point the social link at it instead of a generic homepage, and add one clear call-to-action above the fold.",
         expected_effect=f"Fixing the social-to-conversion handoff turns existing followers into ~${X}/mo of booked {v.sale_unit}s.",
         recommend_when={"state": "social_funnel_leak", "min_signal": "web_analytics"},
         tags=("digital", "social", "funnel", v.family),
@@ -234,8 +234,8 @@ def _online_menu_stale_missing(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your menu online is missing or out of date",
         observation=f"Your published menu/service list is {X} months stale or absent on {X} of your key surfaces (site, listing, order page).",
-        reasoning=f"The menu is the deciding content for a {v.name.lower()}: a searcher comparing options needs to see what you offer and at what price before choosing, and a missing or outdated menu either loses the comparison outright or sets a wrong expectation that fails at purchase — the most-viewed content is doing the least work.",
-        conclusion=f"Publish a current, structured menu/service list on every surface and put one owner on keeping it in sync with what you actually sell.",
+        reasoning=f"The menu is the deciding content for a {v.name.lower()}, so a missing or stale list means a searcher comparing options can't see what you offer or at what price and picks a competitor whose menu is current — which costs you the comparison before the visit and sets a wrong expectation that fails again at purchase.",
+        conclusion=f"Publish a current, structured menu/service list on every surface, set one owner to sync it whenever items or prices change, and standardize the format across site, listing, and order page.",
         expected_effect=f"A current, everywhere-consistent menu lifts choose-rate worth ~${X}/mo of comparison-stage demand.",
         recommend_when={"state": "menu_stale", "min_signal": "listing_scan"},
         tags=("digital", "menu", "content", v.family),
@@ -362,6 +362,44 @@ def _qr_table_order_adoption(v: Vertical, situation: str) -> Built:
         expected_effect=f"At-table self-ordering lifts reorder/attach during peak, worth ~${X}/mo of incremental {v.sale_unit}s.",
         recommend_when={"state": "qr_order_untapped", "min_signal": "web_analytics"},
         tags=("digital", "funnel", "qr_order", v.family),
+    )
+
+
+# ═══════════════════════ OWNED SURFACE / CHANNEL OWNERSHIP ══════════════════
+def _no_website_presence(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"You have no website — every customer journey ends on someone else's surface",
+        observation=f"There is no owned website for the {v.name.lower()}; an estimated {X}% of would-be visitors land only on third-party listings or social pages you don't control.",
+        reasoning=f"Without an owned site you control no surface that fully converts a searcher, so every booking, order, and menu view happens on a third party that owns the customer data, sets the rules, and can re-rank or charge you — which caps both conversion and the SEO that feeds discovery.",
+        conclusion=f"Build a lightweight owned website with the primary action (book, order, call, directions) above the fold, then point every listing and social profile at it.",
+        expected_effect=f"An owned conversion surface recaptures journeys now lost to third parties, worth ~${X}/mo at your average {v.sale_unit} value.",
+        recommend_when={"state": "no_website", "min_signal": "listing_scan"},
+        tags=("digital", "website", "presence", v.family),
+    )
+
+
+def _online_ordering_channel_absent(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"You have no owned online-order link — demand routes through high-fee marketplaces",
+        observation=f"{X}% of online {unit}s come through third-party marketplaces at a {X}% fee, while you offer no direct order/book link of your own.",
+        reasoning=f"When the only digital way to buy is a marketplace, every online {unit} pays that platform a fee and the platform — not you — owns the customer relationship, so demand you could serve directly leaks margin and repeat-contact data on every single order.",
+        conclusion=f"Stand up a direct online order/book channel, surface it ahead of marketplace links, and offer a small direct-order perk to convert marketplace buyers onto your own channel.",
+        expected_effect=f"Shifting {X}% of marketplace {unit}s to a direct channel recovers ~${X}/mo in fees plus owned customer data.",
+        recommend_when={"state": "owned_order_channel_absent", "min_signal": "transactions"},
+        tags=("digital", "channel", "ownership", v.family),
+    )
+
+
+def _gbp_messaging_unanswered(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"Customers message your listing and hear nothing back",
+        observation=f"{X}% of messages sent through your Google profile/website chat go unanswered for {X}+ hours, and the messaging feature is left half-configured.",
+        reasoning=f"A listing message is a high-intent question from someone deciding right now, so a slow or absent reply drives that ready customer to a competitor who answers, and Google de-prioritizes profiles with poor response rates — which quietly suppresses the listing for everyone else too.",
+        conclusion=f"Enable and route listing/chat messages to a covered inbox, set an auto-reply with hours, and answer within {X} minutes during open hours.",
+        expected_effect=f"Connecting the high-intent messages you already receive is worth ~${X}/mo in chosen-then-lost {v.sale_unit}s.",
+        recommend_when={"state": "messaging_unanswered", "min_signal": "gbp_profile"},
+        tags=("digital", "funnel", "messaging", v.family),
     )
 
 
@@ -539,6 +577,34 @@ register(
         required_agents=("DigitalPresenceAgent",),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="DigitalPresenceAgent: pull review timestamps from GBP + platforms to compute velocity/recency (distinct from the marketing domain's score-based reputation); no review timestamp stream is ingested today.",
+        applies_keys=_ALL,
+    ),
+    # ── Owned surface / channel ownership ──
+    Archetype(
+        key="no_website_presence", domain="digital", name="No owned website",
+        build=_no_website_presence, situations=("untapped",),
+        required_signals=("listing_scan",),
+        required_agents=("ListingConsistencyAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_NAP_UP + " Detecting the absence of an owned site (vs only third-party listings) comes from the same listing scan.",
+        applies_keys=_ALL,
+    ),
+    Archetype(
+        key="online_ordering_channel_absent", domain="digital", name="Owned order channel absent",
+        build=_online_ordering_channel_absent, situations=("untapped",),
+        required_signals=("transactions",),
+        required_agents=("OnlineFunnelAgent",),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade=_WEB_UP + " Marketplace vs direct split is partly visible in transactions (channel tag); only the owned-order-page presence check is missing, so this is PARTIAL.",
+        applies_keys=_keys_with_channel("online", "delivery"),
+    ),
+    Archetype(
+        key="gbp_messaging_unanswered", domain="digital", name="Listing messaging unanswered",
+        build=_gbp_messaging_unanswered, situations=("leaking",),
+        required_signals=("gbp_profile",),
+        required_agents=("DigitalPresenceAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_GBP_UP + " Message volume and response latency require the Business Messages read scope.",
         applies_keys=_ALL,
     ),
     # ── Funnel: call / reserve / order ──

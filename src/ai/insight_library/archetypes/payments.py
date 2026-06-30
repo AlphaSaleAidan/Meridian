@@ -148,8 +148,8 @@ def _refund_rate_by_channel(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Refunds are concentrated in your {X} channel",
         observation=f"The {X} channel refunds {X}% of {unit}s vs {X}% elsewhere — a {X}-point gap on the same catalog.",
-        reasoning=f"A channel-specific refund spike points to a channel-specific defect (mis-set expectations, fulfillment, or fit), not product quality; the fix is local, not catalog-wide.",
-        conclusion=f"Audit the {X} channel's top refund reasons and fix the upstream cause (listing accuracy, handoff, or fulfillment) before discounting to compensate.",
+        reasoning=f"A channel-specific refund spike signals a channel-specific defect (mis-set expectations, fulfillment, or fit) rather than a product-quality problem, because the same catalog refunds normally everywhere else — so the fix is local to that channel and discounting to compensate just leaks margin without touching the cause.",
+        conclusion=f"Trigger a reason-code audit on the {X} channel, fix the upstream cause (listing accuracy, handoff, or fulfillment), then set a refund-rate alert on it instead of discounting to paper over the gap.",
         expected_effect=f"Closing the channel refund gap recovers ~${X}/mo in net {unit} value.",
         recommend_when={"state": "refund_channel_concentration", "min_signal": "refunds"},
         tags=("payments", "refunds", "channel", v.family),
@@ -311,6 +311,46 @@ def _settlement_timing(v: Vertical, situation: str) -> Built:
         expected_effect=f"Tightening settlement frees ~${X} of working capital and steadies daily cash.",
         recommend_when={"state": "slow_settlement", "min_signal": "payouts"},
         tags=("payments", "settlement", "cashflow", v.family),
+    )
+
+
+# ── disputes / refunds recovery (new) ───────────────────────────────────
+def _dispute_representment_unworked(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"You're losing winnable chargebacks by default",
+        observation=f"{X}% of disputes are conceded with no response; of the {X}% you do contest, you win {X}% — winnable money going unclaimed.",
+        reasoning=f"An unanswered chargeback is an automatic loss, so every dispute you let lapse forfeits the {unit} revenue AND the goods, whereas a timely evidence packet recovers a real share of them — the gap is process rather than merit, because cases you could win are simply going unworked.",
+        conclusion=f"Set a 48-hour representment workflow that auto-assembles the evidence (receipt, AVS, fulfillment proof) and require a contest response on every dispute above ${X}.",
+        expected_effect=f"Contesting winnable disputes recovers ~${X}/mo in otherwise-conceded {unit} revenue.",
+        recommend_when={"state": "representment_unworked", "min_signal": "disputes"},
+        tags=("payments", "disputes", "recovery", v.family),
+    )
+
+
+def _installment_financing_untapped(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"High-ticket {unit}s have no financing option at checkout",
+        observation=f"{X}% of {unit}s above ${X} are paid in full up front with no installment/BNPL offer, and {X}% of quotes at that price never close.",
+        reasoning=f"A large lump-sum ask is itself a conversion barrier on big-ticket work, so splitting it into installments removes the sticker-shock objection rather than the price — which captures buyers who want the {unit} but can't clear the full amount at once, without giving up a cent of margin.",
+        conclusion=f"Enable a financing/BNPL option on {unit}s above ${X} and surface it in the quote, so the {v.staff_role} can present a monthly figure instead of only the lump sum.",
+        expected_effect=f"Lifting close rate on financed high-ticket {unit}s is worth ~${X}/mo at full margin.",
+        recommend_when={"state": "financing_untapped", "min_signal": "transactions"},
+        tags=("payments", "financing", "conversion", v.family),
+    )
+
+
+def _refund_method_leak(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Every refund leaves as cash when it could stay as credit",
+        observation=f"{X}% of refunds go back to the original tender, and only {X}% are offered store credit or an exchange first.",
+        reasoning=f"A cash/card refund exits the business permanently, whereas store credit keeps the dollars on your balance sheet and brings the customer back to spend them — so defaulting to money-back leaks future revenue that an offered credit recovers, without denying anyone a fair resolution.",
+        conclusion=f"Offer store credit or an exchange (with a small bonus) as the first refund path, and reserve cash-back for customers who decline it.",
+        expected_effect=f"Converting {X}% of refunds to retained credit keeps ~${X}/mo of spend in the business.",
+        recommend_when={"state": "refund_method_leak", "min_signal": "refunds"},
+        tags=("payments", "refunds", "retention", v.family),
     )
 
 
@@ -509,5 +549,31 @@ register(
         required_agents=("PaymentAnalyzer", "ReconciliationAgent"),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="PayoutFeedAgent: ingest batch/settlement and payout timing to detect funding lag and cutoff misses; the payout feed is not ingested today.",
+    ),
+    # ── disputes / refunds recovery (new) ──
+    Archetype(
+        key="dispute_representment_unworked", domain="payments", name="Chargebacks unworked",
+        build=_dispute_representment_unworked, situations=("baseline",),
+        required_signals=("disputes", "transactions"),
+        required_agents=("DisputeAuditor", "PaymentAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="DisputeFeedAgent (shared): the processor dispute feed also carries response status and win/loss outcome; representment win-rate needs that feed plus an evidence-assembly workflow — the dispute feed is not ingested today.",
+    ),
+    Archetype(
+        key="installment_financing_untapped", domain="payments", name="Financing untapped",
+        build=_installment_financing_untapped, situations=("baseline",),
+        required_signals=("transactions",),
+        required_agents=("PaymentAnalyzer", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="FinancingOfferAgent: high-ticket share is derivable from transaction value, but measuring uptake and close-rate lift needs financing/BNPL offer + acceptance events joined to the quote (offer events are not captured today).",
+        applies_flags=("high_ticket",),
+    ),
+    Archetype(
+        key="refund_method_leak", domain="payments", name="Refund method leak",
+        build=_refund_method_leak, situations=("baseline",),
+        required_signals=("refunds", "transactions"),
+        required_agents=("PaymentAnalyzer", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="RefundMethodAgent: refunds are visible, but the refund tender (cash/card vs store credit) and whether credit was offered first are not captured — add a refund-method field to separate retained from exited refunds.",
     ),
 )

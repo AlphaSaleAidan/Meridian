@@ -501,8 +501,8 @@ def _safety_time_of_day(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Perceived safety, not demand, is capping your late hours",
         observation=f"Your {X} late dayparts run {X}% below their daytime potential, tracking local time-of-day safety patterns rather than any drop in appetite.",
-        reasoning=f"For a {v.name} open into the evening, willingness to be in the area after dark gates demand independently of how much customers want the {unit}. Where the surrounding area feels unsafe at certain hours, the late window underperforms no matter the offer — a constraint that comes from the block, not the business, and that lighting/visibility/escort cues address better than discounts.",
-        conclusion=f"Treat late-hour softness as an environment problem: improve lighting and visible {v.staff_role} presence, partner on area safety, and right-size hours to where perceived safety actually supports demand.",
+        reasoning=f"For a {v.name} open into the evening, customers weigh whether the block feels safe after dark before they weigh how much they want the {unit}, so where the surrounding area feels unsafe at certain hours the late window stays soft no matter the offer. The cap comes from the environment, which is why lighting, visible presence, and escort cues move it where a discount cannot — a markdown can't make someone feel safe walking to your door.",
+        conclusion=f"Add brighter entrance lighting and a visible {v.staff_role} at the door, and cut the late hours back to where perceived safety actually supports demand rather than discounting into an empty, dark window.",
         expected_effect=f"Either recovering the late window or trimming unprofitable unsafe hours is worth ~${X}/mo.",
         recommend_when={"state": "safety_gated_hours", "min_signal": "safety_index"},
         tags=("localmarket", "safety", "hours", v.family),
@@ -561,8 +561,8 @@ def _local_econ_indicator(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your demand mix follows the local economy, not just your effort",
         observation=f"Your {unit} mix and basket shift {X}% with local economic indicators (employment, housing, wage trends) in your trade area.",
-        reasoning=f"Discretionary spend at a {v.name} expands and contracts with local economic confidence: in a soft local economy customers trade down and stretch replacement cycles, in a strong one they trade up. Planning the assortment and price ladder to a fixed view misses a slow, predictable external tide you could be riding.{when}",
-        conclusion=f"Tilt the price ladder and {unit} mix to the local economic direction — protect entry options when it softens, push premium and {v.core_kpis[0]} when it firms.",
+        reasoning=f"Discretionary spend at a {v.name} rises and falls with local economic confidence, so a soft local economy drives customers to trade down and stretch replacement cycles while a strong one means they trade up. A price ladder frozen against that tide erodes results either way — too few entry options when budgets tighten, too little premium when they loosen.{when}",
+        conclusion=f"Add entry-tier options when local indicators soften and set the premium tier and {v.core_kpis[0]} forward when they firm, re-weighting the {unit} mix to the local economic direction each quarter.",
         expected_effect=f"Steering the mix with the local economy instead of against it is worth ~${X}/mo through the cycle.",
         recommend_when={"state": "local_econ_sensitivity", "min_signal": "econ_indicators"},
         tags=("localmarket", "economy", "mix", v.family),
@@ -595,6 +595,64 @@ def _air_quality(v: Vertical, situation: str) -> Built:
         expected_effect=f"Re-routing demand on bad-air days instead of losing it is worth ~${X}/mo across the affected days.",
         recommend_when={"state": "air_quality_outdoor_loss", "min_signal": "air_quality"},
         tags=("localmarket", "air_quality", "weather", v.family),
+    )
+
+
+# ── 37. New residential development nearby ──────────────────────────────────
+def _new_residential_development(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    extra = " The first move-ins are happening now — the routines that decide where new households shop are forming this quarter." if situation == "emerging" else ""
+    return Built(
+        title=f"New housing near you is adding residents you haven't captured",
+        observation=f"{X} new housing units came online within {X} of you in the last {X} months, adding an estimated {X} households to your trade area.",
+        reasoning=f"New rooftops are net-new resident demand that didn't exist before, so they expand the addressable base for a {v.name} without taking a single customer from anyone — but new movers form their default routines fast, which means whoever reaches them first becomes the habit and keeps the relationship for years.{extra}",
+        conclusion=f"Send a new-resident welcome offer to the development and stage {v.staff_role} coverage for the added {unit} demand before a competitor claims the move-ins.",
+        expected_effect=f"Capturing the new households as regulars is worth ~${X}/mo of demand that didn't exist a year ago.",
+        recommend_when={"state": "new_residential_growth", "min_signal": "construction_permits"},
+        tags=("localmarket", "growth", "demographics", v.family),
+    )
+
+
+# ── 38. Local rating vs nearby competitors ──────────────────────────────────
+def _local_reputation_gap(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Your local rating trails the competitors customers compare you to",
+        observation=f"Your average rating across local review sites is {X} stars against a {X}-star average for the {X} nearest same-category rivals shoppers see beside you.",
+        reasoning=f"Online ratings are the modern storefront, so a searching customer reads your stars next to the alternatives before choosing — and because a half-star gap diverts discovery-stage demand to higher-rated rivals, the {unit}s you lose never reach your POS, only the ones you keep do, which makes the leak invisible from inside.",
+        conclusion=f"Set a review-generation routine that asks every satisfied customer to rate you, and tackle the top {X} recurring complaint themes dragging the score down.",
+        expected_effect=f"Closing the rating gap to the local average is worth ~${X}/mo in recaptured discovery-stage {unit}s.",
+        recommend_when={"state": "local_reputation_gap", "min_signal": "review_ratings"},
+        tags=("localmarket", "reputation", "discovery", v.family),
+    )
+
+
+# ── 39. Competitor open-hours gap ───────────────────────────────────────────
+def _competitor_hours_gap(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Nearby competitors go dark in a window you could own",
+        observation=f"In the {X} window your nearest {X} competitors are closed, yet local demand signals show {X}% of the day's search and foot-traffic interest still active then.",
+        reasoning=f"Operating hours are a competitive lever, not a fixed cost, so when every rival within reach is closed in a window where demand still exists the customer has nowhere else to go — which means being the only open {v.name} captures the whole residual market instead of splitting it, while staying closed cedes that same window the moment a rival opens it first.",
+        conclusion=f"Extend hours to cover the window your competitors leave dark, staff it lean, and test the residual demand for {X} weeks before committing the schedule.",
+        expected_effect=f"Owning the uncontested window is worth ~${X}/mo on demand no nearby rival is open to serve.",
+        recommend_when={"state": "competitor_hours_gap", "min_signal": "competitor_hours"},
+        tags=("localmarket", "competition", "hours", v.family),
+    )
+
+
+# ── 40. Local media / buzz spike ────────────────────────────────────────────
+def _local_buzz_spike(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    extra = " The mention is fresh and traffic is spiking right now — the window to turn first-timers into regulars is open for days, not weeks." if situation == "emerging" else ""
+    return Built(
+        title=f"A local mention spiked your traffic and it's leaking away",
+        observation=f"After a local feature or viral post about you, {unit} volume jumped {X}% for {X} days, driven by {X} first-time visitors who mostly haven't returned.",
+        reasoning=f"A local buzz spike is borrowed attention that decays fast, so the feature drives a wave of trial visitors, but because they came for the novelty rather than a routine they vanish unless you capture them — which means an un-worked spike inflates one week and leaves nothing behind, while a worked one seeds a lasting base.{extra}",
+        conclusion=f"Capture contact at the {unit} during the spike and send a return offer within {X} days to convert the first-timers into repeat customers before the attention fades.",
+        expected_effect=f"Converting even {X}% of the spike's first-timers into regulars is worth ~${X}/mo of retained demand.",
+        recommend_when={"state": "local_buzz_spike", "min_signal": "local_buzz"},
+        tags=("localmarket", "buzz", "retention", v.family),
     )
 
 
@@ -922,5 +980,41 @@ register(
         applies_keys=OUTDOOR_KEYS,
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="AirQualityAgent: ingest local AQI/wildfire-smoke feeds by geo+date (and forecast) → join bad-air days to the outdoor/open-air share of daily_revenue → output the outdoor-demand loss and an indoor/pickup re-routing trigger.",
+    ),
+    Archetype(
+        key="new_residential_development", domain="localmarket", name="New residential development",
+        build=_new_residential_development, situations=("baseline", "emerging"),
+        required_signals=("construction_permits", "daily_revenue"),
+        required_agents=("GeoGrowthAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="GeoGrowthAgent: ingest residential building/occupancy permits and new-development listings by geo+date → estimate added households in the trade-area radius → output the net-new resident base and a move-in capture window.",
+    ),
+    Archetype(
+        key="local_reputation_gap", domain="localmarket", name="Local rating vs competitors",
+        build=_local_reputation_gap, situations=("baseline",),
+        required_signals=("review_ratings", "competitor_map"),
+        required_agents=("ReputationAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ReputationAgent: pull the merchant's and nearby same-category rivals' ratings/review themes (Google/Yelp APIs) by geo → compute the rating gap and recurring complaint clusters → output the discovery-stage demand at risk and the themes to fix.",
+    ),
+    Archetype(
+        key="competitor_hours_gap", domain="localmarket", name="Competitor open-hours gap",
+        build=_competitor_hours_gap, situations=("baseline",),
+        required_signals=("competitor_hours", "hourly_revenue"),
+        required_agents=("CompetitorMapAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CompetitorMapAgent (hours): collect posted open-hours for same-category rivals in radius (places API) and overlay local demand-by-hour (search/mobility) → output windows where rivals are dark but demand persists, for an hours-extension test.",
+    ),
+    Archetype(
+        key="local_buzz_spike", domain="localmarket", name="Local media/buzz spike",
+        build=_local_buzz_spike, situations=("baseline", "emerging"),
+        required_signals=("local_buzz", "daily_revenue", "transactions"),
+        required_agents=("BuzzMonitorAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="BuzzMonitorAgent: monitor local press, social, and review-volume signals for spikes about the merchant by geo+date → align the mention to the daily_revenue/first-timer surge → output the spike size, decay window, and a capture-the-trial trigger.",
     ),
 )

@@ -119,8 +119,8 @@ def _payout_settlement_lag(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Card payouts land {X} days after the sale",
         observation=f"Card {unit}s settle to your account ~{X} days after capture, leaving ${X} in transit on an average day.",
-        reasoning=f"Settlement lag is a silent overdraft: the {unit} is rung and the customer is gone, but the cash isn't usable until the processor releases it — for a thin-buffer operator that float gap can force borrowing to cover payables that are due before the deposit clears.",
-        conclusion=f"Negotiate next-day funding or hold a buffer equal to {X} days of card volume to bridge the lag.",
+        reasoning=f"Settlement lag is a silent overdraft because the {unit} is rung and the customer is gone, yet the cash isn't usable until the processor releases it — so for a thin-buffer operator that float gap can force borrowing to cover payables that fall due before the deposit clears, and the interest on money you've already earned is a pure, avoidable cost.",
+        conclusion=f"Set up next-day funding with the processor, or reserve a cash buffer equal to {X} days of card volume to bridge the gap until deposits clear.",
         expected_effect=f"Closing the funding gap removes ~${X} of perpetual in-transit cash from your working balance.",
         recommend_when={"state": "settlement_lag", "min_signal": "credit_ledger"},
         tags=("cashflow", "timing", "settlement", v.family),
@@ -221,8 +221,8 @@ def _revenue_concentration_cash_risk(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"{X}% of revenue rides on a single {X}",
         observation=f"One {X} (channel / customer / day) drives {X}% of {v.sale_unit} revenue, up from {X}% a year ago.",
-        reasoning=f"Concentrated revenue is a concentrated cashflow risk: if that one channel, client, or peak day stumbles, the cash shortfall is immediate and large — diversification matters for cash stability even when total revenue looks healthy.{extra}",
-        conclusion=f"Grow a second inflow source toward {X}% of revenue to reduce dependence on the dominant one.",
+        reasoning=f"Concentrated revenue is a concentrated cashflow risk because a single stumble in that one channel, client, or peak day drives an immediate, large shortfall with nothing to absorb it — so diversification protects cash stability even when total revenue looks healthy, since the danger is the dependency itself, not the dollar total.{extra}",
+        conclusion=f"Build a second inflow source up to {X}% of revenue and set a cap on how much any single channel, customer, or day may contribute, so no one stumble can drain the account.",
         expected_effect=f"De-risking the concentration protects ~${X}/mo of revenue exposed to a single point of failure.",
         recommend_when={"state": "revenue_concentrated", "min_signal": "transactions"},
         tags=("cashflow", "concentration", "resilience", v.family),
@@ -309,6 +309,60 @@ def _membership_churn_cash_leak(v: Vertical, situation: str) -> Built:
         expected_effect=f"Cutting churn one point preserves ~${X}/mo of recurring cash plus the acquisition cost behind it.",
         recommend_when={"state": "membership_churn_leak", "min_signal": "subscription_ledger"},
         tags=("cashflow", "recurring", "churn", "membership", v.family),
+    )
+
+
+# ── Fees, liabilities & capital structure ────────────────────────────────
+def _processing_fee_drag(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Card processing fees have climbed to {X}% of revenue",
+        observation=f"Payment processing cost rose from {X}% to {X}% of card revenue over {X} months as more {unit}s moved to premium-reward and keyed/online cards.",
+        reasoning=f"Processing fees skim a percentage off the top of every card {unit}, so as the card mix shifts toward higher-interchange reward and keyed payments the blended rate creeps up and quietly costs real margin — and because it scales with every sale rather than with effort, the leak compounds precisely as volume grows.",
+        conclusion=f"Renegotiate the processor rate against your volume, add a compliant card surcharge or cash discount, and route large {unit}s to lower-fee payment methods.",
+        expected_effect=f"Trimming the effective rate by {X} points recovers ~${X}/mo straight to the bottom line.",
+        recommend_when={"state": "processing_fee_creep", "min_signal": "credit_ledger"},
+        tags=("cashflow", "fees", "margin", v.family),
+    )
+
+
+def _gift_card_liability_float(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Outstanding gift cards are ${X} of float you're misreading",
+        observation=f"${X} in gift cards and store credit are sold but unredeemed, and {X}% are more than {X} months old.",
+        reasoning=f"A gift card is cash collected today against a {unit} you owe later, so the balance is interest-free float now but a real future liability — and because some cards are redeemed alongside extra full-price items while a slice is never redeemed at all, treating the whole balance as either pure profit or pure debt misstates the cash you can actually use.",
+        conclusion=f"Set aside a redemption reserve for the live balance, book aged breakage to income on a schedule, and run a campaign to redeem the oldest cards toward higher-ticket {unit}s.",
+        expected_effect=f"Managing the float and breakage correctly frees ~${X} of usable cash and recognizes ${X}/mo of earned breakage.",
+        recommend_when={"state": "gift_card_float", "min_signal": "gift_card_ledger"},
+        tags=("cashflow", "liability", "float", v.family),
+    )
+
+
+def _debt_service_coverage(v: Vertical, situation: str) -> Built:
+    extra = {
+        "declining": " Coverage is tightening as payments step up — get ahead of it before a soft month can't make the payment.",
+    }.get(situation, "")
+    return Built(
+        title=f"Loan payments eat {X}% of the cash you generate",
+        observation=f"Monthly debt service is ${X} against ~${X} of operating cash flow — a coverage ratio of {X}x, below the {X}x lenders consider safe.",
+        reasoning=f"Debt service is a fixed claim on cash that comes ahead of almost everything else, so a thin coverage ratio means a single soft month forces a choice between the loan and the operation — and because the payment doesn't flex with revenue, the squeeze lands hardest exactly when sales dip and cash is already short.{extra}",
+        conclusion=f"Refinance toward a longer term or lower rate to cut the monthly payment, and reserve a debt-service buffer equal to {X} months of payments before any discretionary spend.",
+        expected_effect=f"Restoring coverage to {X}x removes ~${X}/mo of forced-payment risk and frees cash for operations.",
+        recommend_when={"state": "thin_debt_coverage", "min_signal": "debt_ledger"},
+        tags=("cashflow", "debt", "resilience", v.family),
+    )
+
+
+def _capex_reserve_gap(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"No reserve for equipment that will cost ${X} to replace",
+        observation=f"Your core equipment is {X}% through its useful life with an estimated ${X} replacement cost, yet no monthly capital reserve is being set aside for it.",
+        reasoning=f"Equipment failure is not a question of if but when, so funding a major replacement out of one month's cash turns a predictable event into a crisis — and because the spend is large and lumpy, an unreserved {v.family.replace('_', ' ')} operator ends up borrowing at a bad rate or deferring the fix, which costs more than the smooth monthly set-aside would have.",
+        conclusion=f"Set up a sinking fund and reserve ${X}/mo toward the replacement, sized to the equipment's remaining life, so the capital is in hand before it fails.",
+        expected_effect=f"Pre-funding the replacement avoids ~${X} of emergency financing cost versus paying for it in a single month.",
+        recommend_when={"state": "capex_reserve_gap", "min_signal": "asset_register"},
+        tags=("cashflow", "capex", "resilience", v.family),
     )
 
 
@@ -498,5 +552,37 @@ register(
         required_agents=("CashflowAgent",),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="CashflowAgent: isolate churn cohorts (esp. early-life) and value the recurring stream lost. Needs member-level lifecycle data not ingested.",
+    ),
+    Archetype(
+        key="processing_fee_drag", domain="cashflow", name="Card processing fee creep",
+        build=_processing_fee_drag, situations=("baseline",),
+        required_signals=("credit_ledger", "transactions"),
+        required_agents=("CashflowAgent",),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="CashflowAgent: trend effective processing rate (fees / card volume) and decompose by card type/entry mode. Credit_ledger carries settlement amounts; per-transaction fee and interchange tier need linking from the processor.",
+    ),
+    Archetype(
+        key="gift_card_liability_float", domain="cashflow", name="Gift-card liability float",
+        build=_gift_card_liability_float, situations=("baseline",),
+        required_signals=("gift_card_ledger",),
+        required_agents=("CashflowAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CashflowAgent: ingest gift-card/store-credit issuance and redemption events to compute outstanding liability, aging, and breakage. Stored-value ledger is not collected today.",
+    ),
+    Archetype(
+        key="debt_service_coverage", domain="cashflow", name="Thin debt-service coverage",
+        build=_debt_service_coverage, situations=("baseline", "declining"),
+        required_signals=("debt_ledger", "daily_revenue"),
+        required_agents=("CashflowAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CashflowAgent: ingest loan/lease schedules (payment, rate, term) and derive a debt-service-coverage ratio against operating cash flow. Debt obligations are not ingested.",
+    ),
+    Archetype(
+        key="capex_reserve_gap", domain="cashflow", name="Equipment-replacement reserve gap",
+        build=_capex_reserve_gap, situations=("baseline",),
+        required_signals=("asset_register",),
+        required_agents=("CashflowAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CashflowAgent: ingest an asset register (equipment, age, useful life, replacement cost) to size a monthly sinking-fund reserve vs the lumpy replacement spend. No asset/capex data is collected.",
     ),
 )

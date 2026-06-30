@@ -113,8 +113,8 @@ def _lapsed_seasonal_return(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your seasonal customers aren't coming back this cycle",
         observation=f"{X}% of customers who bought during last year's {X} season have not returned for the current one — a worse return rate than the prior {X} cycles.",
-        reasoning=f"Seasonal customers run on an annual habit: if you miss the re-entry window, you lose the whole cycle, not just a visit — and a generic always-on campaign won't catch a once-a-year buyer at the right moment.",
-        conclusion=f"Time a season-entry win-back to last year's return date for that cohort, via {v.channels[0]}, before the season's demand peaks.",
+        reasoning=f"Seasonal customers run on an annual habit, so missing the re-entry window loses the whole cycle rather than a single visit, and a generic always-on campaign won't reach a once-a-year buyer at the one moment that matters — which is why the timing of the touch, not the size of the offer, is the lever here.",
+        conclusion=f"Trigger a season-entry win-back keyed to last year's return date for that cohort via {v.channels[0]}, and collect a pre-book or deposit for the upcoming season before its demand peaks.",
         expected_effect=f"Re-activating lapsed seasonal buyers protects ~${X} of this cycle's seasonal revenue.",
         recommend_when={"state": "seasonal_customer_lapse", "min_signal": "customer_history"},
         tags=("customer", "seasonal", "winback", v.family),
@@ -374,8 +374,8 @@ def _referral_source_concentration(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Most new customers come from one source — {X}% from {X}",
         observation=f"{X}% of new customers trace to a single channel/referrer, with the rest scattered thin.",
-        reasoning=f"Acquisition concentrated in one source is fragile: an algorithm change, a referrer leaving, or a price hike on that channel would choke your top-of-funnel overnight — diversification is risk management, not vanity.",
-        conclusion=f"Protect and deepen the lead source while deliberately building a second channel to backstop it, instead of riding a single pipe.",
+        reasoning=f"Acquisition concentrated in one source is fragile because an algorithm change, a departing referrer, or a price hike on that channel would choke the entire top-of-funnel overnight — so diversification here is risk management rather than vanity, and a second source protects future inflow from a single point of failure.",
+        conclusion=f"Set a cap so no single source exceeds {X}% of new customers, and build a second acquisition channel to backstop the lead source instead of riding one pipe.",
         expected_effect=f"Diversifying acquisition de-risks ~${X}/mo of new-customer flow against a single-source shock.",
         recommend_when={"state": "acquisition_concentration", "min_signal": "customer_history"},
         tags=("customer", "acquisition", "concentration", v.family),
@@ -419,6 +419,52 @@ def _cohort_retention_flattening(v: Vertical, situation: str) -> Built:
         expected_effect=f"Restoring new-cohort retention to the historical curve protects ~${X}/mo of future revenue.",
         recommend_when={"state": "cohort_retention_decline", "min_signal": "customer_history"},
         tags=("customer", "cohort", "retention", v.family),
+    )
+
+
+# ── Service recovery / reachability / lifecycle (new) ─────────────────────
+def _service_recovery_gap(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Customers who hit a bad experience are never followed up — and don't come back",
+        observation=f"{X}% of customers who hit a service failure (a refund, a complaint, a long wait) get no recovery contact, and they return at {X}% versus {X}% for clean visits.",
+        reasoning=f"An unresolved bad experience all but guarantees churn, so a single service-recovery touch is the highest-leverage save there is — a customer who feels heard after a slip often becomes more loyal than one who never had a problem, which means the silence after a failure leaks customers you could have kept cheaply.",
+        conclusion=f"Trigger a service-recovery outreach within {X} hours of any flagged failure — a {v.staff_role}/owner apology plus a concrete make-good — instead of letting the customer leave unaddressed.",
+        expected_effect=f"Recovering even part of the post-failure churn protects ~${X}/mo in retained {unit} revenue.",
+        recommend_when={"state": "service_recovery_gap", "min_signal": "customer_history"},
+        tags=("customer", "service_recovery", "retention", v.family),
+    )
+
+
+def _contactability_gap(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"You can't reach most of your customers — no contact on file",
+        observation=f"Only {X}% of customers have a usable email/phone with marketing consent; the other {X}% are unreachable between visits.",
+        reasoning=f"Retention marketing only works on customers you can contact, so an unreachable base caps every win-back, loyalty, and reactivation play before it starts — the gap isn't the message, it's that the channel to deliver it was never captured, which silently ceilings the return on all downstream retention spend.",
+        conclusion=f"Collect opt-in contact at the point of {unit} (tied to a receipt, loyalty perk, or rebook) and set a {X}% capture-rate target for the {v.staff_role} at checkout.",
+        expected_effect=f"Lifting contactable share by {X} points expands the addressable base for ~${X}/mo of retainable revenue.",
+        recommend_when={"state": "contactability_gap", "min_signal": "customer_history"},
+        tags=("customer", "contactability", "consent", v.family),
+    )
+
+
+def _lifecycle_event_untapped(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    if v.key in ("dental", "optometry", "vet", "chiro", "physio"):
+        occasion = "recall-due date"
+    elif "appointment_based" in v.flags:
+        occasion = "service anniversary"
+    else:
+        occasion = "birthday/anniversary"
+    return Built(
+        title=f"Personal-occasion triggers ({occasion}) go unused",
+        observation=f"{X}% of customers have a known {occasion} on file, but only {X}% receive any occasion-timed outreach.",
+        reasoning=f"An occasion is a built-in reason to return that the customer already welcomes, so an {occasion}-timed offer converts far better than a generic blast because it lands exactly when intent is naturally high — leaving these triggers unworked forfeits the cheapest, most-welcome touch in the calendar.",
+        conclusion=f"Trigger an automated {occasion} offer via {v.channels[0]} timed to each customer's date, and reactivate lapsed customers with the same hook.",
+        expected_effect=f"Occasion-timed outreach lifts repeat {unit}s for ~${X}/mo at near-zero cost.",
+        recommend_when={"state": "lifecycle_event_untapped", "min_signal": "customer_history"},
+        tags=("customer", "lifecycle", "reactivation", v.family),
     )
 
 
@@ -700,5 +746,33 @@ register(
         required_agents=("CustomerJourneyAgent", "RFMAgent"),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade=_IDENTITY_UPGRADE + " Cohort curves require per-customer acquisition month + retained-by-month from the stitched history.",
+    ),
+    # ── Service recovery / reachability / lifecycle (new) ──
+    Archetype(
+        key="service_recovery_gap", domain="customer", name="Service-recovery gap",
+        build=_service_recovery_gap,
+        situations=("baseline", "leaking"),
+        required_signals=("customer_history", "transactions"),
+        required_agents=("CustomerJourneyAgent", "ServiceRecoveryAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_IDENTITY_UPGRADE + " Plus a ServiceRecoveryAgent to flag failure events (refund/complaint/long-wait) per customer and track whether a recovery touch followed — failure events are not linked to identity today.",
+    ),
+    Archetype(
+        key="contactability_gap", domain="customer", name="Contactability gap",
+        build=_contactability_gap,
+        situations=("baseline",),
+        required_signals=("customer_history",),
+        required_agents=("CustomerJourneyAgent", "ConsentAgent"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="ConsentAgent: contact presence + marketing-consent flags exist on customer profiles, so contactable share is measurable; tying it to the full transacting base still needs " + _IDENTITY_UPGRADE,
+    ),
+    Archetype(
+        key="lifecycle_event_untapped", domain="customer", name="Lifecycle event untapped",
+        build=_lifecycle_event_untapped,
+        situations=("baseline", "untapped"),
+        required_signals=("customer_history",),
+        required_agents=("CustomerJourneyAgent", "LifecycleAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_IDENTITY_UPGRADE + " Plus a LifecycleAgent to store each customer's occasion date (birthday/anniversary/recall-due) and schedule the timed trigger — occasion dates are not captured at acquisition today.",
     ),
 )

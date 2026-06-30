@@ -94,11 +94,12 @@ def _call_abandon_at_peak(v: Vertical, situation: str) -> Built:
 
 
 def _voicemail_no_callback(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
     return Built(
         title=f"Voicemails pile up with no callback",
         observation=f"{X} calls hit voicemail last period; only {X}% received an outbound callback, and median callback lag is {X} hours.",
-        reasoning=f"A voicemail is a warm lead that decays by the hour; for a {v.name.lower()} where the customer can easily choose a competitor, a slow or missing callback wastes intent you already captured — the lead was free, the loss is not.",
-        conclusion=f"Assign voicemail callbacks to a named owner with a {X}-hour SLA and track callback rate as a channel KPI.",
+        reasoning=f"A voicemail is a warm lead that decays by the hour, so every hour without a callback erodes the odds of winning the {unit}; for a {v.name.lower()} where the customer can easily dial a competitor, a slow or missing callback leaks intent you already captured for free — which means the cheapest demand in the business is exactly the demand you're dropping.",
+        conclusion=f"Route every voicemail to a named owner who must call the number back within {X} hours, and flag any callback that breaches the SLA as a channel miss.",
         expected_effect=f"Closing the callback gap recovers ~${X}/mo from leads you already received.",
         recommend_when={"state": "voicemail_no_callback", "min_signal": "phone_call_logs"},
         tags=("channel", "phone", "followup", v.family),
@@ -393,6 +394,59 @@ def _channel_margin_leader_underpromoted(v: Vertical, situation: str) -> Built:
     )
 
 
+def _online_listing_staleness(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Your online menu/listing is stale — orders fail at checkout",
+        observation=f"{X}% of online {unit} attempts hit an out-of-stock, wrong-price, or unavailable item, and {X}% of those sessions abandon without reordering.",
+        reasoning=f"An online listing is the only salesperson on your highest-potential channel, so when it shows items you don't have or prices you don't honor the customer's trust breaks at the worst moment — at checkout — and because a failed online order rarely converts to a phone call, that demand leaks straight to a competitor whose listing is accurate.",
+        conclusion=f"Sync the online catalog to live availability and pricing, set a weekly listing audit, and flag out-of-stock items in real time so customers never select what you can't fulfill.",
+        expected_effect=f"Eliminating failed-listing aborts recovers ~${X}/mo of online {unit}s that currently abandon at checkout.",
+        recommend_when={"state": "online_listing_stale", "min_signal": "online_orders"},
+        tags=("channel", "online", "quality", v.family),
+    )
+
+
+def _drive_thru_accuracy(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Drive-thru order errors drive remakes and comebacks",
+        observation=f"{X}% of drive-thru {unit}s are remade or refunded for accuracy versus {X}% at the counter, concentrated in the {X} peak.",
+        reasoning=f"A drive-thru error costs more than its remake because the customer has already driven off, so you eat the original food, the remake, and a return trip's worth of goodwill — and since accuracy slips fastest under peak speed pressure, the errors cluster exactly where volume and the cost of a comeback are highest.",
+        conclusion=f"Add an order-confirmation screen and a bag-check step at the window, and pre-stage the top {X} error-prone items before the peak to cut the remake rate.",
+        expected_effect=f"Halving the accuracy gap saves ~${X}/mo in remakes, refunds, and lost repeat trips.",
+        recommend_when={"state": "drive_thru_accuracy", "min_signal": "drive_thru_timing"},
+        tags=("channel", "drive_thru", "quality", v.family),
+    )
+
+
+def _catering_channel_untapped(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    extra = " Inquiries are already arriving and going unanswered — the demand is declaring itself before you've built the channel." if situation == "untapped" else ""
+    return Built(
+        title=f"Large/group orders are an untapped high-ticket channel",
+        observation=f"Only {X}% of your {unit}s are large/group/catering orders despite {X} unconverted inquiries a month, even though each is worth {X}x your average ticket.{extra}",
+        reasoning=f"Group and catering orders are the highest-value {unit}s you can take because the basket is many times an individual one while the fulfillment cost per dollar is lower, so leaving the channel informal means high-margin demand either walks or gets fumbled — and because these buyers plan ahead, a captured order also smooths production into your slow windows.",
+        conclusion=f"Build a dedicated large-order path with a set menu, lead-time, and deposit, and route every inquiry to a named owner who closes it within {X} hours.",
+        expected_effect=f"Converting the unworked catering demand is worth ~${X}/mo at an above-average ticket and margin.",
+        recommend_when={"state": "catering_channel_untapped", "min_signal": "transactions"},
+        tags=("channel", "catering", "untapped", v.family),
+    )
+
+
+def _qr_order_adoption(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Table/QR self-ordering is underused while servers bottleneck",
+        observation=f"Only {X}% of {unit}s are placed via QR/table self-order despite {X}-minute waits to flag a {v.staff_role} at peak.",
+        reasoning=f"When ordering depends on catching a {v.staff_role}, a table's spend is capped by server availability, so at peak the second drink or dessert never gets ordered because no one came to ask — and because QR self-order removes that wait, it lifts both table turns and add-on attach without adding labor, which is money the table-service format leaves behind by default.",
+        conclusion=f"Promote QR self-order at every table, route reorders and add-ons through it, and reserve {v.staff_role} attention for the service moments that actually need a person.",
+        expected_effect=f"Lifting self-order adoption raises add-on attach and table turns for ~${X}/mo at no added labor cost.",
+        recommend_when={"state": "qr_order_underused", "min_signal": "online_orders"},
+        tags=("channel", "self_serve", "table_service", v.family),
+    )
+
+
 # ─────────────────────────── REGISTER ───────────────────────────────────────
 _PHONE = _ch("phone")
 _DRIVE = _ch("drive_thru")
@@ -650,5 +704,41 @@ register(
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="ChannelMarginAgent (allocation): rank channels by contribution and compare to marketing spend/share by channel to flag the under-promoted margin leader.",
         applies_keys=_PHONE_OR_ONLINE,
+    ),
+    Archetype(
+        key="online_listing_staleness", domain="channel", name="Stale online listing",
+        build=_online_listing_staleness, situations=("baseline",),
+        required_signals=("online_orders",),
+        required_agents=("OnlineOpsAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="OnlineOpsAgent: reconcile the published online catalog (availability/price) against live inventory and POS pricing, and capture checkout-failure events; listing-vs-live drift and abort reasons are not tracked today.",
+        applies_keys=_ONLINE,
+    ),
+    Archetype(
+        key="drive_thru_accuracy", domain="channel", name="Drive-thru order accuracy",
+        build=_drive_thru_accuracy, situations=("baseline",),
+        required_signals=("drive_thru_timing", "transactions"),
+        required_agents=("DriveThruTimingAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="DriveThruTimingAgent (accuracy): join drive-thru remake/void/refund events to the order and daypart (accuracy events not captured per channel today) and compare to the counter error rate.",
+        applies_keys=_DRIVE,
+    ),
+    Archetype(
+        key="catering_channel_untapped", domain="channel", name="Untapped catering/large-order channel",
+        build=_catering_channel_untapped, situations=("baseline", "untapped"),
+        required_signals=("transactions", "phone_call_logs"),
+        required_agents=("ChannelMixAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ChannelMixAgent (large-order): size the large/group/catering tail from transaction baskets and detect unconverted catering inquiries in call/online logs; inquiry-intent tagging is not built yet.",
+        applies_keys=_PHONE_OR_ONLINE,
+    ),
+    Archetype(
+        key="qr_order_adoption", domain="channel", name="Table/QR self-order adoption",
+        build=_qr_order_adoption, situations=("baseline",),
+        required_signals=("online_orders", "transactions"),
+        required_agents=("ChannelMixAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ChannelMixAgent (table-order): measure QR/table self-order share of dine-in orders and its attach/turn lift vs server-taken orders; table-order origin is not tagged on transactions today.",
+        applies_flags=("table_service",),
     ),
 )

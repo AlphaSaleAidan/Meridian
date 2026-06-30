@@ -161,8 +161,8 @@ def _high_value_unrecognized(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your top {X}% of customers get the same generic emails as everyone else",
         observation=f"The top {X}% of customers drive {X}% of {unit} revenue, yet receive identical mass campaigns with no VIP recognition or tier.",
-        reasoning=f"High-value customers are the cheapest growth you have and the most expensive to lose; treating them like the cold list under-invests in the exact relationships that carry your revenue and invites a competitor to court them.",
-        conclusion=f"Segment the top {X}% and give them early access, a recognition perk, or a personal {v.staff_role} touch distinct from the mass list.",
+        reasoning=f"High-value customers are the cheapest revenue to keep and the most expensive to replace, so sending them the same cold-list blast under-serves the exact relationships that carry your top line, which signals indifference and hands a competitor the opening to court them.",
+        conclusion=f"Build a VIP tier for the top {X}%: enroll them in early access, a recognition perk, and a personal {v.staff_role} touch, and set a send stream distinct from the mass list.",
         expected_effect=f"A {X}pt retention gain on your top {X}% is worth ~${X}/mo given their outsized {unit} value.",
         recommend_when={"state": "vip_untiered", "min_signal": "transactions"},
         tags=("marketing", "vip", v.family),
@@ -276,8 +276,8 @@ def _ugc_not_captured(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Customers post about you — and you capture none of it",
         observation=f"Roughly {X} tagged mentions/photos appear monthly on social, but none are reshared, rights-cleared, or repurposed into marketing.",
-        reasoning=f"User-generated content is free, trusted, high-converting creative; for a visual {v.name.lower()} category, leaving organic posts uncollected forfeits authentic proof that outperforms anything you'd produce in-house.",
-        conclusion=f"Stand up a light UGC workflow: monitor tags, request reshare rights, and feature {X} customer posts/week across owned channels.",
+        reasoning=f"User-generated content converts better than studio creative because it carries peer proof a brand ad can't fake, so leaving tagged posts uncollected means you pay to produce weaker {v.name.lower()} creative while free, higher-trust customer content expires unused in their feeds.",
+        conclusion=f"Collect and rights-clear tagged posts weekly, then reshare {X} customer photos across your owned channels and feature the best at the {v.sale_unit} point.",
         expected_effect=f"A steady UGC stream lifts social-driven discovery and trust worth ~${X}/mo at near-zero production cost.",
         recommend_when={"state": "ugc_uncaptured", "min_signal": "social_mentions"},
         tags=("marketing", "reputation", "ugc", v.family),
@@ -400,6 +400,45 @@ def _abandoned_online_cart(v: Vertical, situation: str) -> Built:
         expected_effect=f"Recovering {X}% of abandoned carts is worth ~${X}/mo in online {unit}s on existing traffic.",
         recommend_when={"state": "cart_abandon_no_recovery", "min_signal": "online_orders"},
         tags=("marketing", "online", "funnel", v.family),
+    )
+
+
+# ═══════════════════════ OWNED: SMS / GIFT-CARD / TIMING ════════════════════
+def _sms_channel_untapped(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"You collect phone numbers but never text — your highest-open channel sits idle",
+        observation=f"You hold {X} opted-in mobile numbers yet sent {X} SMS campaigns in the last {X} days; nearly every contactable customer goes untouched by text.",
+        reasoning=f"SMS is read within minutes by almost everyone who receives it, so an idle text list means your single highest-attention owned channel is switched off while you lean on email that most of the {v.name.lower()}'s customers never open.",
+        conclusion=f"Launch a permission-based SMS program: send {X} timely, {unit}-specific texts/month (drops, open slots, restocks) and route urgent offers to text instead of email.",
+        expected_effect=f"An activated SMS list at {X} sends/month typically returns ~${X}/mo in fast-response {unit}s at near-zero send cost.",
+        recommend_when={"state": "sms_untapped", "min_signal": "sms_send_log"},
+        tags=("marketing", "sms", v.family),
+    )
+
+
+def _gift_card_program_untapped(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Gift cards are an unused source of prepaid cash and new customers",
+        observation=f"Gift cards are only {X}% of sales and you run no seasonal gift-card push, despite {X} gift-giving occasions a year that send fresh buyers your way.",
+        reasoning=f"A gift card is paid for now and redeemed later, so it hands you free working capital up front, books breakage margin on the slice never redeemed, and brings a giver-introduced new customer — value a {v.name.lower()} forfeits entirely while the card stays unmarketed.",
+        conclusion=f"Launch a gift-card push ahead of the {X} biggest gifting windows and merchandise cards at the {v.staff_role} and the online checkout.",
+        expected_effect=f"A promoted gift-card program lifts prepaid sales ~${X}/mo in cash plus breakage and new-customer {unit} value.",
+        recommend_when={"state": "gift_card_untapped", "min_signal": "transactions"},
+        tags=("marketing", "gift_card", v.family),
+    )
+
+
+def _email_sendtime_mistimed(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"Your emails land when no one is reading",
+        observation=f"{X}% of your sends go out in the {X} window, but opens cluster in a different {X} window entirely — timing, not content, is capping engagement.",
+        reasoning=f"An email competes hardest in the first hour after it arrives, so sending into a low-attention window buries it under everything that lands later, which means even a strong {v.sale_unit} offer loses the opens and clicks it would otherwise earn.",
+        conclusion=f"Shift sends into the {X} window where your list actually opens, and schedule each campaign to land just before that peak rather than at a fixed clock time.",
+        expected_effect=f"Re-timing sends to the open peak lifts engagement ~{X}% on the same content, worth ~${X}/mo in email-driven {v.sale_unit}s.",
+        recommend_when={"state": "email_sendtime_mistimed", "min_signal": "email_send_log"},
+        tags=("marketing", "email", "timing", v.family),
     )
 
 
@@ -635,6 +674,32 @@ register(
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="LocalEventAgent: ingest nearby event calendars (sports/festivals/markets via a geo events feed; not connected) and correlate to foot-traffic lift to recommend tie-ins.",
         applies_keys=_keys_with_channel("walk_in"),
+    ),
+    # Owned: SMS / gift-card / send-timing
+    Archetype(
+        key="sms_channel_untapped", domain="marketing", name="SMS channel idle",
+        build=_sms_channel_untapped, situations=("baseline", "untapped"),
+        required_signals=("sms_send_log", "transactions"),
+        required_agents=("SmsAnalyzer",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="SmsAnalyzer: ingest an opted-in SMS contact list and send/delivery log (no SMS source is wired today) and compute reachable-but-untexted contacts vs send cadence.",
+        applies_keys=_keys_with_any_flag("repeat_purchase", "membership", "perishable"),
+    ),
+    Archetype(
+        key="gift_card_program_untapped", domain="marketing", name="Gift-card program untapped",
+        build=_gift_card_program_untapped, situations=("baseline", "untapped", "seasonal_peak"),
+        required_signals=("transactions",),
+        required_agents=("RevenueAnalyzer", "GiftCardAgent"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="GiftCardAgent: separate gift-card issuance/redemption from transactions to measure attach share, breakage, and the new-customer rate of redeemers; redemption linkage is partially available per POS.",
+        applies_families=("food_service", "personal_care", "health_wellness", "retail", "fitness", "hospitality"),
+    ),
+    Archetype(
+        key="email_sendtime_mistimed", domain="marketing", name="Email send-time mistimed",
+        build=_email_sendtime_mistimed, situations=("baseline",),
+        required_signals=("email_send_log",),
+        required_agents=("EmailAnalyzer",),
+        swarm_capability=SwarmCapability.FULL,
     ),
     # Online funnel
     Archetype(

@@ -80,9 +80,9 @@ def _dog_cut(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Cut the dogs — {X} {item}s that are neither popular nor profitable",
         observation=f"{X} {item}s sit low on both axes: under {X} {v.sale_unit}s/week each AND below-average margin.",
-        reasoning=f"Dogs don't just fail to earn — they tax the whole catalog: menu real estate, prep/training time, holding stock, and decision friction for the customer. Removing them concentrates demand onto items that do pay.",
-        conclusion=f"Retire or rework these {X} {item}s; redirect the freed space/attention to your stars and puzzles, and watch for demand migrating up.",
-        expected_effect=f"Pruning the long tail recovers ~{X} hours of prep/handling and simplifies choice, lifting attach on retained {item}s.",
+        reasoning=f"A dog costs far more than the zero it earns, because it still consumes menu real estate, prep/training time, and holding stock, and the extra option drives choice friction that suppresses conversion on your winners — so every dog you keep quietly taxes the {item}s that actually pay.",
+        conclusion=f"Cut or rework these {X} {item}s and redistribute the freed prep time and menu space to your stars and puzzles; track whether demand migrates up.",
+        expected_effect=f"Pruning the long tail recovers ~{X} prep-hours/week and typically lifts attach on the retained {item}s by {X}%.",
         recommend_when={"state": "dog_quadrant", "min_signal": "product_margin"},
         tags=("products", "menu_engineering", "dog", v.family),
     )
@@ -126,8 +126,8 @@ def _basket_affinity(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Frequently-bought-together {item}s aren't merchandised together",
         observation=f"{X} {item} pairs show strong basket affinity (lift > {X}×) but sit in different sections / screens, so the cross-sell is left to chance.",
-        reasoning=f"Affinity is latent demand: customers want both, but placement — not price or a verbal prompt — is the barrier. Co-locating proven pairs converts an existing intent into an extra line with zero discounting (distinct from a priced bundle).",
-        conclusion=f"Place the top {X} affinity partners adjacent (shelf, endcap, combo screen, or recommended-with), and re-measure co-attach.",
+        reasoning=f"Affinity is latent demand the layout is leaking: customers already want both, so the separation — not price or a verbal prompt — is what costs you the second line, because a shopper who'd grab the partner on impulse won't cross the store to find it. Co-locating proven pairs captures that existing intent with zero discounting (distinct from a priced bundle).",
+        conclusion=f"Merchandise the top {X} affinity partners adjacent (shelf, endcap, combo screen, or recommended-with slot) and re-measure co-attach.",
         expected_effect=f"Adjacency typically lifts pair attach by {X}%, ~${X}/mo in incremental {v.sale_unit}s.",
         recommend_when={"state": "unmerchandised_affinity", "min_signal": "basket"},
         tags=("products", "merchandising", "affinity", v.family),
@@ -160,8 +160,8 @@ def _retail_attach_to_service(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"You perform the {v.sale_unit} but miss the {goods} attach",
         observation=f"Only {X}% of {v.sale_unit}s leave with {goods}, though the captive, just-served customer is the easiest retail sale you get.",
-        reasoning=f"A service business has a trust window the moment work is done: the {who} has demonstrated expertise and the customer is primed. Retail attach here is near-pure margin and requires no new traffic — letting it sit at {X}% leaves the highest-intent buyer un-asked.",
-        conclusion=f"Give each {who} one recommended product per {v.sale_unit} tied to the work performed; track retail attach as a per-{_seller(v)} number.",
+        reasoning=f"Finishing the work opens a trust window, because the {who} has just demonstrated expertise and the customer is primed to act on a recommendation — so a tied take-home product sells at near-pure margin and needs no new traffic, which means every {v.sale_unit} that leaves without it leaks the easiest retail dollar you will ever earn.",
+        conclusion=f"Set each {who} a default of one recommended product per {v.sale_unit} tied to the work performed, and track retail attach as a per-{_seller(v)} number.",
         expected_effect=f"Lifting retail attach to {X}% adds ~${X}/mo at retail margin with no added service capacity.",
         recommend_when={"state": "retail_attach_gap", "min_signal": "basket"},
         tags=("products", "attach", "retail_in_service", v.family),
@@ -363,8 +363,8 @@ def _charm_pricing_untested(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Round price endings you've never tested",
         observation=f"{X}% of your {item}s end in round numbers (e.g. ${X}.00) at price points where ending and presentation measurably move conversion.",
-        reasoning=f"Price ENDINGS and how a number is displayed change perceived value independent of the actual price — a presentation lever, not a discount. Untested round endings leave a free, reversible conversion test on the table.",
-        conclusion=f"A/B charm vs round endings on the top {X} {item}s for {X} weeks and keep whichever wins; change nothing else.",
+        reasoning=f"Price endings move perceived value independently of the actual dollars charged, because a charm ending reads as a lower price band even when it costs the customer the same — so a round ending on a high-volume {item} leaks conversion you could recover for free, and the effect is reversible, which makes leaving it untested pure forgone upside.",
+        conclusion=f"Test charm vs round endings on the top {X} {item}s for {X} weeks and keep whichever wins; change nothing else.",
         expected_effect=f"A typical ending lift of {X}% on this volume is ~${X}/mo at zero margin cost.",
         recommend_when={"state": "price_ending_untested", "min_signal": "product_performance"},
         tags=("products", "pricing_presentation", v.family),
@@ -390,8 +390,8 @@ def _signature_undermarketed(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your signature {item} isn't doing differentiation work",
         observation=f"A distinctive, hard-to-copy {item} is ordered by only {X}% of customers and isn't featured in any first-impression surface.",
-        reasoning=f"A signature {item} is your cheapest differentiation — the thing customers describe to others and return for. Leaving it under-marketed wastes the one line competitors can't easily match; it should headline the experience, not hide in the list.",
-        conclusion=f"Make the signature {item} the hero of menu/shelf/first contact and arm {_seller(v)}s with its story; treat it as brand, not just SKU.",
+        reasoning=f"A signature {item} is your cheapest differentiation because it is the line competitors can't easily copy — the thing customers describe to others, which drives word-of-mouth and repeat visits no ad spend buys. So leaving it buried in the list erodes the one asset that pulls new traffic for free, while featuring it captures both trial and the retention it anchors.",
+        conclusion=f"Promote the signature {item} to the hero slot of the menu/shelf/first-contact surface and train {_seller(v)}s to recommend it by name with its story.",
         expected_effect=f"Elevating the signature lifts trial and word-of-mouth, ~${X}/mo plus repeat-visit gains.",
         recommend_when={"state": "signature_undermarketed", "min_signal": "product_performance"},
         tags=("products", "differentiation", "signature", v.family),
@@ -433,6 +433,59 @@ def _service_package_upsell(v: Vertical, situation: str) -> Built:
         expected_effect=f"Converting {X}% of qualifying repeaters to packages adds ~${X}/mo of committed revenue.",
         recommend_when={"state": "package_upsell", "min_signal": "transactions"},
         tags=("products", "packaging", "membership", v.family),
+    )
+
+
+# ── New reasoning patterns ───────────────────────────────────────────────────
+def _menu_real_estate(v: Vertical, situation: str) -> Built:
+    item = _item(v)
+    return Built(
+        title=f"Your prime menu/shelf positions are wasted on weak {item}s",
+        observation=f"The most-seen slots (first screen, eye level, top-left) hold {item}s that drive only {X}% of margin, while your top margin earners sit {X} rows down.",
+        reasoning=f"Placement drives selection because the eye lands on the prime slots first, so a low-margin {item} parked there captures attention a high-margin one would have converted — which means the layout itself leaks margin on every {v.sale_unit}, independent of price or demand.",
+        conclusion=f"Swap your {X} highest-margin {item}s into the prime positions and demote the weak occupants; re-measure mix after {X} weeks.",
+        expected_effect=f"Re-slotting prime positions typically shifts {X}% of mix to high-margin {item}s, ~${X}/mo at no added cost.",
+        recommend_when={"state": "menu_real_estate_misallocated", "min_signal": "product_margin"},
+        tags=("products", "merchandising", "placement", v.family),
+    )
+
+
+def _low_repeat_item(v: Vertical, situation: str) -> Built:
+    item = _item(v)
+    return Built(
+        title=f"A frequently-tried {item} almost nobody buys twice",
+        observation=f"{X}% of customers try this {item} once but only {X}% ever reorder it — a repeat rate well below the catalog norm of {X}%.",
+        reasoning=f"In a repeat-purchase business the reorder rate is the real verdict on an {item}: high trial with low repeat means it disappoints after the first buy, so it costs you twice — the wasted trial AND a customer who now trusts the menu less, which erodes the lifetime value every other {item} compounds on.",
+        conclusion=f"Drop or re-engineer the low-repeat {item} and stop steering first-timers to a line that kills repeat; route trial to a proven gateway instead.",
+        expected_effect=f"Replacing one repeat-killing {item} lifts reorder rate ~{X} points, ~${X}/mo in retained lifetime value.",
+        recommend_when={"state": "low_repeat_item", "min_signal": "transactions"},
+        tags=("products", "retention", "repeat", v.family),
+    )
+
+
+def _prep_intensive_low_margin(v: Vertical, situation: str) -> Built:
+    item = _item(v)
+    return Built(
+        title=f"Labor-heavy {item}s clog the line for little margin",
+        observation=f"{X} {item}s each take ~{X}x the average prep time yet return below-average margin, and they cluster in your {X} rush.",
+        reasoning=f"Prep time is capacity at peak, so a slow-to-make, thin-margin {item} costs you twice during the rush — it ties up the {_seller(v)} and the line while paying less per minute than the {item} behind it, which drives down throughput and revenue per labor-hour exactly when both are scarcest.",
+        conclusion=f"Re-engineer these {X} {item}s for faster assembly (prep-ahead, simpler build) or cut them from the peak menu to protect line speed.",
+        expected_effect=f"Unclogging the slow {item}s lifts rush throughput ~{X}% and recovers ~${X}/mo in peak capacity.",
+        recommend_when={"state": "prep_intensive_low_margin", "min_signal": "product_margin"},
+        tags=("products", "throughput", "menu_engineering", v.family),
+    )
+
+
+def _impulse_not_at_pos(v: Vertical, situation: str) -> Built:
+    item = _item(v)
+    return Built(
+        title=f"High-impulse {item}s aren't at the decision point",
+        observation=f"{X} low-consideration, high-margin {item}s sit in the aisles / back of the menu rather than at checkout, attaching to only {X}% of {v.sale_unit}s.",
+        reasoning=f"Impulse buys are won at the last moment because the choice is unplanned and emotional, so an impulse {item} placed away from the register never reaches the instant it would sell — the customer has already committed and moved on, which means location, not desire, is what caps its attach.",
+        conclusion=f"Merchandise the top {X} impulse {item}s at the register / checkout queue and re-measure attach over {X} weeks.",
+        expected_effect=f"Point-of-sale placement typically lifts impulse attach to {X}%, ~${X}/mo at full margin.",
+        recommend_when={"state": "impulse_not_at_pos", "min_signal": "basket"},
+        tags=("products", "merchandising", "impulse", v.family),
     )
 
 
@@ -661,5 +714,38 @@ register(
         required_agents=("ProductAnalyzer", "CustomerAnalyzer"),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="RepeatCohortAgent: join transactions to customer identity to detect à-la-carte repeaters who qualify for a package (customer linkage not yet on transactions).",
+    ),
+    Archetype(
+        key="menu_real_estate_misallocation", domain="products", name="Prime-position misallocation",
+        build=_menu_real_estate, situations=("baseline",),
+        required_signals=("product_performance", "product_margin"),
+        required_agents=("ProductAnalyzer", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL, swarm_upgrade=_MARGIN_FUSION,
+    ),
+    Archetype(
+        key="low_repeat_item", domain="products", name="Low-repeat item",
+        build=_low_repeat_item, situations=("baseline",),
+        applies_flags=("repeat_purchase",),
+        required_signals=("transactions", "daily_product_performance"),
+        required_agents=("ProductAnalyzer", "CustomerAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ReorderCohortAgent: link transactions to a customer identity to compute per-item reorder rate vs trial (customer linkage on transactions not yet available).",
+    ),
+    Archetype(
+        key="prep_intensive_low_margin", domain="products", name="Prep-heavy, thin-margin item",
+        build=_prep_intensive_low_margin, situations=("baseline",),
+        applies_families=("food_service",),
+        required_signals=("product_performance", "product_margin"),
+        required_agents=("ProductAnalyzer", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="PrepTimeAgent: attach a per-item prep/handling time (recipe build time not captured today) to weigh contribution against the line capacity it consumes at peak.",
+    ),
+    Archetype(
+        key="impulse_not_at_pos", domain="products", name="Impulse item off the decision point",
+        build=_impulse_not_at_pos, situations=("baseline",),
+        applies_families=("retail", "food_service"),
+        required_signals=("transactions", "product_performance"),
+        required_agents=("ProductAnalyzer", "AttachAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL, swarm_upgrade=_MARKET_BASKET,
     ),
 )
