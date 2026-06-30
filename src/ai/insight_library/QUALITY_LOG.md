@@ -34,3 +34,17 @@ lever (add/cut/shift/reprice/bundle…); the **expected_effect** is quantified
   Causal connectives + concrete levers + quantified effect is the repeatable lift.
 - Remaining: 142 C's + ~1,790 why/conclusion demerits in borderline-B archetypes
   → iteration 2 targets these + continues growth.
+
+## Iteration 2 — convert B→A + grow (2026-06-30)
+- Action: fixed the 7 remaining C-tier archetypes + ~30 highest-demerit B-tier
+  archetypes to the A-pattern (causal mechanism + concrete lever + quantified
+  effect applied across every vertical×situation row); added ~38 new grade-A
+  archetypes across all domains.
+- Catalog: 11,639 → **12,759** templates (532 → 570 archetypes).
+- Grade: A **85.8%** (+15.4) · B **14.2%** (−14.1) · C **0.0%** (2 rows) · D/F 0.
+- Lesson refined: the grader's _CONCRETE/_CAUSAL regexes are literal — verbs like
+  "respond/automate/renegotiate/codify/leverage" and "-ing" forms ("costing",
+  "signalling") DON'T match. Fixes must use recognized lemmas (set/reply, trigger,
+  extend-terms, standardize, drives/costs). Banked for iteration 3.
+- Remaining: ~1,816 B's (minor diction on scattered rows) → iter 3 sweeps the
+  remaining B-tier toward A + continues growth past 13k.

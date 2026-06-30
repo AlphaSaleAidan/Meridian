@@ -70,7 +70,7 @@ def _event_conflict(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Big local events quietly cost you your regulars",
         observation=f"On major-event days your {unit} volume drops {X}% even though the area is busier — your base customers stay home or go to the event instead.",
-        reasoning=f"Not every nearby crowd is your crowd. A festival or stadium night pulls your regulars' attention and parking elsewhere, and for a routine-driven {v.name} that substitution shows up as a dip, not a spike. Read blind, it looks like you had a bad day; in truth an external event displaced your demand.{extra}",
+        reasoning=f"Not every nearby crowd is your crowd: a festival or stadium night pulls your regulars' attention and parking elsewhere, so for a routine-driven {v.name} that substitution shows up as a dip rather than a spike — which means read blind it looks like a bad day, when in truth an external event displaced your demand.{extra}",
         conclusion=f"Stop fighting event days head-on: shift labor down, pre-sell or pre-book your regulars around the event, and protect margin instead of chasing walk-ups who aren't coming.",
         expected_effect=f"Right-sizing the {X} conflicting event days a year avoids ~${X}/yr in wasted labor and waste on demand that was never going to show.",
         recommend_when={"state": "event_displaces_regulars", "min_signal": "local_events"},
@@ -82,13 +82,13 @@ def _event_conflict(v: Vertical, situation: str) -> Built:
 def _competitor_proximity(v: Vertical, situation: str) -> Built:
     unit = v.sale_unit
     if "high_ticket" in v.flags:
-        lever = f"lean into being a destination — reputation, expertise, and {v.core_kpis[0]} — where proximity matters least"
+        lever = f"build a destination reputation — set a premium tier tied to your {v.core_kpis[0]} and {v.staff_role} expertise, where proximity matters least"
         why = f"high-ticket buyers travel for the right {v.staff_role}, so density pressures price and trust more than convenience"
     elif "walk_in_heavy" in v.flags:
-        lever = f"win the convenience fight — speed, hours, and a reason-to-pass-them at the {v.channels[0]} moment"
+        lever = f"win the convenience fight — extend hours past the cluster and add a fast-lane {v.sale_unit} that captures the foot traffic at the {v.channels[0]} moment"
         why = f"a walk-in customer picks the nearest acceptable option, so each same-radius rival is a direct splitter of the same foot traffic"
     else:
-        lever = f"differentiate on the {v.core_kpis[0]} lever rather than competing on sameness"
+        lever = f"set a clear {v.core_kpis[0]}-led differentiator and build a reason-to-choose-you rather than competing on sameness"
         why = "a dense cluster of similar shops commoditizes the category and compresses everyone's pricing power"
     return Built(
         title=f"{X} direct competitors sit within {X} of you",
@@ -285,7 +285,7 @@ def _market_share_proxy(v: Vertical, situation: str) -> Built:
         title=f"You hold an estimated {X}% of spend in your own radius",
         observation=f"Against anonymized category spend within {X} of you, your {unit} revenue implies a {X}% local share — {X} the typical share for a {v.name} of your footprint.",
         reasoning=f"Absolute revenue can't tell you whether you're winning; share against the addressable spend in your radius can. A low share in a high-spend area is upside left on the table, while a high share in a thin area means growth has to come from basket, not new customers — opposite strategies you can't choose between without the external denominator.",
-        conclusion=f"Pick the strategy your share implies: chase new-customer reach if share is low, or deepen {v.core_kpis[0]} and basket if share is already high.",
+        conclusion=f"If share is low, launch a new-customer reach push; if share is already high, set a basket-building attach and deepen {v.core_kpis[0]} — pick the lever your share position implies.",
         expected_effect=f"Targeting the right growth lever for your share position is worth ~${X}/mo versus a misaimed push.",
         recommend_when={"state": "local_share_position", "min_signal": "local_benchmark"},
         tags=("localmarket", "market_share", "benchmark", v.family),
@@ -326,7 +326,7 @@ def _payday_cycle(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your {X} mix swings with the neighborhood's pay cycle",
         observation=f"Your {unit} volume and basket rise in the days after common local paydays and thin out before them, a {X}% swing across the pay cycle.",
-        reasoning=f"Discretionary spend near a {v.name} is gated by when the surrounding workforce gets paid. Post-payday windows tolerate upsell and premium mix; pre-payday windows want value and smaller baskets. Running one offer all month under-monetizes the flush days and over-prices the lean ones.",
+        reasoning=f"Discretionary spend near a {v.name} is gated by when the surrounding workforce gets paid, so post-payday windows tolerate upsell and premium mix while pre-payday windows want value and smaller baskets — which means running one offer all month under-monetizes the flush days and over-prices the lean ones.",
         conclusion=f"Phase the offer to the cycle: push premium {unit}s and add-ons post-payday and value/entry options pre-payday, timed to the local pay calendar.",
         expected_effect=f"Phasing offers to the pay cycle is worth ~${X}/mo over a flat all-month approach.",
         recommend_when={"state": "paycycle_demand_swing", "min_signal": "calendar_context"},
@@ -444,7 +444,7 @@ def _anchor_tenant(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"A nearby anchor drives the foot traffic and you don't time to it",
         observation=f"A major traffic anchor within {X} (a big-box, grocery, transit hub, or employer) generates predictable surges your {unit} pattern doesn't align to.",
-        reasoning=f"When a neighbor pulls the crowd, their rhythm becomes your opportunity: the anchor's peak hours, restock days, or shift changes dump qualified foot traffic into your radius on a schedule. A {v.name} that ignores the anchor's clock staffs and stocks to its own average and misses the borrowed surge.",
+        reasoning=f"When a neighbor pulls the crowd, their rhythm becomes your opportunity because the anchor's peak hours, restock days, and shift changes dump qualified foot traffic into your radius on a fixed schedule, so a {v.name} that ignores the anchor's clock staffs and stocks to its own average and misses the borrowed surge.",
         conclusion=f"Map the anchor's traffic rhythm and align your {v.staff_role} coverage, hours, and a catch-the-overflow offer to its peaks.",
         expected_effect=f"Timing to the anchor's traffic is worth ~${X}/mo on surges you currently let pass.",
         recommend_when={"state": "anchor_traffic_unaligned", "min_signal": "anchor_tenants"},
@@ -487,7 +487,7 @@ def _local_search_trend(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"People near you are searching for what you sell more than you're selling it",
         observation=f"Local search interest for your category and specific {unit}s is up {X}% in your area, while your matching sales are flat — a demand signal you're not converting.",
-        reasoning=f"Local search is intent that hasn't reached your register yet: a rising query trend in your radius is future demand declaring itself. If a {v.name} isn't visible or in-stock for what's being searched, that intent routes to whoever is — the gap between local search and local sales is leakage at the discovery step, upstream of everything in the store.{extra}",
+        reasoning=f"Local search is intent that hasn't reached your register yet, so a rising query trend in your radius signals future demand declaring itself; because a {v.name} that isn't visible or in-stock for what's searched leaks that intent to whoever is, the gap between local search and local sales is pure discovery-step leakage upstream of everything in the store.{extra}",
         conclusion=f"Close the discovery gap: make sure the searched {unit}s are visible, in-stock, and findable locally, and align the offer to the rising query.",
         expected_effect=f"Converting the unmet local search interest is worth ~${X}/mo of demand currently leaking to more-visible competitors.",
         recommend_when={"state": "search_demand_unconverted", "min_signal": "search_trends"},
@@ -653,6 +653,63 @@ def _local_buzz_spike(v: Vertical, situation: str) -> Built:
         expected_effect=f"Converting even {X}% of the spike's first-timers into regulars is worth ~${X}/mo of retained demand.",
         recommend_when={"state": "local_buzz_spike", "min_signal": "local_buzz"},
         tags=("localmarket", "buzz", "retention", v.family),
+    )
+
+
+# ── 41. Scheduled minimum-wage / labor-law change ───────────────────────────
+def _minimum_wage_change(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"A scheduled minimum-wage increase resets your labor-cost floor",
+        observation=f"A {X}% statutory wage increase lands in {X}, lifting the cost of every {v.staff_role} hour while your {unit} prices still sit on the old labor base.",
+        reasoning=f"A mandated wage step is an external cost shock with a known date, so for a {v.name} the gap between a higher wage floor and a frozen {unit} price comes straight out of contribution — which means doing nothing lets the increase erode margin on every sale the day it takes effect.",
+        conclusion=f"Reprice ahead of the date: set a {X}% {unit} price step on the most labor-intensive items and re-tier the schedule so {v.staff_role} hours track demand, before the increase lands.",
+        expected_effect=f"Pricing and scheduling ahead of the wage step protects ~${X}/mo of margin the increase would otherwise erase.",
+        recommend_when={"state": "minimum_wage_increase", "min_signal": "labor_law_calendar"},
+        tags=("localmarket", "regulation", "labor_cost", v.family),
+    )
+
+
+# ── 42. Parking supply / cost constraint ────────────────────────────────────
+def _parking_constraint(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Parking near you is too scarce or costly for the trip to feel worth it",
+        observation=f"Within a short walk of you sit only {X} parking spots and metered rates run {X}, yet {X}% of your customers arrive by car.",
+        reasoning=f"For a drive-in {v.name}, parking is part of the price of the visit, so when spaces are scarce or metered high the effective cost of a {unit} rises before the customer even buys — which means demand leaks to competitors with easier parking even when your offer is identical.",
+        conclusion=f"Cut the parking friction: validate or reserve {X} nearby spots, post clear parking directions on every surface, and add a quick curbside pickup lane for the car-bound trip.",
+        expected_effect=f"Lowering parking friction recovers ~${X}/mo of car-borne trips that currently bounce to easier-access rivals.",
+        recommend_when={"state": "parking_supply_constraint", "min_signal": "parking_inventory"},
+        tags=("localmarket", "access", "parking", v.family),
+    )
+
+
+# ── 43. Neighborhood income trajectory (gentrification) ─────────────────────
+def _gentrification_trajectory(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    extra = " The shift is accelerating now — the incoming cohort is forming its habits this year, ahead of most of the street." if situation == "emerging" else ""
+    return Built(
+        title=f"Your neighborhood's income is climbing and your offer hasn't moved with it",
+        observation=f"Trade-area median income and rents have risen {X}% over {X} years, but your {unit} mix and price tiers still target the pre-shift customer.{extra}",
+        reasoning=f"Demographics are a moving trajectory rather than a fixed backdrop, so a {v.name} priced and merchandised for who the neighborhood WAS leaves the rising willingness-to-pay of who it is BECOMING unclaimed — which means the higher-income cohort moving in trades up at a competitor while you hold an outdated entry-only ladder.",
+        conclusion=f"Add a premium {unit} tier and re-weight the mix toward the incoming cohort, then test elevated price points on {X} signature items against the current baseline.",
+        expected_effect=f"Capturing the rising-income trade-up is worth ~${X}/mo the current ladder leaves on the table.",
+        recommend_when={"state": "income_trajectory_shift", "min_signal": "demographics_trend"},
+        tags=("localmarket", "demographics", "trajectory", v.family),
+    )
+
+
+# ── 44. Utility / energy rate shock ─────────────────────────────────────────
+def _utility_cost_shock(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"A local energy-rate jump is quietly raising the cost of every open hour",
+        observation=f"Local commercial utility rates rose {X}% this {X}, adding ${X}/mo to fixed operating cost while your {unit} pricing and open hours are unchanged.",
+        reasoning=f"Energy is a fixed cost paid for every hour the lights and equipment run, so for an energy-intensive {v.name} a rate hike raises the breakeven of each open hour — which means low-yield dayparts that barely cleared cost before now run at a loss and the dead hours turn margin-negative.",
+        conclusion=f"Trim the now-unprofitable hours, shift equipment-heavy prep into off-peak rate windows, and set a small {unit} price step to cover the new energy base.",
+        expected_effect=f"Re-timing and repricing against the rate hike protects ~${X}/mo of margin the energy cost would erode.",
+        recommend_when={"state": "utility_cost_shock", "min_signal": "utility_rates"},
+        tags=("localmarket", "economy", "cost", v.family),
     )
 
 
@@ -1016,5 +1073,42 @@ register(
         exclude_keys=NO_GHOST,
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="BuzzMonitorAgent: monitor local press, social, and review-volume signals for spikes about the merchant by geo+date → align the mention to the daily_revenue/first-timer surge → output the spike size, decay window, and a capture-the-trial trigger.",
+    ),
+    # ── External cost / access / demographic-trend forces (new) ──
+    Archetype(
+        key="minimum_wage_change", domain="localmarket", name="Scheduled minimum-wage increase",
+        build=_minimum_wage_change, situations=("baseline", "seasonal_peak"),
+        required_signals=("labor_law_calendar", "schedule_shifts", "transactions"),
+        required_agents=("RegulatoryCalendarAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="RegulatoryCalendarAgent: track statutory minimum-wage/labor-law schedules by jurisdiction+date → join the effective date and step size to the merchant's labor cost (schedule_shifts) and ticket (transactions) → output the margin hit and the price/schedule pre-adjustment.",
+    ),
+    Archetype(
+        key="parking_supply_constraint", domain="localmarket", name="Parking supply/cost constraint",
+        build=_parking_constraint, situations=("baseline",),
+        required_signals=("parking_inventory", "daily_revenue"),
+        required_agents=("ParkingContextAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ParkingContextAgent: pull nearby parking supply and meter rates (municipal/parking APIs) for the merchant's geo → relate effective parking cost/scarcity to car-arrival share and daily_revenue → output the access-friction drag and validation/curbside levers.",
+    ),
+    Archetype(
+        key="income_trajectory_shift", domain="localmarket", name="Neighborhood income trajectory",
+        build=_gentrification_trajectory, situations=("baseline", "emerging"),
+        required_signals=("demographics_trend", "transactions"),
+        required_agents=("DemographicAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="DemographicAgent (trend): track multi-year census/ACS income and rent TRAJECTORY for the trade area (distinct from the static demographic-fit snapshot) → compare the shift direction to the merchant's price tiers and mix → output the trade-up headroom and re-weighting.",
+    ),
+    Archetype(
+        key="utility_cost_shock", domain="localmarket", name="Local energy-rate shock",
+        build=_utility_cost_shock, situations=("baseline",),
+        required_signals=("utility_rates", "hourly_revenue"),
+        required_agents=("UtilityCostAgent",),
+        exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="UtilityCostAgent: ingest local commercial energy-rate series and rate-schedule windows by geo+date → apply them to the merchant's open hours and equipment load → output the per-open-hour breakeven shift, the now-loss-making dayparts, and the price/hours response.",
     ),
 )

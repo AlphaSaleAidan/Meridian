@@ -60,7 +60,7 @@ def _discount_comp_abuse(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Comps/discounts are {X}% of revenue — {X}% above category norm",
         observation=f"Manual comps and discounts removed ${X} from {X} {unit}s last month, {X}% of which came from {X} {role}(s).",
-        reasoning=f"Comps are margin given away at the {role}'s discretion; when they cluster on specific {role}s or repeat customers they stop being goodwill and become an off-book price — the favored customer pays the {role}, not the till.",
+        reasoning=f"Comps are margin given away at the {role}'s discretion, so when they cluster on specific {role}s or repeat customers they stop being goodwill and become an off-book price — the favored customer pays the {role} instead of the till, which leaks margin straight off the top line.",
         conclusion=f"Cap discretionary comps at ${X}/shift without approval and review the top-{X} comp issuers against repeat-recipient names.",
         expected_effect=f"Reclaiming abused comps recovers ~${X}/mo of margin currently given away.",
         recommend_when={"state": "comp_abuse_suspected", "min_signal": "discount_events"},
@@ -89,7 +89,7 @@ def _after_hours_transactions(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"{X} {unit}s rang up outside your open hours",
         observation=f"{X} transactions posted between {X} and {X} — before open or after close — totaling ${X} last month.",
-        reasoning=f"Sales keyed when the doors are shut can't be real walk-in {unit}s; they're typically test rings, refund manipulation, or cleanup entries — each a sign the till is being touched off-clock with no customer present.{extra}",
+        reasoning=f"Sales keyed when the doors are shut can't be real walk-in {unit}s, so they're typically test rings, refund manipulation, or cleanup entries — which means the till is being touched off-clock with no customer present, and every off-hours ring erodes the audit trail the close depends on.{extra}",
         conclusion=f"Match every out-of-hours transaction to a logged reason (online order, prep) and flag the rest for the {v.staff_role} on record.",
         expected_effect=f"Surfacing off-hours activity closes a blind spot covering ~${X}/mo of unverifiable transactions.",
         recommend_when={"state": "after_hours_activity", "min_signal": "transactions"},
@@ -324,7 +324,7 @@ def _cash_mix_shift(v: Vertical, situation: str) -> Built:
         title=f"Cash share of sales dropped {X} points unexplained",
         observation=f"Cash fell from {X}% to {X}% of {v.sale_unit} tender over {X} weeks with no change in customer mix or pricing.",
         reasoning=f"Card mix usually drifts slowly; a fast drop in REPORTED cash while card volume holds is the signature of cash sales never being rung — the money came in, the {v.sale_unit} never did, so the tender ledger under-counts cash that was actually collected.{extra}",
-        conclusion=f"Compare reported cash to expected cash by daypart and audit shifts where the cash share falls below {X}%.",
+        conclusion=f"Reconcile reported cash against expected cash by daypart, flag any shift where the cash share drops below {X}%, and require a blind second count on the flagged closes.",
         expected_effect=f"Recovering unrung cash sales protects ~${X}/mo that is currently invisible to the books.",
         recommend_when={"state": "cash_mix_shift", "min_signal": "tender_detail"},
         tags=("risk", "cash_handling", "anomaly", v.family),
@@ -337,7 +337,7 @@ def _employee_discount_abuse(v: Vertical, situation: str) -> Built:
         title=f"Employee-discount usage {X}x policy on {X} {role}(s)",
         observation=f"{X} {role}(s) applied the staff discount to {X} {v.sale_unit}s last month — {X}% on transactions with a paying customer present, not their own purchase.",
         reasoning=f"The employee discount is a benefit on the {role}'s OWN purchase; applied to a customer's {v.sale_unit} it becomes an unauthorized price cut the {role} can monetize (friend-pricing, or pocketing the difference) — distinct from generic comp abuse because it hides behind a legitimate discount code.",
-        conclusion=f"Restrict the staff-discount code to transactions with no other customer and audit the top {X} users.",
+        conclusion=f"Require a manager PIN to apply the staff-discount code on any transaction with a paying customer present, and flag the top {X} users for a one-on-one review.",
         expected_effect=f"Closing the loophole recovers ~${X}/mo of margin given away under the staff code.",
         recommend_when={"state": "employee_discount_abuse", "min_signal": "discount_events"},
         tags=("risk", "discounts", "attribution", v.family),
@@ -354,6 +354,48 @@ def _partial_refund_pattern(v: Vertical, situation: str) -> Built:
         expected_effect=f"Catching structured refunds recovers ~${X}/mo that slips beneath single-transaction controls.",
         recommend_when={"state": "structured_refunds", "min_signal": "refund_events"},
         tags=("risk", "refunds", "structuring", v.family),
+    )
+
+
+def _cash_deposit_shortfall(v: Vertical, situation: str) -> Built:
+    role = v.staff_role
+    unit = v.sale_unit
+    return Built(
+        title=f"Bank deposits run ${X} short of counted {unit} cash",
+        observation=f"Counted drawer cash from {unit}s totaled ${X} over {X} weeks but the matching bank deposits came in ${X} lower — a gap invisible in any single close.",
+        reasoning=f"When the drawer balances at close but the bank deposit lands short, the cash is disappearing between the till and the bank, so the loss hides in the {role}'s deposit-handling step that no register report covers — the close looks clean because the skim happens after it is signed off.",
+        conclusion=f"Require a dual-signature deposit log, reconcile every deposit slip to the day's counted {unit} cash, and flag any deposit short by more than ${X}.",
+        expected_effect=f"Closing the deposit gap recovers ~${X}/mo that currently leaks after an apparently clean close.",
+        recommend_when={"state": "deposit_shortfall", "min_signal": "bank_deposits"},
+        tags=("risk", "cash_handling", "leakage", v.family),
+    )
+
+
+def _training_mode_abuse(v: Vertical, situation: str) -> Built:
+    role = v.staff_role
+    unit = v.sale_unit
+    return Built(
+        title=f"{X} live {unit}s rung in training/practice mode",
+        observation=f"{X} transactions worth ${X} were keyed in training mode last month, {X}% by the same {X} {role}(s).",
+        reasoning=f"Training-mode rings never post to the sales ledger or inventory, so a real cash {unit} keyed in training mode lets the {role} hand over product and pocket the cash with no record — which leaks money the void and refund logs can never catch because the sale officially never happened.",
+        conclusion=f"Lock training mode behind a manager PIN, disable it on live terminals during open hours, and flag any training ring paired with a cash drawer event.",
+        expected_effect=f"Disabling open-hours training rings closes a blind spot worth ~${X}/mo in unrecorded cash sales.",
+        recommend_when={"state": "training_mode_rings", "min_signal": "transaction_mode"},
+        tags=("risk", "anomaly", "leakage", v.family),
+    )
+
+
+def _loyalty_points_abuse(v: Vertical, situation: str) -> Built:
+    role = v.staff_role
+    unit = v.sale_unit
+    return Built(
+        title=f"Loyalty points self-accrued on {X}% of {role} transactions",
+        observation=f"One rewards account collected points on {X} {unit}s last month, {X}% of them rung by {X} {role}(s) for customers who weren't enrolled.",
+        reasoning=f"Loyalty points are stored value like a gift card, so a {role} attaching their own rewards account to other customers' purchases banks points they later redeem for free {unit}s — which converts other people's spend into the {role}'s own credit and never shows up in cash or card reconciliation.",
+        conclusion=f"Require the customer's own identifier to attach points, cap points per transaction without a customer match, and flag accounts redeeming above {X}/mo.",
+        expected_effect=f"Closing the points loophole protects ~${X}/mo of margin otherwise redeemed as free product.",
+        recommend_when={"state": "loyalty_points_abuse", "min_signal": "loyalty_ledger"},
+        tags=("risk", "loyalty", "leakage", v.family),
     )
 
 
@@ -559,5 +601,31 @@ register(
         required_agents=("AnomalyLedgerAgent",),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="AnomalyLedgerAgent: rolling per-employee refund-count + amount-distribution analysis to catch just-under-threshold structuring. Requires employee-attributed refund events.",
+    ),
+    Archetype(
+        key="cash_deposit_shortfall", domain="risk", name="Bank-deposit shortfall",
+        build=_cash_deposit_shortfall, situations=("baseline",),
+        applies_families=("retail", "food_service", "personal_care"),
+        required_signals=("bank_deposits", "drawer_counts"),
+        required_agents=("LossPreventionAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="LossPreventionAgent: reconcile end-of-day counted cash against the matching bank deposit to detect cash lost between till and bank. Neither drawer counts nor bank-deposit feeds are ingested today.",
+    ),
+    Archetype(
+        key="training_mode_abuse", domain="risk", name="Training-mode live sales",
+        build=_training_mode_abuse, situations=("baseline", "anomaly"),
+        required_signals=("transaction_mode", "transactions", "employee_id"),
+        required_agents=("AnomalyLedgerAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="AnomalyLedgerAgent: capture the POS training/practice-mode flag per transaction and attribute it to employee to flag live cash rung off-ledger. Mode flag is emitted by the POS but not retained.",
+    ),
+    Archetype(
+        key="loyalty_points_abuse", domain="risk", name="Loyalty-points self-accrual",
+        build=_loyalty_points_abuse, situations=("baseline",),
+        applies_families=("retail", "food_service", "personal_care"),
+        required_signals=("loyalty_ledger", "employee_id"),
+        required_agents=("LossPreventionAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="LossPreventionAgent: ingest loyalty accrual/redemption events with employee attribution to detect a single rewards account banking points across unenrolled customers' purchases. Loyalty ledger is not collected.",
     ),
 )

@@ -53,7 +53,7 @@ def _gbp_incomplete(v: Vertical, situation: str) -> Built:
         title=f"Your Google Business Profile is incomplete — the listing does half its job",
         observation=f"Your GBP is missing {X} of the fields searchers act on (hours, services, attributes, photos) and is {X}% complete.",
         reasoning=f"The Business Profile is the first surface a local searcher sees for a {v.name.lower()}, and Google ranks and displays complete profiles ahead of thin ones; every missing field is both a ranking drag and a question the searcher can't answer, so they pick a competitor whose listing does answer it.",
-        conclusion=f"Complete the {X} highest-impact fields first (hours, primary category, services, photos) and keep attributes current.",
+        conclusion=f"Fill in the {X} highest-impact fields first — set the hours and primary category, add your services, and load fresh photos — then keep attributes current.",
         expected_effect=f"A fully-built profile lifts listing visibility and click-through, recovering ~${X}/mo of searches that currently bounce to competitors.",
         recommend_when={"state": "gbp_incomplete", "min_signal": "gbp_profile"},
         tags=("digital", "gbp", "listing", v.family),
@@ -77,7 +77,7 @@ def _maps_ranking_vs_proximity(v: Vertical, situation: str) -> Built:
         title=f"You rank in the map pack near your door but vanish a few blocks out",
         observation=f"Geo-grid tracking shows you in the top-3 within {X}m of the storefront but off the first map screen beyond {X}m, where much of your draw lives.",
         reasoning=f"Map-pack rank decays with searcher distance; for a {v.name.lower()} that draws from a wider radius than its immediate block, a tight ranking footprint means searchers in your real catchment never see you — proximity is doing the ranking work that profile strength and reviews should be extending.",
-        conclusion=f"Strengthen the proximity-independent ranking factors (category, reviews velocity, profile completeness, local citations) to widen the radius where you place.",
+        conclusion=f"Set the correct primary category, collect {X} new reviews a month, complete the profile, and build {X} local citations to widen the radius where you place.",
         expected_effect=f"Extending your ranked radius captures the searches just outside your block, worth ~${X}/mo of new discovery.",
         recommend_when={"state": "maps_rank_proximity_bound", "min_signal": "maps_geo_grid"},
         tags=("digital", "maps", "ranking", v.family),
@@ -88,8 +88,8 @@ def _maps_photo_freshness(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Customer photos define your listing — your own are stale",
         observation=f"{X}% of the photos on your maps listing are user-uploaded and your newest owner photo is {X} months old.",
-        reasoning=f"On maps, photos are the strongest visual cue a searcher uses to choose; when user photos outnumber and outdate yours, the listing's impression is set by whoever happened to snap a picture, not by how a {v.name.lower()} wants to present its {v.sale_unit} — you've ceded the storefront's first impression.",
-        conclusion=f"Upload a current owner photo set (interior, {v.sale_unit}, team) and refresh it on a schedule so your images lead the listing.",
+        reasoning=f"On maps, photos are the strongest visual cue a searcher uses to choose, so when user photos outnumber and outdate yours, whoever happened to snap a picture — not the owner — sets the listing's impression, which drives comparison-stage clicks to whichever {v.name.lower()} simply looks better and costs you the {v.sale_unit} before a visit.",
+        conclusion=f"Upload a current owner photo set (interior, {v.sale_unit}, team) and set a monthly schedule to refresh it so your images lead the listing.",
         expected_effect=f"A current owner-led photo set lifts listing click-through worth ~${X}/mo of better-qualified discovery.",
         recommend_when={"state": "maps_photos_stale", "min_signal": "gbp_profile"},
         tags=("digital", "maps", "photos", v.family),
@@ -113,7 +113,7 @@ def _third_party_listing_inconsistency(v: Vertical, situation: str) -> Built:
         title=f"Your name/address/phone disagree across the web",
         observation=f"NAP audit finds {X} conflicting versions of your hours/phone/address across Google, Apple, Bing, Yelp, and Facebook.",
         reasoning=f"Inconsistent NAP confuses both ranking algorithms (which use citation agreement as a trust signal) and customers (who may call a dead number or arrive after a wrong-listed close); for a {v.name.lower()} dependent on local search, every conflicting listing is a trust deduction and a literal lost customer.",
-        conclusion=f"Reconcile NAP to one canonical record and push the correction to the {X} platforms that currently disagree.",
+        conclusion=f"Set one canonical NAP record and push the correction out to each of the {X} platforms that currently disagree.",
         expected_effect=f"Consistent citations restore local trust signals and stop misdirected customers, worth ~${X}/mo.",
         recommend_when={"state": "nap_inconsistent", "min_signal": "listing_scan"},
         tags=("digital", "listing", "nap", v.family),
@@ -149,7 +149,7 @@ def _search_visibility_for_category(v: Vertical, situation: str) -> Built:
         title=f"You're invisible for the category searches that should find you",
         observation=f"For the {X} core '{v.name.lower()} near me'-style queries, you don't appear on the first page of results or the map pack.",
         reasoning=f"Category and 'near me' searches are the top of your discovery funnel — the highest-intent way a new customer finds a {v.name.lower()}; absence from page one for your own category means new-customer discovery is structurally capped no matter how good the in-store experience is, because the funnel never starts.",
-        conclusion=f"Target the {X} highest-intent category queries with listing, on-page, and citation work, and track rank movement monthly.",
+        conclusion=f"Build a page for each of the {X} highest-intent category queries, add them to your listing and citations, and set a monthly rank check.",
         expected_effect=f"Reaching page one for core category queries opens net-new discovery worth ~${X}/mo.",
         recommend_when={"state": "category_search_invisible", "min_signal": "serp_rank"},
         tags=("digital", "search", "visibility", v.family),
@@ -400,6 +400,55 @@ def _gbp_messaging_unanswered(v: Vertical, situation: str) -> Built:
         expected_effect=f"Connecting the high-intent messages you already receive is worth ~${X}/mo in chosen-then-lost {v.sale_unit}s.",
         recommend_when={"state": "messaging_unanswered", "min_signal": "gbp_profile"},
         tags=("digital", "funnel", "messaging", v.family),
+    )
+
+
+# ═══════════════════════ ENGAGEMENT / ATTRIBUTION / SEARCH ══════════════════
+def _review_response_absent(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"You never reply to reviews — your reputation is a one-sided conversation",
+        observation=f"You've responded to only {X}% of the last {X} reviews, and every negative one sits with no owner reply.",
+        reasoning=f"Owner responses are a public ranking and trust signal, so a prospect reading reviews for a {v.name.lower()} reads an unanswered complaint as unresolved and Google de-prioritizes disengaged profiles — which means silence both suppresses the listing and hands the deciding impression to your unhappiest customer.",
+        conclusion=f"Reply to every review within {X} hours — thank the positives and offer a concrete fix on the negatives — and set a standing routine so none goes unanswered.",
+        expected_effect=f"An active response routine lifts listing trust and choose-rate worth ~${X}/mo of recovered discovery.",
+        recommend_when={"state": "reviews_unanswered", "min_signal": "review_stream"},
+        tags=("digital", "reviews", "engagement", v.family),
+    )
+
+
+def _branded_search_competitor_ads(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"Competitors are buying ads on your own name",
+        observation=f"On searches for your business name, {X} competitor or aggregator ads sit above your listing, intercepting an estimated {X}% of your branded clicks.",
+        reasoning=f"A branded search is your warmest demand because the customer already wants a {v.name.lower()} by name, so a rival's ad sitting above your result siphons buyers who were coming to you specifically — which means you lose the cheapest, highest-intent traffic there is before they ever reach your door.",
+        conclusion=f"Claim the top of your own branded results: run a low-cost brand-defense ad and tighten the listing and title tags so the organic result also owns the first screen.",
+        expected_effect=f"Recapturing intercepted branded clicks is worth ~${X}/mo of demand already asking for you.",
+        recommend_when={"state": "branded_search_intercepted", "min_signal": "serp_rank"},
+        tags=("digital", "search", "branded", v.family),
+    )
+
+
+def _analytics_attribution_blindspot(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"You can't tell which channel actually brings customers in",
+        observation=f"No conversion tracking ties bookings/orders back to a source, so {X}% of marketing spend runs across {X} channels you can't measure.",
+        reasoning=f"Without attribution you're flying blind on spend, so for a {v.name.lower()} every untracked dollar means you can't separate the channel that drives {v.sale_unit}s from the one that drives nothing — which guarantees budget drifts to whatever is loudest rather than what actually converts.",
+        conclusion=f"Set up basic conversion tracking (call tracking, booking/form events, UTM tags) and reallocate spend toward the {X} channels that prove out, away from the ones that don't.",
+        expected_effect=f"Reallocating spend from unmeasured to proven channels recovers ~${X}/mo of wasted budget.",
+        recommend_when={"state": "attribution_blindspot", "min_signal": "web_analytics"},
+        tags=("digital", "analytics", "attribution", v.family),
+    )
+
+
+def _local_landing_page_missing(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"Searchers across your service area land on a page that names none of them",
+        observation=f"You serve {X} distinct neighborhoods/areas but run one generic page, so {X}% of local-intent queries hit content that mentions no specific place.",
+        reasoning=f"Local search rewards relevance to the searcher's place, so a single generic page for a {v.name.lower()} that covers several areas ranks strongly for none of them — which means high-intent 'near me' searchers in each pocket of your catchment see a competitor whose page actually names their neighborhood.",
+        conclusion=f"Build a dedicated, indexable page for each of the {X} core service areas with local details, then link them from the main site and your listing.",
+        expected_effect=f"Area-specific pages open net-new local discovery worth ~${X}/mo across the catchment.",
+        recommend_when={"state": "local_pages_missing", "min_signal": "serp_rank"},
+        tags=("digital", "search", "local_pages", v.family),
     )
 
 
@@ -670,5 +719,42 @@ register(
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade=_WEB_UP + " At-table self-order adoption needs QR-order session events tied to table/check.",
         applies_keys=_keys_with_any_flag("table_service"),
+    ),
+    # ── Engagement / attribution / search (new) ──
+    Archetype(
+        key="review_response_absent", domain="digital", name="Reviews unanswered",
+        build=_review_response_absent, situations=("leaking",),
+        required_signals=("review_stream",),
+        required_agents=("DigitalPresenceAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="DigitalPresenceAgent: pull each review with its owner-response status/timestamp from GBP + platforms to compute response rate and latency (distinct from review velocity); no review-response stream is ingested today.",
+        applies_keys=_ALL,
+    ),
+    Archetype(
+        key="branded_search_competitor_ads", domain="digital", name="Branded search intercepted",
+        build=_branded_search_competitor_ads, situations=("leaking",),
+        required_signals=("serp_rank",),
+        required_agents=("MapsRankAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_MAPS_UP + " Branded-term interception additionally needs a SERP crawl of the business-name query to detect competitor/aggregator ads above the listing.",
+        applies_keys=_ALL,
+    ),
+    Archetype(
+        key="analytics_attribution_blindspot", domain="digital", name="Attribution blindspot",
+        build=_analytics_attribution_blindspot, situations=("baseline",),
+        required_signals=("web_analytics",),
+        required_agents=("OnlineFunnelAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_WEB_UP + " Source-to-conversion attribution needs UTM/referrer capture plus call/booking event tracking joined to transactions.",
+        applies_keys=_keys_with_channel("online", "booking", "phone"),
+    ),
+    Archetype(
+        key="local_landing_page_missing", domain="digital", name="Local landing pages missing",
+        build=_local_landing_page_missing, situations=("untapped",),
+        required_signals=("serp_rank",),
+        required_agents=("MapsRankAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_MAPS_UP + " Per-area page coverage also needs a crawl of the merchant's own site to map which service areas have a dedicated indexable page.",
+        applies_keys=_ALL,
     ),
 )

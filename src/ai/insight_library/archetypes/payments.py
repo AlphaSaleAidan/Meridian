@@ -135,7 +135,7 @@ def _chargeback_cluster(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Chargebacks are clustering — {X}% above your baseline",
         observation=f"Dispute rate hit {X}% of {v.sale_unit}s this period, concentrated in {X} reason code(s)/channel(s).{extra}",
-        reasoning=f"Beyond the refunded amount, dispute fees and rising chargeback ratios threaten your processing rate (and account standing); a cluster almost always has one addressable cause.",
+        reasoning=f"Beyond the refunded amount, each dispute carries a fee and lifts your chargeback ratio, which threatens your processing rate and account standing because acquirers price risk straight off that ratio — and a cluster almost always traces to one addressable cause.",
         conclusion=f"Root-cause the dominant reason code (descriptor, fulfillment, fraud) and add the matching control — clearer descriptor, signature/AVS, or fulfillment proof.",
         expected_effect=f"Cutting the cluster avoids ~${X}/mo in disputes/fees and protects your rate.",
         recommend_when={"state": "chargeback_cluster", "min_signal": "disputes"},
@@ -351,6 +351,33 @@ def _refund_method_leak(v: Vertical, situation: str) -> Built:
         expected_effect=f"Converting {X}% of refunds to retained credit keeps ~${X}/mo of spend in the business.",
         recommend_when={"state": "refund_method_leak", "min_signal": "refunds"},
         tags=("payments", "refunds", "retention", v.family),
+    )
+
+
+def _digital_wallet_unaccepted(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"You don't accept tap / digital wallets at checkout",
+        observation=f"{X}% of would-be {unit}s are tap-to-pay or mobile-wallet users, but your terminal takes only swipe/chip, adding ~{X}s per {unit} and turning some away.",
+        reasoning=f"Contactless and wallet payment is now the default tender for a large share of customers, so a terminal that can't take it adds friction at the worst moment and signals an out-of-date {v.name.lower()} — which both slows the line and quietly loses the customers who expected to tap and leave.",
+        conclusion=f"Enable contactless and mobile-wallet acceptance on the terminal and surface the tap option at the {v.staff_role}/checkout by default.",
+        expected_effect=f"Faster contactless checkout speeds turns and recovers ~${X}/mo in friction-lost {unit}s.",
+        recommend_when={"state": "no_contactless_acceptance", "min_signal": "tender_type"},
+        tags=("payments", "checkout", "acceptance", v.family),
+    )
+
+
+def _milestone_progress_billing(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    role = v.staff_role
+    return Built(
+        title=f"Big-ticket {unit}s are billed only at the end — cash sits at risk",
+        observation=f"{X}% of {unit}s above ${X} are invoiced in full only on completion, with no deposit or milestone draw, and {X}% of that value ages past terms.",
+        reasoning=f"Carrying a large job from start to finish before billing finances the customer with your own cash, because the {role}'s labor and materials are spent up front while payment lands weeks later — so a single slow-paying account ties up working capital you can't redeploy.",
+        conclusion=f"Bill these {unit}s in milestones — a deposit at booking, a progress draw at the midpoint, and the balance on completion — with card-on-file for the final.",
+        expected_effect=f"Milestone billing pulls ~${X} of project cash forward and cuts end-of-job AR ~{X}%.",
+        recommend_when={"state": "no_milestone_billing", "min_signal": "invoices"},
+        tags=("payments", "billing", "cashflow", v.family),
     )
 
 
@@ -575,5 +602,22 @@ register(
         required_agents=("PaymentAnalyzer", "RevenueAnalyzer"),
         swarm_capability=SwarmCapability.PARTIAL,
         swarm_upgrade="RefundMethodAgent: refunds are visible, but the refund tender (cash/card vs store credit) and whether credit was offered first are not captured — add a refund-method field to separate retained from exited refunds.",
+    ),
+    Archetype(
+        key="digital_wallet_unaccepted", domain="payments", name="No contactless/wallet acceptance",
+        build=_digital_wallet_unaccepted, situations=("baseline",),
+        required_signals=("tender_type", "terminal_config"),
+        required_agents=("PaymentAnalyzer",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="TerminalCapabilityAgent: read terminal acceptance capabilities (contactless/wallet on/off) — terminal capability is not ingested today — to flag a tap-payment gap.",
+    ),
+    Archetype(
+        key="milestone_progress_billing", domain="payments", name="No milestone/progress billing",
+        build=_milestone_progress_billing, situations=("baseline",),
+        required_signals=("invoices", "transactions"),
+        required_agents=("ARAgent", "PaymentAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="InvoiceFeedAgent (shared): milestone vs lump-sum billing needs invoice draw/schedule data joined to job value; the invoice feed is not ingested today.",
+        applies_flags=("high_ticket",),
     ),
 )

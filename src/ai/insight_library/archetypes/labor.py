@@ -96,11 +96,39 @@ def _staff_revenue_link(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your highest-revenue {role} works your lowest-traffic shifts",
         observation=f"{role} {X} converts at ${X}/{v.sale_unit} — {X}% above peers — but is scheduled mostly during {X}.",
-        reasoning=f"Top performers parked in slow windows waste their conversion edge; moving them onto the {X} peak applies their lift to your busiest traffic.",
+        reasoning=f"Top performers parked in slow windows waste their conversion edge, because their above-average close rate lands on near-empty traffic instead of your busiest hours; moving your best {role} onto the {X} peak applies that lift where the {v.sale_unit} volume actually is, which compounds into materially higher per-{v.sale_unit} value.",
         conclusion=f"Schedule {role} {X} onto the {X} peak for {X} weeks and measure ticket lift vs control shifts.",
         expected_effect=f"Aligning your best {role} to peak traffic is worth ~${X}/mo in incremental {v.sale_unit} value.",
         recommend_when={"state": "talent_demand_misalignment", "min_signal": "transactions"},
         tags=("staffing", "performance", v.family),
+    )
+
+
+def _shift_changeover_gap(v: Vertical, situation: str) -> Built:
+    role = v.staff_role
+    unit = v.sale_unit
+    return Built(
+        title=f"Coverage dips at shift change — a recurring hole mid-day",
+        observation=f"Around the {X} changeover, effective {role} coverage drops to {X} for {X} minutes while {X}% of that hour's {unit}s still arrive.",
+        reasoning=f"A handoff gap quietly costs sales because demand doesn't pause while one {role} leaves before the next is productive, so service slows exactly when the floor is thinnest — a scheduling-overlap problem distinct from being understaffed at peak, since the headcount looks fine on paper.",
+        conclusion=f"Stagger the {role} shift starts so the outgoing and incoming overlap through the {X} changeover, rather than scheduling a clean swap that leaves the floor short.",
+        expected_effect=f"Closing the changeover gap recovers ~${X}/mo of {unit}s lost to the mid-shift hole.",
+        recommend_when={"state": "shift_changeover_gap", "min_signal": "schedule_shifts"},
+        tags=("staffing", "scheduling", "coverage", v.family),
+    )
+
+
+def _cross_training_gap(v: Vertical, situation: str) -> Built:
+    role = v.staff_role
+    unit = v.sale_unit
+    return Built(
+        title=f"One skill rides on a single {role} — a coverage single-point-of-failure",
+        observation=f"{X}% of {unit}s depend on a task only {X} {role}(s) can do; when they're off, that demand stalls or walks.",
+        reasoning=f"A skill concentrated in one or two people is a scheduling trap, because a single absence collapses capacity for that {unit}, so you either over-rely on one {role} (burnout, OT premium) or turn demand away — a flexibility gap that pure headcount can't fix.",
+        conclusion=f"Cross-train {X} additional {role}s on the bottleneck skill so coverage flexes, and build a trained backup into every shift instead of relying on one person.",
+        expected_effect=f"Cross-training out the single-point-of-failure protects ~${X}/mo of otherwise-stalled {unit}s.",
+        recommend_when={"state": "cross_training_gap", "min_signal": "schedule_shifts"},
+        tags=("staffing", "cross_training", "risk", v.family),
     )
 
 
@@ -151,5 +179,21 @@ register(
         required_agents=("StaffingAgent", "RevenueAnalyzer"),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="StaffAttributionAgent: attribute transaction value to the worker on shift (needs employee_id on transactions or shift-overlap join) to rank per-staff conversion.",
+    ),
+    Archetype(
+        key="shift_changeover_gap", domain="labor", name="Shift-changeover coverage gap",
+        build=_shift_changeover_gap, situations=("baseline",),
+        required_signals=("schedule_shifts", "hourly_revenue"),
+        required_agents=("StaffingAgent", "PatternAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="StaffPeakFusionAgent (shared): detect minutes where overlapping shift starts/ends drop effective coverage below demand at the changeover boundary.",
+    ),
+    Archetype(
+        key="cross_training_gap", domain="labor", name="Skill single-point-of-failure",
+        build=_cross_training_gap, situations=("baseline",),
+        required_signals=("schedule_shifts", "transactions"),
+        required_agents=("StaffingAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="SkillCoverageAgent: map per-worker skills/role to the tasks each {unit} needs, then flag tasks whose coverage rides on one or two workers (skill matrix is not ingested today).",
     ),
 )

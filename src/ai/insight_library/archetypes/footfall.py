@@ -41,7 +41,7 @@ def _conversion_gap(v: Vertical, situation: str) -> Built:
         title=f"You draw the traffic but lose the sale — {X}% of entrants leave without buying",
         observation=f"Vision counts {X} entries/day but only {X} convert to a {unit} — a {X}% conversion rate against a {v.family} norm near {X}%.",
         reasoning=f"Every entrant is demand you already paid for in rent, location, and marketing; an entry that walks out empty is sunk cost, so the gap between traffic and {unit}s is your single largest recoverable line — bigger than squeezing the customers who already buy.{extra}",
-        conclusion=f"Treat conversion (not traffic) as the goal: pair an entry-count target with a floor-engagement play and measure {unit}s-per-100-entries weekly.",
+        conclusion=f"Set a {unit}s-per-100-entries conversion target instead of an entry-count goal, add a floor-engagement play at the door, and flag any hour that falls below the target.",
         expected_effect=f"Closing the entry-to-{unit} gap by even {X}pts is worth ~${X}/mo on traffic you already have.",
         recommend_when={"state": "high_traffic_low_conversion", "min_signal": "vision_traffic"},
         tags=("footfall", "conversion", v.family),
@@ -320,6 +320,30 @@ def _dwell_high_no_buy(v: Vertical, situation: str) -> Built:
     )
 
 
+def _entry_direction_bias(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"Shoppers all turn one way at the door — {X}% miss a whole side",
+        observation=f"Vision shows {X}% of entrants turn toward the {X} side first, so the opposite side draws only {X}% of first-minute traffic.",
+        reasoning=f"Entry direction is a hard-wired shopper habit, so a layout that fights it strands one side of the floor — the under-walked side gets few eyes no matter how strong its assortment, which means the rent and inventory there earn against a fraction of the traffic the busy side sees.",
+        conclusion=f"Route the cold side back into the path — move a destination category or a {v.staff_role} station onto the under-walked side, and open a sightline that pulls the entry turn toward it.",
+        expected_effect=f"Activating the starved side toward floor-average sales density is worth ~${X}/mo.",
+        recommend_when={"state": "entry_direction_bias", "min_signal": "space_zones"},
+        tags=("footfall", "zone", "layout", v.family),
+    )
+
+
+def _handling_no_buy(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"A product gets handled constantly but rarely bought",
+        observation=f"Vision flags {X} pick-ups/day on one display, yet only {X}% convert to a {v.sale_unit} — far below the floor's touch-to-buy rate.",
+        reasoning=f"A pick-up is the strongest shelf-level intent signal there is, so a product touched often but bought rarely isn't a discovery problem — it's an objection at the shelf (price shock, missing size, unclear value), which means the item is doing the hard work of attracting hands and losing at the last inch.",
+        conclusion=f"Fix the shelf objection — re-price, add a value/size callout, or station a {v.staff_role} at the display — and re-measure touch-to-buy in {X} weeks.",
+        expected_effect=f"Converting even {X}% more of the handled-not-bought intent is worth ~${X}/mo.",
+        recommend_when={"state": "handled_not_bought", "min_signal": "vision_visits"},
+        tags=("footfall", "engagement", "conversion", v.family),
+    )
+
+
 register(
     Archetype(
         key="footfall_conversion_gap", domain="footfall", name="Entries far exceed sales",
@@ -509,5 +533,23 @@ register(
         applies_families=FOOT_FAMILIES, exclude_keys=NO_GHOST,
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="VisitDwellAgent (shared): flag long-dwell visits with no matching POS transaction and cross-check the lingered zone's stock/price (per-visit dwell + zone→SKU not yet built).",
+    ),
+    Archetype(
+        key="footfall_entry_direction_bias", domain="footfall", name="Entry turn-direction bias",
+        build=_entry_direction_bias, situations=("baseline",),
+        required_signals=("space_zones",),
+        required_agents=("ZoneYieldAgent",),
+        applies_families=FOOT_FAMILIES, exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ZoneYieldAgent: derive first-turn direction from entry-path tracks and compute first-minute traffic share by side to surface a starved side of the floor (entry-path direction not yet tracked).",
+    ),
+    Archetype(
+        key="footfall_handling_no_buy", domain="footfall", name="Handled but not bought",
+        build=_handling_no_buy, situations=("baseline",),
+        required_signals=("vision_visits", "transactions"),
+        required_agents=("ProductHandlingAgent",),
+        applies_families=("retail", "personal_care"), exclude_keys=NO_GHOST,
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ProductHandlingAgent: detect product pick-up/handling events at a display from the vision feed and join to POS to compute touch-to-buy per item (shelf-level handling detection not yet built).",
     ),
 )

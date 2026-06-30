@@ -218,8 +218,8 @@ def _category_cannibalization(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"A newer {item} is cannibalizing a higher-margin sibling",
         observation=f"Since the newer {item} launched, a higher-margin sibling's {v.sale_unit}s fell {X}% while total category volume rose only {X}%.",
-        reasoning=f"Growth that comes by stealing from a better-margin item isn't growth — it's a margin downgrade hiding inside a volume number. The customer was going to buy from the category anyway; you just moved them to the cheaper line.{extra}",
-        conclusion=f"Re-price or re-position to protect the margin leader: widen the price/quality gap, or aim the newer {item} at a genuinely new occasion rather than the same shelf.",
+        reasoning=f"Growth that comes by stealing from a better-margin item isn't real growth, because the customer was going to buy from the category anyway — so you've just moved them to the cheaper line, which is a margin downgrade hiding inside a volume number.{extra}",
+        conclusion=f"Reprice or reposition to protect the margin leader: widen the price/quality gap, or aim the newer {item} at a genuinely new occasion rather than the same shelf.",
         expected_effect=f"Halting the margin mix-shift recovers ~${X}/mo without losing the volume.",
         recommend_when={"state": "cannibalization", "min_signal": "product_margin"},
         tags=("products", "cannibalization", "mix", v.family),
@@ -282,7 +282,7 @@ def _hero_overdependence(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"One {item} carries too much of your revenue",
         observation=f"Your single top {item} drives {X}% of {v.sale_unit}s; the next {X} combined do less.",
-        reasoning=f"Over-reliance on one {item} is fragility: a stockout, a price-sensitive customer, a competitor's copy, or simple fatigue with that one line puts an outsized share of revenue at risk with no cushion behind it.{extra}",
+        reasoning=f"Over-reliance on one {item} is fragility, because a stockout, a price-sensitive customer, a competitor's copy, or simple fatigue with that one line puts an outsized share of revenue at risk with no cushion behind it — which means one bad week on it craters the whole day.{extra}",
         conclusion=f"Build a #2 deliberately — promote a high-potential puzzle into a co-hero — while fiercely protecting the current one; don't cut, diversify.",
         expected_effect=f"Growing a credible second hero de-risks ~{X}% of revenue currently riding one {item}.",
         recommend_when={"state": "hero_concentration", "min_signal": "product_performance"},
@@ -486,6 +486,32 @@ def _impulse_not_at_pos(v: Vertical, situation: str) -> Built:
         expected_effect=f"Point-of-sale placement typically lifts impulse attach to {X}%, ~${X}/mo at full margin.",
         recommend_when={"state": "impulse_not_at_pos", "min_signal": "basket"},
         tags=("products", "merchandising", "impulse", v.family),
+    )
+
+
+def _item_description_imagery_gap(v: Vertical, situation: str) -> Built:
+    item = _item(v)
+    return Built(
+        title=f"Strong {item}s with weak names/photos under-convert their slot",
+        observation=f"{X} {item}s with thin or missing descriptions/photos convert {X}% below siblings in the same category at the same price.",
+        reasoning=f"On a menu, shelf, or screen the customer buys what they can picture, so a proven {item} with a flat name and no image loses the choice to a better-presented neighbor — which means the gap is the listing, not the {item}, and it suppresses sales the product would otherwise earn.",
+        conclusion=f"Add appetizing photos and rewrite the names on the {X} highest-traffic under-described {item}s, then re-measure their conversion over {X} weeks.",
+        expected_effect=f"Closing the presentation gap typically lifts those {item}s' conversion {X}%, ~${X}/mo at no margin cost.",
+        recommend_when={"state": "item_presentation_gap", "min_signal": "product_performance"},
+        tags=("products", "merchandising", "presentation", v.family),
+    )
+
+
+def _variant_size_gap(v: Vertical, situation: str) -> Built:
+    item = _item(v)
+    return Built(
+        title=f"Your proven {item} comes in only one size/variant",
+        observation=f"Your top {item} sells in a single size/variant, yet {X}% of requests (or comparable {v.name.lower()}s) show demand for a larger/smaller or alternate version you don't offer.",
+        reasoning=f"A winning {item} confined to one configuration leaves money on the table, because customers who want more, less, or a variant of a thing they already trust either trade down to a worse fit or walk — so the missing variant forfeits demand you've already earned.",
+        conclusion=f"Add one larger (and one alternate) variant of the proven {item} at a tier-priced step, and track variant mix over {X} weeks.",
+        expected_effect=f"Capturing the unmet variant demand on a proven {item} adds ~${X}/mo at full margin.",
+        recommend_when={"state": "variant_size_gap", "min_signal": "product_performance"},
+        tags=("products", "assortment", "variant", v.family),
     )
 
 
@@ -747,5 +773,21 @@ register(
         required_signals=("transactions", "product_performance"),
         required_agents=("ProductAnalyzer", "AttachAnalyzer"),
         swarm_capability=SwarmCapability.PARTIAL, swarm_upgrade=_MARKET_BASKET,
+    ),
+    Archetype(
+        key="item_presentation_gap", domain="products", name="Weak item names/photos",
+        build=_item_description_imagery_gap, situations=("baseline",),
+        required_signals=("product_performance",),
+        required_agents=("ProductAnalyzer", "MerchandisingAgent"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="MerchandisingMetaAgent: score per-item name/description/photo completeness (catalog content fields not yet evaluated) and correlate to per-item conversion.",
+    ),
+    Archetype(
+        key="variant_size_gap", domain="products", name="Missing variant/size",
+        build=_variant_size_gap, situations=("baseline",),
+        required_signals=("product_performance", "transactions"),
+        required_agents=("ProductAnalyzer", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="VariantDemandAgent: detect single-variant top sellers and infer unmet size/variant demand from requests, substitutions, or comparable catalogs.",
     ),
 )

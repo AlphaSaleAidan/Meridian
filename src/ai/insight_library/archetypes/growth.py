@@ -63,7 +63,7 @@ def _second_location_readiness(v: Vertical, situation: str) -> Built:
         title=f"Your single site is maxing out — the numbers say a second location is on the table",
         observation=f"This site runs at {X}% of practical capacity ({kpi} pinned near its ceiling for {X}+ weeks) while {unit} demand keeps arriving at the door.",
         reasoning=f"A {v.name.lower()} that is consistently demand-constrained rather than demand-starved has already proven the format; the next unit of growth can't come from this footprint, so incremental demand is either lost or must be served by a second site.{extra}",
-        conclusion=f"Commission a site/feasibility read for a second location in your draw area and model the {X}% of demand this site already turns away as the new site's opening base.",
+        conclusion=f"Run a site/feasibility study for a second location in your draw area, and build its opening base from the {X}% of demand this site already turns away.",
         expected_effect=f"A proven-format second site typically opens against ~${X}/mo of pre-existing overflow demand rather than from zero.",
         recommend_when={"state": "capacity_pinned_demand_growing", "min_signal": "hourly_revenue"},
         tags=("growth", "expansion", "second_location", v.family),
@@ -353,8 +353,8 @@ def _retail_product_line_addition(v: Vertical, situation: str) -> Built:
     unit = v.sale_unit
     return Built(
         title=f"You perform a service but sell no take-home product",
-        observation=f"You run effectively zero retail attach: customers leave with the {unit} done but nothing to buy and use at home.",
-        reasoning=f"A service customer in your chair has already paid for your expertise and trusts your recommendation — the ideal moment to sell a related take-home product at retail margin; for a {v.name.lower()} with no retail line, that high-trust attach window passes empty every single visit.",
+        observation=f"You run effectively zero retail attach — under {X}% of {unit}s carry a take-home product — so customers leave with the service done but nothing to use at home.",
+        reasoning=f"A service customer in your chair has already paid for your expertise and trusts your recommendation, which makes the end of a {unit} the highest-converting retail moment there is; for a {v.name.lower()} with no retail line, that high-trust window leaks margin every visit because nothing is on the shelf to attach.",
         conclusion=f"Curate a tight retail shelf of products that extend the {unit} result and have the {v.staff_role} recommend one at the end of each service.",
         expected_effect=f"A retail attach line adds ~${X}/mo at retail margin off visits you're already serving.",
         recommend_when={"state": "retail_line_untapped", "min_signal": "transactions"},
@@ -453,6 +453,49 @@ def _seasonal_popup_opportunity(v: Vertical, situation: str) -> Built:
         expected_effect=f"A dedicated seasonal line captures spike demand worth ~${X} per season above the baseline format.",
         recommend_when={"state": "seasonal_popup_untapped", "min_signal": "transactions"},
         tags=("growth", "seasonal", "popup", v.family),
+    )
+
+
+# ═══════════════════════ NEW LINES: HOURS / ASSETS / PARTNERSHIPS ═══════════
+def _closed_window_launch(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    extra = (" Customers are already trying the door and calling during the closed window — the demand is arriving before the line exists."
+             if situation == "emerging" else "")
+    return Built(
+        title=f"You're closed during a window customers keep asking for",
+        observation=f"You field {X} requests a month during the {X} hours/day you're shut, and nearby peers who open then capture {X}% more weekly {unit}s.{extra}",
+        reasoning=f"Opening a currently-closed window is nearly pure incremental revenue, because the rent and equipment are already paid year-round, so the only added cost is variable {v.staff_role} hours while the demand already shows up at a locked door — unlike a slow daypart, here you capture nothing at all today.",
+        conclusion=f"Pilot opening the most-requested closed window for {X} weeks with a lean {v.staff_role} crew, and measure incremental {unit}s against the closed baseline before making it permanent.",
+        expected_effect=f"A proven new open-window converts fixed overhead into ~${X}/mo of incremental {unit}s.",
+        recommend_when={"state": "closed_window_untapped", "min_signal": "phone_call_logs"},
+        tags=("growth", "hours", "new_line", v.family),
+    )
+
+
+def _space_equipment_rental_untapped(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    fam = v.family.replace("_", " ")
+    return Built(
+        title=f"Your space and equipment sit idle — you could rent them out",
+        observation=f"Your {fam} space/equipment runs at {X}% utilization, idle for {X}+ hours a week with no rental income.",
+        reasoning=f"Idle space and equipment are fixed costs earning nothing in the gaps, because you pay rent and depreciation whether or not they're in use, so renting them out in off-hours converts dead overhead into a near-pure-margin second income with no new asset purchase.",
+        conclusion=f"Rent the idle {fam} space or equipment by the hour/session to vetted users in your off-peak windows, and set a rate that covers variable cost plus margin.",
+        expected_effect=f"Renting idle capacity even {X} hours/week adds ~${X}/mo at near-pure margin.",
+        recommend_when={"state": "rental_capacity_untapped", "min_signal": "schedule_shifts"},
+        tags=("growth", "rental", "new_line", v.family),
+    )
+
+
+def _local_partnership_bundle(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"No co-marketed bundle with a neighboring business — shared customers, zero shared offer",
+        observation=f"You share a customer base with {X} adjacent local businesses but run no joint bundle or cross-referral, capturing {X}% of the obvious overlap.",
+        reasoning=f"A partnership bundle pools two trusted brands to reach each other's customers at zero ad cost, because each business vouches for the other to an already-warm audience, so a co-offer converts far better than cold acquisition while the two split the cost of promotion.",
+        conclusion=f"Build a co-marketed bundle with one complementary nearby business — a paired {unit}-plus-their-service offer and a two-way referral — and split the promotion at the point of sale.",
+        expected_effect=f"A single local partnership bundle adds ~${X}/mo of cross-referred {unit}s at near-zero acquisition cost.",
+        recommend_when={"state": "partnership_bundle_untapped", "min_signal": "transactions"},
+        tags=("growth", "partnership", "bundle", v.family),
     )
 
 
@@ -731,5 +774,32 @@ register(
         swarm_capability=SwarmCapability.PARTIAL,
         swarm_upgrade="PatternAnalyzer: quantify the recurring seasonal swing from transaction history to scope a dedicated seasonal line; baseline-vs-season decomposition is partially available.",
         applies_keys=_keys_with_any_flag("seasonal"),
+    ),
+    # ── New lines: hours / assets / partnerships ──
+    Archetype(
+        key="closed_window_launch", domain="growth", name="Closed-window launch",
+        build=_closed_window_launch, situations=("untapped", "emerging"),
+        required_signals=("hourly_revenue", "phone_call_logs"),
+        required_agents=("ChannelBenchmarkAgent", "ExpansionReadinessAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_CHANNELBM_UP + " Closed-window ask detection needs inbound-request capture during non-open hours, plus a peer open-hours benchmark not ingested today.",
+        applies_families=("food_service", "personal_care", "health_wellness", "retail", "automotive"),
+    ),
+    Archetype(
+        key="space_equipment_rental_untapped", domain="growth", name="Idle space/equipment rental",
+        build=_space_equipment_rental_untapped, situations=("untapped",),
+        required_signals=("schedule_shifts", "transactions"),
+        required_agents=("ExpansionReadinessAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_READINESS_UP + " Rental fit additionally needs an idle-asset/idle-space utilization estimate from schedule + capacity data not computed today.",
+        applies_families=("personal_care", "health_wellness", "fitness", "food_service"),
+    ),
+    Archetype(
+        key="local_partnership_bundle", domain="growth", name="Local partnership bundle",
+        build=_local_partnership_bundle, situations=("untapped",),
+        required_signals=("transactions",),
+        required_agents=("PeerBenchmarkAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_PEER_UP + " Co-marketing fit additionally needs nearby-business adjacency + shared-audience estimation not ingested today.",
     ),
 )

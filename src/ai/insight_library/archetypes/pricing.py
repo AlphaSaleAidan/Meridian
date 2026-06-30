@@ -25,7 +25,7 @@ def _discount_leakage(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your {X} category is over-discounted — {X}% of {unit}s sell below list",
         observation=f"{X}% of {X}-category {unit}s carry a discount averaging {X}% off, yet unit volume is flat vs the full-price period.",
-        reasoning=f"A discount that doesn't move volume is pure margin handed back: you're funding a price cut customers would have paid through anyway, costing ~${X} in foregone margin per week.{extra}",
+        reasoning=f"A discount that doesn't move volume is pure margin handed back, because you're funding a price cut customers would have paid through anyway, which costs ~${X} in foregone margin per week.{extra}",
         conclusion=f"Cap the standing discount on {X} to {X}% (or make it loyalty-gated) and watch {X} weeks of volume before widening it again.",
         expected_effect=f"Reclaiming the unwarranted discount is worth ~${X}/mo in recovered margin at current volume.",
         recommend_when={"state": "category_over_discounted", "min_signal": "discounts_applied"},
@@ -57,7 +57,7 @@ def _underpriced_high_demand(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your best-selling {X} is priced like an average one",
         observation=f"{X} accounts for {X}% of {unit}s and rarely needs a discount to sell, yet it's priced within {X}% of slower siblings.",
-        reasoning=f"An item that clears at full price with no promotional help is signalling willingness-to-pay above its sticker — the market is telling you it's underpriced.{extra}",
+        reasoning=f"An item that clears at full price with no promotional help signals willingness-to-pay above its sticker, which means the market itself is telling you it's underpriced.{extra}",
         conclusion=f"Test a {X}% price lift on {X} for {X} weeks; demand this strong rarely flinches at a small move.",
         expected_effect=f"A {X}% lift on a top-{X}% seller flows almost entirely to margin — ~${X}/mo.",
         recommend_when={"state": "high_demand_underpriced", "min_signal": "transactions"},
@@ -271,7 +271,7 @@ def _premium_mix_shift_down(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Customers are trading down to your cheaper {unit}s",
         observation=f"Premium-tier share of {unit}s fell from {X}% to {X}% over {X} months while entry-tier share rose — average {unit} value is sliding.{extra}",
-        reasoning=f"A trade-down trend quietly lowers ticket and margin even at unchanged prices; left alone it re-baselines customer expectations around the cheaper option.",
+        reasoning=f"A trade-down trend quietly lowers ticket and margin even at unchanged prices, because each shifted {unit} buys a thinner item, which left unchecked re-baselines customer expectations around the cheaper option.",
         conclusion=f"Re-merchandise the premium tier (visibility, bundling, {v.staff_role} prompts) and narrow the entry-to-premium gap so the step up feels smaller.",
         expected_effect=f"Recovering {X} points of premium share is worth ~${X}/mo in ticket value.",
         recommend_when={"state": "premium_trading_down", "min_signal": "transactions"},
@@ -408,6 +408,35 @@ def _annual_prepay_missing(v: Vertical, situation: str) -> Built:
         expected_effect=f"Converting {X}% of monthly members to annual prepay locks ~${X} of cash upfront and cuts churn ~{X} points.",
         recommend_when={"state": "no_annual_prepay", "min_signal": "membership_ledger"},
         tags=("pricing", "membership", "cashflow", v.family),
+    )
+
+
+def _competitor_price_gap(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"You're priced under the local market with no reason to be",
+        observation=f"Comparable {v.name.lower()}s charge {X}% more for an equivalent {unit}, yet your price has held flat for {X} months despite steady demand.",
+        reasoning=f"Sitting below the local going rate with no quality or cost disadvantage hands margin to customers for nothing, because the market has already set a higher reference price they accept elsewhere — so the gap is pure foregone contribution, not a competitive edge you're actually using.",
+        conclusion=f"Raise the {X} most-compared {unit}s toward {X}% of the local benchmark in one step, hold quality, and watch volume for {X} weeks before closing the rest of the gap.",
+        expected_effect=f"Closing the market-price gap is worth ~${X}/mo at current volume with no added cost.",
+        recommend_when={"state": "below_market_price", "min_signal": "competitor_prices"},
+        tags=("pricing", "competitive", "margin", v.family),
+    )
+
+
+def _event_surge_pricing(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    extra = {
+        "seasonal_peak": " The next surge window is approaching — set the event price before demand arrives.",
+    }.get(situation, "")
+    return Built(
+        title=f"You hold normal prices through demand surges you could premium-price",
+        observation=f"On {X} surge days (local events, holidays, weather peaks) {unit} demand jumps {X}% but price stays flat, and you sell out by {X}.{extra}",
+        reasoning=f"A predictable demand spike against fixed capacity is scarcity you're giving away, because selling out at the normal price means the last {unit}s went for less than buyers would gladly have paid — so the surge converts into a stockout instead of the premium margin it should earn.",
+        conclusion=f"Set an event-day surge price ({X}% above base) on the highest-demand {unit}s for the {X} known surge dates, and publish it in advance.",
+        expected_effect=f"Event-day surge pricing captures ~${X} per surge day in margin you currently forfeit.",
+        recommend_when={"state": "event_surge_unpriced", "min_signal": "daily_revenue"},
+        tags=("pricing", "surge", "demand", v.family),
     )
 
 
@@ -652,5 +681,21 @@ register(
         swarm_capability=SwarmCapability.PARTIAL,
         swarm_upgrade="ChurnCohortAgent: month-to-month vs prepay split and churn timing need member billing-cadence history; cadence is not retained per member today.",
         applies_flags=("membership",),
+    ),
+    Archetype(
+        key="competitor_price_gap", domain="pricing", name="Below-market price gap",
+        build=_competitor_price_gap, situations=("baseline",),
+        required_signals=("competitor_prices", "transactions"),
+        required_agents=("PriceAnalyzer", "CompetitorWatchAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CompetitorPriceAgent: ingest nearby same-category price points (no competitor price feed today) to benchmark each item against the local market rate.",
+    ),
+    Archetype(
+        key="event_surge_pricing", domain="pricing", name="Event surge pricing untapped",
+        build=_event_surge_pricing, situations=("baseline", "seasonal_peak"),
+        required_signals=("daily_revenue", "local_events"),
+        required_agents=("PriceAnalyzer", "PatternAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="EventDemandAgent: align daily_revenue spikes to a local-event/holiday calendar to flag recurring surge days that hold flat prices.",
     ),
 )

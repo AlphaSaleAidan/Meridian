@@ -389,7 +389,7 @@ def _channel_migration(v: Vertical, situation: str) -> Built:
         title=f"Your customers are migrating from {a} to {b}",
         observation=f"The share of {unit}s through {b} rose from {X}% to {X}% over {X} months as {a} declined, with the same customers switching.",
         reasoning=f"A channel migration changes your cost-to-serve and your relationship: if customers move to a {b} you under-serve (or that carries higher fees/lower attach), revenue can hold while margin and loyalty quietly erode.",
-        conclusion=f"Meet customers on the rising channel — bring its experience, attach, and margin up to par with {a} — rather than defending a channel they're leaving.",
+        conclusion=f"Shift investment to the rising {b} channel — rebuild its attach prompts and margin to match {a}, and set a per-channel attach target — instead of defending the {a} they're leaving.",
         expected_effect=f"Managing the migration protects ~${X}/mo in margin and attach that a passive shift would leak.",
         recommend_when={"state": "channel_migration", "min_signal": "customer_history"},
         tags=("customer", "channel", "migration", v.family),
@@ -465,6 +465,46 @@ def _lifecycle_event_untapped(v: Vertical, situation: str) -> Built:
         expected_effect=f"Occasion-timed outreach lifts repeat {unit}s for ~${X}/mo at near-zero cost.",
         recommend_when={"state": "lifecycle_event_untapped", "min_signal": "customer_history"},
         tags=("customer", "lifecycle", "reactivation", v.family),
+    )
+
+
+# ── Segmentation / unit-economics (new) ───────────────────────────────────
+def _mid_tier_upgrade_path(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Your mid-tier customers are one step from VIP — and nobody's nudging them",
+        observation=f"{X} customers sit just below your top spend tier (~${X} each), {X}% of the way to VIP behavior, yet get no upgrade path.",
+        reasoning=f"The moveable middle is the cheapest growth in the base, because these customers already trust you and spend steadily, so a small nudge toward the next tier compounds across hundreds of them — far cheaper than acquiring new customers who start at zero.",
+        conclusion=f"Build a deliberate upgrade path for the mid-tier — set a next-tier target per customer and trigger a tailored cross-sell or step-up offer via {v.channels[0]} — instead of treating them as a static middle.",
+        expected_effect=f"Graduating even {X}% of the mid-tier to top-tier spend adds ~${X}/mo of higher-value revenue.",
+        recommend_when={"state": "mid_tier_upgrade_path", "min_signal": "customer_history"},
+        tags=("customer", "rfm", "segmentation", "upgrade", v.family),
+    )
+
+
+def _high_value_one_timer(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Your biggest first-time orders never came back",
+        observation=f"{X} customers spent ${X}+ on their first {unit} — well above the ${X} average — but never returned.",
+        reasoning=f"A high-value one-timer is a costlier loss than an average one, because the customer already demonstrated strong willingness-to-pay, so their silence signals a fixable post-purchase gap rather than weak intent — and recovering one is worth several ordinary win-backs.",
+        conclusion=f"Single out the high-first-spend non-returners and run a personal {v.channels[0]} follow-up with a concrete reason to return, separate from the generic one-and-done flow.",
+        expected_effect=f"Reactivating even {X}% of high-value one-timers is worth ~${X}/mo at their proven ticket.",
+        recommend_when={"state": "high_value_one_timer", "min_signal": "customer_history"},
+        tags=("customer", "first_visit", "winback", "value", v.family),
+    )
+
+
+def _cac_payback_slow(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"It takes {X} visits to earn back what a new customer costs",
+        observation=f"Average acquisition cost is ${X} but a new customer's first {X} {unit}s return only ${X} in contribution — payback stretches past {X} months.",
+        reasoning=f"A long CAC-payback period ties up cash on every new customer, because you fund the acquisition today and recover it slowly, so faster growth actually drains the bank balance harder rather than easing it — the metric that decides whether acquisition is safe to scale.",
+        conclusion=f"Shorten payback before scaling spend — lift the first-{unit} contribution with an onboarding attach, and shift budget to the channels that repay fastest rather than the cheapest-per-lead.",
+        expected_effect=f"Cutting payback by {X} months frees ~${X}/mo of cash currently locked in un-recovered acquisition.",
+        recommend_when={"state": "cac_payback_slow", "min_signal": "customer_history"},
+        tags=("customer", "cac", "ltv", "unit_economics", v.family),
     )
 
 
@@ -774,5 +814,33 @@ register(
         required_agents=("CustomerJourneyAgent", "LifecycleAgent"),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade=_IDENTITY_UPGRADE + " Plus a LifecycleAgent to store each customer's occasion date (birthday/anniversary/recall-due) and schedule the timed trigger — occasion dates are not captured at acquisition today.",
+    ),
+    # ── Segmentation / unit-economics (new) ──
+    Archetype(
+        key="mid_tier_upgrade_path", domain="customer", name="Mid-tier upgrade path",
+        build=_mid_tier_upgrade_path,
+        situations=("baseline", "untapped"),
+        required_signals=("customer_history", "transactions"),
+        required_agents=("RFMAgent", "CustomerJourneyAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_IDENTITY_UPGRADE + " RFMAgent then isolates the near-VIP mid-tier and the per-customer distance to the top spend band.",
+    ),
+    Archetype(
+        key="high_value_one_timer", domain="customer", name="High-value one-timer",
+        build=_high_value_one_timer,
+        situations=("baseline", "leaking"),
+        required_signals=("customer_history", "transactions"),
+        required_agents=("CustomerJourneyAgent", "RFMAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_IDENTITY_UPGRADE + " Requires per-customer first-{unit} value vs subsequent visits to isolate high-spend non-returners.",
+    ),
+    Archetype(
+        key="cac_payback_slow", domain="customer", name="Slow CAC payback",
+        build=_cac_payback_slow,
+        situations=("baseline",),
+        required_signals=("customer_history", "transactions"),
+        required_agents=("CustomerJourneyAgent", "RFMAgent", "AttributionAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade=_IDENTITY_UPGRADE + " Plus AttributionAgent for per-cohort acquisition cost and a contribution figure (cost-per-{unit}); acquisition spend is not captured today.",
     ),
 )

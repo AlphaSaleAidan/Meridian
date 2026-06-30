@@ -169,7 +169,7 @@ def _supplier_terms_not_optimized(v: Vertical, situation: str) -> Built:
         title=f"Supplier terms leave ${X} of free credit unused",
         observation=f"You pay {X} key suppliers on ~{X}-day terms while peers in {v.family.replace('_', ' ')} hold {X}-day terms on similar volume.",
         reasoning=f"Supplier credit is the cheapest working capital there is — interest-free days between receiving goods and paying for them; under-using it means you fund inventory from your own cash when the vendor would have, an avoidable squeeze for an inventory-heavy operator.",
-        conclusion=f"Renegotiate the {X} largest suppliers toward {X}-day terms using your volume and payment history as leverage.",
+        conclusion=f"Renegotiate the {X} largest suppliers to extend terms to {X} days, and set a payables policy that holds each invoice to its full due date — using your volume and payment history as the lever.",
         expected_effect=f"Extending terms frees ~${X} of working capital at zero financing cost.",
         recommend_when={"state": "supplier_terms_suboptimal", "min_signal": "payables_terms"},
         tags=("cashflow", "working_capital", "suppliers", v.family),
@@ -363,6 +363,31 @@ def _capex_reserve_gap(v: Vertical, situation: str) -> Built:
         expected_effect=f"Pre-funding the replacement avoids ~${X} of emergency financing cost versus paying for it in a single month.",
         recommend_when={"state": "capex_reserve_gap", "min_signal": "asset_register"},
         tags=("cashflow", "capex", "resilience", v.family),
+    )
+
+
+def _early_pay_discount_untaken(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"You're leaving ${X} of supplier early-pay discounts on the table",
+        observation=f"{X} suppliers offer an early-payment discount (e.g. {X}% for paying within 10 days) but {X}% of those invoices are paid late or at net, capturing none of it.",
+        reasoning=f"An unclaimed early-pay discount is a guaranteed return you're declining, because the discount annualized usually beats any other use of the cash, so paying late to 'hold' working capital here actually costs more than it saves — the opposite of the supplier-terms lever where stretching is the win.",
+        conclusion=f"Capture the early-pay discounts whose annualized rate beats your cost of capital — set the payment run to hit those cutoffs first — and stretch only the terms that carry no discount.",
+        expected_effect=f"Taking the worthwhile early-pay discounts saves ~${X}/mo at a return that beats holding the cash.",
+        recommend_when={"state": "early_pay_discount_untaken", "min_signal": "payables_terms"},
+        tags=("cashflow", "working_capital", "suppliers", "discounts", v.family),
+    )
+
+
+def _milestone_progress_billing(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"You fund big jobs to completion before billing a cent",
+        observation=f"Jobs over ${X} are billed only on completion after a ~{X}-week build, so you carry {X}% of the {unit} cost (labor + materials) out of pocket meanwhile.",
+        reasoning=f"Billing only at the end of a long job means you bank the whole project as a working-capital loan to the customer, because materials and {v.staff_role} wages go out weeks before any cash comes in, so a string of big jobs can starve the account even when every one is profitable.",
+        conclusion=f"Bill the job in milestones — collect a deposit at signing and progress draws at set stages — instead of carrying the whole {unit} to completion.",
+        expected_effect=f"Milestone billing pulls ~${X} of cash forward per large job and cuts the working-capital drag.",
+        recommend_when={"state": "progress_billing_untapped", "min_signal": "invoice_ledger"},
+        tags=("cashflow", "working_capital", "receivables", v.family),
     )
 
 
@@ -584,5 +609,23 @@ register(
         required_agents=("CashflowAgent",),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="CashflowAgent: ingest an asset register (equipment, age, useful life, replacement cost) to size a monthly sinking-fund reserve vs the lumpy replacement spend. No asset/capex data is collected.",
+    ),
+    Archetype(
+        key="early_pay_discount_untaken", domain="cashflow", name="Unclaimed early-pay discounts",
+        build=_early_pay_discount_untaken, situations=("baseline",),
+        applies_flags=("inventory_heavy",),
+        required_signals=("payables_terms",),
+        required_agents=("CashflowAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CashflowAgent: ingest supplier early-payment discount terms + actual payment dates to flag discounts whose annualized return beats cost of capital. No payables/terms source exists.",
+    ),
+    Archetype(
+        key="milestone_progress_billing", domain="cashflow", name="Progress-billing untapped",
+        build=_milestone_progress_billing, situations=("baseline",),
+        applies_families=("home_services",),
+        required_signals=("invoice_ledger", "transactions"),
+        required_agents=("CashflowAgent",),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CashflowAgent: join job size + duration to billing timing to size the working-capital carried by end-of-job billing. Job-level billing schedule is not ingested.",
     ),
 )

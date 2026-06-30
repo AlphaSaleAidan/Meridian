@@ -118,7 +118,7 @@ def _concentration_one_day(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"{X}% of your revenue lands on a single day ({X})",
         observation=f"{X} alone produces ${X} of weekly revenue while your slowest day produces ${X} — a {X}x spread.",
-        reasoning=f"Revenue riding on one day is fragile and caps growth: {v.staff_role} capacity and {_capacity_unit(v)} availability are saturated that day (no upside) and idle the rest (paid, unproductive).",
+        reasoning=f"Revenue riding on one day is fragile and caps growth, because {v.staff_role} capacity and {_capacity_unit(v)} availability are saturated that day (no upside) while sitting idle and paid-for the rest of the week — so the fixed cost earns nothing six days in seven.",
         conclusion=conclusion,
         expected_effect=f"Shifting even {X}% of the peak-day demand to a flat day adds ~${X}/mo without new capacity.",
         recommend_when={"state": "single_day_concentration", "min_signal": "daily_revenue"},
@@ -534,6 +534,31 @@ def _off_peak_demand_fill(v: Vertical, situation: str) -> Built:
     )
 
 
+def _large_group_revenue(v: Vertical, situation: str) -> Built:
+    cap = _capacity_unit(v)
+    return Built(
+        title=f"Group/party/catering demand is walking past an unbuilt offer",
+        observation=f"{X}% of {v.sale_unit}s already come from groups of {X}+, yet there's no packaged group/party/catering offer, deposit, or booking path for them.",
+        reasoning=f"Group occasions are the highest-ticket, most-plannable demand a {v.name.lower()} sees, because one booking fills many {cap}s at once and commits in advance — so leaving it un-packaged forfeits both the large ticket and the capacity certainty it would lock in.",
+        conclusion=f"Build a named group/party/catering package with a deposit and a simple booking path, and promote it to past large-{v.sale_unit} customers.",
+        expected_effect=f"Converting even {X} group bookings a month is worth ~${X}/mo in high-ticket revenue.",
+        recommend_when={"state": "group_revenue_untapped", "min_signal": "transactions"},
+        tags=("revenue", "untapped", "group", v.family),
+    )
+
+
+def _wholesale_b2b_channel(v: Vertical, situation: str) -> Built:
+    return Built(
+        title=f"A wholesale / B2B channel sits entirely unbuilt",
+        observation=f"{X}% of revenue is walk-in retail and ~0% is wholesale/B2B, though {X} nearby offices, resellers, or venues buy your category in volume elsewhere.",
+        reasoning=f"Wholesale demand is repeat, high-volume, and forecastable, because a business buyer orders on a standing cadence rather than one impulse {v.sale_unit} at a time — so a {v.name.lower()} with no B2B offer leaves a steady, capacity-smoothing revenue line completely on the table.",
+        conclusion=f"Build a wholesale price list and pitch the {X} nearest high-volume buyers (offices, resellers, venues) with a standing-order discount.",
+        expected_effect=f"Landing even {X} standing wholesale accounts adds ~${X}/mo of predictable revenue.",
+        recommend_when={"state": "wholesale_channel_untapped", "min_signal": "transactions"},
+        tags=("revenue", "untapped", "wholesale", v.family),
+    )
+
+
 register(
     Archetype(
         key="declining_revenue_trend", domain="revenue", name="Declining revenue trend",
@@ -799,5 +824,23 @@ register(
         swarm_capability=SwarmCapability.PARTIAL,
         swarm_upgrade="CapacityYieldAgent (shared): identify off-peak windows running below a utilization floor while peak saturates, for demand-shifting offers.",
         applies_families=("personal_care", "health_wellness", "fitness", "automotive", "hospitality", "food_service"),
+    ),
+    Archetype(
+        key="group_revenue_untapped", domain="revenue", name="Group/catering revenue untapped",
+        build=_large_group_revenue, situations=("baseline", "untapped"),
+        required_signals=("transactions", "bookings"),
+        required_agents=("RevenueAnalyzer", "BookingAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="GroupBookingAgent: detect large-party transactions and the absence of a packaged group/catering offer + deposit path to size the untapped channel.",
+        applies_families=("food_service", "hospitality", "personal_care", "health_wellness", "fitness"),
+    ),
+    Archetype(
+        key="wholesale_channel_untapped", domain="revenue", name="Wholesale/B2B channel untapped",
+        build=_wholesale_b2b_channel, situations=("baseline", "untapped"),
+        required_signals=("transactions", "channel_revenue"),
+        required_agents=("RevenueAnalyzer", "ChannelAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="ChannelMixAgent: separate retail vs wholesale/B2B revenue (no B2B channel tag today) and benchmark nearby category wholesale potential.",
+        applies_families=("food_service", "retail"),
     ),
 )

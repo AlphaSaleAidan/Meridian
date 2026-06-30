@@ -172,7 +172,7 @@ def _consistency_across_staff(v: Vertical, situation: str) -> Built:
         title=f"Experience quality swings too much between {role}s",
         observation=f"Satisfaction/repeat rate ranges from {X}% to {X}% across {role}s for the same {sale} type.",
         reasoning=f"Wide variance means the experience is person-dependent, not systematized — a customer's outcome is a coin flip on who serves them, which makes the brand promise unreliable and caps retention.",
-        conclusion=f"Codify what the top {role}s do into a standard and coach the bottom of the range up to it.",
+        conclusion=f"Standardize what the top {role}s do into a written playbook and train the bottom of the range up to it.",
         expected_effect=f"Compressing the variance lifts the average experience and protects ~${X}/mo in repeat {sale}s.",
         recommend_when={"state": "consistency_variance_staff", "min_signal": "experience_flag"},
         tags=("experience", "consistency", v.family),
@@ -222,7 +222,7 @@ def _wait_seating_accessibility(v: Vertical, situation: str) -> Built:
         title=f"Nowhere comfortable to wait makes your {X} peak feel worse than it is",
         observation=f"At peak {X} customers wait with inadequate seating/accessibility, and feedback flags the wait environment {X}% of the time.",
         reasoning=f"Perceived wait, not just actual wait, drives dissatisfaction — an uncomfortable or inaccessible wait makes the same minutes feel longer and disproportionately hurts customers with accessibility needs.",
-        conclusion=f"Improve the {X} peak wait environment (seating, shade/warmth, clear accessibility) to soften perceived wait.",
+        conclusion=f"Add seating, shade/warmth, and clear accessibility to the {X} peak wait area so the same minutes feel shorter.",
         expected_effect=f"Better wait experience reduces walkouts and protects ~${X}/mo in peak {v.sale_unit}s.",
         recommend_when={"state": "wait_environment_gap", "min_signal": "service_observation"},
         tags=("experience", "wait", "accessibility", v.family),
@@ -273,7 +273,7 @@ def _review_response_gap(v: Vertical, situation: str) -> Built:
         title=f"You're leaving reviews unanswered — a public experience signal",
         observation=f"{X}% of reviews go without a response, including {X}% of the negative ones, over the last {X} weeks.",
         reasoning=f"Prospective customers read how a business responds to feedback as a proxy for how it will treat them — unanswered negatives read as not caring, while thoughtful replies recover trust publicly at near-zero cost.",
-        conclusion=f"Respond to every review within {X} days, leading with the negatives and naming the specific fix.",
+        conclusion=f"Set a {X}-day response rule and reply to every review, leading with the negatives and naming the specific fix.",
         expected_effect=f"Active review response lifts conversion of review-readers, worth ~${X}/mo in new {v.sale_unit}s.",
         recommend_when={"state": "review_response_gap", "min_signal": "reviews_text"},
         tags=("experience", "reviews", v.family),
@@ -382,6 +382,33 @@ def _staff_turnover_experience_drag(v: Vertical, situation: str) -> Built:
         expected_effect=f"Stabilizing the {role} bench lifts average experience and protects ~${X}/mo in turnover-driven repeat loss.",
         recommend_when={"state": "staff_turnover_experience_drag", "min_signal": "schedule_shifts"},
         tags=("experience", "turnover", "consistency", v.family),
+    )
+
+
+def _service_status_update_gap(v: Vertical, situation: str) -> Built:
+    sale = v.sale_unit
+    role = v.staff_role
+    return Built(
+        title=f"Customers are left in the dark while a {sale} is in progress",
+        observation=f"{X}% of multi-step or multi-day {sale}s give the customer no proactive status update, and '{X}' (no communication) recurs in feedback.",
+        reasoning=f"Silence during an in-progress job reads as neglect, because the customer can't tell whether work is on track and fills the gap with worry — so a {role} who proactively updates status converts anxious waiting into trust, while saying nothing breeds the calls, complaints, and churn that follow uncertainty.",
+        conclusion=f"Send a proactive status update at each key stage of the {sale} (received, in progress, ready) by text so the customer never has to chase you.",
+        expected_effect=f"Proactive updates cut status-chasing calls and protect ~${X}/mo in trust-driven repeats.",
+        recommend_when={"state": "service_status_update_gap", "min_signal": "contact_log"},
+        tags=("experience", "communication", "status", v.family),
+    )
+
+
+def _digital_self_service_gap(v: Vertical, situation: str) -> Built:
+    sale = v.sale_unit
+    return Built(
+        title=f"No online self-service — customers must call to book/order",
+        observation=f"{X}% of {sale}s still start with a phone call or in-person ask because there's no online booking/ordering option, and {X}% of off-hours demand goes unanswered.",
+        reasoning=f"Forcing every {sale} through a live channel caps demand at your staffed hours, because a customer ready to commit at 10pm or mid-meeting can't, and many never call back — so the missing self-service path silently turns away convenience-driven demand a competitor's online option captures.",
+        conclusion=f"Enable online self-service booking/ordering with real-time availability, and route after-hours and overflow demand to it by default.",
+        expected_effect=f"Capturing off-hours self-service demand is worth ~${X}/mo in {sale}s that today go unbooked.",
+        recommend_when={"state": "digital_self_service_gap", "min_signal": "bookings"},
+        tags=("experience", "self_service", "friction", v.family),
     )
 
 
@@ -635,5 +662,22 @@ register(
         required_agents=("ExperienceSignalAgent",),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="ExperienceSignalAgent (shared): classify complaints as expectation-gap vs execution-failure to route the right fix (communication vs service).",
+    ),
+    Archetype(
+        key="service_status_update_gap", domain="experience", name="No proactive status updates",
+        build=_service_status_update_gap, situations=("baseline", "leaking"),
+        applies_flags=("appointment_based",),
+        required_signals=("contact_log", "bookings"),
+        required_agents=("FollowUpAgent", "ExperienceSignalAgent"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="FollowUpAgent (shared): detect absence of per-stage status outreach on multi-step/multi-day jobs (status-touch log not yet ingested) and tie it to no-communication feedback.",
+    ),
+    Archetype(
+        key="digital_self_service_gap", domain="experience", name="No online self-service",
+        build=_digital_self_service_gap, situations=("baseline", "untapped"),
+        required_signals=("bookings", "transactions"),
+        required_agents=("ExperienceSignalAgent",),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="ChannelAvailabilityAgent: detect lack of an online booking/order path and estimate off-hours/overflow demand turned away (channel availability not yet modeled).",
     ),
 )

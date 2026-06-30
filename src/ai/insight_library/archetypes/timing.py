@@ -59,7 +59,7 @@ def _slowest_day_shift(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Demand is quietly shifting onto your slowest day ({X})",
         observation=f"{X} has grown from {X}% to {X}% of weekly {unit}s over the last {X} weeks while your historically busy {X} flattened.",
-        reasoning=f"When the demand curve moves between days, a schedule built for the old pattern overstaffs the fading day and underserves the rising one — you pay twice for the lag.",
+        reasoning=f"When the demand curve moves between days, a schedule built for the old pattern overstaffs the fading day while it underserves the rising one, so you pay twice for the lag — idle {v.staff_role} hours on the dead day and lost {unit}s on the busy one.",
         conclusion=f"Rebalance one {v.staff_role} shift from {X} toward {X} and re-point any day-targeted promo to match where demand is actually going.",
         expected_effect=f"Tracking the shift recovers ~${X}/mo otherwise lost to mistimed coverage.",
         recommend_when={"state": "demand_shifting_days", "min_signal": "daily_revenue"},
@@ -109,7 +109,7 @@ def _seasonality_peak_prep(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Your {X} seasonal peak is {X} weeks out — secure capacity",
         observation=f"Last {X} years, {unit}s rose ~{X}% from {X} through {X}; the ramp is starting again.",
-        reasoning=f"A visible peak is a capacity-and-readiness event: the loss isn't demand, it's the {unit}s you can't fulfill when {v.staff_role} hours{(' and stock' if inv else '')} aren't staged in advance.",
+        reasoning=f"A visible peak is a capacity-and-readiness event, so the loss isn't demand — it's the {unit}s you can't fulfill because {v.staff_role} hours{(' and stock' if inv else '')} aren't staged in advance, which means proven demand walks straight to whoever is ready.",
         conclusion=f"Prepare ahead of the curve: {capacity_lever}, schedule {v.staff_role} coverage to the historical shape, and warm demand early via {v.channels[0]}.",
         expected_effect=f"Being ready for the peak captures ~${X}/mo that would otherwise hit a capacity ceiling.",
         recommend_when={"state": "seasonal_peak", "min_signal": "daily_revenue"},
@@ -122,7 +122,7 @@ def _holiday_spike(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"{X} drives a {X}% one-day spike you under-prepare for",
         observation=f"Around {X}, daily {unit}s jump ~{X}% above a normal {X}, then snap back within {X} days.",
-        reasoning=f"A holiday spike is a short, predictable surge: it rewards pre-staged capacity and pre-orders, and punishes treating it like a normal day ({v.staff_role} undercoverage, stockouts, walkaways).",
+        reasoning=f"A holiday spike is a short, predictable surge, so it rewards pre-staged capacity and pre-orders and punishes treating it like a normal day — because {v.staff_role} undercoverage and stockouts turn the year's densest demand into walkaways instead of sales.",
         conclusion=f"Run a holiday playbook: take pre-orders/bookings via {v.channels[0]}, staff the spike day to the historical multiple, and prep {unit} supply to the forecast — not the average.",
         expected_effect=f"Capturing the full holiday spike instead of the average is worth ~${X} per occurrence.",
         recommend_when={"state": "holiday_spike", "min_signal": "daily_revenue"},
@@ -386,6 +386,45 @@ def _inquiry_to_sale_lag(v: Vertical, situation: str) -> Built:
     )
 
 
+def _service_time_drift(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Time per {unit} has crept up {X}% — silent capacity loss",
+        observation=f"Average time per {unit} drifted from {X} to {X} minutes over {X} weeks while {v.staff_role} headcount and open hours held flat.",
+        reasoning=f"Throughput is capacity divided by time-per-{unit}, so when service time creeps up the same staffed hours hold fewer {unit}s — which means effective capacity shrank without anyone cutting a shift, and a throughput-bound business loses the difference at every peak.",
+        conclusion=f"Set a target time-per-{unit}, trim the slowest step in the {unit} flow, and stage prep ahead so the {v.staff_role} isn't building capacity from scratch at the peak.",
+        expected_effect=f"Recovering the drifted {X}% of service time adds back ~${X}/mo of peak throughput.",
+        recommend_when={"state": "service_time_drift", "min_signal": "transactions"},
+        tags=("timing", "throughput", "capacity", v.family),
+    )
+
+
+def _daylight_demand_shift(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Your evening trade shrinks with the daylight — {X}% swing",
+        observation=f"Post-{X} {unit}s fall ~{X}% in the short-daylight months versus the long-daylight ones, even though your close time never changes.",
+        reasoning=f"Foot traffic tracks daylight rather than the clock, so when sunset moves earlier the after-dark hours empty out while you still pay a {v.staff_role}, lights, and heat against them — which turns a fixed closing schedule into a seasonal cost leak the calendar hides.",
+        conclusion=f"Shift the close earlier in short-daylight months and redeploy those {v.staff_role} hours into the busier afternoon, rather than holding one schedule year-round.",
+        expected_effect=f"Flexing hours to daylight saves ~${X}/mo of dead after-dark cost.",
+        recommend_when={"state": "daylight_demand_shift", "min_signal": "hourly_revenue"},
+        tags=("timing", "seasonality", "hours", v.family),
+    )
+
+
+def _local_event_demand(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Nearby events move your demand {X}% — and you don't plan for them",
+        observation=f"On days with a major event within {X} miles, {unit}s swing ~{X}% versus a normal {X}, but staffing and prep don't change for them.",
+        reasoning=f"A scheduled local event is a known demand shock, so ignoring the venue calendar means you under-staff the inbound-crowd days and over-staff the ones an event pulls traffic away — which leaks lost {unit}s when the crowd arrives and idle {v.staff_role} cost when it doesn't.",
+        conclusion=f"Build the local-event calendar into the schedule — add {v.staff_role} coverage and prep for inbound-crowd events, and trim hours for events that draw traffic elsewhere.",
+        expected_effect=f"Planning to the event calendar is worth ~${X}/mo in matched cost and captured surge.",
+        recommend_when={"state": "local_event_sensitivity", "min_signal": "daily_revenue"},
+        tags=("timing", "event", "exogenous", v.family),
+    )
+
+
 # ── Registration ──────────────────────────────────────────────────────────
 register(
     Archetype(
@@ -617,5 +656,32 @@ register(
         required_agents=("ChannelAgent", "LeadingIndicatorAgent"),
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="LeadingIndicatorAgent: ingest dated inquiry/quote/call volume per channel (caller_memory_index gives phone inquiries; web/booking inquiries are not yet captured) and cross-correlate against daily_revenue to estimate the lead and drive forward staffing/stock.",
+    ),
+    Archetype(
+        key="service_time_drift", domain="timing", name="Service-time drift",
+        build=_service_time_drift,
+        situations=("baseline", "emerging"),
+        required_signals=("transactions", "hourly_revenue"),
+        required_agents=("PatternAnalyzer", "ThroughputAgent"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="ThroughputAgent: derive time-per-{unit} from transaction timestamps (or order-open-to-close) and trend it over weeks to separate a capacity loss from a demand drop. Per-order duration is not yet computed.",
+    ),
+    Archetype(
+        key="daylight_demand_shift", domain="timing", name="Daylight-driven hour shift",
+        build=_daylight_demand_shift,
+        situations=("baseline",),
+        required_signals=("hourly_revenue",),
+        required_agents=("SeasonalityAgent", "PatternAnalyzer"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="SeasonalityAgent: join hourly_revenue to local sunset times by date to attribute after-dark demand decay to daylight rather than season. A sunrise/sunset table keyed to merchant location must be added.",
+    ),
+    Archetype(
+        key="local_event_demand", domain="timing", name="Local-event demand shock",
+        build=_local_event_demand,
+        situations=("baseline",),
+        required_signals=("daily_revenue",),
+        required_agents=("CalendarAgent", "PatternAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="CalendarAgent: ingest a geo-scoped local-event feed (stadiums, venues, conventions within a radius) and join to daily_revenue to isolate event-driven swings from ordinary day-of-week effects. No local-event source is wired today.",
     ),
 )

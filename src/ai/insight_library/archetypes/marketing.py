@@ -188,7 +188,7 @@ def _review_volume_low(v: Vertical, situation: str) -> Built:
         title=f"You collect almost no reviews — {X} in {X} months",
         observation=f"Only {X} new public reviews landed in the last {X} months despite serving {X} customers — a request rate near zero.",
         reasoning=f"For a {v.name.lower()}, review count is a primary ranking and trust signal: thin volume suppresses map/search visibility AND lets a single bad review dominate the average, so low volume is both a discovery problem and a reputation-fragility problem.",
-        conclusion=f"Automate a post-{v.sale_unit} review request (SMS/email) timed {X} hours after a happy interaction, and ask only satisfied customers.",
+        conclusion=f"Trigger an automated post-{v.sale_unit} review request (SMS/email) {X} hours after a happy interaction, and send it only to satisfied customers.",
         expected_effect=f"Raising volume to {X} reviews/month lifts local discovery and is worth ~${X}/mo in incremental walk-in/search demand.",
         recommend_when={"state": "review_volume_low", "min_signal": "review_feed"},
         tags=("marketing", "reputation", "reviews", v.family),
@@ -216,7 +216,7 @@ def _review_response_gap(v: Vertical, situation: str) -> Built:
         title=f"You reply to {X}% of reviews — owners' responses are missing",
         observation=f"{X}% of reviews (and {X}% of negative ones) have no owner response, including reviews older than {X} days.",
         reasoning=f"Public responses are read by prospects far more than by the original reviewer; an unanswered complaint signals an inattentive {v.name.lower()}, while a calm reply converts a negative into proof of care — so silence forfeits free reputation repair.",
-        conclusion=f"Respond to every review within {X} hours using a brief, specific, non-defensive template — negatives first.",
+        conclusion=f"Set a {X}-hour response SLA and reply to every review with a brief, specific, non-defensive template — negatives first.",
         expected_effect=f"Consistent responses measurably lift conversion from your listing, worth ~${X}/mo at current traffic.",
         recommend_when={"state": "review_response_gap", "min_signal": "review_feed"},
         tags=("marketing", "reputation", "reviews", v.family),
@@ -251,7 +251,7 @@ def _competitor_review_gap(v: Vertical, situation: str) -> Built:
     return Built(
         title=f"Nearby competitors out-review you {X} to 1",
         observation=f"Comparable {v.name.lower()}s within {X} km hold {X} reviews at {X} stars; you hold {X} at {X} — a visible gap on the same search result.",
-        reasoning=f"Customers choose between you and the next pin on the map by review count and rating side-by-side; a thin profile next to a dense one loses the click before the {v.sale_unit} ever starts, regardless of who's actually better.",
+        reasoning=f"Customers choose between you and the next pin on the map by review count and rating side-by-side, so a thin profile next to a dense one loses the click before the {v.sale_unit} ever starts, regardless of who is actually better.",
         conclusion=f"Close the volume gap with a sustained request program and lead your listing with the {X} differentiators competitors lack.",
         expected_effect=f"Drawing even with local competitors on review density is worth ~${X}/mo in recaptured comparison clicks.",
         recommend_when={"state": "competitor_review_gap", "min_signal": "review_feed"},
@@ -439,6 +439,32 @@ def _email_sendtime_mistimed(v: Vertical, situation: str) -> Built:
         expected_effect=f"Re-timing sends to the open peak lifts engagement ~{X}% on the same content, worth ~${X}/mo in email-driven {v.sale_unit}s.",
         recommend_when={"state": "email_sendtime_mistimed", "min_signal": "email_send_log"},
         tags=("marketing", "email", "timing", v.family),
+    )
+
+
+def _retargeting_untapped(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Visitors who didn't buy are never retargeted",
+        observation=f"{X} people browse your site/profile monthly without buying, yet zero retargeting (owned-audience ads, SMS, or email) ever reaches them again.",
+        reasoning=f"A visitor who looked and left has already shown intent, so they convert far cheaper than a cold prospect — which means dropping them after one visit forfeits the warmest, lowest-cost demand a {v.name.lower()} can re-reach, the second touch most likely to close.",
+        conclusion=f"Build a retargeting audience from site/profile visitors and run a {X}-touch sequence (owned-audience ad + email/SMS) with one clear {unit} offer.",
+        expected_effect=f"Re-reaching warm visitors typically recovers {X}% of them, ~${X}/mo in otherwise-lost {unit}s.",
+        recommend_when={"state": "retargeting_untapped", "min_signal": "web_analytics"},
+        tags=("marketing", "retargeting", "funnel", v.family),
+    )
+
+
+def _email_segmentation_missing(v: Vertical, situation: str) -> Built:
+    unit = v.sale_unit
+    return Built(
+        title=f"Every contact gets the same email — no behavioral segments",
+        observation=f"All {X} contacts receive one identical campaign regardless of recency, frequency, or {unit} history; click rate sits {X} points under a segmented benchmark.",
+        reasoning=f"One message to a behaviorally diverse list is irrelevant to most of it, because a lapsed buyer, a new customer, and a weekly regular each need a different ask — so a single blast under-converts every segment at once and trains the list to ignore you.",
+        conclusion=f"Split the list into {X} behavioral segments (new, active, lapsed) and send each a tailored {unit}-relevant message; measure click lift against the blast.",
+        expected_effect=f"Behavioral segmentation typically lifts email-driven revenue {X}%, ~${X}/mo on the same list.",
+        recommend_when={"state": "email_unsegmented", "min_signal": "email_send_log"},
+        tags=("marketing", "email", "segmentation", v.family),
     )
 
 
@@ -710,5 +736,23 @@ register(
         swarm_capability=SwarmCapability.MISSING,
         swarm_upgrade="OnlineFunnelAgent: capture online checkout funnel/cart-abandon events (online store webhooks not yet ingested) and trigger recovery sequences.",
         applies_keys=_keys_with_channel("online"),
+    ),
+    Archetype(
+        key="retargeting_untapped", domain="marketing", name="Visitors not retargeted",
+        build=_retargeting_untapped, situations=("baseline", "untapped"),
+        required_signals=("web_analytics", "transactions"),
+        required_agents=("OnlineFunnelAgent", "RevenueAnalyzer"),
+        swarm_capability=SwarmCapability.MISSING,
+        swarm_upgrade="WebAudienceAgent: ingest site/profile visitor + non-purchase events (web analytics not yet connected) to build retargetable owned audiences.",
+        applies_keys=_keys_with_channel("online", "booking"),
+    ),
+    Archetype(
+        key="email_unsegmented", domain="marketing", name="Email not segmented",
+        build=_email_segmentation_missing, situations=("baseline",),
+        required_signals=("email_send_log", "transactions"),
+        required_agents=("EmailAnalyzer", "CustomerLifecycleAgent"),
+        swarm_capability=SwarmCapability.PARTIAL,
+        swarm_upgrade="CustomerLifecycleAgent (shared): derive recency/frequency segments from transactions and join to email_send_log to drive per-segment campaigns.",
+        applies_keys=_keys_with_any_flag("repeat_purchase", "membership", "high_ticket"),
     ),
 )
