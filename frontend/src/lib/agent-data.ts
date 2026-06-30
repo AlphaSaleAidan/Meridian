@@ -44,6 +44,10 @@ export interface TopAction {
   /** Analytical model the agent used to derive this action's reasoning. */
   model: string
   reasoning: ReasoningChain
+  /** True when produced by the grounded engine (cites the merchant's own data). */
+  grounded?: boolean
+  /** Concrete next step from the grounded engine (what to literally do). */
+  actionItem?: string
 }
 
 export interface RFMSegment {

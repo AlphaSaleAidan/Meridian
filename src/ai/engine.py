@@ -64,6 +64,14 @@ class AnalysisContext:
     skeletal_data: list[dict] = field(default_factory=list)
     staff_positions: list[dict] = field(default_factory=list)
 
+    # Multi-source signals for the grounded Top-Actions engine. Loaded
+    # best-effort (empty when the subsystem isn't connected for this merchant).
+    phone_calls: list[dict] = field(default_factory=list)
+    phone_orders: list[dict] = field(default_factory=list)
+    merchant_health: list[dict] = field(default_factory=list)
+    email_engagement: list[dict] = field(default_factory=list)
+    action_feedback: list[dict] = field(default_factory=list)
+
     # Merchant metadata
     business_vertical: str = "other"
     timezone: str = "America/Los_Angeles"
@@ -353,6 +361,31 @@ class MeridianAI:
                 logger.error(f"Cross-reference analysis failed: {e}", exc_info=True)
                 result.errors.append(f"cross_reference: {str(e)}")
 
+        # ── Phase 5c.5: Grounded Top Actions (multi-source LLM reasoning) ──
+        # Runs only when GROUNDED_ACTIONS_ENABLED. Reasons over the full evidence
+        # brief (POS + phone + camera + health + email + accept/reject feedback)
+        # and emits cite-or-drop actions. These become the authoritative top
+        # actions; the rule-based insights remain as backup/candidates.
+        if os.environ.get("GROUNDED_ACTIONS_ENABLED", "").lower() in ("1", "true"):
+            try:
+                from .grounded_actions import generate_grounded_actions
+                grounded = await generate_grounded_actions(
+                    ctx=ctx,
+                    revenue=result.revenue_analysis,
+                    products=result.product_analysis,
+                    patterns=result.pattern_analysis,
+                    money_left=result.money_left_score,
+                    candidate_insights=result.insights,
+                    top_n=int(os.environ.get("GROUNDED_ACTIONS_TOP_N", "5") or "5"),
+                )
+                # Prepend so they lead the persisted set; the actions route also
+                # surfaces grounded-first.
+                result.insights = grounded + result.insights
+                logger.info("Grounded actions: %s generated for %s", len(grounded), ctx.org_id)
+            except Exception as e:
+                logger.error(f"Grounded actions failed: {e}", exc_info=True)
+                result.errors.append(f"grounded_actions: {str(e)}")
+
         # ── Phase 5d: Autonomous Swarm Training ──────────────
         if result.agent_outputs:
             try:
@@ -413,14 +446,46 @@ class MeridianAI:
         ctx.transactions = [dict(r) for r in transactions]
         ctx.inventory = [dict(r) for r in inventory]
 
+        # Multi-source signals for the grounded Top-Actions engine. Only loaded
+        # when the flag is on so the legacy path pays zero extra query cost.
+        # Every loader is best-effort and returns [] on any error.
+        if os.environ.get("GROUNDED_ACTIONS_ENABLED", "").lower() in ("1", "true"):
+            await self._load_grounded_signals(ctx, org_id, days)
+
         logger.info(
             f"Loaded context for {org_id}: "
             f"{len(ctx.daily_revenue)} daily, "
             f"{len(ctx.hourly_revenue)} hourly, "
             f"{len(ctx.product_performance)} products, "
-            f"{len(ctx.transactions)} transactions"
+            f"{len(ctx.transactions)} transactions, "
+            f"{len(ctx.phone_calls)} calls, {len(ctx.vision_traffic)} vision, "
+            f"{len(ctx.merchant_health)} health"
         )
         return ctx
+
+    async def _load_grounded_signals(self, ctx: "AnalysisContext", org_id: str, days: int) -> None:
+        """Best-effort load of phone/vision/health/email/feedback signals. A DB
+        backend missing any loader (older adapter) or a failing query simply
+        leaves that signal empty — the grounded engine degrades gracefully."""
+        async def _maybe(name: str, *args):
+            fn = getattr(self.db, name, None)
+            if fn is None:
+                return []
+            try:
+                return list(await fn(*args)) or []
+            except Exception as e:  # noqa: BLE001
+                logger.warning("grounded signal %s failed for %s: %s", name, org_id, e)
+                return []
+
+        (ctx.phone_calls, ctx.phone_orders, ctx.vision_traffic,
+         ctx.merchant_health, ctx.email_engagement, ctx.action_feedback) = await asyncio.gather(
+            _maybe("get_phone_call_logs", org_id, days),
+            _maybe("get_phone_orders", org_id, days),
+            _maybe("get_vision_traffic", org_id, days),
+            _maybe("get_merchant_health", org_id),
+            _maybe("get_email_engagement", org_id, days),
+            _maybe("get_recent_action_feedback", org_id),
+        )
 
     async def _persist_results(self, result: AnalysisResult):
         """Save analysis results to database."""

@@ -515,6 +515,91 @@ class SupabaseREST:
             })
         return items
 
+    # ─── Grounded-engine signal loaders (multi-source) ────────
+    # Each is best-effort: a missing table / column / RLS denial returns [] so
+    # the Top-Actions engine degrades gracefully instead of failing the whole
+    # nightly analysis. org_id / merchant_id / business_id are the same business
+    # UUID under different column names across these subsystems.
+
+    async def get_phone_call_logs(self, org_id: str, days: int = 30, limit: int = 500) -> list[dict]:
+        """Phone-agent call logs (transcripts, duration, order data) for the merchant."""
+        try:
+            return await self.select(
+                "phone_call_logs",
+                filters={"merchant_id": f"eq.{org_id}", "created_at": f"gte.{_days_ago(days)}"},
+                order="created_at.desc",
+                limit=limit,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("get_phone_call_logs failed for %s: %s", org_id, e)
+            return []
+
+    async def get_phone_orders(self, org_id: str, days: int = 30, limit: int = 500) -> list[dict]:
+        """Phone-agent orders (incl. POS push success) for the merchant."""
+        try:
+            return await self.select(
+                "phone_orders",
+                filters={"merchant_id": f"eq.{org_id}", "created_at": f"gte.{_days_ago(days)}"},
+                order="created_at.desc",
+                limit=limit,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("get_phone_orders failed for %s: %s", org_id, e)
+            return []
+
+    async def get_vision_traffic(self, org_id: str, days: int = 30, limit: int = 2000) -> list[dict]:
+        """Camera footfall buckets (entries/exits/occupancy/conversion)."""
+        try:
+            return await self.select(
+                "vision_traffic",
+                filters={"org_id": f"eq.{org_id}", "bucket": f"gte.{_days_ago(days)}"},
+                order="bucket.desc",
+                limit=limit,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("get_vision_traffic failed for %s: %s", org_id, e)
+            return []
+
+    async def get_merchant_health(self, org_id: str, limit: int = 12) -> list[dict]:
+        """Latest merchant_health scores per category (business_id-scoped)."""
+        try:
+            return await self.select(
+                "merchant_health",
+                filters={"business_id": f"eq.{org_id}"},
+                order="measured_at.desc",
+                limit=limit,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("get_merchant_health failed for %s: %s", org_id, e)
+            return []
+
+    async def get_email_engagement(self, org_id: str, days: int = 30, limit: int = 500) -> list[dict]:
+        """Outbound email log with open/click/bounce timestamps (org_id is TEXT here)."""
+        try:
+            return await self.select(
+                "email_send_log",
+                filters={"org_id": f"eq.{org_id}", "created_at": f"gte.{_days_ago(days)}"},
+                order="created_at.desc",
+                limit=limit,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("get_email_engagement failed for %s: %s", org_id, e)
+            return []
+
+    async def get_recent_action_feedback(self, org_id: str, days: int = 45, limit: int = 200) -> list[dict]:
+        """Recent insights' acceptance state so the engine can avoid repeating
+        rejected/completed action types (the feedback loop)."""
+        try:
+            return await self.select(
+                "insights",
+                filters={"org_id": f"eq.{org_id}", "created_at": f"gte.{_days_ago(days)}"},
+                order="created_at.desc",
+                limit=limit,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("get_recent_action_feedback failed for %s: %s", org_id, e)
+            return []
+
     async def save_insights(self, insights: list[dict]) -> int:
         """Persist AI-generated insights."""
         if not insights:
