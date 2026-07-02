@@ -109,7 +109,7 @@ async function checkAdmin(): Promise<boolean> {
   return !!data
 }
 
-async function checkIsSalesRep(email: string): Promise<boolean> {
+export async function checkIsSalesRep(email: string): Promise<boolean> {
   if (!supabase) {
     try {
       const raw = localStorage.getItem('meridian_sales_rep')
@@ -252,15 +252,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const u = { id: data.user.id, email: data.user.email || email }
       setUser(u)
 
-      const salesRep = await checkIsSalesRep(u.email)
+      // Section isolation: sales-rep accounts sign in at the rep portal, never
+      // the customer login — even when the same email also has a business.
+      const repRole = String(data.user.user_metadata?.role ?? '').toLowerCase() === 'sales_rep'
+      const salesRep = repRole || await checkIsSalesRep(u.email)
       if (salesRep) {
-        const o = await fetchBusinessForUser(u.id, u.email)
-        if (!o) {
-          await supabase.auth.signOut()
-          setUser(null)
-          setIsSalesRep(false)
-          return 'This account belongs to a sales rep. Please use the sales portal at /login'
-        }
+        await supabase.auth.signOut()
+        setUser(null)
+        setIsSalesRep(false)
+        return 'This account belongs to a sales rep. Please use the sales portal login.'
       }
 
       const [o, admin] = await Promise.all([

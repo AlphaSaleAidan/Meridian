@@ -5,6 +5,7 @@ import {
   Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, WifiOff, Trash2, Loader2,
 } from 'lucide-react'
 import { type Deal } from '@/lib/canada-sales-demo-data'
+import { verticalsByGroup, findVerticalByValue } from '@/data/cadVerticals'
 import {
   useCanadaLeads,
   useCanadaLeadsRealtime,
@@ -125,7 +126,7 @@ export default function CanadaPortalLeadsPage() {
 
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
-    vertical: 'Restaurant', commission_rate: '70', notes: '',
+    vertical: '', commission_rate: '70', notes: '',
     source: 'Referral', city: '', province: '', pos_system: '',
   })
   const [addError, setAddError] = useState('')
@@ -285,9 +286,16 @@ export default function CanadaPortalLeadsPage() {
               <input required value={newDeal.contact_name} onChange={e => setNewDeal(p => ({ ...p, contact_name: e.target.value }))} className={inputClass} placeholder="Contact Name *" />
               <input type="email" value={newDeal.contact_email} onChange={e => setNewDeal(p => ({ ...p, contact_email: e.target.value }))} className={inputClass} placeholder="Contact Email" />
               <input type="tel" value={newDeal.contact_phone} onChange={e => setNewDeal(p => ({ ...p, contact_phone: e.target.value }))} className={inputClass} placeholder="Phone" />
-              <select value={newDeal.vertical} onChange={e => setNewDeal(p => ({ ...p, vertical: e.target.value }))} className={inputClass}>
-                {['Restaurant', 'Smoke Shop', 'Cafe', 'Bar', 'Food Truck', 'Salon', 'Boutique', 'Convenience Store', 'Other'].map(v => (
-                  <option key={v} value={v}>{v}</option>
+              {/* Canonical business type (deck slug) — drives which industry
+                  proposal deck this lead gets, so it must be a real selection. */}
+              <select required value={newDeal.vertical} onChange={e => setNewDeal(p => ({ ...p, vertical: e.target.value }))} className={inputClass}>
+                <option value="">Business Type *</option>
+                {verticalsByGroup().map(({ group, items }) => (
+                  <optgroup key={group.key} label={group.label}>
+                    {items.map(v => (
+                      <option key={v.slug} value={v.slug}>{v.title}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <select value={newDeal.source} onChange={e => setNewDeal(p => ({ ...p, source: e.target.value }))} className={inputClass}>
@@ -302,9 +310,11 @@ export default function CanadaPortalLeadsPage() {
                   <option key={p} value={p}>{p}</option>
                 ))}
               </select>
+              {/* Only the POS systems Meridian integrates today — Square and
+                  Clover — plus escape hatches for merchants on anything else. */}
               <select required value={newDeal.pos_system} onChange={e => setNewDeal(p => ({ ...p, pos_system: e.target.value }))} className={inputClass}>
                 <option value="">Current POS System *</option>
-                {['Square', 'Clover', 'Toast', 'Moneris', 'Lightspeed', 'Shopify POS', 'TouchBistro', 'Revel', 'Heartland', 'Aloha', 'NCR Silver', 'SpotOn', 'Helcim', 'Dejavoo', 'Poynt', 'Payanywhere', 'SumUp', 'iZettle', 'Vend', 'Hike POS', 'Epos Now', 'Lavu', 'Upserve', 'Talech', 'PayPal Zettle', 'Stripe Terminal', 'None / Paper', 'Other'].map(v => (
+                {['Square', 'Clover', 'None / Paper', 'Other'].map(v => (
                   <option key={v} value={v.toLowerCase()}>{v}</option>
                 ))}
               </select>
@@ -382,7 +392,7 @@ export default function CanadaPortalLeadsPage() {
                     <span className="text-sm font-semibold text-white truncate">{deal.business_name}</span>
                     {deal.vertical && (
                       <span className="text-2xs px-1.5 py-0.5 rounded bg-pm-canada-border text-pm-canada-text-muted font-medium">
-                        {deal.vertical}
+                        {findVerticalByValue(deal.vertical)?.title || deal.vertical}
                       </span>
                     )}
                     <span className="text-2xs px-2 py-0.5 rounded-full bg-pm-amber-gold/10 text-pm-amber-gold font-medium">

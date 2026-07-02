@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
+import { useAuth, checkIsSalesRep } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { MapPin } from 'lucide-react'
@@ -72,12 +72,25 @@ export default function CanadaLoginPage() {
     }
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
     if (authError) {
+      setLoading(false)
       setError(authError.message)
       setLoggingIn(false)
       return
     }
+    // Section isolation: sales-rep accounts sign in at the rep portal login,
+    // never here — mirror of the gate in sales-auth that keeps customers out
+    // of the rep portal.
+    const repRole = String(data.user?.user_metadata?.role ?? '').toLowerCase() === 'sales_rep'
+    const isRepAccount = repRole || await checkIsSalesRep(data.user?.email || email)
+    if (isRepAccount) {
+      await supabase.auth.signOut()
+      setLoading(false)
+      setError('This is a sales rep account. Please sign in at the rep portal: /canada/portal/login')
+      setLoggingIn(false)
+      return
+    }
+    setLoading(false)
     // First login with a rep-issued temporary password — force a reset before
     // letting the customer into the portal.
     if (data.user?.user_metadata?.must_reset_password) {
