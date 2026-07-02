@@ -869,7 +869,8 @@ export default function CanadaPortalCreateCustomerPage() {
                 className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none transition-colors"
               >
                 <option value="">Not sure / ask later</option>
-                {posSystems.map(s => (
+                {/* Canada offers only the live integrations for now. */}
+                {posSystems.filter(s => s.key === 'square' || s.key === 'clover').map(s => (
                   <option key={s.key} value={s.key}>{s.name}</option>
                 ))}
               </select>

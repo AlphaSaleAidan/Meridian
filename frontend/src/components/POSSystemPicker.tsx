@@ -136,7 +136,9 @@ export default function POSSystemPicker({
   const available = useMemo(() => {
     let systems = posSystems
     if (portalContext === 'canada') {
-      systems = systems.filter(s => s.canadaAvailable !== false)
+      // Canada offers only the two live integrations for now — Square and
+      // Clover. Widen this list as further integrations go live in Canada.
+      systems = systems.filter(s => s.key === 'square' || s.key === 'clover')
     }
     if (vertical) {
       // Stable sort: vertical-recommended systems first, others in original order.
