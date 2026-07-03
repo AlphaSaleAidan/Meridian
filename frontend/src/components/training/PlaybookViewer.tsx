@@ -31,6 +31,18 @@ const SECTION_META: Record<string, { label: string; icon: typeof BookOpen; order
 // data-requirements matrices, decision trees, etc.) and not shown to reps.
 const HIDDEN_PREFIXES = ['_']
 
+// Canada sells Square + Clover only (the portal's POS pickers are restricted to
+// match), so Canadian reps only see those two integration guides. US keeps the
+// full catalog.
+const CANADA_POS_GUIDES = new Set(['square.md', 'clover.md'])
+
+function visibleForCountry(path: string, country: 'canada' | 'us'): boolean {
+  if (country !== 'canada') return true
+  const parts = path.split('/')
+  if (parts[0] !== '10-pos-integrations') return true
+  return CANADA_POS_GUIDES.has(parts[parts.length - 1])
+}
+
 // Acronyms that should always render fully uppercased (case-insensitive match on token).
 const ACRONYMS = new Set([
   'pos', 'ai', 'api', 'ui', 'ux', 'kpi', 'roi', 'faq', 'b2b', 'b2c', 'ltv', 'cac',
@@ -139,8 +151,11 @@ function sortTree(nodes: TreeNode[]) {
   for (const node of nodes) sortTree(node.children)
 }
 
-export function PlaybookViewer({ country: _country }: PlaybookViewerProps) {
-  const tree = useMemo(() => buildTree(Object.keys(PLAYBOOK)), [])
+export function PlaybookViewer({ country }: PlaybookViewerProps) {
+  const tree = useMemo(
+    () => buildTree(Object.keys(PLAYBOOK).filter(p => visibleForCountry(p, country))),
+    [country],
+  )
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['00-getting-started']))
   const [selectedPath, setSelectedPath] = useState<string>('00-getting-started/01-welcome.md')
   const [query, setQuery] = useState('')
