@@ -9,7 +9,7 @@ import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan } from '@/lib/proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
 import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type InvoiceInput } from '@/lib/generate-invoice-pdf-us'
@@ -401,7 +401,7 @@ export default function USPortalLeadDetailPage() {
       const dueDate = new Date(now)
       dueDate.setDate(dueDate.getDate() + 30)
 
-      const planName = monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard'
+      const planName = closestMonthlyPlan(monthlyPrice).label
       const priceCents = Math.round(monthlyPrice * 100)
       const setupFeeCents = Math.round((Number(setupFee) || 0) * 100)
 
@@ -531,7 +531,7 @@ export default function USPortalLeadDetailPage() {
         region: deal.province || 'New York',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
-        planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
+        planName: closestMonthlyPlan(monthlyPrice).label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
@@ -561,7 +561,7 @@ export default function USPortalLeadDetailPage() {
         region: deal.province || 'New York',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
-        planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
+        planName: closestMonthlyPlan(monthlyPrice).label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
@@ -647,8 +647,7 @@ export default function USPortalLeadDetailPage() {
 
   const buildProposalInput = useCallback(() => {
     if (!deal || !rep) return null
-    const closestPlan = monthlyPrice >= 1000 ? 'command' : monthlyPrice >= 500 ? 'premium' : 'standard'
-    const plan = getPlan(closestPlan)
+    const plan = getPlan(closestMonthlyPlan(monthlyPrice).id)
     return {
       businessName: deal.business_name,
       ownerName: deal.contact_name,
@@ -718,7 +717,7 @@ export default function USPortalLeadDetailPage() {
             business_name: deal.business_name,
             rep_name: rep?.name || '',
             rep_email: rep?.email || '',
-            plan_name: monthlyPrice >= 750 ? 'Command' : monthlyPrice >= 375 ? 'Premium' : 'Standard',
+            plan_name: closestMonthlyPlan(monthlyPrice).label,
             monthly_price: `$${monthlyPrice.toLocaleString()}`,
             setup_fee: (Number(setupFee) || 0) > 0 ? `$${(Number(setupFee) || 0).toLocaleString()}` : '',
             due_today: `$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,

@@ -73,3 +73,16 @@ export const PLAN_TIERS: PlanTier[] = [
 export function getPlan(id: string): PlanTier {
   return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1] // default to Standard
 }
+
+/**
+ * Closest monthly tier for a custom monthly price. Reps can slide to any
+ * value, so plan labels shown on SLAs/emails/checkout links are derived from
+ * the canonical tier prices above rather than hardcoded thresholds. Weekly is
+ * excluded — custom slider pricing is always monthly.
+ */
+export function closestMonthlyPlan(monthly: number, tiers: PlanTier[] = PLAN_TIERS): PlanTier {
+  const monthlyTiers = tiers.filter(p => (p.interval ?? 'month') === 'month')
+  return monthlyTiers.reduce((best, p) =>
+    Math.abs(p.price - monthly) < Math.abs(best.price - monthly) ? p : best
+  )
+}

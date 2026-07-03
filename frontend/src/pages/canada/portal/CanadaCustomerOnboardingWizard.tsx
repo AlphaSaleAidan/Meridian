@@ -9,7 +9,7 @@ import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSystemPicker from '@/components/POSSystemPicker'
-import { getPlan as getCanadaPlan } from '@/lib/canada-proposal-plans'
+import { getPlan as getCanadaPlan, closestMonthlyPlanCad } from '@/lib/canada-proposal-plans'
 
 // ── Canada Theme ──
 const T = {
@@ -78,6 +78,8 @@ export default function CanadaCustomerOnboardingWizard() {
     phone: searchParams.get('phone') || '',
     plan: searchParams.get('plan') || '',
     price: searchParams.get('price') || '',
+    setup: searchParams.get('setup') || '',
+    freemonth: searchParams.get('freemonth') || '',
   }
 
   const [step, setStep] = useState<Step>('account')
@@ -126,6 +128,11 @@ export default function CanadaCustomerOnboardingWizard() {
   // prefill.price comes from the rep portal link and is ALREADY in CAD — do not re-apply CAD_RATE.
   // Fall back to the CAD Standard plan price (USD 250 × 1.37 = CA$343) rather than a bare 250.
   const monthlyPriceCAD = prefill.price ? parseInt(prefill.price) : getCanadaPlan('standard').price
+  // Setup fee + first-month-free flow through from the rep's custom setup in the
+  // portal link so the agreement text and day-1 invoice match the rep's quote.
+  const setupFeeCAD = prefill.setup ? Math.max(0, parseInt(prefill.setup) || 0) : 0
+  const firstMonthFree = prefill.freemonth === '1' || prefill.freemonth === 'true'
+  const dueTodayCAD = (firstMonthFree ? 0 : monthlyPriceCAD) + setupFeeCAD
 
   // Processing — 20-minute AI analysis timer (persists across page reloads)
   // Hard data (revenue, products, staff, schedules) is available immediately from POS.
@@ -246,6 +253,7 @@ export default function CanadaCustomerOnboardingWizard() {
           province: province || null,
           org_id: org?.org_id || null,
           monthly_price_cad_cents: Math.round(monthlyPriceCAD * 100),
+          setup_fee_cad_cents: Math.round(setupFeeCAD * 100),
           pos_system: posProvider || null,
           rep_id: searchParams.get('rep') || null,
           rep_name: searchParams.get('rep_name') || null,
@@ -447,32 +455,42 @@ export default function CanadaCustomerOnboardingWizard() {
   async function handleSquareCheckout() {
     if (!org?.org_id) { setCheckoutError('Account not fully created — go back and retry signup'); return }
     setCheckoutLoading(true); setCheckoutError(null)
-    const planLabel = (prefill.plan || 'Standard').replace(/^\w/, (c: string) => c.toUpperCase())
+    const planLabel = prefill.plan
+      ? prefill.plan.replace(/^\w/, (c: string) => c.toUpperCase())
+      : closestMonthlyPlanCad(monthlyPriceCAD).label
     try {
       const authHeaders = await getAuthHeaders()
-      const [upfrontRes, recurringRes] = await Promise.all([
-        fetch(`${API_BASE}/api/billing/create-invoice`, {
+      // Day-1 invoice mirrors the rep's quote exactly: real setup fee + first
+      // month, with the first month waived when the rep toggled it free.
+      // Skipped entirely when nothing is due today (free month + no setup fee).
+      const upfrontLabel = setupFeeCAD > 0
+        ? (firstMonthFree ? 'Setup Fee — First Month Free' : 'Setup Fee + First Month')
+        : 'First Month'
+      const invoiceReqs: Promise<Response>[] = []
+      if (dueTodayCAD > 0) {
+        invoiceReqs.push(fetch(`${API_BASE}/api/billing/create-invoice`, {
           method: 'POST', headers: authHeaders,
           body: JSON.stringify({
-            org_id: org?.org_id, amount_cents: monthlyPriceCAD * 100,
+            org_id: org?.org_id, amount_cents: dueTodayCAD * 100,
             customer_email: account.email,
-            description: `Meridian Analytics (Canada) - ${planLabel} Plan (Setup Fee)`,
+            description: `Meridian AI Business Solutions (Canada) - ${planLabel} Plan (${upfrontLabel})`,
             due_days: 3,
             currency: 'CAD',
           }),
+        }))
+      }
+      invoiceReqs.push(fetch(`${API_BASE}/api/billing/create-invoice`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({
+          org_id: org?.org_id, amount_cents: monthlyPriceCAD * 100,
+          customer_email: account.email,
+          description: `Meridian AI Business Solutions (Canada) - ${planLabel} Plan (Monthly Recurring)`,
+          due_days: 30,
+          currency: 'CAD',
         }),
-        fetch(`${API_BASE}/api/billing/create-invoice`, {
-          method: 'POST', headers: authHeaders,
-          body: JSON.stringify({
-            org_id: org?.org_id, amount_cents: monthlyPriceCAD * 100,
-            customer_email: account.email,
-            description: `Meridian Analytics (Canada) - ${planLabel} Plan (Monthly Recurring)`,
-            due_days: 30,
-            currency: 'CAD',
-          }),
-        }),
-      ])
-      if (upfrontRes.ok && recurringRes.ok) {
+      }))
+      const invoiceResults = await Promise.all(invoiceReqs)
+      if (invoiceResults.every(r => r.ok)) {
         try {
           const provRes = await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
             method: 'POST', headers: authHeaders,
@@ -500,7 +518,7 @@ export default function CanadaCustomerOnboardingWizard() {
         setPaymentComplete(true)
         return
       }
-      const failedRes = !upfrontRes.ok ? upfrontRes : recurringRes
+      const failedRes = invoiceResults.find(r => !r.ok)!
       const errorData = await failedRes.json().catch(() => null)
       setCheckoutError(errorData?.detail || 'Unable to create invoices. Please try again or contact support at help@meridian.tips')
     } catch (err: any) {
@@ -693,7 +711,7 @@ export default function CanadaCustomerOnboardingWizard() {
             <div className={`${cardCls} max-h-96 overflow-y-auto space-y-3 text-xs ${T.text} leading-relaxed`}>
               <h2 className="text-sm font-bold">Meridian AI Analytics Services — Service Agreement</h2>
               <p className={T.muted}>
-                This Agreement is entered into between <span className={T.text}>Meridian Analytics Inc.</span> ("Provider")
+                This Agreement is entered into between <span className={T.text}>Meridian AI Business Solutions</span> ("Provider")
                 and <span className={T.text}>{account.businessName || '[Business Name]'}</span> ("Client"),
                 represented by <span className={T.text}>{account.ownerName || '[Owner Name]'}</span>.
               </p>
@@ -704,7 +722,10 @@ export default function CanadaCustomerOnboardingWizard() {
 
               <h3 className="text-sm-tight font-semibold mt-3">2. Subscription &amp; Billing</h3>
               <p className={T.muted}>Monthly subscription of <span className={T.text}>CA${monthlyPriceCAD.toLocaleString()}</span>{' '}
-                billed via Square. Cancel anytime; no long-term commitment. All amounts in Canadian dollars.</p>
+                billed via Square.
+                {setupFeeCAD > 0 && <> A one-time setup fee of <span className={T.text}>CA${setupFeeCAD.toLocaleString()}</span> is payable upon signup.</>}
+                {firstMonthFree && <> The first month of service is free; recurring monthly billing begins in the second month.</>}
+                {' '}Cancel anytime; no long-term commitment. All amounts in Canadian dollars.</p>
 
               <h3 className="text-sm-tight font-semibold mt-3">3. Data Privacy — PIPEDA</h3>
               <p className={T.muted}>Client data is collected, used, and disclosed in accordance with Canada's Personal
@@ -1059,11 +1080,13 @@ export default function CanadaCustomerOnboardingWizard() {
                 </div>
                 <p className={`text-sm font-medium ${T.text}`}>Invoices Sent!</p>
                 <p className={`text-xs ${T.muted} mt-1`}>
-                  Two invoices sent to <span className={T.text}>{account.email}</span>:
+                  {dueTodayCAD > 0 ? 'Two invoices' : 'One invoice'} sent to <span className={T.text}>{account.email}</span>:
                 </p>
                 <div className={`mt-2 space-y-1 text-2xs ${T.muted}`}>
-                  <p>1. <span className={T.text}>CA${monthlyPriceCAD}</span> — Setup fee (due in 3 days)</p>
-                  <p>2. <span className={T.text}>CA${monthlyPriceCAD}/mo</span> — Monthly recurring (due in 30 days)</p>
+                  {dueTodayCAD > 0 && (
+                    <p>1. <span className={T.text}>CA${dueTodayCAD.toLocaleString()}</span> — {setupFeeCAD > 0 ? (firstMonthFree ? 'Setup fee (first month free)' : 'Setup fee + first month') : 'First month'} (due in 3 days)</p>
+                  )}
+                  <p>{dueTodayCAD > 0 ? '2. ' : ''}<span className={T.text}>CA${monthlyPriceCAD.toLocaleString()}/mo</span> — Monthly recurring (due in 30 days)</p>
                 </div>
                 <p className={`text-2xs ${T.muted}/60 mt-2`}>
                   Pay via the links in your email — your dashboard is ready to use now
@@ -1073,19 +1096,29 @@ export default function CanadaCustomerOnboardingWizard() {
               <div className={`${cardCls} space-y-4`}>
                 <div className={`rounded-lg p-4 ${T.pageBg} ${T.cardBorder}`}>
                   <div className="flex justify-between items-center mb-3">
-                    <span className={`text-sm-tight font-medium ${T.text}`}>Meridian Analytics (Canada)</span>
+                    <span className={`text-sm-tight font-medium ${T.text}`}>Meridian AI Business Solutions (Canada)</span>
                     <span className="text-2xs px-2 py-0.5 rounded-full bg-pm-accent/10 text-pm-accent font-medium border border-pm-accent/20">
                       {prefill.plan || 'Standard'}
                     </span>
                   </div>
                   <div className="space-y-2 text-xs">
+                    {setupFeeCAD > 0 && (
+                      <div className={`flex justify-between ${T.muted}`}>
+                        <span>One-time setup fee</span>
+                        <span className={T.text}>CA${setupFeeCAD.toLocaleString()}.00</span>
+                      </div>
+                    )}
                     <div className={`flex justify-between ${T.muted}`}>
-                      <span>Setup fee (due in 3 days)</span>
-                      <span className={T.text}>CA${monthlyPriceCAD}.00</span>
+                      <span>First month</span>
+                      <span className={T.text}>{firstMonthFree ? 'Free' : `CA$${monthlyPriceCAD.toLocaleString()}.00`}</span>
+                    </div>
+                    <div className={`flex justify-between ${T.muted}`}>
+                      <span>Due today (invoice due in 3 days)</span>
+                      <span className={T.text}>CA${dueTodayCAD.toLocaleString()}.00</span>
                     </div>
                     <div className={`flex justify-between ${T.muted}`}>
                       <span>Monthly recurring (starts day 30)</span>
-                      <span className={T.text}>CA${monthlyPriceCAD}.00/mo</span>
+                      <span className={T.text}>CA${monthlyPriceCAD.toLocaleString()}.00/mo</span>
                     </div>
                     <div className={`flex justify-between ${T.muted}`}>
                       <span>Commitment</span>
@@ -1122,8 +1155,9 @@ export default function CanadaCustomerOnboardingWizard() {
 
                 <div className="rounded-lg p-3 bg-pm-accent/5 border border-pm-accent/15">
                   <p className={`text-2xs ${T.muted} leading-relaxed`}>
-                    <span className={`${T.accentTxt} font-medium`}>How billing works:</span> You'll receive two Square invoices via email — a one-time
-                    setup fee and your monthly recurring subscription. Pay at your convenience through the secure links.
+                    <span className={`${T.accentTxt} font-medium`}>How billing works:</span> You'll receive {dueTodayCAD > 0 ? 'two Square invoices' : 'one Square invoice'} via email —{' '}
+                    {dueTodayCAD > 0 && <>CA${dueTodayCAD.toLocaleString()} due now ({setupFeeCAD > 0 ? (firstMonthFree ? 'setup fee — your first month is free' : 'setup fee + first month') : 'first month'}), then </>}
+                    your CA${monthlyPriceCAD.toLocaleString()}/mo recurring subscription. Pay at your convenience through the secure links.
                     We'll review and reconfirm your plan every 3 months. Cancel anytime from your dashboard settings.
                   </p>
                 </div>

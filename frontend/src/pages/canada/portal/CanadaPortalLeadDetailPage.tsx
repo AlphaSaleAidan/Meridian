@@ -12,6 +12,7 @@ import {
   CAD_VERTICALS,
 } from '@/data/cadVerticals'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { closestMonthlyPlanCad, CAD_RATE } from '@/lib/canada-proposal-plans'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import {
   useCanadaLead,
@@ -357,7 +358,7 @@ export default function CanadaPortalLeadDetailPage() {
       const dueDate = new Date(now)
       dueDate.setDate(dueDate.getDate() + 30)
 
-      const planName = monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard'
+      const planName = closestMonthlyPlanCad(monthlyPrice).label
       const priceCents = Math.round(monthlyPrice * 100)
       const setupFeeCents = Math.round((Number(setupFee) || 0) * 100)
 
@@ -486,7 +487,7 @@ export default function CanadaPortalLeadDetailPage() {
         region: deal.province || 'Ontario',
         posSystem: 'N/A',
         repName: rep.name || 'Sales Representative',
-        planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
+        planName: closestMonthlyPlanCad(monthlyPrice).label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
@@ -534,7 +535,7 @@ export default function CanadaPortalLeadDetailPage() {
         region: deal.province || 'Ontario',
         posSystem: 'N/A',
         repName: rep.name || 'Sales Representative',
-        planName: monthlyPrice >= 1000 ? 'Command' : monthlyPrice >= 500 ? 'Premium' : 'Standard',
+        planName: closestMonthlyPlanCad(monthlyPrice).label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
@@ -680,7 +681,7 @@ export default function CanadaPortalLeadDetailPage() {
             business_name: deal.business_name,
             rep_name: rep?.name || '',
             rep_email: rep?.email || '',
-            plan_name: monthlyPrice >= 750 ? 'Command' : monthlyPrice >= 375 ? 'Premium' : 'Standard',
+            plan_name: closestMonthlyPlanCad(monthlyPrice).label,
             monthly_price: `CA$${monthlyPrice.toLocaleString()}`,
             setup_fee: (Number(setupFee) || 0) > 0 ? `CA$${(Number(setupFee) || 0).toLocaleString()}` : '',
             due_today: `CA$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
@@ -959,7 +960,7 @@ export default function CanadaPortalLeadDetailPage() {
             />
             <span className="text-sm font-semibold text-pm-amber-gold w-28 text-right">CA${monthlyPrice.toLocaleString()}/mo</span>
           </div>
-          <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / 1.37).toLocaleString()}/mo</p>
+          <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / CAD_RATE).toLocaleString()}/mo</p>
         </div>
 
         {/* Setup Fee */}

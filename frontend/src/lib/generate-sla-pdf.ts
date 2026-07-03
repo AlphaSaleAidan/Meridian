@@ -243,8 +243,8 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
   <!-- 4. Term -->
   <div class="section">
     <h2>4. Term and Termination</h2>
-    <p>4.1 <strong>Initial Term.</strong> This Agreement shall commence on ${effectiveDate} and continue for twelve (12) months.</p>
-    <p>4.2 <strong>Renewal.</strong> Following the Initial Term, this Agreement auto-renews for successive twelve (12) month periods unless either party provides thirty (30) days&rsquo; written notice of non-renewal.</p>
+    <p>4.1 <strong>Term.</strong> This Agreement shall commence on ${effectiveDate} and continue on a month-to-month basis until terminated in accordance with this Section. There is no minimum commitment or long-term lock-in.</p>
+    <p>4.2 <strong>Termination for Convenience.</strong> Either party may terminate this Agreement at any time, for any reason, by providing thirty (30) days&rsquo; written notice to the other party. Fees accrued through the effective date of termination remain payable; no early-termination fee applies.</p>
     <p>4.3 <strong>Termination for Cause.</strong> Either party may terminate immediately upon written notice if the other party commits a material breach and fails to cure within thirty (30) days.</p>
     <p>4.4 <strong>Effect of Termination.</strong> Upon termination, the Provider shall cease all Services, provide Client data in electronic format within thirty (30) days, and securely delete all Client data within sixty (60) days.</p>
   </div>

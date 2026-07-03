@@ -700,7 +700,7 @@ export default function CanadaPortalCreateCustomerPage() {
         } catch { }
       }
 
-      const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
+      const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&setup=${setupFee}&freemonth=${form.firstMonthFree ? '1' : '0'}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
       setOnboardingLink(link)
 
       // Reflect actual backend email delivery status. SMS is rep-initiated via the OS handler — no auto-send.
@@ -1399,7 +1399,7 @@ export default function CanadaPortalCreateCustomerPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 onClick={() => {
-                  const url = `${window.location.origin}/canada/onboard?token=${onboardingLink.split('token=')[1]?.split('&')[0] || ''}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
+                  const url = `${window.location.origin}/canada/onboard?token=${onboardingLink.split('token=')[1]?.split('&')[0] || ''}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&setup=${setupFee}&freemonth=${form.firstMonthFree ? '1' : '0'}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
                   window.open(url, '_blank')
                 }}
                 className="flex items-center justify-center gap-2 px-4 py-3 text-sm-tight font-medium text-pm-canada-bg bg-pm-accent rounded-lg hover:bg-pm-accent transition-colors"
