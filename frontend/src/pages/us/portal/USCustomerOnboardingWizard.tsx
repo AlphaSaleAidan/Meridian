@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { parseCsv } from '@/lib/csv-parse'
 import POSSystemPicker from '@/components/POSSystemPicker'
+import { getPlan, closestMonthlyPlan } from '@/lib/proposal-plans'
 // US portal — prices are already in USD, no conversion needed
 
 // ── US Theme ──
@@ -83,6 +84,8 @@ export default function USCustomerOnboardingWizard() {
     phone: searchParams.get('phone') || '',
     plan: searchParams.get('plan') || '',
     price: searchParams.get('price') || '',
+    setup: searchParams.get('setup') || '',
+    freemonth: searchParams.get('freemonth') || '',
   }
 
   const [step, setStep] = useState<Step>('account')
@@ -124,8 +127,13 @@ export default function USCustomerOnboardingWizard() {
   const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [paymentComplete, setPaymentComplete] = useState(false)
   const [checkoutError, setCheckoutError] = useState<string | null>(null)
-  const monthlyPrice = prefill.price ? parseInt(prefill.price, 10) : 250
+  const monthlyPrice = prefill.price ? parseInt(prefill.price, 10) : getPlan('standard').price
   const monthlyPriceUSD = monthlyPrice
+  // Setup fee + first-month-free flow through from the rep's custom setup in the
+  // portal link so the agreement text and day-1 invoice match the rep's quote.
+  const setupFeeUSD = prefill.setup ? Math.max(0, parseInt(prefill.setup, 10) || 0) : 0
+  const firstMonthFree = prefill.freemonth === '1' || prefill.freemonth === 'true'
+  const dueTodayUSD = (firstMonthFree ? 0 : monthlyPriceUSD) + setupFeeUSD
 
   // Processing — 20-minute AI analysis timer (persists across page reloads)
   // Hard data (revenue, products, staff, schedules) is available immediately from POS.
@@ -247,6 +255,7 @@ export default function USCustomerOnboardingWizard() {
           state: province || null,
           org_id: org?.org_id || null,
           monthly_price_usd_cents: Math.round(monthlyPriceUSD * 100),
+          setup_fee_usd_cents: Math.round(setupFeeUSD * 100),
           pos_system: posProvider || null,
           rep_id: searchParams.get('rep') || null,
           rep_name: searchParams.get('rep_name') || null,
@@ -448,30 +457,40 @@ export default function USCustomerOnboardingWizard() {
   async function handleSquareCheckout() {
     if (!org?.org_id) { setCheckoutError('Account not fully created — go back and retry signup'); return }
     setCheckoutLoading(true); setCheckoutError(null)
-    const planLabel = (prefill.plan || 'Standard').replace(/^\w/, (c: string) => c.toUpperCase())
+    const planLabel = prefill.plan
+      ? prefill.plan.replace(/^\w/, (c: string) => c.toUpperCase())
+      : closestMonthlyPlan(monthlyPriceUSD).label
     try {
       const authHeaders = await getAuthHeaders()
-      const [upfrontRes, recurringRes] = await Promise.all([
-        fetch(`${API_BASE}/api/billing/create-invoice`, {
+      // Day-1 invoice mirrors the rep's quote exactly: real setup fee + first
+      // month, with the first month waived when the rep toggled it free.
+      // Skipped entirely when nothing is due today (free month + no setup fee).
+      const upfrontLabel = setupFeeUSD > 0
+        ? (firstMonthFree ? 'Setup Fee — First Month Free' : 'Setup Fee + First Month')
+        : 'First Month'
+      const invoiceReqs: Promise<Response>[] = []
+      if (dueTodayUSD > 0) {
+        invoiceReqs.push(fetch(`${API_BASE}/api/billing/create-invoice`, {
           method: 'POST', headers: authHeaders,
           body: JSON.stringify({
-            org_id: org?.org_id, amount_cents: monthlyPriceUSD * 100, currency: 'USD',
+            org_id: org?.org_id, amount_cents: dueTodayUSD * 100, currency: 'USD',
             customer_email: account.email,
-            description: `Meridian Analytics (US) - ${planLabel} Plan (Setup Fee)`,
+            description: `Meridian AI Business Solutions (US) - ${planLabel} Plan (${upfrontLabel})`,
             due_days: 3,
           }),
+        }))
+      }
+      invoiceReqs.push(fetch(`${API_BASE}/api/billing/create-invoice`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({
+          org_id: org?.org_id, amount_cents: monthlyPriceUSD * 100, currency: 'USD',
+          customer_email: account.email,
+          description: `Meridian AI Business Solutions (US) - ${planLabel} Plan (Monthly Recurring)`,
+          due_days: 30,
         }),
-        fetch(`${API_BASE}/api/billing/create-invoice`, {
-          method: 'POST', headers: authHeaders,
-          body: JSON.stringify({
-            org_id: org?.org_id, amount_cents: monthlyPriceUSD * 100, currency: 'USD',
-            customer_email: account.email,
-            description: `Meridian Analytics (US) - ${planLabel} Plan (Monthly Recurring)`,
-            due_days: 30,
-          }),
-        }),
-      ])
-      if (upfrontRes.ok && recurringRes.ok) {
+      }))
+      const invoiceResults = await Promise.all(invoiceReqs)
+      if (invoiceResults.every(r => r.ok)) {
         try {
           const provRes = await fetch(`${API_BASE}/api/onboarding/provision-customer`, {
             method: 'POST', headers: authHeaders,
@@ -507,7 +526,7 @@ export default function USCustomerOnboardingWizard() {
         setPaymentComplete(true)
         return
       }
-      const failedRes = !upfrontRes.ok ? upfrontRes : recurringRes
+      const failedRes = invoiceResults.find(r => !r.ok)!
       const errorData = await failedRes.json().catch(() => null)
       setCheckoutError(errorData?.detail || 'Unable to create invoices. Please try again or contact support at help@meridian.tips')
     } catch (err: any) {
@@ -699,7 +718,7 @@ export default function USCustomerOnboardingWizard() {
             <div className={`${cardCls} max-h-96 overflow-y-auto space-y-3 text-[12.5px] ${T.text} leading-relaxed`}>
               <h2 className="text-[14px] font-bold">Meridian AI Analytics Services — Service Agreement</h2>
               <p className={T.muted}>
-                This Agreement is entered into between <span className={T.text}>Meridian Analytics Inc.</span> ("Provider")
+                This Agreement is entered into between <span className={T.text}>Meridian AI Business Solutions</span> ("Provider")
                 and <span className={T.text}>{account.businessName || '[Business Name]'}</span> ("Client"),
                 represented by <span className={T.text}>{account.ownerName || '[Owner Name]'}</span>.
               </p>
@@ -710,7 +729,10 @@ export default function USCustomerOnboardingWizard() {
 
               <h3 className="text-[13px] font-semibold mt-3">2. Subscription &amp; Billing</h3>
               <p className={T.muted}>Monthly subscription of <span className={T.text}>${monthlyPriceUSD.toLocaleString()}</span>{' '}
-                billed via Square. Cancel anytime; no long-term commitment. All amounts in United States dollars.</p>
+                billed via Square.
+                {setupFeeUSD > 0 && <> A one-time setup fee of <span className={T.text}>${setupFeeUSD.toLocaleString()}</span> is payable upon signup.</>}
+                {firstMonthFree && <> The first month of service is free; recurring monthly billing begins in the second month.</>}
+                {' '}Cancel anytime; no long-term commitment. All amounts in United States dollars.</p>
 
               <h3 className="text-[13px] font-semibold mt-3">3. Data Privacy</h3>
               <p className={T.muted}>Client data is collected, used, and disclosed in accordance with applicable United States
@@ -1042,11 +1064,13 @@ export default function USCustomerOnboardingWizard() {
                 </div>
                 <p className={`text-[14px] font-medium ${T.text}`}>Invoices Sent!</p>
                 <p className={`text-[12px] ${T.muted} mt-1`}>
-                  Two invoices sent to <span className={T.text}>{account.email}</span>:
+                  {dueTodayUSD > 0 ? 'Two invoices' : 'One invoice'} sent to <span className={T.text}>{account.email}</span>:
                 </p>
                 <div className={`mt-2 space-y-1 text-[11px] ${T.muted}`}>
-                  <p>1. <span className={T.text}>${monthlyPriceUSD}</span> — Setup fee (due in 3 days)</p>
-                  <p>2. <span className={T.text}>${monthlyPriceUSD}/mo</span> — Monthly recurring (due in 30 days)</p>
+                  {dueTodayUSD > 0 && (
+                    <p>1. <span className={T.text}>${dueTodayUSD.toLocaleString()}</span> — {setupFeeUSD > 0 ? (firstMonthFree ? 'Setup fee (first month free)' : 'Setup fee + first month') : 'First month'} (due in 3 days)</p>
+                  )}
+                  <p>{dueTodayUSD > 0 ? '2. ' : ''}<span className={T.text}>${monthlyPriceUSD.toLocaleString()}/mo</span> — Monthly recurring (due in 30 days)</p>
                 </div>
                 <p className={`text-[11px] ${T.muted}/60 mt-2`}>
                   Pay via the links in your email — your dashboard is ready to use now
@@ -1056,19 +1080,29 @@ export default function USCustomerOnboardingWizard() {
               <div className={`${cardCls} space-y-4`}>
                 <div className={`rounded-lg p-4 ${T.pageBg} ${T.cardBorder}`}>
                   <div className="flex justify-between items-center mb-3">
-                    <span className={`text-[13px] font-medium ${T.text}`}>Meridian Analytics (US)</span>
+                    <span className={`text-[13px] font-medium ${T.text}`}>Meridian AI Business Solutions (US)</span>
                     <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#17C5B0]/10 text-[#17C5B0] font-medium border border-[#17C5B0]/20">
                       {prefill.plan || 'Standard'}
                     </span>
                   </div>
                   <div className="space-y-2 text-[12px]">
+                    {setupFeeUSD > 0 && (
+                      <div className={`flex justify-between ${T.muted}`}>
+                        <span>One-time setup fee</span>
+                        <span className={T.text}>${setupFeeUSD.toLocaleString()}.00</span>
+                      </div>
+                    )}
                     <div className={`flex justify-between ${T.muted}`}>
-                      <span>Setup fee (due in 3 days)</span>
-                      <span className={T.text}>${monthlyPriceUSD}.00</span>
+                      <span>First month</span>
+                      <span className={T.text}>{firstMonthFree ? 'Free' : `$${monthlyPriceUSD.toLocaleString()}.00`}</span>
+                    </div>
+                    <div className={`flex justify-between ${T.muted}`}>
+                      <span>Due today (invoice due in 3 days)</span>
+                      <span className={T.text}>${dueTodayUSD.toLocaleString()}.00</span>
                     </div>
                     <div className={`flex justify-between ${T.muted}`}>
                       <span>Monthly recurring (starts day 30)</span>
-                      <span className={T.text}>${monthlyPriceUSD}.00/mo</span>
+                      <span className={T.text}>${monthlyPriceUSD.toLocaleString()}.00/mo</span>
                     </div>
                     <div className={`flex justify-between ${T.muted}`}>
                       <span>Commitment</span>
@@ -1105,8 +1139,9 @@ export default function USCustomerOnboardingWizard() {
 
                 <div className="rounded-lg p-3 bg-[#17C5B0]/5 border border-[#17C5B0]/15">
                   <p className={`text-[11px] ${T.muted} leading-relaxed`}>
-                    <span className={`${T.accentTxt} font-medium`}>How billing works:</span> You'll receive two Square invoices via email — a one-time
-                    setup fee and your monthly recurring subscription. Pay at your convenience through the secure links.
+                    <span className={`${T.accentTxt} font-medium`}>How billing works:</span> You'll receive {dueTodayUSD > 0 ? 'two Square invoices' : 'one Square invoice'} via email —{' '}
+                    {dueTodayUSD > 0 && <>${dueTodayUSD.toLocaleString()} due now ({setupFeeUSD > 0 ? (firstMonthFree ? 'setup fee — your first month is free' : 'setup fee + first month') : 'first month'}), then </>}
+                    your ${monthlyPriceUSD.toLocaleString()}/mo recurring subscription. Pay at your convenience through the secure links.
                     We'll review and reconfirm your plan every 3 months. Cancel anytime from your dashboard settings.
                   </p>
                 </div>
