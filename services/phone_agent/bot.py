@@ -56,7 +56,7 @@ from pipecat.transports.websocket.fastapi import (
 
 from merchant_config import MerchantPhoneConfig
 from order_normalizer import normalize_order
-from pos_connector import create_pos_order
+from pos_connector import create_pos_order  # noqa: F401  (kept for back-compat imports)
 from order_router import route_order  # noqa: F401  (kept for back-compat imports)
 from pay_on_phone import dispatch_order, resolve_mode
 from caller_memory import build_memory_block_for
@@ -407,30 +407,23 @@ async def run_call_bot(
         if caller_info.get("phone") and not args.get("caller_phone"):
             args["caller_phone"] = caller_info["phone"]
         normalized = normalize_order(args, merchant_config)
-        # POS creds: prefer the merchant's own connected token; for a Square
-        # merchant with none (the demo), fall back to Meridian's Square creds from
-        # env so the order still lands in a real Square dashboard. Keeps tokens in
-        # env, not the DB.
-        pos_token = merchant_config.pos_access_token
-        pos_location = merchant_config.pos_location_id
-        if merchant_config.pos_system == "square" and not pos_token:
-            pos_token = os.getenv("SQUARE_ACCESS_TOKEN", "")
-            pos_location = pos_location or os.getenv("SQUARE_LOCATION_ID", "")
-        pos_result = await create_pos_order(
-            normalized, merchant_config.pos_system, pos_token, pos_location,
-        )
 
         # ── PAY ON THE PHONE: branch on the merchant's payment_mode ──────────
-        # pay_now (default): order is OPEN in the POS but the kitchen ticket is
-        #   HELD (awaiting_payment) until the caller pays via a secure texted
-        #   link — anti-scam, no no-shows / prank orders reach the kitchen.
+        # pay_now (default): POS push is DEFERRED — mark_order_paid() creates
+        #   the ticket only after the caller pays via the secure texted link,
+        #   so an unpaid order never reaches the POS or the kitchen.
         # optional: the caller's pay_choice decides (defaults to pay_now).
-        # pay_at_pickup: legacy behavior — order goes to the kitchen unpaid.
+        # pay_at_pickup: legacy behavior — POS ticket now, unpaid.
+        # dispatch_order owns POS creation (creds incl. the Square env fallback
+        # live in pay_on_phone._create_pos).
         mode = resolve_mode(merchant_config, args.get("pay_choice", ""))
-        await dispatch_order(
-            normalized, merchant_config, caller_info, pos_result,
+        dispatched = await dispatch_order(
+            normalized, merchant_config, caller_info,
             pay_choice=args.get("pay_choice", ""),
         )
+        pos_result = dispatched.get("pos_result") or {
+            "success": False, "method": "deferred", "pos_order_id": "",
+        }
         if mode == "pay_now":
             say = _pay_now_confirmation(normalized)
             log_status = "awaiting_payment"
