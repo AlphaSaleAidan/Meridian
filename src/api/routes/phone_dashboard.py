@@ -28,6 +28,15 @@ router = APIRouter(prefix="/api/phone", tags=["phone-dashboard"])
 _UUID_RE = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I
 )
+# Real merchant ids are the businesses.id TEXT primary key, shaped
+# `biz_<hex>` (see frontend auth.tsx / businesses table: `biz_` + 32 hex).
+# Accept both a UUID and a `biz_` id, but keep a strict format guard so no
+# arbitrary/injection-shaped string gets through to the DB layer.
+_MERCHANT_ID_RE = re.compile(
+    r'^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    r'|biz_[0-9a-f]{16,40})$',
+    re.I,
+)
 
 
 class PhoneConfigRequest(BaseModel):
@@ -57,7 +66,7 @@ class PhoneConfigRequest(BaseModel):
 
 
 def _validate_merchant_id(merchant_id: str):
-    if not _UUID_RE.match(merchant_id):
+    if not _MERCHANT_ID_RE.match(merchant_id or ""):
         raise HTTPException(400, "Invalid merchant_id format")
 
 
@@ -258,9 +267,10 @@ async def auto_build_menu_on_connect(merchant_id: str) -> None:
 
     Reuses the exact extraction path the manual endpoint uses. Never raises — a
     menu-build failure must not break the POS connect response. Skips merchants
-    whose id isn't a UUID (the menu_items shape keys off the org/merchant id).
+    whose id isn't a valid merchant id (the menu_items shape keys off the
+    org/merchant id — accepts both UUIDs and `biz_` ids).
     """
-    if not _UUID_RE.match(merchant_id or ""):
+    if not _MERCHANT_ID_RE.match(merchant_id or ""):
         return
     try:
         db = get_db()

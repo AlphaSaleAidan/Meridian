@@ -31,7 +31,12 @@ def _run(coro):
 
 
 VALID_UUID = "168b6df2-e9af-4b00-8fec-51e51149ff19"
+# Real merchant/org id shape: businesses.id is TEXT `biz_<32 hex>`.
+VALID_BIZ_ID = "biz_9e066503fe6b43c1b8a50cc0c3989e6c"
+VALID_BIZ_ID_SHORT = "biz_1cee43eb2ce5431a"  # frontend 16-hex variant
 NON_UUID_VALUES = ["", "demo", "not-a-uuid", "12345", "168b6df2-e9af"]
+# Must STILL be rejected even after we relax to accept biz_ ids — no injection.
+BAD_BIZ_SHAPED = ["biz_", "biz_../etc/passwd", "biz_' OR '1'='1", "biz_zzzz", "../etc"]
 
 
 @pytest.fixture(autouse=True)
@@ -71,3 +76,61 @@ def test_clover_status_valid_uuid_is_not_rejected_by_guard():
     result = _run(clover_oauth.connection_status(VALID_UUID))
     assert result["connected"] is False
     assert result.get("reason") == "db_unavailable"
+
+
+# --- BUG-3: real merchant ids are `biz_<hex>`, not UUIDs ---------------------
+# The status guards previously rejected the real businesses.id shape with
+# reason="invalid_org_id", which blocked the Clover connected-check (and the
+# Square one) for every real merchant. They must now fall through to the DB
+# branch (here db_unavailable) instead of being rejected by the shape guard.
+
+@pytest.mark.parametrize("org_id", [VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
+def test_clover_status_accepts_biz_id(org_id):
+    result = _run(clover_oauth.connection_status(org_id))
+    assert result["connected"] is False
+    assert result.get("reason") == "db_unavailable"
+    assert result.get("reason") != "invalid_org_id"
+
+
+@pytest.mark.parametrize("org_id", [VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
+def test_square_status_accepts_biz_id(org_id):
+    result = _run(oauth.connection_status(org_id))
+    assert result["connected"] is False
+    assert result.get("reason") == "db_unavailable"
+    assert result.get("reason") != "invalid_org_id"
+
+
+@pytest.mark.parametrize("org_id", BAD_BIZ_SHAPED)
+def test_clover_status_still_rejects_bad_shapes(org_id):
+    result = _run(clover_oauth.connection_status(org_id))
+    assert result["connected"] is False
+    assert result.get("reason") == "invalid_org_id"
+
+
+@pytest.mark.parametrize("org_id", BAD_BIZ_SHAPED)
+def test_square_status_still_rejects_bad_shapes(org_id):
+    result = _run(oauth.connection_status(org_id))
+    assert result["connected"] is False
+    assert result.get("reason") == "invalid_org_id"
+
+
+# --- BUG-3: phone_dashboard._validate_merchant_id ---------------------------
+from fastapi import HTTPException  # noqa: E402
+from src.api.routes import phone_dashboard  # noqa: E402
+
+
+@pytest.mark.parametrize("mid", [VALID_UUID, VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
+def test_phone_validate_merchant_id_accepts_real_ids(mid):
+    # Must not raise for a real UUID or biz_ merchant id.
+    phone_dashboard._validate_merchant_id(mid)
+
+
+@pytest.mark.parametrize(
+    "mid",
+    ["", "../etc/passwd", "biz_", "biz_' OR '1'='1", "'; DROP TABLE businesses;--",
+     "demo", "biz_zzzz", "not-an-id"],
+)
+def test_phone_validate_merchant_id_rejects_garbage(mid):
+    with pytest.raises(HTTPException) as exc:
+        phone_dashboard._validate_merchant_id(mid)
+    assert exc.value.status_code == 400

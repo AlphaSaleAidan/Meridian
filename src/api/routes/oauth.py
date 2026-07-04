@@ -34,6 +34,14 @@ router = APIRouter(prefix="/api/square", tags=["square-oauth"])
 _UUID_RE = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I
 )
+# Real merchant/org ids are the businesses.id TEXT primary key shaped `biz_<hex>`
+# (see frontend auth.tsx). Accept both UUIDs and `biz_` ids, keeping a strict
+# format guard so nothing arbitrary reaches the query layer.
+_ORG_ID_RE = re.compile(
+    r'^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    r'|biz_[0-9a-f]{16,40})$',
+    re.I,
+)
 
 # HMAC signing secret — REQUIRED in all environments.
 _STATE_SECRET = os.environ.get("OAUTH_STATE_SECRET", "")
@@ -335,9 +343,9 @@ async def callback(
 async def connection_status(org_id: str):
     """Quick check if org has an active Square connection."""
     from ...db import _db_instance
-    # Guard non-uuid org_id (demo edge) before it reaches the uuid column and
-    # raises a 500 on the invalid cast.
-    if not _UUID_RE.match(org_id or ""):
+    # Guard malformed org_id (demo edge) before it reaches the query layer.
+    # Accepts both UUIDs and `biz_` merchant ids (the real businesses.id shape).
+    if not _ORG_ID_RE.match(org_id or ""):
         return {"connected": False, "reason": "invalid_org_id"}
     if not _db_instance:
         return {"connected": False, "reason": "db_unavailable"}
