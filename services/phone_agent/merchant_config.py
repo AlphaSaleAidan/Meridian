@@ -69,6 +69,13 @@ class MerchantPhoneConfig:
     reservation_platform: str = ""
 
 
+def reservations_on(config) -> bool:
+    """True when the reservation hand-off tool should be exposed:
+    reservations enabled AND a booking URL set. Shared by both agent stacks
+    (Pipecat bot.py and the Vapi webhook route)."""
+    return bool(getattr(config, "reservations_enabled", False)
+                and getattr(config, "reservation_url", ""))
+
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
 

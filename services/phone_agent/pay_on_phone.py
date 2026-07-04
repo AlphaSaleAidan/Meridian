@@ -51,11 +51,6 @@ DTMF_PAYMENT_ENABLED = os.getenv("PHONE_DTMF_PAYMENT", "0").lower() in ("1", "tr
 POS_PUSH_AFTER_PAYMENT = os.getenv("POS_PUSH_AFTER_PAYMENT", "1") == "1"
 
 
-def _deferred_pos_result() -> dict:
-    """Placeholder pos_result for a held order whose ticket is pushed on payment."""
-    return {"success": False, "method": "deferred", "pos_order_id": "", "deferred": True}
-
-
 async def _create_pos(order: dict, config: MerchantPhoneConfig) -> dict:
     """Create the POS order with the merchant's creds (env fallback for the
     Square demo, same rule as bot.py / the Vapi route)."""
@@ -102,19 +97,22 @@ async def dispatch_order(
     `pos_result` may be passed by legacy callers that already created the POS
     order; when it carries a real pos_order_id it is honored (too late to defer).
 
-    Returns {"mode", "released", "sms_sent", "payment_link", ...}.
+    Returns {"mode", "released", "pos_result", "sms_sent", "payment_link", ...}.
     """
     mode = resolve_mode(config, pay_choice)
     if mode == "pay_now":
         already_created = bool((pos_result or {}).get("pos_order_id"))
         if POS_PUSH_AFTER_PAYMENT and not already_created:
-            pos_result = _deferred_pos_result()
+            # Placeholder — the real ticket is pushed by mark_order_paid() on payment.
+            pos_result = {"success": False, "method": "deferred",
+                          "pos_order_id": "", "deferred": True}
         elif pos_result is None:
             pos_result = await _create_pos(order, config)
         result = await collect_pay_now(order, config, caller_info, pos_result)
         result["mode"] = "pay_now"
         result["released"] = False  # held until paid
         result["pos_deferred"] = bool(pos_result.get("deferred"))
+        result["pos_result"] = pos_result
         return result
     # pay_at_pickup — release to kitchen now (unchanged legacy path).
     if pos_result is None:

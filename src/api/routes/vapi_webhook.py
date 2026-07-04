@@ -33,6 +33,8 @@ _PHONE_AGENT_DIR = str(Path(__file__).resolve().parents[3] / "services" / "phone
 if _PHONE_AGENT_DIR not in sys.path:
     sys.path.insert(0, _PHONE_AGENT_DIR)
 
+from merchant_config import reservations_on  # noqa: E402  (needs the sys.path insert above)
+
 WEBHOOK_URL = os.getenv("PUBLIC_PAY_BASE", "https://api.meridian.tips").rstrip("/") + "/api/vapi/webhook"
 
 # Telnyx fallback: an existing Telnyx/Pipecat agent DID that Vapi forwards the
@@ -141,7 +143,7 @@ def _system_prompt(config) -> str:
     menu = ("\n\nMENU:\n" + "\n".join(menu_lines)) if menu_lines else ""
     order_types = ", ".join(getattr(config, "order_types", ["pickup", "delivery"]))
     reservations = ""
-    if _reservations_on(config):
+    if reservations_on(config):
         platform = getattr(config, "reservation_platform", "") or "their online booking system"
         reservations = (
             "\n- RESERVATIONS: you cannot book tables yourself. When the caller asks about a "
@@ -179,11 +181,6 @@ def _system_prompt(config) -> str:
     )
 
 
-def _reservations_on(config) -> bool:
-    return bool(getattr(config, "reservations_enabled", False)
-                and getattr(config, "reservation_url", ""))
-
-
 _SUBMIT_ORDER_TOOL = {
     "type": "function",
     "function": {
@@ -213,10 +210,7 @@ _RESERVATION_TOOL = {
         "name": "send_reservation_link",
         "description": "Text the caller the restaurant's reservation/booking link. "
                        "Call when they ask about reserving/booking a table.",
-        "parameters": {"type": "object", "properties": {
-            "party_size": {"type": "integer"},
-            "requested_time": {"type": "string"},
-        }},
+        "parameters": {"type": "object", "properties": {}},
     },
     "server": {"url": WEBHOOK_URL},
 }
@@ -224,7 +218,7 @@ _RESERVATION_TOOL = {
 
 def _assistant_for(config) -> dict:
     tools = [_SUBMIT_ORDER_TOOL]
-    if _reservations_on(config):
+    if reservations_on(config):
         tools.append(_RESERVATION_TOOL)
     return {
         "name": f"{config.business_name} — Order Taker",
@@ -241,14 +235,13 @@ def _assistant_for(config) -> dict:
 async def _send_reservation_link(config, caller_phone: str) -> str:
     """Text the caller the merchant's existing booking link. Returns the line
     the agent should say."""
-    if not _reservations_on(config):
+    if not reservations_on(config):
         return "I'm sorry — we don't take reservations by phone."
     if not caller_phone:
-        url = config.reservation_url
-        return f"You can book a table on our website at {url}."
+        return f"You can book a table on our website at {config.reservation_url}."
     from sms_checkout import send_sms
-    body = (f"Book your table at {config.business_name}: {config.reservation_url}")
-    res = await send_sms(caller_phone, body)
+    res = await send_sms(
+        caller_phone, f"Book your table at {config.business_name}: {config.reservation_url}")
     if res.get("sent"):
         return "I've just texted you our booking link — you can pick your time and party size there."
     return f"You can book a table online at {config.reservation_url}."
@@ -286,7 +279,7 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
         normalized, config, {"phone": caller_phone},
         pay_choice=args.get("pay_choice", ""),
     )
-    pos_result = routed.get("pos_result") or {"success": False, "method": "deferred"}
+    pos_result = routed.get("pos_result", {})
     logger.info("VAPI order placed: merchant=%s caller=%s items=%d pos=%s sms=%s",
                 config.merchant_id, caller_phone or "?", len(normalized.get("items", [])),
                 pos_result.get("success"), routed.get("sms_sent"))

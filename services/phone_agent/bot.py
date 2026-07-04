@@ -11,7 +11,8 @@ function-calling API (register_function + FunctionCallParams.result_callback), s
 there's far less custom code and the LLM stage is actually connected.
 
 The order tools call our existing order pipeline unchanged:
-  normalize_order → create_pos_order → route_order → log + spoken confirmation.
+  normalize_order → dispatch_order (POS timing per payment mode) → log +
+  spoken confirmation.
 
 Phase 2 swaps STT/TTS to NVIDIA Nemotron via `pipecat.services.nvidia` (same
 pipeline). Env:
@@ -54,9 +55,8 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketTransport,
 )
 
-from merchant_config import MerchantPhoneConfig
+from merchant_config import MerchantPhoneConfig, reservations_on
 from order_normalizer import normalize_order
-from pos_connector import create_pos_order  # noqa: F401  (kept for back-compat imports)
 from order_router import route_order  # noqa: F401  (kept for back-compat imports)
 from pay_on_phone import dispatch_order, resolve_mode
 from caller_memory import build_memory_block_for
@@ -120,14 +120,9 @@ _RESERVATION = FunctionSchema(
     name="send_reservation_link",
     description="Text the caller the restaurant's reservation/booking link. "
                 "Call when they ask about reserving or booking a table.",
-    properties={"party_size": {"type": "integer"}, "requested_time": {"type": "string"}},
+    properties={},
     required=[],
 )
-
-
-def _reservations_on(config: MerchantPhoneConfig) -> bool:
-    return bool(getattr(config, "reservations_enabled", False)
-                and getattr(config, "reservation_url", ""))
 
 
 def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_block: str = "") -> str:
@@ -157,7 +152,7 @@ def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_b
     ) if _brief else ""
 
     reservation_section = ""
-    if _reservations_on(config):
+    if reservations_on(config):
         platform = config.reservation_platform or "their online booking system"
         reservation_section = (
             "\n- RESERVATIONS: you cannot book tables yourself. When the caller asks about "
@@ -453,9 +448,7 @@ async def run_call_bot(
             normalized, merchant_config, caller_info,
             pay_choice=args.get("pay_choice", ""),
         )
-        pos_result = dispatched.get("pos_result") or {
-            "success": False, "method": "deferred", "pos_order_id": "",
-        }
+        pos_result = dispatched.get("pos_result", {})
         if mode == "pay_now":
             say = _pay_now_confirmation(normalized)
             log_status = "awaiting_payment"
@@ -480,7 +473,8 @@ async def run_call_bot(
     async def _on_reservation(params: FunctionCallParams):
         """Text the caller the merchant's EXISTING booking link (we never book)."""
         say = "You can book a table on our website."
-        if _reservations_on(merchant_config):
+        if reservations_on(merchant_config):
+            say = f"You can book a table online at {merchant_config.reservation_url}."
             phone = caller_info.get("phone", "")
             if phone:
                 try:
@@ -490,21 +484,18 @@ async def run_call_bot(
                         f"Book your table at {merchant_config.business_name}: "
                         f"{merchant_config.reservation_url}",
                     )
-                    say = ("I've just texted you our booking link — pick your time and "
-                           "party size there." if res.get("sent")
-                           else f"You can book online at {merchant_config.reservation_url}.")
+                    if res.get("sent"):
+                        say = ("I've just texted you our booking link — pick your "
+                               "time and party size there.")
                 except Exception as e:  # noqa: BLE001
                     logger.error("reservation SMS failed: %s", e)
-                    say = f"You can book online at {merchant_config.reservation_url}."
-            else:
-                say = f"You can book a table online at {merchant_config.reservation_url}."
         await _log_call(merchant_id, session_ref, caller_info, "reservation_link_sent")
         await params.result_callback({"say": say})
 
     llm.register_function("submit_order", _on_submit_order)
     llm.register_function("transfer_to_human", _on_transfer)
     llm.register_function("end_call_no_order", _on_end_call)
-    if _reservations_on(merchant_config):
+    if reservations_on(merchant_config):
         llm.register_function("send_reservation_link", _on_reservation)
 
     memory_block = ""
@@ -518,7 +509,7 @@ async def run_call_bot(
         messages=[{"role": "system", "content": build_system_prompt(merchant_config, caller_info, memory_block)}],
         tools=ToolsSchema(standard_tools=(
             [_SUBMIT_ORDER, _TRANSFER, _END_CALL]
-            + ([_RESERVATION] if _reservations_on(merchant_config) else [])
+            + ([_RESERVATION] if reservations_on(merchant_config) else [])
         )),
     )
     user_agg, assistant_agg = LLMContextAggregatorPair(

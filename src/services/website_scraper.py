@@ -132,7 +132,6 @@ def _extract_logo(html: str, base_url: str) -> str:
     return ""
 
 
-
 # Known reservation platforms — hostname fragment → platform label. The agent
 # hands callers to the restaurant's EXISTING rez system (we never book directly).
 RESERVATION_PLATFORMS = [

@@ -232,6 +232,24 @@ def _install_pos_spy(monkeypatch, spy):
     monkeypatch.setattr(pay_on_phone, "_create_pos", fake_create_pos)
 
 
+def _install_patch_client(monkeypatch, patches=None):
+    """Stub httpx.AsyncClient so mark_order_paid's PATCH lands in `patches`
+    (when given) instead of hitting Supabase."""
+    class FakeResp:
+        status_code = 204
+
+    class FakeClient:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+
+        async def patch(self, url, json=None, headers=None, timeout=None):
+            if patches is not None:
+                patches.append({"url": url, "json": json})
+            return FakeResp()
+
+    monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
+
+
 async def test_pay_now_defers_pos_push(monkeypatch):
     """Flag ON + no pre-created POS order → no POS call at order time; the
     held row carries no pos_order_id and the result is marked deferred."""
@@ -310,15 +328,7 @@ async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
     monkeypatch.setattr(mc, "get_merchant_config", fake_get_config)
 
     patches = []
-    class FakeResp:
-        status_code = 204
-    class FakeClient:
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-        async def patch(self, url, json=None, headers=None, timeout=None):
-            patches.append({"url": url, "json": json})
-            return FakeResp()
-    monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
+    _install_patch_client(monkeypatch, patches)
 
     res = await pay_on_phone.mark_order_paid(
         merchant_id="real-merchant", caller_phone="+15555550111",
@@ -351,14 +361,7 @@ async def test_mark_paid_skips_push_when_ticket_exists(monkeypatch):
                 "caller_phone": "+15555550111", "pos_order_id": "POS-EXISTING"}
     monkeypatch.setattr(pay_on_phone, "_fetch_held_order", fake_fetch)
 
-    class FakeResp:
-        status_code = 204
-    class FakeClient:
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
-        async def patch(self, url, json=None, headers=None, timeout=None):
-            return FakeResp()
-    monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
+    _install_patch_client(monkeypatch)
 
     res = await pay_on_phone.mark_order_paid(
         merchant_id="real-merchant", pos_order_id="POS-EXISTING")
