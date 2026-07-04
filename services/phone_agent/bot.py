@@ -116,6 +116,18 @@ _END_CALL = FunctionSchema(
         "order_completed", "customer_declined", "wrong_number", "question_only", "customer_hung_up"]}},
     required=["reason"],
 )
+_RESERVATION = FunctionSchema(
+    name="send_reservation_link",
+    description="Text the caller the restaurant's reservation/booking link. "
+                "Call when they ask about reserving or booking a table.",
+    properties={"party_size": {"type": "integer"}, "requested_time": {"type": "string"}},
+    required=[],
+)
+
+
+def _reservations_on(config: MerchantPhoneConfig) -> bool:
+    return bool(getattr(config, "reservations_enabled", False)
+                and getattr(config, "reservation_url", ""))
 
 
 def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_block: str = "") -> str:
@@ -132,6 +144,15 @@ def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_b
             lines.append(line)
         menu_section = "\n\nMENU:\n" + "\n".join(lines)
     memory_section = f"\n\n{memory_block}" if memory_block else ""
+
+    reservation_section = ""
+    if _reservations_on(config):
+        platform = config.reservation_platform or "their online booking system"
+        reservation_section = (
+            "\n- RESERVATIONS: you cannot book tables yourself. When the caller asks about "
+            f"a reservation/table, offer to text them the booking link ({platform}) and call "
+            "send_reservation_link() — then confirm the text is on its way."
+        )
 
     # PAY ON THE PHONE — tell the agent the payment step for this merchant.
     mode = getattr(config, "payment_mode", "pay_now")
@@ -167,7 +188,7 @@ RULES:
 - Read back the complete order before submitting
 - Only call submit_order() AFTER the customer confirms it's correct
 - If the customer asks for a person, call transfer_to_human()
-- If the call ends without an order, call end_call_no_order()
+- If the call ends without an order, call end_call_no_order(){reservation_section}
 - Available order types: {", ".join(config.order_types)}
 - If an item isn't on the menu, say so politely and suggest alternatives{payment_section}
 
@@ -445,9 +466,35 @@ async def run_call_bot(
         await _log_call(merchant_id, session_ref, caller_info, f"no_order_{reason}")
         await params.result_callback({"say": "Thank you for calling. Have a great day!"})
 
+    async def _on_reservation(params: FunctionCallParams):
+        """Text the caller the merchant's EXISTING booking link (we never book)."""
+        say = "You can book a table on our website."
+        if _reservations_on(merchant_config):
+            phone = caller_info.get("phone", "")
+            if phone:
+                try:
+                    from sms_checkout import send_sms
+                    res = await send_sms(
+                        phone,
+                        f"Book your table at {merchant_config.business_name}: "
+                        f"{merchant_config.reservation_url}",
+                    )
+                    say = ("I've just texted you our booking link — pick your time and "
+                           "party size there." if res.get("sent")
+                           else f"You can book online at {merchant_config.reservation_url}.")
+                except Exception as e:  # noqa: BLE001
+                    logger.error("reservation SMS failed: %s", e)
+                    say = f"You can book online at {merchant_config.reservation_url}."
+            else:
+                say = f"You can book a table online at {merchant_config.reservation_url}."
+        await _log_call(merchant_id, session_ref, caller_info, "reservation_link_sent")
+        await params.result_callback({"say": say})
+
     llm.register_function("submit_order", _on_submit_order)
     llm.register_function("transfer_to_human", _on_transfer)
     llm.register_function("end_call_no_order", _on_end_call)
+    if _reservations_on(merchant_config):
+        llm.register_function("send_reservation_link", _on_reservation)
 
     memory_block = ""
     if caller_info.get("phone"):
@@ -458,7 +505,10 @@ async def run_call_bot(
 
     context = LLMContext(
         messages=[{"role": "system", "content": build_system_prompt(merchant_config, caller_info, memory_block)}],
-        tools=ToolsSchema(standard_tools=[_SUBMIT_ORDER, _TRANSFER, _END_CALL]),
+        tools=ToolsSchema(standard_tools=(
+            [_SUBMIT_ORDER, _TRANSFER, _END_CALL]
+            + ([_RESERVATION] if _reservations_on(merchant_config) else [])
+        )),
     )
     user_agg, assistant_agg = LLMContextAggregatorPair(
         context,
