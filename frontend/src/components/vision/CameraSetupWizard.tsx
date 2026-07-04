@@ -1,104 +1,108 @@
 import { useState } from 'react'
-import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
+import {
+  Camera, CheckCircle, Shield, X, ChevronLeft, ChevronRight,
+  QrCode, Cloud, Terminal, Copy, Loader2, Info,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import { getAuthHeaders } from '@/lib/supabase'
 
-type ComplianceMode = 'anonymous' | 'opt_in_identity' | 'disabled'
+// Corrected direction (Aidan): connect the merchant's ALREADY-INSTALLED cameras with ZERO
+// shipped hardware. Options are ordered by friction, easiest first:
+//   PRIMARY  — vendor-cloud: scan the QR sticker on the camera, or pick the brand and log
+//              into the camera app they already use (OAuth). Cloud-to-cloud, no install.
+//   FALLBACK — one-line LAN connector: a single `docker run` on a PC they already own; it
+//              auto-discovers ONVIF cameras. No hardware, no RTSP typing, no port-forward.
+//   ADVANCED — manual RTSP (legacy, for power users).
+// Anonymous analytics only; the biometric identity tier stays gated server-side.
 
-interface CameraConfig {
-  name: string
-  rtsp_url: string
-  compliance_mode: ComplianceMode
-  active_hours: { start: string; end: string }
-  zone_config: Record<string, unknown>
-}
+type Method = 'vendor' | 'connector' | 'manual'
 
 interface CameraSetupWizardProps {
   orgId: string
-  onComplete: (camera: CameraConfig) => void
+  onComplete: (result?: unknown) => void
   onClose: () => void
 }
 
-const STEPS = ['Device', 'Camera', 'Zones', 'Privacy', 'Confirm'] as const
-type Step = (typeof STEPS)[number]
-
-// Cameras launch LIVE in anonymous mode. The biometric identity tier
-// (opt_in_identity) stays disabled until the consent-signage flow ships — mirrors
-// the backend CAMERA_IDENTITY_ENABLED gate (vision.py). Flip to '1' to allow it.
-const CAMERA_IDENTITY_ENABLED = import.meta.env.VITE_CAMERA_IDENTITY === '1'
+const apiBase = (import.meta.env.VITE_API_URL || '') as string
 
 export default function CameraSetupWizard({ orgId, onComplete, onClose }: CameraSetupWizardProps) {
-  const [step, setStep] = useState(0)
-  const [config, setConfig] = useState<CameraConfig>({
-    name: '',
-    rtsp_url: '',
-    compliance_mode: 'anonymous',
-    active_hours: { start: '07:00', end: '22:00' },
-    zone_config: {},
-  })
-  const [edgeDetected, setEdgeDetected] = useState(false)
-  const [connectionTested, setConnectionTested] = useState(false)
+  const [method, setMethod] = useState<Method | null>(null)
   const [error, setError] = useState('')
-  const [consentConfirmed, setConsentConfirmed] = useState(false)
+  const [busy, setBusy] = useState(false)
 
-  const currentStep = STEPS[step]
+  // LAN connector
+  const [pairing, setPairing] = useState<{ pairing_code: string; install_command: string; qr_payload: string } | null>(null)
 
-  const canAdvance = (): boolean => {
-    switch (currentStep) {
-      case 'Device': return true
-      case 'Camera': return config.name.length > 0 && config.rtsp_url.length > 0
-      case 'Zones': return true
-      case 'Privacy': return consentConfirmed || config.compliance_mode === 'disabled'
-      case 'Confirm': return true
-      default: return false
+  // manual RTSP (advanced)
+  const [name, setName] = useState('')
+  const [rtsp, setRtsp] = useState('')
+
+  const startVendorOAuth = async () => {
+    setBusy(true); setError('')
+    try {
+      const res = await fetch(`${apiBase}/api/vision/connect/vendor/tuya/oauth-url?org_id=${encodeURIComponent(orgId)}`, {
+        headers: { ...(await getAuthHeaders()) },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.authorize_url) {
+        setError(data.detail || 'Camera-cloud connect isn’t available on this deployment yet. Use the one-line connector below.')
+        return
+      }
+      // Send the merchant to their camera vendor's consent screen; they log into the app
+      // they already use. On return, the backend links + registers their cameras.
+      window.location.href = data.authorize_url as string
+    } catch {
+      setError('Could not reach the server. Please try again.')
+    } finally {
+      setBusy(false)
     }
   }
 
-  const apiBase = (import.meta.env.VITE_API_URL || '') as string
+  const mintPairingCode = async () => {
+    setBusy(true); setError('')
+    try {
+      const res = await fetch(`${apiBase}/api/vision/connect/pairing-code`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()) },
+        body: JSON.stringify({ org_id: orgId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.detail || 'Could not create a pairing code.')
+        return
+      }
+      setPairing(data)
+    } catch {
+      setError('Could not reach the server. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
-  // NOTE: This only validates the RTSP URL *format*. A live reachability test
-  // against the camera happens on the edge agent (it's the only thing on the
-  // local network that can reach the RTSP stream) and is not yet wired here, so
-  // we deliberately do NOT claim the camera is "connected" — see the
-  // coming-soon note rendered next to the button.
-  const testConnection = () => {
+  const submitManual = async () => {
     setError('')
-    const urlPattern = /^rtsp:\/\/.+/i
-    if (!urlPattern.test(config.rtsp_url)) {
-      setConnectionTested(false)
+    if (!/^rtsp:\/\/.+/i.test(rtsp)) {
       setError('Enter a valid RTSP URL (e.g., rtsp://192.168.1.100:554/stream1)')
       return
     }
-    setConnectionTested(true)
-  }
-
-  const handleSubmit = async () => {
-    setError('')
     try {
       const res = await fetch(`${apiBase}/api/vision/cameras`, {
         method: 'POST',
-        // getAuthHeaders() already includes Content-Type; spreading it attaches
-        // the Supabase JWT that require_org_access (CA-1/CA-2) now demands.
         headers: { ...(await getAuthHeaders()) },
-        body: JSON.stringify({
-          org_id: orgId,
-          name: config.name,
-          rtsp_url: config.rtsp_url,
-          compliance_mode: config.compliance_mode,
-          active_hours: config.active_hours,
-          zone_config: config.zone_config,
-        }),
+        body: JSON.stringify({ org_id: orgId, name, rtsp_url: rtsp, compliance_mode: 'anonymous' }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         setError(data.detail || 'Failed to register camera')
         return
       }
-      onComplete(config)
+      onComplete()
     } catch {
       setError('Could not reach the server. Please try again.')
     }
   }
+
+  const copy = (text: string) => { try { void navigator.clipboard?.writeText(text) } catch { /* noop */ } }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -107,103 +111,155 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
           <div className="flex items-center gap-2">
             <Camera size={16} className="text-[#1A8FD6]" />
-            <h2 className="text-sm font-semibold text-[#F5F5F7]">Connect Camera</h2>
+            <h2 className="text-sm font-semibold text-[#F5F5F7]">Connect your cameras</h2>
           </div>
           <button aria-label="Close setup" onClick={onClose} className="text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors">
             <X size={16} />
           </button>
         </div>
 
-        {/* Progress */}
-        <div className="px-5 py-3 border-b border-[#1F1F23]">
-          <div className="flex items-center gap-1">
-            {STEPS.map((s, i) => (
-              <div key={s} className="flex items-center gap-1 flex-1">
-                <div className={clsx(
-                  'w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold transition-colors',
-                  i < step ? 'bg-[#17C5B0] text-white' :
-                  i === step ? 'bg-[#1A8FD6] text-white' :
-                  'bg-[#1F1F23] text-[#A1A1A8]/40'
-                )}>
-                  {i < step ? <CheckCircle size={12} /> : i + 1}
-                </div>
-                <span className={clsx(
-                  'text-[9px] hidden sm:inline',
-                  i === step ? 'text-[#F5F5F7] font-medium' : 'text-[#A1A1A8]/40'
-                )}>{s}</span>
-                {i < STEPS.length - 1 && (
-                  <div className={clsx(
-                    'flex-1 h-px mx-1',
-                    i < step ? 'bg-[#17C5B0]/40' : 'bg-[#1F1F23]'
-                  )} />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Step Content */}
         <div className="px-5 py-5 space-y-4">
-          {/* Step 1: Device */}
-          {currentStep === 'Device' && (
+          {/* Method picker (default) */}
+          {!method && (
             <>
               <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Edge Device</h3>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Use the cameras you already have</h3>
                 <p className="text-[11px] text-[#A1A1A8]">
-                  Meridian Vision runs on your hardware. No video leaves your premises.
+                  No new hardware. Connect your existing security cameras &mdash; pick the easiest option.
                 </p>
               </div>
-              <div className="grid grid-cols-1 gap-3">
-                {[
-                  { name: 'Jetson Nano', cameras: '2-3', price: '$149', recommended: false },
-                  { name: 'Jetson Orin Nano', cameras: '4-6', price: '$249', recommended: true },
-                  { name: 'Jetson Orin NX', cameras: '8-12', price: '$499', recommended: false },
-                  { name: 'Custom Linux + GPU', cameras: 'Varies', price: 'BYO', recommended: false },
-                ].map(device => (
-                  <button
-                    key={device.name}
-                    onClick={() => setEdgeDetected(true)}
-                    className={clsx(
-                      'p-3 rounded-lg border text-left transition-all',
-                      edgeDetected && device.recommended
-                        ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
-                        : 'border-[#1F1F23] hover:border-[#A1A1A8]/20 bg-[#0A0A0B]'
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-medium text-[#F5F5F7]">{device.name}</span>
-                        {device.recommended && (
-                          <span className="ml-2 text-[8px] font-bold text-[#1A8FD6] bg-[#1A8FD6]/10 px-1.5 py-0.5 rounded">
-                            RECOMMENDED
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-[#A1A1A8] font-mono">{device.price}</span>
-                    </div>
-                    <p className="text-[10px] text-[#A1A1A8]/60 mt-1">Supports {device.cameras} cameras</p>
-                  </button>
-                ))}
-              </div>
+
+              {/* PRIMARY — vendor-cloud */}
+              <button
+                onClick={() => setMethod('vendor')}
+                className="w-full p-3 rounded-lg border border-[#1A8FD6]/40 bg-[#1A8FD6]/5 text-left hover:bg-[#1A8FD6]/10 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Cloud size={15} className="text-[#1A8FD6]" />
+                  <span className="text-xs font-medium text-[#F5F5F7]">Connect via your camera app</span>
+                  <span className="ml-auto text-[8px] font-bold text-[#17C5B0] bg-[#17C5B0]/10 px-1.5 py-0.5 rounded">EASIEST</span>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8]/70 mt-1 ml-6">
+                  Scan the sticker on your camera or log into the app you already use (Smart Life &amp; more).
+                  Nothing to install.
+                </p>
+              </button>
+
+              {/* FALLBACK — LAN connector */}
+              <button
+                onClick={() => setMethod('connector')}
+                className="w-full p-3 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] text-left hover:border-[#A1A1A8]/20 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Terminal size={15} className="text-[#A1A1A8]" />
+                  <span className="text-xs font-medium text-[#F5F5F7]">One-line connector</span>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8]/60 mt-1 ml-6">
+                  Camera brand not supported above? Run one command on a PC you already have on the same
+                  network. It finds your cameras automatically &mdash; no hardware, no RTSP URLs.
+                </p>
+              </button>
+
+              {/* ADVANCED — manual RTSP */}
+              <button
+                onClick={() => setMethod('manual')}
+                className="w-full text-left text-[10px] text-[#A1A1A8]/50 hover:text-[#A1A1A8] transition-colors"
+              >
+                Advanced: enter an RTSP URL manually &rarr;
+              </button>
             </>
           )}
 
-          {/* Step 2: Camera */}
-          {currentStep === 'Camera' && (
+          {/* VENDOR-CLOUD */}
+          {method === 'vendor' && (
             <>
               <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Camera Connection</h3>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Connect via your camera app</h3>
                 <p className="text-[11px] text-[#A1A1A8]">
-                  Enter the RTSP URL from your IP camera and give it a name.
+                  We connect to the cameras you already have, through the camera cloud &mdash; nothing to install.
                 </p>
+              </div>
+              <div className="p-3 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] flex items-start gap-2">
+                <QrCode size={16} className="text-[#1A8FD6] flex-shrink-0 mt-0.5" />
+                <div className="text-[10px] text-[#A1A1A8]">
+                  <p className="text-[#F5F5F7] font-medium text-[11px]">Scan the sticker on your camera</p>
+                  <p className="mt-0.5">Most cameras have a QR/serial sticker. Scan it, then authorize your camera
+                    account once. (Sticker scanning links to the same authorize step.)</p>
+                </div>
+              </div>
+              <button
+                onClick={startVendorOAuth}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={13} className="animate-spin" /> : <Cloud size={13} />}
+                Authorize my camera account
+              </button>
+              {error && <p className="text-[10px] text-amber-400">{error}</p>}
+            </>
+          )}
+
+          {/* LAN CONNECTOR */}
+          {method === 'connector' && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">One-line connector</h3>
+                <p className="text-[11px] text-[#A1A1A8]">
+                  Run this on any PC/POS terminal on the same network as your cameras. It dials out to
+                  Meridian and auto-discovers your cameras &mdash; no hardware, no router changes.
+                </p>
+              </div>
+              {!pairing ? (
+                <button
+                  onClick={mintPairingCode}
+                  disabled={busy}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors disabled:opacity-50"
+                >
+                  {busy ? <Loader2 size={13} className="animate-spin" /> : <Terminal size={13} />}
+                  Get my connect command
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Run this one line</label>
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
+                      <code className="text-[10px] text-[#17C5B0] font-mono break-all flex-1">{pairing.install_command}</code>
+                      <button aria-label="Copy command" onClick={() => copy(pairing.install_command)} className="text-[#A1A1A8] hover:text-[#F5F5F7] flex-shrink-0">
+                        <Copy size={13} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg border border-[#1F1F23]/50 bg-[#17C5B0]/5">
+                    <Info size={13} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-[#A1A1A8]">
+                      Your cameras appear here within seconds of running it. Camera passwords stay on that
+                      machine and never reach the cloud. Code expires in 15 minutes.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onComplete()}
+                    className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors"
+                  >
+                    <CheckCircle size={12} /> Done &mdash; I ran the command
+                  </button>
+                </div>
+              )}
+              {error && <p className="text-[10px] text-amber-400">{error}</p>}
+            </>
+          )}
+
+          {/* MANUAL RTSP (advanced) */}
+          {method === 'manual' && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Advanced: RTSP URL</h3>
+                <p className="text-[11px] text-[#A1A1A8]">For power users who already know their camera&rsquo;s RTSP URL.</p>
               </div>
               <div className="space-y-3">
                 <div>
                   <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Camera Name</label>
                   <input
-                    type="text"
-                    value={config.name}
-                    onChange={e => setConfig(c => ({ ...c, name: e.target.value }))}
+                    type="text" value={name} onChange={e => setName(e.target.value)}
                     placeholder="e.g., Front Door, Checkout Area"
                     className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40"
                   />
@@ -211,260 +267,48 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                 <div>
                   <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">RTSP URL</label>
                   <input
-                    type="text"
-                    value={config.rtsp_url}
-                    onChange={e => {
-                      setConfig(c => ({ ...c, rtsp_url: e.target.value }))
-                      setConnectionTested(false)
-                    }}
+                    type="text" value={rtsp} onChange={e => setRtsp(e.target.value)}
                     placeholder="rtsp://192.168.1.100:554/stream1"
                     className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40 font-mono"
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={testConnection}
-                    disabled={!config.rtsp_url}
-                    className={clsx(
-                      'px-3 py-1.5 text-[11px] rounded-lg font-medium transition-colors',
-                      connectionTested
-                        ? 'bg-[#17C5B0]/10 text-[#17C5B0] border border-[#17C5B0]/20'
-                        : 'bg-[#1A8FD6]/10 text-[#1A8FD6] border border-[#1A8FD6]/20 hover:bg-[#1A8FD6]/20'
-                    )}
-                  >
-                    {connectionTested ? (
-                      <span className="flex items-center gap-1.5"><CheckCircle size={11} /> URL format valid</span>
-                    ) : (
-                      <span className="flex items-center gap-1.5"><Wifi size={11} /> Check URL format</span>
-                    )}
-                  </button>
-                  {error && <span className="text-[10px] text-red-400">{error}</span>}
-                </div>
-                <p className="text-[9px] text-[#A1A1A8]/40">
-                  Live stream reachability is verified by the on-prem edge agent after setup — coming soon.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Active From</label>
-                    <input
-                      type="time"
-                      value={config.active_hours.start}
-                      onChange={e => setConfig(c => ({ ...c, active_hours: { ...c.active_hours, start: e.target.value } }))}
-                      className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Active Until</label>
-                    <input
-                      type="time"
-                      value={config.active_hours.end}
-                      onChange={e => setConfig(c => ({ ...c, active_hours: { ...c.active_hours, end: e.target.value } }))}
-                      className="w-full px-3 py-2 text-xs bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/40"
-                    />
-                  </div>
-                </div>
+                <button
+                  onClick={submitManual}
+                  disabled={!name || !rtsp}
+                  className={clsx(
+                    'w-full flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg transition-colors',
+                    name && rtsp ? 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90' : 'bg-[#1F1F23] text-[#A1A1A8]/40 cursor-not-allowed',
+                  )}
+                >
+                  <CheckCircle size={12} /> Add camera
+                </button>
               </div>
+              {error && <p className="text-[10px] text-amber-400">{error}</p>}
             </>
           )}
 
-          {/* Step 3: Zones */}
-          {currentStep === 'Zones' && (
-            <>
-              <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Detection Zones</h3>
-                <p className="text-[11px] text-[#A1A1A8]">
-                  Define areas in the camera view for tracking. Zone drawing will be available once the camera is connected.
-                </p>
-              </div>
-              <div className="aspect-video bg-[#0A0A0B] border border-[#1F1F23] rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <Camera size={32} className="text-[#A1A1A8]/20 mx-auto mb-2" />
-                  <p className="text-[11px] text-[#A1A1A8]/40">Camera preview will appear here</p>
-                  <p className="text-[9px] text-[#A1A1A8]/20 mt-1">Draw entry, browse, and checkout zones</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {['Entry', 'Browse', 'Checkout'].map(zone => (
-                  <div key={zone} className="p-2 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] text-center">
-                    <div className={clsx(
-                      'w-3 h-3 rounded-full mx-auto mb-1',
-                      zone === 'Entry' ? 'bg-[#17C5B0]' :
-                      zone === 'Browse' ? 'bg-[#1A8FD6]' :
-                      'bg-[#7C5CFF]'
-                    )} />
-                    <span className="text-[10px] text-[#A1A1A8]">{zone} Zone</span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[9px] text-[#A1A1A8]/40">
-                Zones can be configured after setup via the camera management panel.
-              </p>
-            </>
-          )}
-
-          {/* Step 4: Privacy */}
-          {currentStep === 'Privacy' && (
-            <>
-              <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Privacy & Compliance</h3>
-                <p className="text-[11px] text-[#A1A1A8]">
-                  Choose how visitor data is processed. No images are ever stored or transmitted.
-                </p>
-              </div>
-              <div className="space-y-2">
-                {([
-                  {
-                    mode: 'anonymous' as ComplianceMode,
-                    label: 'Anonymous (Recommended)',
-                    desc: 'Aggregate counts only. No face data processed. Safest for compliance.',
-                    badge: 'GDPR/CCPA Safe',
-                    badgeColor: '#17C5B0',
-                  },
-                  {
-                    mode: 'opt_in_identity' as ComplianceMode,
-                    label: 'Opt-in Identity',
-                    desc: 'Detect repeat visitors via face embeddings (stored on-prem only, 90-day auto-delete).',
-                    badge: 'Requires Consent Signage',
-                    badgeColor: '#FBBF24',
-                  },
-                  {
-                    mode: 'disabled' as ComplianceMode,
-                    label: 'Disabled',
-                    desc: 'Camera connected but no vision processing. Useful for future activation.',
-                    badge: '',
-                    badgeColor: '',
-                  },
-                ]).map(opt => {
-                  // Identity tier is gated until the consent flow ships — show it
-                  // but make it unselectable ("Coming soon") so anonymous launches.
-                  const locked = opt.mode === 'opt_in_identity' && !CAMERA_IDENTITY_ENABLED
-                  const badge = locked ? 'Coming soon' : opt.badge
-                  const badgeColor = locked ? '#A1A1A8' : opt.badgeColor
-                  return (
-                  <button
-                    key={opt.mode}
-                    disabled={locked}
-                    onClick={() => { if (!locked) setConfig(c => ({ ...c, compliance_mode: opt.mode })) }}
-                    className={clsx(
-                      'w-full p-3 rounded-lg border text-left transition-all',
-                      locked && 'opacity-50 cursor-not-allowed',
-                      config.compliance_mode === opt.mode
-                        ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
-                        : 'border-[#1F1F23] hover:border-[#A1A1A8]/20 bg-[#0A0A0B]'
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className={clsx(
-                        'w-3 h-3 rounded-full border-2',
-                        config.compliance_mode === opt.mode ? 'border-[#1A8FD6] bg-[#1A8FD6]' : 'border-[#A1A1A8]/20'
-                      )} />
-                      <span className="text-xs font-medium text-[#F5F5F7]">{opt.label}</span>
-                      {badge && (
-                        <span className="text-[8px] font-bold px-1.5 py-0.5 rounded" style={{
-                          color: badgeColor,
-                          backgroundColor: `${badgeColor}15`,
-                        }}>{badge}</span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-[#A1A1A8]/60 mt-1 ml-5">
-                      {locked ? 'Repeat-visitor identity is releasing soon. Anonymous analytics is live now.' : opt.desc}
-                    </p>
-                  </button>
-                )})}
-              </div>
-
-              {config.compliance_mode !== 'disabled' && (
-                <label className="flex items-start gap-2 p-3 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={consentConfirmed}
-                    onChange={e => setConsentConfirmed(e.target.checked)}
-                    className="mt-0.5 accent-[#1A8FD6]"
-                  />
-                  <div>
-                    <span className="text-[11px] text-[#F5F5F7] font-medium">
-                      I confirm consent signage is posted in the camera's field of view
-                    </span>
-                    <p className="text-[9px] text-[#A1A1A8]/40 mt-0.5">
-                      Required for compliance. Signage must inform customers that video analytics are in use.
-                    </p>
-                  </div>
-                </label>
-              )}
-
-              <div className="flex items-start gap-2 p-3 rounded-lg border border-[#1F1F23]/50 bg-[#17C5B0]/5">
-                <Shield size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
-                <div className="text-[10px] text-[#A1A1A8] space-y-1">
-                  <p>No raw images or video are ever stored or transmitted to the cloud.</p>
-                  <p>Face embeddings (opt-in only) stay on your hardware and auto-delete after 90 days.</p>
-                  <p>Customers can request immediate deletion (CCPA/GDPR right to erasure).</p>
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Step 5: Confirm */}
-          {currentStep === 'Confirm' && (
-            <>
-              <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Review & Activate</h3>
-                <p className="text-[11px] text-[#A1A1A8]">
-                  Confirm your camera configuration before activating.
-                </p>
-              </div>
-              <div className="space-y-2">
-                {[
-                  { label: 'Camera Name', value: config.name },
-                  { label: 'RTSP URL', value: config.rtsp_url },
-                  { label: 'Active Hours', value: `${config.active_hours.start} - ${config.active_hours.end}` },
-                  { label: 'Privacy Mode', value: config.compliance_mode.replace('_', ' ') },
-                ].map(item => (
-                  <div key={item.label} className="flex justify-between py-2 border-b border-[#1F1F23]/50">
-                    <span className="text-[11px] text-[#A1A1A8]">{item.label}</span>
-                    <span className="text-[11px] text-[#F5F5F7] font-medium font-mono">{item.value}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-400/20 bg-amber-400/5">
-                <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
-                <p className="text-[10px] text-[#A1A1A8]">
-                  The edge agent must be running on your device for the camera to start processing.
-                  See the setup guide for Docker installation instructions.
-                </p>
-              </div>
-            </>
-          )}
+          {/* Privacy note — always visible */}
+          <div className="flex items-start gap-2 p-3 rounded-lg border border-[#1F1F23]/50 bg-[#17C5B0]/5">
+            <Shield size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
+            <p className="text-[10px] text-[#A1A1A8]">
+              Anonymous analytics only &mdash; aggregate counts, no face data. No raw video is stored in the cloud.
+            </p>
+          </div>
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-[#1F1F23]">
           <button
-            onClick={() => step > 0 ? setStep(s => s - 1) : onClose()}
+            onClick={() => { if (method) { setMethod(null); setPairing(null); setError('') } else { onClose() } }}
             className="flex items-center gap-1 text-[11px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors"
           >
             <ChevronLeft size={12} />
-            {step > 0 ? 'Back' : 'Cancel'}
+            {method ? 'Back' : 'Cancel'}
           </button>
-          {currentStep === 'Confirm' ? (
-            <button
-              onClick={handleSubmit}
-              className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors"
-            >
-              <CheckCircle size={12} /> Activate Camera
-            </button>
-          ) : (
-            <button
-              onClick={() => setStep(s => s + 1)}
-              disabled={!canAdvance()}
-              className={clsx(
-                'flex items-center gap-1 px-4 py-2 text-[11px] font-semibold rounded-lg transition-colors',
-                canAdvance()
-                  ? 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90'
-                  : 'bg-[#1F1F23] text-[#A1A1A8]/40 cursor-not-allowed'
-              )}
-            >
-              Next <ChevronRight size={12} />
-            </button>
+          {!method && (
+            <span className="flex items-center gap-1 text-[10px] text-[#A1A1A8]/40">
+              Pick an option above <ChevronRight size={11} />
+            </span>
           )}
         </div>
       </div>
