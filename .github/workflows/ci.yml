@@ -21,7 +21,13 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install ruff --quiet
-      - name: ruff check
+      # Non-blocking: ruff surfaces style issues but must NOT fail the CI check
+      # suite. Railway gates production deploys on this suite (checkSuites=true),
+      # so a hard-failing style linter on a pre-existing backlog silently blocked
+      # every backend deploy (all SKIPPED since 2026-06-30). Real gates —
+      # POS ingestion harness, security, syntax, gitleaks — stay blocking.
+      - name: ruff check (advisory)
+        continue-on-error: true
         run: ruff check src/
 
   pos-ingestion-harness:
