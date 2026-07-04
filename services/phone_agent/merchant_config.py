@@ -54,6 +54,13 @@ class MerchantPhoneConfig:
     # state. Demo / test merchants set this to keep live POS calls off
     # the demo path even after the merchant completes Square OAuth.
     demo_safe: bool = False
+    # RESERVATIONS: hand-off to the restaurant's EXISTING rez system. When
+    # enabled and a URL is set, the agent texts callers the booking link
+    # (send_reservation_link tool) — Meridian never books tables itself.
+    reservations_enabled: bool = False
+    reservation_url: str = ""
+    reservation_platform: str = ""
+    website_url: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -117,6 +124,10 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 stripe_account_id=(row.get("stripe_account_id") or "").strip(),
                 stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
                 demo_safe=bool(row.get("demo_safe", False)),
+                reservations_enabled=bool(row.get("reservations_enabled", False)),
+                reservation_url=(row.get("reservation_url") or "").strip(),
+                reservation_platform=(row.get("reservation_platform") or "").strip(),
+                website_url=(row.get("website_url") or "").strip(),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

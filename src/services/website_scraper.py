@@ -42,6 +42,7 @@ async def scrape_website(url: str) -> dict:
             "logo_url": _extract_logo(html, url),
             "social_links": _extract_social_links(html),
             "services": [],
+            "reservation": extract_reservation_link(html, url),
         }
 
         json_ld = _extract_json_ld(html)
@@ -129,6 +130,50 @@ def _extract_logo(html: str, base_url: str) -> str:
                 return src
             return urljoin(base_url, src)
     return ""
+
+
+
+# Known reservation platforms — hostname fragment → platform label. The agent
+# hands callers to the restaurant's EXISTING rez system (we never book directly).
+RESERVATION_PLATFORMS = [
+    ("opentable.", "opentable"),
+    ("resy.com", "resy"),
+    ("sevenrooms.com", "sevenrooms"),
+    ("exploretock.com", "tock"),
+    ("tockhq.com", "tock"),
+    ("yelp.com/reservations", "yelp"),
+    ("tablein.com", "tablein"),
+    ("bookenda.com", "bookenda"),
+    ("libroreserve.com", "libro"),          # common in Canada
+    ("zenchef.com", "zenchef"),
+    ("thefork.com", "thefork"),
+    ("quandoo.", "quandoo"),
+]
+
+
+def extract_reservation_link(html: str, base_url: str = "") -> dict:
+    """Find the restaurant's reservation link on their site.
+
+    Two passes: (1) any href pointing at a known reservation platform;
+    (2) any anchor whose visible text reads like "reserve / book a table",
+    resolved against base_url. Returns {url, platform} or {}.
+    """
+    hrefs = re.findall(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', html, re.I | re.S)
+    for url, _text in hrefs:
+        low = url.lower()
+        for frag, platform in RESERVATION_PLATFORMS:
+            if frag in low:
+                return {"url": url if low.startswith("http") else urljoin(base_url, url),
+                        "platform": platform}
+    for url, text in hrefs:
+        plain = re.sub(r"<[^>]+>", " ", text or "")
+        if re.search(r"\b(reserv|book\s+(a\s+)?table|book\s+now)", plain, re.I):
+            low = url.lower()
+            if low.startswith(("mailto:", "tel:", "#", "javascript:")):
+                continue
+            return {"url": url if low.startswith("http") else urljoin(base_url, url),
+                    "platform": "website"}
+    return {}
 
 
 def _extract_social_links(html: str) -> dict:

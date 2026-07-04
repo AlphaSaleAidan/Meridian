@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth'
 import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
 import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 import { HistoricalRevenueSection, OpenOrdersSection } from '@/components/SalesHistorySections'
+import MenuEditorCard from '@/components/phone/MenuEditorCard'
 
 /**
  * Canada-merchant home — the payable hero surface.
@@ -438,6 +439,10 @@ export default function MerchantHomePage() {
 
       {/* Top 3 Actions */}
       <Top3ActionsPanel />
+
+      {/* Phone agent menu — the ported menu, editable in place so the
+          merchant can fix anything the POS/photo/website import got wrong. */}
+      <MenuEditorCard orgId={orgId} />
 
       {/* Pillar quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
