@@ -61,6 +61,13 @@ class MerchantPhoneConfig:
     # Empty string = no brief = prompt is byte-for-byte unchanged (no regression).
     website_url: str = ""
     restaurant_brief: str = ""
+    # RESERVATIONS: hand-off to the restaurant's EXISTING rez system. When
+    # enabled and a URL is set, the agent texts callers the booking link
+    # (send_reservation_link tool) — Meridian never books tables itself.
+    reservations_enabled: bool = False
+    reservation_url: str = ""
+    reservation_platform: str = ""
+
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -126,6 +133,9 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 demo_safe=bool(row.get("demo_safe", False)),
                 website_url=(row.get("website_url") or "").strip(),
                 restaurant_brief=(row.get("restaurant_brief") or "").strip(),
+                reservations_enabled=bool(row.get("reservations_enabled", False)),
+                reservation_url=(row.get("reservation_url") or "").strip(),
+                reservation_platform=(row.get("reservation_platform") or "").strip(),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

@@ -54,11 +54,60 @@ class PhoneConfigRequest(BaseModel):
     # back-compat: omitting it leaves the stored value untouched (save_phone_config
     # only writes non-None fields).
     order_routing: str | None = None
+    # Reservations: hand-off to the restaurant's EXISTING rez system.
+    website_url: str | None = None
+    reservation_url: str | None = None
+    reservation_platform: str | None = None
+    reservations_enabled: bool | None = None
 
 
 def _validate_merchant_id(merchant_id: str):
     if not _UUID_RE.match(merchant_id):
         raise HTTPException(400, "Invalid merchant_id format")
+
+
+class ReservationScrapeRequest(BaseModel):
+    website_url: str
+
+
+@router.post("/reservations/scrape/{merchant_id}")
+async def scrape_reservation_link(
+    merchant_id: str, req: ReservationScrapeRequest, _auth=Depends(require_service_auth)
+):
+    """Scrape the merchant's website for their existing reservation link
+    (OpenTable/Resy/Tock/… or a generic "book a table" anchor) and store it on
+    phone_agent_config. Triggered by the wizard's reservation toggle."""
+    _validate_merchant_id(merchant_id)
+    url = (req.website_url or "").strip()
+    if not url.lower().startswith(("http://", "https://")):
+        url = f"https://{url}"
+
+    from ...services.website_scraper import scrape_website
+    scraped = await scrape_website(url)
+    if scraped.get("error"):
+        raise HTTPException(422, f"Could not scrape {url}: {scraped['error']}")
+
+    rez = scraped.get("reservation") or {}
+    db = get_db()
+    payload = {
+        "website_url": url,
+        "reservation_url": rez.get("url", ""),
+        "reservation_platform": rez.get("platform", ""),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    rows = await db.select("phone_agent_config",
+                           filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
+    if rows:
+        await db.update("phone_agent_config", payload,
+                        filters={"merchant_id": f"eq.{merchant_id}"})
+    else:
+        await db.insert("phone_agent_config", {**payload, "merchant_id": merchant_id})
+
+    logger.info("Reservation scrape for %s: %s (%s)", merchant_id,
+                rez.get("url") or "not found", rez.get("platform") or "-")
+    return {"ok": True, "found": bool(rez.get("url")),
+            "reservation_url": rez.get("url", ""),
+            "reservation_platform": rez.get("platform", "")}
 
 
 @router.get("/config/{merchant_id}")

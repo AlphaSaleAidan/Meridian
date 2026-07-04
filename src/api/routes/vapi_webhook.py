@@ -140,6 +140,14 @@ def _system_prompt(config) -> str:
 
     menu = ("\n\nMENU:\n" + "\n".join(menu_lines)) if menu_lines else ""
     order_types = ", ".join(getattr(config, "order_types", ["pickup", "delivery"]))
+    reservations = ""
+    if _reservations_on(config):
+        platform = getattr(config, "reservation_platform", "") or "their online booking system"
+        reservations = (
+            "\n- RESERVATIONS: you cannot book tables yourself. When the caller asks about a "
+            f"reservation/table, offer to text them the restaurant's booking link ({platform}) "
+            "and call send_reservation_link — then tell them the link is on its way."
+        )
     business = config.business_name
 
     return (
@@ -166,8 +174,14 @@ def _system_prompt(config) -> str:
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
         "- Frustrated caller → brief apology, repeat back only the unclear part, ask once to clarify."
+        f"{reservations}"
         f"{menu}"
     )
+
+
+def _reservations_on(config) -> bool:
+    return bool(getattr(config, "reservations_enabled", False)
+                and getattr(config, "reservation_url", ""))
 
 
 _SUBMIT_ORDER_TOOL = {
@@ -193,8 +207,25 @@ _SUBMIT_ORDER_TOOL = {
     "server": {"url": WEBHOOK_URL},
 }
 
+_RESERVATION_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "send_reservation_link",
+        "description": "Text the caller the restaurant's reservation/booking link. "
+                       "Call when they ask about reserving/booking a table.",
+        "parameters": {"type": "object", "properties": {
+            "party_size": {"type": "integer"},
+            "requested_time": {"type": "string"},
+        }},
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
 
 def _assistant_for(config) -> dict:
+    tools = [_SUBMIT_ORDER_TOOL]
+    if _reservations_on(config):
+        tools.append(_RESERVATION_TOOL)
     return {
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": config.greeting or f"Thanks for calling {config.business_name}! What can I get for you?",
@@ -202,9 +233,25 @@ def _assistant_for(config) -> dict:
         "voice": {"provider": "vapi", "voiceId": "Elliot"},
         "model": {"provider": "openai", "model": "gpt-4.1",
                   "messages": [{"role": "system", "content": _system_prompt(config)}],
-                  "tools": [_SUBMIT_ORDER_TOOL]},
+                  "tools": tools},
         "endCallFunctionEnabled": True,
     }
+
+
+async def _send_reservation_link(config, caller_phone: str) -> str:
+    """Text the caller the merchant's existing booking link. Returns the line
+    the agent should say."""
+    if not _reservations_on(config):
+        return "I'm sorry — we don't take reservations by phone."
+    if not caller_phone:
+        url = config.reservation_url
+        return f"You can book a table on our website at {url}."
+    from sms_checkout import send_sms
+    body = (f"Book your table at {config.business_name}: {config.reservation_url}")
+    res = await send_sms(caller_phone, body)
+    if res.get("sent"):
+        return "I've just texted you our booking link — you can pick your time and party size there."
+    return f"You can book a table online at {config.reservation_url}."
 
 
 def _confirm(args: dict, routed: dict) -> str:
@@ -223,24 +270,23 @@ def _confirm(args: dict, routed: dict) -> str:
 
 
 async def _place_order(args: dict, config, caller_phone: str) -> str:
-    """Run the real order pipeline: normalize → POS create → route (Stripe + SMS)."""
+    """Run the real order pipeline via pay_on_phone.dispatch_order — POS push
+    timing follows the payment mode: pay_now defers the ticket until Stripe
+    confirms payment (mark_order_paid pushes it); pay_at_pickup pushes now."""
     from order_normalizer import normalize_order
-    from pos_connector import create_pos_order
-    from order_router import route_order
+    from pay_on_phone import dispatch_order
     if caller_phone and not args.get("caller_phone"):
         args["caller_phone"] = caller_phone
     normalized = normalize_order(args, config)
-    # route_order only texts the pay link when the order carries caller_phone —
-    # force it from the call's caller id so the SMS always fires.
+    # the pay-link SMS only fires when the order carries caller_phone —
+    # force it from the call's caller id so the SMS always goes out.
     if caller_phone:
         normalized["caller_phone"] = caller_phone
-    pos_token = getattr(config, "pos_access_token", "") or ""
-    pos_loc = getattr(config, "pos_location_id", "") or ""
-    if getattr(config, "pos_system", "") == "square" and not pos_token:
-        pos_token = os.getenv("SQUARE_ACCESS_TOKEN", "")
-        pos_loc = pos_loc or os.getenv("SQUARE_LOCATION_ID", "")
-    pos_result = await create_pos_order(normalized, getattr(config, "pos_system", "") or "", pos_token, pos_loc)
-    routed = await route_order(normalized, config, {"phone": caller_phone}, pos_result)
+    routed = await dispatch_order(
+        normalized, config, {"phone": caller_phone},
+        pay_choice=args.get("pay_choice", ""),
+    )
+    pos_result = routed.get("pos_result") or {"success": False, "method": "deferred"}
     logger.info("VAPI order placed: merchant=%s caller=%s items=%d pos=%s sms=%s",
                 config.merchant_id, caller_phone or "?", len(normalized.get("items", [])),
                 pos_result.get("success"), routed.get("sms_sent"))
@@ -310,6 +356,15 @@ async def vapi_webhook(request: Request):
                     logger.error("submit_order failed: %s", e)
                     res = "Your order is in — we'll follow up by text shortly."
                 results.append({"toolCallId": tc.get("id"), "result": res})
+            elif fn.get("name") == "send_reservation_link":
+                try:
+                    if config is None:
+                        config = await _resolve_config(_dialed_number(msg))
+                    res = await _send_reservation_link(config, _caller_number(msg))
+                except Exception as e:  # noqa: BLE001
+                    logger.error("send_reservation_link failed: %s", e)
+                    res = "You can book a table on our website."
+                results.append({"toolCallId": tc.get("id"), "result": res})
             else:
                 results.append({"toolCallId": tc.get("id"), "result": "ok"})
         return {"results": results}
@@ -323,6 +378,13 @@ async def vapi_webhook(request: Request):
             except Exception as e:  # noqa: BLE001
                 logger.error("submit_order (legacy) failed: %s", e)
                 return {"result": "Your order is in — we'll follow up by text shortly."}
+        if fc.get("name") == "send_reservation_link":
+            try:
+                config = await _resolve_config(_dialed_number(msg))
+                return {"result": await _send_reservation_link(config, _caller_number(msg))}
+            except Exception as e:  # noqa: BLE001
+                logger.error("send_reservation_link (legacy) failed: %s", e)
+                return {"result": "You can book a table on our website."}
         return {"result": "ok"}
 
     if mtype == "end-of-call-report":

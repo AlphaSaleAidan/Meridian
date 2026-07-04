@@ -82,6 +82,24 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId, existing
   const [newItem, setNewItem] = useState({ name: '', price: '', category: '' })
   const [addItemError, setAddItemError] = useState<string | null>(null)
 
+  // Reservations: scrape the merchant's site for their EXISTING booking link
+  // (OpenTable/Resy/…). The agent then texts callers that link — it never books.
+  const [websiteUrl, setWebsiteUrl] = useState('')
+  const [scrapeReservations, setScrapeReservations] = useState(false)
+  const [rezScraping, setRezScraping] = useState(false)
+  const [rezResult, setRezResult] = useState<{ url: string; platform: string } | null>(null)
+  const [rezError, setRezError] = useState<string | null>(null)
+
+  const runReservationScrape = async () => {
+    if (!websiteUrl.trim()) { setRezError('Enter your website URL first'); return }
+    setRezScraping(true); setRezError(null)
+    const res = await phoneService.scrapeReservationLink(orgId, websiteUrl.trim())
+    setRezScraping(false)
+    if (!res) { setRezError('Could not reach your website — check the URL'); return }
+    if (!res.found) { setRezError('No reservation link found — you can paste one in Settings later'); return }
+    setRezResult({ url: res.reservation_url, platform: res.reservation_platform })
+  }
+
   const addMenuItem = () => {
     const name = newItem.name.trim()
     const price = parseFloat(newItem.price)
@@ -251,6 +269,44 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId, existing
                   </p>
                 )}
               </div>
+              <div>
+                <label className="text-xs text-[#A1A1A8] block mb-1">Website (optional)</label>
+                <input
+                  className={inputCls}
+                  placeholder="https://yourrestaurant.com"
+                  value={websiteUrl}
+                  onChange={e => { setWebsiteUrl(e.target.value); setRezResult(null); setRezError(null) }}
+                />
+              </div>
+              {/* Reservation link scrape toggle */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div
+                  className={clsx('w-9 h-5 rounded-full transition-colors relative', scrapeReservations ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]')}
+                  onClick={() => { setScrapeReservations(v => !v); setRezError(null) }}
+                >
+                  <div className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform', scrapeReservations ? 'translate-x-4' : 'translate-x-0.5')} />
+                </div>
+                <span className="text-xs text-[#F5F5F7]">Find my reservation link — the agent texts callers your existing booking page (OpenTable, Resy, …)</span>
+              </label>
+              {scrapeReservations && (
+                <div className="space-y-2">
+                  {rezResult ? (
+                    <div className="px-3 py-2 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/25 text-xs text-[#17C5B0]">
+                      Found ({rezResult.platform}): <span className="text-[#F5F5F7] break-all">{rezResult.url}</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={runReservationScrape}
+                      disabled={rezScraping}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1A8FD6]/15 border border-[#1A8FD6]/30 text-[#1A8FD6] hover:bg-[#1A8FD6]/25 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {rezScraping && <Loader2 size={12} className="animate-spin" />}
+                      {rezScraping ? 'Scanning your website…' : 'Scan my website'}
+                    </button>
+                  )}
+                  {rezError && <p className="text-[10px] text-amber-400/90">{rezError}</p>}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -577,6 +633,8 @@ export default function SetupWizard({ biz, onDone, connectedPos, orgId, existing
                 business_hours: cfg.businessHours,
                 after_hours_message: cfg.afterHoursMessage,
                 active: true,
+                ...(websiteUrl.trim() ? { website_url: websiteUrl.trim() } : {}),
+                reservations_enabled: scrapeReservations && !!rezResult,
               })
             }
             onDone()

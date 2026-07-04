@@ -38,6 +38,18 @@ export interface PhoneConfig {
   transfer_number?: string
   // How confirmed orders are routed, chosen in the setup wizard.
   order_routing?: 'pos' | 'webhook' | 'sms' | 'email'
+  // Reservations: hand-off to the restaurant's existing rez system
+  website_url?: string
+  reservation_url?: string
+  reservation_platform?: string
+  reservations_enabled?: boolean
+}
+
+export interface ReservationScrapeResult {
+  ok: boolean
+  found: boolean
+  reservation_url: string
+  reservation_platform: string
 }
 
 export interface PhoneStatsResponse {
@@ -68,6 +80,22 @@ export const phoneService = {
       body: JSON.stringify(config),
     })
     return res.ok
+  },
+
+  /** Scrape the merchant's website for their existing reservation link
+   *  (OpenTable/Resy/… or a "book a table" anchor) and store it on the config. */
+  async scrapeReservationLink(merchantId: string, websiteUrl: string): Promise<ReservationScrapeResult | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/phone/reservations/scrape/${merchantId}`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ website_url: websiteUrl }),
+      })
+      if (!res.ok) return null
+      return res.json()
+    } catch {
+      return null
+    }
   },
 
   async getCalls(merchantId: string, limit = 50): Promise<PhoneCallEntry[]> {

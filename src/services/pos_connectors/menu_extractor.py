@@ -124,6 +124,9 @@ def _coerce_catalog(raw: Any, *, max_items: int) -> list[dict]:
         category = _extract_category(rec)
         if category:
             item["category"] = category
+        sizes = _extract_sizes(rec)
+        if sizes:
+            item["sizes"] = sizes
         out.append(item)
 
         if len(out) >= max_items:
@@ -167,6 +170,28 @@ def _extract_name(rec: dict) -> str:
         if val:
             return str(val).strip()
     return ""
+
+
+def _extract_sizes(rec: dict) -> list[str]:
+    """Square variation names ("Small", "Large", ...) so the agent can confirm
+    size correctly. Only emitted for 2+ real variations - a single "Regular"
+    variation is just the price holder. The agent prompt builders already read
+    item["sizes"]; this is the first pipeline that writes it."""
+    data = rec.get("item_data")
+    if not isinstance(data, dict):
+        return []
+    variations = data.get("variations")
+    if not isinstance(variations, list) or len(variations) < 2:
+        return []
+    names: list[str] = []
+    for var in variations:
+        if not isinstance(var, dict):
+            continue
+        vdata = var.get("item_variation_data") or var.get("itemVariationData") or {}
+        vname = str(vdata.get("name") or "").strip()
+        if vname and vname.lower() not in ("regular", "default") and vname not in names:
+            names.append(vname)
+    return names[:6]
 
 
 def _extract_category(rec: dict) -> str:

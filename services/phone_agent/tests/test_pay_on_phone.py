@@ -222,3 +222,147 @@ async def test_resolve_mode_invalid_falls_back_to_pay_now():
     # Even an unexpected stored mode resolves safely.
     cfg = replace(cfg, payment_mode="weird")
     assert pay_on_phone.resolve_mode(cfg) == "pay_now"
+
+
+# ─── POS PUSH AFTER PAYMENT (deferred ticket) ────────────────────────────────
+def _install_pos_spy(monkeypatch, spy):
+    async def fake_create_pos(order, config):
+        spy.pos_calls.append(order)
+        return {"success": True, "pos_order_id": "POS-DEFERRED-1", "pos_system": "square"}
+    monkeypatch.setattr(pay_on_phone, "_create_pos", fake_create_pos)
+
+
+async def test_pay_now_defers_pos_push(monkeypatch):
+    """Flag ON + no pre-created POS order → no POS call at order time; the
+    held row carries no pos_order_id and the result is marked deferred."""
+    spy = Spy().install(monkeypatch)
+    _install_pos_spy(monkeypatch, spy)
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", True)
+
+    result = await pay_on_phone.dispatch_order(
+        _order(), _cfg(mode="pay_now"), {"phone": "+15555550111"},
+    )
+
+    assert result["mode"] == "pay_now"
+    assert result["released"] is False
+    assert result["pos_deferred"] is True
+    assert spy.pos_calls == []                                # NO POS push yet
+    assert len(spy.link_calls) == 1                           # pay link still goes out
+    assert spy.link_calls[0]["pos_order_id"] == ""            # link not tied to a ticket
+    assert len(spy.sms_calls) == 1                            # SMS still goes out
+
+
+async def test_flag_off_restores_upfront_push(monkeypatch):
+    """Flag OFF → old behavior: POS order created at order time even for pay_now."""
+    spy = Spy().install(monkeypatch)
+    _install_pos_spy(monkeypatch, spy)
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", False)
+
+    result = await pay_on_phone.dispatch_order(
+        _order(), _cfg(mode="pay_now"), {"phone": "+15555550111"},
+    )
+
+    assert result["pos_deferred"] is False
+    assert len(spy.pos_calls) == 1                            # pushed up front
+    assert spy.link_calls[0]["pos_order_id"] == "POS-DEFERRED-1"
+
+
+async def test_pickup_pushes_pos_immediately(monkeypatch):
+    """pay_at_pickup keeps today's behavior regardless of the flag."""
+    spy = Spy().install(monkeypatch)
+    _install_pos_spy(monkeypatch, spy)
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", True)
+
+    result = await pay_on_phone.dispatch_order(
+        _order(), _cfg(mode="pay_at_pickup"), {"phone": "+15555550111"},
+    )
+
+    assert result["mode"] == "pay_at_pickup"
+    assert result["released"] is True
+    assert len(spy.pos_calls) == 1                            # ticket created now
+    assert ("route_order", {"kitchen_released": True}) in spy.patched
+
+
+async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
+    """Payment confirmed → the REAL mark_order_paid creates the deferred POS
+    ticket and patches the row by primary key with pos_order_id + paid."""
+    spy = Spy()
+    _install_pos_spy(monkeypatch, spy)
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", True)
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_KEY", "fake-key")
+
+    held_row = {
+        "id": "row-42", "merchant_id": "real-merchant", "customer_name": "Sam",
+        "order_type": "pickup", "items": [{"name": "Cheeseburger", "quantity": 1}],
+        "subtotal": 12.99, "tax": 1.69, "total": 14.68,
+        "delivery_address": "", "special_requests": "",
+        "caller_phone": "+15555550111", "pos_order_id": "",
+    }
+
+    async def fake_fetch(query):
+        return dict(held_row)
+    monkeypatch.setattr(pay_on_phone, "_fetch_held_order", fake_fetch)
+
+    import merchant_config as mc
+    async def fake_get_config(merchant_id):
+        return _demo_config(merchant_id)
+    monkeypatch.setattr(mc, "get_merchant_config", fake_get_config)
+
+    patches = []
+    class FakeResp:
+        status_code = 204
+    class FakeClient:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def patch(self, url, json=None, headers=None, timeout=None):
+            patches.append({"url": url, "json": json})
+            return FakeResp()
+    monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
+
+    res = await pay_on_phone.mark_order_paid(
+        merchant_id="real-merchant", caller_phone="+15555550111",
+        method="stripe", payment_txn_id="pi_123",
+    )
+
+    assert res["released"] is True
+    assert res["pos_pushed"] is True
+    assert len(spy.pos_calls) == 1                            # ticket pushed on payment
+    assert spy.pos_calls[0]["items"][0]["name"] == "Cheeseburger"
+    assert len(patches) == 1
+    assert "id=eq.row-42" in patches[0]["url"]                # patched by primary key
+    p = patches[0]["json"]
+    assert p["payment_status"] == "paid"
+    assert p["kitchen_released"] is True
+    assert p["pos_order_id"] == "POS-DEFERRED-1"
+    assert p["pos_success"] is True
+
+
+async def test_mark_paid_skips_push_when_ticket_exists(monkeypatch):
+    """Webhook retry / already-created ticket → no second POS order."""
+    spy = Spy()
+    _install_pos_spy(monkeypatch, spy)
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", True)
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_KEY", "fake-key")
+
+    async def fake_fetch(query):
+        return {"id": "row-7", "merchant_id": "real-merchant",
+                "caller_phone": "+15555550111", "pos_order_id": "POS-EXISTING"}
+    monkeypatch.setattr(pay_on_phone, "_fetch_held_order", fake_fetch)
+
+    class FakeResp:
+        status_code = 204
+    class FakeClient:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def patch(self, url, json=None, headers=None, timeout=None):
+            return FakeResp()
+    monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
+
+    res = await pay_on_phone.mark_order_paid(
+        merchant_id="real-merchant", pos_order_id="POS-EXISTING")
+
+    assert res["released"] is True
+    assert res["pos_pushed"] is False
+    assert spy.pos_calls == []                                # idempotent — no duplicate

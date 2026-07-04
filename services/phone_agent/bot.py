@@ -56,7 +56,7 @@ from pipecat.transports.websocket.fastapi import (
 
 from merchant_config import MerchantPhoneConfig
 from order_normalizer import normalize_order
-from pos_connector import create_pos_order
+from pos_connector import create_pos_order  # noqa: F401  (kept for back-compat imports)
 from order_router import route_order  # noqa: F401  (kept for back-compat imports)
 from pay_on_phone import dispatch_order, resolve_mode
 from caller_memory import build_memory_block_for
@@ -116,6 +116,18 @@ _END_CALL = FunctionSchema(
         "order_completed", "customer_declined", "wrong_number", "question_only", "customer_hung_up"]}},
     required=["reason"],
 )
+_RESERVATION = FunctionSchema(
+    name="send_reservation_link",
+    description="Text the caller the restaurant's reservation/booking link. "
+                "Call when they ask about reserving or booking a table.",
+    properties={"party_size": {"type": "integer"}, "requested_time": {"type": "string"}},
+    required=[],
+)
+
+
+def _reservations_on(config: MerchantPhoneConfig) -> bool:
+    return bool(getattr(config, "reservations_enabled", False)
+                and getattr(config, "reservation_url", ""))
 
 
 def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_block: str = "") -> str:
@@ -143,6 +155,15 @@ def build_system_prompt(config: MerchantPhoneConfig, caller_info: dict, memory_b
         "The MENU above is the single source of truth for items, sizes, and prices — "
         "never invent items, prices, hours, or facts from this description."
     ) if _brief else ""
+
+    reservation_section = ""
+    if _reservations_on(config):
+        platform = config.reservation_platform or "their online booking system"
+        reservation_section = (
+            "\n- RESERVATIONS: you cannot book tables yourself. When the caller asks about "
+            f"a reservation/table, offer to text them the booking link ({platform}) and call "
+            "send_reservation_link() — then confirm the text is on its way."
+        )
 
     # PAY ON THE PHONE — tell the agent the payment step for this merchant.
     mode = getattr(config, "payment_mode", "pay_now")
@@ -178,7 +199,7 @@ RULES:
 - Read back the complete order before submitting
 - Only call submit_order() AFTER the customer confirms it's correct
 - If the customer asks for a person, call transfer_to_human()
-- If the call ends without an order, call end_call_no_order()
+- If the call ends without an order, call end_call_no_order(){reservation_section}
 - Available order types: {", ".join(config.order_types)}
 - If an item isn't on the menu, say so politely and suggest alternatives{payment_section}
 
@@ -418,30 +439,23 @@ async def run_call_bot(
         if caller_info.get("phone") and not args.get("caller_phone"):
             args["caller_phone"] = caller_info["phone"]
         normalized = normalize_order(args, merchant_config)
-        # POS creds: prefer the merchant's own connected token; for a Square
-        # merchant with none (the demo), fall back to Meridian's Square creds from
-        # env so the order still lands in a real Square dashboard. Keeps tokens in
-        # env, not the DB.
-        pos_token = merchant_config.pos_access_token
-        pos_location = merchant_config.pos_location_id
-        if merchant_config.pos_system == "square" and not pos_token:
-            pos_token = os.getenv("SQUARE_ACCESS_TOKEN", "")
-            pos_location = pos_location or os.getenv("SQUARE_LOCATION_ID", "")
-        pos_result = await create_pos_order(
-            normalized, merchant_config.pos_system, pos_token, pos_location,
-        )
 
         # ── PAY ON THE PHONE: branch on the merchant's payment_mode ──────────
-        # pay_now (default): order is OPEN in the POS but the kitchen ticket is
-        #   HELD (awaiting_payment) until the caller pays via a secure texted
-        #   link — anti-scam, no no-shows / prank orders reach the kitchen.
+        # pay_now (default): POS push is DEFERRED — mark_order_paid() creates
+        #   the ticket only after the caller pays via the secure texted link,
+        #   so an unpaid order never reaches the POS or the kitchen.
         # optional: the caller's pay_choice decides (defaults to pay_now).
-        # pay_at_pickup: legacy behavior — order goes to the kitchen unpaid.
+        # pay_at_pickup: legacy behavior — POS ticket now, unpaid.
+        # dispatch_order owns POS creation (creds incl. the Square env fallback
+        # live in pay_on_phone._create_pos).
         mode = resolve_mode(merchant_config, args.get("pay_choice", ""))
-        await dispatch_order(
-            normalized, merchant_config, caller_info, pos_result,
+        dispatched = await dispatch_order(
+            normalized, merchant_config, caller_info,
             pay_choice=args.get("pay_choice", ""),
         )
+        pos_result = dispatched.get("pos_result") or {
+            "success": False, "method": "deferred", "pos_order_id": "",
+        }
         if mode == "pay_now":
             say = _pay_now_confirmation(normalized)
             log_status = "awaiting_payment"
@@ -463,9 +477,35 @@ async def run_call_bot(
         await _log_call(merchant_id, session_ref, caller_info, f"no_order_{reason}")
         await params.result_callback({"say": "Thank you for calling. Have a great day!"})
 
+    async def _on_reservation(params: FunctionCallParams):
+        """Text the caller the merchant's EXISTING booking link (we never book)."""
+        say = "You can book a table on our website."
+        if _reservations_on(merchant_config):
+            phone = caller_info.get("phone", "")
+            if phone:
+                try:
+                    from sms_checkout import send_sms
+                    res = await send_sms(
+                        phone,
+                        f"Book your table at {merchant_config.business_name}: "
+                        f"{merchant_config.reservation_url}",
+                    )
+                    say = ("I've just texted you our booking link — pick your time and "
+                           "party size there." if res.get("sent")
+                           else f"You can book online at {merchant_config.reservation_url}.")
+                except Exception as e:  # noqa: BLE001
+                    logger.error("reservation SMS failed: %s", e)
+                    say = f"You can book online at {merchant_config.reservation_url}."
+            else:
+                say = f"You can book a table online at {merchant_config.reservation_url}."
+        await _log_call(merchant_id, session_ref, caller_info, "reservation_link_sent")
+        await params.result_callback({"say": say})
+
     llm.register_function("submit_order", _on_submit_order)
     llm.register_function("transfer_to_human", _on_transfer)
     llm.register_function("end_call_no_order", _on_end_call)
+    if _reservations_on(merchant_config):
+        llm.register_function("send_reservation_link", _on_reservation)
 
     memory_block = ""
     if caller_info.get("phone"):
@@ -476,7 +516,10 @@ async def run_call_bot(
 
     context = LLMContext(
         messages=[{"role": "system", "content": build_system_prompt(merchant_config, caller_info, memory_block)}],
-        tools=ToolsSchema(standard_tools=[_SUBMIT_ORDER, _TRANSFER, _END_CALL]),
+        tools=ToolsSchema(standard_tools=(
+            [_SUBMIT_ORDER, _TRANSFER, _END_CALL]
+            + ([_RESERVATION] if _reservations_on(merchant_config) else [])
+        )),
     )
     user_agg, assistant_agg = LLMContextAggregatorPair(
         context,
