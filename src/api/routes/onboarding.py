@@ -13,7 +13,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_admin_auth, require_jwt, require_service_auth
+from ..auth import require_admin_auth, require_jwt, require_org_member, require_service_auth
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.onboarding")
@@ -529,9 +529,19 @@ class MarkOnboardedRequest(BaseModel):
     org_id: str
 
 
-@router.post("/mark-onboarded", dependencies=[Depends(require_service_auth)])
-async def mark_onboarded(req: MarkOnboardedRequest):
-    """Mark a business as onboarded. Called after setup wizard completion."""
+@router.post("/mark-onboarded")
+async def mark_onboarded(req: MarkOnboardedRequest, user: dict = Depends(require_jwt)):
+    """Mark a business as onboarded. Called after setup wizard completion.
+
+    Auth: a customer marks THEIR OWN org onboarded with their own session JWT.
+    Previously this required service auth (admin/service token), so the customer's
+    "Skip — I'll connect later" step 403'd and never persisted server-side — on
+    every reload the customer was bounced back to /canada/setup (BUG-1). We now
+    accept the owner JWT and enforce org membership so a customer can only mark
+    their own org (no cross-tenant); admins in ADMIN_EMAILS retain support access
+    via _check_org_membership.
+    """
+    await require_org_member(user, req.org_id)
     import httpx
 
     supabase_url = os.environ.get("SUPABASE_URL", "")

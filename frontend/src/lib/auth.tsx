@@ -32,7 +32,7 @@ export interface AuthState {
   validateToken: (token: string) => Promise<string | null>
   connectPos: (provider: string, credentials: Record<string, string>, repId?: string | null) => Promise<string | null>
   resetPassword: (email: string) => Promise<string | null>
-  markOnboarded: () => void
+  markOnboarded: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -465,15 +465,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null
   }, [user, org])
 
-  const markOnboarded = useCallback(() => {
+  const markOnboarded = useCallback(async () => {
     if (!org) return
     const updated = { ...org, onboarded: true }
     saveOrg(updated)
     setOrg(updated)
     const apiUrl = import.meta.env.VITE_API_URL || ''
+    // Forward the customer's own session JWT — the backend now authorizes the
+    // owner (require_jwt + org membership) instead of service auth, so "Skip —
+    // I'll connect later" persists server-side and survives a reload (BUG-1).
+    // getAuthHeaders() already includes Content-Type.
     fetch(`${apiUrl}/api/onboarding/mark-onboarded`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...(await getAuthHeaders()) },
       body: JSON.stringify({ org_id: org.org_id }),
     }).catch(() => {})
   }, [org])
