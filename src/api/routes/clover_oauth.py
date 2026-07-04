@@ -32,11 +32,18 @@ logger = logging.getLogger("meridian.api.clover_oauth")
 
 router = APIRouter(prefix="/api/clover", tags=["clover-oauth"])
 
-# org_id is a Postgres uuid column; a non-uuid value (demo/edge callers) makes
-# the DB lookup raise an invalid-uuid cast error → 500. Validate the shape first
-# and treat anything else as "not connected" (same regex as phone_dashboard).
+# org_id is validated before it reaches the DB lookup. Real merchant/org ids are
+# the businesses.id TEXT primary key shaped `biz_<hex>` (see frontend auth.tsx),
+# but some tables still key off UUIDs — so accept BOTH shapes. Anything else is
+# treated as "not connected" rather than crashing on an invalid cast. Keep a
+# strict format guard so no arbitrary/injection string reaches the query layer.
 _UUID_RE = re.compile(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I
+)
+_ORG_ID_RE = re.compile(
+    r'^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    r'|biz_[0-9a-f]{16,40})$',
+    re.I,
 )
 
 # HMAC signing secret — reuse the same OAuth state secret as Square so a single
@@ -323,9 +330,10 @@ async def connection_status(org_id: str):
     from ...db import _db_instance
     oauth_available = clover_config.has_oauth_credentials
     clover_available = clover_config.is_enabled
-    # Guard non-uuid org_id (demo edge) before it reaches the uuid column and
-    # raises a 500 on the invalid cast.
-    if not _UUID_RE.match(org_id or ""):
+    # Guard malformed org_id (demo edge) before it reaches the query layer.
+    # Accepts both UUIDs and `biz_` merchant ids (the real businesses.id shape);
+    # anything else is reported as "not connected" rather than crashing.
+    if not _ORG_ID_RE.match(org_id or ""):
         return {
             "connected": False,
             "reason": "invalid_org_id",
