@@ -72,11 +72,15 @@ class ReservationScrapeRequest(BaseModel):
 
 @router.post("/reservations/scrape/{merchant_id}")
 async def scrape_reservation_link(
-    merchant_id: str, req: ReservationScrapeRequest, _auth=Depends(require_service_auth)
+    merchant_id: str, req: ReservationScrapeRequest,
+    principal=Depends(require_service_auth),
 ):
     """Scrape the merchant's website for their existing reservation link
     (OpenTable/Resy/Tock/… or a generic "book a table" anchor) and store it on
     phone_agent_config. Triggered by the wizard's reservation toggle."""
+    # BOLA guard: this endpoint WRITES to phone_agent_config, so the principal
+    # must own this merchant — same gate as save_phone_config.
+    await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     url = (req.website_url or "").strip()
     if not url.lower().startswith(("http://", "https://")):
