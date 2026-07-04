@@ -98,10 +98,39 @@ def test_postgrest_not_found_or_denied_becomes_404(status_code, message):
     assert f"store returned {status_code}" in excinfo.value.detail
 
 
+# ─── 400 UUID-cast → graceful empty list (BUG-2) ────────────────────────
+# A biz_ org id compared against a UUID org_id column produces PostgREST 400
+# with SQLSTATE 22P02 ("invalid input syntax for type uuid"). That means the
+# (valid) org simply can't match any row — it has no notifications. The
+# handler MUST return 200 with an empty list, never a 500 that bricks the
+# Settings pillar's notifications poller with endless retries.
+
+@pytest.mark.parametrize(
+    "message,details",
+    [
+        ('invalid input syntax for type uuid: "biz_deadbeef0123456789abcdef"', ""),
+        ("bad request", 'invalid input syntax for type uuid: "biz_x"'),
+        ("SQLSTATE 22P02", ""),
+    ],
+)
+def test_uuid_cast_400_returns_empty_list(message, details):
+    """The BUG-2 fix: a UUID type-cast 400 for a valid (biz_) org id fails
+    soft with an empty notifications list, not a 500. Widening the frontend's
+    Settings pillar depends on this endpoint never 500-ing for a real org."""
+    db = _fake_db(SupabaseRESTError(400, message, details=details))
+
+    result = _run(
+        get_notifications(org_id=VALID_ORG, limit=20, unread_only=False, db=db)
+    )
+
+    assert result["notifications"] == []
+    assert result["total"] == 0
+
+
 # ─── 400 / 5xx / unknown → re-raise as the original SupabaseRESTError ──
-# This is the critical assertion: a non-not-found store error MUST NOT be
-# laundered into a 404. FastAPI's default exception handler will turn the
-# re-raised SupabaseRESTError into a 5xx, surfacing the real outage.
+# This is the critical assertion: a non-not-found, non-uuid-cast store error
+# MUST NOT be laundered into a 404 or a soft 200. FastAPI's default exception
+# handler will turn the re-raised SupabaseRESTError into a 5xx.
 
 @pytest.mark.parametrize(
     "status_code,scenario",

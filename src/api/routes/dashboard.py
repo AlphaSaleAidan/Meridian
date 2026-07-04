@@ -47,6 +47,20 @@ def _validate_org_id(org_id: str = Query(..., description="Organization ID")) ->
 OrgId = Annotated[str, Depends(_validate_org_id)]
 
 
+def _is_uuid_cast_error(exc: SupabaseRESTError) -> bool:
+    """True if a PostgREST error is a UUID type-cast failure (SQLSTATE 22P02).
+
+    PostgREST surfaces ``invalid input syntax for type uuid: "..."`` as HTTP
+    400 with Postgres code ``22P02``. This happens when a non-UUID org id
+    (e.g. a ``biz_`` merchant id) is compared against a UUID ``org_id``
+    column — a "no such row" condition, not a server fault.
+    """
+    haystack = f"{getattr(exc, 'message', '')} {getattr(exc, 'details', '')}".lower()
+    return "22p02" in haystack or (
+        "invalid input syntax for type uuid" in haystack
+    ) or ("uuid" in haystack and "invalid input syntax" in haystack)
+
+
 def _get_db():
     from ...db import _db_instance
     if _db_instance is None:
@@ -671,9 +685,16 @@ async def get_notifications(
     is converted to a graceful HTTP 404 so the customer-Layout notifications
     poller doesn't fill DevTools with red 500s on every admin page mount.
 
-    Any other failure (PostgREST 400 from a malformed query, 5xx upstream,
+    A PostgREST 400 caused by a UUID type-cast failure (SQLSTATE 22P02 — e.g.
+    a ``biz_`` merchant id compared against a UUID ``org_id`` column) is
+    treated as "valid org id that simply cannot match any row": we return an
+    empty notifications list (200) rather than a 500, because such an org has
+    no notifications by definition and the poller must not brick the Settings
+    pillar with an endlessly-retried 500 (BUG-2).
+
+    Any other failure (a genuinely malformed query 400, 5xx upstream,
     network timeout, unhandled bug) is re-raised so it surfaces as a real
-    500 — observability isn't laundered into a calm 404.
+    500 — observability isn't laundered into a calm 200/404.
     """
     filters: dict = {
         "org_id": f"eq.{org_id}",
@@ -690,7 +711,7 @@ async def get_notifications(
         )
     except SupabaseRESTError as exc:
         # Only the genuine not-found / RLS-denied PostgREST responses become
-        # graceful 404s. Validation 400s and upstream 5xx propagate.
+        # graceful 404s.
         if exc.status_code in (401, 403, 404):
             logger.warning(
                 "notifications fetch denied/missing for org_id=%s: "
@@ -704,14 +725,25 @@ async def get_notifications(
                     f"(store returned {exc.status_code})"
                 ),
             )
-        # Non-404-shaped errors: log full context, then re-raise so FastAPI
-        # converts to the appropriate 5xx and we keep observability.
-        logger.error(
-            "notifications fetch failed with unexpected store error for "
-            "org_id=%s: status=%d message=%r details=%r",
-            org_id, exc.status_code, exc.message, exc.details,
-        )
-        raise
+        # A UUID type-cast 400 means the org id (validated, e.g. a biz_ id)
+        # can't match a UUID org_id column — there are simply no notifications.
+        # Fail soft with an empty list instead of a 500 (BUG-2).
+        if exc.status_code == 400 and _is_uuid_cast_error(exc):
+            logger.info(
+                "notifications: org_id=%s not UUID-shaped for notifications "
+                "store (status=%d code/msg=%r) — returning empty list",
+                org_id, exc.status_code, exc.message,
+            )
+            notifications = []
+        else:
+            # Non-soft-failable errors: log full context, then re-raise so
+            # FastAPI converts to the appropriate 5xx and we keep observability.
+            logger.error(
+                "notifications fetch failed with unexpected store error for "
+                "org_id=%s: status=%d message=%r details=%r",
+                org_id, exc.status_code, exc.message, exc.details,
+            )
+            raise
 
     return {
         "notifications": [
