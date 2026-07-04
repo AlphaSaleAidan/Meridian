@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { getAuthHeaders } from '@/lib/supabase'
+import PhoneCameraCard from '@/components/vision/PhoneCameraCard'
 
 type ComplianceMode = 'anonymous' | 'opt_in_identity' | 'disabled'
 
@@ -148,9 +149,19 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           {currentStep === 'Device' && (
             <>
               <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Edge Device</h3>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Connect a camera</h3>
                 <p className="text-[11px] text-[#A1A1A8]">
-                  Meridian Vision runs on your hardware. No video leaves your premises.
+                  Use hardware you already own. The fastest way is a spare phone — no
+                  appliance to buy. Or connect existing IP cameras.
+                </p>
+              </div>
+
+              {/* Zero-hardware Path A: phone/tablet as camera. */}
+              <PhoneCameraCard orgId={orgId} />
+
+              <div className="pt-1">
+                <p className="text-[10px] font-medium text-[#A1A1A8]/60 uppercase tracking-wide">
+                  Or use an existing IP camera (optional edge device)
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-3">
