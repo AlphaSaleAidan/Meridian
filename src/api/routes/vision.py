@@ -129,6 +129,11 @@ class VisitIngestRequest(BaseModel):
     demographic: dict = {}
 
 
+# A camera is 'online' if its edge agent heartbeated within this window
+# (heartbeats arrive every ~60s; 5 min tolerates transient network gaps).
+ONLINE_HEARTBEAT_WINDOW_SEC = 300
+
+
 def _get_db():
     from ...db import _db_instance as db
     return db
@@ -142,10 +147,25 @@ async def list_cameras(org_id: str):
 
     try:
         cameras = await db.select("vision_cameras", filters={"org_id": f"eq.{org_id}"}, order="created_at.asc")
-        return {"org_id": org_id, "cameras": cameras, "total": len(cameras)}
+        # `status` is only ever written by registration ('offline') and heartbeats
+        # ('online'), so a dead edge device stays 'online' in the DB forever.
+        # Compute liveness from heartbeat recency instead of trusting the column.
+        now = datetime.now(timezone.utc)
+        for cam in cameras:
+            hb = cam.get("last_heartbeat")
+            online = False
+            if hb:
+                try:
+                    hb_dt = datetime.fromisoformat(str(hb).replace("Z", "+00:00"))
+                    online = (now - hb_dt).total_seconds() < ONLINE_HEARTBEAT_WINDOW_SEC
+                except ValueError:
+                    pass
+            cam["online"] = online
+        online_count = sum(1 for c in cameras if c["online"])
+        return {"org_id": org_id, "cameras": cameras, "total": len(cameras), "online_count": online_count}
     except Exception as e:
         logger.warning("vision_cameras query failed: %s", e)
-        return {"org_id": org_id, "cameras": [], "total": 0}
+        return {"org_id": org_id, "cameras": [], "total": 0, "online_count": 0}
 
 
 @router.post("/cameras")

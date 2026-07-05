@@ -123,6 +123,7 @@ const VsDorPage = lazyRetry(() => import('@/pages/seo/VsDorPage'))
 const VsPlacerAiPage = lazyRetry(() => import('@/pages/seo/VsPlacerAiPage'))
 const VsFootTrafficCountersPage = lazyRetry(() => import('@/pages/seo/VsFootTrafficCountersPage'))
 const CameraIntelligencePage = lazyRetry(() => import('@/pages/seo/CameraIntelligencePage'))
+const CameraIntelligenceDashboardPage = lazyRetry(() => import('@/pages/CameraIntelligencePage'))
 const FAQHubPage = lazyRetry(() => import('@/pages/seo/FAQHubPage'))
 const BestAnalyticsSoftwarePage = lazyRetry(() => import('@/pages/seo/BestAnalyticsSoftwarePage'))
 const FoodCostCalculatorPage = lazyRetry(() => import('@/pages/seo/FoodCostCalculatorPage'))
@@ -181,6 +182,7 @@ function CustomerDashboardRoutes() {
       <Route path="schedule" element={<Suspense fallback={<InlineFallback />}><SchedulePage /></Suspense>} />
       <Route path="space" element={<Suspense fallback={<InlineFallback />}><SpaceTab /></Suspense>} />
       <Route path="phone-orders" element={<Suspense fallback={<InlineFallback />}><PhoneOrdersPage /></Suspense>} />
+      <Route path="camera-intelligence" element={<Suspense fallback={<InlineFallback />}><CameraIntelligenceDashboardPage /></Suspense>} />
       <Route path="my-website" element={<Suspense fallback={<InlineFallback />}><MyWebsitePage /></Suspense>} />
       <Route path="content" element={<Suspense fallback={<InlineFallback />}><ContentDashboardPage /></Suspense>} />
       <Route path="content/settings" element={<Suspense fallback={<InlineFallback />}><ContentSettingsPage /></Suspense>} />

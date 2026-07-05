@@ -305,6 +305,29 @@ export default function SettingsPage() {
   const orgId = useOrgId()
   const conn = useApi(() => api.connection(orgId), [orgId])
   const [showCameraWizard, setShowCameraWizard] = useState(false)
+
+  // vision_cameras.features arrives as a JSON string via PostgREST
+  const parseFeatures = (f: any): Record<string, any> => {
+    if (!f) return {}
+    if (typeof f === 'string') { try { return JSON.parse(f) } catch { return {} } }
+    return f
+  }
+
+  // Live view is opt-in per camera (features.live_view); before this toggle no UI
+  // could enable it, so the Live tab's "go live" was unreachable.
+  const toggleLiveView = async (cam: any, enabled: boolean) => {
+    try {
+      const headers = await getAuthHeaders()
+      await fetch(`${import.meta.env.VITE_API_URL || ''}/api/vision/cameras/${cam.id}?org_id=${encodeURIComponent(orgId)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { ...headers, Accept: 'application/json' },
+        body: JSON.stringify({ features: { ...parseFeatures(cam.features), live_view: enabled } }),
+      })
+    } finally {
+      cameras.refetch()
+    }
+  }
   const cameras = useApi(() => api.cameras(orgId), [orgId])
 
   if (conn.loading) return <LoadingPage />
@@ -418,7 +441,7 @@ export default function SettingsPage() {
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Cameras</h3>
               <p className="text-[11px] text-[#A1A1A8]/50 mt-0.5">
-                {cameras.data?.total ? `${cameras.data.total} camera${cameras.data.total > 1 ? 's' : ''} connected` : 'Connect cameras for foot traffic and customer intelligence'}
+                {cameras.data?.total ? `${(cameras.data as any).online_count ?? 0} of ${cameras.data.total} camera${cameras.data.total > 1 ? 's' : ''} online` : 'Connect cameras for foot traffic and customer intelligence'}
               </p>
             </div>
             <button
@@ -435,7 +458,7 @@ export default function SettingsPage() {
                 <div key={cam.id} className="px-4 sm:px-5 py-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={clsx('p-2 rounded-lg', cam.status === 'online' ? 'bg-[#17C5B0]/10 text-[#17C5B0]' : 'bg-[#1F1F23] text-[#A1A1A8]/50')}>
+                      <div className={clsx('p-2 rounded-lg', cam.online ? 'bg-[#17C5B0]/10 text-[#17C5B0]' : 'bg-[#1F1F23] text-[#A1A1A8]/50')}>
                         <Camera size={16} />
                       </div>
                       <div>
@@ -444,14 +467,23 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <span className={clsx('text-[10px] font-medium px-2 py-0.5 rounded-full border',
-                      cam.status === 'online' ? 'text-[#17C5B0] bg-[#17C5B0]/10 border-[#17C5B0]/20' : 'text-[#A1A1A8] bg-[#1F1F23] border-[#1F1F23]'
+                      cam.online ? 'text-[#17C5B0] bg-[#17C5B0]/10 border-[#17C5B0]/20' : 'text-[#A1A1A8] bg-[#1F1F23] border-[#1F1F23]'
                     )}>
-                      {cam.status || 'offline'}
+                      {cam.online ? 'online' : 'offline'}
                     </span>
                   </div>
-                  <div className="mt-2 flex gap-4 text-[10px] text-[#A1A1A8]/50">
+                  <div className="mt-2 flex items-center gap-4 text-[10px] text-[#A1A1A8]/50">
                     <span>Mode: {(cam.compliance_mode || 'anonymous').replace('_', ' ')}</span>
                     {cam.last_heartbeat && <span>Last seen: {formatRelative(cam.last_heartbeat)}</span>}
+                    <label className="ml-auto flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!parseFeatures(cam.features).live_view}
+                        onChange={e => void toggleLiveView(cam, e.target.checked)}
+                        className="accent-[#17C5B0]"
+                      />
+                      <span className="text-[#A1A1A8]">Live view</span>
+                    </label>
                   </div>
                 </div>
               ))}

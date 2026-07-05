@@ -349,7 +349,13 @@ export default function CustomersPage() {
   const [sortBy, setSortBy] = useState<SortKey>('totalSpent')
   const [search, setSearch] = useState('')
   const [showCameraWizard, setShowCameraWizard] = useState(false)
-  const [cameraStatus] = useState<CameraStatus>('none')
+  const camerasData = useApi(() => api.cameras(orgId), [orgId])
+  const camRows: any[] = camerasData.data?.cameras ?? []
+  const cameraCount = camRows.length
+  const onlineCameras = camRows.filter(c =>
+    c.last_heartbeat && Date.now() - new Date(c.last_heartbeat).getTime() < 5 * 60 * 1000
+  ).length
+  const cameraStatus: CameraStatus = cameraCount === 0 ? 'none' : onlineCameras > 0 ? 'live' : 'offline'
 
   if (!isDemoMode && apiData.loading) return <LoadingPage />
   if (!isDemoMode && apiData.error) return <ErrorState message={apiData.error} onRetry={apiData.refetch} />
@@ -361,7 +367,7 @@ export default function CustomersPage() {
       <DataPageSkeleton title="Customers" layout="table">
         <div className="space-y-6">
           {showCameraWizard && (
-            <CameraSetupWizard orgId={orgId} onComplete={() => setShowCameraWizard(false)} onClose={() => setShowCameraWizard(false)} />
+            <CameraSetupWizard orgId={orgId} onComplete={() => { setShowCameraWizard(false); camerasData.refetch() }} onClose={() => setShowCameraWizard(false)} />
           )}
           <ScrollReveal variant="fadeUp">
             <div className="flex items-start justify-between gap-4">
@@ -369,7 +375,7 @@ export default function CustomersPage() {
                 <h1 className="text-2xl font-bold text-[#F5F5F7]">Customer Intelligence</h1>
                 <p className="text-sm text-[#A1A1A8] mt-1">Spend, repeat rate &amp; payment mix from your POS sales</p>
               </div>
-              <ConnectCamerasButton status={cameraStatus} cameraCount={0} onConnect={() => setShowCameraWizard(true)} />
+              <ConnectCamerasButton status={cameraStatus} cameraCount={onlineCameras || cameraCount} onConnect={() => setShowCameraWizard(true)} />
             </div>
           </ScrollReveal>
           <RealCustomersView data={apiData.data} />
@@ -424,7 +430,7 @@ export default function CustomersPage() {
           </div>
           <ConnectCamerasButton
             status={cameraStatus}
-            cameraCount={0}
+            cameraCount={onlineCameras || cameraCount}
             onConnect={() => setShowCameraWizard(true)}
           />
         </div>
