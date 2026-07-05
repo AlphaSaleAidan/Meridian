@@ -20,7 +20,9 @@ export default function ProtectedRoute({ children, loginPath = '/customer/login'
   }
 
   if (!authenticated) {
-    return <Navigate to={loginPath} state={{ from: location.pathname }} replace />
+    // Preserve the query string too — OAuth returns land here as
+    // `?oauth=success&merchant_id=…` and must survive a login bounce.
+    return <Navigate to={loginPath} state={{ from: location.pathname + location.search }} replace />
   }
 
   if (!allowSalesReps) {
@@ -30,7 +32,7 @@ export default function ProtectedRoute({ children, loginPath = '/customer/login'
   }
 
   if (!org) {
-    return <Navigate to={loginPath} state={{ from: location.pathname }} replace />
+    return <Navigate to={loginPath} state={{ from: location.pathname + location.search }} replace />
   }
 
   const isCanada = location.pathname.startsWith('/canada/')

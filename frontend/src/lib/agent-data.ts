@@ -973,6 +973,21 @@ export interface MenuEngItem {
   marginCents: number
 }
 
+/** Quadrant → recommendation copy, shared by the demo generator AND the real
+ *  API mapper (the backend /analytics/menu-engineering response carries no
+ *  recommendation field, so real items derive theirs client-side from the
+ *  quadrant via this map). */
+export const MENU_QUADRANT_RECOMMENDATIONS: Record<MenuQuadrant, string> = {
+  star: 'Protect and promote — premium menu placement, never discount',
+  puzzle: 'High profit but low sales — increase visibility, add to combos, train staff to upsell',
+  plowhorse: 'Popular but low margin — raise price incrementally or reduce portion cost',
+  dog: 'Low profit, low popularity — consider removing or completely reinventing',
+}
+
+export function menuQuadrantRecommendation(q: MenuQuadrant): string {
+  return MENU_QUADRANT_RECOMMENDATIONS[q] ?? ''
+}
+
 export function generateMenuEngineering(): MenuEngItem[] {
   const products = getProducts(getActiveBusinessType())
   const items = products.slice(0, 10)
@@ -984,13 +999,6 @@ export function generateMenuEngineering(): MenuEngItem[] {
     if (sales < avgSales && margin >= avgMargin) return 'puzzle'
     if (sales >= avgSales && margin < avgMargin) return 'plowhorse'
     return 'dog'
-  }
-
-  const recommendations: Record<MenuQuadrant, string> = {
-    star: 'Protect and promote — premium menu placement, never discount',
-    puzzle: 'High profit but low sales — increase visibility, add to combos, train staff to upsell',
-    plowhorse: 'Popular but low margin — raise price incrementally or reduce portion cost',
-    dog: 'Low profit, low popularity — consider removing or completely reinventing',
   }
 
   let ms = 300
@@ -1010,7 +1018,7 @@ export function generateMenuEngineering(): MenuEngItem[] {
       popularityIndex: Math.round((monthlySales / avgSales) * 100),
       profitabilityIndex: Math.round((marginPct / avgMargin) * 100),
       quadrant: q,
-      recommendation: recommendations[q],
+      recommendation: menuQuadrantRecommendation(q),
       revenueCents,
       marginCents,
     }

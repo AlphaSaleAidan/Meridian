@@ -130,6 +130,7 @@ async def send_payment_link_to_caller(
                 payment_link=pay_url,
                 business_name=getattr(merchant_config, "business_name", "")
                     or "Meridian",
+                sms_pay_template=getattr(merchant_config, "sms_pay_template", "") or "",
             )
 
     if skipped_reason:

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import POSLogo, { POSStatusBadge } from './POSLogo'
 import { posSystems, type POSSystem, type POSSystemKey } from '@/data/pos-systems'
+import { useIsDemo } from '@/hooks/useOrg'
 
 interface POSSystemPickerProps {
   value: string | null
@@ -107,6 +108,7 @@ export default function POSSystemPicker({
   vertical,
 }: POSSystemPickerProps) {
   const t = themes[portalContext]
+  const isDemo = useIsDemo()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [waitlistEmail, setWaitlistEmail] = useState('')
@@ -253,7 +255,7 @@ export default function POSSystemPicker({
                       </span>
                     )}
                     <POSStatusBadge status={sys.status} />
-                    {sys.status !== 'integrated' && (
+                    {isDemo && sys.status !== 'integrated' && (
                       <span className={clsx('text-[9px] font-medium', t.textDim)}>(Demo)</span>
                     )}
                     {portalContext === 'canada' && sys.canadaAvailable && (
@@ -461,15 +463,19 @@ function IntegratedContent({
         <AutoCredentialFields system={system} theme={t} credentialValues={credentialValues} onCredentialChange={onCredentialChange} />
       )}
 
-      {/* Connect button */}
-      <button
-        type="button"
-        onClick={onCredentialSubmit}
-        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all text-white"
-        style={{ backgroundColor: t.accent }}
-      >
-        <Wifi size={16} /> {onCredentialSubmit ? `Save & Connect ${system.name}` : `Connect ${system.name} (Demo)`}
-      </button>
+      {/* Connect button — only rendered when the surface actually handles the
+          submit. Without a handler this was a dead "Connect (Demo)" button that
+          claimed to connect and did nothing. */}
+      {onCredentialSubmit && (
+        <button
+          type="button"
+          onClick={onCredentialSubmit}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-all text-white"
+          style={{ backgroundColor: t.accent }}
+        >
+          <Wifi size={16} /> Save &amp; Connect {system.name}
+        </button>
+      )}
 
       {/* SR notes */}
       {mode === 'lead-detail' && system.notesForSR && (

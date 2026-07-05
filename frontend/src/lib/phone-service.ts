@@ -38,6 +38,31 @@ export interface PhoneConfig {
   transfer_number?: string
   // How confirmed orders are routed, chosen in the setup wizard.
   order_routing?: 'pos' | 'webhook' | 'sms' | 'email'
+  // Merchant-customized Text-to-Pay SMS body. Supports {name} {business}
+  // {total} {link} placeholders; empty/unset falls back to the default copy.
+  sms_pay_template?: string
+}
+
+/** Result of POST /api/phone/config — carries enough to explain a failure. */
+export interface SaveConfigResult {
+  ok: boolean
+  status: number
+  detail?: string
+}
+
+/**
+ * Human-readable reason for a failed saveConfig, specific enough to act on:
+ * auth problems say "log out and back in", validation errors surface the
+ * backend's own detail text.
+ */
+export function saveConfigErrorMessage(res: SaveConfigResult): string {
+  if (res.ok) return ''
+  if (res.status === 401 || res.status === 403) {
+    return 'Session issue — log out and back in, then try again.'
+  }
+  if (res.status === 400 && res.detail) return res.detail
+  if (res.detail) return `Could not save (${res.status}): ${res.detail}`
+  return `Could not save — the server responded with ${res.status}. Please try again.`
 }
 
 export interface PhoneStatsResponse {
@@ -61,13 +86,26 @@ export const phoneService = {
     return res.json()
   },
 
-  async saveConfig(config: Partial<PhoneConfig> & { merchant_id: string }): Promise<boolean> {
-    const res = await fetch(`${API_BASE}/api/phone/config`, {
-      method: 'POST',
-      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
-      body: JSON.stringify(config),
-    })
-    return res.ok
+  async saveConfig(config: Partial<PhoneConfig> & { merchant_id: string }): Promise<SaveConfigResult> {
+    let res: Response
+    try {
+      res = await fetch(`${API_BASE}/api/phone/config`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+    } catch {
+      // Network / CORS failure — no HTTP status to report.
+      return { ok: false, status: 0, detail: 'Could not reach the server' }
+    }
+    if (res.ok) return { ok: true, status: res.status }
+    let detail: string | undefined
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string') detail = body.detail
+      else if (body?.detail != null) detail = JSON.stringify(body.detail)
+    } catch { /* non-JSON error body */ }
+    return { ok: false, status: res.status, detail }
   },
 
   async getCalls(merchantId: string, limit = 50): Promise<PhoneCallEntry[]> {
@@ -120,6 +158,8 @@ export const phoneService = {
     country?: string
     area_code?: string
     business_name?: string
+    // Swap: release the current number at the provider and purchase a new one.
+    force?: boolean
   }): Promise<ProvisionNumberResponse> {
     const res = await fetch(`${API_BASE}/api/phone/provision-number`, {
       method: 'POST',
@@ -147,6 +187,25 @@ export const phoneService = {
     )
     if (!res.ok) {
       let detail = `scan failed: ${res.status}`
+      try { detail = (await res.json()).detail || detail } catch { /* noop */ }
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+
+  // Supplementary menu builder: upload a CSV (name,price,category — header
+  // flexible); the backend parses rows and MERGES them onto the existing menu.
+  async importMenuCsv(merchantId: string, file: File, replace = false): Promise<MenuScanResult> {
+    const form = new FormData()
+    form.append('file', file)
+    // Strip Content-Type so the browser sets the multipart boundary itself.
+    const { 'Content-Type': _ct, ...headers } = await getAuthHeaders()
+    const res = await fetch(
+      `${API_BASE}/api/phone/menu/import-csv/${merchantId}?replace=${replace}`,
+      { method: 'POST', headers, body: form },
+    )
+    if (!res.ok) {
+      let detail = `import failed: ${res.status}`
       try { detail = (await res.json()).detail || detail } catch { /* noop */ }
       throw new Error(detail)
     }

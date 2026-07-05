@@ -280,18 +280,54 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
   const [testResult, setTestResult] = useState<{ valid: boolean; merchant?: string; error?: string } | null>(null)
   const [connectError, setConnectError] = useState('')
   const [connected, setConnected] = useState(false)
+  // True while the merchant is approving in the OAuth tab we opened — the
+  // original tab polls /status until the connection lands.
+  const [waitingOAuth, setWaitingOAuth] = useState(false)
   const orgId = useOrgId()
   const apiBase = import.meta.env.VITE_API_URL || ''
   const oauthPath = OAUTH_AUTHORIZE[system.key]
 
   function startOAuth() {
-    // Demo / no real org → fall back to the demo onConnect behaviour.
-    if (!orgId || orgId === 'demo') { onConnect?.(system); return }
+    // Demo pages simulate a connection via onConnect. Real contexts never fake it.
+    if (isDemo) { onConnect?.(system); return }
+    if (!orgId || orgId === 'demo') {
+      setConnectError('Your account is still loading — refresh the page and try again.')
+      return
+    }
+    setConnectError('')
     const ret = encodeURIComponent(window.location.pathname + window.location.search)
     const rep = repId ? `&rep_id=${encodeURIComponent(repId)}` : ''
-    window.location.href =
-      `${apiBase}${oauthPath}?org_id=${encodeURIComponent(orgId)}&return_to=${ret}${rep}`
+    // Open the provider sign-in in a NEW tab so this page keeps its session and
+    // can watch the connection land via polling.
+    window.open(
+      `${apiBase}${oauthPath}?org_id=${encodeURIComponent(orgId)}&return_to=${ret}${rep}`,
+      '_blank',
+      'noopener',
+    )
+    setWaitingOAuth(true)
   }
+
+  // Poll this provider's /status while the OAuth tab is open.
+  useEffect(() => {
+    if (!waitingOAuth || !orgId || orgId === 'demo') return
+    let active = true
+    const tick = async () => {
+      try {
+        const res = await fetch(`${apiBase}/api/${system.key}/status?org_id=${encodeURIComponent(orgId)}`)
+        if (!res.ok) return
+        const st = await res.json()
+        if (active && st?.connected) {
+          setWaitingOAuth(false)
+          setConnected(true)
+          onConnect?.(system)
+        }
+      } catch { /* transient — keep polling */ }
+    }
+    tick()
+    const id = setInterval(tick, 4000)
+    return () => { active = false; clearInterval(id) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingOAuth, orgId, system.key])
 
   const allFilled = fields.every(f => (creds[f.key] || '').trim().length > 0)
 
@@ -330,8 +366,12 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
   }
 
   async function handleConnect() {
-    if (!allFilled || !orgId || orgId === 'demo') {
-      onConnect?.(system)
+    // Demo pages simulate; real contexts must never report a connection that
+    // didn't reach the backend.
+    if (isDemo) { onConnect?.(system); return }
+    if (!allFilled) return
+    if (!orgId || orgId === 'demo') {
+      setConnectError('Your account is still loading — refresh the page and try again.')
       return
     }
     setConnecting(true)
@@ -414,16 +454,35 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
               <AlertTriangle size={12} /> {connectError}
             </div>
           )}
-          <button
-            onClick={startOAuth}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[12px] font-medium text-white rounded-lg transition-all"
-            style={{ backgroundColor: system.brandColor }}
-          >
-            <Wifi size={12} /> Connect with {system.name}
-          </button>
-          <p className="text-[9px] text-[#A1A1A8]/40 text-center">
-            You'll sign in to {system.name} securely — no keys to copy or paste.
-          </p>
+          {waitingOAuth ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1A8FD6]/10 border border-[#1A8FD6]/20">
+                <Wifi size={14} className="text-[#1A8FD6] animate-pulse" />
+                <span className="text-[12px] text-[#1A8FD6]">
+                  Waiting for you to approve in the other tab…
+                </span>
+              </div>
+              <button
+                onClick={() => setWaitingOAuth(false)}
+                className="w-full px-3 py-2 text-[11px] text-[#A1A1A8] hover:text-[#F5F5F7] border border-[#1F1F23] rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={startOAuth}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 text-[12px] font-medium text-white rounded-lg transition-all"
+                style={{ backgroundColor: system.brandColor }}
+              >
+                <Wifi size={12} /> Connect with {system.name}
+              </button>
+              <p className="text-[9px] text-[#A1A1A8]/40 text-center">
+                You'll sign in to {system.name} securely in a new tab — no keys to copy or paste.
+              </p>
+            </>
+          )}
         </div>
       )}
 

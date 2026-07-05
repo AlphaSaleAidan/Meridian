@@ -58,6 +58,9 @@ interface Props {
   onDayChange: (day: number) => void
   onAssign: (target: AssignTarget, staffId: string | null) => void
   onShiftClick: (s: ScheduleShift) => void
+  /** Position slot defs (with merchant renames applied). Falls back to the
+   *  business-type defaults when not provided. */
+  defs?: PositionDef[]
 }
 
 /* ---------- draggable staff chip (pool) ---------- */
@@ -140,12 +143,13 @@ function Slot({ row, staffMap, onTap, onClear, onOpen }: {
 
 export default function PositionsBoard({
   shifts, staff, businessType, peaks, weekStartDate, day, onDayChange, onAssign, onShiftClick,
+  defs: customDefs,
 }: Props) {
   const [activeStaffId, setActiveStaffId] = useState<string | null>(null)
   const [picker, setPicker] = useState<Row | null>(null)
 
   const staffMap = useMemo(() => new Map(staff.map(s => [s.id, s])), [staff])
-  const defs = useMemo(() => positionsForType(businessType), [businessType])
+  const defs = useMemo(() => customDefs ?? positionsForType(businessType), [customDefs, businessType])
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),

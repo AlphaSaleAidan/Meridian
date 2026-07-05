@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   Phone, PhoneCall, PhoneOff, PhoneIncoming, Settings, Mic, Volume2,
@@ -18,7 +19,7 @@ import {
 import { phoneService, type PhoneConfig } from '@/lib/phone-service'
 import { getAuthHeaders } from '@/lib/supabase'
 import {
-  LiveCallsBanner, RecordingPlayback, SetupWizard, SettingsTab,
+  LiveCallsBanner, RecordingPlayback, SettingsTab,
 } from '@/components/phone'
 
 /* ---------- Config maps ---------- */
@@ -194,15 +195,15 @@ function ConnectPhoneModal({ biz, onClose }: { biz: PhoneBizConfig; onClose: () 
 }
 
 /* ---------- Overview Tab ---------- */
-function OverviewTab({ calls, biz, period, setPeriod, onViewCall, onConnect }: {
-  calls: PhoneCallEntry[]; biz: PhoneBizConfig; period: string; setPeriod: (p: 'today' | '7d' | '30d' | '90d') => void; onViewCall: (c: PhoneCallEntry) => void; onConnect: () => void
+function OverviewTab({ calls, biz, isDemo, period, setPeriod, onViewCall, onConnect }: {
+  calls: PhoneCallEntry[]; biz: PhoneBizConfig; isDemo: boolean; period: string; setPeriod: (p: 'today' | '7d' | '30d' | '90d') => void; onViewCall: (c: PhoneCallEntry) => void; onConnect: () => void
 }) {
   const stats = useMemo(() => getPhoneStats(calls, period as any), [calls, period])
   const liveCalls = calls.filter(c => c.status === 'in_progress')
   const recentCalls = calls.slice(0, 8)
   return (
     <div className="space-y-5">
-      <LiveCallsBanner biz={biz} />
+      <LiveCallsBanner biz={biz} isDemo={isDemo} liveCalls={liveCalls} />
       <div className="flex items-center gap-2">
         {(['today', '7d', '30d', '90d'] as const).map(p => (
           <button key={p} onClick={() => setPeriod(p)} className={clsx('px-3 py-1 rounded-lg text-xs font-medium transition-colors', period === p ? 'bg-[#1A8FD6]/10 text-[#1A8FD6]' : 'text-[#A1A1A8] hover:text-[#F5F5F7]')}>{p === 'today' ? 'Today' : p}</button>
@@ -630,23 +631,33 @@ export default function PhoneOrdersPage() {
   const isDemo = useIsDemo()
   const { org } = useAuth()
   const flags = useModuleFlags()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [tab, setTab] = useState<Tab>('overview')
   const [period, setPeriod] = useState<'today' | '7d' | '30d' | '90d'>('30d')
   const [selectedCall, setSelectedCall] = useState<PhoneCallEntry | null>(null)
-  const [showWizard, setShowWizard] = useState(false)
   const [showConnect, setShowConnect] = useState(false)
   const [realCalls, setRealCalls] = useState<PhoneCallEntry[] | null>(null)
   const [phoneConfig, setPhoneConfig] = useState<PhoneConfig | null>(null)
 
   const connectedPos = org?.pos_provider || null
-  const setupKey = 'meridian_phone_setup'
-  const [setupDone, setSetupDone] = useState(() => isDemo || localStorage.getItem(setupKey) === '1')
+
+  // The single phone setup flow now lives in the Phone pillar's "Set up"
+  // segment (pages/canada/merchant/PhoneSetupWizard). When this page renders
+  // inside the pillar shell we can deep-link to it; on legacy dashboard routes
+  // (/app, /demo, /canada/dashboard) the segment doesn't exist, so we fall
+  // back to the connect-instructions modal.
+  const inPillar = pathname.startsWith('/canada/merchant') || pathname.startsWith('/canada/demo')
+  const goToSetup = useCallback(() => {
+    const base = pathname.startsWith('/canada/demo') ? '/canada/demo' : '/canada/merchant'
+    navigate(`${base}/phone?view=setup`)
+  }, [navigate, pathname])
 
   const demoData = useMemo(() => getPhoneDemoData('midtown-kitchen'), [])
 
   useEffect(() => {
     if (!orgId || isDemo) return
-    phoneService.getConfig(orgId).then(cfg => { setPhoneConfig(cfg); if (cfg.exists && cfg.active) setSetupDone(true) })
+    phoneService.getConfig(orgId).then(cfg => setPhoneConfig(cfg))
     phoneService.getCalls(orgId).then(c => setRealCalls(c))
   }, [orgId, isDemo])
 
@@ -660,35 +671,33 @@ export default function PhoneOrdersPage() {
 
   const calls = isDemo ? demoData.calls : (realCalls ?? [])
 
-  const handleWizardDone = useCallback(async () => {
-    localStorage.setItem(setupKey, '1')
-    setSetupDone(true)
-    setShowWizard(false)
-    if (orgId && !isDemo) phoneService.getConfig(orgId).then(setPhoneConfig)
-  }, [orgId, isDemo])
-
-  if (!setupDone || showWizard) {
-    return (
-      <div className="space-y-6">
-        {!showWizard && (
-          <div className="card p-5 border-[#17C5B0]/10">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 flex items-center justify-center flex-shrink-0"><Phone size={20} className="text-[#17C5B0]" /></div>
-              <div><h2 className="text-sm font-semibold text-[#F5F5F7]">Welcome to Phone Orders</h2><p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">Set up your AI phone agent in under 2 minutes.</p></div>
-            </div>
-          </div>
-        )}
-        <SetupWizard biz={business} onDone={handleWizardDone} connectedPos={connectedPos} orgId={orgId} existingConfig={phoneConfig?.exists ? phoneConfig : undefined} />
-      </div>
-    )
-  }
+  // Fresh (or never-activated) accounts get a pointer to the pillar Set up
+  // segment instead of the old embedded wizard.
+  const needsSetup = !isDemo && phoneConfig !== null && !(phoneConfig.exists && phoneConfig.active)
 
   return (
     <div className="space-y-6">
+      {needsSetup && (
+        <div className="card p-5 border-[#17C5B0]/10">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#17C5B0]/10 flex items-center justify-center flex-shrink-0"><Phone size={20} className="text-[#17C5B0]" /></div>
+            <div className="flex-1">
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">Welcome to Phone Orders</h2>
+              <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">Your AI phone agent isn&apos;t live yet. Set it up in under 2 minutes.</p>
+            </div>
+            <button
+              onClick={inPillar ? goToSetup : () => setShowConnect(true)}
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[#17C5B0] text-white text-xs font-medium rounded-lg hover:bg-[#17C5B0]/90 transition-colors"
+            >
+              <ArrowRight size={14} /> Set up
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div><h1 className="text-2xl font-bold text-[#F5F5F7]">Phone Orders</h1><p className="text-sm text-[#A1A1A8] mt-1">AI-powered phone ordering for your business</p></div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowConnect(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1A8FD6] text-white text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors"><Phone size={14} /> Connect Phone</button>
+          <button onClick={inPillar ? goToSetup : () => setShowConnect(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1A8FD6] text-white text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors"><Phone size={14} /> Connect Phone</button>
           {(isDemo || phoneConfig?.active) && (
             <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-[#17C5B0]/10 text-[#17C5B0]"><span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0] animate-pulse" />Active</span>
           )}
@@ -705,11 +714,11 @@ export default function PhoneOrdersPage() {
           <button key={t.key} onClick={() => setTab(t.key)} className={tab === t.key ? 'period-btn-active' : 'period-btn-inactive'}>{t.label}</button>
         ))}
       </div>
-      {tab === 'overview' && <OverviewTab calls={calls} biz={business} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
+      {tab === 'overview' && <OverviewTab calls={calls} biz={business} isDemo={isDemo} period={period} setPeriod={setPeriod} onViewCall={setSelectedCall} onConnect={() => setShowConnect(true)} />}
       {tab === 'calls' && <CallLogTab calls={calls} biz={business} onViewCall={setSelectedCall} />}
       {tab === 'text_orders' && flags.textToOrder && <TextOrderingTab biz={business} isDemo={isDemo} />}
       {tab === 'get_paid' && <GetPaidTab calls={calls} biz={business} orgId={orgId} isDemo={isDemo} />}
-      {tab === 'settings' && <SettingsTab biz={business} onReconfigure={() => setShowWizard(true)} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} orgId={orgId} />}
+      {tab === 'settings' && <SettingsTab biz={business} phoneConfig={phoneConfig} onReconfigure={inPillar ? goToSetup : undefined} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} orgId={orgId} />}
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}
       {showConnect && <ConnectPhoneModal biz={business} onClose={() => setShowConnect(false)} />}
     </div>

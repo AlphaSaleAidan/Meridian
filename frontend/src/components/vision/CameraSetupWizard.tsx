@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { getAuthHeaders } from '@/lib/supabase'
@@ -19,13 +19,137 @@ interface CameraSetupWizardProps {
   onClose: () => void
 }
 
-const STEPS = ['Device', 'Camera', 'Zones', 'Privacy', 'Confirm'] as const
+const STEPS = ['Camera', 'Zones', 'Privacy', 'Confirm'] as const
 type Step = (typeof STEPS)[number]
 
 // Cameras launch LIVE in anonymous mode. The biometric identity tier
 // (opt_in_identity) stays disabled until the consent-signage flow ships — mirrors
 // the backend CAMERA_IDENTITY_ENABLED gate (vision.py). Flip to '1' to allow it.
 const CAMERA_IDENTITY_ENABLED = import.meta.env.VITE_CAMERA_IDENTITY === '1'
+
+// Zones are stored NORMALIZED (0–1) relative to the camera frame; the edge
+// agent scales them to native pixels at runtime. Keys are lowercase slugs —
+// the same names later appear in vision_visits.zones_visited.
+type ZoneRect = { x1: number; y1: number; x2: number; y2: number }
+type ZoneRects = Record<string, ZoneRect>
+
+const ZONE_PRESETS = ['Door', 'Entry', 'Bar', 'Register', 'Seating Area', 'Restroom', 'Patio', 'Kitchen']
+const ZONE_COLORS = ['#17C5B0', '#1A8FD6', '#7C5CFF', '#F0B35B', '#E06B5E', '#5BC8A0', '#D46BB8', '#8FA6B8']
+
+const zoneSlug = (label: string) => label.trim().toLowerCase().replace(/\s+/g, '_')
+
+function ZoneEditor({ zones, onChange }: { zones: ZoneRects; onChange: (z: ZoneRects) => void }) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ key: string; mode: 'move' | 'resize'; startX: number; startY: number; rect: ZoneRect } | null>(null)
+  const [customName, setCustomName] = useState('')
+
+  const names = Object.keys(zones)
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+
+  const addZone = (label: string) => {
+    const key = zoneSlug(label)
+    if (!key || zones[key]) return
+    const n = names.length
+    const x1 = clamp(0.08 + (n % 3) * 0.3, 0, 0.7)
+    const y1 = clamp(0.1 + Math.floor(n / 3) * 0.28, 0, 0.7)
+    onChange({ ...zones, [key]: { x1, y1, x2: clamp(x1 + 0.26, 0, 1), y2: clamp(y1 + 0.24, 0, 1) } })
+  }
+
+  const removeZone = (key: string) => {
+    const next = { ...zones }
+    delete next[key]
+    onChange(next)
+  }
+
+  const onPointerDown = (e: React.PointerEvent, key: string, mode: 'move' | 'resize') => {
+    e.preventDefault()
+    e.stopPropagation()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    dragRef.current = { key, mode, startX: e.clientX, startY: e.clientY, rect: { ...zones[key] } }
+  }
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    const box = boxRef.current
+    if (!d || !box) return
+    const b = box.getBoundingClientRect()
+    const dx = (e.clientX - d.startX) / b.width
+    const dy = (e.clientY - d.startY) / b.height
+    const r = d.rect
+    let next: ZoneRect
+    if (d.mode === 'move') {
+      const w = r.x2 - r.x1, h = r.y2 - r.y1
+      const x1 = clamp(r.x1 + dx, 0, 1 - w), y1 = clamp(r.y1 + dy, 0, 1 - h)
+      next = { x1, y1, x2: x1 + w, y2: y1 + h }
+    } else {
+      next = { x1: r.x1, y1: r.y1, x2: clamp(r.x2 + dx, r.x1 + 0.06, 1), y2: clamp(r.y2 + dy, r.y1 + 0.06, 1) }
+    }
+    onChange({ ...zones, [d.key]: next })
+  }
+
+  const onPointerUp = () => { dragRef.current = null }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        {ZONE_PRESETS.map(label => {
+          const used = !!zones[zoneSlug(label)]
+          return (
+            <button key={label} onClick={() => addZone(label)} disabled={used}
+              className={clsx('px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors',
+                used ? 'border-[#1F1F23] text-[#A1A1A8]/30' : 'border-[#1A8FD6]/30 text-[#1A8FD6] hover:bg-[#1A8FD6]/10')}>
+              + {label}
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex gap-2">
+        <input value={customName} onChange={e => setCustomName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && customName.trim()) { addZone(customName); setCustomName('') } }}
+          placeholder="Custom zone name…"
+          className="flex-1 px-3 py-1.5 text-[11px] bg-[#0A0A0B] border border-[#1F1F23] rounded-lg text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:outline-none focus:border-[#1A8FD6]/40" />
+        <button onClick={() => { if (customName.trim()) { addZone(customName); setCustomName('') } }}
+          className="px-3 py-1.5 text-[10px] font-medium rounded-lg border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-colors">
+          Add
+        </button>
+      </div>
+      <div ref={boxRef} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
+        className="relative aspect-video bg-[#0A0A0B] border border-[#1F1F23] rounded-lg overflow-hidden select-none touch-none">
+        {names.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p className="text-[11px] text-[#A1A1A8]/40">Camera view — add a zone above to place it here</p>
+          </div>
+        )}
+        {names.map((key, i) => {
+          const r = zones[key]
+          const color = ZONE_COLORS[i % ZONE_COLORS.length]
+          return (
+            <div key={key}
+              onPointerDown={e => onPointerDown(e, key, 'move')}
+              className="absolute rounded-md cursor-move"
+              style={{
+                left: `${r.x1 * 100}%`, top: `${r.y1 * 100}%`,
+                width: `${(r.x2 - r.x1) * 100}%`, height: `${(r.y2 - r.y1) * 100}%`,
+                border: `2px dashed ${color}`, background: `${color}1a`,
+              }}>
+              <span className="absolute -top-2 left-1 px-1.5 rounded text-[9px] font-bold"
+                style={{ background: color, color: '#04211c' }}>
+                {key.replace(/_/g, ' ')}
+              </span>
+              <button onPointerDown={e => e.stopPropagation()} onClick={() => removeZone(key)}
+                className="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-[#111113] border border-[#1F1F23] text-[#A1A1A8] hover:text-red-400 text-[9px] leading-none">
+                ×
+              </button>
+              <div onPointerDown={e => onPointerDown(e, key, 'resize')}
+                className="absolute -bottom-1 -right-1 w-3 h-3 rounded-sm cursor-nwse-resize"
+                style={{ background: color }} />
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export default function CameraSetupWizard({ orgId, onComplete, onClose }: CameraSetupWizardProps) {
   const [step, setStep] = useState(0)
@@ -36,7 +160,6 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     active_hours: { start: '07:00', end: '22:00' },
     zone_config: {},
   })
-  const [selectedDevice, setSelectedDevice] = useState<string | null>(null)
   const [connectionTested, setConnectionTested] = useState(false)
   const [error, setError] = useState('')
   const [consentConfirmed, setConsentConfirmed] = useState(false)
@@ -45,7 +168,6 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
 
   const canAdvance = (): boolean => {
     switch (currentStep) {
-      case 'Device': return true
       case 'Camera': return config.name.length > 0 && config.rtsp_url.length > 0
       case 'Zones': return true
       case 'Privacy': return consentConfirmed || config.compliance_mode === 'disabled'
@@ -72,7 +194,11 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     setConnectionTested(true)
   }
 
+  const [submitting, setSubmitting] = useState(false)
+
   const handleSubmit = async () => {
+    if (submitting) return  // double-click here created duplicate cameras
+    setSubmitting(true)
     setError('')
     try {
       const res = await fetch(`${apiBase}/api/vision/cameras`, {
@@ -103,6 +229,8 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
       onComplete(config)
     } catch {
       setError('Could not reach the server. Please try again.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -150,50 +278,6 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
 
         {/* Step Content */}
         <div className="px-5 py-5 space-y-4">
-          {/* Step 1: Device */}
-          {currentStep === 'Device' && (
-            <>
-              <div>
-                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Edge Device</h3>
-                <p className="text-[11px] text-[#A1A1A8]">
-                  Meridian Vision runs on your hardware. No video leaves your premises.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 gap-3">
-                {[
-                  { name: 'Jetson Nano', cameras: '2-3', price: '$149', recommended: false },
-                  { name: 'Jetson Orin Nano', cameras: '4-6', price: '$249', recommended: true },
-                  { name: 'Jetson Orin NX', cameras: '8-12', price: '$499', recommended: false },
-                  { name: 'Custom Linux + GPU', cameras: 'Varies', price: 'BYO', recommended: false },
-                ].map(device => (
-                  <button
-                    key={device.name}
-                    onClick={() => setSelectedDevice(device.name)}
-                    className={clsx(
-                      'p-3 rounded-lg border text-left transition-all',
-                      selectedDevice === device.name
-                        ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
-                        : 'border-[#1F1F23] hover:border-[#A1A1A8]/20 bg-[#0A0A0B]'
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-medium text-[#F5F5F7]">{device.name}</span>
-                        {device.recommended && (
-                          <span className="ml-2 text-[8px] font-bold text-[#1A8FD6] bg-[#1A8FD6]/10 px-1.5 py-0.5 rounded">
-                            RECOMMENDED
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-[#A1A1A8] font-mono">{device.price}</span>
-                    </div>
-                    <p className="text-[10px] text-[#A1A1A8]/60 mt-1">Supports {device.cameras} cameras</p>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
           {/* Step 2: Camera */}
           {currentStep === 'Camera' && (
             <>
@@ -201,6 +285,14 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Camera Connection</h3>
                 <p className="text-[11px] text-[#A1A1A8]">
                   Enter the RTSP URL from your IP camera and give it a name.
+                </p>
+              </div>
+              <div className="flex items-start gap-2 p-3 rounded-lg border border-[#17C5B0]/20 bg-[#17C5B0]/5">
+                <Shield size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] text-[#A1A1A8]">
+                  Your video never leaves your premises — Meridian processes it on-site and
+                  reports back only the analytics (walk-ins, occupancy, conversion). If your
+                  cameras are on the same wifi network, that's all you need.
                 </p>
               </div>
               <div className="space-y-3">
@@ -279,32 +371,15 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Detection Zones</h3>
                 <p className="text-[11px] text-[#A1A1A8]">
-                  Define areas in the camera view for tracking. Zone drawing will be available once the camera is connected.
+                  Tap a preset to drop it on the view, then drag to position and resize.
+                  Zones tell Meridian what each area is, so dwell and conversion are
+                  measured per area. Optional — you can skip and add zones later.
                 </p>
               </div>
-              <div className="aspect-video bg-[#0A0A0B] border border-[#1F1F23] rounded-lg flex items-center justify-center">
-                <div className="text-center">
-                  <Camera size={32} className="text-[#A1A1A8]/20 mx-auto mb-2" />
-                  <p className="text-[11px] text-[#A1A1A8]/40">Camera preview will appear here</p>
-                  <p className="text-[9px] text-[#A1A1A8]/20 mt-1">Draw entry, browse, and checkout zones</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {['Entry', 'Browse', 'Checkout'].map(zone => (
-                  <div key={zone} className="p-2 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] text-center">
-                    <div className={clsx(
-                      'w-3 h-3 rounded-full mx-auto mb-1',
-                      zone === 'Entry' ? 'bg-[#17C5B0]' :
-                      zone === 'Browse' ? 'bg-[#1A8FD6]' :
-                      'bg-[#7C5CFF]'
-                    )} />
-                    <span className="text-[10px] text-[#A1A1A8]">{zone} Zone</span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[9px] text-[#A1A1A8]/40">
-                Zones can be configured after setup via the camera management panel.
-              </p>
+              <ZoneEditor
+                zones={config.zone_config as ZoneRects}
+                onChange={zones => setConfig(c => ({ ...c, zone_config: zones }))}
+              />
             </>
           )}
 
@@ -434,8 +509,8 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
               <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-400/20 bg-amber-400/5">
                 <AlertTriangle size={14} className="text-amber-400 flex-shrink-0 mt-0.5" />
                 <p className="text-[10px] text-[#A1A1A8]">
-                  The edge agent must be running on your device for the camera to start processing.
-                  See the setup guide for Docker installation instructions.
+                  Once activated, Meridian's on-site processor picks this camera up
+                  automatically and the first analytics arrive within about 15 minutes.
                 </p>
               </div>
             </>
@@ -454,9 +529,10 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           {currentStep === 'Confirm' ? (
             <button
               onClick={handleSubmit}
-              className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors"
+              disabled={submitting}
+              className="flex items-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-50 transition-colors"
             >
-              <CheckCircle size={12} /> Activate Camera
+              <CheckCircle size={12} /> {submitting ? 'Activating…' : 'Activate Camera'}
             </button>
           ) : (
             <button

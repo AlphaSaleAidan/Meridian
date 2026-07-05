@@ -185,6 +185,21 @@ async def register_camera(req: CameraRegisterRequest):
         raise HTTPException(status_code=503, detail="Database not available")
 
     import json as json_mod
+
+    # Idempotency: double-submits (and retries) must not create duplicate
+    # cameras — the same org registering the same stream returns the existing
+    # row. (No unique constraint exists on (org_id, rtsp_url) yet.)
+    try:
+        existing = await db.select(
+            "vision_cameras",
+            filters={"org_id": f"eq.{req.org_id}", "rtsp_url": f"eq.{req.rtsp_url}"},
+            limit=1,
+        )
+        if existing:
+            return existing[0]
+    except Exception as e:
+        logger.warning("register_camera dedupe check failed (continuing): %s", e)
+
     row = {
         "org_id": req.org_id,
         "location_id": req.location_id,
@@ -395,6 +410,21 @@ async def ingest_traffic(req: TrafficIngestRequest):
         req.demographic_breakdown = {}
 
     import json as json_mod
+
+    # Idempotency: double-submits (and retries) must not create duplicate
+    # cameras — the same org registering the same stream returns the existing
+    # row. (No unique constraint exists on (org_id, rtsp_url) yet.)
+    try:
+        existing = await db.select(
+            "vision_cameras",
+            filters={"org_id": f"eq.{req.org_id}", "rtsp_url": f"eq.{req.rtsp_url}"},
+            limit=1,
+        )
+        if existing:
+            return existing[0]
+    except Exception as e:
+        logger.warning("register_camera dedupe check failed (continuing): %s", e)
+
     row = {
         "org_id": req.org_id,
         "camera_id": req.camera_id,

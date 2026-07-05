@@ -6,10 +6,12 @@ import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { api } from '@/lib/api'
+import { isUuid } from '@/lib/schedule-api'
 import { useApi } from '@/hooks/useApi'
 import { LoadingPage, ErrorState } from '@/components/LoadingState'
 
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const dayFull = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const hourLabels = Array.from({ length: 24 }, (_, i) => {
   if (i === 0) return '12a'
   if (i < 12) return `${i}a`
@@ -22,37 +24,40 @@ export default function PeakHoursPage() {
   const isDemo = useIsDemo()
   const { org } = useAuth()
   const posConnected = !!org?.pos_connected
-  const hourlyData = useApi(() => api.hourlyRevenue(orgId), [orgId])
+  // Real merchants: the SAME per-(day, hour) POS source the Schedule page's
+  // Auto-fill and Expected-traffic use (/api/schedule/peak-hours — SQL over
+  // real transactions). Previously this page fetched the hour-of-day-only
+  // /revenue/hourly aggregate and FABRICATED the weekday axis with a synthetic
+  // day factor, so every day (e.g. Sunday) was a scaled clone of the same
+  // curve and disagreed with the schedule pillar.
+  const peakData = useApi(
+    () => (isDemo || !isUuid(orgId))
+      ? Promise.resolve(null)
+      : api.schedulePeakHours(orgId, 8),
+    [orgId, isDemo],
+  )
 
-  // Before a POS is connected the analytics endpoint 401s. Rather than a
-  // generic scaffold, render the heatmap *shell* (empty cells) so the merchant
-  // sees exactly what will fill in as transactions roll in. Only surface
-  // loading / error states once a POS is actually connected.
-  if (!isDemo && posConnected && hourlyData.loading) return <LoadingPage />
-  if (!isDemo && posConnected && hourlyData.error) return <ErrorState message={hourlyData.error} onRetry={hourlyData.refetch} />
+  // Before a POS is connected the endpoint has nothing to aggregate. Rather
+  // than a generic scaffold, render the heatmap *shell* (empty cells) so the
+  // merchant sees exactly what will fill in as transactions roll in. Only
+  // surface loading / error states once a POS is actually connected.
+  if (!isDemo && posConnected && peakData.loading) return <LoadingPage />
+  if (!isDemo && posConnected && peakData.error) return <ErrorState message={peakData.error} onRetry={peakData.refetch} />
 
   let cells: PeakHourCell[]
   if (isDemo) {
     cells = generatePeakHourHeatmap()
-  } else if (posConnected && hourlyData.data?.hourly?.length) {
-    const hourly = hourlyData.data.hourly
-    cells = []
-    for (let day = 0; day < 7; day++) {
-      for (const h of hourly) {
-        if (!h.hour) continue
-        const hourNum = h.hour.includes('T') ? new Date(h.hour).getUTCHours() : parseInt(h.hour.split(':')[0], 10)
-        const dayFactor = day >= 5 ? 1.15 : 0.95 + day * 0.02
-        cells.push({
-          day,
-          hour: hourNum,
-          intensity: Math.round(h.sales * dayFactor),
-          transactions: Math.round(h.sales * dayFactor),
-          revenue: Math.round(h.revenue_cents * dayFactor),
-        })
-      }
-    }
   } else {
-    cells = []
+    const weeks = Math.max(1, peakData.data?.weeks ?? 8)
+    cells = (peakData.data?.peaks ?? []).map(p => ({
+      day: p.day,
+      hour: p.hour,
+      intensity: p.intensity,
+      // txn_count / revenue_cents are totals over the analyzed weeks —
+      // divide so the stats below read as honest weekly figures.
+      transactions: Math.round(p.txn_count / weeks),
+      revenue: Math.round(p.revenue_cents / weeks),
+    }))
   }
 
   const peakCell = cells.length ? cells.reduce((max, c) => c.intensity > max.intensity ? c : max, cells[0]) : null
@@ -157,13 +162,29 @@ export default function PeakHoursPage() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[#F5F5F7]">Peak Hour Optimizer Recommendation</h3>
-              <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
-                Your <span className="text-[#F5F5F7] font-medium">7-9AM window</span> generates {morningPct}% of daily revenue
-                but current staffing is 1 person below optimal. Adding 1 staff member during this window would
-                reduce average queue time from 4.2 to 2.1 minutes and recover an estimated
-                <span className="text-[#17C5B0] font-medium"> $520/month</span> in lost walkout revenue.
-                <span className="text-[#A1A1A8]/50"> (Confidence: 88%)</span>
-              </p>
+              {isDemo ? (
+                <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+                  Your <span className="text-[#F5F5F7] font-medium">7-9AM window</span> generates {morningPct}% of daily revenue
+                  but current staffing is 1 person below optimal. Adding 1 staff member during this window would
+                  reduce average queue time from 4.2 to 2.1 minutes and recover an estimated
+                  <span className="text-[#17C5B0] font-medium"> $520/month</span> in lost walkout revenue.
+                  <span className="text-[#A1A1A8]/50"> (Confidence: 88%)</span>
+                </p>
+              ) : (
+                // Real merchants only see numbers derived from their POS
+                // transactions — no invented dollars or confidence figures.
+                <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+                  Your busiest window is{' '}
+                  <span className="text-[#F5F5F7] font-medium">
+                    {peakCell ? `${dayFull[peakCell.day]} around ${hourLabels[peakCell.hour]}` : '—'}
+                  </span>
+                  {morningPct > 0 && (
+                    <> and the 7-9AM window generates <span className="text-[#17C5B0] font-medium">{morningPct}%</span> of weekly revenue</>
+                  )}
+                  . Staff your strongest people into these windows — the Schedule page&apos;s Auto-fill
+                  optimizes against this same demand signal.
+                </p>
+              )}
             </div>
           </div>
         </div>

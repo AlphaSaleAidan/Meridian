@@ -10,7 +10,7 @@
 import { demoData } from './demo-data'
 import { getAuthHeaders } from './supabase'
 import type { StaffMemberDto, ShiftDto, PeakHourPoint } from './schedule-api'
-import type { TopAction, ReasoningChain } from './agent-data'
+import { menuQuadrantRecommendation, type MenuQuadrant, type TopAction, type ReasoningChain } from './agent-data'
 import { formatCents } from './format'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -595,12 +595,6 @@ export const api = {
         .then((r: any) => {
           const rows = r.items ?? []
           const maxQty = Math.max(1, ...rows.map((i: any) => i.quantity_sold ?? 0))
-          const rec: Record<string, string> = {
-            star: 'Feature prominently & protect the price.',
-            puzzle: 'Promote or reposition — high margin, low volume.',
-            plowhorse: 'Popular but thin — re-engineer cost or nudge price.',
-            dog: 'Low on both — consider cutting or reworking.',
-          }
           return {
             quadrants: r.quadrants ?? {},
             items: rows.map((i: any) => {
@@ -614,7 +608,9 @@ export const api = {
                 popularityIndex: Math.round(((i.quantity_sold ?? 0) / maxQty) * 190) + 5,
                 profitabilityIndex: Math.max(0, Math.min(200, Math.round((i.margin_pct ?? 0) * 2))),
                 quadrant: q,
-                recommendation: rec[q] ?? '',
+                // Backend carries no recommendation field — derive it from the
+                // quadrant with the same map the demo generator uses.
+                recommendation: menuQuadrantRecommendation(q as MenuQuadrant),
                 revenueCents: i.revenue_cents ?? 0,
                 marginCents: (i.revenue_cents ?? 0) - (i.cost_cents ?? 0),
               }

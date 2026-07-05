@@ -474,12 +474,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Forward the customer's own session JWT — the backend now authorizes the
     // owner (require_jwt + org membership) instead of service auth, so "Skip —
     // I'll connect later" persists server-side and survives a reload (BUG-1).
-    // getAuthHeaders() already includes Content-Type.
-    fetch(`${apiUrl}/api/onboarding/mark-onboarded`, {
-      method: 'POST',
-      headers: { ...(await getAuthHeaders()) },
-      body: JSON.stringify({ org_id: org.org_id }),
-    }).catch(() => {})
+    // getAuthHeaders() already includes Content-Type. Awaitable (callers gate
+    // navigation on it) with ONE retry; a persistent failure stays non-fatal —
+    // the local flag above keeps the session usable.
+    const persist = async () => {
+      const res = await fetch(`${apiUrl}/api/onboarding/mark-onboarded`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()) },
+        body: JSON.stringify({ org_id: org.org_id }),
+      })
+      if (!res.ok) throw new Error(`mark-onboarded failed: ${res.status}`)
+    }
+    try {
+      await persist()
+    } catch {
+      try { await persist() } catch { /* resilient — local flag already set */ }
+    }
   }, [org])
 
   const resetPassword = useCallback(async (email: string): Promise<string | null> => {

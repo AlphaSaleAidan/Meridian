@@ -2,19 +2,12 @@ import { useState } from 'react'
 import { X, Check } from 'lucide-react'
 import type { ScheduleStaffMember } from '@/lib/agent-data'
 import type { BusinessType } from '@/lib/demo-context'
+import { ROLES_BY_TYPE } from './schedule-positions'
 
 const STAFF_COLORS = [
   '#17C5B0', '#1A8FD6', '#E06B5E', '#D4A843', '#9B7FD4', '#4CAF50',
   '#FF7043', '#26C6DA', '#AB47BC', '#78909C', '#EC407A', '#8D6E63',
 ]
-
-const ROLES_BY_TYPE: Record<string, string[]> = {
-  coffee_shop: ['barista', 'bar_lead', 'cashier', 'supervisor'],
-  restaurant: ['server', 'bartender', 'host', 'kitchen', 'runner', 'manager'],
-  fast_food: ['counter', 'drive_through', 'kitchen', 'manager'],
-  auto_shop: ['technician', 'advisor', 'parts_counter'],
-  smoke_shop: ['associate', 'shift_lead'],
-}
 
 const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -25,9 +18,12 @@ interface Props {
   onSave: (member: Omit<ScheduleStaffMember, 'id'>) => void
   businessType: BusinessType
   existing?: ScheduleStaffMember
+  /** Custom position list (from Manage positions) — falls back to the
+   *  business-type defaults when not provided. */
+  roles?: string[]
 }
 
-export default function AddStaffModal({ open, onClose, onSave, businessType, existing }: Props) {
+export default function AddStaffModal({ open, onClose, onSave, businessType, existing, roles: customRoles }: Props) {
   const [name, setName] = useState(existing?.name || '')
   const [role, setRole] = useState(existing?.role || '')
   const [color, setColor] = useState(existing?.color || STAFF_COLORS[0])
@@ -39,7 +35,11 @@ export default function AddStaffModal({ open, onClose, onSave, businessType, exi
 
   if (!open) return null
 
-  const roles = ROLES_BY_TYPE[businessType] || ROLES_BY_TYPE.coffee_shop
+  const baseRoles = customRoles && customRoles.length > 0
+    ? customRoles
+    : (ROLES_BY_TYPE[businessType] || ROLES_BY_TYPE.coffee_shop)
+  // Keep the current selection visible even if it was removed from the list.
+  const roles = role && !baseRoles.includes(role) ? [role, ...baseRoles] : baseRoles
 
   function handleSave() {
     if (!name.trim() || !role) return
