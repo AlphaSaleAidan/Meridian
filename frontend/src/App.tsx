@@ -427,10 +427,15 @@ export default function App() {
                   <Route
                     key={pillar.path || '_home'}
                     index={pillar.path === ''}
-                    path={pillar.path || undefined}
+                    path={pillar.path ? `${pillar.path}/*` : undefined}
                     element={<MerchantPillarPage pillar={pillar} />}
                   />
                 ))}
+                <Route path="camera-analytics" element={
+                  <Suspense fallback={<LazyFallback />}>
+                    <CameraAnalyticsDemoPage />
+                  </Suspense>
+                } />
               </Route>
 
               {/* ══════════════════════════════════════════════
@@ -474,7 +479,7 @@ export default function App() {
                   <Route
                     key={pillar.path || '_home'}
                     index={pillar.path === ''}
-                    path={pillar.path || undefined}
+                    path={pillar.path ? `${pillar.path}/*` : undefined}
                     element={<MerchantPillarPage pillar={pillar} />}
                   />
                 ))}
