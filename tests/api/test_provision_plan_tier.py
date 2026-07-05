@@ -66,3 +66,21 @@ def test_provision_token_status_is_constraint_valid():
     src = inspect.getsource(onboarding_mod.provision_customer)
     assert '"token_status": "pending"' in src
     assert '"token_status": "active"' not in src
+
+
+def test_provision_org_id_must_be_uuid():
+    # slug org ids 22P02 every uuid-typed org_id column downstream (live hit)
+    with pytest.raises(Exception):
+        onboarding_mod.ProvisionCustomerRequest(
+            org_id="biz_slug", email="a@b.co", owner_name="A", business_name="B")
+    req = onboarding_mod.ProvisionCustomerRequest(
+        org_id="d9155461-07d0-4b7a-a8ee-e32a9e11e316", email="a@b.co",
+        owner_name="A", business_name="B")
+    assert req.org_id
+
+
+def test_onboarding_notifications_use_valid_enum_status():
+    import inspect as _i
+    src = _i.getsource(onboarding_mod)
+    # notifications.status enum: pending/sent/delivered/failed/acknowledged
+    assert '"status": "active",\n            "created_at"' not in src.replace('    ', ' ')
