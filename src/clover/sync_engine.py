@@ -108,17 +108,14 @@ class CloverSyncEngine:
             self.progress.update("merchant", "Fetching merchant profile...", 5)
             self._emit_progress()
 
-            # get_merchant feeds the location record AND the currency pin, but
-            # it's a single non-critical lookup — a failure must NOT abort the
-            # whole backfill (matches the employees/categories best-effort style
-            # below). Fall back to an empty merchant + default currency so the
-            # rest of the sync still runs.
-            try:
-                merchant = await self.client.get_merchant()
-            except Exception as e:
-                logger.warning(f"Could not fetch merchant profile (non-fatal): {e}")
-                result.errors.append(f"merchant: {e}")
-                merchant = {}
+            # get_merchant feeds the location record AND the currency pin.
+            # During the initial backfill a failure here is FATAL: continuing
+            # with merchant={} pins every backfilled transaction to the USD
+            # fallback (mislabeling CAD merchants) and writes a garbage
+            # location row. Let the exception reach the outer handler so the
+            # backfill is marked failed and the merchant retries the connect,
+            # instead of completing with silently wrong data.
+            merchant = await self.client.get_merchant()
             order_type_lookup, tender_lookup = await self._fetch_config_lookups()
             mapper = CloverDataMapper(
                 org_id=self.org_id,

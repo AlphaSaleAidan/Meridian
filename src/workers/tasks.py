@@ -550,104 +550,22 @@ def upload_archive_to_r2(org_id: str, year: int, month: int):
 # ════════════════════════════════════════════════════════════
 # P3: POS pipeline on Celery
 # ════════════════════════════════════════════════════════════
-# Previously: backfill ran via FastAPI background_tasks (pinning an
-# API worker for the duration of a large merchant's initial sync);
-# incremental_sync.py and token_refresh.py were async functions with
-# no Celery wrapping and no beat schedule, so the only periodic POS
-# sync was via the nightly-analysis chord. P3 fixes all three:
+# Initial backfills run via FastAPI background_tasks in
+# pos_connections.py / the OAuth callbacks (a Celery variant,
+# backfill_pos_connection, was removed: it was never dispatched and
+# had drifted — it imported a nonexistent _run_square_backfill and
+# called _run_clover_backfill with the wrong signature).
 #
-#   backfill_pos_connection       — dispatched by /api/pos/connect
-#                                    and the OAuth callbacks via
-#                                    .delay(); replaces the
-#                                    FastAPI background_tasks path.
 #   incremental_sync_all          — beat: every 15 min.
 #   refresh_pos_tokens            — beat: daily 04:45 UTC. Closes the
 #                                    Square 30-day refresh-token
 #                                    cliff (refreshes anything
 #                                    expiring within 7 days).
 #
-# All three use the existing run_async() bridge — the underlying
-# functions live in pos_connections.py / incremental_sync.py /
-# token_refresh.py and are lazy-imported inside each task body so
-# Celery worker startup doesn't have to load the FastAPI router
-# graph.
-
-
-@shared_task(
-    bind=True,
-    name="src.workers.tasks.backfill_pos_connection",
-    max_retries=3,
-    default_retry_delay=120,
-    # Backfills can take many minutes on a large merchant; don't
-    # rate-limit them at the queue level — the per-provider
-    # _run_*_backfill helpers respect their own client pagination
-    # limits. acks_late + worker_max_tasks_per_child=200 are
-    # configured globally in celery_app.py so a long-running
-    # backfill that gets killed by `pm2 restart celery-worker` is
-    # re-queued.
-)
-def backfill_pos_connection(
-    self,
-    provider: str,
-    org_id: str,
-    connection_id: str,
-    credentials: dict,
-):
-    """Run initial POS backfill on the Celery path.
-
-    Replaces the FastAPI background_tasks kickoff. Dispatches by
-    provider to the existing `_run_*_backfill` async helpers in
-    `src.api.routes.pos_connections` so the actual ingestion logic
-    stays in one place. Credentials travel inline on the task
-    payload; they're encrypted at rest in `pos_connections`
-    immediately before this task is queued, so the inline copy
-    only exists for the duration of the queued task.
-    """
-    logger.info(
-        f"Celery backfill: provider={provider} org={org_id} conn={connection_id}"
-    )
-
-    async def _run():
-        # P3: Celery worker is a separate process from the API; the
-        # API's startup event isn't run here, so the global db
-        # singleton is uninitialised by default. Existing tasks
-        # follow the same `init_db -> use -> close_db` pattern.
-        from ..db import init_db, close_db
-        await init_db()
-        try:
-            from ..api.routes.pos_connections import (
-                _run_toast_backfill,
-                _run_square_backfill,
-                _run_clover_backfill,
-                _run_generic_backfill,
-            )
-            if provider == "toast":
-                return await _run_toast_backfill(
-                    org_id=org_id, connection_id=connection_id, credentials=credentials,
-                )
-            if provider == "square":
-                return await _run_square_backfill(
-                    org_id=org_id, connection_id=connection_id, credentials=credentials,
-                )
-            if provider == "clover":
-                return await _run_clover_backfill(
-                    org_id=org_id, connection_id=connection_id, credentials=credentials,
-                )
-            return await _run_generic_backfill(
-                org_id=org_id, connection_id=connection_id,
-                pos_system=provider, credentials=credentials,
-            )
-        finally:
-            await close_db()
-
-    try:
-        run_async(_run())
-        return {"status": "ok", "provider": provider, "org_id": org_id}
-    except Exception as exc:
-        logger.error(
-            f"Backfill failed for {provider}/{org_id}: {exc}", exc_info=True,
-        )
-        raise self.retry(exc=exc)
+# Both use the existing run_async() bridge — the underlying functions
+# live in incremental_sync.py / token_refresh.py and are lazy-imported
+# inside each task body so Celery worker startup doesn't have to load
+# the FastAPI router graph.
 
 
 @shared_task(
