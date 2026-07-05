@@ -48,7 +48,7 @@ ORDER_TOOLS = [
                     "customer_name": {"type": "string"},
                     "order_type": {
                         "type": "string",
-                        "enum": ["pickup", "delivery", "dine_in", "appointment", "hold"],
+                        "enum": ["pickup", "delivery", "dine_in", "reservation", "appointment", "hold"],
                     },
                     "items": {
                         "type": "array",

@@ -576,6 +576,27 @@ export const api = {
       `/api/dashboard/products/${productId}`, { method: 'PATCH', params: { org_id: orgId }, body },
     ),
 
+  // Bulk cost import — upload a CSV of inventory costs / a recent stock-up.
+  // Deterministic parse on the backend (no AI): matches rows to products by
+  // name and sets products.cost_cents so margins compute from real costs.
+  importProductCosts: async (orgId: string, csvText: string) => {
+    const authHeaders = await getAuthHeaders()
+    const res = await fetch(
+      new URL(`${API_BASE}/api/dashboard/products/import-costs/${orgId}`, window.location.origin).toString(),
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'text/csv', 'Accept': 'application/json' },
+        body: csvText,
+      },
+    )
+    if (!res.ok) {
+      const body = await res.text()
+      throw new Error(`API ${res.status}: ${body}`)
+    }
+    return res.json() as Promise<{ matched: number; updated: number; unmatched: string[]; total_rows: number }>
+  },
+
   // Inventory cost-sheet processing (upload happens via supabase storage in the
   // component; these trigger AI extraction + poll status).
   processInventoryDoc: (orgId: string, docId: string) =>

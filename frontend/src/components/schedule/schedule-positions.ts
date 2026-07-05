@@ -79,21 +79,18 @@ export function defaultRolesForType(businessType: string): string[] {
 }
 
 /* ------------------------------------------------------------------ *
- * Custom positions — merchant-editable role list (Manage positions).
+ * Custom positions — the merchant's own PositionDef list (Manage positions).
  *
- * Roles are plain strings on staff + shift rows (no positions table), so the
- * laziest persistence that survives reload is:
- *   - the edited list itself      → localStorage, keyed per merchant
- *   - renames of rows in use      → PUT /schedule/staff + /schedule/shifts
- *     (so renamed roles live in the DB and show up on any device)
+ * The full defs list (name, role, headcount, times) persists in localStorage
+ * per merchant — roles are plain strings on staff + shift rows, there's no
+ * positions table. Role renames are additionally written through to the
+ * affected staff/shift rows via PUT /schedule/staff + /schedule/shifts so
+ * renamed roles live in the DB and show up on any device.
  * ------------------------------------------------------------------ */
 
 export interface PositionsOverride {
-  /** The merchant's current position list (role strings). */
-  positions: string[]
-  /** original default role -> current name, so POSITIONS_BY_TYPE slot defs
-   *  keep matching staff after a rename. */
-  renames: Record<string, string>
+  /** The merchant's full position list (replaces the business-type defaults). */
+  defs: PositionDef[]
 }
 
 const POSITIONS_STORE_PREFIX = 'meridian-positions-v1:'
@@ -102,16 +99,64 @@ export function positionsStorageKey(merchantId: string, businessType: string): s
   return `${POSITIONS_STORE_PREFIX}${merchantId || `demo-${businessType}`}`
 }
 
-export function loadPositionsOverride(key: string): PositionsOverride | null {
+const TIME_RE = /^\d{1,2}:\d{2}$/
+
+function sanitizeDef(d: unknown): PositionDef | null {
+  const o = d as Partial<PositionDef> | null
+  if (!o || typeof o !== 'object') return null
+  if (typeof o.key !== 'string' || !o.key) return null
+  if (typeof o.label !== 'string' || !o.label.trim()) return null
+  if (typeof o.role !== 'string' || !o.role) return null
+  if (typeof o.start !== 'string' || !TIME_RE.test(o.start)) return null
+  if (typeof o.end !== 'string' || !TIME_RE.test(o.end)) return null
+  const base = typeof o.base === 'number' && Number.isFinite(o.base) ? Math.max(0, Math.round(o.base)) : 1
+  return { key: o.key, label: o.label, role: o.role, start: o.start, end: o.end, base, ...(o.flex ? { flex: true } : {}) }
+}
+
+/** v0 stored shape: role-string list + rename map. Rebuild as a defs list. */
+function migrateLegacyOverride(
+  parsed: { positions?: unknown; renames?: unknown },
+  businessType: string,
+): PositionsOverride {
+  const positions: string[] = Array.isArray(parsed.positions)
+    ? parsed.positions.filter((p): p is string => typeof p === 'string')
+    : []
+  const renames: Record<string, string> =
+    parsed.renames && typeof parsed.renames === 'object' ? parsed.renames as Record<string, string> : {}
+  const listed = new Set(positions)
+  const defs = positionsForType(businessType)
+    .map(d => (renames[d.role] ? { ...d, role: renames[d.role] } : { ...d }))
+    .filter(d => listed.has(d.role))
+  const covered = new Set(defs.map(d => d.role))
+  const defaults = new Set(defaultRolesForType(businessType))
+  const renameTargets = new Set(Object.values(renames))
+  for (const p of positions) {
+    if (!covered.has(p) && !defaults.has(p) && !renameTargets.has(p)) {
+      defs.push({
+        key: `custom-${p}`,
+        label: p.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        role: p, start: '09:00', end: '17:00', base: 1,
+      })
+    }
+  }
+  return { defs }
+}
+
+export function loadPositionsOverride(key: string, businessType: string): PositionsOverride | null {
   try {
     const raw = localStorage.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed?.positions)) return null
-    return {
-      positions: parsed.positions.filter((p: unknown) => typeof p === 'string'),
-      renames: parsed.renames && typeof parsed.renames === 'object' ? parsed.renames : {},
+    if (Array.isArray(parsed?.defs)) {
+      return { defs: parsed.defs.map(sanitizeDef).filter((d: PositionDef | null): d is PositionDef => d !== null) }
     }
+    if (Array.isArray(parsed?.positions)) {
+      // Old rename-map shape — migrate into a full defs list once.
+      const migrated = migrateLegacyOverride(parsed, businessType)
+      savePositionsOverride(key, migrated)
+      return migrated
+    }
+    return null
   } catch {
     return null
   }
@@ -121,10 +166,12 @@ export function savePositionsOverride(key: string, override: PositionsOverride):
   try { localStorage.setItem(key, JSON.stringify(override)) } catch { /* quota/private mode — non-fatal */ }
 }
 
-/** Slot defs with merchant renames applied, so Auto-fill + the board keep
- *  matching staff whose roles were renamed. */
-export function applyPositionRenames(defs: PositionDef[], renames: Record<string, string>): PositionDef[] {
-  return defs.map(d => (renames[d.role] ? { ...d, role: renames[d.role] } : d))
+/** Single source of truth for a merchant's position defs: their saved custom
+ *  list (migrating the old stored shape if present), else the business-type
+ *  defaults. Used by the board, Auto-fill, and the staff-role picker. */
+export function resolvePositions(merchantId: string, businessType: string): PositionDef[] {
+  const override = loadPositionsOverride(positionsStorageKey(merchantId, businessType), businessType)
+  return override ? override.defs : positionsForType(businessType).map(d => ({ ...d }))
 }
 
 /** Expected traffic for a day, 0..1, scaled ACROSS the week (min-max) so the

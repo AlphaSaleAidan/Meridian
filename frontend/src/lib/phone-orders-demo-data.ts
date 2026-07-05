@@ -32,7 +32,7 @@ export interface PhoneCallEntry {
   subtotal: number
   tax: number
   total: number
-  orderType: 'pickup' | 'delivery' | 'dine_in'
+  orderType: 'pickup' | 'delivery' | 'dine_in' | 'reservation'
   transcript: TranscriptLine[]
   createdAt: string
   paymentStatus: PaymentStatus
@@ -50,7 +50,7 @@ export interface PhoneBizConfig {
   phone: string
   greeting: string
   voice: string
-  orderTypes: ('pickup' | 'delivery' | 'dine_in')[]
+  orderTypes: ('pickup' | 'delivery' | 'dine_in' | 'reservation')[]
   menu: PhoneMenuItem[]
 }
 

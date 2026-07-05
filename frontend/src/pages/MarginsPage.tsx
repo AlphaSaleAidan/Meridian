@@ -95,6 +95,75 @@ function CostSheetUploader({ orgId, onComplete }: { orgId: string; onComplete: (
   )
 }
 
+// Direct CSV cost import — "upload a CSV of the inventory cost or recent
+// inventory stock up". Deterministic parse on the backend (no AI pipeline):
+// rows are matched to products by name and products.cost_cents is set, so
+// margins compute from real cost data.
+function CostCsvUploader({ orgId, disabled, onComplete }: { orgId: string; disabled?: boolean; onComplete: () => void }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [state, setState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle')
+  const [msg, setMsg] = useState('')
+  const [unmatched, setUnmatched] = useState<string[]>([])
+  const [showUnmatched, setShowUnmatched] = useState(false)
+
+  async function handleFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setState('uploading'); setMsg(file.name); setUnmatched([]); setShowUnmatched(false)
+    try {
+      const text = await file.text()
+      const r = await api.importProductCosts(orgId, text)
+      const total = r.matched + r.unmatched.length
+      setState('done')
+      setMsg(total === 0
+        ? 'No product rows with costs found in that CSV.'
+        : `Updated costs for ${r.updated} of ${total} product${total === 1 ? '' : 's'}.`)
+      setUnmatched(r.unmatched)
+      if (r.updated > 0) onComplete()
+    } catch (err: any) {
+      setState('error'); setMsg(err?.message?.slice(0, 140) || 'Upload failed.')
+    }
+  }
+
+  const busy = state === 'uploading'
+  return (
+    <div className="flex flex-col items-start sm:items-end gap-1.5 flex-shrink-0">
+      <input ref={inputRef} type="file" accept=".csv,text/csv" onChange={handleFile} className="sr-only" />
+      <button
+        onClick={() => inputRef.current?.click()}
+        disabled={disabled || busy}
+        title={disabled ? 'Cost upload works on live data — demo mode uses sample costs' : 'CSV with product name + cost columns (or total + quantity for a stock-up)'}
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#1F1F23] bg-[#111113] text-[#F5F5F7] font-semibold text-sm hover:border-[#1A8FD6]/60 hover:text-[#1A8FD6] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {state === 'done' ? <CheckCircle2 size={16} className="text-[#17C5B0]" /> : busy ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+        {busy ? 'Importing…' : 'Upload cost CSV'}
+      </button>
+      {msg && (
+        <p className={clsx('text-2xs font-mono max-w-[260px] sm:text-right', state === 'error' ? 'text-red-400' : 'text-pm-muted')}>{msg}</p>
+      )}
+      {unmatched.length > 0 && (
+        <div className="max-w-[260px]">
+          <button
+            onClick={() => setShowUnmatched(!showUnmatched)}
+            className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300 transition-colors"
+          >
+            {unmatched.length} row{unmatched.length === 1 ? '' : 's'} didn&apos;t match a product
+            {showUnmatched ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+          </button>
+          {showUnmatched && (
+            <ul className="mt-1 p-2 bg-[#0A0A0B] rounded-lg border border-[#1F1F23] max-h-32 overflow-y-auto space-y-0.5">
+              {unmatched.map(name => (
+                <li key={name} className="text-[10px] font-mono text-[#A1A1A8] truncate">{name}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const tooltipStyle = {
   backgroundColor: '#111113',
   border: '1px solid #1F1F23',
@@ -191,11 +260,14 @@ export default function MarginsPage() {
   return (
     <div className="space-y-6">
       <ScrollReveal variant="fadeUp">
-        <div>
-          <h1 className="text-2xl font-bold text-[#F5F5F7]">Margin Analysis</h1>
-          <p className="text-sm text-[#A1A1A8] mt-1">
-            Powered by Margin Optimizer agent • Formula-driven cost accounting with waste-adjusted margins
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-[#F5F5F7]">Margin Analysis</h1>
+            <p className="text-sm text-[#A1A1A8] mt-1">
+              Powered by Margin Optimizer agent • Formula-driven cost accounting with waste-adjusted margins
+            </p>
+          </div>
+          <CostCsvUploader orgId={orgId} disabled={isDemo} onComplete={apiData.refetch} />
         </div>
       </ScrollReveal>
 

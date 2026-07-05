@@ -318,6 +318,7 @@ def _toast_dining_option(order_type: str) -> str:
         "pickup": "TAKE_OUT",
         "delivery": "DELIVERY",
         "dine_in": "DINE_IN",
+        "reservation": "DINE_IN",
     }
     return mapping.get(order_type, "TAKE_OUT")
 
