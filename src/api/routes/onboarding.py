@@ -390,7 +390,9 @@ async def provision_customer(req: ProvisionCustomerRequest):
                 "status": "active",
                 "created_at": now,
                 "access_token": portal_token,
-                "token_status": "active",
+                # constrained to pending/redeemed/expired (20260429_001); the portal
+                # redemption flow flips it to 'redeemed' — "active" 23514s the upsert
+                "token_status": "pending",
             }
             await db.upsert("businesses", biz_data, on_conflict="id")
         except Exception as e:

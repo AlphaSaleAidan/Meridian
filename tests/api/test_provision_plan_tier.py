@@ -58,3 +58,11 @@ def test_provision_customer_writes_mapped_plan_tier():
     src = inspect.getsource(onboarding_mod.provision_customer)
     assert '"plan_tier": _plan_tier(req.plan)' in src
     assert '"plan_tier": req.plan' not in src
+
+
+def test_provision_token_status_is_constraint_valid():
+    # businesses_token_status_check allows pending/redeemed/expired only;
+    # "active" was the second hidden 23514 behind the plan_tier one.
+    src = inspect.getsource(onboarding_mod.provision_customer)
+    assert '"token_status": "pending"' in src
+    assert '"token_status": "active"' not in src
