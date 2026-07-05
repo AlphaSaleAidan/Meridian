@@ -389,8 +389,11 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
   isDemo: boolean
 }) {
   const apiBase = (import.meta.env.VITE_API_URL || '') as string
-  const [connectStatus, setConnectStatus] = useState<'loading' | 'connected' | 'not_connected' | 'error'>('loading')
+  // Same response shape as StripeConnectStep (canada merchant onboarding wizard):
+  // connected = Stripe account exists, charges_enabled = onboarding finished / payouts active.
+  const [connectStatus, setConnectStatus] = useState<'loading' | 'connected' | 'incomplete' | 'not_connected'>('loading')
   const [connectLoading, setConnectLoading] = useState(false)
+  const [connectError, setConnectError] = useState<string | null>(null)
 
   const orderCalls = calls.filter(c => c.status === 'order_placed' && c.total > 0)
 
@@ -401,27 +404,39 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
       try {
         const headers = await getAuthHeaders()
         const r = await fetch(`${apiBase}/api/stripe/connect/status/${orgId}`, { headers })
-        const data = r.ok ? (await r.json() as { connected: boolean }) : null
-        setConnectStatus(data?.connected ? 'connected' : 'not_connected')
+        const data = r.ok
+          ? (await r.json() as { connected: boolean; charges_enabled: boolean; details_submitted?: boolean })
+          : null
+        setConnectStatus(data?.charges_enabled ? 'connected' : data?.connected ? 'incomplete' : 'not_connected')
       } catch { setConnectStatus('not_connected') }
     })()
   }, [orgId, isDemo, apiBase])
 
   async function handleConnect() {
-    if (isDemo || connectLoading) return
+    if (isDemo || connectLoading || !orgId) return
     setConnectLoading(true)
+    setConnectError(null)
     try {
       const headers = await getAuthHeaders()
       const res = await fetch(`${apiBase}/api/stripe/connect/onboard/${orgId}`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
       })
-      if (res.ok) {
-        const data = (await res.json()) as { onboarding_url?: string }
-        if (data.onboarding_url) { window.location.href = data.onboarding_url }
+      if (!res.ok) {
+        let detail = `Could not start bank setup (${res.status})`
+        try { detail = (await res.json()).detail || detail } catch { /* noop */ }
+        throw new Error(detail)
       }
-    } catch { /* noop — leave status as-is */ }
-    finally { setConnectLoading(false) }
+      const { onboarding_url } = (await res.json()) as { onboarding_url?: string }
+      if (!onboarding_url) throw new Error('Bank setup is unavailable right now — please try again.')
+      // Full-page redirect to Stripe's hosted onboarding. Stripe sends the
+      // merchant back here when done; the status fetch above then reports
+      // charges_enabled and we render the connected state.
+      window.location.href = onboarding_url
+    } catch (e) {
+      setConnectError(e instanceof Error ? e.message : 'Bank setup failed — please try again.')
+      setConnectLoading(false)
+    }
   }
 
   const totals = useMemo(() => orderCalls.reduce(
@@ -452,14 +467,22 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
             {connectStatus === 'connected' ? (
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-[#F5F5F7]">Payouts connected</h2>
+                  <h2 className="text-base font-bold text-[#F5F5F7]">Bank account connected</h2>
                   <CheckCircle2 size={14} className="text-[#17C5B0]" />
                 </div>
-                <p className="text-xs text-[#A1A1A8] mt-1">Your Stripe account is linked — earnings are deposited daily.</p>
+                <p className="text-xs text-[#A1A1A8] mt-1">Payouts are active — your net earnings are deposited straight to your bank via Stripe.</p>
+              </div>
+            ) : connectStatus === 'incomplete' ? (
+              <div>
+                <h2 className="text-base font-bold text-[#F5F5F7]">Finish bank setup</h2>
+                <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
+                  Your Stripe account was created but setup isn&apos;t finished, so payouts aren&apos;t active yet.
+                  Continue where you left off — it only takes a few minutes.
+                </p>
               </div>
             ) : (
               <div>
-                <h2 className="text-base font-bold text-[#F5F5F7]">Connect to get paid</h2>
+                <h2 className="text-base font-bold text-[#F5F5F7]">Connect a bank account to get paid</h2>
                 <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
                   Link your bank account via Stripe Connect (uses Plaid) to receive daily payouts of your net revenue.
                   Your earnings are deposited automatically after each completed order.
@@ -470,22 +493,31 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
           {connectStatus !== 'connected' && (
             <button
               onClick={isDemo ? undefined : handleConnect}
-              disabled={connectLoading || isDemo}
+              disabled={connectLoading || isDemo || connectStatus === 'loading'}
               className={clsx(
                 'flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
                 isDemo
                   ? 'bg-[#1A8FD6]/30 text-[#1A8FD6]/60 cursor-not-allowed'
-                  : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90',
+                  : 'bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 disabled:opacity-60',
               )}
             >
-              {connectLoading
+              {connectLoading || connectStatus === 'loading'
                 ? <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 : <ExternalLink size={14} />
               }
-              {connectLoading ? 'Redirecting…' : 'Connect payouts'}
+              {connectLoading ? 'Redirecting…'
+                : connectStatus === 'loading' ? 'Checking…'
+                : connectStatus === 'incomplete' ? 'Continue bank setup'
+                : 'Connect bank account'}
             </button>
           )}
         </div>
+        {connectError && (
+          <div className="mt-4 bg-red-400/5 border border-red-400/20 rounded-lg px-4 py-3 flex items-start gap-2">
+            <AlertCircle size={12} className="text-red-400 mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-red-400 leading-relaxed">{connectError}</p>
+          </div>
+        )}
         {connectStatus !== 'connected' && (
           <div className="mt-4 bg-[#111113] border border-[#1F1F23] rounded-lg px-4 py-3 flex items-start gap-2">
             <Info size={12} className="text-[#A1A1A8] mt-0.5 flex-shrink-0" />

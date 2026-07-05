@@ -3,11 +3,12 @@ import type { ScheduleShift, ScheduleStaffMember } from '@/lib/agent-data'
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const MARGIN = 15
-const BG = '#0a0f0d'
-const CARD = '#0f1512'
-const BORDER = '#1a2420'
+// Print-friendly palette: white paper, dark ink, light gray grid, accent header
+const CARD = '#ffffff'
+const HEADER_FILL = '#eaf2f8'
+const BORDER = '#d4dad6'
 const ACCENT = '#1A8FD6'
-const TEXT = '#e8ede8'
+const TEXT = '#1f2523'
 const MUTED = '#6b7a74'
 
 function addDays(date: Date, days: number): Date {
@@ -60,17 +61,15 @@ export async function generateSchedulePdf(input: SchedulePdfInput): Promise<Blob
   const staffMap = new Map<string, ScheduleStaffMember>()
   staff.forEach(s => staffMap.set(s.id, s))
 
-  // Only include assigned, non-recommended shifts
+  // Assigned, non-recommended shifts
   const realShifts = shifts.filter(s => !s.isRecommended && s.staffMemberId)
+  // Unassigned (open) shifts still belong on the printed week
+  const openShifts = shifts.filter(s => !s.isRecommended && !s.staffMemberId)
 
   // Unique staff that have shifts
   const staffWithShifts = staff.filter(s =>
     realShifts.some(sh => sh.staffMemberId === s.id)
   )
-
-  // Background
-  setFillColor(doc, BG)
-  doc.rect(0, 0, pageW, pageH, 'F')
 
   // Header
   let y = 14
@@ -94,53 +93,60 @@ export async function generateSchedulePdf(input: SchedulePdfInput): Promise<Blob
   const rowH = 9
   const headerH = 8
 
-  // Table header — day names
-  let x = MARGIN
-  setFillColor(doc, '#142018')
-  setDrawColor(doc, BORDER)
-  doc.rect(x, y, nameColW, headerH, 'FD')
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'bold')
-  setColor(doc, MUTED)
-  doc.text('Staff', x + 2, y + 5.5)
+  // Table header — day names (redrawn at the top of every page)
+  function drawDayHeader(headerY: number): number {
+    let hx = MARGIN
+    setFillColor(doc, HEADER_FILL)
+    setDrawColor(doc, BORDER)
+    doc.rect(hx, headerY, nameColW, headerH, 'FD')
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'bold')
+    setColor(doc, MUTED)
+    doc.text('Staff', hx + 2, headerY + 5.5)
 
-  x += nameColW
-  for (let d = 0; d < 7; d++) {
-    setFillColor(doc, '#142018')
-    doc.rect(x, y, dayColW, headerH, 'FD')
-    setColor(doc, ACCENT)
-    const dayDate = addDays(weekStartDate, d)
-    const label = `${DAY_NAMES[d].slice(0, 3)} ${dayDate.getDate()}`
-    doc.text(label, x + dayColW / 2, y + 5.5, { align: 'center' })
-    x += dayColW
+    hx += nameColW
+    for (let d = 0; d < 7; d++) {
+      setFillColor(doc, HEADER_FILL)
+      doc.rect(hx, headerY, dayColW, headerH, 'FD')
+      setColor(doc, ACCENT)
+      const dayDate = addDays(weekStartDate, d)
+      const label = `${DAY_NAMES[d].slice(0, 3)} ${dayDate.getDate()}`
+      doc.text(label, hx + dayColW / 2, headerY + 5.5, { align: 'center' })
+      hx += dayColW
+    }
+    return headerY + headerH
   }
 
-  y += headerH
+  y = drawDayHeader(y)
 
-  // Staff rows
-  const staffList = staffWithShifts.length > 0 ? staffWithShifts : staff
-  for (const member of staffList) {
-    if (y + rowH > pageH - 20) break // prevent overflow
+  // Page break — start a new page and repeat the day-column header
+  function breakPageIfNeeded() {
+    if (y + rowH > pageH - 20) {
+      doc.addPage()
+      y = drawDayHeader(MARGIN)
+    }
+  }
 
-    x = MARGIN
+  // One grid row: name cell + 7 day cells
+  function drawRow(name: string, shiftsForDay: (d: number) => string) {
+    breakPageIfNeeded()
+
+    let x = MARGIN
     setFillColor(doc, CARD)
     setDrawColor(doc, BORDER)
     doc.rect(x, y, nameColW, rowH, 'FD')
     doc.setFontSize(7)
     doc.setFont('helvetica', 'bold')
     setColor(doc, TEXT)
-    doc.text(member.name, x + 2, y + 6)
+    doc.text(name, x + 2, y + 6)
 
     x += nameColW
     for (let d = 0; d < 7; d++) {
       setFillColor(doc, CARD)
       doc.rect(x, y, dayColW, rowH, 'FD')
 
-      const dayShifts = realShifts.filter(
-        s => s.staffMemberId === member.id && s.dayOfWeek === d
-      )
-      if (dayShifts.length > 0) {
-        const label = dayShifts.map(s => `${s.startTime}–${s.endTime}`).join(', ')
+      const label = shiftsForDay(d)
+      if (label) {
         doc.setFontSize(6.5)
         doc.setFont('helvetica', 'normal')
         setColor(doc, TEXT)
@@ -151,6 +157,27 @@ export async function generateSchedulePdf(input: SchedulePdfInput): Promise<Blob
     }
 
     y += rowH
+  }
+
+  // Staff rows
+  const staffList = staffWithShifts.length > 0 ? staffWithShifts : staff
+  for (const member of staffList) {
+    drawRow(member.name, d =>
+      realShifts
+        .filter(s => s.staffMemberId === member.id && s.dayOfWeek === d)
+        .map(s => `${s.startTime}–${s.endTime}`)
+        .join(', ')
+    )
+  }
+
+  // Open (unassigned) shifts — skip the row when there are none
+  if (openShifts.length > 0) {
+    drawRow('Open shifts', d =>
+      openShifts
+        .filter(s => s.dayOfWeek === d)
+        .map(s => `${s.startTime}–${s.endTime} (${s.role.replace(/_/g, ' ')})`)
+        .join(', ')
+    )
   }
 
   // Footer

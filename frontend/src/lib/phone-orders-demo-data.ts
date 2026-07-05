@@ -324,15 +324,18 @@ export function getPhoneDemoData(bizId?: string) {
   return { business: biz, calls, businesses: allBiz }
 }
 
+// Labels/descriptions = the Vapi native voice actually used on live calls
+// (see KOKORO_TO_VAPI in src/api/routes/vapi_webhook.py). The stored `id`
+// stays the legacy kokoro-style value so existing merchant configs remain valid.
 export const VOICE_OPTIONS = [
-  { id: 'af_bella', label: 'Bella', desc: 'Warm, professional (female)', sampleText: "Thank you for calling! I'd be happy to help you place an order today." },
-  { id: 'af_sarah', label: 'Sarah', desc: 'Bright, casual (female)', sampleText: "Hey there! Welcome in -- what can I get started for you?" },
-  { id: 'af_nicole', label: 'Nicole', desc: 'Calm, soothing (female)', sampleText: "Hi, you've reached us -- take your time, I'm here whenever you're ready." },
-  { id: 'bf_emma', label: 'Emma', desc: 'Refined British (female)', sampleText: "Good day, thank you for ringing -- how may I help with your order?" },
-  { id: 'am_adam', label: 'Adam', desc: 'Deep, authoritative (male)', sampleText: "Good evening. I'll take your order whenever you're ready." },
-  { id: 'am_michael', label: 'Michael', desc: 'Conversational (male)', sampleText: "Hi! Thanks for calling -- let me know what sounds good to you." },
-  { id: 'am_echo', label: 'Echo', desc: 'Smooth, upbeat (male)', sampleText: "Hey, great to hear from you -- what can I grab for you tonight?" },
-  { id: 'bm_george', label: 'George', desc: 'Distinguished British (male)', sampleText: "Hello there, lovely to hear from you -- what shall I put together?" },
+  { id: 'af_bella', label: 'Savannah', desc: 'Warm, professional (female)', sampleText: "Thank you for calling! I'd be happy to help you place an order today." },
+  { id: 'af_sarah', label: 'Lily', desc: 'Bright, friendly (female)', sampleText: "Hey there! Welcome in -- what can I get started for you?" },
+  { id: 'af_nicole', label: 'Hana', desc: 'Calm, gentle (female)', sampleText: "Hi, you've reached us -- take your time, I'm here whenever you're ready." },
+  { id: 'bf_emma', label: 'Paige', desc: 'Polished, articulate (female)', sampleText: "Good day, thank you for ringing -- how may I help with your order?" },
+  { id: 'am_adam', label: 'Rohan', desc: 'Deep, confident (male)', sampleText: "Good evening. I'll take your order whenever you're ready." },
+  { id: 'am_michael', label: 'Elliot', desc: 'Conversational, natural (male) -- default', sampleText: "Hi! Thanks for calling -- let me know what sounds good to you." },
+  { id: 'am_echo', label: 'Cole', desc: 'Smooth, energetic (male)', sampleText: "Hey, great to hear from you -- what can I grab for you tonight?" },
+  { id: 'bm_george', label: 'Spencer', desc: 'Easygoing, upbeat (male)', sampleText: "Hello there, lovely to hear from you -- what shall I put together?" },
 ]
 
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {

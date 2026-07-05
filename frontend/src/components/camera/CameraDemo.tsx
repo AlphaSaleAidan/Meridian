@@ -12,9 +12,10 @@ type Staff = { id: string; score: number; grade: string; coverage_pct: number; c
 type Data = { summary: { fps: number; duration_s: number; unique_people: number; peak_occupancy: number; entries: number; customers_served: number; staff: Staff[]; zones: { staff: number[][]; bar_front: number[][] } }; frames: Frame[] }
 
 const STAFF_NAMES: Record<number, string> = { 7: 'Maria L.' } // demo roster; customers stay anonymous
-// `illustrative: true` => layer is a synthetic value-prop teaser, not real model output (POS x-ref, exceptions).
-const LAYERS: [string, string, boolean?][] = [['detections', 'Detections'], ['identity', 'Identity'], ['journey', 'Journey'], ['zones', 'Zones'], ['heatmap', 'Heatmap'], ['staff', 'Staff'], ['pos_xref', 'POS x-ref', true], ['exceptions', 'Exceptions', true]]
-const PRESETS: Record<string, string[]> = { Operations: ['detections', 'zones', 'heatmap'], 'Staff review': ['detections', 'staff', 'identity', 'zones'], 'Loss Prevention': ['detections', 'identity', 'pos_xref', 'exceptions'], All: LAYERS.map(l => l[0]), Raw: [] }
+// Every layer is real model output — these are the exact signals the edge agent
+// turns into data (vision_traffic / vision_visits): tracks, zones, dwell, heat.
+const LAYERS: [string, string][] = [['detections', 'Detections'], ['identity', 'Identity'], ['journey', 'Journey'], ['dwell', 'Dwell'], ['zones', 'Zones'], ['heatmap', 'Heatmap'], ['staff', 'Staff']]
+const PRESETS: Record<string, string[]> = { Operations: ['detections', 'zones', 'heatmap'], 'Staff review': ['detections', 'staff', 'identity', 'zones'], 'Customer flow': ['detections', 'identity', 'journey', 'dwell'], All: LAYERS.map(l => l[0]), Raw: [] }
 
 export default function CameraDemo() {
   const vidRef = useRef<HTMLVideoElement>(null)
@@ -47,6 +48,18 @@ export default function CameraDemo() {
     const poly = (pts: number[][], X: (n: number) => number, Y: (n: number) => number, stroke: string, fill: string) => { ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]) }
     const grade = data.summary.staff[0]?.grade ?? ''
     const fps = data.summary.fps
+    // Dwell = frames since the track first appeared — same signal the edge agent
+    // writes to vision_visits.dwell_seconds.
+    const firstSeen = new Map<number, number>()
+    data.frames.forEach((f, i) => f.boxes.forEach(b => { if (!firstSeen.has(b.id)) firstSeen.set(b.id, i) }))
+    const inPoly = (px: number, py: number, pts: number[][]) => {
+      let inside = false
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i], [xj, yj] = pts[j]
+        if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside
+      }
+      return inside
+    }
     // --- Smoothing layer -------------------------------------------------
     // The clip data is keyframed at 24fps; drawing it raw makes boxes teleport on
     // any frame-skip and makes labels/counters flicker frame-to-frame. We keep a
@@ -85,15 +98,25 @@ export default function CameraDemo() {
       })
       rboxes.forEach((r, id) => { if (!r.live) { r.op = ease(r.op, 0, dt, 0.14); if (r.op < 0.02) rboxes.delete(id) } })
       if (layers.heatmap) for (let r = 0; r < heat.rows; r++) for (let q = 0; q < heat.cols; q++) { const v = heat.g[r][q] / heat.mx; if (v > .05) { ctx.fillStyle = `rgba(240,140,70,${Math.min(.5, v * .7)})`; ctx.fillRect(q * w / heat.cols, r * h / heat.rows, w / heat.cols, h / heat.rows) } }
-      if (layers.zones) { poly(data.summary.zones.staff, X, Y, 'rgba(23,197,176,.9)', 'rgba(23,197,176,.10)'); poly(data.summary.zones.bar_front, X, Y, 'rgba(26,143,214,.9)', 'rgba(26,143,214,.08)'); pill(X(data.summary.zones.staff[0][0]), Y(data.summary.zones.staff[0][1]), 'Staff zone', '#17C5B0', '#04211c') }
+      if (layers.zones) {
+        const inStaff = fr.boxes.filter(b => inPoly(b.x + b.w / 2, b.y + b.h, data.summary.zones.staff)).length
+        const inBar = fr.boxes.filter(b => inPoly(b.x + b.w / 2, b.y + b.h, data.summary.zones.bar_front)).length
+        poly(data.summary.zones.staff, X, Y, 'rgba(23,197,176,.9)', 'rgba(23,197,176,.10)')
+        poly(data.summary.zones.bar_front, X, Y, 'rgba(26,143,214,.9)', 'rgba(26,143,214,.08)')
+        pill(X(data.summary.zones.staff[0][0]), Y(data.summary.zones.staff[0][1]), `Staff zone · ${inStaff}`, '#17C5B0', '#04211c')
+        pill(X(data.summary.zones.bar_front[0][0]), Y(data.summary.zones.bar_front[0][1]), `Bar · ${inBar}`, '#1A8FD6', '#03141f')
+      }
       if (layers.journey) { ctx.strokeStyle = 'rgba(26,143,214,.8)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round'; const hist: Record<number, number[][]> = {}; for (let j = Math.max(0, k - 26); j <= k; j++) data.frames[j].boxes.forEach(b => { (hist[b.id] = hist[b.id] || []).push([b.x + b.w / 2, b.y + b.h]) }); Object.values(hist).forEach(tr => { if (tr.length < 2) return; ctx.beginPath(); tr.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y))); ctx.stroke() }) }
       rboxes.forEach((r, id) => {
         const isStaff = staffIds.current.has(id), x = X(r.x), y = Y(r.y), bw = X(r.w), bh = Y(r.h)
         ctx.globalAlpha = r.op < 0 ? 0 : r.op > 1 ? 1 : r.op
         if (layers.staff && isStaff) { ctx.save(); ctx.shadowColor = 'rgba(23,197,176,.7)'; ctx.shadowBlur = 10; ctx.strokeStyle = '#17C5B0'; ctx.lineWidth = 3; rr(x, y, bw, bh, 6); ctx.stroke(); ctx.restore(); pill(x, y - 4, (STAFF_NAMES[id] || ('STAFF #' + id)) + (grade ? ' · ' + grade : ''), '#17C5B0', '#04211c') }
-        else if (layers.detections) { ctx.save(); ctx.shadowColor = 'rgba(240,179,91,.45)'; ctx.shadowBlur = 5; ctx.strokeStyle = '#F0B35B'; ctx.lineWidth = 2; rr(x, y, bw, bh, 5); ctx.stroke(); ctx.restore(); if (!layers.pos_xref && !layers.identity) pill(x, y - 4, Math.round(r.conf * 100) + '%', 'rgba(0,0,0,.5)', '#F0B35B') }
+        else if (layers.detections) { ctx.save(); ctx.shadowColor = 'rgba(240,179,91,.45)'; ctx.shadowBlur = 5; ctx.strokeStyle = '#F0B35B'; ctx.lineWidth = 2; rr(x, y, bw, bh, 5); ctx.stroke(); ctx.restore(); if (!layers.identity) pill(x, y - 4, Math.round(r.conf * 100) + '%', 'rgba(0,0,0,.5)', '#F0B35B') }
         if (layers.identity && !isStaff) pill(x, y + bh + 20, '#' + id, '#9B7FD4', '#fff')
-        if (layers.pos_xref && !isStaff && id % 4 === 0) pill(x, y - 4, '✓ $' + (18 + id % 30) + ' · ' + (1 + id % 4), '#17C5B0', '#04211c')
+        if (layers.dwell && !isStaff) {
+          const dwellS = Math.max(0, Math.round((k - (firstSeen.get(id) ?? k)) / fps))
+          pill(x, y + bh + (layers.identity ? 42 : 20), `⏱ ${Math.floor(dwellS / 60)}:${String(dwellS % 60).padStart(2, '0')}`, 'rgba(0,0,0,.55)', '#F5F5F7')
+        }
       })
       ctx.globalAlpha = 1
     }
@@ -125,17 +148,15 @@ export default function CameraDemo() {
             {Object.keys(PRESETS).map(n => <button key={n} data-testid={`camera-preset-${n}`} onClick={() => setPreset(n)} className="px-3 py-1.5 rounded-full text-[11px] font-semibold border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] transition-all">{n}</button>)}
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2" data-testid="camera-layers">
-            {LAYERS.map(([k, lab, illustrative]) => (
+            {LAYERS.map(([k, lab]) => (
               <button key={k} data-testid={`camera-layer-${k}`} aria-pressed={!!layers[k]} onClick={() => setLayers(p => ({ ...p, [k]: !p[k] }))}
-                title={illustrative ? 'Illustrative — sample data, not live model output' : undefined}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left transition-all ${layers[k] ? 'bg-[#17C5B0]/15 border border-[#17C5B0]/40' : 'border border-[#1F1F23] hover:bg-[#1F1F23]'}`}>
                 <span className={`w-2 h-2 rounded-full ${layers[k] ? 'bg-[#17C5B0]' : 'bg-[#A1A1A8]/30'}`} />
                 <span className={`text-[12px] font-semibold ${layers[k] ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]'}`}>{lab}</span>
-                {illustrative && <span className="ml-auto text-[9px] font-bold uppercase tracking-wide text-[#F0B35B]/80 px-1 py-0.5 rounded bg-[#F0B35B]/10">demo</span>}
               </button>
             ))}
           </div>
-          {s && <p className="text-[11px] text-[#A1A1A8]/60 mt-2.5 leading-relaxed">Model: YOLOv8 + ByteTrack · {s.fps} fps · {s.duration_s}s · {data!.frames.length} frames analyzed. Scene is illustrative; detection, tracking, counts &amp; grading are real model output.</p>}
+          {s && <p className="text-[11px] text-[#A1A1A8]/60 mt-2.5 leading-relaxed">Model: YOLOv8 + ByteTrack · {s.fps} fps · {s.duration_s}s · {data!.frames.length} frames analyzed. Scene is illustrative; every overlay — detection, tracking, dwell, zones, heat &amp; grading — is real model output, the same signals your cameras turn into data.</p>}
         </div>
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl bg-[#111113] border border-[#1F1F23] p-4">

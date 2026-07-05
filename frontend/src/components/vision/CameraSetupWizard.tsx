@@ -36,7 +36,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     active_hours: { start: '07:00', end: '22:00' },
     zone_config: {},
   })
-  const [edgeDetected, setEdgeDetected] = useState(false)
+  const [selectedDevice, setSelectedDevice] = useState<string | null>(null)
   const [connectionTested, setConnectionTested] = useState(false)
   const [error, setError] = useState('')
   const [consentConfirmed, setConsentConfirmed] = useState(false)
@@ -91,7 +91,13 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        setError(data.detail || 'Failed to register camera')
+        // FastAPI validation errors put an array of objects in `detail`
+        const detail = typeof data.detail === 'string'
+          ? data.detail
+          : Array.isArray(data.detail)
+            ? data.detail.map((d: any) => d?.msg).filter(Boolean).join('; ')
+            : ''
+        setError(detail || 'Failed to register camera')
         return
       }
       onComplete(config)
@@ -162,10 +168,10 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                 ].map(device => (
                   <button
                     key={device.name}
-                    onClick={() => setEdgeDetected(true)}
+                    onClick={() => setSelectedDevice(device.name)}
                     className={clsx(
                       'p-3 rounded-lg border text-left transition-all',
-                      edgeDetected && device.recommended
+                      selectedDevice === device.name
                         ? 'border-[#1A8FD6] bg-[#1A8FD6]/5'
                         : 'border-[#1F1F23] hover:border-[#A1A1A8]/20 bg-[#0A0A0B]'
                     )}

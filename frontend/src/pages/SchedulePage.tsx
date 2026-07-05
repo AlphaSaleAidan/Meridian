@@ -448,7 +448,7 @@ export default function SchedulePage() {
     const a = document.createElement('a'); a.href = url
     a.download = `schedule-${formatDateISO(weekStartDate)}.pdf`; a.click()
     URL.revokeObjectURL(url)
-  }, [shifts, staff, weekStartDate])
+  }, [shifts, staff, weekStartDate, org])
 
   // Canada always renders a ready-to-use (empty) schedule — no radar loader.
   // Staff sync from the POS lands in the calendar; otherwise the merchant adds
@@ -493,9 +493,9 @@ export default function SchedulePage() {
                 <Copy size={15} /><span>Copy</span>
               </button>
               <button onClick={handleDownloadPdf}
-                aria-label="Download schedule as PDF" title="Download PDF"
-                className="flex items-center justify-center pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
-                <FileDown size={15} />
+                aria-label="Print week as PDF" title="Print week (PDF)"
+                className="flex items-center justify-center gap-1.5 pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <FileDown size={15} /><span>Print week (PDF)</span>
               </button>
               <button onClick={() => setShowAddStaff(true)}
                 aria-label="Manage staff" title="Manage staff"

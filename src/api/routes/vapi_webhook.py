@@ -170,6 +170,27 @@ def _system_prompt(config) -> str:
     )
 
 
+# Merchants pick a kokoro-style voice id in Phone Orders settings (stored on
+# phone_agent_config.voice). Vapi only serves its own native voices, so map
+# each UI id to the closest Vapi voice. Unknown/empty → Elliot. Configs
+# default to af_bella, so unpicked merchants move Elliot → Savannah — matching
+# the female "Bella" their settings UI has claimed all along.
+KOKORO_TO_VAPI = {
+    "af_bella": "Savannah",
+    "af_sarah": "Lily",
+    "af_nicole": "Hana",
+    "bf_emma": "Paige",
+    "am_adam": "Rohan",
+    "am_michael": "Elliot",
+    "am_echo": "Cole",
+    "bm_george": "Spencer",
+}
+
+
+def _vapi_voice(voice_id: str) -> str:
+    return KOKORO_TO_VAPI.get((voice_id or "").strip(), "Elliot")
+
+
 _SUBMIT_ORDER_TOOL = {
     "type": "function",
     "function": {
@@ -199,7 +220,7 @@ def _assistant_for(config) -> dict:
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": config.greeting or f"Thanks for calling {config.business_name}! What can I get for you?",
         "transcriber": {"provider": "deepgram", "model": "nova-3"},
-        "voice": {"provider": "vapi", "voiceId": "Elliot"},
+        "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
         "model": {"provider": "openai", "model": "gpt-4.1",
                   "messages": [{"role": "system", "content": _system_prompt(config)}],
                   "tools": [_SUBMIT_ORDER_TOOL]},
