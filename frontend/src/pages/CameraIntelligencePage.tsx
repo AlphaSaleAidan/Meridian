@@ -247,7 +247,7 @@ export default function CameraIntelligencePage() {
           <div className="flex items-center gap-2">
             {isDemo && (
               <a
-                href={isCanadaPath() ? '/canada/demo/camera/live' : '/demo/camera-analytics'}
+                href={isCanadaPath() ? '/canada/demo/camera-analytics' : '/demo/camera-analytics'}
                 className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-lg border border-[#7c3aed]/30 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 transition-colors"
               >
                 <Eye size={13} /> Live Camera Demo <ArrowUpRight size={11} />

@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { useMobile } from '@/hooks/useMobile'
 import { PortalLoadingSkeleton } from '@/pages/canada/portal/PortalPage'
@@ -14,8 +14,10 @@ export default function MerchantPillarPage({ pillar }: { pillar: Pillar }) {
   const [params, setParams] = useSearchParams()
   const { isMobile } = useMobile()
 
+  // Deep links use a path segment (/camera/live); in-app tabs use ?view=.
+  const splat = (useParams()['*'] || '').split('/')[0]
   const segments = isMobile ? pillar.segments.filter(s => !s.desktopOnly) : pillar.segments
-  const requested = params.get('view')
+  const requested = params.get('view') || splat
   const active = segments.find(s => s.view === requested) ?? segments[0]
   const Active = active.Component
 
