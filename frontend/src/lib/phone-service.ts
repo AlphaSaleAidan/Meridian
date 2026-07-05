@@ -17,6 +17,11 @@ export function isValidE164(value: string): boolean {
   return E164_RE.test(value.trim())
 }
 
+export interface ReservationConfig {
+  on_website: boolean
+  website_url: string
+}
+
 export interface PhoneConfig {
   exists: boolean
   merchant_id: string
@@ -41,6 +46,7 @@ export interface PhoneConfig {
   // Merchant-customized Text-to-Pay SMS body. Supports {name} {business}
   // {total} {link} placeholders; empty/unset falls back to the default copy.
   sms_pay_template?: string
+  reservation_config?: ReservationConfig | null
 }
 
 /** Result of POST /api/phone/config — carries enough to explain a failure. */

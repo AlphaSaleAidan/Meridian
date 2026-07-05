@@ -41,6 +41,7 @@ class MerchantPhoneConfig:
     # Merchant-customized Text-to-Pay SMS body ({name} {business} {total}
     # {link} placeholders, safe-replaced by sms_checkout). "" = default copy.
     sms_pay_template: str = ""
+    reservation_config: dict | None = None
     # PAY ON THE PHONE: pay_now (DEFAULT, anti-scam — kitchen only sees PAID
     # tickets), pay_at_pickup (legacy OPEN/unpaid), or optional (caller chooses).
     payment_mode: str = "pay_now"
@@ -122,6 +123,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 sms_ordering_enabled=row.get("sms_ordering_enabled", True),
                 tax_rate=row.get("tax_rate", 0.13),
                 sms_pay_template=(row.get("sms_pay_template") or "").strip(),
+                reservation_config=row.get("reservation_config") or None,
                 # Default to pay_now if the column is missing/null (anti-scam default).
                 payment_mode=_norm_payment_mode(row.get("payment_mode")),
                 business_timezone=(row.get("business_timezone") or "").strip(),

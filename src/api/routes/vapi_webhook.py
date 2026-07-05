@@ -139,8 +139,28 @@ def _system_prompt(config) -> str:
             menu_lines.append(line)
 
     menu = ("\n\nMENU:\n" + "\n".join(menu_lines)) if menu_lines else ""
-    order_types = ", ".join(getattr(config, "order_types", ["pickup", "delivery"]))
+    raw_types = list(getattr(config, "order_types", ["pickup", "delivery"]))
+    # "dine_in" was renamed to "reservation" in the product; old configs persist.
+    display_types = ["reservation" if t == "dine_in" else t for t in raw_types]
+    order_types = ", ".join(display_types)
     business = config.business_name
+
+    reservation_lines = ""
+    if "reservation" in display_types:
+        resv = getattr(config, "reservation_config", None) or {}
+        if resv.get("on_website") and resv.get("website_url"):
+            reservation_lines = (
+                "\nRESERVATIONS: If the caller wants a reservation, tell them the fastest way "
+                f"is to book online at {resv['website_url']} — offer to take their name, party "
+                "size, and preferred time as a backup if they'd rather book by phone."
+            )
+        else:
+            reservation_lines = (
+                "\nRESERVATIONS: If the caller wants a reservation, take it on the call: get "
+                "their name, party size, date and time, and phone number. Confirm the details "
+                "back, then call submit_order with order_type 'reservation' and the details in "
+                "the notes."
+            )
 
     return (
         f"You are the AI phone order-taker for {business}.\n"
@@ -152,7 +172,7 @@ def _system_prompt(config) -> str:
         "3. Once the caller finishes ordering, check whether they have added a drink or a side. "
         "If not, offer ONE natural upsell — e.g. 'Can I throw in a drink or a side for you?' "
         "Do this ONCE only; move on if they decline.\n"
-        "4. Ask: pickup or delivery? Get their name.\n"
+        "4. Ask how they'd like it (pickup, delivery — or a reservation if they're booking a table). Get their name.\n"
         "5. If delivery: ask for their delivery address before proceeding.\n"
         "6. Calculate the total (size price + per-topping charge × number of toppings for each "
         "item, then add sides and drinks). Read back the COMPLETE order — every item, size, "
@@ -162,6 +182,7 @@ def _system_prompt(config) -> str:
         "your phone — you'll get a receipt once it goes through.'\n\n"
         "GUARD RULES:\n"
         f"- Available order types: {order_types}.\n"
+        f"{reservation_lines}"
         "- Delivery without an address → ask for the address before calling submit_order.\n"
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
@@ -203,7 +224,7 @@ _SUBMIT_ORDER_TOOL = {
             "type": "object",
             "properties": {
                 "customer_name": {"type": "string"},
-                "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in"]},
+                "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in", "reservation"]},
                 "items": {"type": "array", "items": {"type": "object", "properties": {
                     "name": {"type": "string"}, "quantity": {"type": "integer"},
                     "size": {"type": "string"},

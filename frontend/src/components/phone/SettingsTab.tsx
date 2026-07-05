@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { clsx } from 'clsx'
+import { ConnectReservationSystem, ORDER_TYPE_OPTIONS, hasOrderType, toggleOrderType } from './ConnectReservationSystem'
 import {
   Settings, Volume2, Link2, Phone, ListOrdered, Route,
   CheckCircle2, CreditCard, SendHorizontal, MessageSquare, AlertCircle,
@@ -10,7 +11,7 @@ import {
   VOICE_OPTIONS, DEFAULT_VOICE_SETTINGS, DEFAULT_PERSONALITY,
   type PhoneBizConfig, type VoiceSettings, type VoicePersonality,
 } from '@/lib/phone-orders-demo-data'
-import { phoneService, saveConfigErrorMessage, type PhoneConfig } from '@/lib/phone-service'
+import { phoneService, saveConfigErrorMessage, type PhoneConfig , type ReservationConfig } from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
 import MenuBuildStatus from '@/components/menu/MenuBuildStatus'
 import MenuPhotoScanner from '@/components/menu/MenuPhotoScanner'
@@ -53,6 +54,11 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
   useEffect(() => {
     if (phoneConfig?.sms_pay_template) setSmsPayTemplate(phoneConfig.sms_pay_template)
   }, [phoneConfig?.sms_pay_template])
+
+  const [reservationConfig, setReservationConfig] = useState<ReservationConfig | null>(phoneConfig?.reservation_config ?? null)
+  useEffect(() => {
+    if (phoneConfig?.reservation_config) setReservationConfig(phoneConfig.reservation_config)
+  }, [phoneConfig?.reservation_config])
 
   async function handleSave() {
     if (!orgId) return
@@ -137,15 +143,22 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
         <div>
           <label className="text-xs text-[#A1A1A8] block mb-2">Order Types</label>
           <div className="flex gap-2">
-            {['pickup', 'delivery', 'dine_in'].map(type => (
-              <button key={type} onClick={() => {
-                setCfg(p => ({ ...p, orderTypes: p.orderTypes.includes(type) ? p.orderTypes.filter(t => t !== type) : [...p.orderTypes, type] }))
-              }} className={clsx('px-3 py-1.5 rounded-lg border text-xs font-medium transition-all capitalize',
-                cfg.orderTypes.includes(type) ? 'border-[#17C5B0]/20 bg-[#17C5B0]/5 text-[#17C5B0]' : 'border-[#1F1F23] text-[#A1A1A8]')}>
-                {type.replace('_', ' ')}
+            {ORDER_TYPE_OPTIONS.map(({ value, label }) => (
+              <button key={value} onClick={() => {
+                setCfg(p => ({ ...p, orderTypes: toggleOrderType(p.orderTypes, value) }))
+              }} className={clsx('px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
+                hasOrderType(cfg.orderTypes, value) ? 'border-[#17C5B0]/20 bg-[#17C5B0]/5 text-[#17C5B0]' : 'border-[#1F1F23] text-[#A1A1A8]')}>
+                {label}
               </button>
             ))}
           </div>
+          {hasOrderType(cfg.orderTypes, 'reservation') && (
+            <ConnectReservationSystem
+              merchantId={orgId}
+              config={reservationConfig}
+              onSaved={setReservationConfig}
+            />
+          )}
         </div>
       </div>
 

@@ -17,12 +17,14 @@ Routes:
   GET  /api/dashboard/connection                    → POS connection status
 """
 import asyncio
+import csv
+import io
 import logging
 import re
 from datetime import datetime, timezone, timedelta
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Query, HTTPException, Depends, Request
 from pydantic import BaseModel
 
 from ..auth import require_admin, require_org_access
@@ -502,6 +504,255 @@ async def update_product_cost(
     dashboard_cache.invalidate_org(org_id)  # margins/products recompute on next read
     return {"ok": True, "product_id": product_id,
             "cost_cents": fields.get("cost_cents"), "price_cents": fields.get("price_cents")}
+
+
+# ─── Bulk cost import (CSV) ───────────────────────────────
+# "Upload a CSV of the inventory cost or recent inventory stock-up" — sets
+# products.cost_cents in bulk so the margins page computes from real cost data
+# instead of the vertical COGS estimate. Deterministic parse (no AI) — the
+# AI-extraction path for PDFs/photos lives in inventory_docs.py.
+
+_MAX_COST_CSV_BYTES = 1 * 1024 * 1024  # 1 MB
+_MAX_COST_CSV_ROWS = 2000
+
+# Header candidates, compared after normalization (lowercase, separators → space).
+_NAME_HEADERS = {
+    "name", "item", "product", "product name", "item name", "menu item",
+    "description", "item description", "product description",
+}
+_UNIT_COST_HEADERS = {
+    "cost", "unit cost", "price paid", "unit price", "cost per unit",
+    "per unit cost", "cost each", "price per unit", "purchase price", "cogs",
+}
+_TOTAL_COST_HEADERS = {
+    "total", "total cost", "total price", "total paid", "amount",
+    "extended", "extended price", "extended cost", "line total", "subtotal",
+}
+_QUANTITY_HEADERS = {
+    "quantity", "qty", "units", "count", "qty received", "quantity received",
+}
+
+
+def _normalize_header(header: str) -> str:
+    """'Unit_Cost ($)' → 'unit cost' — so header matching survives case,
+    underscores/dashes, and currency suffixes."""
+    cleaned = re.sub(r"[^a-z0-9]+", " ", (header or "").lower()).strip()
+    return re.sub(r"\b(usd|cad|\$)\b", "", cleaned).strip()
+
+
+def _money_to_cents(value: str | None) -> int | None:
+    """'$1,234.50' → 123450. None for blank/unparseable/negative."""
+    if value is None:
+        return None
+    text = str(value).replace("$", "").replace(",", "").strip()
+    if not text:
+        return None
+    try:
+        cents = int(round(float(text) * 100))
+    except (TypeError, ValueError):
+        return None
+    return cents if cents >= 0 else None
+
+
+def _parse_quantity(value: str | None) -> float | None:
+    if value is None:
+        return None
+    text = str(value).replace(",", "").strip()
+    if not text:
+        return None
+    try:
+        qty = float(text)
+    except (TypeError, ValueError):
+        return None
+    return qty if qty > 0 else None
+
+
+def _parse_cost_csv(text: str) -> list[dict]:
+    """Header-flexible CSV → [{'name': ..., 'cost_cents': ...}].
+
+    Column detection: product name (name/item/product...), per-unit cost
+    (cost/unit_cost/price_paid/unit price...), and optionally a stock-up shape —
+    total + quantity, where unit cost = total / quantity. Rows without a name
+    or a derivable cost are skipped.
+    """
+    reader = csv.reader(io.StringIO(text))
+    try:
+        raw_headers = next(reader)
+    except StopIteration:
+        raise HTTPException(422, "CSV is empty")
+
+    headers = [_normalize_header(h) for h in raw_headers]
+
+    def _find_col(candidates: set[str]) -> int | None:
+        for i, h in enumerate(headers):
+            if h in candidates:
+                return i
+        return None
+
+    name_col = _find_col(_NAME_HEADERS)
+    unit_col = _find_col(_UNIT_COST_HEADERS)
+    total_col = _find_col(_TOTAL_COST_HEADERS)
+    qty_col = _find_col(_QUANTITY_HEADERS)
+
+    if name_col is None:
+        raise HTTPException(
+            422, "Could not find a product-name column (expected a header like "
+                 "'name', 'item', or 'product')")
+    if unit_col is None and not (total_col is not None and qty_col is not None):
+        raise HTTPException(
+            422, "Could not find a cost column (expected a header like 'cost', "
+                 "'unit_cost', 'price paid' — or 'total' + 'quantity' for stock-up rows)")
+
+    rows: list[dict] = []
+    for line_no, row in enumerate(reader, start=2):
+        if len(rows) >= _MAX_COST_CSV_ROWS:
+            raise HTTPException(413, f"Too many rows (max {_MAX_COST_CSV_ROWS})")
+        if not row or all(not (c or "").strip() for c in row):
+            continue
+
+        def _cell(idx: int | None) -> str | None:
+            return row[idx] if idx is not None and idx < len(row) else None
+
+        name = (_cell(name_col) or "").strip()
+        if not name:
+            continue
+
+        cost_cents = _money_to_cents(_cell(unit_col)) if unit_col is not None else None
+        if cost_cents is None and total_col is not None and qty_col is not None:
+            # Stock-up rows: derive unit cost from total spend / quantity bought.
+            total_cents = _money_to_cents(_cell(total_col))
+            qty = _parse_quantity(_cell(qty_col))
+            if total_cents is not None and qty:
+                cost_cents = int(round(total_cents / qty))
+        if cost_cents is None or cost_cents <= 0:
+            continue
+
+        rows.append({"name": name, "cost_cents": cost_cents, "line": line_no})
+
+    return rows
+
+
+def _match_product(name: str, products: list[dict], by_name: dict[str, dict]) -> dict | None:
+    """Case-insensitive exact match, then prefix, then substring fallback.
+
+    Mirrors the tiered matching in services/phone_agent/order_normalizer.py
+    ::_find_menu_item (exact → looser), copied rather than imported so this
+    route has no dependency on phone modules. Ambiguity in the fallback tiers
+    resolves to the longest catalog name (most specific match).
+    """
+    name_lower = name.lower().strip()
+
+    exact = by_name.get(name_lower)
+    if exact is not None:
+        return exact
+
+    prefix_hits = [
+        p for p in products
+        if (pn := (p.get("name") or "").lower().strip())
+        and (pn.startswith(name_lower) or name_lower.startswith(pn))
+    ]
+    if prefix_hits:
+        return max(prefix_hits, key=lambda p: len(p.get("name") or ""))
+
+    substr_hits = [
+        p for p in products
+        if (pn := (p.get("name") or "").lower().strip())
+        and (name_lower in pn or pn in name_lower)
+    ]
+    if substr_hits:
+        return max(substr_hits, key=lambda p: len(p.get("name") or ""))
+
+    return None
+
+
+@router.post("/products/import-costs/{org_id}")
+async def import_product_costs(
+    org_id: str,
+    request: Request,
+    db=Depends(_get_db),
+):
+    """Bulk cost import: upload a CSV of inventory costs / a recent stock-up
+    and set ``products.cost_cents`` for every row that matches a catalog
+    product by name. Accepts a raw ``text/csv`` body or a multipart upload
+    (field ``file``). Returns {matched, updated, unmatched} so the UI can show
+    exactly which rows didn't land.
+
+    Tenancy: the router-level require_org_access guard enforces membership on
+    the path org_id (same pattern as the org-scoped POSTs in inventory_docs).
+    """
+    if not _UUID_RE.match(org_id) and not org_id.startswith("biz_"):
+        raise HTTPException(422, "org_id must be a valid UUID or business ID")
+
+    # Raw text/csv body or multipart — mirrors the CSV-import convention used
+    # elsewhere in the API (menu import).
+    content_type = (request.headers.get("content-type") or "").lower()
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        upload = form.get("file") or form.get("csv")
+        if upload is None or isinstance(upload, str):
+            raise HTTPException(400, "missing CSV file (multipart field 'file')")
+        raw = await upload.read()
+    else:
+        raw = await request.body()
+
+    if not raw:
+        raise HTTPException(400, "empty upload")
+    if len(raw) > _MAX_COST_CSV_BYTES:
+        raise HTTPException(413, "CSV too large (max 1 MB)")
+
+    try:
+        text = raw.decode("utf-8-sig")  # tolerate Excel's BOM
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("latin-1")
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(422, "could not decode CSV text") from exc
+
+    rows = _parse_cost_csv(text)
+    if not rows:
+        return {"matched": 0, "updated": 0, "unmatched": [], "total_rows": 0,
+                "note": "No rows with a product name and a positive cost were found"}
+
+    products = await db.get_products(org_id)
+    by_name = {
+        (p.get("name") or "").lower().strip(): p
+        for p in products if (p.get("name") or "").strip()
+    }
+
+    matched = 0
+    unmatched: list[str] = []
+    # Last row wins when several rows name the same product (e.g. a stock-up
+    # sheet listing multiple purchases) — one UPDATE per product.
+    cost_by_product: dict[str, int] = {}
+    for row in rows:
+        product = _match_product(row["name"], products, by_name)
+        if product is None or not product.get("id"):
+            unmatched.append(row["name"])
+            continue
+        matched += 1
+        cost_by_product[product["id"]] = row["cost_cents"]
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for product_id, cost_cents in cost_by_product.items():
+        await db.update(
+            "products",
+            {"cost_cents": cost_cents, "updated_at": now_iso},
+            filters={"id": f"eq.{product_id}", "org_id": f"eq.{org_id}"},
+        )
+
+    if cost_by_product:
+        dashboard_cache.invalidate_org(org_id)  # margins/products recompute on next read
+
+    logger.info(
+        "Cost CSV import for org=%s: %d rows, %d matched, %d products updated, %d unmatched",
+        org_id, len(rows), matched, len(cost_by_product), len(unmatched),
+    )
+    return {
+        "matched": matched,
+        "updated": len(cost_by_product),
+        "unmatched": unmatched,
+        "total_rows": len(rows),
+    }
 
 
 # ─── Insights ─────────────────────────────────────────────

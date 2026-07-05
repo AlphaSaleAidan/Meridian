@@ -69,6 +69,9 @@ class PhoneConfigRequest(BaseModel):
     # Persisted to phone_agent_config.sms_pay_template
     # (migration 20260706_sms_pay_template).
     sms_pay_template: str | None = None
+    # {on_website: bool, website_url: str} — the "Connect your reservation
+    # system" questionnaire (migration 20260706_reservation_config).
+    reservation_config: dict | None = None
 
 
 def _validate_merchant_id(merchant_id: str):

@@ -18,10 +18,9 @@ import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import PositionsBoard, { type AssignTarget } from '@/components/schedule/PositionsBoard'
 import ManagePositionsModal from '@/components/schedule/ManagePositionsModal'
 import {
-  positionsForType, buildPositionSchedule, dayDemand,
-  defaultRolesForType, applyPositionRenames,
-  loadPositionsOverride, savePositionsOverride, positionsStorageKey,
-  type PositionsOverride, type PositionDef,
+  buildPositionSchedule, dayDemand,
+  resolvePositions, savePositionsOverride, positionsStorageKey,
+  type PositionDef,
 } from '@/components/schedule/schedule-positions'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
@@ -128,51 +127,31 @@ export default function SchedulePage() {
     [livePeakHours, businessType],
   )
 
-  // ── Custom positions (Manage positions micro-wizard) ─────────
-  // Roles are plain strings on staff/shift rows; the edited list itself is the
-  // only thing without a home, so it persists in localStorage per merchant.
-  // Renames are additionally written through to staff/shift rows via the
-  // existing schedule endpoints so they survive on any device.
-  const positionsKey = positionsStorageKey(liveMode ? merchantId : '', businessType)
-  const [posOverride, setPosOverride] = useState<PositionsOverride | null>(null)
-  useEffect(() => { setPosOverride(loadPositionsOverride(positionsKey)) }, [positionsKey])
+  // ── Custom positions (Manage positions) ──────────────────────
+  // The merchant's full PositionDef list is the single source of truth for the
+  // board, Auto-fill, and the staff-role picker. It persists in localStorage
+  // per merchant (roles are plain strings on staff/shift rows — there's no
+  // positions table); role renames are additionally written through to the
+  // affected staff/shift rows so they survive on any device.
+  const positionsSourceId = liveMode ? merchantId : ''
+  const [positionDefs, setPositionDefs] = useState<PositionDef[]>(
+    () => resolvePositions(positionsSourceId, businessType))
+  useEffect(() => {
+    setPositionDefs(resolvePositions(positionsSourceId, businessType))
+  }, [positionsSourceId, businessType])
 
-  const positionRenames = posOverride?.renames ?? {}
+  // Staff-role picker list: the defs' roles plus roles staff already carry, so
+  // an existing member's role never disappears from the picker.
   const positions = useMemo(() => {
-    const base = posOverride?.positions ?? defaultRolesForType(businessType)
-    const set = new Set(base)
-    // Roles actually in use are never invisible, even if removed from the list.
+    const set = new Set(positionDefs.map(d => d.role))
     staff.forEach(s => { if (s.role) set.add(s.role) })
     return [...set]
-  }, [posOverride, businessType, staff])
+  }, [positionDefs, staff])
 
-  // Slot defs for the board + Auto-fill: business-type defaults with renames
-  // applied, removed positions dropped, and merchant-added positions given a
-  // generic all-day slot so they show up on the board.
-  const positionDefs = useMemo<PositionDef[]>(() => {
-    const renames = posOverride?.renames ?? {}
-    const listed = new Set(positions)
-    const defs = applyPositionRenames(positionsForType(businessType), renames)
-      .filter(d => listed.has(d.role))
-    const covered = new Set(defs.map(d => d.role))
-    const defaults = new Set(defaultRolesForType(businessType))
-    const renameTargets = new Set(Object.values(renames))
-    for (const p of positions) {
-      if (!covered.has(p) && !defaults.has(p) && !renameTargets.has(p)) {
-        defs.push({
-          key: `custom-${p}`,
-          label: p.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-          role: p, start: '09:00', end: '17:00', base: 1,
-        })
-      }
-    }
-    return defs
-  }, [businessType, positions, posOverride])
-
-  const updatePositions = useCallback((next: PositionsOverride) => {
-    setPosOverride(next)
-    savePositionsOverride(positionsKey, next)
-  }, [positionsKey])
+  const handlePositionsChange = useCallback((defs: PositionDef[]) => {
+    setPositionDefs(defs)
+    savePositionsOverride(positionsStorageKey(positionsSourceId, businessType), { defs })
+  }, [positionsSourceId, businessType])
 
   // Regenerate demo staff + shifts when business type changes so all five
   // demo scenarios show coherent data (hours per role, peak coverage, labor%).
@@ -306,24 +285,12 @@ export default function SchedulePage() {
     }
   }, [liveMode, merchantId, portalContext, showToast])
 
-  // ── Manage-positions handlers ─────────────────────────────────
-  const handleAddPosition = useCallback((role: string) => {
-    updatePositions({ positions: [...positions, role], renames: { ...positionRenames } })
-    showToast(`Position "${role.replace(/_/g, ' ')}" added`)
-  }, [positions, positionRenames, updatePositions, showToast])
-
-  const handleRenamePosition = useCallback(async (oldRole: string, newRole: string) => {
-    // Track the rename against the ORIGINAL default role so the built-in
-    // position slots keep matching (supports chained renames).
-    const renames = { ...positionRenames }
-    const origin = Object.keys(renames).find(k => renames[k] === oldRole)
-      ?? (defaultRolesForType(businessType).includes(oldRole) ? oldRole : null)
-    if (origin) renames[origin] = newRole
-    updatePositions({ positions: positions.map(p => (p === oldRole ? newRole : p)), renames })
-
-    // Renaming = update every staff/shift row that carries the old role.
+  // ── Manage-positions: write a role rename through to the rows carrying it ──
+  // (the defs list itself is updated by the modal via handlePositionsChange)
+  const handleRenameRole = useCallback(async (oldRole: string, newRole: string) => {
     const affectedStaff = staff.filter(s => s.role === oldRole)
     const affectedShifts = shifts.filter(s => s.role === oldRole)
+    if (affectedStaff.length === 0 && affectedShifts.length === 0) return
     setStaff(prev => prev.map(s => (s.role === oldRole ? { ...s, role: newRole } : s)))
     setShifts(prev => prev.map(s => (s.role === oldRole ? { ...s, role: newRole } : s)))
     if (!liveMode) return
@@ -334,13 +301,7 @@ export default function SchedulePage() {
     if (results.some(r => r.status === 'rejected')) {
       showToast('Position renamed, but some rows failed to save — check your connection')
     }
-  }, [positions, positionRenames, staff, shifts, liveMode, businessType, updatePositions, showToast])
-
-  const handleDeletePosition = useCallback((role: string) => {
-    const renames = { ...positionRenames }
-    for (const k of Object.keys(renames)) if (renames[k] === role) delete renames[k]
-    updatePositions({ positions: positions.filter(p => p !== role), renames })
-  }, [positions, positionRenames, updatePositions])
+  }, [staff, shifts, liveMode, showToast])
 
   const handleShiftClick = useCallback((s: ScheduleShift) => setSelectedShift(s), [])
 
@@ -791,8 +752,8 @@ export default function SchedulePage() {
       <AddStaffModal open={showAddStaff} onClose={() => setShowAddStaff(false)}
         onSave={handleAddStaff} businessType={businessType} roles={positions} />
       <ManagePositionsModal open={showManagePositions} onClose={() => setShowManagePositions(false)}
-        positions={positions} staff={staff} shifts={shifts}
-        onAdd={handleAddPosition} onRename={handleRenamePosition} onDelete={handleDeletePosition} />
+        defs={positionDefs} staff={staff} shifts={shifts}
+        onChange={handlePositionsChange} onRenameRole={handleRenameRole} />
       <ShiftEditPopover shift={selectedShift} staff={staff} onClose={() => setSelectedShift(null)}
         onSave={handleShiftSave} onDelete={handleShiftDelete} onSplitShift={handleSplitShift} />
     </div>

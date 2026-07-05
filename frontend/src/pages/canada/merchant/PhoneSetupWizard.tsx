@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { clsx } from 'clsx'
+import { ConnectReservationSystem, ORDER_TYPE_OPTIONS, hasOrderType, toggleOrderType } from '@/components/phone/ConnectReservationSystem'
 import {
   PhoneForwarded, Clock, Hash, Server, ArrowRight, ArrowLeft,
   CheckCircle2, Loader2, Copy, Phone, Info, AlertCircle, Sparkles,
@@ -9,6 +10,7 @@ import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import {
   phoneService, isValidE164, saveConfigErrorMessage, type PhoneConfig,
+  type ReservationConfig,
 } from '@/lib/phone-service'
 import { api } from '@/lib/api'
 import { posSystems } from '@/data/pos-systems'
@@ -150,6 +152,7 @@ export default function PhoneSetupWizard() {
   const [greeting, setGreeting] = useState('')
   const [voice, setVoice] = useState('af_bella')
   const [orderTypes, setOrderTypes] = useState<string[]>(['pickup', 'delivery'])
+  const [reservationConfig, setReservationConfig] = useState<ReservationConfig | null>(null)
   const [routing, setRouting] = useState<'pos' | 'webhook' | 'sms' | 'email'>(connectedPos ? 'pos' : 'sms')
   const [transferNumber, setTransferNumber] = useState('')
   const [menu, setMenu] = useState<PhoneMenuItem[]>([])
@@ -166,6 +169,7 @@ export default function PhoneSetupWizard() {
       if (cfg.greeting) setGreeting(cfg.greeting)
       if (cfg.voice) setVoice(cfg.voice)
       if (cfg.order_types?.length) setOrderTypes(cfg.order_types)
+      if (cfg.reservation_config) setReservationConfig(cfg.reservation_config)
       if (cfg.order_routing) setRouting(cfg.order_routing)
       if (cfg.transfer_number) setTransferNumber(cfg.transfer_number)
       if (cfg.menu_items?.length) {
@@ -311,6 +315,7 @@ export default function PhoneSetupWizard() {
       greeting: greeting || undefined,
       voice,
       order_types: orderTypes,
+      reservation_config: reservationConfig ?? undefined,
       menu_items: menu.map(m => ({ name: m.name, price: m.price, category: m.category })),
       transfer_number: transferTrimmed ? normalizeToE164(transferTrimmed) : undefined,
       order_routing: routing,
@@ -613,15 +618,22 @@ export default function PhoneSetupWizard() {
             <div>
               <label className="text-xs text-[#A1A1A8] block mb-2">Order Types</label>
               <div className="flex gap-2">
-                {['pickup', 'delivery', 'dine_in'].map(t => (
-                  <button key={t} onClick={() => {
-                    setOrderTypes(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t])
-                  }} className={clsx('px-3 py-1.5 rounded-lg border text-xs font-medium capitalize transition-all',
-                    orderTypes.includes(t) ? 'border-[#17C5B0]/20 bg-[#17C5B0]/5 text-[#17C5B0]' : 'border-[#1F1F23] text-[#A1A1A8]')}>
-                    {t.replace('_', ' ')}
+                {ORDER_TYPE_OPTIONS.map(({ value, label }) => (
+                  <button key={value} onClick={() => {
+                    setOrderTypes(p => toggleOrderType(p, value))
+                  }} className={clsx('px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
+                    hasOrderType(orderTypes, value) ? 'border-[#17C5B0]/20 bg-[#17C5B0]/5 text-[#17C5B0]' : 'border-[#1F1F23] text-[#A1A1A8]')}>
+                    {label}
                   </button>
                 ))}
               </div>
+              {hasOrderType(orderTypes, 'reservation') && (
+                <ConnectReservationSystem
+                  merchantId={orgId}
+                  config={reservationConfig}
+                  onSaved={setReservationConfig}
+                />
+              )}
             </div>
           </div>
 

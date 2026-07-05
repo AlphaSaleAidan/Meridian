@@ -112,7 +112,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "customer_name": {"type": "string"},
-                "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in"]},
+                "order_type": {"type": "string", "enum": ["pickup", "delivery", "dine_in", "reservation"]},
                 "items": {
                     "type": "array",
                     "items": {
@@ -186,7 +186,7 @@ MENU:
 RULES:
 - Help the customer build their order item by item.
 - Suggest sizes or options when relevant.
-- When done, read back the order with total price, ask for their name and pickup/delivery/dine-in.
+- When done, read back the order with total price, ask for their name and pickup/delivery — or reservation details (party size, time) if they're booking a table.
 - If delivery, ask for address.
 - Once confirmed, call submit_order.
 - For items not on menu, let them know politely.
