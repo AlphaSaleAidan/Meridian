@@ -600,6 +600,14 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
         finally:
             await client.close()
 
+        # run_initial_backfill never raises — it folds fatal exceptions into
+        # result.errors ("fatal: ..."). Without this gate a dead backfill was
+        # still marked historical_import_complete / status=connected (the
+        # "connected, no data" bug fixed for Square in f0609688).
+        fatal_errors = [err for err in (getattr(result, "errors", None) or []) if str(err).startswith("fatal:")]
+        if fatal_errors:
+            raise RuntimeError(fatal_errors[0])
+
         await _write_sync_result(db, result)
 
         await _import_pos_staff(db, org_id, result.employee_cache)
@@ -639,11 +647,22 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
 
     except Exception as e:
         logger.error(f"Clover backfill failed for org={org_id}: {e}", exc_info=True)
-        await db.update(
-            "pos_connections",
-            {"status": "error", "last_error": str(e)[:500]},
-            filters={"id": f"eq.{connection_id}"},
-        )
+        try:
+            await db.update(
+                "pos_connections",
+                {
+                    "status": "error",
+                    "last_error": str(e)[:500],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                filters={"id": f"eq.{connection_id}"},
+            )
+            # Revert the connected flags the dashboard gates on so the portal
+            # prompts a reconnect (mirrors the Square fix in f0609688).
+            await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
+            await db.update("organizations", {"pos_connection_status": "error"}, filters={"id": f"eq.{org_id}"})
+        except Exception as record_err:
+            logger.error(f"Could not record Clover backfill failure for org={org_id}: {record_err}")
 
 
 async def _run_generic_backfill(org_id: str, connection_id: str, pos_system: str, credentials: dict):
