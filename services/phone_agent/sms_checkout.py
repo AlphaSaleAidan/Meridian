@@ -5,6 +5,7 @@ verified working for CA delivery).
 """
 import logging
 import os
+import re
 from typing import Any
 
 import httpx
@@ -26,9 +27,12 @@ async def send_checkout_sms(
     order: dict[str, Any],
     payment_link: str,
     business_name: str,
+    sms_pay_template: str = "",
 ) -> dict:
     """
     Send order confirmation + payment link to the customer's phone.
+    ``sms_pay_template`` is the merchant's optional custom body
+    (phone_agent_config.sms_pay_template) — empty falls back to default copy.
     Returns {"sent": True/False, "method": "telnyx"|"none"}.
     """
     phone = order.get("caller_phone", "")
@@ -36,7 +40,9 @@ async def send_checkout_sms(
         logger.warning("No phone number for checkout SMS")
         return {"sent": False, "method": "none", "reason": "no_phone"}
 
-    return await send_sms(phone, _format_checkout_sms(order, payment_link, business_name))
+    return await send_sms(
+        phone, _format_checkout_sms(order, payment_link, business_name, sms_pay_template)
+    )
 
 
 async def send_sms(to: str, body: str) -> dict:
@@ -74,13 +80,38 @@ async def _send_via_telnyx(phone: str, message: str) -> dict:
 
 
 def _format_checkout_sms(
-    order: dict, payment_link: str, business_name: str
+    order: dict, payment_link: str, business_name: str, template: str = ""
 ) -> str:
     sym = "CA$" if order.get("currency") == "CAD" else "$"
     total = order.get("total", 0)
     item_count = sum(i.get("quantity", 1) for i in order.get("items", []))
     order_type = order.get("order_type", "pickup").replace("_", " ").title()
     customer_name = order.get("customer_name", "").split()[0] if order.get("customer_name") else ""
+
+    # Merchant-customized template (phone_agent_config.sms_pay_template).
+    # Rendered with sequential .replace — NEVER .format — so braces in
+    # customer-supplied values or in the template itself can't raise or be
+    # re-interpreted as placeholders.
+    if (template or "").strip():
+        body = template
+        # The payment link is the whole point of the SMS: if the merchant's
+        # template omits {link}, append it so the customer can always pay.
+        if "{link}" not in body:
+            body = f"{body.rstrip()}\n\nPay here: {{link}}"
+        replacements = {
+            "{name}": customer_name,
+            "{business}": business_name,
+            "{total}": f"{sym}{total:.2f}",
+            "{link}": payment_link,
+        }
+        # Single pass so substituted VALUES are never re-scanned for
+        # placeholders (a customer named "{link}" stays literal).
+        body = re.sub(
+            r"\{(?:name|business|total|link)\}",
+            lambda m: replacements[m.group(0)],
+            body,
+        )
+        return body
 
     lines = []
     if customer_name:

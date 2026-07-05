@@ -175,15 +175,18 @@ def _system_prompt(config) -> str:
 # each UI id to the closest Vapi voice. Unknown/empty → Elliot. Configs
 # default to af_bella, so unpicked merchants move Elliot → Savannah — matching
 # the female "Bella" their settings UI has claimed all along.
+# Live roster only — Lily/Hana/Paige/Cole/Spencer/Neha/Harry were RETIRED by
+# Vapi (docs.vapi.ai/providers/voice/vapi-voices); a retired voiceId fails the
+# call. Sample audio for each ships at frontend/public/voices/<name>.mp3.
 KOKORO_TO_VAPI = {
     "af_bella": "Savannah",
-    "af_sarah": "Lily",
-    "af_nicole": "Hana",
-    "bf_emma": "Paige",
-    "am_adam": "Rohan",
+    "af_sarah": "Layla",
+    "af_nicole": "Naina",
+    "bf_emma": "Emma",
+    "am_adam": "Sid",
     "am_michael": "Elliot",
-    "am_echo": "Cole",
-    "bm_george": "Spencer",
+    "am_echo": "Kai",
+    "bm_george": "Neil",
 }
 
 

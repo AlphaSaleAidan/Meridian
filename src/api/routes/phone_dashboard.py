@@ -15,7 +15,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
 from ..auth import enforce_service_member, require_service_auth
@@ -63,6 +63,12 @@ class PhoneConfigRequest(BaseModel):
     # back-compat: omitting it leaves the stored value untouched (save_phone_config
     # only writes non-None fields).
     order_routing: str | None = None
+    # Merchant-customized Text-to-Pay SMS body. Supports {name} {business}
+    # {total} {link} placeholders, rendered with safe replace (never .format)
+    # by sms_checkout._format_checkout_sms. Empty/unset → default copy.
+    # Persisted to phone_agent_config.sms_pay_template
+    # (migration 20260706_sms_pay_template).
+    sms_pay_template: str | None = None
 
 
 def _validate_merchant_id(merchant_id: str):
@@ -419,6 +425,162 @@ async def scan_menu_photo(
     }
 
 
+# Max upload accepted for a menu CSV (spreadsheet exports are tiny).
+_MAX_MENU_CSV_BYTES = 1 * 1024 * 1024  # 1 MB
+_MAX_MENU_CSV_ROWS = 1000
+
+# Header aliases recognized in a menu CSV (case-insensitive).
+_CSV_NAME_KEYS = {"name", "item", "item name", "title", "product"}
+_CSV_PRICE_KEYS = {"price", "cost", "amount", "unit price"}
+_CSV_CATEGORY_KEYS = {"category", "section", "group", "type"}
+
+
+def _parse_menu_csv(text: str) -> list[dict]:
+    """Parse CSV text into the menu_items shape: [{name, price?, category?}].
+
+    Header-flexible: a first row containing a recognizable name column (and
+    optionally price/category, in any order) is used as the header; otherwise
+    rows are read positionally as ``name,price[,category]``. Currency symbols
+    in prices are tolerated ("$9.99", "CA$ 12"). Rows without a name are
+    skipped.
+    """
+    import csv
+    import io
+
+    rows = [r for r in csv.reader(io.StringIO(text)) if any((c or "").strip() for c in r)]
+    if not rows:
+        return []
+    if len(rows) > _MAX_MENU_CSV_ROWS:
+        raise HTTPException(status_code=413, detail=f"too many rows (max {_MAX_MENU_CSV_ROWS})")
+
+    def _norm(cell: str) -> str:
+        return (cell or "").strip().lower()
+
+    header = [_norm(c) for c in rows[0]]
+    name_col = next((i for i, c in enumerate(header) if c in _CSV_NAME_KEYS), None)
+    if name_col is not None:
+        price_col = next((i for i, c in enumerate(header) if c in _CSV_PRICE_KEYS), None)
+        category_col = next((i for i, c in enumerate(header) if c in _CSV_CATEGORY_KEYS), None)
+        data_rows = rows[1:]
+    else:
+        # No recognizable header → positional name,price[,category].
+        name_col, price_col, category_col = 0, 1, 2
+        data_rows = rows
+
+    def _cell(row: list, idx: int | None) -> str:
+        if idx is None or idx >= len(row):
+            return ""
+        return (row[idx] or "").strip()
+
+    items: list[dict] = []
+    for row in data_rows:
+        name = _cell(row, name_col)
+        if not name:
+            continue
+        item: dict = {"name": name}
+        raw_price = _cell(row, price_col)
+        if raw_price:
+            cleaned = re.sub(r"[^\d.\-]", "", raw_price)
+            try:
+                item["price"] = round(float(cleaned), 2)
+            except ValueError:
+                pass  # unparseable price — keep the item, priceless
+        category = _cell(row, category_col)
+        if category:
+            item["category"] = category
+        items.append(item)
+    return items
+
+
+@router.post("/menu/import-csv/{merchant_id}")
+async def import_menu_csv(
+    merchant_id: str,
+    request: Request,
+    replace: bool = Query(False),
+    principal=Depends(require_service_auth),
+):
+    """Supplementary menu builder: import a ``name,price,category`` CSV.
+
+    Accepts either a raw ``text/csv`` body or a multipart upload (field name
+    ``file``). Rows are parsed into the agent's ``{name, price?, category?}``
+    shape and **merged onto** the merchant's existing ``menu_items`` — same
+    persistence as the photo scanner. Pass ``?replace=true`` to overwrite.
+    """
+    from ...services.menu_vision import merge_menu_items
+
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+
+    content_type = (request.headers.get("content-type") or "").lower()
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        upload = form.get("file") or form.get("csv") or form.get("photo")
+        if upload is None or isinstance(upload, str):
+            raise HTTPException(status_code=400, detail="missing CSV file (multipart field 'file')")
+        raw = await upload.read()
+    else:
+        raw = await request.body()
+
+    if not raw:
+        raise HTTPException(status_code=400, detail="empty upload")
+    if len(raw) > _MAX_MENU_CSV_BYTES:
+        raise HTTPException(status_code=413, detail="CSV too large (max 1 MB)")
+
+    try:
+        text = raw.decode("utf-8-sig")  # tolerate Excel's BOM
+    except UnicodeDecodeError:
+        try:
+            text = raw.decode("latin-1")
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=422, detail="could not decode CSV text") from exc
+
+    parsed = _parse_menu_csv(text)
+    if not parsed:
+        return {
+            "scanned": True,
+            "added": 0,
+            "item_count": 0,
+            "reason": "no menu items found in the CSV",
+        }
+
+    db = get_db()
+    config_rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{merchant_id}"},
+        limit=1,
+    )
+    existing = (config_rows[0].get("menu_items") if config_rows else None) or []
+    if replace:
+        menu, added = parsed, len(parsed)
+    else:
+        before = len(existing) if isinstance(existing, list) else 0
+        menu = merge_menu_items(existing, parsed)
+        added = len(menu) - before
+
+    payload = {"menu_items": menu, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if config_rows:
+        await db.update(
+            "phone_agent_config",
+            payload,
+            filters={"merchant_id": f"eq.{merchant_id}"},
+        )
+    else:
+        await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
+
+    logger.info(
+        "Imported %d menu items from CSV for %s (%s, +%d, total %d)",
+        len(parsed), merchant_id, "replace" if replace else "merge", added, len(menu),
+    )
+    return {
+        "scanned": True,
+        "added": added,
+        "scanned_count": len(parsed),
+        "item_count": len(menu),
+        "mode": "replace" if replace else "merge",
+        "sample": parsed[:5],
+    }
+
+
 @router.get("/calls/{merchant_id}")
 async def get_phone_calls(
     merchant_id: str,
@@ -738,6 +900,9 @@ class ProvisionNumberRequest(BaseModel):
     country: str = "CA"
     area_code: str | None = None
     business_name: str | None = None
+    # Swap: release the merchant's current number at the provider (best-effort)
+    # and purchase a fresh one. Without force, provisioning stays idempotent.
+    force: bool = False
 
 
 # --- Twilio provider ---
@@ -846,10 +1011,65 @@ async def _telnyx_purchase(phone_number: str) -> dict:
         return {"phone_number": bought, "sid": order_id}
 
 
+# --- Number release (swap support) ---
+
+async def _twilio_release(sid: str) -> bool:
+    """Release a purchased Twilio number by its IncomingPhoneNumber SID.
+    Best-effort: failures are logged, never raised."""
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            res = await client.delete(
+                f"{TWILIO_API}/Accounts/{TWILIO_SID}/IncomingPhoneNumbers/{sid}.json",
+                auth=(TWILIO_SID, TWILIO_TOKEN),
+            )
+        if res.status_code in (200, 204):
+            return True
+        logger.error("Twilio number release %s failed %d: %s", sid, res.status_code, res.text[:300])
+    except Exception as exc:  # noqa: BLE001 — best-effort release
+        logger.error("Twilio number release %s failed: %s", sid, exc)
+    return False
+
+
+async def _telnyx_release(phone_number: str, sid: str | None) -> bool:
+    """Release a purchased Telnyx number. The sid we store at purchase time is
+    the number ORDER id, so resolve the phone-number resource id by number
+    first, falling back to DELETE with the stored sid. Best-effort: failures
+    are logged, never raised."""
+    try:
+        headers = {"Authorization": f"Bearer {TELNYX_API_KEY}"}
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            number_id: str | None = None
+            res = await client.get(
+                f"{TELNYX_API}/phone_numbers",
+                params={"filter[phone_number]": phone_number},
+                headers=headers,
+            )
+            if res.status_code == 200:
+                data = res.json().get("data", [])
+                if data:
+                    number_id = data[0].get("id")
+            target = number_id or sid
+            if not target:
+                logger.error("Telnyx release: no id resolvable for %s", phone_number)
+                return False
+            res = await client.delete(f"{TELNYX_API}/phone_numbers/{target}", headers=headers)
+        if res.status_code in (200, 204):
+            return True
+        logger.error(
+            "Telnyx number release %s (%s) failed %d: %s",
+            phone_number, target, res.status_code, res.text[:300],
+        )
+    except Exception as exc:  # noqa: BLE001 — best-effort release
+        logger.error("Telnyx number release %s failed: %s", phone_number, exc)
+    return False
+
+
 @router.post("/provision-number")
 async def provision_number(req: ProvisionNumberRequest, principal=Depends(require_service_auth)):
     """Provision a dedicated phone number for a merchant. Idempotent: if the
     merchant already has a number it is returned unchanged (never double-buys).
+    With ``force=true`` the current number is released at the provider
+    (best-effort) and a fresh one is purchased — the swap path.
     Provider is chosen by PHONE_PROVIDER (telnyx | twilio)."""
     await enforce_service_member(principal, req.merchant_id)
     _validate_merchant_id(req.merchant_id)
@@ -869,8 +1089,29 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
         limit=1,
     )
     existing = rows[0].get("phone_number") if rows else None
-    if existing:
+    existing_sid = rows[0].get("phone_number_sid") if rows else None
+    if existing and not req.force:
         return {"phone_number": existing, "provisioned": False, "already_existed": True}
+
+    if existing and req.force:
+        # Swap: release the old number at the provider first. Best-effort —
+        # a failed release (already released, legacy row without a sid, provider
+        # hiccup) is logged but never blocks buying the replacement.
+        if PHONE_PROVIDER == "telnyx":
+            released = await _telnyx_release(existing, existing_sid)
+        elif existing_sid:
+            released = await _twilio_release(existing_sid)
+        else:
+            released = False
+            logger.warning(
+                "Swap for %s: no provider sid stored for %s — skipping release",
+                req.merchant_id, existing,
+            )
+        if not released:
+            logger.warning(
+                "Swap for %s: could not release %s at %s (continuing with purchase)",
+                req.merchant_id, existing, PHONE_PROVIDER,
+            )
 
     country = (req.country or "CA").upper()
     available = await _telnyx_search(country, req.area_code) if PHONE_PROVIDER == "telnyx" \
@@ -884,12 +1125,21 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
         purchased = await _twilio_purchase(available, req.business_name or f"Meridian {req.merchant_id[:8]}")
     number = purchased["phone_number"]
 
-    payload = {"phone_number": number, "updated_at": datetime.now(timezone.utc).isoformat()}
+    payload = {
+        "phone_number": number,
+        # Provider id/sid stored at purchase time so a later swap can release
+        # the number (migration 20260706_phone_number_sid).
+        "phone_number_sid": purchased.get("sid"),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
     if rows:
         await db.update("phone_agent_config", payload, filters={"merchant_id": f"eq.{req.merchant_id}"})
     else:
         payload["merchant_id"] = req.merchant_id
         await db.insert("phone_agent_config", payload)
-    logger.info("Provisioned %s for merchant %s via %s", number, req.merchant_id, PHONE_PROVIDER)
+    logger.info(
+        "Provisioned %s for merchant %s via %s%s",
+        number, req.merchant_id, PHONE_PROVIDER, " (swap)" if req.force and existing else "",
+    )
 
     return {"phone_number": number, "provisioned": True, "already_existed": False, "provider": PHONE_PROVIDER}

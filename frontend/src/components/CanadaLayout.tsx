@@ -61,11 +61,15 @@ export default function CanadaLayout() {
 
   useEffect(() => {
     if (!user?.id) return
+    // The dismissal flag is per-origin localStorage, so a returning customer on
+    // a different origin (or with cleared storage) would get the walkthrough
+    // stacked on them again. An onboarded org counts as already-dismissed.
+    if (org?.onboarded) return
     const key = `meridian_walkthrough_${user.id}`
     if (localStorage.getItem(key) !== 'completed') {
       setShowWalkthrough(true)
     }
-  }, [user?.id])
+  }, [user?.id, org?.onboarded])
 
   // Redirect mobile users away from desktop-only pages
   useEffect(() => {

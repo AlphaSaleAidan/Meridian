@@ -42,13 +42,13 @@ UI_VOICE_IDS = [
 
 EXPECTED = {
     "af_bella": "Savannah",
-    "af_sarah": "Lily",
-    "af_nicole": "Hana",
-    "bf_emma": "Paige",
-    "am_adam": "Rohan",
+    "af_sarah": "Layla",
+    "af_nicole": "Naina",
+    "bf_emma": "Emma",
+    "am_adam": "Sid",
     "am_michael": "Elliot",
-    "am_echo": "Cole",
-    "bm_george": "Spencer",
+    "am_echo": "Kai",
+    "bm_george": "Neil",
 }
 
 
@@ -92,7 +92,7 @@ def test_unknown_or_empty_voice_falls_back_to_elliot(bad):
 
 def test_assistant_uses_merchant_voice():
     assistant = vw._assistant_for(_fake_config(voice="af_sarah"))
-    assert assistant["voice"] == {"provider": "vapi", "voiceId": "Lily"}
+    assert assistant["voice"] == {"provider": "vapi", "voiceId": "Layla"}
 
 
 def test_assistant_defaults_to_elliot_without_voice():

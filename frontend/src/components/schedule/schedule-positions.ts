@@ -61,6 +61,72 @@ export function positionsForType(businessType: string): PositionDef[] {
   return POSITIONS_BY_TYPE[businessType] || POSITIONS_BY_TYPE.coffee_shop
 }
 
+/** Default staff roles per business type (the AddStaffModal picker list). */
+export const ROLES_BY_TYPE: Record<string, string[]> = {
+  coffee_shop: ['barista', 'bar_lead', 'cashier', 'supervisor'],
+  restaurant: ['server', 'bartender', 'host', 'kitchen', 'runner', 'manager'],
+  fast_food: ['counter', 'drive_through', 'kitchen', 'manager'],
+  auto_shop: ['technician', 'advisor', 'parts_counter'],
+  smoke_shop: ['associate', 'shift_lead'],
+}
+
+/** Union of the staff-role picker defaults and the position-slot roles, so the
+ *  Manage-positions wizard lists everything the schedule can actually use. */
+export function defaultRolesForType(businessType: string): string[] {
+  const set = new Set(ROLES_BY_TYPE[businessType] || ROLES_BY_TYPE.coffee_shop)
+  for (const def of positionsForType(businessType)) set.add(def.role)
+  return [...set]
+}
+
+/* ------------------------------------------------------------------ *
+ * Custom positions — merchant-editable role list (Manage positions).
+ *
+ * Roles are plain strings on staff + shift rows (no positions table), so the
+ * laziest persistence that survives reload is:
+ *   - the edited list itself      → localStorage, keyed per merchant
+ *   - renames of rows in use      → PUT /schedule/staff + /schedule/shifts
+ *     (so renamed roles live in the DB and show up on any device)
+ * ------------------------------------------------------------------ */
+
+export interface PositionsOverride {
+  /** The merchant's current position list (role strings). */
+  positions: string[]
+  /** original default role -> current name, so POSITIONS_BY_TYPE slot defs
+   *  keep matching staff after a rename. */
+  renames: Record<string, string>
+}
+
+const POSITIONS_STORE_PREFIX = 'meridian-positions-v1:'
+
+export function positionsStorageKey(merchantId: string, businessType: string): string {
+  return `${POSITIONS_STORE_PREFIX}${merchantId || `demo-${businessType}`}`
+}
+
+export function loadPositionsOverride(key: string): PositionsOverride | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed?.positions)) return null
+    return {
+      positions: parsed.positions.filter((p: unknown) => typeof p === 'string'),
+      renames: parsed.renames && typeof parsed.renames === 'object' ? parsed.renames : {},
+    }
+  } catch {
+    return null
+  }
+}
+
+export function savePositionsOverride(key: string, override: PositionsOverride): void {
+  try { localStorage.setItem(key, JSON.stringify(override)) } catch { /* quota/private mode — non-fatal */ }
+}
+
+/** Slot defs with merchant renames applied, so Auto-fill + the board keep
+ *  matching staff whose roles were renamed. */
+export function applyPositionRenames(defs: PositionDef[], renames: Record<string, string>): PositionDef[] {
+  return defs.map(d => (renames[d.role] ? { ...d, role: renames[d.role] } : d))
+}
+
 /** Expected traffic for a day, 0..1, scaled ACROSS the week (min-max) so the
  *  forecast spreads red→green instead of clustering — a day's mean sales
  *  intensity relative to the slowest/busiest day. */

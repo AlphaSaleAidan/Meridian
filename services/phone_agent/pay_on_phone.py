@@ -112,6 +112,7 @@ async def collect_pay_now(
             order=order,
             payment_link=payment_result["url"],
             business_name=config.business_name,
+            sms_pay_template=getattr(config, "sms_pay_template", "") or "",
         )
 
     # Write the held order: pending payment, ticket NOT released to the kitchen.

@@ -837,7 +837,7 @@ export default function CanadaCustomerOnboardingWizard() {
                 follow-up. */}
             {posProvider === 'square' && org?.org_id && (
               <a
-                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/canada/dashboard')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
                 className={btnPrimary + ' justify-center w-full'}
                 target="_blank"
                 rel="noopener noreferrer"

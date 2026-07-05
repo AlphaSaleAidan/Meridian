@@ -22,7 +22,11 @@ from ...square.oauth import OAuthManager, OAuthError
 from ...security.encryption import encrypt_token
 # Shared post-OAuth return-path allowlist (also used by clover_oauth.py) so the
 # two callbacks can't drift — US /onboard was missing here before centralization.
-from ._oauth_return import safe_return_to as _safe_return_to
+from ._oauth_return import (
+    origin_from_referer as _origin_from_referer,
+    safe_origin as _safe_origin,
+    safe_return_to as _safe_return_to,
+)
 
 logger = logging.getLogger("meridian.api.oauth")
 
@@ -71,37 +75,63 @@ oauth_manager = OAuthManager()
 _DEFAULT_RETURN_TO = "/app/settings"
 
 
-def _redirect_to(return_to: str, params: dict) -> RedirectResponse:
-    """Build a same-origin redirect to the wizard (or legacy settings)."""
+def _redirect_to(return_to: str, params: dict, origin: str = "") -> RedirectResponse:
+    """Build a redirect to the wizard (or legacy settings) on the origin the
+    merchant started from (falls back to the static FRONTEND_URL)."""
     path = return_to or _DEFAULT_RETURN_TO
-    return RedirectResponse(url=f"{_FRONTEND_URL}{path}?{urlencode(params)}")
+    base = _safe_origin(origin) or _FRONTEND_URL
+    return RedirectResponse(url=f"{base}{path}?{urlencode(params)}")
 
 
-def _sign_state(org_id: str, return_to: str = "") -> str:
+def _b64_encode_field(value: str) -> str:
+    return base64.urlsafe_b64encode(value.encode()).decode().rstrip("=") if value else "_"
+
+
+def _b64_decode_field(value: str) -> str:
+    if value == "_":
+        return ""
+    try:
+        pad = "=" * (-len(value) % 4)
+        return base64.urlsafe_b64decode(value + pad).decode()
+    except Exception:
+        return ""
+
+
+def _sign_state(org_id: str, return_to: str = "", origin: str = "") -> str:
     """Create a self-contained HMAC-signed state token.
 
-    Format: org_id:nonce:expires:rt_b64:sig (rt_b64 is '_' when no return_to,
-    keeping legacy 4-part tokens verifiable for in-flight flows)."""
+    Format: org_id:nonce:expires:rt_b64[:origin_b64]:sig. origin_b64 is only
+    appended when an origin was captured, so states without one stay in the
+    older 5-part format (rt_b64 is '_' when no return_to) — keeping legacy
+    tokens verifiable for flows in flight across a deploy."""
     nonce = uuid4().hex[:16]
     expires = int(time.time()) + _STATE_TTL_SECONDS
-    rt_b64 = base64.urlsafe_b64encode(return_to.encode()).decode().rstrip("=") if return_to else "_"
+    rt_b64 = _b64_encode_field(return_to)
     payload = f"{org_id}:{nonce}:{expires}:{rt_b64}"
+    if origin:
+        payload = f"{payload}:{_b64_encode_field(origin)}"
     sig = hmac.new(
         _STATE_SECRET.encode(), payload.encode(), hashlib.sha256
     ).hexdigest()[:32]
     return f"{payload}:{sig}"
 
 
-def _verify_state(state: str) -> tuple[str, str] | None:
-    """Verify HMAC-signed state token. Returns (org_id, return_to) or None."""
+def _verify_state(state: str) -> tuple[str, str, str] | None:
+    """Verify HMAC-signed state token. Returns (org_id, return_to, origin) or
+    None. Accepts legacy 4-part (no return_to), 5-part (return_to) and new
+    6-part (return_to + origin) formats so in-flight states survive a deploy."""
     parts = state.split(":")
+    rt_b64 = "_"
+    origin_b64 = "_"
     if len(parts) == 4:
         org_id, nonce, expires_str, sig = parts
-        rt_b64 = "_"
         payload = f"{org_id}:{nonce}:{expires_str}"
     elif len(parts) == 5:
         org_id, nonce, expires_str, rt_b64, sig = parts
         payload = f"{org_id}:{nonce}:{expires_str}:{rt_b64}"
+    elif len(parts) == 6:
+        org_id, nonce, expires_str, rt_b64, origin_b64, sig = parts
+        payload = f"{org_id}:{nonce}:{expires_str}:{rt_b64}:{origin_b64}"
     else:
         return None
     try:
@@ -116,15 +146,9 @@ def _verify_state(state: str) -> tuple[str, str] | None:
     ).hexdigest()[:32]
     if not hmac.compare_digest(sig, expected_sig):
         return None
-    if rt_b64 == "_":
-        return_to = ""
-    else:
-        try:
-            pad = "=" * (-len(rt_b64) % 4)
-            return_to = base64.urlsafe_b64decode(rt_b64 + pad).decode()
-        except Exception:
-            return_to = ""
-    return org_id, _safe_return_to(return_to)
+    return_to = _b64_decode_field(rt_b64)
+    origin = _b64_decode_field(origin_b64)
+    return org_id, _safe_return_to(return_to), _safe_origin(origin)
 
 
 @router.get("/authorize")
@@ -141,7 +165,11 @@ async def authorize(request: Request, org_id: str | None = None, return_to: str 
     if not org_id:
         raise HTTPException(400, "org_id is required")
 
-    state = _sign_state(org_id, _safe_return_to(return_to))
+    # Capture the origin the merchant started from (sessions are per-origin) so
+    # the callback can land them back on the same frontend. Absent/unknown
+    # referers fall back to FRONTEND_URL in the callback.
+    origin = _origin_from_referer(request.headers.get("referer"))
+    state = _sign_state(org_id, _safe_return_to(return_to), origin)
     url, _ = oauth_manager.get_authorize_url(org_id=org_id, state=state)
 
     logger.info(f"OAuth: redirecting org {org_id} to Square authorize")
@@ -169,10 +197,11 @@ async def callback(
         logger.warning(f"OAuth denied: {error} — {error_description}")
         verified = _verify_state(state) if state else None
         denied_return_to = verified[1] if verified else ""
+        denied_origin = verified[2] if verified else ""
         return _redirect_to(denied_return_to, {
             "oauth": "denied",
             "error": error_description or "Authorization was denied.",
-        })
+        }, denied_origin)
 
     if not code or not state:
         raise HTTPException(400, "Missing code or state parameter")
@@ -181,7 +210,7 @@ async def callback(
     verified = _verify_state(state)
     if verified is None:
         raise HTTPException(403, "Invalid or expired state — possible CSRF attack")
-    org_id, return_to = verified
+    org_id, return_to, origin = verified
 
     # Exchange code for tokens
     try:
@@ -191,7 +220,7 @@ async def callback(
         return _redirect_to(return_to, {
             "oauth": "error",
             "error": str(e),
-        })
+        }, origin)
 
     logger.info(
         f"OAuth success for org {org_id}: "
@@ -330,13 +359,13 @@ async def callback(
             "oauth": "partial",
             "merchant_id": tokens["merchant_id"],
             "warning": "Connected but failed to save — please retry.",
-        })
+        }, origin)
 
     # ── Redirect back to the originating surface ──────────
     return _redirect_to(return_to, {
         "oauth": "success",
         "merchant_id": tokens["merchant_id"],
-    })
+    }, origin)
 
 
 @router.get("/status")

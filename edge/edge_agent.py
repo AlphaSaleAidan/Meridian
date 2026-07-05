@@ -71,6 +71,22 @@ class CameraProcessor:
         self.name = camera_config.get("name", "Camera")
         self.compliance_mode = camera_config.get("compliance_mode", "anonymous")
         self.zone_config = camera_config.get("zone_config", {})
+
+    @staticmethod
+    def _zone_px(zone: dict, frame_w: int, frame_h: int) -> dict:
+        """Zones from the setup wizard are NORMALIZED (0-1); legacy configs used
+        native pixels. Scale normalized rects to this frame's size."""
+        if not zone:
+            return zone
+        vals = [zone.get(k, 0) for k in ("x1", "y1", "x2", "y2")]
+        if all(0 <= v <= 1.0 for v in vals) and any(v > 0 for v in vals):
+            return {
+                "x1": zone.get("x1", 0) * frame_w,
+                "y1": zone.get("y1", 0) * frame_h,
+                "x2": zone.get("x2", 1) * frame_w,
+                "y2": zone.get("y2", 1) * frame_h,
+            }
+        return zone
         self.active_hours = camera_config.get("active_hours", {"start": "07:00", "end": "22:00"})
         # Per-camera feature toggles set by the merchant in the portal (vision_cameras.features).
         # The merchant's choice is authoritative: a disabled analysis is skipped even if
@@ -258,8 +274,9 @@ class CameraProcessor:
             self._analyze_demographics(frame, detections)
         self.current_bucket["occupancy_samples"].append(person_count)
 
-        queue_zone = self.zone_config.get("checkout", {}) if self.features["zones"] else {}
+        queue_zone = self.zone_config.get("checkout", {}) or self.zone_config.get("register", {}) if self.features["zones"] else {}
         if queue_zone and detections:
+            queue_zone = self._zone_px(queue_zone, frame.shape[1], frame.shape[0])
             qx1 = queue_zone.get("x1", 0)
             qy1 = queue_zone.get("y1", 0)
             qx2 = queue_zone.get("x2", frame.shape[1])
@@ -280,8 +297,12 @@ class CameraProcessor:
                 self.current_bucket["depth_distances"].extend(distances)
 
                 if self.zone_config:
+                    scaled_zones = {
+                        name: self._zone_px(z, frame.shape[1], frame.shape[0])
+                        for name, z in self.zone_config.items()
+                    }
                     zone_depths = self.depth_processor.get_zone_depths(
-                        depth_map, self.zone_config
+                        depth_map, scaled_zones
                     )
                     zone_counts = defaultdict(int)
                     for dist in distances:

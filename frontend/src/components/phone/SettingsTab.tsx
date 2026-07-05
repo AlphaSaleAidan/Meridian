@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { clsx } from 'clsx'
 import {
   Settings, Volume2, Link2, Phone, ListOrdered, Route,
-  CheckCircle2, CreditCard, SendHorizontal, MessageSquare,
+  CheckCircle2, CreditCard, SendHorizontal, MessageSquare, AlertCircle,
 } from 'lucide-react'
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import PersonalityPanel from './PersonalityPanel'
@@ -10,49 +10,68 @@ import {
   VOICE_OPTIONS, DEFAULT_VOICE_SETTINGS, DEFAULT_PERSONALITY,
   type PhoneBizConfig, type VoiceSettings, type VoicePersonality,
 } from '@/lib/phone-orders-demo-data'
-import { phoneService } from '@/lib/phone-service'
+import { phoneService, saveConfigErrorMessage, type PhoneConfig } from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
 import MenuBuildStatus from '@/components/menu/MenuBuildStatus'
 import MenuPhotoScanner from '@/components/menu/MenuPhotoScanner'
 
 const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
 
+// Placeholders the merchant can drop into the Text-to-Pay SMS template.
+// Rendered server-side by sms_checkout._format_checkout_sms via safe replace.
+const SMS_TEMPLATE_CHIPS = ['{name}', '{business}', '{total}', '{link}'] as const
+
 interface Props {
   biz: PhoneBizConfig
-  onReconfigure: () => void
+  /** Persisted config row (real accounts) — hydrates fields biz doesn't carry. */
+  phoneConfig?: PhoneConfig | null
+  /** Deep-link to the pillar Set up segment. Omitted where the pillar doesn't exist. */
+  onReconfigure?: () => void
   connectedPos: string | null
   onConnect: () => void
   orgId: string
 }
 
-export default function SettingsTab({ biz, onReconfigure, connectedPos, onConnect, orgId }: Props) {
+export default function SettingsTab({ biz, phoneConfig, onReconfigure, connectedPos, onConnect, orgId }: Props) {
   const posInfo = connectedPos ? posSystems.find(p => p.key === connectedPos) : null
   const hasDirectApi = connectedPos ? DIRECT_API_SYSTEMS.has(connectedPos) : false
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({ ...DEFAULT_VOICE_SETTINGS })
   const [personality, setPersonality] = useState<VoicePersonality>({ ...DEFAULT_PERSONALITY })
+  const [smsPayTemplate, setSmsPayTemplate] = useState('')
   const [cfg, setCfg] = useState({
     active: true,
     greeting: biz.greeting,
     voice: biz.voice,
     businessName: biz.name,
     orderTypes: [...biz.orderTypes] as string[],
-    smsCheckout: true,
   })
+
+  // Hydrate the saved SMS template once the persisted config arrives.
+  useEffect(() => {
+    if (phoneConfig?.sms_pay_template) setSmsPayTemplate(phoneConfig.sms_pay_template)
+  }, [phoneConfig?.sms_pay_template])
 
   async function handleSave() {
     if (!orgId) return
     setSaving(true)
-    await phoneService.saveConfig({
+    setSaveError(null)
+    const res = await phoneService.saveConfig({
       merchant_id: orgId,
       business_name: cfg.businessName,
       greeting: cfg.greeting,
       voice: cfg.voice,
       order_types: cfg.orderTypes,
       active: cfg.active,
+      sms_pay_template: smsPayTemplate.trim() || undefined,
     })
     setSaving(false)
+    if (!res.ok) {
+      setSaveError(saveConfigErrorMessage(res))
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -150,8 +169,8 @@ export default function SettingsTab({ biz, onReconfigure, connectedPos, onConnec
       </div>
 
       {/* Menu */}
-      <div className="card p-4">
-        <div className="flex items-center gap-2 mb-3">
+      <div className="card p-4 space-y-3">
+        <div className="flex items-center gap-2">
           <ListOrdered size={14} className="text-[#1A8FD6]" />
           <h3 className="text-sm font-semibold text-[#F5F5F7]">Menu ({biz.menu.length} items)</h3>
         </div>
@@ -166,19 +185,18 @@ export default function SettingsTab({ biz, onReconfigure, connectedPos, onConnec
             </div>
           ))}
         </div>
+        {/* Supplementary builders — scan a paper menu or import a CSV. */}
+        <MenuPhotoScanner />
       </div>
 
-      {/* Text-to-Pay */}
+      {/* Text-to-Pay — always on; merchants customize the SMS body below. */}
       <div className="card p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <CreditCard size={14} className="text-[#17C5B0]" />
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Text-to-Pay Checkout</h3>
           </div>
-          <button onClick={() => setCfg(p => ({ ...p, smsCheckout: !p.smsCheckout }))}
-            className={clsx('relative w-10 h-5 rounded-full transition-colors', cfg.smsCheckout ? 'bg-[#17C5B0]' : 'bg-[#2A2A30]')}>
-            <span className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform', cfg.smsCheckout ? 'left-5' : 'left-0.5')} />
-          </button>
+          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#17C5B0]/10 text-[#17C5B0]">Included</span>
         </div>
         <div className="space-y-2">
           <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
@@ -200,6 +218,34 @@ export default function SettingsTab({ biz, onReconfigure, connectedPos, onConnec
                 {posInfo ? `Payment processed through ${posInfo.name}` : 'Payment processed through your connected POS'}
               </p>
             </div>
+          </div>
+
+          {/* SMS message template */}
+          <div className="pt-2">
+            <label className="text-xs text-[#A1A1A8] block mb-1">SMS message</label>
+            <textarea
+              value={smsPayTemplate}
+              onChange={e => setSmsPayTemplate(e.target.value)}
+              rows={3}
+              placeholder={'Hi {name}! Your order from {business} is confirmed — {total}.\nPay here: {link}'}
+              className="w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-xs text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50 resize-none"
+            />
+            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <span className="text-[9px] text-[#A1A1A8]/60">Insert:</span>
+              {SMS_TEMPLATE_CHIPS.map(chip => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => setSmsPayTemplate(t => (t ? `${t}${t.endsWith(' ') || t.endsWith('\n') ? '' : ' '}${chip}` : chip))}
+                  className="px-1.5 py-0.5 rounded bg-[#1F1F23] text-[10px] font-mono text-[#1A8FD6] hover:bg-[#2A2A30] transition-colors"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+            <p className="text-[9px] text-[#A1A1A8]/50 mt-1">
+              Leave blank to use the default message. The payment {'{link}'} is always appended if your message omits it.
+            </p>
           </div>
         </div>
       </div>
@@ -235,18 +281,22 @@ export default function SettingsTab({ biz, onReconfigure, connectedPos, onConnec
       {/* Auto menu-builder progress — populates from the connected POS catalog. */}
       <MenuBuildStatus />
 
-      {/* Supplementary builder — scan a paper menu / specials board into the menu. */}
-      <MenuPhotoScanner />
-
       {/* Save + Reconfigure */}
+      {saveError && (
+        <div className="px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+          <AlertCircle size={14} className="flex-shrink-0" /> {saveError}
+        </div>
+      )}
       <button onClick={handleSave} disabled={saving}
         className="w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
         {saving ? 'Saving...' : saved ? <><CheckCircle2 size={14} /> Saved</> : 'Save Changes'}
       </button>
-      <button onClick={onReconfigure}
-        className="w-full py-2 border border-[#1F1F23] rounded-lg text-xs text-[#A1A1A8] hover:border-[#1A8FD6]/30 hover:text-[#1A8FD6] transition-colors">
-        Re-run Setup Wizard
-      </button>
+      {onReconfigure && (
+        <button onClick={onReconfigure}
+          className="w-full py-2 border border-[#1F1F23] rounded-lg text-xs text-[#A1A1A8] hover:border-[#1A8FD6]/30 hover:text-[#1A8FD6] transition-colors">
+          Re-run Setup Wizard
+        </button>
+      )}
     </div>
   )
 }

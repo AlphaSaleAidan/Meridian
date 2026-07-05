@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { clsx } from 'clsx'
-import { Star, HelpCircle, Truck, XCircle, ArrowUpRight, LayoutGrid, DollarSign } from 'lucide-react'
-import { generateMenuEngineering, type MenuEngItem, type MenuQuadrant } from '@/lib/agent-data'
+import { Star, HelpCircle, Truck, XCircle, ArrowUpRight, LayoutGrid, DollarSign, ChevronDown } from 'lucide-react'
+import { generateMenuEngineering, menuQuadrantRecommendation, type MenuEngItem, type MenuQuadrant } from '@/lib/agent-data'
 import { formatCentsCompact } from '@/lib/format'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
@@ -26,6 +26,7 @@ const quadrantConfig: Record<MenuQuadrant, { label: string; color: string; bg: s
 function QuadrantCard({ quadrant, items }: { quadrant: MenuQuadrant; items: MenuEngItem[] }) {
   const cfg = quadrantConfig[quadrant]
   const Icon = cfg.icon
+  const [expanded, setExpanded] = useState(false)
   return (
     <DashboardTiltCard className={clsx('card p-4', cfg.border)}>
       <div className="flex items-center gap-2 mb-3">
@@ -50,9 +51,49 @@ function QuadrantCard({ quadrant, items }: { quadrant: MenuQuadrant; items: Menu
         ))}
       </div>
       {items.length > 0 && (
-        <div className={clsx('mt-3 pt-2 border-t border-[#1F1F23] text-[10px]', cfg.color)}>
-          <ArrowUpRight size={10} className="inline mr-1" />
-          {items[0].recommendation}
+        <div className="mt-3 pt-2 border-t border-[#1F1F23]">
+          <button
+            onClick={() => setExpanded(v => !v)}
+            aria-expanded={expanded}
+            className={clsx(
+              'w-full flex items-start gap-1 text-left text-[10px] rounded-md -mx-1 px-1 py-0.5',
+              'hover:bg-[#1F1F23]/60 transition-colors',
+              cfg.color,
+            )}
+          >
+            <ArrowUpRight size={10} className="mt-[2px] flex-shrink-0" />
+            <span className="flex-1">{items[0].recommendation || menuQuadrantRecommendation(quadrant)}</span>
+            <ChevronDown
+              size={12}
+              className={clsx(
+                'mt-[1px] flex-shrink-0 text-[#A1A1A8]/60 transition-transform duration-300',
+                expanded && 'rotate-180',
+              )}
+            />
+          </button>
+          {/* Expandable per-item suggestion rows — max-height transition for a smooth reveal */}
+          <div
+            className={clsx(
+              'overflow-hidden transition-[max-height,opacity] duration-300 ease-out',
+              expanded ? 'max-h-[480px] opacity-100' : 'max-h-0 opacity-0',
+            )}
+          >
+            <div className="mt-2 space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+              {items.map(item => (
+                <div key={item.name} className="rounded-lg bg-[#1F1F23]/40 border border-[#1F1F23] px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-medium text-[#F5F5F7] truncate">{item.name}</p>
+                    <span className="text-[9px] font-mono text-[#A1A1A8]/50 flex-shrink-0">
+                      {item.marginPct}% margin • {item.monthlySales}/mo
+                    </span>
+                  </div>
+                  <p className={clsx('text-[10px] mt-0.5 leading-snug', cfg.color)}>
+                    {item.recommendation || menuQuadrantRecommendation(item.quadrant)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </DashboardTiltCard>

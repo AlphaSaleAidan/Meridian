@@ -18,6 +18,35 @@ export const VOICE_SAMPLES: Record<string, { pitch: number; rate: number }> = {
   bm_george:  { pitch: 0.75, rate: 0.92 },
 }
 
+/** Real Vapi voice samples (docs.vapi.ai) shipped at public/voices/. Preview
+ *  plays the ACTUAL voice heard on live calls; SpeechSynthesis remains only for
+ *  simulated test-call dialogue (dynamic text can't use fixed samples). */
+export const VAPI_SAMPLE_SRC: Record<string, string> = {
+  af_bella: '/voices/savannah.mp3',
+  af_sarah: '/voices/layla.mp3',
+  af_nicole: '/voices/naina.mp3',
+  bf_emma: '/voices/emma.mp3',
+  am_adam: '/voices/sid.mp3',
+  am_michael: '/voices/elliot.mp3',
+  am_echo: '/voices/kai.mp3',
+  bm_george: '/voices/neil.mp3',
+}
+
+let _sharedAudio: HTMLAudioElement | null = null
+export function playVapiSample(voiceId: string, onEnd?: () => void): HTMLAudioElement | null {
+  const srcUrl = VAPI_SAMPLE_SRC[voiceId]
+  if (!srcUrl) { onEnd?.(); return null }
+  stopVapiSample()
+  const audio = new Audio(srcUrl)
+  _sharedAudio = audio
+  if (onEnd) { audio.onended = onEnd; audio.onerror = onEnd }
+  void audio.play().catch(() => onEnd?.())
+  return audio
+}
+export function stopVapiSample(): void {
+  if (_sharedAudio) { _sharedAudio.pause(); _sharedAudio = null }
+}
+
 const FEMALE_RE = /samantha|karen|victoria|zira|tessa|moira|fiona|serena|female|woman|google uk english female|google us english/i
 const MALE_RE = /daniel|alex|david|mark|fred|rishi|oliver|arthur|male|man|google uk english male/i
 
@@ -77,22 +106,12 @@ export function VoicePlayButton({ voiceId, isSelected }: { voiceId: string; isSe
   const handlePlay = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     if (playing) {
-      window.speechSynthesis.cancel()
+      stopVapiSample()
       setPlaying(false)
       return
     }
-    window.speechSynthesis.cancel()
-    const option = VOICE_OPTIONS.find(v => v.id === voiceId)
-    if (!option) return
-    const utter = new SpeechSynthesisUtterance(option.sampleText)
-    const sample = VOICE_SAMPLES[voiceId]
-    if (sample) { utter.pitch = sample.pitch; utter.rate = sample.rate }
-    const preferred = pickBrowserVoice(voiceId)
-    if (preferred) utter.voice = preferred
-    utter.onend = () => setPlaying(false)
-    utter.onerror = () => setPlaying(false)
     setPlaying(true)
-    window.speechSynthesis.speak(utter)
+    playVapiSample(voiceId, () => setPlaying(false))
   }, [playing, voiceId])
 
   return (
@@ -122,32 +141,20 @@ export function VoicePreviewCard({ voiceId, businessName, greeting, settings, on
   const [playing, setPlaying] = useState(false)
 
   useEffect(() => {
-    return () => { window.speechSynthesis.cancel() }
+    return () => { window.speechSynthesis.cancel(); stopVapiSample() }
   }, [])
 
   function handlePreview() {
     if (playing) {
-      window.speechSynthesis.cancel()
+      stopVapiSample()
       setPlaying(false)
       return
     }
-    window.speechSynthesis.cancel()
-    const text = greeting || `Thank you for calling ${businessName}! How can I help you today?`
-    const utter = new SpeechSynthesisUtterance(text)
-    const sample = VOICE_SAMPLES[voiceId]
-    if (sample) {
-      utter.pitch = sample.pitch * settings.pitch
-      utter.rate = sample.rate * settings.speed
-    } else {
-      utter.pitch = settings.pitch
-      utter.rate = settings.speed
-    }
-    const preferred = pickBrowserVoice(voiceId)
-    if (preferred) utter.voice = preferred
-    utter.onend = () => setPlaying(false)
-    utter.onerror = () => setPlaying(false)
+    // Real Vapi sample — the exact voice live calls use. Speed slider maps to
+    // playbackRate; pitch can't be applied to a fixed recording.
     setPlaying(true)
-    window.speechSynthesis.speak(utter)
+    const audio = playVapiSample(voiceId, () => setPlaying(false))
+    if (audio) audio.playbackRate = Math.min(1.5, Math.max(0.7, settings.speed))
   }
 
   return (

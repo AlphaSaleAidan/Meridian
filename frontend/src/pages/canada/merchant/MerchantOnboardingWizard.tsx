@@ -210,14 +210,20 @@ export default function MerchantOnboardingWizard() {
     if (!orgId) { setError('Your account is still being set up — please refresh and try again.'); return }
     setError(null)
     const url = `${API_BASE}/api/square/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(RETURN_TO)}`
-    window.location.href = url
+    // Approve in a NEW tab; this tab moves to the sync step whose 4s status
+    // polling picks up the completed connection.
+    window.open(url, '_blank', 'noopener')
+    setProvider('square')
+    setStep('sync')
   }
 
   function startCloverConnect() {
     if (!orgId) { setError('Your account is still being set up — please refresh and try again.'); return }
     setError(null)
     const url = `${API_BASE}/api/clover/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(RETURN_TO)}`
-    window.location.href = url
+    window.open(url, '_blank', 'noopener')
+    setProvider('clover')
+    setStep('sync')
   }
 
   async function connectCloverManual() {
@@ -394,7 +400,11 @@ export default function MerchantOnboardingWizard() {
                   </p>
                 </div>
 
-                {/* Square — live, one-click OAuth */}
+                {/* Option 1 — one-click connect (opens the provider in a new tab) */}
+                <p className={`text-[10px] font-semibold uppercase tracking-wider ${T.muted}`}>
+                  One-click connect
+                </p>
+
                 <button
                   onClick={startSquareConnect}
                   className={`w-full ${cardCls} flex items-center gap-4 text-left hover:border-[#00d4aa]/40 transition-colors`}
@@ -403,13 +413,12 @@ export default function MerchantOnboardingWizard() {
                     <Wifi size={20} className="text-[#006AFF]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[14px] font-semibold ${T.text}`}>Connect Square</p>
-                    <p className={`text-[11px] ${T.muted}`}>One-click secure authorization — no API keys needed</p>
+                    <p className={`text-[14px] font-semibold ${T.text}`}>Square</p>
+                    <p className={`text-[11px] ${T.muted}`}>Sign in to Square in a new tab — no keys to copy</p>
                   </div>
                   <ArrowRight size={16} className={T.accentTxt} />
                 </button>
 
-                {/* Clover — live: 1-click OAuth (if configured) + manual key/ID paste */}
                 {cloverOAuthAvailable && (
                   <button
                     onClick={startCloverConnect}
@@ -419,28 +428,28 @@ export default function MerchantOnboardingWizard() {
                       <Store size={20} className="text-[#1DC167]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-[14px] font-semibold ${T.text}`}>Connect Clover</p>
-                      <p className={`text-[11px] ${T.muted}`}>One-click secure authorization — no API keys needed</p>
+                      <p className={`text-[14px] font-semibold ${T.text}`}>Clover</p>
+                      <p className={`text-[11px] ${T.muted}`}>Sign in to Clover in a new tab — no keys to copy</p>
                     </div>
                     <ArrowRight size={16} className={T.accentTxt} />
                   </button>
                 )}
 
-                {/* Clover manual key/ID paste */}
+                {/* Option 2 — API key paste (Clover) */}
+                <p className={`text-[10px] font-semibold uppercase tracking-wider ${T.muted} pt-1`}>
+                  Connect with API key
+                </p>
+
                 <div className={`w-full ${cardCls}`}>
                   <button
                     onClick={() => setCloverOpen(o => !o)}
                     className="w-full flex items-center gap-4 text-left"
                   >
                     <div className="w-11 h-11 rounded-lg bg-[#1DC167]/10 flex items-center justify-center flex-shrink-0">
-                      {cloverOAuthAvailable
-                        ? <KeyRound size={20} className="text-[#1DC167]" />
-                        : <Store size={20} className="text-[#1DC167]" />}
+                      <KeyRound size={20} className="text-[#1DC167]" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-[14px] font-semibold ${T.text}`}>
-                        {cloverOAuthAvailable ? 'Connect Clover with API keys' : 'Connect Clover'}
-                      </p>
+                      <p className={`text-[14px] font-semibold ${T.text}`}>Clover</p>
                       <p className={`text-[11px] ${T.muted}`}>
                         Paste your Merchant ID and API Token
                       </p>
@@ -511,7 +520,7 @@ export default function MerchantOnboardingWizard() {
                   <p className={`text-[13px] ${T.muted} mt-1`}>
                     {status?.connected
                       ? `${providerLabel} is connected. We're pulling in your sales history now.`
-                      : `Waiting for ${providerLabel} to confirm the connection…`}
+                      : `Approve the connection in the ${providerLabel} tab we just opened — this page updates automatically.`}
                   </p>
                 </div>
 

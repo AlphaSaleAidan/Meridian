@@ -3,37 +3,44 @@ import { clsx } from 'clsx'
 import { PhoneCall } from 'lucide-react'
 import WaveformVisualizer from './WaveformVisualizer'
 import { ensureAnimStyles } from './phone-anim-styles'
-import type { PhoneBizConfig, PhoneOrderItem } from '@/lib/phone-orders-demo-data'
+import type { PhoneBizConfig, PhoneCallEntry, PhoneOrderItem } from '@/lib/phone-orders-demo-data'
 
 interface Props {
   biz: PhoneBizConfig
+  /** Demo mode runs a simulated call; live mode renders ONLY real data. */
+  isDemo: boolean
+  /** Real in-progress calls (status === 'in_progress'). Drives the live view. */
+  liveCalls: PhoneCallEntry[]
 }
 
-/** Simulated live transcript lines for the mini-viewer. */
-const LIVE_CONVO_POOL = [
-  { speaker: 'caller' as const, text: "Yeah, hi. Can I place an order for pickup?" },
-  { speaker: 'agent' as const, text: "Absolutely! What can I get for you?" },
-  { speaker: 'caller' as const, text: "I'll have the..." },
-  { speaker: 'agent' as const, text: "Great choice! That's a customer favorite." },
-  { speaker: 'caller' as const, text: "Can I also add..." },
-  { speaker: 'agent' as const, text: "Of course! Anything else?" },
-  { speaker: 'caller' as const, text: "Actually, what do you recommend?" },
-  { speaker: 'agent' as const, text: "Our most popular item is the..." },
-  { speaker: 'caller' as const, text: "Perfect, let's go with that." },
-  { speaker: 'agent' as const, text: "Sounds good! Anything else for you today?" },
-  { speaker: 'caller' as const, text: "That's everything." },
-  { speaker: 'agent' as const, text: "Your total comes to..." },
+type ConvoLine = { speaker: 'caller' | 'agent'; text: string }
+
+/** Simulated live transcript lines for the mini-viewer (DEMO MODE ONLY). */
+const LIVE_CONVO_POOL: ConvoLine[] = [
+  { speaker: 'caller', text: "Yeah, hi. Can I place an order for pickup?" },
+  { speaker: 'agent', text: "Absolutely! What can I get for you?" },
+  { speaker: 'caller', text: "I'll have the..." },
+  { speaker: 'agent', text: "Great choice! That's a customer favorite." },
+  { speaker: 'caller', text: "Can I also add..." },
+  { speaker: 'agent', text: "Of course! Anything else?" },
+  { speaker: 'caller', text: "Actually, what do you recommend?" },
+  { speaker: 'agent', text: "Our most popular item is the..." },
+  { speaker: 'caller', text: "Perfect, let's go with that." },
+  { speaker: 'agent', text: "Sounds good! Anything else for you today?" },
+  { speaker: 'caller', text: "That's everything." },
+  { speaker: 'agent', text: "Your total comes to..." },
 ]
 
-export default function LiveCallsBanner({ biz }: Props) {
-  const [activeCalls, setActiveCalls] = useState(() => Math.random() < 0.5 ? 1 : 0)
+export default function LiveCallsBanner({ biz, isDemo, liveCalls }: Props) {
+  // ── Demo-only simulation state. Never advances in live mode. ──
+  const [simActiveCalls, setSimActiveCalls] = useState(() => (isDemo && Math.random() < 0.5) ? 1 : 0)
   const [lineIndex, setLineIndex] = useState(0)
-  const [visibleLines, setVisibleLines] = useState<typeof LIVE_CONVO_POOL>([])
-  const [orderItems, setOrderItems] = useState<PhoneOrderItem[]>([])
-  const [agentSpeaking, setAgentSpeaking] = useState(false)
+  const [simVisibleLines, setSimVisibleLines] = useState<ConvoLine[]>([])
+  const [simOrderItems, setSimOrderItems] = useState<PhoneOrderItem[]>([])
+  const [simAgentSpeaking, setSimAgentSpeaking] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Build live transcript lines with actual menu items
+  // Build simulated transcript lines with actual menu items (demo only)
   const liveConvo = useMemo(() => {
     if (biz.menu.length === 0) return LIVE_CONVO_POOL
     const item1 = biz.menu[Math.floor(Math.random() * biz.menu.length)]
@@ -52,18 +59,20 @@ export default function LiveCallsBanner({ biz }: Props) {
 
   useEffect(() => {
     ensureAnimStyles()
+    if (!isDemo) return
     const interval = setInterval(() => {
-      setActiveCalls(Math.random() < 0.4 ? 1 : 0)
+      setSimActiveCalls(Math.random() < 0.4 ? 1 : 0)
     }, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [isDemo])
 
-  // Advance the live transcript
+  // Advance the simulated transcript (demo only)
   useEffect(() => {
-    if (activeCalls === 0) {
-      setVisibleLines([])
+    if (!isDemo) return
+    if (simActiveCalls === 0) {
+      setSimVisibleLines([])
       setLineIndex(0)
-      setOrderItems([])
+      setSimOrderItems([])
       return
     }
 
@@ -73,22 +82,22 @@ export default function LiveCallsBanner({ biz }: Props) {
         if (next > liveConvo.length) return 0
         const line = liveConvo[prev]
         if (line) {
-          setVisibleLines(vl => {
+          setSimVisibleLines(vl => {
             const updated = [...vl, line].slice(-4)
             return updated
           })
-          setAgentSpeaking(line.speaker === 'agent')
+          setSimAgentSpeaking(line.speaker === 'agent')
           // Simulate building order items
           if (line.speaker === 'caller' && line.text.includes('have the')) {
             const menuMatch = biz.menu.find(m => line.text.includes(m.name))
             if (menuMatch) {
-              setOrderItems(oi => [...oi, { name: menuMatch.name, qty: 1, price: menuMatch.price }])
+              setSimOrderItems(oi => [...oi, { name: menuMatch.name, qty: 1, price: menuMatch.price }])
             }
           }
           if (line.speaker === 'caller' && line.text.includes('also get the')) {
             const menuMatch = biz.menu.find(m => line.text.includes(m.name))
             if (menuMatch) {
-              setOrderItems(oi => [...oi, { name: menuMatch.name, qty: 1, price: menuMatch.price }])
+              setSimOrderItems(oi => [...oi, { name: menuMatch.name, qty: 1, price: menuMatch.price }])
             }
           }
         }
@@ -97,7 +106,20 @@ export default function LiveCallsBanner({ biz }: Props) {
     }, 3500)
 
     return () => clearInterval(interval)
-  }, [activeCalls, liveConvo, biz.menu])
+  }, [isDemo, simActiveCalls, liveConvo, biz.menu])
+
+  // ── Live mode: everything derives from the real in-progress calls. ──
+  const activeCalls = isDemo ? simActiveCalls : liveCalls.length
+  const liveCall = !isDemo && liveCalls.length > 0 ? liveCalls[0] : null
+  const realVisibleLines: ConvoLine[] = useMemo(
+    () => (liveCall ? liveCall.transcript.slice(-4).map(t => ({ speaker: t.speaker, text: t.text })) : []),
+    [liveCall],
+  )
+  const visibleLines = isDemo ? simVisibleLines : realVisibleLines
+  const orderItems: PhoneOrderItem[] = isDemo ? simOrderItems : (liveCall?.items ?? [])
+  const agentSpeaking = isDemo
+    ? simAgentSpeaking
+    : visibleLines.length > 0 && visibleLines[visibleLines.length - 1].speaker === 'agent'
 
   // Auto-scroll transcript
   useEffect(() => {
@@ -107,6 +129,8 @@ export default function LiveCallsBanner({ biz }: Props) {
   }, [visibleLines])
 
   if (activeCalls === 0) {
+    // Live mode: no banner at all unless a real call is in progress.
+    if (!isDemo) return null
     return (
       <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border bg-[#111113] border-[#1F1F23] transition-colors">
         <span className="w-2.5 h-2.5 rounded-full bg-[#A1A1A8]/40" />
@@ -123,7 +147,7 @@ export default function LiveCallsBanner({ biz }: Props) {
           <span className="w-2.5 h-2.5 rounded-full bg-[#17C5B0] live-pulse-ring" />
         </div>
         <span className="text-xs font-medium text-[#17C5B0]">
-          {activeCalls} active call
+          {activeCalls} active call{activeCalls === 1 ? '' : 's'}
         </span>
 
         {/* Mini waveform when agent is speaking */}

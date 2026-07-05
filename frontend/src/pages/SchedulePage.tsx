@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy, Percent } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Calendar, Send, Sparkles, FileDown, ChevronLeft, ChevronRight, Plus, Clock, DollarSign, Users, X, Copy, Percent, Briefcase } from 'lucide-react'
 import {
   generateScheduleStaff, generateScheduleShifts,
   generatePeakHourHeatmap, getHolidaysForWeek,
@@ -15,7 +16,13 @@ import '@/components/schedule/schedule-theme.css'
 import AddStaffModal from '@/components/schedule/AddStaffModal'
 import ShiftEditPopover from '@/components/schedule/ShiftEditPopover'
 import PositionsBoard, { type AssignTarget } from '@/components/schedule/PositionsBoard'
-import { positionsForType, buildPositionSchedule, dayDemand } from '@/components/schedule/schedule-positions'
+import ManagePositionsModal from '@/components/schedule/ManagePositionsModal'
+import {
+  positionsForType, buildPositionSchedule, dayDemand,
+  defaultRolesForType, applyPositionRenames,
+  loadPositionsOverride, savePositionsOverride, positionsStorageKey,
+  type PositionsOverride, type PositionDef,
+} from '@/components/schedule/schedule-positions'
 import TeamHoursPanel from '@/components/schedule/TeamHoursPanel'
 import RecommendationsPanel from '@/components/schedule/RecommendationsPanel'
 import PeakHoursHeatmap from '@/components/PeakHoursHeatmap'
@@ -59,6 +66,7 @@ export default function SchedulePage() {
   // Mobile day selection is lifted here so the coverage strip and day view stay in sync.
   const [mobileDay, setMobileDay] = useState(() => indexOfTodayInWeek(getMonday(new Date())))
   const [showAddStaff, setShowAddStaff] = useState(false)
+  const [showManagePositions, setShowManagePositions] = useState(false)
   const [selectedShift, setSelectedShift] = useState<ScheduleShift | null>(null)
   const [isPublished, setIsPublished] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -119,6 +127,52 @@ export default function SchedulePage() {
     () => livePeakHours ?? generatePeakHourHeatmap(),
     [livePeakHours, businessType],
   )
+
+  // ── Custom positions (Manage positions micro-wizard) ─────────
+  // Roles are plain strings on staff/shift rows; the edited list itself is the
+  // only thing without a home, so it persists in localStorage per merchant.
+  // Renames are additionally written through to staff/shift rows via the
+  // existing schedule endpoints so they survive on any device.
+  const positionsKey = positionsStorageKey(liveMode ? merchantId : '', businessType)
+  const [posOverride, setPosOverride] = useState<PositionsOverride | null>(null)
+  useEffect(() => { setPosOverride(loadPositionsOverride(positionsKey)) }, [positionsKey])
+
+  const positionRenames = posOverride?.renames ?? {}
+  const positions = useMemo(() => {
+    const base = posOverride?.positions ?? defaultRolesForType(businessType)
+    const set = new Set(base)
+    // Roles actually in use are never invisible, even if removed from the list.
+    staff.forEach(s => { if (s.role) set.add(s.role) })
+    return [...set]
+  }, [posOverride, businessType, staff])
+
+  // Slot defs for the board + Auto-fill: business-type defaults with renames
+  // applied, removed positions dropped, and merchant-added positions given a
+  // generic all-day slot so they show up on the board.
+  const positionDefs = useMemo<PositionDef[]>(() => {
+    const renames = posOverride?.renames ?? {}
+    const listed = new Set(positions)
+    const defs = applyPositionRenames(positionsForType(businessType), renames)
+      .filter(d => listed.has(d.role))
+    const covered = new Set(defs.map(d => d.role))
+    const defaults = new Set(defaultRolesForType(businessType))
+    const renameTargets = new Set(Object.values(renames))
+    for (const p of positions) {
+      if (!covered.has(p) && !defaults.has(p) && !renameTargets.has(p)) {
+        defs.push({
+          key: `custom-${p}`,
+          label: p.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          role: p, start: '09:00', end: '17:00', base: 1,
+        })
+      }
+    }
+    return defs
+  }, [businessType, positions, posOverride])
+
+  const updatePositions = useCallback((next: PositionsOverride) => {
+    setPosOverride(next)
+    savePositionsOverride(positionsKey, next)
+  }, [positionsKey])
 
   // Regenerate demo staff + shifts when business type changes so all five
   // demo scenarios show coherent data (hours per role, peak coverage, labor%).
@@ -252,6 +306,42 @@ export default function SchedulePage() {
     }
   }, [liveMode, merchantId, portalContext, showToast])
 
+  // ── Manage-positions handlers ─────────────────────────────────
+  const handleAddPosition = useCallback((role: string) => {
+    updatePositions({ positions: [...positions, role], renames: { ...positionRenames } })
+    showToast(`Position "${role.replace(/_/g, ' ')}" added`)
+  }, [positions, positionRenames, updatePositions, showToast])
+
+  const handleRenamePosition = useCallback(async (oldRole: string, newRole: string) => {
+    // Track the rename against the ORIGINAL default role so the built-in
+    // position slots keep matching (supports chained renames).
+    const renames = { ...positionRenames }
+    const origin = Object.keys(renames).find(k => renames[k] === oldRole)
+      ?? (defaultRolesForType(businessType).includes(oldRole) ? oldRole : null)
+    if (origin) renames[origin] = newRole
+    updatePositions({ positions: positions.map(p => (p === oldRole ? newRole : p)), renames })
+
+    // Renaming = update every staff/shift row that carries the old role.
+    const affectedStaff = staff.filter(s => s.role === oldRole)
+    const affectedShifts = shifts.filter(s => s.role === oldRole)
+    setStaff(prev => prev.map(s => (s.role === oldRole ? { ...s, role: newRole } : s)))
+    setShifts(prev => prev.map(s => (s.role === oldRole ? { ...s, role: newRole } : s)))
+    if (!liveMode) return
+    const results = await Promise.allSettled([
+      ...affectedStaff.filter(s => isUuid(s.id)).map(s => api.scheduleUpdateStaff(s.id, { role: newRole })),
+      ...affectedShifts.filter(s => isUuid(s.id)).map(s => api.scheduleUpdateShift(s.id, { role: newRole })),
+    ])
+    if (results.some(r => r.status === 'rejected')) {
+      showToast('Position renamed, but some rows failed to save — check your connection')
+    }
+  }, [positions, positionRenames, staff, shifts, liveMode, businessType, updatePositions, showToast])
+
+  const handleDeletePosition = useCallback((role: string) => {
+    const renames = { ...positionRenames }
+    for (const k of Object.keys(renames)) if (renames[k] === role) delete renames[k]
+    updatePositions({ positions: positions.filter(p => p !== role), renames })
+  }, [positions, positionRenames, updatePositions])
+
   const handleShiftClick = useCallback((s: ScheduleShift) => setSelectedShift(s), [])
 
   const handleAcceptRecommendation = useCallback(async (rec: {
@@ -375,7 +465,7 @@ export default function SchedulePage() {
     setIsGenerating(true)
     // Position-based optimizer: fill every required position, scaled by sales
     // history (peak-hour intensity), busiest days first.
-    const defs = positionsForType(businessType)
+    const defs = positionDefs
     const opt = buildPositionSchedule(staff, defs, peakHours, weekStartDate)
     // Name the busiest day the optimizer prioritized (revenue-driven), so the
     // toast reads like the agent explaining itself. ponytail: derived, no extra state.
@@ -415,7 +505,7 @@ export default function SchedulePage() {
     } finally {
       setIsGenerating(false)
     }
-  }, [liveMode, merchantId, portalContext, staff, peakHours, weekStartDate, shifts, businessType, showToast])
+  }, [liveMode, merchantId, portalContext, staff, peakHours, weekStartDate, shifts, positionDefs, showToast])
 
   const handlePublish = useCallback(async () => {
     setIsPublished(true)
@@ -502,6 +592,11 @@ export default function SchedulePage() {
                 className="flex items-center justify-center pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
                 <Users size={15} />
               </button>
+              <button onClick={() => setShowManagePositions(true)}
+                aria-label="Manage positions" title="Manage positions"
+                className="flex items-center justify-center pill px-4 py-2.5 rounded-full border border-[#1F1F23] text-[#A1A1A8] hover:text-[#F5F5F7] hover:bg-[#1F1F23] active:scale-[0.98] transition-all">
+                <Briefcase size={15} />
+              </button>
             </div>
             {/* Primary actions */}
             <div className="flex items-center gap-2">
@@ -585,10 +680,19 @@ export default function SchedulePage() {
         </div>
       </ScrollReveal>
 
-      {/* Friendly illustrated empty states */}
-      {!isGenerating && staff.length === 0 && (
-        <ScrollReveal variant="fadeUp" delay={0.045}>
-          <div className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]">
+      {/* Friendly illustrated empty states — AnimatePresence gives the
+          illustration a soft fade + scale-down exit when content arrives,
+          instead of an abrupt swap. */}
+      <AnimatePresence>
+        {!isGenerating && staff.length === 0 && (
+          <motion.div
+            key="empty-add-team"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]"
+          >
             <img src="/schedule-illustration.png" alt="" className="w-28 h-28 object-contain drop-shadow-[0_8px_24px_rgba(23,197,176,0.25)]" />
             <div>
               <h3 className="text-base font-bold text-[#F5F5F7]">Let&apos;s set up your schedule</h3>
@@ -598,12 +702,17 @@ export default function SchedulePage() {
               className="pill flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 transition-all">
               <Plus size={15} /> Add your team
             </button>
-          </div>
-        </ScrollReveal>
-      )}
-      {!isGenerating && staff.length > 0 && realShifts.length === 0 && (
-        <ScrollReveal variant="fadeUp" delay={0.045}>
-          <div className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]">
+          </motion.div>
+        )}
+        {!isGenerating && staff.length > 0 && realShifts.length === 0 && (
+          <motion.div
+            key="empty-blank-week"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.96 }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
+            className="flex flex-col items-center text-center gap-3 px-6 py-8 rounded-2xl bg-gradient-to-b from-[#111113] to-[#0A0A0B] border border-[#1F1F23]"
+          >
             <img src="/schedule-illustration.png" alt="" className="w-28 h-28 object-contain drop-shadow-[0_8px_24px_rgba(23,197,176,0.25)]" />
             <div>
               <h3 className="text-base font-bold text-[#F5F5F7]">Your week is a blank canvas</h3>
@@ -613,9 +722,9 @@ export default function SchedulePage() {
               className="pill flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold text-white bg-gradient-to-r from-[#17C5B0] to-[#1A8FD6] shadow-lg shadow-[#1A8FD6]/20 hover:brightness-110 transition-all disabled:opacity-40">
               <Sparkles size={15} /> Auto-fill positions
             </button>
-          </div>
-        </ScrollReveal>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Generating state */}
       {isGenerating && (
@@ -638,6 +747,7 @@ export default function SchedulePage() {
               peaks={peakHours} weekStartDate={weekStartDate}
               day={mobileDay} onDayChange={setMobileDay}
               onAssign={handleAssign} onShiftClick={handleShiftClick}
+              defs={positionDefs}
             />
           </div>
           {/* Peak Hours side-by-side: the same demand signal Auto-fill optimizes
@@ -679,7 +789,10 @@ export default function SchedulePage() {
       )}
 
       <AddStaffModal open={showAddStaff} onClose={() => setShowAddStaff(false)}
-        onSave={handleAddStaff} businessType={businessType} />
+        onSave={handleAddStaff} businessType={businessType} roles={positions} />
+      <ManagePositionsModal open={showManagePositions} onClose={() => setShowManagePositions(false)}
+        positions={positions} staff={staff} shifts={shifts}
+        onAdd={handleAddPosition} onRename={handleRenamePosition} onDelete={handleDeletePosition} />
       <ShiftEditPopover shift={selectedShift} staff={staff} onClose={() => setSelectedShift(null)}
         onSave={handleShiftSave} onDelete={handleShiftDelete} onSplitShift={handleSplitShift} />
     </div>

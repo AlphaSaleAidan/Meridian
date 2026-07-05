@@ -51,6 +51,7 @@ async def route_order(
                 order=order,
                 payment_link=payment_result["url"],
                 business_name=config.business_name,
+                sms_pay_template=getattr(config, "sms_pay_template", "") or "",
             )
             await _update_order_payment(
                 order, payment_result, sms_result,
