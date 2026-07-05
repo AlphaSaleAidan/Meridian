@@ -8,7 +8,7 @@ import logging
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
@@ -142,7 +142,7 @@ async def create_account(req: CreateAccountRequest):
             "body": f"Account created for {req.business_name}. Connect your Square POS to get started.",
             "priority": "high",
             "source_type": "event",
-            "status": "active",
+            "status": "sent",
             "created_at": now,
         })
 
@@ -192,7 +192,7 @@ async def send_welcome(req: SendWelcomeRequest):
         "body": f"Welcome email sent to {req.email}",
         "priority": "normal",
         "source_type": "event",
-        "status": "active",
+        "status": "sent",
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
 
@@ -241,6 +241,18 @@ async def handle_subscription_payment(payment_data: dict):
 
 class ProvisionCustomerRequest(BaseModel):
     org_id: str
+
+    @field_validator("org_id")
+    @classmethod
+    def _org_id_must_be_uuid(cls, v: str) -> str:
+        # businesses.id is text, but pos_connections/products/organizations/
+        # subscriptions/notifications all type org_id as uuid — a slug here
+        # 22P02s every downstream query (hit live with 'biz_aidan_view').
+        try:
+            UUID(v)
+        except ValueError:
+            raise ValueError("org_id must be a UUID")
+        return v
     email: EmailStr
     owner_name: str
     business_name: str
@@ -508,7 +520,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                 "body": f"Credentials email {'sent to' if welcome_sent else 'FAILED for'} {req.email}",
                 "priority": "high",
                 "source_type": "event",
-                "status": "active",
+                "status": "sent",
                 "created_at": now,
             })
     except Exception as e:
