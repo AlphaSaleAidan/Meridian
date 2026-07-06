@@ -158,6 +158,9 @@ export default function CanadaPortalLeadDetailPage() {
   // rendered client-side (qrcode lib) so it can't fail to appear when an
   // external QR image service is blocked.
   const [checkoutUrl, setCheckoutUrl] = useState('')
+  // Ref mirror of checkoutUrl: handleEmailInvoice may run in the same tick as
+  // the generate step, before the state update is visible.
+  const checkoutUrlRef = useRef('')
   const [checkoutQr, setCheckoutQr] = useState('')
   const [checkoutCopied, setCheckoutCopied] = useState(false)
 
@@ -371,7 +374,9 @@ export default function CanadaPortalLeadDetailPage() {
           method: 'POST',
           headers: authHdrs,
           body: JSON.stringify({
-            org_id: deal.id,
+            // no org_id: deal.id is a LEAD, not an org — sending it as org_id
+            // tripped the org-membership guard (403) for rep sessions and
+            // silently downgraded the QR/PDF link to the local invoice page.
             lead_id: deal.id,
             monthly_amount_cents: priceCents,
             currency: 'CAD',
@@ -390,6 +395,7 @@ export default function CanadaPortalLeadDetailPage() {
 
       // Surface the checkout link + an on-screen QR so the customer can scan
       // to pay right at the checkout step (not only inside the emailed PDF).
+      checkoutUrlRef.current = checkoutUrl
       setCheckoutUrl(checkoutUrl)
       try {
         const qr = await QRCode.toDataURL(checkoutUrl, {
@@ -460,7 +466,9 @@ export default function CanadaPortalLeadDetailPage() {
             amount: `CA$${monthlyPrice.toLocaleString()}`,
             rep_name: rep?.name || '',
             rep_email: rep?.email || '',
-            invoice_url: generateInvoiceUrl(invoiceNumber),
+            // Stripe subscribe short-link (opens hosted checkout) — the local
+            // /canada/invoice page is only the last-resort fallback.
+            invoice_url: checkoutUrlRef.current || checkoutUrl || generateInvoiceUrl(invoiceNumber),
             recurring: true,
           },
         }),
