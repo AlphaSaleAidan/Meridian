@@ -64,13 +64,6 @@ export interface VoicePersonality {
   brandKeywords: string[]
 }
 
-export interface VoiceSettings {
-  speed: number
-  pitch: number
-  warmth: number
-  language: 'en' | 'fr' | 'es'
-}
-
 export interface PhoneStats {
   totalCalls: number
   orders: number
@@ -89,7 +82,7 @@ import { generateCalls } from './phone-transcript-builder'
 const BUSINESSES: PhoneBizConfig[] = [
   {
     id: 'tony-pizza', name: "Tony's Pizza Palace", vertical: 'Pizza Shop', country: 'US',
-    currency: '$', taxRate: 0.08875, phone: '+1 (212) 555-0101',
+    currency: '$', taxRate: 0.08875, phone: '+1 (380) 240-9535',  // LIVE demo line — callable
     greeting: "Thanks for calling Tony's Pizza Palace! What can I get for you?",
     voice: 'am_adam', orderTypes: ['pickup', 'delivery'],
     menu: [
@@ -170,7 +163,7 @@ const BUSINESSES: PhoneBizConfig[] = [
   },
   {
     id: 'la-belle', name: 'La Belle Poutine', vertical: 'Poutinerie', country: 'CA',
-    currency: 'CA$', taxRate: 0.14975, phone: '+1 (514) 555-0601',
+    currency: 'CA$', taxRate: 0.14975, phone: '+1 (380) 240-9535',  // LIVE demo line — callable (answers as Tony's Pizza)
     greeting: "Bonjour! Thanks for calling La Belle Poutine. What can I get for you?",
     voice: 'af_bella', orderTypes: ['pickup', 'delivery'],
     menu: [
@@ -337,13 +330,6 @@ export const VOICE_OPTIONS = [
   { id: 'am_echo', label: 'Kai', desc: 'Friendly, relaxed, approachable (male)', sampleText: "Hey, great to hear from you -- what can I grab for you tonight?" },
   { id: 'bm_george', label: 'Neil', desc: 'Clear, professional (male)', sampleText: "Hello there, lovely to hear from you -- what shall I put together?" },
 ]
-
-export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
-  speed: 1.0,
-  pitch: 1.0,
-  warmth: 0.7,
-  language: 'en',
-}
 
 export const DEFAULT_PERSONALITY: VoicePersonality = {
   formality: 0.5,

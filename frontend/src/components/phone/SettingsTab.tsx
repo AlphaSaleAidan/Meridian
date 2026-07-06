@@ -8,8 +8,8 @@ import {
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import PersonalityPanel from './PersonalityPanel'
 import {
-  VOICE_OPTIONS, DEFAULT_VOICE_SETTINGS, DEFAULT_PERSONALITY,
-  type PhoneBizConfig, type VoiceSettings, type VoicePersonality,
+  VOICE_OPTIONS, DEFAULT_PERSONALITY,
+  type PhoneBizConfig, type VoicePersonality,
 } from '@/lib/phone-orders-demo-data'
 import { phoneService, saveConfigErrorMessage, type PhoneConfig , type ReservationConfig } from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
@@ -39,7 +39,6 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({ ...DEFAULT_VOICE_SETTINGS })
   const [personality, setPersonality] = useState<VoicePersonality>({ ...DEFAULT_PERSONALITY })
   const [smsPayTemplate, setSmsPayTemplate] = useState('')
   const [cfg, setCfg] = useState({
@@ -54,6 +53,12 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
   useEffect(() => {
     if (phoneConfig?.sms_pay_template) setSmsPayTemplate(phoneConfig.sms_pay_template)
   }, [phoneConfig?.sms_pay_template])
+
+  // Hydrate the saved personality (defaults fill any missing fields so older
+  // rows saved before a field existed still render a complete panel).
+  useEffect(() => {
+    if (phoneConfig?.personality) setPersonality({ ...DEFAULT_PERSONALITY, ...phoneConfig.personality })
+  }, [phoneConfig?.personality])
 
   const [reservationConfig, setReservationConfig] = useState<ReservationConfig | null>(phoneConfig?.reservation_config ?? null)
   useEffect(() => {
@@ -72,6 +77,7 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
       order_types: cfg.orderTypes,
       active: cfg.active,
       sms_pay_template: smsPayTemplate.trim() || undefined,
+      personality,
     })
     setSaving(false)
     if (!res.ok) {
@@ -131,14 +137,8 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
           </div>
         </div>
 
-        {/* Voice Preview with waveform + sliders */}
-        <VoicePreviewCard
-          voiceId={cfg.voice}
-          businessName={cfg.businessName}
-          greeting={cfg.greeting}
-          settings={voiceSettings}
-          onSettingsChange={setVoiceSettings}
-        />
+        {/* Voice Preview with waveform — plays the real studio sample */}
+        <VoicePreviewCard voiceId={cfg.voice} />
 
         <div>
           <label className="text-xs text-[#A1A1A8] block mb-2">Order Types</label>

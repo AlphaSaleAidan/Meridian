@@ -72,11 +72,33 @@ class PhoneConfigRequest(BaseModel):
     # {on_website: bool, website_url: str} — the "Connect your reservation
     # system" questionnaire (migration 20260706_reservation_config).
     reservation_config: dict | None = None
+    # Agent personality: {formality: float, upsell: 'none'|'gentle'|'active',
+    # humor: bool, customGreeting, customHold, customClosing, brandKeywords[]}.
+    # Persisted to phone_agent_config.personality (migration
+    # 20260706_personality) and rendered into the live Vapi system prompt by
+    # vapi_webhook._system_prompt.
+    personality: dict | None = None
 
 
 def _validate_merchant_id(merchant_id: str):
     if not _MERCHANT_ID_RE.match(merchant_id or ""):
         raise HTTPException(400, "Invalid merchant_id format")
+
+
+@router.get("/fees")
+async def get_fee_settings():
+    """Live pricing dials (env-tunable, no auth — it's public pricing).
+
+    The UI reads these instead of hardcoding amounts, so changing
+    MERIDIAN_SERVICE_FEE_CENTS / MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN in
+    Railway updates every displayed price with no redeploy.
+    """
+    import os
+    return {
+        "service_fee_cents": int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0),
+        "overage_cents_per_min": int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45),
+        "included_minutes": 3,
+    }
 
 
 @router.get("/config/{merchant_id}")

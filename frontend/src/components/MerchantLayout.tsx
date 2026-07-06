@@ -50,7 +50,13 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   const mobileNavPillars = [...moneyPillars, ...(settingsPillar ? [settingsPillar] : [])]
 
   return (
-    <div className="flex h-screen bg-[#0A0A0B] text-white overflow-hidden">
+    // h-dvh (not h-screen): the shell scrolls via <main>, never the document,
+    // so mobile browser chrome never retracts — 100vh (large viewport) makes
+    // the overflow-hidden shell taller than the visible screen and the bottom
+    // of the scrolled content sits permanently behind the chrome/bottom nav
+    // ("can't scroll to the bottom" on long pages like Phone). 100dvh tracks
+    // the real visible height; h-screen stays as the no-dvh fallback.
+    <div className="flex h-screen supports-[height:100dvh]:h-dvh bg-[#0A0A0B] text-white overflow-hidden">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={closeSidebar} />
       )}

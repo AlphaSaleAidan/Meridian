@@ -92,6 +92,76 @@ async def _resolve_config(dialed: str):
     return cfg or _demo_config(merchant_id or "demo")
 
 
+def _personality(config) -> dict:
+    """Merchant-set agent personality (phone_agent_config.personality JSONB).
+
+    {formality: float, upsell: 'none'|'gentle'|'active', humor: bool,
+     customGreeting, customHold, customClosing, brandKeywords[]} — every field
+    optional. Missing/None/non-dict → {} so the prompt stays byte-for-byte
+    unchanged for merchants who never touched the panel."""
+    p = getattr(config, "personality", None)
+    return p if isinstance(p, dict) else {}
+
+
+def _effective_greeting(config) -> str:
+    """customGreeting (personality) overrides the standard greeting when set."""
+    custom = str(_personality(config).get("customGreeting") or "").strip()
+    return custom or (config.greeting or "")
+
+
+def _personality_style_lines(p: dict) -> list[str]:
+    """Prompt lines for the personality fields that are actually set."""
+    lines: list[str] = []
+    formality = p.get("formality")
+    if isinstance(formality, (int, float)):
+        if formality < 0.35:
+            lines.append("- Keep the tone casual and relaxed.")
+        elif formality > 0.7:
+            lines.append("- Keep the tone polished and professional.")
+    if p.get("humor") is True:
+        lines.append("- Light, tasteful humor is welcome.")
+    hold = str(p.get("customHold") or "").strip()
+    if hold:
+        lines.append(f'- When you need a moment say: "{hold}"')
+    closing = str(p.get("customClosing") or "").strip()
+    if closing:
+        lines.append(f'- End calls with: "{closing}"')
+    keywords = [str(k).strip() for k in (p.get("brandKeywords") or []) if str(k).strip()]
+    if keywords:
+        lines.append(
+            "- Work these phrases in naturally when relevant: " + ", ".join(keywords)
+        )
+    return lines
+
+
+# Step 3 of the call flow — the upsell instruction. 'gentle' (the default,
+# and any unset/unknown value) keeps the original single-suggestion step;
+# 'none' REPLACES it with a hard no-upsell rule; 'active' allows two.
+_UPSELL_STEP_GENTLE = (
+    "3. Once the caller finishes ordering, check whether they have added a drink or a side. "
+    "If not, offer ONE natural upsell — e.g. 'Can I throw in a drink or a side for you?' "
+    "Do this ONCE only; move on if they decline.\n"
+)
+_UPSELL_STEP_NONE = (
+    "3. Do not upsell — never suggest additional items. Once the caller finishes "
+    "ordering, move straight on.\n"
+)
+_UPSELL_STEP_ACTIVE = (
+    "3. Once the caller finishes ordering, you may suggest add-ons that pair well "
+    "(a drink, side, or dessert) — up to TWO natural suggestions per call, never "
+    "pushy; move on as soon as they decline.\n"
+)
+
+
+def _upsell_step(p: dict) -> str:
+    upsell = str(p.get("upsell") or "").strip().lower()
+    if upsell == "none":
+        return _UPSELL_STEP_NONE
+    if upsell == "active":
+        return _UPSELL_STEP_ACTIVE
+    return _UPSELL_STEP_GENTLE
+
+
 def _system_prompt(config) -> str:
     """Build a polished, money-flow-showcasing call script for any merchant.
 
@@ -162,16 +232,21 @@ def _system_prompt(config) -> str:
                 "the notes."
             )
 
+    # Merchant personality: tone/humor/custom-phrase lines only when set, so
+    # an absent or empty personality leaves the prompt byte-for-byte unchanged.
+    personality = _personality(config)
+    style_lines = _personality_style_lines(personality)
+    style_block = ("\n\nSTYLE:\n" + "\n".join(style_lines)) if style_lines else ""
+
     return (
         f"You are the AI phone order-taker for {business}.\n"
-        "Keep every reply to 1-2 sentences — warm, friendly, phone-natural. Never robotic.\n\n"
+        "Keep every reply to 1-2 sentences — warm, friendly, phone-natural. Never robotic."
+        f"{style_block}\n\n"
         "CALL FLOW (follow this order every time):\n"
-        f"1. Greet: \"{config.greeting}\"\n"
+        f"1. Greet: \"{_effective_greeting(config)}\"\n"
         "2. Take the order item by item. For each item confirm: name, size (if applicable), "
         "quantity, and any extra toppings or modifications.\n"
-        "3. Once the caller finishes ordering, check whether they have added a drink or a side. "
-        "If not, offer ONE natural upsell — e.g. 'Can I throw in a drink or a side for you?' "
-        "Do this ONCE only; move on if they decline.\n"
+        f"{_upsell_step(personality)}"
         "4. Ask how they'd like it (pickup, delivery — or a reservation if they're booking a table). Get their name.\n"
         "5. If delivery: ask for their delivery address before proceeding.\n"
         "6. Calculate the total (size price + per-topping charge × number of toppings for each "
@@ -240,9 +315,12 @@ _SUBMIT_ORDER_TOOL = {
 
 
 def _assistant_for(config) -> dict:
+    # personality.customGreeting (when set) overrides the standard greeting as
+    # the spoken opener; _system_prompt's step-1 greet line uses the same value
+    # so the prompt never contradicts what the caller just heard.
     return {
         "name": f"{config.business_name} — Order Taker",
-        "firstMessage": config.greeting or f"Thanks for calling {config.business_name}! What can I get for you?",
+        "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
         "transcriber": {"provider": "deepgram", "model": "nova-3"},
         "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
         "model": {"provider": "openai", "model": "gpt-4.1",
