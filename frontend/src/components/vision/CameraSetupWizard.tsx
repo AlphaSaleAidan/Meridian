@@ -1,10 +1,24 @@
 import { useRef, useState } from 'react'
-import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
+import {
+  Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle,
+  QrCode, Cloud, Terminal, Copy, Loader2, Info,
+} from 'lucide-react'
 import { clsx } from 'clsx'
 import { getAuthHeaders } from '@/lib/supabase'
 import PhoneCameraCard from '@/components/vision/PhoneCameraCard'
 
 type ComplianceMode = 'anonymous' | 'opt_in_identity' | 'disabled'
+
+// Connect EXISTING cameras with zero shipped hardware (#264). Methods ordered by
+// friction, easiest first:
+//   vendor    — cloud-to-cloud via the camera app they already use (Tuya / Smart Life
+//               OAuth). Nothing to install.
+//   connector — one-line LAN connector: a single `docker run` on a PC they already own;
+//               it auto-discovers ONVIF cameras and dials out (no port-forwarding).
+//   manual    — RTSP URL by hand (power users): the full Camera → Zones → Privacy →
+//               Confirm wizard below.
+// Anonymous analytics only; the biometric identity tier stays gated server-side.
+type ConnectMethod = 'vendor' | 'connector' | 'manual'
 
 interface CameraConfig {
   name: string
@@ -16,7 +30,9 @@ interface CameraConfig {
 
 interface CameraSetupWizardProps {
   orgId: string
-  onComplete: (camera: CameraConfig) => void
+  // camera is present for the manual-RTSP path; vendor/connector flows complete
+  // without a local CameraConfig (the backend registers the cameras).
+  onComplete: (camera?: CameraConfig) => void
   onClose: () => void
 }
 
@@ -153,6 +169,11 @@ function ZoneEditor({ zones, onChange }: { zones: ZoneRects; onChange: (z: ZoneR
 }
 
 export default function CameraSetupWizard({ orgId, onComplete, onClose }: CameraSetupWizardProps) {
+  // null = the "How is your camera connected?" picker (first screen).
+  const [method, setMethod] = useState<ConnectMethod | null>(null)
+  const [busy, setBusy] = useState(false)
+  // LAN connector pairing payload (pairing_code / install_command / qr_payload).
+  const [pairing, setPairing] = useState<{ pairing_code: string; install_command: string; qr_payload: string } | null>(null)
   const [step, setStep] = useState(0)
   const [config, setConfig] = useState<CameraConfig>({
     name: '',
@@ -235,6 +256,52 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
     }
   }
 
+  // ── Vendor-cloud (Tuya / Smart Life) — cloud-to-cloud OAuth, nothing to install.
+  const startVendorOAuth = async () => {
+    setBusy(true); setError('')
+    try {
+      const res = await fetch(`${apiBase}/api/vision/connect/vendor/tuya/oauth-url?org_id=${encodeURIComponent(orgId)}`, {
+        headers: { ...(await getAuthHeaders()) },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.authorize_url) {
+        setError(data.detail || 'Camera-cloud connect isn’t available on this deployment yet. Use the local network connector instead.')
+        return
+      }
+      // Send the merchant to their camera vendor's consent screen; they log into the
+      // app they already use. On return, the backend links + registers their cameras.
+      window.location.href = data.authorize_url as string
+    } catch {
+      setError('Could not reach the server. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // ── LAN connector — mint a 15-minute pairing code + one-line install command.
+  const mintPairingCode = async () => {
+    setBusy(true); setError('')
+    try {
+      const res = await fetch(`${apiBase}/api/vision/connect/pairing-code`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()) },
+        body: JSON.stringify({ org_id: orgId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.detail || 'Could not create a pairing code.')
+        return
+      }
+      setPairing(data)
+    } catch {
+      setError('Could not reach the server. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const copyText = (text: string) => { try { void navigator.clipboard?.writeText(text) } catch { /* noop */ } }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-[#111113] border border-[#1F1F23] rounded-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
@@ -249,7 +316,8 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           </button>
         </div>
 
-        {/* Progress */}
+        {/* Progress — manual RTSP wizard only */}
+        {method === 'manual' && (
         <div className="px-5 py-3 border-b border-[#1F1F23]">
           <div className="flex items-center gap-1">
             {STEPS.map((s, i) => (
@@ -276,11 +344,155 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
             ))}
           </div>
         </div>
+        )}
 
         {/* Step Content */}
         <div className="px-5 py-5 space-y-4">
+          {/* Step 0: method picker — how is your camera connected? */}
+          {!method && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">How is your camera connected?</h3>
+                <p className="text-[11px] text-[#A1A1A8]">
+                  No new hardware — connect the cameras you already have. Pick the easiest option.
+                </p>
+              </div>
+
+              {/* PRIMARY — vendor-cloud (Tuya / Smart Life) */}
+              <button
+                onClick={() => { setError(''); setMethod('vendor') }}
+                className="w-full p-3 rounded-lg border border-[#1A8FD6]/40 bg-[#1A8FD6]/5 text-left hover:bg-[#1A8FD6]/10 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Cloud size={15} className="text-[#1A8FD6]" />
+                  <span className="text-xs font-medium text-[#F5F5F7]">Smart-app camera (Tuya / Smart Life)</span>
+                  <span className="ml-auto text-[8px] font-bold text-[#17C5B0] bg-[#17C5B0]/10 px-1.5 py-0.5 rounded">EASIEST</span>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8]/70 mt-1 ml-6">
+                  Scan the sticker on your camera or log into the app you already use.
+                  Nothing to install.
+                </p>
+              </button>
+
+              {/* FALLBACK — LAN connector */}
+              <button
+                onClick={() => { setError(''); setMethod('connector') }}
+                className="w-full p-3 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] text-left hover:border-[#A1A1A8]/20 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Terminal size={15} className="text-[#A1A1A8]" />
+                  <span className="text-xs font-medium text-[#F5F5F7]">Local network connector</span>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8]/60 mt-1 ml-6">
+                  Camera brand not supported above? Run one command on a PC you already have on the
+                  same network. It finds your cameras automatically &mdash; no hardware, no RTSP URLs.
+                </p>
+              </button>
+
+              {/* ADVANCED — manual RTSP (existing Camera → Zones → Privacy → Confirm wizard) */}
+              <button
+                onClick={() => { setError(''); setMethod('manual'); setStep(0) }}
+                className="w-full p-3 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] text-left hover:border-[#A1A1A8]/20 transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <Wifi size={15} className="text-[#A1A1A8]" />
+                  <span className="text-xs font-medium text-[#F5F5F7]">Manual RTSP</span>
+                </div>
+                <p className="text-[10px] text-[#A1A1A8]/60 mt-1 ml-6">
+                  For power users who already know their camera&rsquo;s RTSP URL. Full setup with
+                  detection zones and privacy controls.
+                </p>
+              </button>
+
+              <div className="flex items-start gap-2 p-3 rounded-lg border border-[#1F1F23]/50 bg-[#17C5B0]/5">
+                <Shield size={14} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] text-[#A1A1A8]">
+                  Anonymous analytics only &mdash; aggregate counts, no face data. No raw video is stored in the cloud.
+                </p>
+              </div>
+            </>
+          )}
+
+          {/* Vendor-cloud (Tuya / Smart Life) */}
+          {method === 'vendor' && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Connect via your camera app</h3>
+                <p className="text-[11px] text-[#A1A1A8]">
+                  We connect to the cameras you already have, through the camera cloud &mdash; nothing to install.
+                </p>
+              </div>
+              <div className="p-3 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] flex items-start gap-2">
+                <QrCode size={16} className="text-[#1A8FD6] flex-shrink-0 mt-0.5" />
+                <div className="text-[10px] text-[#A1A1A8]">
+                  <p className="text-[#F5F5F7] font-medium text-[11px]">Scan the sticker on your camera</p>
+                  <p className="mt-0.5">Most cameras have a QR/serial sticker. Scan it, then authorize your camera
+                    account once. (Sticker scanning links to the same authorize step.)</p>
+                </div>
+              </div>
+              <button
+                onClick={startVendorOAuth}
+                disabled={busy}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={13} className="animate-spin" /> : <Cloud size={13} />}
+                Authorize my camera account
+              </button>
+              {error && <p className="text-[10px] text-amber-400">{error}</p>}
+            </>
+          )}
+
+          {/* LAN connector */}
+          {method === 'connector' && (
+            <>
+              <div>
+                <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Local network connector</h3>
+                <p className="text-[11px] text-[#A1A1A8]">
+                  Run this on any PC/POS terminal on the same network as your cameras. It dials out to
+                  Meridian and auto-discovers your cameras &mdash; no hardware, no router changes.
+                </p>
+              </div>
+              {!pairing ? (
+                <button
+                  onClick={mintPairingCode}
+                  disabled={busy}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors disabled:opacity-50"
+                >
+                  {busy ? <Loader2 size={13} className="animate-spin" /> : <Terminal size={13} />}
+                  Get my connect command
+                </button>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-medium text-[#A1A1A8] mb-1 block">Run this one line</label>
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
+                      <code className="text-[10px] text-[#17C5B0] font-mono break-all flex-1">{pairing.install_command}</code>
+                      <button aria-label="Copy command" onClick={() => copyText(pairing.install_command)} className="text-[#A1A1A8] hover:text-[#F5F5F7] flex-shrink-0">
+                        <Copy size={13} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2 p-2.5 rounded-lg border border-[#1F1F23]/50 bg-[#17C5B0]/5">
+                    <Info size={13} className="text-[#17C5B0] flex-shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-[#A1A1A8]">
+                      Your cameras appear here within seconds of running it. Camera passwords stay on that
+                      machine and never reach the cloud. Code expires in 15 minutes.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onComplete()}
+                    className="w-full flex items-center justify-center gap-1.5 px-4 py-2 text-[11px] font-semibold rounded-lg bg-[#1A8FD6] text-white hover:bg-[#1A8FD6]/90 transition-colors"
+                  >
+                    <CheckCircle size={12} /> Done &mdash; I ran the command
+                  </button>
+                </div>
+              )}
+              {error && <p className="text-[10px] text-amber-400">{error}</p>}
+            </>
+          )}
+
           {/* Step 2: Camera */}
-          {currentStep === 'Camera' && (
+          {method === 'manual' && currentStep === 'Camera' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Camera Connection</h3>
@@ -376,7 +588,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           )}
 
           {/* Step 3: Zones */}
-          {currentStep === 'Zones' && (
+          {method === 'manual' && currentStep === 'Zones' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Detection Zones</h3>
@@ -394,7 +606,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           )}
 
           {/* Step 4: Privacy */}
-          {currentStep === 'Privacy' && (
+          {method === 'manual' && currentStep === 'Privacy' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Privacy & Compliance</h3>
@@ -495,7 +707,7 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
           )}
 
           {/* Step 5: Confirm */}
-          {currentStep === 'Confirm' && (
+          {method === 'manual' && currentStep === 'Confirm' && (
             <>
               <div>
                 <h3 className="text-sm font-semibold text-[#F5F5F7] mb-1">Review & Activate</h3>
@@ -530,13 +742,21 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-[#1F1F23]">
           <button
-            onClick={() => step > 0 ? setStep(s => s - 1) : onClose()}
+            onClick={() => {
+              if (method === 'manual' && step > 0) { setStep(s => s - 1); return }
+              if (method) { setMethod(null); setPairing(null); setError(''); return }
+              onClose()
+            }}
             className="flex items-center gap-1 text-[11px] text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors"
           >
             <ChevronLeft size={12} />
-            {step > 0 ? 'Back' : 'Cancel'}
+            {method ? 'Back' : 'Cancel'}
           </button>
-          {currentStep === 'Confirm' ? (
+          {!method ? (
+            <span className="flex items-center gap-1 text-[10px] text-[#A1A1A8]/40">
+              Pick an option above <ChevronRight size={11} />
+            </span>
+          ) : method !== 'manual' ? null : currentStep === 'Confirm' ? (
             <button
               onClick={handleSubmit}
               disabled={submitting}

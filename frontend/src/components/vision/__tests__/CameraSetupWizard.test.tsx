@@ -55,11 +55,12 @@ describe('CameraSetupWizard', () => {
       />,
     )
 
-    // ── Step 1: Device ──────────────────────────────────────────────────────
-    // Click a device card so edgeDetected=true is set (mirrors realistic usage).
-    // canAdvance() for 'Device' always returns true regardless.
-    fireEvent.click(screen.getByText('Jetson Nano'))
-    fireEvent.click(screen.getByRole('button', { name: /Next/i }))
+    // ── Step 0: method picker ───────────────────────────────────────────────
+    // #264 added a "How is your camera connected?" picker as the first screen.
+    // The manual-RTSP card routes into the classic Camera → Zones → Privacy →
+    // Confirm wizard this guard exercises. (Replaces the old 'Jetson Nano'
+    // Device-step click — that step was removed when the wizard was rebuilt.)
+    fireEvent.click(screen.getByText('Manual RTSP'))
 
     // ── Step 2: Camera ──────────────────────────────────────────────────────
     // Both Camera Name and RTSP URL must be filled for canAdvance() to be true.
