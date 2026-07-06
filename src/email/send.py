@@ -21,6 +21,8 @@ from .templates import (
     trial_expiring,
     payment_receipt,
     payment_failed,
+    proposal_sent,
+    invoice_sent,
     sla_signed,
     customer_credentials,
     rep_credentials,
@@ -320,6 +322,69 @@ async def send_sla_signed(
     subject = f"Signed SLA — {business_name}"
     result = await _client.send(to, subject, html, tag="sla_signed")
     await _log_send(to, "sla_signed", subject, result, org_id=org_id, tag="sla_signed")
+    return result
+
+
+async def send_proposal_sent(
+    to: str,
+    business_name: str,
+    *,
+    first_name: str = "",
+    rep_name: str = "",
+    rep_email: str = "",
+    plan_name: str = "",
+    monthly_price: str = "",
+    setup_fee: str = "",
+    due_today: str = "",
+    proposal_url: str = "",
+    org_id: Optional[str] = None,
+) -> dict:
+    html = proposal_sent.render(
+        business_name=business_name,
+        first_name=first_name,
+        rep_name=rep_name,
+        rep_email=rep_email,
+        plan_name=plan_name,
+        monthly_price=monthly_price,
+        setup_fee=setup_fee,
+        due_today=due_today,
+        proposal_url=proposal_url,
+    )
+    subject = f"Your Meridian proposal — {business_name}"
+    result = await _client.send(to, subject, html, tag="proposal_sent")
+    await _log_send(to, "proposal_sent", subject, result, org_id=org_id, tag="proposal_sent")
+    return result
+
+
+async def send_invoice_sent(
+    to: str,
+    business_name: str,
+    *,
+    first_name: str = "",
+    invoice_number: str = "",
+    amount: str = "",
+    rep_name: str = "",
+    rep_email: str = "",
+    invoice_url: str = "",
+    recurring: bool = False,
+    org_id: Optional[str] = None,
+) -> dict:
+    html = invoice_sent.render(
+        business_name=business_name,
+        first_name=first_name,
+        invoice_number=invoice_number,
+        amount=amount,
+        rep_name=rep_name,
+        rep_email=rep_email,
+        invoice_url=invoice_url,
+        recurring=recurring,
+    )
+    subject = (
+        f"Invoice {invoice_number} — {business_name}" if invoice_number
+        else f"Invoice — {business_name}"
+    )
+    result = await _client.send(to, subject, html, tag="invoice_sent")
+    await _log_send(to, "invoice_sent", subject, result, org_id=org_id, tag="invoice_sent")
     return result
 
 
