@@ -36,6 +36,29 @@ PLATFORM_FEE_BPS = int(os.getenv("MERIDIAN_PLATFORM_FEE_BPS", "0") or 0)
 # Meridian's balance and the merchant is auto-paid the remainder (Stripe payout
 # schedule, set to daily at onboarding). Combined with PLATFORM_FEE_BPS if both set.
 SERVICE_FEE_CENTS = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
+# Stripe-processing gross-up ("Case B"): destination charges debit Stripe's
+# processing fee from the PLATFORM balance, not the merchant's — verified
+# empirically in test mode (app fee $0.50 on a $32 order → Meridian nets
+# −$0.73; grossed-up fee → Meridian nets exactly +$0.50). Adding the estimated
+# processing cost to the application fee deducts it from the merchant's payout
+# in transit, so the merchant bears card fees exactly like on their own POS.
+# Rates are env-tunable because Stripe's actual fee varies by card/country
+# (Amex/international run higher); the residual is pennies either way.
+STRIPE_GROSSUP_ENABLED = os.getenv("STRIPE_FEE_GROSSUP_ENABLED", "1") == "1"
+STRIPE_FEE_BPS = int(os.getenv("STRIPE_FEE_BPS", "290") or 290)          # 2.9%
+STRIPE_FEE_FIXED_CENTS = int(os.getenv("STRIPE_FEE_FIXED_CENTS", "30") or 30)
+
+
+def application_fee_cents(amount_cents: int) -> int:
+    """Total application fee on a destination charge of `amount_cents`:
+    Meridian's service fee + optional bps + (when grossed up) Stripe's
+    estimated processing cost. Always capped below the charge amount."""
+    fee = SERVICE_FEE_CENTS + int(round(amount_cents * PLATFORM_FEE_BPS / 10000))
+    if STRIPE_GROSSUP_ENABLED:
+        fee += int(round(amount_cents * STRIPE_FEE_BPS / 10000)) + STRIPE_FEE_FIXED_CENTS
+    return min(fee, max(amount_cents - 1, 0))
+
+
 # Demo test-charge override: when set, orders for a demo merchant charge this flat
 # amount (clamped to Stripe's $0.50 CAD minimum) instead of the real total, so
 # test runs cost ~$0.50 rather than full price. Real merchants are never touched.
@@ -172,12 +195,13 @@ async def _stripe_checkout(
     )
     if connect_account:
         pi_data: dict[str, Any] = {"transfer_data": {"destination": connect_account}}
-        # Auto-take our fee at charge time: flat service fee + optional %. Stripe
-        # routes this to Meridian and pays the merchant the remainder (daily).
-        # Capped below the order so we never try to take more than was charged.
-        fee = SERVICE_FEE_CENTS + int(round(amount * PLATFORM_FEE_BPS / 10000))
+        # Auto-take our fee at charge time: flat service fee + optional % +
+        # (Case B) Stripe's estimated processing gross-up. Stripe routes this to
+        # Meridian and pays the merchant the remainder (daily). Capped below the
+        # order so we never try to take more than was charged.
+        fee = application_fee_cents(amount)
         if fee > 0:
-            pi_data["application_fee_amount"] = min(fee, max(amount - 1, 0))
+            pi_data["application_fee_amount"] = fee
         kwargs["payment_intent_data"] = pi_data
 
     session = stripe.checkout.Session.create(**kwargs)

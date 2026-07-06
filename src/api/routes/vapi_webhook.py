@@ -346,24 +346,23 @@ def _confirm(args: dict, routed: dict) -> str:
 
 
 async def _place_order(args: dict, config, caller_phone: str) -> str:
-    """Run the real order pipeline: normalize → POS create → route (Stripe + SMS)."""
+    """Run the real order pipeline via pay_on_phone.dispatch_order — POS push
+    timing follows the payment mode: pay_now defers the ticket until Stripe
+    confirms payment (mark_order_paid pushes it); pay_at_pickup pushes now."""
     from order_normalizer import normalize_order
-    from pos_connector import create_pos_order
-    from order_router import route_order
+    from pay_on_phone import dispatch_order
     if caller_phone and not args.get("caller_phone"):
         args["caller_phone"] = caller_phone
     normalized = normalize_order(args, config)
-    # route_order only texts the pay link when the order carries caller_phone —
-    # force it from the call's caller id so the SMS always fires.
+    # the pay-link SMS only fires when the order carries caller_phone —
+    # force it from the call's caller id so the SMS always goes out.
     if caller_phone:
         normalized["caller_phone"] = caller_phone
-    pos_token = getattr(config, "pos_access_token", "") or ""
-    pos_loc = getattr(config, "pos_location_id", "") or ""
-    if getattr(config, "pos_system", "") == "square" and not pos_token:
-        pos_token = os.getenv("SQUARE_ACCESS_TOKEN", "")
-        pos_loc = pos_loc or os.getenv("SQUARE_LOCATION_ID", "")
-    pos_result = await create_pos_order(normalized, getattr(config, "pos_system", "") or "", pos_token, pos_loc)
-    routed = await route_order(normalized, config, {"phone": caller_phone}, pos_result)
+    routed = await dispatch_order(
+        normalized, config, {"phone": caller_phone},
+        pay_choice=args.get("pay_choice", ""),
+    )
+    pos_result = routed.get("pos_result", {})
     logger.info("VAPI order placed: merchant=%s caller=%s items=%d pos=%s sms=%s",
                 config.merchant_id, caller_phone or "?", len(normalized.get("items", [])),
                 pos_result.get("success"), routed.get("sms_sent"))

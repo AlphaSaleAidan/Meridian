@@ -182,7 +182,9 @@ async def test_create_checkout_uses_stripe_when_ready(monkeypatch):
     cap = _FakeStripe.captured
     assert cap["mode"] == "payment"
     assert cap["payment_intent_data"]["transfer_data"]["destination"] == "acct_merchant"
-    assert cap["payment_intent_data"]["application_fee_amount"] == 22  # 1% of 2250c = 22.5 -> 22 (round half-to-even)
+    # 1% of 2250c = 22 (round half-to-even) + Stripe processing gross-up
+    # (2.9% of 2250 = 65, + 30c fixed) so Meridian nets its fee AFTER Stripe (Case B).
+    assert cap["payment_intent_data"]["application_fee_amount"] == 22 + 65 + 30
     assert cap["metadata"]["pos_order_id"] == "ord_42"
 
 

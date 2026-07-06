@@ -42,6 +42,27 @@ DEMO_MERCHANT_ID = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
 # so the wiring point is explicit.
 DTMF_PAYMENT_ENABLED = os.getenv("PHONE_DTMF_PAYMENT", "0").lower() in ("1", "true", "yes")
 
+# POS PUSH AFTER PAYMENT (product decision 2026-07-04): for virtually-paid
+# orders (pay_now) the POS ticket is NOT created until payment confirms — the
+# old "hold" was only a DB flag while the open ticket already sat in the
+# merchant's POS, so unpaid orders could still be cooked. With this on, the
+# ticket is pushed by mark_order_paid() when Stripe confirms. Set 0 to restore
+# the old create-up-front behavior.
+POS_PUSH_AFTER_PAYMENT = os.getenv("POS_PUSH_AFTER_PAYMENT", "1") == "1"
+
+
+async def _create_pos(order: dict, config: MerchantPhoneConfig) -> dict:
+    """Create the POS order with the merchant's creds (env fallback for the
+    Square demo, same rule as bot.py / the Vapi route)."""
+    from pos_connector import create_pos_order
+    pos_system = getattr(config, "pos_system", "") or ""
+    token = getattr(config, "pos_access_token", "") or ""
+    location = getattr(config, "pos_location_id", "") or ""
+    if pos_system == "square" and not token:
+        token = os.getenv("SQUARE_ACCESS_TOKEN", "")
+        location = location or os.getenv("SQUARE_LOCATION_ID", "")
+    return await create_pos_order(order, pos_system, token, location)
+
 
 def is_demo(merchant_id: str) -> bool:
     """Demo/synthetic merchant → simulate payment, never charge."""
@@ -62,26 +83,48 @@ async def dispatch_order(
     order: dict[str, Any],
     config: MerchantPhoneConfig,
     caller_info: dict,
-    pos_result: dict,
+    pos_result: dict | None = None,
     pay_choice: str = "",
 ) -> dict:
-    """Post-POS dispatch shared by the live bot and the tests.
+    """Order dispatch shared by the live bot, the Vapi route, and the tests.
+    Owns POS creation so its timing follows the payment mode:
 
-    Branches on the resolved payment mode:
-      pay_now      → hold the kitchen ticket, text a secure pay link (anti-scam)
-      pay_at_pickup → today's behavior: release to the kitchen via route_order
+      pay_now       → POS push DEFERRED until payment confirms (mark_order_paid
+                      creates the ticket) — an unpaid order never reaches the
+                      kitchen. Pay link + SMS go out now.
+      pay_at_pickup → today's behavior: POS ticket now, release via route_order.
 
-    Returns {"mode", "released", ...collect_pay_now fields}.
+    `pos_result` may be passed by legacy callers that already created the POS
+    order; when it carries a real pos_order_id it is honored (too late to defer).
+
+    Returns {"mode", "released", "pos_result", "sms_sent", "payment_link", ...}.
     """
     mode = resolve_mode(config, pay_choice)
     if mode == "pay_now":
+        already_created = bool((pos_result or {}).get("pos_order_id"))
+        if POS_PUSH_AFTER_PAYMENT and not already_created:
+            # Placeholder — the real ticket is pushed by mark_order_paid() on payment.
+            pos_result = {"success": False, "method": "deferred",
+                          "pos_order_id": "", "deferred": True}
+        elif pos_result is None:
+            pos_result = await _create_pos(order, config)
         result = await collect_pay_now(order, config, caller_info, pos_result)
         result["mode"] = "pay_now"
         result["released"] = False  # held until paid
+        result["pos_deferred"] = bool(pos_result.get("deferred"))
+        result["pos_result"] = pos_result
         return result
     # pay_at_pickup — release to kitchen now (unchanged legacy path).
-    await route_order(order, config, caller_info, pos_result)
-    return {"mode": "pay_at_pickup", "released": True}
+    if pos_result is None:
+        pos_result = await _create_pos(order, config)
+    routed = await route_order(order, config, caller_info, pos_result) or {}
+    return {
+        "mode": "pay_at_pickup",
+        "released": True,
+        "sms_sent": routed.get("sms_sent", False),
+        "payment_link": routed.get("payment_link", ""),
+        "pos_result": pos_result,
+    }
 
 
 async def collect_pay_now(
@@ -233,6 +276,15 @@ async def mark_order_paid(
         logger.warning("mark_order_paid: no key to match an order")
         return {"released": False, "matched_by": "none"}
 
+    # SELECT the held row first: (a) PATCH by primary key — the phone-match
+    # query's order/limit params are ignored by PostgREST on PATCH and would
+    # hit every row for that caller; (b) we need the stored order to push the
+    # deferred POS ticket now that payment is confirmed.
+    row = await _fetch_held_order(query)
+    if row is None:
+        logger.warning("mark_order_paid: no order matched (%s)", matched_by)
+        return {"released": False, "matched_by": matched_by}
+
     patch = {
         "payment_status": "paid",
         "status": "paid",
@@ -248,10 +300,34 @@ async def mark_order_paid(
         patch["payment_txn_id"] = payment_txn_id
     if simulate:
         patch["payment_note"] = "simulated (demo)"
+
+    # POS PUSH AFTER PAYMENT: the ticket was deferred at order time — payment
+    # is now confirmed, so push it to the kitchen. Idempotent: only when the
+    # row has no pos_order_id yet (a webhook retry won't create a second one).
+    # (simulate/demo included: the immediate simulated "paid" plays the same
+    # release path, and demo_safe merchants are logs-only in the connector.)
+    pos_pushed = False
+    if POS_PUSH_AFTER_PAYMENT and not (row.get("pos_order_id") or ""):
+        try:
+            from merchant_config import get_merchant_config
+            cfg = await get_merchant_config(merchant_id or row.get("merchant_id", ""))
+            if cfg is not None:
+                order = {k: row.get(k) for k in (
+                    "merchant_id", "customer_name", "order_type", "items",
+                    "subtotal", "tax", "total", "delivery_address",
+                    "special_requests", "caller_phone",
+                )}
+                pos_result = await _create_pos(order, cfg)
+                patch["pos_order_id"] = pos_result.get("pos_order_id", "")
+                patch["pos_success"] = bool(pos_result.get("success"))
+                pos_pushed = bool(pos_result.get("success"))
+        except Exception as e:  # noqa: BLE001 — never lose the paid flag over a POS hiccup
+            logger.error("deferred POS push failed (order stays SMS/email ticket): %s", e)
+
     try:
         async with httpx.AsyncClient() as client:
             await client.patch(
-                f"{SUPABASE_URL}/rest/v1/phone_orders{query}",
+                f"{SUPABASE_URL}/rest/v1/phone_orders?id=eq.{row.get('id')}",
                 json=patch,
                 headers={
                     "apikey": SUPABASE_KEY,
@@ -261,8 +337,29 @@ async def mark_order_paid(
                 },
                 timeout=10,
             )
-        logger.info("Order paid + kitchen released (matched_by=%s)", matched_by)
-        return {"released": True, "matched_by": matched_by}
+        logger.info("Order paid + kitchen released (matched_by=%s pos_pushed=%s)",
+                    matched_by, pos_pushed)
+        return {"released": True, "matched_by": matched_by, "pos_pushed": pos_pushed}
     except Exception as e:
         logger.error("mark_order_paid failed: %s", e)
         return {"released": False, "matched_by": matched_by}
+
+
+async def _fetch_held_order(query: str) -> dict | None:
+    """Fetch the single order row matched by `query` (select honors order/limit)."""
+    sep = "&" if "?" in query else "?"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/phone_orders{query}{sep}select=*",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                },
+                timeout=10,
+            )
+            rows = resp.json() if resp.status_code == 200 else []
+            return rows[0] if rows else None
+    except Exception as e:  # noqa: BLE001
+        logger.error("_fetch_held_order failed: %s", e)
+        return None
