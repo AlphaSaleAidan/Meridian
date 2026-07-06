@@ -39,6 +39,7 @@ const SpaceTab = lazyRetry(() => import('@/pages/SpaceTab'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
 
 const SchedulePage = lazyRetry(() => import('@/pages/SchedulePage'))
+const CamConnectPage = lazyRetry(() => import('@/pages/CamConnectPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const MerchantSitePage = lazyRetry(() => import('@/pages/MerchantSitePage'))
 const CameraAnalyticsDemoPage = lazyRetry(() => import('@/pages/CameraAnalyticsDemoPage'))
@@ -263,6 +264,9 @@ export default function App() {
                   ══════════════════════════════════════════════ */}
               <Route path="/" element={<LandingPage />} />
               <Route path="/landing" element={<LandingPage />} />
+              {/* Zero-hardware camera connect (Path A): merchant opens this on a phone
+                  they already own via a dashboard QR code. No app, no install. */}
+              <Route path="/cam" element={<Suspense fallback={<LazyFallback />}><CamConnectPage /></Suspense>} />
               <Route path="/careers" element={<CareersPage />} />
 
               {/* SEO — Industry landing pages */}
