@@ -625,19 +625,25 @@ export default function CanadaPortalLeadDetailPage() {
   // meridian-decks.vercel.app, personalized with rep + business name) — the
   // current proposal format. Falls back to prompting the rep to tag the
   // business type, since the deck is selected from deal.vertical.
-  function openProposalDeck(): string | null {
+  function proposalDeckUrl(): string | null {
     if (!deal || !rep) return null
     const deck = findVerticalByValue(deal.vertical)
-    if (!deck) {
-      toast("Tag this lead's business type first — the proposal is built from its industry deck.", 'info')
-      return null
-    }
-    const url = buildPersonalizedDeckUrl(deck.slug, rep, deal.business_name, {
+    if (!deck) return null
+    return buildPersonalizedDeckUrl(deck.slug, rep, deal.business_name, {
       monthly: monthlyPrice,
       setup: Number(setupFee) || 0,
       currency: 'CAD',
       firstMonthFree,
     })
+  }
+
+  function openProposalDeck(): string | null {
+    if (!deal || !rep) return null
+    const url = proposalDeckUrl()
+    if (!url) {
+      toast("Tag this lead's business type first — the proposal is built from its industry deck.", 'info')
+      return null
+    }
     window.open(url, '_blank')
     return url
   }
@@ -685,6 +691,7 @@ export default function CanadaPortalLeadDetailPage() {
             monthly_price: `CA$${monthlyPrice.toLocaleString()}`,
             setup_fee: (Number(setupFee) || 0) > 0 ? `CA$${(Number(setupFee) || 0).toLocaleString()}` : '',
             due_today: `CA$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
+            proposal_url: proposalDeckUrl() || '',
           },
         }),
       })
