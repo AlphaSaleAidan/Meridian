@@ -96,10 +96,7 @@ export default function SchedulePage() {
     api.schedulePeakHours(merchantId, 8)
       .then(res => {
         if (cancelled) return
-        // Only override the synthetic heatmap if the real one has signal.
-        setLivePeakHours(res.peaks.length > 0
-          ? res.peaks.map(p => ({ day: p.day, hour: p.hour, intensity: p.intensity }))
-          : null)
+        setLivePeakHours(res.peaks.map(p => ({ day: p.day, hour: p.hour, intensity: p.intensity })))
       })
       .catch(e => console.warn('schedulePeakHours load failed:', e))
     api.scheduleProjectedRevenue(merchantId, 8)
@@ -122,10 +119,13 @@ export default function SchedulePage() {
       .catch(e => console.warn('scheduleShifts load failed:', e))
     return () => { cancelled = true }
   }, [liveMode, merchantId, weekStartDate])
+  // Live merchants never see fabricated demand: real per-(day, hour) POS rows,
+  // or an empty heatmap while transactions sync. Demo keeps the synthetic set.
   const peakHours = useMemo(
-    () => livePeakHours ?? generatePeakHourHeatmap(),
-    [livePeakHours, businessType],
+    () => (liveMode ? (livePeakHours ?? []) : generatePeakHourHeatmap()),
+    [liveMode, livePeakHours, businessType],
   )
+  const awaitingPeakData = liveMode && peakHours.length === 0
 
   // ── Custom positions (Manage positions) ──────────────────────
   // The merchant's full PositionDef list is the single source of truth for the
@@ -432,10 +432,16 @@ export default function SchedulePage() {
     // toast reads like the agent explaining itself. ponytail: derived, no extra state.
     const DAY_FULL = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
     const busiest = DAY_FULL[[0, 1, 2, 3, 4, 5, 6].sort((a, b) => dayDemand(b, peakHours) - dayDemand(a, peakHours))[0]]
-    const fillMsg = (total: number, open: number) =>
-      open > 0
-        ? `Built around your busiest day (${busiest}) — ${total - open} positions filled, ${open} still open`
-        : `Built around your busiest day (${busiest}) — all ${total} positions filled`
+    // With no sales history every day scores the same — don't invent a
+    // "busiest day"; say what actually drove the fill.
+    const fillMsg = (total: number, open: number) => {
+      const filled = open > 0
+        ? `${total - open} positions filled, ${open} still open`
+        : `all ${total} positions filled`
+      return peakHours.length === 0
+        ? `Schedule built from your position plan — ${filled}. Peak-hour tuning kicks in as POS sales sync.`
+        : `Built around your busiest day (${busiest}) — ${filled}`
+    }
     if (!liveMode) {
       // Demo: cosmetic delay + local set.
       await new Promise(r => setTimeout(r, 1200))
@@ -717,7 +723,9 @@ export default function SchedulePage() {
             <PeakHoursHeatmap
               cells={peakHours}
               title="Peak Hours"
-              caption="Demand for the selected day — Auto-fill staffs against this. Tap a day above to rotate."
+              caption={awaitingPeakData
+                ? 'Built from your real POS transactions — cells light up as sales sync. No history yet.'
+                : 'Demand for the selected day — Auto-fill staffs against this. Tap a day above to rotate.'}
               day={mobileDay}
             />
           </div>
