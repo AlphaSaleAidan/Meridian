@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Camera, CheckCircle, Wifi, Shield, X, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { getAuthHeaders } from '@/lib/supabase'
+import PhoneCameraCard from '@/components/vision/PhoneCameraCard'
 
 type ComplianceMode = 'anonymous' | 'opt_in_identity' | 'disabled'
 
@@ -361,6 +362,15 @@ export default function CameraSetupWizard({ orgId, onComplete, onClose }: Camera
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* Zero-hardware Path A: use a phone/tablet you already own as the camera.
+                  Registers via /api/vision/camera/register-browser and hands off to /cam. */}
+              <div className="pt-1">
+                <p className="text-[10px] font-medium text-[#A1A1A8]/60 uppercase tracking-wide mb-2">
+                  Or use a phone as a camera — no IP camera needed
+                </p>
+                <PhoneCameraCard orgId={orgId} />
               </div>
             </>
           )}

@@ -348,8 +348,10 @@ async def request_live_view(camera_id: str, org_id: str = Query(...)):
     feats = cam.get("features") or {}
     if isinstance(feats, str):
         import json as _j
-        try: feats = _j.loads(feats)
-        except Exception: feats = {}
+        try:
+            feats = _j.loads(feats)
+        except Exception:
+            feats = {}
     if not feats.get("live_view"):
         raise HTTPException(status_code=403, detail="Live view is turned off for this camera")
 
@@ -384,8 +386,10 @@ async def live_state(camera_id: str):
     feats = cam.get("features") or {}
     if isinstance(feats, str):
         import json as _j
-        try: feats = _j.loads(feats)
-        except Exception: feats = {}
+        try:
+            feats = _j.loads(feats)
+        except Exception:
+            feats = {}
     req_at = cam.get("live_requested_at")
     fresh = False
     if req_at:
@@ -620,3 +624,95 @@ async def run_vision_agents(org_id: str, days: int = Query(7, ge=1, le=90)):
                     results[agent.name] = result
 
     return {"org_id": org_id, "agents": results}
+
+
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Zero-hardware camera connect — Path A: phone/tablet as camera.
+#
+# The merchant opens the /cam PWA on a phone they already own and props it at
+# the space. No app, no install, no LAN config. The browser POSTs JPEG frames to
+# /api/vision/camera/frame; those frames feed the SAME detector/analytics/writer
+# the RTSP path uses (see src/camera/frame_ingest.py). Anonymous only.
+# ══════════════════════════════════════════════════════════════════════════
+
+class BrowserCameraRegisterRequest(BaseModel):
+    org_id: str
+    name: str = "Phone camera"
+    placement: Optional[str] = None
+    location_id: Optional[str] = None
+
+
+@router.post("/camera/register-browser")
+async def register_browser_camera(req: BrowserCameraRegisterRequest):
+    """Register a phone/tablet as a browser camera (Path A).
+
+    Auth: router-level require_org_access verifies the caller's JWT + org
+    membership (org_id is in the body → resolved by _org_id_from_body). Returns a
+    per-camera frame token + the /cam deep link + QR payload. The token is the
+    credential the phone uses to post frames (a browser can't hold a service JWT).
+    Anonymous compliance only — this path never opens the identity tier.
+    """
+    from ...camera.frame_ingest import mint_frame_token, token_hash
+
+    db = _get_db()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    import json as json_mod
+    feats = {**DEFAULT_CAMERA_FEATURES}
+    row = {
+        "org_id": req.org_id,
+        "location_id": req.location_id,
+        "name": req.name,
+        # schema requires rtsp_url NOT NULL; sentinel documents the browser source.
+        "rtsp_url": "browser:pending",
+        "source": "browser",
+        "placement": req.placement,
+        "zone_config": json_mod.dumps({}),
+        "compliance_mode": "anonymous",
+        "active_hours": json_mod.dumps({"start": "00:00", "end": "23:59"}),
+        "status": "offline",
+        "features": json_mod.dumps(feats),
+    }
+    try:
+        result = await db.insert("vision_cameras", row)
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to register camera")
+        cam = result[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to register browser camera: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to register camera")
+
+    camera_id = cam["id"]
+    try:
+        token = mint_frame_token(camera_id, req.org_id)
+    except RuntimeError:
+        raise HTTPException(
+            status_code=503,
+            detail="Camera frame ingest not configured (VISION_INGEST_TOKEN unset)",
+        )
+
+    # Persist the token hash + finalize the rtsp_url sentinel now that we have the id.
+    try:
+        await db.update(
+            "vision_cameras",
+            {"connect_token_hash": token_hash(token), "rtsp_url": f"browser:{camera_id}"},
+            filters={"id": f"eq.{camera_id}"},
+        )
+    except Exception as e:
+        logger.warning("Failed to persist frame token hash for %s: %s", camera_id, e)
+
+    # Deep link the phone opens. cam_url is what the QR encodes.
+    base = os.environ.get("PUBLIC_APP_URL", "https://meridian.tips").rstrip("/")
+    cam_url = f"{base}/cam?camera_id={camera_id}&org_id={req.org_id}&token={token}"
+    return {
+        "camera": cam,
+        "camera_id": camera_id,
+        "frame_token": token,
+        "cam_url": cam_url,
+        "qr_payload": cam_url,
+    }
