@@ -16,8 +16,8 @@ import { api } from '@/lib/api'
 import { posSystems } from '@/data/pos-systems'
 import { VoicePlayButton, VoicePreviewCard, TestCallModal } from '@/components/phone'
 import {
-  VOICE_OPTIONS, DEFAULT_VOICE_SETTINGS,
-  type PhoneBizConfig, type VoiceSettings, type PhoneMenuItem,
+  VOICE_OPTIONS,
+  type PhoneBizConfig, type PhoneMenuItem,
 } from '@/lib/phone-orders-demo-data'
 
 /**
@@ -147,7 +147,6 @@ export default function PhoneSetupWizard() {
   const [showTestCall, setShowTestCall] = useState(false)
 
   // ── Agent configuration (ported from the old embedded SetupWizard) ──
-  const [voiceSettings, setVoiceSettings] = useState<VoiceSettings>({ ...DEFAULT_VOICE_SETTINGS })
   const [businessName, setBusinessName] = useState(org?.business_name || 'My Business')
   const [greeting, setGreeting] = useState('')
   const [voice, setVoice] = useState('af_bella')
@@ -606,14 +605,8 @@ export default function PhoneSetupWizard() {
               </div>
             </div>
 
-            {/* Voice preview with waveform */}
-            <VoicePreviewCard
-              voiceId={voice}
-              businessName={businessName}
-              greeting={greeting}
-              settings={voiceSettings}
-              onSettingsChange={setVoiceSettings}
-            />
+            {/* Voice preview with waveform — plays the real studio sample */}
+            <VoicePreviewCard voiceId={voice} />
 
             <div>
               <label className="text-xs text-[#A1A1A8] block mb-2">Order Types</label>

@@ -372,14 +372,34 @@ function TextOrderingTab({ biz, isDemo }: { biz: PhoneBizConfig; isDemo: boolean
 }
 
 /* ---------- Money-flow fee constants ---------- */
-const MERIDIAN_FEE = 2.50          // flat per order
+// Fallbacks only — the live values come from GET /api/phone/fees (env-tunable).
+const DEFAULT_MERIDIAN_FEE = 0.50
+const DEFAULT_OVERAGE_PER_MIN = 0.20
+
+function useFeeSettings() {
+  const [fees, setFees] = useState({ fee: DEFAULT_MERIDIAN_FEE, overagePerMin: DEFAULT_OVERAGE_PER_MIN, includedMin: 3 })
+  useEffect(() => {
+    fetch(`${import.meta.env.VITE_API_URL || ''}/api/phone/fees`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!d) return
+        setFees({
+          fee: (d.service_fee_cents ?? 50) / 100,
+          overagePerMin: (d.overage_cents_per_min ?? 20) / 100,
+          includedMin: d.included_minutes ?? 3,
+        })
+      })
+      .catch(() => { /* fallbacks already set */ })
+  }, [])
+  return fees
+}
 const STRIPE_PCT   = 0.029         // 2.9 %
 const STRIPE_FIXED = 0.30          // + $0.30 per transaction
 
-function calcSplit(total: number): { meridianFee: number; stripeFee: number; net: number } {
+function calcSplit(total: number, meridianFee: number): { meridianFee: number; stripeFee: number; net: number } {
   const stripeFee = Math.round((total * STRIPE_PCT + STRIPE_FIXED) * 100) / 100
-  const net       = Math.round((total - MERIDIAN_FEE - stripeFee) * 100) / 100
-  return { meridianFee: MERIDIAN_FEE, stripeFee, net }
+  const net       = Math.round((total - meridianFee - stripeFee) * 100) / 100
+  return { meridianFee, stripeFee, net }
 }
 
 /* ---------- Get Paid Tab ---------- */
@@ -389,6 +409,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
   orgId: string
   isDemo: boolean
 }) {
+  const fees = useFeeSettings()
   const apiBase = (import.meta.env.VITE_API_URL || '') as string
   // Same response shape as StripeConnectStep (canada merchant onboarding wizard):
   // connected = Stripe account exists, charges_enabled = onboarding finished / payouts active.
@@ -442,7 +463,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
 
   const totals = useMemo(() => orderCalls.reduce(
     (acc, c) => {
-      const { meridianFee, stripeFee, net } = calcSplit(c.total)
+      const { meridianFee, stripeFee, net } = calcSplit(c.total, fees.fee)
       return {
         gross:        acc.gross + c.total,
         meridianFees: acc.meridianFees + meridianFee,
@@ -523,8 +544,8 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
           <div className="mt-4 bg-[#111113] border border-[#1F1F23] rounded-lg px-4 py-3 flex items-start gap-2">
             <Info size={12} className="text-[#A1A1A8] mt-0.5 flex-shrink-0" />
             <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
-              Long AI calls (&gt;3 min) add <strong className="text-[#F5F5F7]">{biz.currency}0.45/min</strong> billed separately.
-              Stripe processing is ~2.9% + {biz.currency}0.30 per transaction. Meridian charges a flat {biz.currency}2.50 service fee per order.
+              Long AI calls (&gt;{fees.includedMin} min) add <strong className="text-[#F5F5F7]">{biz.currency}{fees.overagePerMin.toFixed(2)}/min</strong> billed separately.
+              Stripe processing is ~2.9% + {biz.currency}0.30 per transaction. Meridian charges a flat {biz.currency}{fees.fee.toFixed(2)} service fee per order.
             </p>
           </div>
         )}
@@ -549,7 +570,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
       {totals.total > 0 && (
         <p className="text-[10px] text-[#A1A1A8]">
           {totals.paid} of {totals.total} order{totals.total !== 1 ? 's' : ''} paid &middot;
-          Stripe fees are estimated (2.9% + {biz.currency}0.30). Long AI calls (&gt;3 min) add {biz.currency}0.45/min billed separately.
+          Stripe fees are estimated (2.9% + {biz.currency}0.30). Long AI calls (&gt;{fees.includedMin} min) add {biz.currency}{fees.overagePerMin.toFixed(2)}/min billed separately.
         </p>
       )}
 
@@ -580,7 +601,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
               </thead>
               <tbody>
                 {orderCalls.slice(0, 50).map(call => {
-                  const { meridianFee, stripeFee, net } = calcSplit(call.total)
+                  const { meridianFee, stripeFee, net } = calcSplit(call.total, fees.fee)
                   const pc = call.paymentStatus !== 'none' ? PAYMENT_CFG[call.paymentStatus] : null
                   return (
                     <tr key={call.id}>
@@ -615,7 +636,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-[10px] text-[#A1A1A8]">
         <span className="flex items-center gap-1"><ArrowRight size={10} className="text-amber-400" /> Customer pays full order total</span>
-        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Meridian flat fee: {biz.currency}2.50/order</span>
+        <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Meridian flat fee: {biz.currency}{fees.fee.toFixed(2)}/order</span>
         <span className="flex items-center gap-1"><ArrowRight size={10} className="text-red-400" /> Stripe processing: ~2.9% + {biz.currency}0.30</span>
         <span className="flex items-center gap-1"><ArrowRight size={10} className="text-[#17C5B0]" /> Net deposited to your account</span>
       </div>
@@ -653,7 +674,7 @@ export default function PhoneOrdersPage() {
     navigate(`${base}/phone?view=setup`)
   }, [navigate, pathname])
 
-  const demoData = useMemo(() => getPhoneDemoData('midtown-kitchen'), [])
+  const demoData = useMemo(() => getPhoneDemoData('tony-pizza'), [])
 
   useEffect(() => {
     if (!orgId || isDemo) return

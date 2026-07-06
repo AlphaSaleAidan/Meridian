@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { clsx } from 'clsx'
 import { Play, Square } from 'lucide-react'
 import WaveformVisualizer from './WaveformVisualizer'
-import { VOICE_OPTIONS, type VoiceSettings } from '@/lib/phone-orders-demo-data'
+import { VOICE_OPTIONS } from '@/lib/phone-orders-demo-data'
 
 /** Pitch / rate overrides per voice ID for SpeechSynthesis. Spread wide so each
  *  voice is audibly distinct even when the browser only exposes one voice per
@@ -76,19 +76,20 @@ function pickBrowserVoice(voiceId: string): SpeechSynthesisVoice | undefined {
 }
 
 /** Speak text in the given voice ID, applying the per-voice pitch/rate and a
- *  distinct browser voice. Shared by the voice previews and the test call. */
+ *  distinct browser voice. Used by the simulated test call (dynamic dialogue
+ *  can't use fixed samples, so speechSynthesis stands in for the real voice). */
 export function speakWithVoice(
   text: string,
   voiceId: string,
-  opts?: { onEnd?: () => void; speed?: number; pitch?: number },
+  opts?: { onEnd?: () => void },
 ): void {
   if (!text.trim()) { opts?.onEnd?.(); return }
   window.speechSynthesis.cancel()
   const utter = new SpeechSynthesisUtterance(text)
   const sample = VOICE_SAMPLES[voiceId]
   if (sample) {
-    utter.pitch = sample.pitch * (opts?.pitch ?? 1)
-    utter.rate = sample.rate * (opts?.speed ?? 1)
+    utter.pitch = sample.pitch
+    utter.rate = sample.rate
   }
   const preferred = pickBrowserVoice(voiceId)
   if (preferred) utter.voice = preferred
@@ -128,16 +129,16 @@ export function VoicePlayButton({ voiceId, isSelected }: { voiceId: string; isSe
   )
 }
 
-/* ---------- Full voice preview card with waveform + settings ---------- */
+/* ---------- Full voice preview card with waveform ---------- */
+/** Plays the REAL Vapi studio sample for the selected voice. No tuning
+ *  sliders: Vapi native voices accept no speed/pitch params, so any knob here
+ *  would be placebo (the old Speed/Pitch/Warmth sliders never persisted and
+ *  never touched live calls — removed after Aidan's live testing). */
 interface VoicePreviewProps {
   voiceId: string
-  businessName: string
-  greeting: string
-  settings: VoiceSettings
-  onSettingsChange: (s: VoiceSettings) => void
 }
 
-export function VoicePreviewCard({ voiceId, businessName, greeting, settings, onSettingsChange }: VoicePreviewProps) {
+export function VoicePreviewCard({ voiceId }: VoicePreviewProps) {
   const [playing, setPlaying] = useState(false)
 
   useEffect(() => {
@@ -150,96 +151,36 @@ export function VoicePreviewCard({ voiceId, businessName, greeting, settings, on
       setPlaying(false)
       return
     }
-    // Real Vapi sample — the exact voice live calls use. Speed slider maps to
-    // playbackRate; pitch can't be applied to a fixed recording.
+    // Real Vapi sample — the exact voice live calls use.
     setPlaying(true)
-    const audio = playVapiSample(voiceId, () => setPlaying(false))
-    if (audio) audio.playbackRate = Math.min(1.5, Math.max(0.7, settings.speed))
+    playVapiSample(voiceId, () => setPlaying(false))
   }
 
   return (
-    <div className="space-y-4">
-      {/* Preview + Waveform */}
-      <div className="bg-[#111113] border border-[#1F1F23] rounded-lg p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <button
-            onClick={handlePreview}
-            className={clsx(
-              'w-10 h-10 rounded-full flex items-center justify-center transition-all flex-shrink-0',
-              playing ? 'bg-[#17C5B0] text-white' : 'bg-[#1A8FD6]/15 text-[#1A8FD6] hover:bg-[#1A8FD6]/25',
-            )}
-          >
-            {playing ? <Square size={14} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-[#F5F5F7]">
-              {playing ? 'Playing preview...' : 'Preview greeting'}
-            </p>
-            <p className="text-[10px] text-[#A1A1A8] truncate">
-              {VOICE_OPTIONS.find(v => v.id === voiceId)?.label || 'Voice'} &middot;
-              {settings.speed.toFixed(1)}x &middot;
-              {settings.language === 'en' ? 'English' : settings.language === 'fr' ? 'French' : 'Spanish'}
-            </p>
-          </div>
-        </div>
-        <WaveformVisualizer active={playing} barCount={24} height={28} />
-      </div>
-
-      {/* Voice tuning sliders */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div>
-          <label className="text-[10px] text-[#A1A1A8] block mb-1.5">Speed ({settings.speed.toFixed(1)}x)</label>
-          <input type="range" min={0.8} max={1.2} step={0.05} value={settings.speed}
-            onChange={e => onSettingsChange({ ...settings, speed: parseFloat(e.target.value) })}
-            className="w-full accent-[#1A8FD6] h-1" />
-          <div className="flex justify-between text-[8px] text-[#A1A1A8]/50 mt-0.5">
-            <span>Slower</span><span>Faster</span>
-          </div>
-        </div>
-        <div>
-          <label className="text-[10px] text-[#A1A1A8] block mb-1.5">Pitch ({settings.pitch.toFixed(1)}x)</label>
-          <input type="range" min={0.8} max={1.2} step={0.05} value={settings.pitch}
-            onChange={e => onSettingsChange({ ...settings, pitch: parseFloat(e.target.value) })}
-            className="w-full accent-[#1A8FD6] h-1" />
-          <div className="flex justify-between text-[8px] text-[#A1A1A8]/50 mt-0.5">
-            <span>Lower</span><span>Higher</span>
-          </div>
-        </div>
-        <div>
-          <label className="text-[10px] text-[#A1A1A8] block mb-1.5">Warmth ({Math.round(settings.warmth * 100)}%)</label>
-          <input type="range" min={0} max={1} step={0.1} value={settings.warmth}
-            onChange={e => onSettingsChange({ ...settings, warmth: parseFloat(e.target.value) })}
-            className="w-full accent-[#17C5B0] h-1" />
-          <div className="flex justify-between text-[8px] text-[#A1A1A8]/50 mt-0.5">
-            <span>Neutral</span><span>Warm</span>
-          </div>
+    <div className="bg-[#111113] border border-[#1F1F23] rounded-lg p-4">
+      <div className="flex items-center gap-3 mb-3">
+        <button
+          onClick={handlePreview}
+          className={clsx(
+            'w-10 h-10 rounded-full flex items-center justify-center transition-all flex-shrink-0',
+            playing ? 'bg-[#17C5B0] text-white' : 'bg-[#1A8FD6]/15 text-[#1A8FD6] hover:bg-[#1A8FD6]/25',
+          )}
+        >
+          {playing ? <Square size={14} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-[#F5F5F7]">
+            {playing ? 'Playing preview...' : 'Preview voice'}
+          </p>
+          <p className="text-[10px] text-[#A1A1A8] truncate">
+            {VOICE_OPTIONS.find(v => v.id === voiceId)?.label || 'Voice'}
+          </p>
         </div>
       </div>
-
-      {/* Language selector */}
-      <div>
-        <label className="text-[10px] text-[#A1A1A8] block mb-1.5">Language</label>
-        <div className="flex gap-2">
-          {([
-            { key: 'en' as const, label: 'English' },
-            { key: 'fr' as const, label: 'French' },
-            { key: 'es' as const, label: 'Spanish' },
-          ]).map(lang => (
-            <button
-              key={lang.key}
-              onClick={() => onSettingsChange({ ...settings, language: lang.key })}
-              className={clsx(
-                'px-3 py-1.5 rounded-lg border text-xs font-medium transition-all',
-                settings.language === lang.key
-                  ? 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5 text-[#1A8FD6]'
-                  : 'border-[#1F1F23] text-[#A1A1A8] hover:border-[#2A2A30]',
-              )}
-            >
-              {lang.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <WaveformVisualizer active={playing} barCount={24} height={28} />
+      <p className="text-[10px] text-[#A1A1A8] mt-3">
+        This is the exact studio voice callers hear on live calls.
+      </p>
     </div>
   )
 }

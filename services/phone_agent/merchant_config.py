@@ -42,6 +42,9 @@ class MerchantPhoneConfig:
     # {link} placeholders, safe-replaced by sms_checkout). "" = default copy.
     sms_pay_template: str = ""
     reservation_config: dict | None = None
+    # Agent personality (formality/upsell/humor/custom phrases/brand keywords)
+    # set in Phone Orders settings; rendered into the live system prompt.
+    personality: dict | None = None
     # PAY ON THE PHONE: pay_now (DEFAULT, anti-scam — kitchen only sees PAID
     # tickets), pay_at_pickup (legacy OPEN/unpaid), or optional (caller chooses).
     payment_mode: str = "pay_now"
@@ -124,6 +127,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 tax_rate=row.get("tax_rate", 0.13),
                 sms_pay_template=(row.get("sms_pay_template") or "").strip(),
                 reservation_config=row.get("reservation_config") or None,
+                personality=row.get("personality") or None,
                 # Default to pay_now if the column is missing/null (anti-scam default).
                 payment_mode=_norm_payment_mode(row.get("payment_mode")),
                 business_timezone=(row.get("business_timezone") or "").strip(),
@@ -209,7 +213,7 @@ def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
         business_name="Tony's Pizza",
         business_type="restaurant",
         phone_number="+15555550100",
-        greeting="Thanks for calling Tony's Pizza! What can I get started for you?",
+        greeting="Thanks for calling Tony's Pizza — this is Meridian's live ordering demo, so nothing gets charged. What can I get started for you?",
         voice="af_bella",
         language="en",
         active=True,
@@ -246,7 +250,9 @@ def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
         special_instructions_enabled=True,
         transfer_number="",
         pos_webhook_url="",
-        sms_checkout_enabled=True,
+        # Public demo line: NEVER text real Stripe payment links — a stranger
+        # paying for demo pizza is a refund/dispute, not revenue.
+        sms_checkout_enabled=False,
         sms_ordering_enabled=True,
         tax_rate=0.13,
         payment_mode="pay_now",

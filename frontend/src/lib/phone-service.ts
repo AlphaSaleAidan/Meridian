@@ -1,7 +1,7 @@
 import { getAuthHeaders } from '@/lib/supabase'
 import type {
   PhoneCallEntry, PhoneBizConfig, PhoneStats,
-  CallStatus, PaymentStatus, TranscriptLine,
+  CallStatus, PaymentStatus, TranscriptLine, VoicePersonality,
 } from './phone-orders-demo-data'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -47,6 +47,10 @@ export interface PhoneConfig {
   // {total} {link} placeholders; empty/unset falls back to the default copy.
   sms_pay_template?: string
   reservation_config?: ReservationConfig | null
+  // Agent personality (formality/upsell/humor/custom phrases/brand keywords).
+  // Persisted to phone_agent_config.personality (JSONB) and rendered into the
+  // live Vapi system prompt by vapi_webhook._system_prompt.
+  personality?: VoicePersonality | null
 }
 
 /** Result of POST /api/phone/config — carries enough to explain a failure. */
