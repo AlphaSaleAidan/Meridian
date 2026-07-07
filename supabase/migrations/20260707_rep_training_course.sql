@@ -97,14 +97,17 @@ $$;
 grant execute on function rep_training_complete(text) to authenticated;
 
 -- ─── Lead-creation lock ──────────────────────────────────────
--- Replaces the wide-open "with check (true)" insert policy from
--- 20260507_canada_leads.sql. Admins (admin_users membership via is_admin(),
--- 20260429_003) bypass; everyone else must have completed the course.
-drop policy if exists "Sales reps can insert leads" on canada_leads;
+-- Prod already has a permissive per-rep ownership policy ("Reps can insert
+-- own leads": rep_id null-or-own). Permissive policies OR together, so the
+-- training gate must be RESTRICTIVE — it ANDs on top of ownership:
+--   insert allowed iff ownership AND (is_admin() OR rep_training_complete()).
+-- Admins (admin_users membership via is_admin(), 20260429_003) bypass.
+drop policy if exists "Sales reps can insert leads" on canada_leads;        -- legacy open policy, if present
 drop policy if exists "Trained reps and admins can insert leads" on canada_leads;
+drop policy if exists "Training required to insert leads" on canada_leads;
 
-create policy "Trained reps and admins can insert leads"
-  on canada_leads for insert
+create policy "Training required to insert leads"
+  on canada_leads as restrictive for insert
   with check (is_admin() or rep_training_complete());
 
 -- ─── OPTIONAL GRANDFATHER (leave commented unless Aidan says so) ──
