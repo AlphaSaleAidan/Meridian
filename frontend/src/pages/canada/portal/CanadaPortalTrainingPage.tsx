@@ -2,7 +2,6 @@ import { GraduationCap } from 'lucide-react'
 import PlaybookViewer from '@/components/training/PlaybookViewer'
 import ComplianceGuidesCard from '@/components/training/ComplianceGuidesCard'
 import TrainingCourse from '@/components/training/TrainingCourse'
-import TrainingVideosCard from '@/components/training/TrainingVideosCard'
 
 export default function CanadaPortalTrainingPage() {
   return (
@@ -20,8 +19,6 @@ export default function CanadaPortalTrainingPage() {
       </header>
 
       <TrainingCourse accent="#17C5B0" />
-
-      <TrainingVideosCard accent="#17C5B0" />
 
       <ComplianceGuidesCard accent="#17C5B0" />
 

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   CheckCircle2, FileSignature, GraduationCap, Lock, MonitorPlay,
-  PlayCircle, Smartphone, Zap,
+  PlayCircle, Smartphone,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import {
@@ -17,15 +17,14 @@ const CONDUCT_STEP = 'conduct'
 const FORMATS: { id: CourseFormat; label: string; icon: typeof MonitorPlay }[] = [
   { id: 'landscape', label: 'Desktop', icon: MonitorPlay },
   { id: 'vertical', label: 'iPhone', icon: Smartphone },
-  { id: 'brainrot', label: 'Brainrot', icon: Zap },
 ]
 
 /**
- * The rep Training Course: five video modules in order, a 10-question quiz
+ * The rep Training Course: five video modules in order, a 4-question quiz
  * after each (pass with PASS_SCORE, fail = rewatch), and the Code of Conduct
  * signature at the end. Course completion unlocks lead creation for
  * non-admin reps (UI gate here, RLS on canada_leads as the hard layer).
- * Watching any format — desktop, iPhone, or brainrot — counts.
+ * Watching either format — desktop or iPhone — counts.
  */
 export default function TrainingCourse({ accent = '#17C5B0' }: { accent?: string }) {
   const { rep } = useSalesAuth()
@@ -82,7 +81,7 @@ export default function TrainingCourse({ accent = '#17C5B0' }: { accent?: string
     if (!activeModule) return false
     let passed = score >= PASS_SCORE
     try {
-      passed = await recordQuizAttempt(rep, activeModule.id, score, progress)
+      passed = await recordQuizAttempt(rep, activeModule.id, score, activeModule.quiz.length, progress)
     } catch (err) {
       console.warn('[training] could not save quiz attempt:', err)
     }
@@ -108,7 +107,7 @@ export default function TrainingCourse({ accent = '#17C5B0' }: { accent?: string
         </span>
       </header>
       <p className="text-[11px] text-white/40 mb-4">
-        Watch each video, pass its quiz ({PASS_SCORE}/10 to pass — fail and you rewatch), then sign
+        Watch each video, pass its quiz ({PASS_SCORE}/4 to pass — fail and you rewatch), then sign
         the Code of Conduct. Finishing the course unlocks lead creation.
       </p>
 
@@ -238,7 +237,7 @@ export default function TrainingCourse({ accent = '#17C5B0' }: { accent?: string
             {modulePassed ? (
               <span className="flex items-center gap-1.5 text-[11.5px] font-medium" style={{ color: accent }}>
                 <CheckCircle2 size={13} /> Passed
-                {progress?.best_score != null && ` · best ${progress.best_score}/10`}
+                {progress?.best_score != null && ` · best ${progress.best_score}/${activeModule.quiz.length}`}
                 {' '}— review anytime
               </span>
             ) : (

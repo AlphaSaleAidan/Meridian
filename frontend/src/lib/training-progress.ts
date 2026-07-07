@@ -159,6 +159,7 @@ export async function recordQuizAttempt(
   rep: SalesRepProfile,
   moduleId: string,
   score: number,
+  quizTotal: number,
   prev: ModuleProgress | undefined,
 ): Promise<boolean> {
   if (!supabase) return score >= PASS_SCORE
@@ -169,6 +170,7 @@ export async function recordQuizAttempt(
       ...repKeys(rep),
       module_id: moduleId,
       attempts: (prev?.attempts ?? 0) + 1,
+      quiz_total: quizTotal,
       best_score: Math.max(score, prev?.best_score ?? 0),
       passed: alreadyPassed || passed,
       passed_at: alreadyPassed || !passed ? prev?.passed_at ?? null : new Date().toISOString(),
