@@ -19,7 +19,9 @@ if (sentryDsn) {
 }
 
 import { initServiceWorker } from '@/lib/notifications'
+import { startRadarFavicon } from '@/lib/favicon-radar'
 initServiceWorker()
+startRadarFavicon()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
