@@ -1,7 +1,7 @@
 // Bump on every deploy — activate purges caches with any other name, so a stale
 // name leaves old shells stranded in browsers (root cause of "portal reverted"
 // reports surviving server-side fixes).
-const CACHE_NAME = 'meridian-v29-20260707a'
+const CACHE_NAME = 'meridian-v30-20260707b'
 const SHELL_URLS = ['/', '/index.html']
 
 self.addEventListener('install', (event) => {
