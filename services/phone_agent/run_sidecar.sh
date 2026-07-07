@@ -18,6 +18,12 @@
 #   PHONE_PROVIDER     twilio | telnyx   (default twilio; must match the live provider)
 #   TELNYX_API_KEY     or TWILIO_ACCOUNT_SID+TWILIO_AUTH_TOKEN   for auto-hangup at call end
 #   PHONE_AGENT_PORT   default 8095
+#   DEEPGRAM_API_KEY + CARTESIA_API_KEY   enable the premium voice lane
+#   VOICE_AB=1         alternate premium/nemotron lanes per call (A/B on the test line)
+#   VOICE_VENDOR       pin one lane: premium | nemotron
+#   WORKERS            uvicorn workers (default 1). Each worker handles many
+#                      concurrent calls (cloud STT/TTS ≈ audio proxying); scale
+#                      workers ~= CPU cores for max simultaneous lines.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -31,8 +37,10 @@ if [ -f .env ]; then set -a; . ./.env; set +a; fi
 export PHONE_PROVIDER="${PHONE_PROVIDER:-twilio}"
 export PHONE_AGENT_PORT="$PORT"
 
-CMD=("$VENV/bin/python" -m uvicorn main:app --host 127.0.0.1 --port "$PORT")
-echo "phone-agent sidecar → 127.0.0.1:$PORT  (provider=$PHONE_PROVIDER, nemotron=$([ -n "${NVIDIA_API_KEY:-}" ] && echo on || echo off))"
+WORKERS="${WORKERS:-1}"
+CMD=("$VENV/bin/python" -m uvicorn main:app --host 127.0.0.1 --port "$PORT" --workers "$WORKERS")
+PREMIUM=$([ -n "${DEEPGRAM_API_KEY:-}" ] && [ -n "${CARTESIA_API_KEY:-}" ] && echo on || echo off)
+echo "phone-agent sidecar → 127.0.0.1:$PORT  (provider=$PHONE_PROVIDER, nemotron=$([ -n "${NVIDIA_API_KEY:-}" ] && echo on || echo off), premium=$PREMIUM, ab=${VOICE_AB:-0}, workers=$WORKERS)"
 
 if [ "${1:-}" = "--daemon" ]; then
   pkill -f "uvicorn main:app" 2>/dev/null || true; sleep 1

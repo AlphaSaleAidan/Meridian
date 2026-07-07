@@ -19,6 +19,7 @@ pipeline). Env:
   DEEPSEEK_API_KEY / DEEPSEEK_MODEL
 """
 import asyncio
+import itertools
 import json
 import logging
 import os
@@ -248,6 +249,29 @@ def _nemotron_on() -> bool:
     return bool(os.getenv("NVIDIA_API_KEY")) and os.getenv("NEMOTRON_DISABLED", "").lower() not in ("1", "true", "yes")
 
 
+def _premium_on() -> bool:
+    """Premium vendor lane (Deepgram STT + Cartesia TTS — the same component
+    vendors Vapi runs) when both keys are present and not explicitly disabled."""
+    return (bool(os.getenv("DEEPGRAM_API_KEY")) and bool(os.getenv("CARTESIA_API_KEY"))
+            and os.getenv("PREMIUM_VOICE_DISABLED", "").lower() not in ("1", "true", "yes"))
+
+
+_ab_counter = itertools.count()
+
+
+def _pick_vendor() -> str:
+    """Vendor lane for ONE call. VOICE_VENDOR pins it ('premium'|'nemotron');
+    VOICE_AB=1 alternates lanes per call so back-to-back test calls compare
+    vendors directly. Premium requires its keys; otherwise nemotron lane
+    (which itself falls back to local Moonshine/Kokoro)."""
+    pinned = os.getenv("VOICE_VENDOR", "").strip().lower()
+    if pinned in ("premium", "nemotron"):
+        return pinned if (pinned != "premium" or _premium_on()) else "nemotron"
+    if os.getenv("VOICE_AB", "").lower() in ("1", "true", "yes") and _premium_on():
+        return "premium" if next(_ab_counter) % 2 == 0 else "nemotron"
+    return "premium" if _premium_on() else "nemotron"
+
+
 def _language(config: MerchantPhoneConfig) -> "Language":
     """Map the merchant's configured language to a pipecat Language. Canada-first:
     any 'fr*' code → Canadian French; everything else → US English."""
@@ -256,14 +280,27 @@ def _language(config: MerchantPhoneConfig) -> "Language":
     return Language.FR_CA if code.startswith("fr") else Language.EN_US
 
 
-def _build_stt(config: MerchantPhoneConfig):
-    """STT: Nemotron 3.5 ASR (streaming, NVCF-hosted) → Moonshine (local).
+def _build_stt(config: MerchantPhoneConfig, vendor: str = "nemotron"):
+    """STT by lane: premium = Deepgram Nova streaming (Vapi's default ears);
+    nemotron = Nemotron 3.5 ASR (streaming, NVCF-hosted) → Moonshine (local).
 
     IMPORTANT: the NVCF-hosted `nemotron-asr-streaming` (online) model only serves
     en-US today — requesting language_code=fr makes the gRPC stream drop in a
     reconnect loop (verified). So the streaming ASR is English-only; French
     merchants stay on the turn-based path (see phone.py /voice gate). We clamp to
     en-US defensively here too, so a French config can never wedge a live call."""
+    if vendor == "premium":
+        try:
+            from pipecat.services.deepgram.stt import DeepgramSTTService
+            lang = "fr-CA" if str(_language(config).value).lower().startswith("fr") else "en-US"
+            model = os.getenv("DEEPGRAM_MODEL", "nova-3")
+            logger.info("STT: Deepgram %s (premium lane, lang=%s)", model, lang)
+            return DeepgramSTTService(
+                api_key=os.environ["DEEPGRAM_API_KEY"],
+                settings=DeepgramSTTService.Settings(model=model, language=lang),
+            )
+        except Exception as e:
+            logger.warning("Deepgram STT unavailable, falling back to Nemotron lane: %s", e)
     if _nemotron_on():
         try:
             from pipecat.services.nvidia.stt import NvidiaSTTService
@@ -282,8 +319,24 @@ def _build_stt(config: MerchantPhoneConfig):
     return MoonshineSTTService()
 
 
-def _build_tts(config: MerchantPhoneConfig):
-    """TTS: Magpie-TTS-multilingual (NVCF-hosted, EN+FR for Canada) → Kokoro (local)."""
+def _build_tts(config: MerchantPhoneConfig, vendor: str = "nemotron"):
+    """TTS by lane: premium = Cartesia Sonic (the naturalness gap vs Vapi);
+    nemotron = Magpie-TTS-multilingual (NVCF, EN+FR for Canada) → Kokoro (local)."""
+    if vendor == "premium":
+        try:
+            from pipecat.services.cartesia.tts import CartesiaTTSService
+            lang = _language(config)
+            # Default voice: Cartesia's conversational English female; override
+            # per deployment with CARTESIA_VOICE_ID (pick at play.cartesia.ai).
+            voice = os.getenv("CARTESIA_VOICE_ID", "71a7ad14-091c-4e8e-a314-022ece01c121")
+            model = os.getenv("CARTESIA_MODEL", "sonic-2")
+            logger.info("TTS: Cartesia %s (premium lane, voice=%s, lang=%s)", model, voice, lang)
+            return CartesiaTTSService(
+                api_key=os.environ["CARTESIA_API_KEY"],
+                settings=CartesiaTTSService.Settings(model=model, voice=voice, language=lang),
+            )
+        except Exception as e:
+            logger.warning("Cartesia TTS unavailable, falling back to Nemotron lane: %s", e)
     if _nemotron_on():
         try:
             from pipecat.services.nvidia.tts import NvidiaTTSService
@@ -387,8 +440,10 @@ async def run_call_bot(
         ),
     )
 
-    stt = _build_stt(merchant_config)   # Nemotron 3.5 ASR (NVCF) → Moonshine fallback
-    tts = _build_tts(merchant_config)   # Magpie-TTS multilingual (NVCF) → Kokoro fallback
+    vendor = _pick_vendor()  # premium (Deepgram+Cartesia) | nemotron — see VOICE_AB
+    logger.info("VOICE LANE for call %s: %s", caller_info.get("call_id") or caller_info.get("phone") or "?", vendor.upper())
+    stt = _build_stt(merchant_config, vendor)
+    tts = _build_tts(merchant_config, vendor)
     llm = DeepSeekLLMService(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL, model=DEEPSEEK_MODEL)
 
     # ── Order tools as registered LLM functions (call our existing pipeline) ──
