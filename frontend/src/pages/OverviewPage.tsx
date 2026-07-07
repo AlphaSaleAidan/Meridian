@@ -218,7 +218,7 @@ export default function OverviewPage() {
                 : ''
               return (
                 <>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {BUCKETS.map(b => {
                       const cutoff = new Date(now)
                       cutoff.setDate(cutoff.getDate() + b.days)

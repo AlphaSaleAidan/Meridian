@@ -110,7 +110,7 @@ export default function CanadaPortalSignupPage() {
 
           <p className="text-center text-2xs text-pm-muted mt-5">
             Already have an account?{' '}
-            <Link to="/canada/portal/login" className="text-pm-teal hover:text-pm-teal/80 transition-colors font-medium">
+            <Link to="/canada/portal/login" className="inline-flex items-center justify-center min-h-[44px] -my-3 px-2 text-pm-teal hover:text-pm-teal/80 transition-colors font-medium">
               Sign in
             </Link>
           </p>

@@ -136,7 +136,7 @@ export default function WalletCardPage() {
 
   if (loading) {
     return (
-      <div className="h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#17C5B0] border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -144,7 +144,7 @@ export default function WalletCardPage() {
 
   if (!rep) {
     return (
-      <div className="h-screen bg-black flex items-center justify-center text-white">
+      <div className="min-h-screen bg-black flex items-center justify-center text-white">
         Badge not found
       </div>
     )

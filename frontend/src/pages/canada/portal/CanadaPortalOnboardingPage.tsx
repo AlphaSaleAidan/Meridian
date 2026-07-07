@@ -218,7 +218,7 @@ export default function CanadaPortalOnboardingPage() {
                   pricing, the actual amounts depend on the deal prices reps negotiate. Review
                   these figures once typical custom deal sizes are established. */}
               {/* Income Projection Cards */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: 'Month 1', amount: 'CA$2,025', sub: '5 closes' },
                   { label: 'Month 6', amount: 'CA$12,150', sub: '30 closes' },
