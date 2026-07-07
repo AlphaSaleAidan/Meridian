@@ -125,7 +125,7 @@ function ProposalOverlay({
       {/* Slides container */}
       <div
         id="proposal-slides"
-        className="h-screen overflow-y-auto snap-y snap-mandatory scroll-smooth"
+        className="h-screen supports-[height:100dvh]:h-dvh overflow-y-auto snap-y snap-mandatory scroll-smooth"
         onScroll={handleScroll}
         style={{ scrollSnapType: 'y mandatory' }}
       >

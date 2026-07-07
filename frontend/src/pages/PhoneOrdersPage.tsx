@@ -226,7 +226,7 @@ function OverviewTab({ calls, biz, isDemo, period, setPeriod, onViewCall, onConn
       {stats.orders > 0 && (
         <div className="card p-4 border-[#17C5B0]/10">
           <div className="flex items-center gap-2 mb-3"><CreditCard size={14} className="text-[#17C5B0]" /><h3 className="text-sm font-semibold text-[#F5F5F7]">Text-to-Pay Checkout</h3></div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="bg-[#111113] rounded-lg px-3 py-2"><p className="text-[10px] text-[#A1A1A8]">Collected</p><p className="text-sm font-bold text-[#17C5B0] font-mono">{fmtMoney(stats.paidRevenue, biz.currency)}</p></div>
             <div className="bg-[#111113] rounded-lg px-3 py-2"><p className="text-[10px] text-[#A1A1A8]">Pending</p><p className="text-sm font-bold text-amber-400 font-mono">{stats.pending}</p></div>
             <div className="bg-[#111113] rounded-lg px-3 py-2"><p className="text-[10px] text-[#A1A1A8]">Collection Rate</p><p className="text-sm font-bold text-[#F5F5F7] font-mono">{stats.orders > 0 ? Math.round(stats.paid / stats.orders * 100) : 0}%</p></div>

@@ -174,7 +174,7 @@ export default function GarryWidget() {
       )}
 
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 w-[440px] max-h-[620px] bg-[#0f1512] border border-[#1a2420] rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden">
+        <div className="fixed bottom-6 right-3 sm:right-6 z-50 w-[calc(100vw-1.5rem)] max-w-[440px] max-h-[620px] bg-[#0f1512] border border-[#1a2420] rounded-xl shadow-2xl shadow-black/50 flex flex-col overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a2420] bg-[#0a0f0d]">
             <div className="flex items-center gap-2.5">

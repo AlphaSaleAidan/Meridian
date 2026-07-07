@@ -50,12 +50,15 @@ export default function CookieConsentBanner() {
     setConsent('essential')
   }
 
+  // z-40 keeps the mobile bottom nav (z-50) tappable; pointer-events-none on the
+  // gutter so only the visible card intercepts taps. Compact on small screens —
+  // the full-size banner buried the login CTA on 375x667.
   return (
-    <div className="fixed bottom-0 inset-x-0 z-50 p-4">
-      <div className="mx-auto max-w-3xl rounded-xl border border-zinc-700 bg-zinc-900 p-5 shadow-2xl">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-zinc-300 leading-relaxed">
-            <p className="font-medium text-white mb-1">Cookie Preferences</p>
+    <div className="fixed bottom-0 inset-x-0 z-40 p-2 sm:p-4 pointer-events-none">
+      <div className="pointer-events-auto mx-auto max-w-3xl rounded-xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5 shadow-2xl">
+        <div className="flex flex-col gap-2.5 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs sm:text-sm text-zinc-300 leading-snug sm:leading-relaxed">
+            <p className="font-medium text-white mb-0.5 sm:mb-1">Cookie Preferences</p>
             <p>
               We use essential cookies for authentication.
               {isQuebec ? (
@@ -65,16 +68,16 @@ export default function CookieConsentBanner() {
               )}
             </p>
           </div>
-          <div className="flex shrink-0 gap-3">
+          <div className="flex shrink-0 gap-2 sm:gap-3">
             <button
               onClick={handleEssentialOnly}
-              className="rounded-lg border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white"
+              className="rounded-lg border border-zinc-600 px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-zinc-300 transition-colors hover:border-zinc-500 hover:text-white"
             >
               Essential Only
             </button>
             <button
               onClick={handleAcceptAll}
-              className="rounded-lg bg-[#1A8FD6] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1A8FD6]/90"
+              className="rounded-lg bg-[#1A8FD6] px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium text-white transition-colors hover:bg-[#1A8FD6]/90"
             >
               Accept All
             </button>

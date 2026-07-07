@@ -130,7 +130,8 @@ export default function ForecastsPage() {
                 <h3 className="text-sm font-semibold text-[#F5F5F7]">Next 7 Days — Daily Demand Forecast</h3>
                 <span className="text-[9px] text-[#A1A1A8]/40 ml-auto font-mono">weekday seasonality + trend</span>
               </div>
-              <div className="grid grid-cols-7 gap-2">
+              <div className="overflow-x-auto">
+              <div className="grid grid-cols-7 gap-2 min-w-[480px]">
                 {daily.map(d => {
                   const heightPct = Math.round((d.predictedCents / maxCents) * 100)
                   const above = d.vsAvgPct > 5
@@ -149,6 +150,7 @@ export default function ForecastsPage() {
                     </div>
                   )
                 })}
+              </div>
               </div>
               <p className="text-[10px] text-[#A1A1A8]/50 mt-3 font-mono">
                 Δ vs weekly average — green = above, amber = below. Drives the schedule recommendations.

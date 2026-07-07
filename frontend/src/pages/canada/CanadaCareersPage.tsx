@@ -174,7 +174,7 @@ export default function CanadaCareersPage() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: EASE, delay: 0.2 }}
-          className="max-w-2xl mx-auto px-6 mt-10 grid grid-cols-3 gap-4"
+          className="max-w-2xl mx-auto px-6 mt-10 grid grid-cols-1 sm:grid-cols-3 gap-4"
         >
           {[
             { label: 'Month 1', amount: 'CA$2,025', sub: '5 closes at CA$405 avg' },

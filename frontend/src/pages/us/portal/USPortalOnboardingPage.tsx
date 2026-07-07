@@ -215,7 +215,7 @@ export default function USPortalOnboardingPage() {
               </div>
 
               {/* Income Projection Cards */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {[
                   { label: 'Month 1', amount: '$2,500', sub: '5 closes' },
                   { label: 'Month 6', amount: '$15,000', sub: '30 closes' },
