@@ -86,7 +86,7 @@ export default function CanadaPortalLoginPage() {
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
               <div className="text-center">
-                <button type="button" onClick={() => { setShowForgot(true); setError(null); setSuccess(null) }} className="text-2xs text-pm-teal hover:text-pm-teal/80 transition-colors">
+                <button type="button" onClick={() => { setShowForgot(true); setError(null); setSuccess(null) }} className="inline-flex items-center justify-center min-h-[44px] -my-3 px-2 text-2xs text-pm-teal hover:text-pm-teal/80 transition-colors">
                   Forgot password?
                 </button>
               </div>
@@ -101,7 +101,7 @@ export default function CanadaPortalLoginPage() {
                 {loading ? 'Sending...' : 'Send Reset Link'}
               </button>
               <p className="text-center text-2xs text-pm-muted">
-                <button type="button" onClick={() => { setShowForgot(false); setError(null); setSuccess(null) }} className="text-pm-teal hover:text-pm-teal/80 transition-colors">
+                <button type="button" onClick={() => { setShowForgot(false); setError(null); setSuccess(null) }} className="inline-flex items-center justify-center min-h-[44px] -my-3 px-2 text-pm-teal hover:text-pm-teal/80 transition-colors">
                   Back to sign in
                 </button>
               </p>
@@ -110,7 +110,7 @@ export default function CanadaPortalLoginPage() {
 
           <p className="text-center text-2xs text-pm-muted mt-5">
             New sales rep?{' '}
-            <Link to="/canada/portal/signup" className="text-pm-teal hover:text-pm-teal/80 transition-colors font-medium">
+            <Link to="/canada/portal/signup" className="inline-flex items-center justify-center min-h-[44px] -my-3 px-2 text-pm-teal hover:text-pm-teal/80 transition-colors font-medium">
               Create your account
             </Link>
           </p>
@@ -118,7 +118,7 @@ export default function CanadaPortalLoginPage() {
 
         <p className="text-center text-2xs text-pm-muted/50 mt-5">
           Business owner?{' '}
-          <Link to="/canada/login" className="text-pm-accent hover:text-pm-accent/80 transition-colors font-medium">
+          <Link to="/canada/login" className="inline-flex items-center justify-center min-h-[44px] -my-3 px-2 text-pm-accent hover:text-pm-accent/80 transition-colors font-medium">
             Sign in here
           </Link>
         </p>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 const STORAGE_KEY = 'meridian_cookie_consent'
 
@@ -30,11 +30,29 @@ function isQuebecLocale(): boolean {
 export default function CookieConsentBanner() {
   const [consent, setConsent] = useState<ConsentLevel>(getStoredConsent)
   const [isQuebec] = useState(isQuebecLocale)
+  const bannerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     // Re-check on mount in case localStorage was updated
     setConsent(getStoredConsent())
   }, [])
+
+  // Reserve scroll space for the banner: on short viewports the auth forms
+  // (rep signup password + submit at 375x667) sat fully under it with
+  // scrollHeight === innerHeight — unreachable, not just hidden.
+  useEffect(() => {
+    if (consent !== null) return
+    const apply = () => {
+      const h = bannerRef.current?.offsetHeight ?? 0
+      document.body.style.paddingBottom = h ? `${h}px` : ''
+    }
+    apply()
+    window.addEventListener('resize', apply)
+    return () => {
+      window.removeEventListener('resize', apply)
+      document.body.style.paddingBottom = ''
+    }
+  }, [consent])
 
   if (consent !== null) return null
 
@@ -54,7 +72,7 @@ export default function CookieConsentBanner() {
   // gutter so only the visible card intercepts taps. Compact on small screens —
   // the full-size banner buried the login CTA on 375x667.
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 p-2 sm:p-4 pointer-events-none">
+    <div ref={bannerRef} className="fixed bottom-0 inset-x-0 z-40 p-2 sm:p-4 pointer-events-none">
       <div className="pointer-events-auto mx-auto max-w-3xl rounded-xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5 shadow-2xl">
         <div className="flex flex-col gap-2.5 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs sm:text-sm text-zinc-300 leading-snug sm:leading-relaxed">
