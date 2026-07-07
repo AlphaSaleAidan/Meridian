@@ -4,6 +4,7 @@ import { clsx } from 'clsx'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import playbookData from '@/data/playbook.json'
+import PlaybookVideo from './PlaybookVideo'
 
 const PLAYBOOK = playbookData as Record<string, string>
 
@@ -213,6 +214,7 @@ export function PlaybookViewer({ country }: PlaybookViewerProps) {
           <div className="mb-3 text-[10px] uppercase tracking-wider text-[#4a5550] flex items-center gap-1.5">
             <FileText size={11} /> {selectedPath}
           </div>
+          <PlaybookVideo docPath={selectedPath} />
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             components={{

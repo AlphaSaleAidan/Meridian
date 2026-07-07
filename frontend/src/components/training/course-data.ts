@@ -2,9 +2,9 @@
 // Code of Conduct. Every question is answerable from the module's video —
 // the quiz enforces watching, it isn't a trick exam.
 
-export const PASS_SCORE = 6 // out of 10 — below this the rep rewatches
+export const PASS_SCORE = 3 // out of 4 — below this the rep rewatches
 
-export type CourseFormat = 'landscape' | 'vertical' | 'brainrot'
+export type CourseFormat = 'landscape' | 'vertical'
 
 export interface QuizQuestion {
   q: string
@@ -28,14 +28,8 @@ export const COURSE_MODULES: CourseModule[] = [
     files: {
       landscape: 'meridian-connect-trailer.mp4',
       vertical: 'meridian-connect-trailer-vertical.mp4',
-      brainrot: 'meridian-connect-trailer-brainrot.mp4',
     },
     quiz: [
-      {
-        q: 'How many things does Meridian connect for a merchant?',
-        options: ['Two', 'Three', 'Four', 'Six'],
-        answer: 2,
-      },
       {
         q: 'Which four connections make up the Meridian pitch?',
         options: [
@@ -45,26 +39,6 @@ export const COURSE_MODULES: CourseModule[] = [
           'POS, delivery apps, loyalty, marketing',
         ],
         answer: 0,
-      },
-      {
-        q: 'What does the AI phone agent do with calls it can\'t handle?',
-        options: [
-          'Hangs up politely',
-          'Hands them to the owner\'s real phone line',
-          'Takes a voicemail and emails it',
-          'Asks the caller to try again later',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'How many studio voices can the merchant choose from?',
-        options: ['Three', 'Five', 'Eight', 'Twelve'],
-        answer: 2,
-      },
-      {
-        q: 'How much sales history does Meridian pull when the POS connects?',
-        options: ['30 days', '6 months', 'Up to 18 months', 'Everything since the account opened'],
-        answer: 2,
       },
       {
         q: 'What does the merchant do in the one-click POS connect?',
@@ -87,26 +61,6 @@ export const COURSE_MODULES: CourseModule[] = [
         answer: 2,
       },
       {
-        q: 'Which camera metrics does Meridian report?',
-        options: [
-          'Faces and names of repeat customers',
-          'Walk-ins, queues, and how many visitors actually buy',
-          'Staff break times',
-          'License plates in the parking lot',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'What can a merchant drop in to load their costs?',
-        options: [
-          'Only a formatted CSV template',
-          'A supplier invoice or cost sheet — CSV, spreadsheet, even a photo',
-          'Only receipts scanned in the mobile app',
-          'A QuickBooks export exclusively',
-        ],
-        answer: 1,
-      },
-      {
         q: 'What happens to the margins page once costs are loaded?',
         options: [
           'It stops estimating and starts knowing',
@@ -125,39 +79,8 @@ export const COURSE_MODULES: CourseModule[] = [
     files: {
       landscape: 'connect-phone.mp4',
       vertical: 'connect-phone-vertical.mp4',
-      brainrot: 'connect-phone-brainrot.mp4',
     },
     quiz: [
-      {
-        q: 'Where does phone setup start in the customer portal?',
-        options: [
-          'Settings → Integrations',
-          'Phone Calls → Set up',
-          'Dashboard → Add-ons',
-          'You call Meridian support to start it',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'How does the business get its phone number in step one?',
-        options: [
-          'The merchant ports their number in, which takes a week',
-          'Meridian provisions a dedicated number automatically',
-          'The rep buys one from Telnyx manually',
-          'They reuse the owner\'s cell number',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'The merchant doesn\'t like the number they got. What do you do?',
-        options: [
-          'Open a support ticket',
-          'Press the Swap button — a new number instantly',
-          'Tell them numbers can\'t be changed',
-          'Reinstall the phone agent',
-        ],
-        answer: 1,
-      },
       {
         q: 'What is the transfer number?',
         options: [
@@ -167,36 +90,6 @@ export const COURSE_MODULES: CourseModule[] = [
           'The store\'s fax line',
         ],
         answer: 1,
-      },
-      {
-        q: 'What do you configure in step two?',
-        options: [
-          'Payment processing',
-          'Business name and the greeting callers will hear',
-          'Staff accounts',
-          'Delivery zones',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'How should you demo the voices to a merchant?',
-        options: [
-          'Describe them from memory',
-          'Press play on the real samples so they hear what callers will hear',
-          'Call the line eight times',
-          'Send them a YouTube link',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'Which is NOT one of the three ways to load the menu?',
-        options: [
-          'Scan a printed menu with the camera',
-          'Import a CSV',
-          'Sync from their POS after it\'s connected',
-          'Dictate it to the AI over a phone call',
-        ],
-        answer: 3,
       },
       {
         q: 'Why must you check the menu prices during setup?',
@@ -237,29 +130,8 @@ export const COURSE_MODULES: CourseModule[] = [
     files: {
       landscape: 'connect-pos.mp4',
       vertical: 'connect-pos-vertical.mp4',
-      brainrot: 'connect-pos-brainrot.mp4',
     },
     quiz: [
-      {
-        q: 'Where does the merchant start the POS connection?',
-        options: [
-          'A banner on their home screen: Connect your POS',
-          'An email link from Meridian',
-          'The rep connects it from the sales portal',
-          'Square\'s app marketplace',
-        ],
-        answer: 0,
-      },
-      {
-        q: 'What are the four steps of the POS wizard?',
-        options: [
-          'Login, Pay, Sync, Done',
-          'Welcome, Connect, First Sync, Confirm',
-          'Choose, Verify, Import, Review',
-          'Connect, Map, Test, Launch',
-        ],
-        answer: 1,
-      },
       {
         q: 'In one-click connect, whose Square/Clover account signs in?',
         options: [
@@ -271,42 +143,12 @@ export const COURSE_MODULES: CourseModule[] = [
         answer: 2,
       },
       {
-        q: 'After the merchant presses Allow in the provider tab, what happens?',
-        options: [
-          'They copy a code back into Meridian',
-          'The original tab notices automatically — no copying anything',
-          'They wait for a confirmation email',
-          'The rep enters an API key',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'Who is the API-key path for?',
-        options: [
-          'Square merchants only',
-          'Clover merchants who prefer it — paste the API key and merchant ID',
-          'Merchants without internet',
-          'Enterprise accounts only',
-        ],
-        answer: 1,
-      },
-      {
         q: 'What does First Sync import?',
         options: [
           'Only today\'s sales',
           'Up to eighteen months of history — products, sales, refunds',
           'Customer phone numbers',
           'Staff schedules',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'A large merchant\'s first sync is taking a few minutes. What\'s true?',
-        options: [
-          'Something is broken — reconnect immediately',
-          'That\'s normal; the page updates itself every few seconds',
-          'You must refresh the browser manually',
-          'The sync must be restarted after 60 seconds',
         ],
         answer: 1,
       },
@@ -330,16 +172,6 @@ export const COURSE_MODULES: CourseModule[] = [
         ],
         answer: 0,
       },
-      {
-        q: 'A sync fails after setup. What does the video say to do?',
-        options: [
-          'The portal shows it — just reconnect',
-          'Delete the account and start over',
-          'Email engineering',
-          'Wait 24 hours for auto-repair',
-        ],
-        answer: 0,
-      },
     ],
   },
   {
@@ -349,7 +181,6 @@ export const COURSE_MODULES: CourseModule[] = [
     files: {
       landscape: 'connect-camera.mp4',
       vertical: 'connect-camera-vertical.mp4',
-      brainrot: 'connect-camera-brainrot.mp4',
     },
     quiz: [
       {
@@ -363,58 +194,8 @@ export const COURSE_MODULES: CourseModule[] = [
         answer: 0,
       },
       {
-        q: 'What is the first question when you press Add Camera?',
-        options: [
-          'What brand is your camera?',
-          'How is your camera connected?',
-          'How many cameras do you have?',
-          'Where is your router?',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'Which option is the easiest, per the video?',
-        options: [
-          'Manual RTSP',
-          'Smart-app camera — sign into the Smart Life or Tuya account and pick the cameras',
-          'Local network connector',
-          'Shipping the camera to Meridian',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'How does the local network connector work?',
-        options: [
-          'You install an app on the camera itself',
-          'A one-line command run on any computer in the store on the same wifi — it finds the cameras by itself',
-          'You plug a Meridian box into the router',
-          'You forward ports on the modem',
-        ],
-        answer: 1,
-      },
-      {
         q: 'How long is the pairing code valid?',
         options: ['Five minutes', 'Fifteen minutes — run it while you\'re together', 'One hour', 'It never expires'],
-        answer: 1,
-      },
-      {
-        q: 'What does the manual option ask for?',
-        options: [
-          'The camera\'s RTSP address from its admin panel',
-          'The camera\'s serial number',
-          'A photo of the camera',
-          'The merchant\'s wifi password',
-        ],
-        answer: 0,
-      },
-      {
-        q: 'What are detection zones for?',
-        options: [
-          'Blurring parts of the image',
-          'Telling Meridian what each area means — Door, Register, Seating',
-          'Setting recording schedules',
-          'Adjusting brightness per region',
-        ],
         answer: 1,
       },
       {
@@ -426,11 +207,6 @@ export const COURSE_MODULES: CourseModule[] = [
           'Audio capture — for staff coaching',
         ],
         answer: 0,
-      },
-      {
-        q: 'How soon do the first numbers arrive after activation?',
-        options: ['Instantly', 'Within about fifteen minutes', 'The next morning', 'After one full week'],
-        answer: 1,
       },
       {
         q: 'Which set of metrics do cameras feed into analytics?',
@@ -451,7 +227,6 @@ export const COURSE_MODULES: CourseModule[] = [
     files: {
       landscape: 'connect-csv.mp4',
       vertical: 'connect-csv-vertical.mp4',
-      brainrot: 'connect-csv-brainrot.mp4',
     },
     quiz: [
       {
@@ -465,37 +240,12 @@ export const COURSE_MODULES: CourseModule[] = [
         answer: 1,
       },
       {
-        q: 'Which page do you open to load costs?',
-        options: ['Dashboard', 'The Margins page', 'Settings → Billing', 'Inventory → Suppliers'],
-        answer: 1,
-      },
-      {
-        q: 'What can the cost CSV contain?',
-        options: [
-          'Item name and unit cost, or a stock-up receipt with totals and quantities',
-          'Only barcodes and prices',
-          'Only Meridian\'s exact template',
-          'Sales totals by day',
-        ],
-        answer: 0,
-      },
-      {
         q: 'What does the second upload button accept?',
         options: [
           'Only Excel files',
           'Almost anything — a PDF supplier invoice, a spreadsheet, even a photo of a delivery sheet',
           'Only photos',
           'Signed purchase orders only',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'How does Meridian match uploaded lines to products?',
-        options: [
-          'By barcode only',
-          'To the product catalog by name',
-          'By price similarity',
-          'It doesn\'t — you map every line by hand',
         ],
         answer: 1,
       },
@@ -510,26 +260,6 @@ export const COURSE_MODULES: CourseModule[] = [
         answer: 1,
       },
       {
-        q: 'When do margins recalculate with real numbers?',
-        options: [
-          'Overnight',
-          'The moment it saves',
-          'After an admin approves',
-          'On the first of the month',
-        ],
-        answer: 1,
-      },
-      {
-        q: 'At what levels do margins recalculate?',
-        options: [
-          'Store total only',
-          'Per product, per category, and across the whole menu',
-          'Per supplier only',
-          'Per transaction only',
-        ],
-        answer: 1,
-      },
-      {
         q: 'What should you tell the merchant to bring to onboarding?',
         options: [
           'Their tax returns',
@@ -538,16 +268,6 @@ export const COURSE_MODULES: CourseModule[] = [
           'Their landlord\'s contact info',
         ],
         answer: 1,
-      },
-      {
-        q: 'Why does the video call real margins the fastest "wow"?',
-        options: [
-          'The merchant leaves with real margins on day one',
-          'It unlocks a discount',
-          'It makes the dashboard load faster',
-          'It\'s required before the POS will sync',
-        ],
-        answer: 0,
       },
     ],
   },
