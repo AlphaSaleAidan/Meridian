@@ -24,7 +24,10 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pipecat.transcriptions.language import Language
 
 import httpx
 
