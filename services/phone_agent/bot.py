@@ -259,20 +259,36 @@ def _premium_on() -> bool:
             and os.getenv("PREMIUM_VOICE_DISABLED", "").lower() not in ("1", "true", "yes"))
 
 
+def _gpu_on() -> bool:
+    """Self-hosted GPU lane (office box: Parakeet STT + Chatterbox TTS behind
+    OpenAI-compatible endpoints) when both base URLs are configured."""
+    return bool(os.getenv("GPU_STT_BASE_URL")) and bool(os.getenv("GPU_TTS_BASE_URL"))
+
+
 _ab_counter = itertools.count()
 
 
+def _available_lanes() -> list[str]:
+    lanes = []
+    if _premium_on():
+        lanes.append("premium")
+    if _gpu_on():
+        lanes.append("gpu")
+    lanes.append("nemotron")  # always available (itself falls back to local)
+    return lanes
+
+
 def _pick_vendor() -> str:
-    """Vendor lane for ONE call. VOICE_VENDOR pins it ('premium'|'nemotron');
-    VOICE_AB=1 alternates lanes per call so back-to-back test calls compare
-    vendors directly. Premium requires its keys; otherwise nemotron lane
-    (which itself falls back to local Moonshine/Kokoro)."""
+    """Vendor lane for ONE call. VOICE_VENDOR pins it ('premium'|'gpu'|'nemotron');
+    VOICE_AB=1 rotates through every available lane call-by-call so back-to-back
+    test calls compare vendors directly."""
+    lanes = _available_lanes()
     pinned = os.getenv("VOICE_VENDOR", "").strip().lower()
-    if pinned in ("premium", "nemotron"):
-        return pinned if (pinned != "premium" or _premium_on()) else "nemotron"
-    if os.getenv("VOICE_AB", "").lower() in ("1", "true", "yes") and _premium_on():
-        return "premium" if next(_ab_counter) % 2 == 0 else "nemotron"
-    return "premium" if _premium_on() else "nemotron"
+    if pinned in ("premium", "gpu", "nemotron"):
+        return pinned if pinned in lanes else "nemotron"
+    if os.getenv("VOICE_AB", "").lower() in ("1", "true", "yes") and len(lanes) > 1:
+        return lanes[next(_ab_counter) % len(lanes)]
+    return lanes[0]
 
 
 def _language(config: MerchantPhoneConfig) -> "Language":
@@ -292,6 +308,15 @@ def _build_stt(config: MerchantPhoneConfig, vendor: str = "nemotron"):
     reconnect loop (verified). So the streaming ASR is English-only; French
     merchants stay on the turn-based path (see phone.py /voice gate). We clamp to
     en-US defensively here too, so a French config can never wedge a live call."""
+    if vendor == "gpu":
+        try:
+            from pipecat.services.openai.stt import OpenAISTTService
+            base = os.environ["GPU_STT_BASE_URL"]
+            model = os.getenv("GPU_STT_MODEL", "whisper-1")  # parakeet server is whisper-compatible
+            logger.info("STT: GPU box %s (gpu lane, %s)", model, base)
+            return OpenAISTTService(model=model, api_key=os.getenv("GPU_API_KEY", "local"), base_url=base)
+        except Exception as e:
+            logger.warning("GPU STT unavailable, falling back to Nemotron lane: %s", e)
     if vendor == "premium":
         try:
             from pipecat.services.deepgram.stt import DeepgramSTTService
@@ -325,6 +350,16 @@ def _build_stt(config: MerchantPhoneConfig, vendor: str = "nemotron"):
 def _build_tts(config: MerchantPhoneConfig, vendor: str = "nemotron"):
     """TTS by lane: premium = Cartesia Sonic (the naturalness gap vs Vapi);
     nemotron = Magpie-TTS-multilingual (NVCF, EN+FR for Canada) → Kokoro (local)."""
+    if vendor == "gpu":
+        try:
+            from pipecat.services.openai.tts import OpenAITTSService
+            base = os.environ["GPU_TTS_BASE_URL"]
+            voice = os.getenv("GPU_TTS_VOICE", "alloy")  # chatterbox-tts-api maps OpenAI voice names
+            logger.info("TTS: GPU box chatterbox (gpu lane, %s, voice=%s)", base, voice)
+            return OpenAITTSService(api_key=os.getenv("GPU_API_KEY", "local"), base_url=base,
+                                    voice=voice, model=os.getenv("GPU_TTS_MODEL", "tts-1"))
+        except Exception as e:
+            logger.warning("GPU TTS unavailable, falling back to Nemotron lane: %s", e)
     if vendor == "premium":
         try:
             from pipecat.services.cartesia.tts import CartesiaTTSService
