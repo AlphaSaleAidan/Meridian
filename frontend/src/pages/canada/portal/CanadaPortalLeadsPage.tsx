@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, WifiOff, Trash2, Loader2,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, WifiOff, Trash2, Loader2, Lock,
 } from 'lucide-react'
 import { type Deal } from '@/lib/canada-sales-demo-data'
 import { verticalsByGroup, findVerticalByValue } from '@/data/cadVerticals'
@@ -14,6 +14,7 @@ import {
   canadaKeys,
 } from '@/lib/canada-queries'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { useTrainingLock } from '@/lib/training-progress'
 import { useToast } from '@/components/Toast'
 import { queueIfOffline, setupOfflineSync, getPendingCount } from '@/lib/offline-queue'
 import { requestNotificationPermission } from '@/lib/notifications'
@@ -112,6 +113,8 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
 export default function CanadaPortalLeadsPage() {
   const { rep } = useSalesAuth()
   const { toast } = useToast()
+  const { locked: trainingLocked } = useTrainingLock()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const qc = useQueryClient()
   const { data: deals = [], isLoading, error } = useCanadaLeads(rep?.rep_id)
@@ -132,8 +135,17 @@ export default function CanadaPortalLeadsPage() {
   const [addError, setAddError] = useState('')
 
   useEffect(() => {
-    if (searchParams.get('new') === 'true') setShowNew(true)
-  }, [searchParams])
+    if (searchParams.get('new') === 'true' && !trainingLocked) setShowNew(true)
+  }, [searchParams, trainingLocked])
+
+  const openNewLead = () => {
+    if (trainingLocked) {
+      toast('Finish the Training Course to create leads', 'error')
+      navigate('/canada/portal/training')
+      return
+    }
+    setShowNew(true)
+  }
 
   useEffect(() => {
     const cleanup = setupOfflineSync((count) => {
@@ -222,10 +234,11 @@ export default function CanadaPortalLeadsPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowNew(true)}
+          onClick={openNewLead}
           className="flex items-center gap-2 px-3.5 py-2 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 transition-all"
+          title={trainingLocked ? 'Complete the Training Course to unlock lead creation' : undefined}
         >
-          <Plus size={16} /> New Lead
+          {trainingLocked ? <Lock size={16} /> : <Plus size={16} />} New Lead
         </button>
       </div>
 
@@ -272,7 +285,7 @@ export default function CanadaPortalLeadsPage() {
       </div>
 
       {/* New Lead Modal */}
-      {showNew && (
+      {showNew && !trainingLocked && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="w-full max-w-lg bg-pm-canada-surface border border-pm-canada-border rounded-xl p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">

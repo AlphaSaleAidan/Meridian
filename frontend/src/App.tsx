@@ -12,6 +12,7 @@ import { merchantPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 import CookieConsentBanner from '@/components/compliance/CookieConsentBanner'
+import TrainingGate from '@/components/training/TrainingGate'
 import { loadGA4, CONSENT_EVENT } from '@/lib/analytics'
 
 const CustomerLoginPage = lazyRetry(() => import('@/pages/customer/CustomerLoginPage'))
@@ -517,7 +518,7 @@ export default function App() {
                 <Route path="dashboard" element={<Suspense fallback={<InlineFallback />}><CanadaPortalDashboardPage /></Suspense>} />
                 <Route path="leads" element={<Suspense fallback={<InlineFallback />}><CanadaPortalLeadsPage /></Suspense>} />
                 <Route path="leads/:id" element={<Suspense fallback={<InlineFallback />}><CanadaPortalLeadDetailPage /></Suspense>} />
-                <Route path="new-customer" element={<Suspense fallback={<InlineFallback />}><CanadaPortalCreateCustomerPage /></Suspense>} />
+                <Route path="new-customer" element={<Suspense fallback={<InlineFallback />}><TrainingGate><CanadaPortalCreateCustomerPage /></TrainingGate></Suspense>} />
                 <Route path="accounts" element={<Suspense fallback={<InlineFallback />}><CanadaPortalAccountsPage /></Suspense>} />
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTrainingPage /></Suspense>} />
                 <Route path="proposals" element={<Suspense fallback={<InlineFallback />}><CanadaPortalProposalsPage /></Suspense>} />
