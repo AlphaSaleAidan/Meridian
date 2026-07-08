@@ -1,6 +1,7 @@
 import { GraduationCap } from 'lucide-react'
 import PlaybookViewer from '@/components/training/PlaybookViewer'
 import ComplianceGuidesCard from '@/components/training/ComplianceGuidesCard'
+import TrainingCourse from '@/components/training/TrainingCourse'
 
 export default function USPortalTrainingPage() {
   return (
@@ -10,12 +11,14 @@ export default function USPortalTrainingPage() {
           <GraduationCap size={18} className="text-[#00d4aa]" />
         </div>
         <div>
-          <h1 className="text-lg font-bold text-white">Sales Rep Playbook</h1>
+          <h1 className="text-lg font-bold text-white">Training &amp; Playbook</h1>
           <p className="text-[11px] text-[#6b7a74]">
-            Find any answer in 30 seconds. POS integrations, camera setup, features, troubleshooting, cheat sheets.
+            Complete the course to unlock lead creation, then use the playbook to find any answer in 30 seconds.
           </p>
         </div>
       </header>
+
+      <TrainingCourse accent="#00d4aa" />
 
       <ComplianceGuidesCard accent="#00d4aa" />
 

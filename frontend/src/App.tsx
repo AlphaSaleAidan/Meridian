@@ -568,7 +568,7 @@ export default function App() {
                 <Route path="dashboard" element={<Suspense fallback={<InlineFallback />}><USPortalDashboardPage /></Suspense>} />
                 <Route path="leads" element={<Suspense fallback={<InlineFallback />}><USPortalLeadsPage /></Suspense>} />
                 <Route path="leads/:id" element={<Suspense fallback={<InlineFallback />}><USPortalLeadDetailPage /></Suspense>} />
-                <Route path="new-customer" element={<Suspense fallback={<InlineFallback />}><USPortalCreateCustomerPage /></Suspense>} />
+                <Route path="new-customer" element={<Suspense fallback={<InlineFallback />}><TrainingGate><USPortalCreateCustomerPage /></TrainingGate></Suspense>} />
                 <Route path="accounts" element={<Suspense fallback={<InlineFallback />}><USPortalAccountsPage /></Suspense>} />
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><USPortalTrainingPage /></Suspense>} />
                 <Route path="proposals" element={<Suspense fallback={<InlineFallback />}><USPortalProposalsPage /></Suspense>} />

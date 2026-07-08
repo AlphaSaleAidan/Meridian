@@ -119,6 +119,10 @@ export default function USPortalLeadDetailPage() {
   const [invoiceEmailed, setInvoiceEmailed] = useState(false)
   // Stripe subscribe-link: URL + client-side QR for the customer to scan at checkout
   const [checkoutUrl, setCheckoutUrl] = useState('')
+  // Ref mirror of checkoutUrl: handleEmailInvoice can run in the same tick the
+  // link resolves, before the state update flushes — so the emailed "View & Pay"
+  // link reads from the ref, not stale state.
+  const checkoutUrlRef = useRef('')
   const [checkoutQr, setCheckoutQr] = useState('')
   const [checkoutCopied, setCheckoutCopied] = useState(false)
 
@@ -433,6 +437,7 @@ export default function USPortalLeadDetailPage() {
       // Surface the subscription link + on-screen QR so the customer can scan
       // to subscribe right at the checkout step (distinct from per-order phone fee).
       setCheckoutUrl(resolvedCheckoutUrl)
+      checkoutUrlRef.current = resolvedCheckoutUrl
       try {
         const qr = await QRCode.toDataURL(resolvedCheckoutUrl, {
           width: 240,
@@ -504,7 +509,7 @@ export default function USPortalLeadDetailPage() {
             amount: `$${monthlyPrice.toLocaleString()}`,
             rep_name: rep?.name || '',
             rep_email: rep?.email || '',
-            invoice_url: generateInvoiceUrl(invoiceNumber),
+            invoice_url: checkoutUrlRef.current || checkoutUrl || generateInvoiceUrl(invoiceNumber),
             recurring: true,
           },
         }),
