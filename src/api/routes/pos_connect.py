@@ -112,7 +112,13 @@ async def callback(provider: str, request: Request, background_tasks: Background
     except OAuthError as e:
         return _redirect_to(return_to, {"oauth": "error", "error": str(e)}, origin)
 
-    merchant_id = await mgr.resolve_merchant_id(tokens) or f"{provider}:{org_id}"
+    if cfg.merchant_id_strategy.startswith("callback:"):
+        # Provider returns the account id as a callback query param (e.g.
+        # Lightspeed X-Series `domain_prefix`), not in the token response.
+        qp = cfg.merchant_id_strategy.split(":", 1)[1]
+        merchant_id = request.query_params.get(qp, "") or f"{provider}:{org_id}"
+    else:
+        merchant_id = await mgr.resolve_merchant_id(tokens) or f"{provider}:{org_id}"
 
     try:
         from ...db import _db_instance

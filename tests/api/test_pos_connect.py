@@ -21,12 +21,19 @@ from src.pos_connect.registry import PROVIDERS, enabled_providers, get_provider 
 from src.pos_connect.oauth import sign_state, verify_state, GenericOAuthManager  # noqa: E402
 
 
-def test_all_registry_providers_start_unverified():
-    # Nothing ships pre-verified — every provider must be validated against a real
-    # app before it can be offered. This guards against an accidental live flip.
+# Providers whose OAuth config has been validated against a real registered app
+# and are intentionally live. Everything else must stay verified=False until it
+# too has been validated — this guards against an accidental live flip.
+VALIDATED = {"lightspeed_xseries"}
+
+
+def test_only_validated_providers_are_verified():
     assert PROVIDERS, "registry should not be empty"
     for key, cfg in PROVIDERS.items():
-        assert cfg.verified is False, f"{key} must stay verified=False until validated"
+        if key in VALIDATED:
+            assert cfg.verified is True, f"{key} is validated but not marked verified"
+        else:
+            assert cfg.verified is False, f"{key} must stay verified=False until validated"
 
 
 def test_enabled_requires_verified_and_credentials(monkeypatch):
