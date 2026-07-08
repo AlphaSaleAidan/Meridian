@@ -1,0 +1,13 @@
+-- Add 'lightspeed_xseries' to the pos_connections.provider enum so the generic
+-- POS connector can store a Lightspeed X-Series connection. The provider key is
+-- 'lightspeed_xseries' (not the pre-existing 'lightspeed' label) because that
+-- key is baked into the OAuth redirect_uri registered with Lightspeed
+-- (https://api.meridian.tips/api/pos/lightspeed_xseries/callback) — renaming the
+-- key would require re-registering the redirect URI, so we add the enum value.
+--
+-- Without this, the OAuth round-trip succeeds but the callback's INSERT into
+-- pos_connections fails ("invalid input value for enum pos_provider"), leaving
+-- the merchant on the "connected but failed to save" path.
+--
+-- ADD VALUE cannot run inside a transaction block; apply as a standalone statement.
+ALTER TYPE pos_provider ADD VALUE IF NOT EXISTS 'lightspeed_xseries';
