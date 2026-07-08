@@ -47,6 +47,7 @@ from .middleware.security_headers import SecurityHeadersMiddleware
 from .middleware.rate_limiter import RateLimitMiddleware
 from .routes.oauth import router as oauth_router
 from .routes.clover_oauth import router as clover_oauth_router
+from .routes.pos_connect import router as pos_connect_router
 from .routes.webhooks import router as webhook_router
 from .routes.dashboard import router as dashboard_router
 from .routes.cpa import router as cpa_router
@@ -224,6 +225,7 @@ app.add_middleware(RateLimitMiddleware)
 # Register API routes
 app.include_router(oauth_router)
 app.include_router(clover_oauth_router)
+app.include_router(pos_connect_router)
 app.include_router(webhook_router)
 app.include_router(dashboard_router)
 app.include_router(cpa_router)

@@ -845,6 +845,12 @@ export default function USCustomerOnboardingWizard() {
                 Connect with Clover (OAuth)
               </a>
             )}
+            {/* Additional 1-click POS providers (generic framework). Renders a
+                button per provider that is verified + credential-configured on
+                the server; empty otherwise — see src/pos_connect/. */}
+            {org?.org_id && (
+              <ExtraPosConnectButtons orgId={org.org_id} repId={searchParams.get('rep')} />
+            )}
             <div className="flex justify-between">
               <button onClick={() => setStep('sla')} className={btnBack}><ArrowLeft size={14} /> Back</button>
               <button onClick={handlePosNext} disabled={saving || !posProvider} className={btnPrimary}>
@@ -1235,5 +1241,38 @@ export default function USCustomerOnboardingWizard() {
         )}
       </div>
     </div>
+  )
+}
+
+/** Extra 1-click POS connect buttons, driven by GET /api/pos/providers.
+ *  Only providers that are verified AND credential-configured server-side are
+ *  returned, so this renders nothing until a provider is switched on — no
+ *  demo-ware. Mirrors the Square/Clover authorize-link pattern above. */
+function ExtraPosConnectButtons({ orgId, repId }: { orgId: string; repId: string | null }) {
+  const [providers, setProviders] = useState<Array<{ key: string; label: string; authorize_path: string }>>([])
+  useEffect(() => {
+    let alive = true
+    fetch(`${import.meta.env.VITE_API_URL || ''}/api/pos/providers`)
+      .then(r => (r.ok ? r.json() : { providers: [] }))
+      .then(d => { if (alive) setProviders(d.providers || []) })
+      .catch(() => { if (alive) setProviders([]) })
+    return () => { alive = false }
+  }, [])
+  if (providers.length === 0) return null
+  const rep = repId ? `&rep_id=${encodeURIComponent(repId)}` : ''
+  return (
+    <>
+      {providers.map(p => (
+        <a
+          key={p.key}
+          href={`${import.meta.env.VITE_API_URL || ''}${p.authorize_path}?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent('/us/dashboard')}${rep}`}
+          className={btnPrimary + ' justify-center w-full'}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Connect with {p.label} (OAuth)
+        </a>
+      ))}
+    </>
   )
 }
