@@ -66,13 +66,19 @@ _REGISTRY: dict[str, ProviderConfig] = {
         ProviderConfig(
             key="lightspeed_xseries",
             label="Lightspeed (X-Series)",
-            authorize_url="https://cloud.lightspeedapp.com/auth/oauth/authorize",
+            # Validated 2026-07-08 against the real "Meridian POS Analytics" app:
+            # secure.retail.lightspeed.app/connect accepted our client_id and
+            # redirected to Lightspeed sign-in preserving the OAuth params. Token
+            # host is per-account (the domain_prefix returned on the callback).
+            authorize_url="https://secure.retail.lightspeed.app/connect",
             token_url="https://{domain_prefix}.retail.lightspeed.app/api/1.0/token",
-            scopes=[],  # X-Series requires an explicit scope from 2026-06-01; set on verification
+            scopes=["sales:read", "products:read"],  # X-Series requires a scope from 2026-06-01
             client_id_env="LIGHTSPEED_CLIENT_ID",
             client_secret_env="LIGHTSPEED_CLIENT_SECRET",
-            merchant_id_strategy="token:domain_prefix",
-            verified=False,
+            # X-Series identifies the account by the domain_prefix on the callback
+            # query, not in the token response.
+            merchant_id_strategy="callback:domain_prefix",
+            verified=True,
             market_note="Self-serve OAuth2. Real US restaurant + retail footprint.",
             docs_url="https://x-series-api.lightspeedhq.com/docs/authorization",
         ),
