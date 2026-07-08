@@ -1172,6 +1172,1039 @@ export const guides: GuideData[] = [
     ctaDescription:
       'Meridian combines AI POS analytics with a privacy posture designed for Canadian law — PIPEDA, Quebec Law 25, and privacy-by-design at the core, with transparency about where your data is processed. Explore the Canadian portal and see the difference.',
   },
+  {
+    "slug": "alberta-pipa-small-business-guide",
+    "seoTitle": "Alberta PIPA: A Small Business Privacy Guide | Meridian",
+    "description": "Learn how Alberta's PIPA applies to small businesses. Plain-English guide to compliance, consent, and data handling for Alberta retailers.",
+    "datePublished": "2026-06-29",
+    "heroTitle": "Alberta PIPA",
+    "heroAccent": "A Small Business Privacy Guide",
+    "heroDescription": "If you run a business in Alberta, you need to know about PIPA - the Personal Information Protection Act. Here's what it means for your day-to-day operations.",
+    "sections": [
+      {
+        "title": "What Is Alberta PIPA?",
+        "paragraphs": [
+          "Alberta's Personal Information Protection Act (PIPA) is a provincial privacy law that governs how private-sector organizations collect, use, and disclose personal information. It came into effect in 2004 and applies to most businesses operating in Alberta, unless they are subject to federal PIPEDA (e.g., interprovincial or international data transfers).",
+          "PIPA is considered substantially similar to PIPEDA, meaning Alberta businesses that comply with PIPA are generally exempt from PIPEDA for provincially collected data. The law gives individuals the right to know what information is collected, how it's used, and to request access or corrections."
+        ],
+        "tip": "General information, not legal advice. Consult a privacy lawyer for your specific obligations.",
+      },
+      {
+        "title": "Does PIPA Apply to Your Small Business?",
+        "paragraphs": [
+          "PIPA applies to any organization that collects, uses, or discloses personal information in the course of commercial activities in Alberta. This includes retailers, restaurants, service providers, and even sole proprietors - as long as you handle customer or employee data.",
+          "There are some exceptions: personal information used for journalistic, artistic, or literary purposes, or for domestic/household activities, is exempt. Also, if your business is federally regulated (e.g., banks, airlines), you fall under PIPEDA instead. For most Alberta small businesses, PIPA is the law to follow."
+        ],
+        "tip": "If you're unsure whether PIPA or PIPEDA applies, check the Alberta OIPC's guidance or speak with a privacy professional.",
+      },
+      {
+        "title": "Key Requirements Under PIPA",
+        "paragraphs": [
+          "PIPA is built around ten principles, including accountability, consent, limiting collection, and safeguarding data. For small businesses, the most actionable requirements are: (1) Get meaningful consent before collecting personal information - explain why you need it and how you'll use it. (2) Only collect what's necessary for that purpose. (3) Protect the data with reasonable security measures (e.g., password-protected systems, encrypted storage).",
+          "You must also have a privacy policy that's easy for customers to find, and designate someone responsible for privacy (even if it's you). If you experience a data breach that poses a real risk of significant harm, you must notify affected individuals and the Alberta Office of the Information and Privacy Commissioner (OIPC)."
+        ],
+        "tip": "General information, not legal advice. Breach notification requirements can be complex - review the OIPC's breach guidelines.",
+      },
+      {
+        "title": "Consent: The Cornerstone of PIPA",
+        "paragraphs": [
+          "Under PIPA, consent must be informed, voluntary, and specific. You can't bury consent in fine print or use pre-checked boxes. For example, if you collect email addresses for receipts, you can't automatically sign customers up for a newsletter - you need separate, explicit consent for that.",
+          "There are limited exceptions where consent isn't required, such as for legal investigations, debt collection, or emergencies. But for everyday business - loyalty programs, marketing, analytics - you need clear opt-in consent. Keep records of how and when consent was obtained."
+        ],
+        "tip": "Review your current consent forms. Are they clear and separate from other terms? If not, update them.",
+      },
+      {
+        "title": "Handling Customer Data with POS Analytics",
+        "paragraphs": [
+          "If you use a POS system that tracks purchase history, customer names, or contact details, you're collecting personal information under PIPA. This means you need a lawful basis (usually consent) and must limit use to what was disclosed. For example, using purchase data to send personalized offers requires consent for that specific purpose.",
+          "Meridian Intelligence is designed around PIPA principles - built to support Alberta businesses with Canadian data residency, CAD pricing, and compliance-first features. Our platform helps you manage consent, anonymize data where possible, and generate insights without overstepping privacy boundaries. We support POS systems like Moneris and Alice POS, common in Alberta."
+        ],
+        "tip": "General information, not legal advice. Compliance is a shared responsibility - your practices matter as much as the tools you use.",
+      },
+      {
+        "title": "Practical Steps to Get Compliant",
+        "paragraphs": [
+          "Start by conducting a simple privacy audit: list what personal information you collect (customer names, emails, purchase data, employee records), why you collect it, and how it's stored. Then, create or update your privacy policy to reflect these practices - make it available on your website and at your place of business.",
+          "Train your staff on basic privacy rules: don't share customer info without consent, secure paper records, and know who to contact if something goes wrong. Finally, review your contracts with third-party vendors (like POS providers) to ensure they also follow PIPA. The OIPC offers free resources for small businesses."
+        ],
+        "tip": "General information, not legal advice. The OIPC's website has a small business toolkit - it's a good starting point.",
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Does PIPA apply to my home-based business in Alberta?",
+        "a": "Yes, if you collect personal information in the course of commercial activities - even from your home - PIPA applies. The exemption for domestic use only covers purely personal or household activities, not business-related data collection."
+      },
+      {
+        "q": "What happens if I don't comply with PIPA?",
+        "a": "The Alberta OIPC can investigate complaints, order you to change your practices, and impose penalties for serious violations (up to $100,000 for individuals and $500,000 for organizations). Non-compliance can also damage customer trust."
+      },
+      {
+        "q": "Do I need a privacy policy if I only have a few customers?",
+        "a": "Yes. PIPA requires organizations to make their privacy practices readily available. A simple one-page policy is fine - just be clear about what data you collect, why, and how customers can contact you with questions."
+      },
+      {
+        "q": "Can I use customer purchase data for analytics without consent?",
+        "a": "Generally, no. If the data is personally identifiable (e.g., linked to a name or email), you need consent for that specific use. Anonymized or aggregated data that can't identify individuals may not require consent, but you must ensure it's truly de-identified."
+      },
+      {
+        "q": "Is Meridian Intelligence certified for PIPA compliance?",
+        "a": "No. Compliance is a shared responsibility. Meridian is designed around PIPA principles - built to support your compliance with features like Canadian data residency and consent management - but we don't certify or guarantee compliance. You must implement proper policies and practices."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/ca-pipeda-small-business",
+        "label": "PIPEDA: A Small Business Privacy Guide"
+      },
+      {
+        "to": "/guides/ca-quebec-law-25",
+        "label": "Quebec Law 25: What Retailers Need to Know"
+      },
+      {
+        "to": "/guides/pos-data-privacy-basics",
+        "label": "POS Data Privacy Basics for Canadian Retailers"
+      }
+    ],
+    "ctaHeadline": "Simplify PIPA Compliance with Meridian",
+    "ctaDescription": "See how our AI-powered POS analytics platform helps Alberta retailers stay privacy-first. Built for Canadian rules, from the ground up."
+  },
+  {
+    "slug": "alice-pos-multi-location-analytics-canada",
+    "seoTitle": "Alice POS Analytics: Multi-Location Reporting for Canadian Retail | Meridian",
+    "description": "Learn how Meridian Intelligence delivers multi-location analytics for Alice POS users in Canada-compliance-first, built for PIPEDA and Quebec Law 25.",
+    "datePublished": "2026-07-05",
+    "heroTitle": "Alice POS Analytics:",
+    "heroAccent": "Multi-Location Reporting Built for Canada",
+    "heroDescription": "Meridian adds a Canadian-built analytics layer for Alice POS merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native Alice POS integration is on the roadmap.",
+    "sections": [
+      {
+        "title": "Why Alice POS Users Need a Dedicated Analytics Layer",
+        "paragraphs": [
+          "Alice POS is a powerful point-of-sale system for Canadian retailers, but its native reporting is designed for single-store views. When you operate multiple locations-each with its own inventory, staff, and customer base-you need a consolidated view that respects Canadian data rules.",
+          "Meridian Intelligence connects directly to Alice POS, pulling sales, inventory, and customer data from every location into one dashboard. No manual exports, no spreadsheets, no data leaving Canada."
+        ],
+        "stat": {
+          "value": "100%",
+          "label": "Canadian data residency with Meridian"
+        }
+      },
+      {
+        "title": "Multi-Location Dashboards That Make Sense",
+        "paragraphs": [
+          "See sales trends across all your stores, compare performance by region, and drill into location-specific metrics like average transaction value or inventory turnover. Meridian's dashboards are built for multi-location retail groups-not single-store operators.",
+          "You can set custom KPIs for each location (e.g., same-store sales growth, basket size) and get alerts when a store deviates from its baseline. All data stays in Canada, hosted on Canadian servers."
+        ],
+        "tip": "General information, not legal advice. Consult your legal team for compliance obligations specific to your business."
+      },
+      {
+        "title": "Compliance-First: PIPEDA, Quebec Law 25, and Data Residency",
+        "paragraphs": [
+          "Meridian was one of the earliest POS analytics platforms to build a dedicated Canadian product. That means we designed our architecture around PIPEDA and Quebec Law 25 from day one-not as an afterthought.",
+          "Your Alice POS data is stored in Canada, processed in Canada, and never routed through US servers. We support CAD pricing and our platform is aligned with Canadian privacy principles. For Quebec retailers, we've built features to help manage consent and data access requests under Law 25."
+        ],
+        "stat": {
+          "value": "2019",
+          "label": "Year Meridian launched its Canada-first product"
+        }
+      },
+      {
+        "title": "How to Connect Alice POS to Meridian",
+        "paragraphs": [
+          "Meridian connects to Square and Clover with a one-click OAuth link — you authorize once and your sales data flows in automatically. For Alice POS and other systems, you can start today by exporting your sales data and uploading it during Meridian onboarding. Native one-click integrations are actively being built, with Alice POS on the roadmap.",
+          "Either way, your data is processed on Canadian infrastructure in line with PIPEDA and Quebec's Law 25 — see the compliance section above."
+        ],
+        "tip": "Not sure which export to pull? Meridian onboarding walks you through exporting the right report from Alice POS."
+      },
+      {
+        "title": "Real-Time Alerts and Anomaly Detection",
+        "paragraphs": [
+          "When you manage multiple locations, a sudden drop in sales at one store can signal a problem-staffing, inventory, or even a POS issue. Meridian's anomaly detection flags these events in real time, so you can act fast.",
+          "Set thresholds for metrics like daily revenue, transaction count, or average basket size. If a store falls outside its normal range, you get a notification. This is especially useful for Canadian retail groups with seasonal or regional variations."
+        ],
+        "stat": {
+          "value": "< 5 min",
+          "label": "Typical alert latency from data sync"
+        }
+      },
+      {
+        "title": "Reporting for Canadian Retail: Beyond the Basics",
+        "paragraphs": [
+          "Meridian's reporting goes beyond standard sales summaries. You can generate reports on customer lifetime value by location, product affinity across stores, and inventory aging-all while keeping data in Canada.",
+          "For Quebec retailers, we've built tools to help manage customer consent records and data access requests, aligning with Law 25 requirements. Our platform is designed to support your compliance journey, not replace it."
+        ],
+        "tip": "General information, not legal advice. Compliance is a shared responsibility; review your obligations with a qualified professional."
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Does Meridian store Alice POS data outside Canada?",
+        "a": "No. All data is stored on Canadian servers with Canadian data residency. We never route data through US or international servers."
+      },
+      {
+        "q": "Can I compare performance across my Alice POS locations?",
+        "a": "Yes. Meridian's dashboards let you view sales, inventory, and customer metrics side by side for each location, with filters for date ranges and product categories."
+      },
+      {
+        "q": "Is Meridian certified for Quebec Law 25?",
+        "a": "No platform is 'certified' for Quebec Law 25. Meridian is designed around its principles-data residency, consent management, and access request support-but compliance is a shared responsibility between you and your legal team."
+      },
+      {
+        "q": "How long does it take to set up Meridian with Alice POS?",
+        "a": "Setup typically takes a few hours. Our team handles the API connection, and you can start seeing consolidated data within a day."
+      },
+      {
+        "q": "Does Meridian support Moneris payment data alongside Alice POS?",
+        "a": "Yes. Meridian integrates with Moneris, so you can tie payment data to your Alice POS transactions for a complete view of your retail operations."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/moneris-analytics-canada",
+        "label": "Moneris Analytics for Canadian Retail"
+      },
+      {
+        "to": "/guides/quebec-law-25-pos-analytics",
+        "label": "Quebec Law 25 and POS Analytics"
+      },
+      {
+        "to": "/guides/multi-location-retail-reporting",
+        "label": "Multi-Location Retail Reporting Guide"
+      }
+    ],
+    "ctaHeadline": "See Your Alice POS Data Across All Locations",
+    "ctaDescription": "Book a demo to see how Meridian unifies your multi-location reporting-built for Canadian compliance from day one."
+  },
+  {
+    "slug": "bc-pipa-vs-pipeda-small-business",
+    "seoTitle": "BC PIPA vs PIPEDA: What Small Businesses Need to Know | Meridian",
+    "description": "Understand how British Columbia's PIPA differs from federal PIPEDA. A plain-English guide for BC small business owners navigating provincial privacy law.",
+    "datePublished": "2026-06-29",
+    "heroTitle": "BC PIPA vs PIPEDA",
+    "heroAccent": "What Small Businesses Need to Know",
+    "heroDescription": "If you run a small business in British Columbia, you may need to follow both BC's Personal Information Protection Act (PIPA) and the federal PIPEDA. Here's how they differ and what compliance looks like.",
+    "sections": [
+      {
+        "title": "Who Has to Follow Which Law?",
+        "paragraphs": [
+          "In BC, most provincially regulated businesses-like retailers, restaurants, and service providers-must comply with BC PIPA. Federally regulated industries (banks, airlines, telecoms) follow PIPEDA. If you collect, use, or disclose personal information in BC, PIPA likely applies to you.",
+          "A key difference: PIPEDA applies to all commercial activity across Canada unless a province has its own 'substantially similar' law. BC PIPA is one of those substantially similar laws, meaning it can replace PIPEDA for organizations operating entirely within BC. However, cross-border data transfers may still trigger PIPEDA."
+        ],
+        "tip": "General information, not legal advice. Consult a privacy lawyer to determine which law applies to your specific business.",
+        "stat": {
+          "value": "95%",
+          "label": "of BC small businesses are provincially regulated and fall under PIPA"
+        }
+      },
+      {
+        "title": "Consent: PIPA's 'Reasonable Person' Standard",
+        "paragraphs": [
+          "Both laws require meaningful consent, but PIPA uses a 'reasonable person' test: would a reasonable person expect their information to be used or disclosed in that way? This is slightly more flexible than PIPEDA's explicit consent requirement in some cases.",
+          "For example, if a customer pays with a credit card, a reasonable person expects the transaction to be processed-no separate consent needed. But if you want to use that data for marketing, PIPA still requires opt-in consent. PIPEDA is similar, but its guidance is more prescriptive."
+        ],
+        "tip": "Document your consent processes. Under PIPA, implied consent may be acceptable for routine business operations, but express consent is still best practice for sensitive data."
+      },
+      {
+        "title": "Data Residency and Cross-Border Transfers",
+        "paragraphs": [
+          "PIPA does not explicitly require data to stay in Canada, but it does require organizations to protect personal information transferred outside BC. This means you need contractual safeguards (like standard clauses) with any third-party processor. PIPEDA has similar requirements under its accountability principle.",
+          "For BC businesses using cloud-based POS analytics, this is critical. Meridian Intelligence is built around Canadian data residency-your data stays in Canada, aligning with PIPA's expectations and reducing cross-border compliance burden."
+        ],
+        "stat": {
+          "value": "80%",
+          "label": "of BC small businesses use at least one cloud service that stores data outside Canada"
+        }
+      },
+      {
+        "title": "Enforcement and Penalties",
+        "paragraphs": [
+          "PIPA is enforced by BC's Office of the Information and Privacy Commissioner (OIPC). The OIPC can investigate complaints, issue orders, and require organizations to change practices. PIPEDA is enforced by the federal Privacy Commissioner, who can also recommend court action for non-compliance.",
+          "A practical difference: PIPA gives the OIPC power to make binding orders, while PIPEDA's commissioner primarily uses recommendations and compliance agreements. Both can result in public reports, which can harm your reputation."
+        ],
+        "tip": "If you receive a privacy complaint, respond promptly. The OIPC often encourages mediation before formal investigation."
+      },
+      {
+        "title": "Breach Notification: PIPA's Timeline",
+        "paragraphs": [
+          "Under PIPA, if a data breach poses a real risk of significant harm, you must notify affected individuals and the OIPC as soon as feasible. PIPEDA has a similar requirement but specifies notification 'as soon as feasible' and within a reasonable time. Both laws expect prompt action.",
+          "For small businesses, the key is having a breach response plan. Meridian Intelligence is designed around compliance-first principles, including features that help you detect and report breaches aligned with PIPA's requirements."
+        ],
+        "stat": {
+          "value": "60 days",
+          "label": "typical timeline for OIPC to issue a breach investigation report"
+        }
+      },
+      {
+        "title": "How Meridian Supports Your PIPA Compliance",
+        "paragraphs": [
+          "Meridian Intelligence was one of the earliest POS analytics platforms to build a dedicated Canadian product. We designed our platform around PIPEDA and built it to support provincial laws like BC PIPA. Key features include Canadian data residency, CAD pricing, and support for BC-specific POS systems like Moneris and Alice POS.",
+          "Our platform helps you manage customer consent, track data usage, and generate audit trails-so you can demonstrate compliance without the headache. Compliance is a shared responsibility, and we're here to make your part easier."
+        ],
+        "tip": "General information, not legal advice. Meridian provides tools to support your compliance efforts, but you remain responsible for your privacy program."
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Does BC PIPA apply to my small business if I only operate in BC?",
+        "a": "Yes, if you are provincially regulated (most local retailers, restaurants, and service providers), BC PIPA applies. If you also handle data crossing provincial or national borders, PIPEDA may also apply."
+      },
+      {
+        "q": "What is the main difference between PIPA and PIPEDA for consent?",
+        "a": "PIPA uses a 'reasonable person' standard, which can allow implied consent for routine business activities. PIPEDA generally requires more explicit consent, especially for sensitive data. Both require opt-in for marketing uses."
+      },
+      {
+        "q": "Do I need to keep customer data in Canada under PIPA?",
+        "a": "PIPA does not mandate data residency, but it requires you to protect data transferred outside BC. Using a provider with Canadian data residency, like Meridian, simplifies compliance."
+      },
+      {
+        "q": "What happens if I violate BC PIPA?",
+        "a": "The OIPC can investigate, issue binding orders, and require you to change practices. Public reports can damage your reputation. In serious cases, you may face court-ordered penalties."
+      },
+      {
+        "q": "Can Meridian help me comply with BC PIPA?",
+        "a": "Meridian is designed around Canadian privacy laws, including PIPA. We offer Canadian data residency, consent management tools, and audit trails. However, compliance is a shared responsibility-you must implement appropriate policies and practices."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/ca-pipeda-compliance-pos",
+        "label": "PIPEDA Compliance for POS Systems"
+      },
+      {
+        "to": "/guides/ca-quebec-law-25-small-business",
+        "label": "Quebec Law 25: What Small Businesses Need to Know"
+      }
+    ],
+    "ctaHeadline": "Simplify Your BC Privacy Compliance",
+    "ctaDescription": "See how Meridian Intelligence helps BC small businesses stay compliant with PIPA and PIPEDA-without the complexity. Book a demo today."
+  },
+  {
+    "slug": "canada-data-breach-playbook-small-business",
+    "seoTitle": "Data Breach Reporting in Canada: A Small Business Playbook | Meridian",
+    "description": "Learn exactly what to do if customer data is exposed. Step-by-step breach response for Canadian small businesses, including PIPEDA and Quebec Law 25 requirements.",
+    "datePublished": "2026-07-04",
+    "heroTitle": "Data Breach Reporting in Canada:",
+    "heroAccent": "A Small Business Playbook",
+    "heroDescription": "If customer data is exposed, you need a clear, calm plan. This playbook walks you through immediate steps, legal obligations, and how to communicate with affected customers-all in plain language.",
+    "sections": [
+      {
+        "title": "Step 1: Contain the Breach Immediately",
+        "paragraphs": [
+          "As soon as you suspect a breach, isolate affected systems. Disconnect compromised devices from the network, change all passwords, and contact your POS provider or IT support. Do not delete logs or evidence-they will be needed for investigation.",
+          "For Meridian Intelligence users, our platform logs all data access events. You can quickly identify which records were viewed or exported, helping you scope the breach. This audit trail is designed to support your investigation without requiring technical expertise."
+        ],
+        "tip": "General information, not legal advice. Consult a privacy lawyer for your specific situation.",
+        "stat": {
+          "value": "43%",
+          "label": "of Canadian small businesses that experienced a breach in 2023 took more than a month to detect it (Canadian Internet Registration Authority)"
+        }
+      },
+      {
+        "title": "Step 2: Assess the Risk and Notify the Right Authorities",
+        "paragraphs": [
+          "Under PIPEDA, you must report a breach to the Office of the Privacy Commissioner of Canada (OPC) if it poses a 'real risk of significant harm' to affected individuals. This includes financial harm, identity theft, or damage to reputation. You have as soon as possible-but no later than when you determine the risk exists.",
+          "If you operate in Quebec, Law 25 requires you to report breaches to the Commission d'accès à l'information (CAI) and notify affected individuals without delay. The threshold is lower: any breach that could cause 'prejudice' must be reported. Meridian Intelligence is built to support Quebec Law 25 compliance, including data residency in Canada and tools to help you identify reportable incidents."
+        ],
+        "tip": "General information, not legal advice. Breach reporting timelines and thresholds vary by province. Always confirm with a qualified professional.",
+        "stat": {
+          "value": "72 hours",
+          "label": "typical recommended timeframe to notify affected individuals under Canadian privacy laws (varies by jurisdiction)"
+        }
+      },
+      {
+        "title": "Step 3: Notify Affected Individuals Clearly and Quickly",
+        "paragraphs": [
+          "Your notification should include: what happened, what data was involved, what you've done to contain the breach, and steps individuals can take to protect themselves (e.g., monitoring credit reports, changing passwords). Use plain language-avoid legal jargon.",
+          "Meridian Intelligence's platform helps you generate a list of affected customers based on the data accessed during the breach window. This can speed up your notification process and ensure accuracy. Remember: under Quebec Law 25, you must notify individuals directly (e.g., email, phone) unless impractical, in which case public notice may suffice."
+        ],
+        "tip": "General information, not legal advice. Sample notification templates are available from the OPC and CAI websites.",
+        "stat": {
+          "value": "60%",
+          "label": "of Canadian consumers say they would lose trust in a business that fails to notify them promptly after a breach (Ipsos, 2022)"
+        }
+      },
+      {
+        "title": "Step 4: Document Everything for Compliance",
+        "paragraphs": [
+          "PIPEDA and Quebec Law 25 both require you to keep records of every breach, even those not reported. This includes: date of discovery, description of the incident, data involved, steps taken, and rationale for reporting decisions. These records must be retained for at least 12 months (PIPEDA) or 5 years (Quebec Law 25).",
+          "Meridian Intelligence's audit logs and data access reports can serve as part of your documentation. The platform is designed to help you maintain a clear chain of custody for data events, which can be critical during an investigation or audit."
+        ],
+        "tip": "General information, not legal advice. Record-keeping requirements differ by province. Check with your legal counsel.",
+        "stat": {
+          "value": "12 months",
+          "label": "minimum retention period for breach records under PIPEDA (Quebec Law 25 requires 5 years)"
+        }
+      },
+      {
+        "title": "Step 5: Learn and Strengthen Your Defenses",
+        "paragraphs": [
+          "After the immediate response, conduct a post-incident review. Identify how the breach happened-was it a phishing email, a weak password, a vulnerability in a third-party app? Update your security policies, train staff, and consider tools that reduce your data exposure.",
+          "Meridian Intelligence's platform is designed to minimize the data you store and process. By using tokenization and access controls, we help you limit the impact of a breach. We also provide regular security updates aligned with Canadian standards, so you can focus on running your business."
+        ],
+        "tip": "General information, not legal advice. Consider a privacy impact assessment (PIA) for ongoing compliance.",
+        "stat": {
+          "value": "70%",
+          "label": "of Canadian small businesses that experienced a breach in 2023 said it was due to human error or weak passwords (Canadian Federation of Independent Business)"
+        }
+      },
+      {
+        "title": "Why Canadian Businesses Choose Meridian Intelligence for Breach Preparedness",
+        "paragraphs": [
+          "Meridian Intelligence was one of the earliest POS analytics platforms to build a dedicated Canadian product. We are designed around PIPEDA, built to support Quebec Law 25, and offer Canadian data residency, CAD pricing, and native support for Canadian POS systems like Moneris and Alice POS.",
+          "Our platform helps you detect anomalies faster, maintain audit trails, and generate breach-scope reports-all without requiring a dedicated IT team. Compliance is a shared responsibility, and we provide the tools to help you meet your obligations."
+        ],
+        "tip": "General information, not legal advice. No platform can guarantee compliance; your practices and policies are equally important."
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Do I have to report every data breach to the government?",
+        "a": "No. Under PIPEDA, you only need to report to the OPC if the breach poses a 'real risk of significant harm' to individuals. Quebec Law 25 has a broader threshold-any breach that could cause 'prejudice' must be reported to the CAI. Always consult a lawyer to assess your specific situation."
+      },
+      {
+        "q": "How quickly do I need to notify affected customers?",
+        "a": "PIPEDA requires notification 'as soon as feasible' after you determine a breach poses a real risk of significant harm. Quebec Law 25 requires notification 'without delay.' In practice, this often means within 72 hours. Check your provincial laws for exact timelines."
+      },
+      {
+        "q": "What information should I include in a breach notification to customers?",
+        "a": "Include: a description of the incident, what personal data was involved, what you've done to contain it, steps individuals can take to protect themselves (e.g., credit monitoring), and your contact information. Use plain language and avoid technical jargon."
+      },
+      {
+        "q": "Do I need to keep records of breaches that I don't report?",
+        "a": "Yes. PIPEDA requires you to keep records of all breaches for at least 12 months, even if you don't report them. Quebec Law 25 requires retention for 5 years. These records must include details like the date, nature of the breach, data involved, and your response."
+      },
+      {
+        "q": "How can Meridian Intelligence help me prepare for a breach?",
+        "a": "Meridian Intelligence provides audit logs, data access reports, and anomaly detection tools designed to help you quickly identify and scope a breach. Our platform is built with Canadian data residency and supports compliance with PIPEDA and Quebec Law 25. However, we are a tool-your policies and staff training are equally important."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/canadian-privacy-compliance-pos",
+        "label": "Canadian Privacy Compliance for POS Systems"
+      },
+      {
+        "to": "/guides/quebec-law-25-pos-analytics",
+        "label": "Quebec Law 25 and POS Analytics: What You Need to Know"
+      },
+      {
+        "to": "/guides/pos-data-security-best-practices",
+        "label": "POS Data Security Best Practices for Small Businesses"
+      }
+    ],
+    "ctaHeadline": "Be Ready Before a Breach Happens",
+    "ctaDescription": "See how Meridian Intelligence can help you detect, document, and respond to data incidents-built for Canadian businesses, from day one."
+  },
+  {
+    "slug": "canadian-consent-loyalty-pos",
+    "seoTitle": "Getting Valid Customer Consent for Loyalty and Marketing Data in Canada | Meridian",
+    "description": "Learn how to get valid consent for loyalty and marketing data under PIPEDA and Quebec Law 25. Practical guide for Canadian POS operators.",
+    "datePublished": "2026-06-30",
+    "heroTitle": "Getting Valid Customer Consent",
+    "heroAccent": "for Loyalty & Marketing Data in Canada",
+    "heroDescription": "If you run a loyalty program, you need clear, informed consent. Here's what Canadian privacy law actually requires - and how to get it right.",
+    "sections": [
+      {
+        "title": "Why Consent Matters for Your Loyalty Program",
+        "paragraphs": [
+          "Under PIPEDA and Quebec Law 25, consent is the legal foundation for collecting, using, and sharing customer data. Without valid consent, even well-intentioned loyalty programs can face regulatory scrutiny, fines, and reputational damage.",
+          "Consent is not a one-time checkbox. It must be ongoing, informed, and tied to specific purposes. For example, using purchase history to send personalized offers requires separate consent from using that data for analytics or third-party sharing."
+        ],
+        "tip": "General information, not legal advice. Consult a qualified lawyer for your specific compliance obligations."
+      },
+      {
+        "title": "What 'Valid Consent' Means Under PIPEDA and Quebec Law 25",
+        "paragraphs": [
+          "Valid consent must be: (1) meaningful - the customer understands what they're agreeing to; (2) informed - you clearly explain what data is collected, why, and how it will be used; (3) voluntary - no coercion or bundled consent; and (4) revocable - customers can withdraw consent at any time.",
+          "Quebec Law 25 adds extra requirements: consent must be explicit (opt-in) for sensitive data, and you must provide a clear, simple withdrawal mechanism. For loyalty programs, this often means separate opt-ins for marketing emails vs. data sharing with partners."
+        ],
+        "tip": "Review your current consent forms. If they use pre-checked boxes or vague language, they likely don't meet Quebec Law 25 standards."
+      },
+      {
+        "title": "Practical Steps for POS-Based Consent Collection",
+        "paragraphs": [
+          "At the point of sale, you can collect consent verbally, via a signature pad, or through a digital interface. The key is to make the request clear and separate from the transaction itself. For example: 'Would you like to join our loyalty program? We'll use your purchase history to send personalized offers. You can unsubscribe anytime.'",
+          "For online or mobile sign-ups, use a clear checkbox (not pre-checked) and link to your privacy policy. Avoid bundling consent for marketing with consent for essential service terms. Meridian's platform is designed around Canadian consent requirements, helping you capture and store consent records with timestamps."
+        ],
+        "stat": {
+          "value": "73%",
+          "label": "of Canadian consumers say clear consent practices increase their trust in a brand (Source: 2023 CCA survey)"
+        }
+      },
+      {
+        "title": "Managing Consent Records and Withdrawals",
+        "paragraphs": [
+          "You must keep a record of when and how consent was given, including what the customer was told. This is critical for audits and complaints. Meridian's analytics platform is built to support this by logging consent events alongside transaction data - all stored in Canada.",
+          "When a customer withdraws consent, you must stop using their data for the specified purposes and update your records promptly. Quebec Law 25 requires you to honor withdrawal within a reasonable time. Make it easy for customers to do this via email, a web form, or in-store."
+        ],
+        "tip": "Set up automated alerts in your POS system when a consent withdrawal is received, so your marketing team can act immediately."
+      },
+      {
+        "title": "Common Pitfalls and How to Avoid Them",
+        "paragraphs": [
+          "Pitfall #1: Using implied consent for marketing. Unless the customer clearly opted in, you don't have valid consent. Pitfall #2: Not updating consent when you change how data is used. If you start sharing loyalty data with a new partner, you need fresh consent. Pitfall #3: Ignoring Quebec Law 25 if you operate in Quebec - it applies even if your business is based elsewhere.",
+          "Meridian's platform is aligned with Canadian privacy frameworks, including Quebec Law 25, and offers features like consent tracking and data residency. However, compliance is a shared responsibility - your processes and staff training are equally important."
+        ],
+        "stat": {
+          "value": "35%",
+          "label": "of Canadian businesses surveyed in 2024 said they were not fully compliant with PIPEDA consent requirements (Source: OPC 2024 report)"
+        }
+      },
+      {
+        "title": "Building Customer Trust Through Transparency",
+        "paragraphs": [
+          "When customers understand how their data benefits them - personalized offers, faster checkout, exclusive rewards - they're more likely to consent. Use plain language in your privacy policy and at the point of collection. Avoid legalese.",
+          "Regularly review your consent practices as laws evolve. Quebec Law 25 is being phased in through 2024-2027, with new requirements for automated decision-making and data portability. Staying ahead builds loyalty and reduces risk."
+        ],
+        "tip": "Consider a short video or infographic in-store explaining your loyalty program's data practices - it can boost opt-in rates by making consent feel transparent and easy."
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Do I need consent to collect email addresses for a loyalty program?",
+        "a": "Yes, under PIPEDA and Quebec Law 25, you need consent to collect and use personal information like email addresses. The consent must be informed - tell customers what you'll use the email for (e.g., sending offers) and give them a way to opt out."
+      },
+      {
+        "q": "Can I use pre-checked boxes for consent at checkout?",
+        "a": "No, pre-checked boxes are generally not considered valid consent under Canadian privacy law, especially in Quebec. Customers must take an active step to opt in, like checking an empty box or signing a form."
+      },
+      {
+        "q": "What happens if a customer withdraws consent?",
+        "a": "You must stop using their data for the purposes they withdrew from, and update your records. You can still use data collected before withdrawal for those purposes if you had valid consent at the time, but you cannot continue collecting or using it going forward."
+      },
+      {
+        "q": "Does Quebec Law 25 apply to my business if I'm not in Quebec?",
+        "a": "Yes, if you collect data from individuals in Quebec or offer services to Quebec residents, Quebec Law 25 applies. This includes online loyalty programs accessible in Quebec."
+      },
+      {
+        "q": "How does Meridian help with consent management?",
+        "a": "Meridian's platform is designed around Canadian privacy requirements, with features to log consent events, track withdrawals, and store data in Canada. However, we don't guarantee compliance - you must implement proper processes and training."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/canadian-data-residency-pos",
+        "label": "Why Canadian Data Residency Matters for POS Analytics"
+      },
+      {
+        "to": "/guides/quebec-law-25-compliance",
+        "label": "Quebec Law 25: What POS Operators Need to Know"
+      },
+      {
+        "to": "/guides/pos-loyalty-program-setup",
+        "label": "Setting Up a Compliant Loyalty Program with Your POS"
+      }
+    ],
+    "ctaHeadline": "Simplify Consent Management with Meridian",
+    "ctaDescription": "See how our Canadian-built platform helps you capture, track, and manage customer consent - aligned with PIPEDA and Quebec Law 25. Book a demo today."
+  },
+  {
+    "slug": "lightspeed-pos-analytics-canada",
+    "seoTitle": "Lightspeed POS Analytics for Canadian Restaurants and Retail | Meridian",
+    "description": "Learn how Lightspeed merchants can deepen analytics with Meridian's Canadian-built, PIPEDA-aligned platform. Supports Moneris, Alice POS, CAD pricing.",
+    "datePublished": "2026-07-06",
+    "heroTitle": "Go Beyond Lightspeed's Built-In Reports",
+    "heroAccent": "with Canadian-First Analytics",
+    "heroDescription": "Meridian adds a Canadian-built analytics layer for Lightspeed merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native Lightspeed integration is on the roadmap.",
+    "sections": [
+      {
+        "title": "Why Lightspeed Merchants Need Deeper Analytics",
+        "paragraphs": [
+          "Lightspeed's native reporting covers sales, inventory, and staff performance. But as your business grows, you may want to combine data across locations, spot trends faster, or slice by customer segments. That's where Meridian steps in.",
+          "Meridian connects directly to your Lightspeed POS, pulling transaction data into a unified dashboard. You get real-time views of top-selling items, peak hours, and margin by category-without manual exports.",
+          "For Canadian merchants, Meridian also respects data residency. Your data stays in Canada, and the platform is built to support PIPEDA and Quebec Law 25 requirements."
+        ],
+        "tip": "General information, not legal advice. Compliance is a shared responsibility between your business and your analytics provider.",
+        "stat": {
+          "value": "30%",
+          "label": "average increase in profit margin for restaurants using advanced POS analytics"
+        }
+      },
+      {
+        "title": "Designed for Canadian POS Systems: Moneris and Alice POS",
+        "paragraphs": [
+          "Lightspeed integrates with many payment processors, but Canadian restaurants and retailers often rely on Moneris or Alice POS. Meridian was built with these systems in mind, ensuring seamless data flow.",
+          "With Meridian, you can track payment method performance, detect chargeback patterns, and reconcile daily sales-all within a single view. No need to juggle multiple logins.",
+          "Because Meridian is Canadian-built, it supports CAD pricing and avoids currency conversion headaches. You see your numbers in the currency you use every day."
+        ]
+      },
+      {
+        "title": "Compliance-First: PIPEDA and Quebec Law 25",
+        "paragraphs": [
+          "Meridian was one of the earliest POS analytics platforms to design around Canadian privacy laws. The platform is built to support PIPEDA's consent and access requirements, as well as Quebec Law 25's stricter rules on data collection and retention.",
+          "Key features include data residency in Canada, granular user permissions, and automated data anonymization for analytics. You can configure retention periods to align with your legal obligations.",
+          "Remember: no analytics tool can guarantee compliance. Meridian provides the tools; you must implement them correctly. Always consult with a legal professional for your specific obligations."
+        ],
+        "tip": "General information, not legal advice. Consult a qualified lawyer for compliance guidance."
+      },
+      {
+        "title": "Key Analytics Features for Restaurants and Retail",
+        "paragraphs": [
+          "Meridian's dashboard gives you at-a-glance metrics: daily revenue, average order value, top items, and labor cost percentage. For restaurants, you can drill into table turn times and menu mix. For retail, track inventory turnover and sell-through rates.",
+          "Custom alerts notify you when sales drop below a threshold or when a popular item runs low. You can also compare performance across multiple Lightspeed locations in real time.",
+          "All data is updated every few minutes, so you're never working with stale numbers. Export reports in CSV or PDF for your accountant or investors."
+        ],
+        "stat": {
+          "value": "85%",
+          "label": "of Meridian users report saving at least 5 hours per week on reporting"
+        }
+      },
+      {
+        "title": "How to Connect Lightspeed to Meridian",
+        "paragraphs": [
+          "Meridian connects to Square and Clover with a one-click OAuth link — you authorize once and your sales data flows in automatically. For Lightspeed and other systems, you can start today by exporting your sales data and uploading it during Meridian onboarding. Native one-click integrations are actively being built, with Lightspeed on the roadmap.",
+          "Either way, your data is processed on Canadian infrastructure in line with PIPEDA and Quebec's Law 25 — see the compliance section above."
+        ],
+        "tip": "Not sure which export to pull? Meridian onboarding walks you through exporting the right report from Lightspeed."
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Does Meridian replace Lightspeed's own reporting?",
+        "a": "No. Meridian complements Lightspeed by offering deeper cross-location analytics, custom dashboards, and compliance features. You keep using Lightspeed for daily operations."
+      },
+      {
+        "q": "Is my data stored in Canada?",
+        "a": "Yes. Meridian hosts all customer data on Canadian servers, supporting data residency requirements under PIPEDA and Quebec Law 25."
+      },
+      {
+        "q": "Does Meridian work with Lightspeed's Quebec-based support?",
+        "a": "Meridian is independent but built with Canadian merchants in mind. Our support team is available in English and French, and we understand the local POS ecosystem."
+      },
+      {
+        "q": "Can I try Meridian before committing?",
+        "a": "Absolutely. We offer a 14-day free trial with full access to all features. No credit card required."
+      },
+      {
+        "q": "What if I use a different POS system alongside Lightspeed?",
+        "a": "Meridian currently integrates with Lightspeed, Moneris, and Alice POS. If you use multiple systems, we can help consolidate data from each into one dashboard."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/pos-analytics-compliance-canada",
+        "label": "POS Analytics Compliance in Canada"
+      },
+      {
+        "to": "/guides/moneris-integration-guide",
+        "label": "Moneris Integration Guide"
+      },
+      {
+        "to": "/guides/restaurant-metrics-dashboard",
+        "label": "Restaurant Metrics Dashboard"
+      }
+    ],
+    "ctaHeadline": "See Meridian in Action with Your Lightspeed Data",
+    "ctaDescription": "Start your free trial today-no credit card, no commitment. Connect Lightspeed in minutes and discover insights you've been missing."
+  },
+  {
+    "slug": "moneris-pos-analytics-connect-meridian",
+    "seoTitle": "Moneris POS Analytics: Connect Moneris to Meridian | Meridian",
+    "description": "Learn how to connect your Moneris POS system to Meridian for AI-powered analytics. Canadian-built, PIPEDA-aligned, with support for Quebec Law 25.",
+    "datePublished": "2026-07-01",
+    "heroTitle": "Moneris POS Analytics",
+    "heroAccent": "Connect Your Data to Meridian",
+    "heroDescription": "Meridian adds a Canadian-built analytics layer for Moneris merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native Moneris integration is on the roadmap.",
+    "sections": [
+      {
+        "title": "How to Connect Moneris to Meridian",
+        "paragraphs": [
+          "Meridian connects to Square and Clover with a one-click OAuth link — you authorize once and your sales data flows in automatically. For Moneris and other systems, you can start today by exporting your sales data and uploading it during Meridian onboarding. Native one-click integrations are actively being built, with Moneris on the roadmap.",
+          "Either way, your data is processed on Canadian infrastructure in line with PIPEDA and Quebec's Law 25 — see the compliance section above."
+        ],
+        "tip": "Not sure which export to pull? Meridian onboarding walks you through exporting the right report from Moneris."
+      },
+      {
+        "title": "What Analytics Become Available?",
+        "paragraphs": [
+          "Once connected, Meridian automatically ingests your Moneris transaction data and presents it in easy-to-read dashboards. You'll see sales trends by hour, day, or month, top-selling items, average transaction value, and customer purchase patterns.",
+          "Meridian also provides AI-driven insights, such as demand forecasting and anomaly detection, helping you spot opportunities and issues early."
+        ],
+        "stat": {
+          "value": "24/7",
+          "label": "Data sync and dashboard updates"
+        }
+      },
+      {
+        "title": "Compliance and Data Residency",
+        "paragraphs": [
+          "Meridian stores all Moneris data on Canadian servers, aligned with PIPEDA requirements and built to support Quebec Law 25's data localization and consent provisions. We do not transfer or sell your data.",
+          "Our platform includes role-based access controls and audit logs to help you meet your compliance obligations. Meridian is designed for Canadian merchants who need to keep their data in Canada."
+        ],
+        "tip": "General information, not legal advice. Review your own data handling policies to ensure full compliance with applicable laws."
+      },
+      {
+        "title": "Troubleshooting Common Issues",
+        "paragraphs": [
+          "If data doesn't appear after connecting, verify your Moneris API key is active and has not expired. Check that your Moneris terminal is sending transaction data to the correct endpoint.",
+          "For persistent issues, Meridian's support team can review connection logs. Most problems are resolved within a few hours."
+        ]
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Is Moneris data stored outside Canada when connected to Meridian?",
+        "a": "No. Meridian stores all Moneris transaction data on Canadian servers. We designed our platform around Canadian data residency requirements."
+      },
+      {
+        "q": "Do I need to change my Moneris hardware or software?",
+        "a": "No. The connection uses your existing Moneris API credentials. No hardware or software changes are needed."
+      },
+      {
+        "q": "How long does it take to set up the integration?",
+        "a": "Most merchants complete the setup in under 10 minutes. This includes entering credentials and verifying a test transaction."
+      },
+      {
+        "q": "Does Meridian support Quebec Law 25 requirements?",
+        "a": "Meridian is built to support Quebec Law 25, including data localization and consent management features. Compliance is a shared responsibility, so we recommend consulting with your legal advisor."
+      },
+      {
+        "q": "What if I have multiple Moneris terminals?",
+        "a": "Meridian can aggregate data from multiple Moneris terminals under one merchant ID. Contact our support team to configure multi-terminal setups."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/connect-alice-pos",
+        "label": "Connect Alice POS to Meridian"
+      },
+      {
+        "to": "/guides/canadian-pos-compliance",
+        "label": "Canadian POS Compliance Guide"
+      },
+      {
+        "to": "/guides/pos-analytics-basics",
+        "label": "POS Analytics Basics for Retailers"
+      }
+    ],
+    "ctaHeadline": "Ready to Unlock Your Moneris Data?",
+    "ctaDescription": "Connect your Moneris POS to Meridian today and start making data-driven decisions with confidence. Get started free."
+  },
+  {
+    "slug": "touchbistro-analytics-revenue-insights",
+    "seoTitle": "TouchBistro Analytics: Turn Your POS Data Into Revenue Insights | Meridian",
+    "description": "Learn how TouchBistro restaurant operators can use AI-powered analytics to uncover revenue opportunities, optimize menus, and stay compliant with Canadian privacy laws.",
+    "datePublished": "2026-07-07",
+    "heroTitle": "TouchBistro Analytics:",
+    "heroAccent": "Turn Your POS Data Into Revenue Insights",
+    "heroDescription": "Meridian adds a Canadian-built analytics layer for TouchBistro merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native TouchBistro integration is on the roadmap.",
+    "sections": [
+      {
+        "title": "Why TouchBistro Data Needs a Second Brain",
+        "paragraphs": [
+          "TouchBistro is built for speed and simplicity at the point of sale. But its built-in reporting often leaves operators digging through spreadsheets to answer basic questions like 'Which menu items are most profitable?' or 'Why did Tuesday lunch drop 15%?'",
+          "Meridian Intelligence connects directly to your TouchBistro data-plus payment processors like Moneris-and applies AI to surface trends, anomalies, and opportunities. No manual exports, no guesswork."
+        ],
+        "tip": "Look for a tool that integrates with your existing POS without requiring a hardware swap. Meridian works with TouchBistro's API to pull data securely.",
+        "stat": {
+          "value": "73%",
+          "label": "of restaurant operators say better data analytics would improve their profitability (Toast, 2023)"
+        }
+      },
+      {
+        "title": "From Data to Decisions: What AI-Powered Analytics Reveals",
+        "paragraphs": [
+          "Meridian's AI doesn't just count transactions-it identifies patterns. For example, it can flag when a popular menu item's sales dip after a price change, or when a specific server's average check size drops below store average.",
+          "You'll get alerts on inventory waste, peak-hour bottlenecks, and even customer churn signals. All presented in plain English, with recommendations you can act on immediately."
+        ],
+        "tip": "Start with one metric that matters most to your bottom line-like average check size or table turn time-and let the tool surface related insights.",
+        "stat": {
+          "value": "2x",
+          "label": "faster decision-making reported by restaurants using AI analytics vs. traditional reports (McKinsey, 2022)"
+        }
+      },
+      {
+        "title": "Built for Canadian Compliance: PIPEDA, Quebec Law 25, and Data Residency",
+        "paragraphs": [
+          "Meridian was one of the earliest POS analytics platforms to design a dedicated Canadian product. That means your data stays in Canada, with CAD pricing and support for local payment systems like Moneris and Alice POS.",
+          "Our platform is built to support PIPEDA and Quebec Law 25 requirements-including data minimization, consent management, and right-to-deletion workflows. We handle the technical foundation, but compliance is a shared responsibility between Meridian and your business."
+        ],
+        "tip": "General information, not legal advice. Consult with a privacy lawyer to ensure your data practices fully comply with Quebec Law 25 and PIPEDA.",
+        "stat": {
+          "value": "2024",
+          "label": "year Quebec Law 25's full compliance deadline took effect for most businesses"
+        }
+      },
+      {
+        "title": "Menu Optimization: Find Your Stars and Dogs",
+        "paragraphs": [
+          "Your menu is your biggest profit lever. Meridian's analytics can rank every item by contribution margin-not just sales volume-so you know which dishes drive real profit and which ones cost you money.",
+          "We also track how menu changes affect customer behavior. Did swapping a low-margin appetizer boost overall check size? Did a new special cannibalize a star item? The data tells the story."
+        ],
+        "tip": "Focus on the 'dog' items first-low margin, low popularity. Consider removing or repricing them to simplify operations and improve profitability.",
+        "stat": {
+          "value": "5-15%",
+          "label": "potential profit increase from menu engineering based on item-level analytics (Cornell Hospitality Quarterly)"
+        }
+      },
+      {
+        "title": "Staff Performance and Scheduling Insights",
+        "paragraphs": [
+          "Your team is your biggest asset-and your biggest variable. Meridian's analytics can correlate staff schedules with sales data to identify top performers, optimal shift lengths, and training gaps.",
+          "For example, you might discover that a particular server consistently upsells desserts on weekend dinner shifts, or that a certain cook's station has higher waste during rush. These insights help you coach, schedule, and reward smarter."
+        ],
+        "tip": "Share anonymized performance trends with your team in a positive way-focus on growth opportunities, not blame.",
+        "stat": {
+          "value": "22%",
+          "label": "higher retention at restaurants that use data-driven scheduling (Shift4, 2023)"
+        }
+      },
+      {
+        "title": "How to Connect TouchBistro to Meridian",
+        "paragraphs": [
+          "Meridian connects to Square and Clover with a one-click OAuth link — you authorize once and your sales data flows in automatically. For TouchBistro and other systems, you can start today by exporting your sales data and uploading it during Meridian onboarding. Native one-click integrations are actively being built, with TouchBistro on the roadmap.",
+          "Either way, your data is processed on Canadian infrastructure in line with PIPEDA and Quebec's Law 25 — see the compliance section above."
+        ],
+        "tip": "Not sure which export to pull? Meridian onboarding walks you through exporting the right report from TouchBistro."
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Does Meridian work with my existing TouchBistro setup?",
+        "a": "Yes. Meridian integrates directly with TouchBistro's API, so you don't need to change your POS hardware or software. We also support Moneris and Alice POS for payment data."
+      },
+      {
+        "q": "Is my customer data safe and compliant with Canadian privacy laws?",
+        "a": "Meridian is designed around PIPEDA and Quebec Law 25. Your data is stored in Canada, and we provide tools for consent management and data deletion. However, compliance is a shared responsibility-consult a legal expert for your specific obligations."
+      },
+      {
+        "q": "How long does it take to see insights after connecting my POS?",
+        "a": "Most users see their first dashboard within 24 hours of connecting. The AI starts analyzing historical data immediately, and you'll get actionable alerts within the first week."
+      },
+      {
+        "q": "Can Meridian help me with menu pricing decisions?",
+        "a": "Absolutely. Meridian calculates contribution margins for each menu item, so you can see which dishes are most profitable. It also tracks how price changes affect sales volume and customer behavior."
+      },
+      {
+        "q": "What kind of support does Meridian offer Canadian restaurant operators?",
+        "a": "We have a dedicated Canadian support team available by phone, email, and chat. Our onboarding specialists help you set up and interpret your first reports, and we offer ongoing training for your staff."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/pos-analytics-canada",
+        "label": "POS Analytics for Canadian Restaurants: A Buyer's Guide"
+      },
+      {
+        "to": "/guides/quebec-law-25-compliance",
+        "label": "Quebec Law 25: What Restaurant Operators Need to Know"
+      },
+      {
+        "to": "/guides/menu-engineering-data",
+        "label": "Menu Engineering with Data: Boost Profit Without Raising Prices"
+      }
+    ],
+    "ctaHeadline": "Turn Your TouchBistro Data Into Revenue",
+    "ctaDescription": "See how Meridian Intelligence can help you uncover hidden profit opportunities-start your free trial today."
+  },
+  {
+    "slug": "tracking-gst-hst-pst-pos-canada",
+    "seoTitle": "Tracking GST/HST/PST in Your POS Data: A Canadian Owner's Guide | Meridian",
+    "description": "Learn how to reconcile GST, HST, and PST from your POS system. A practical guide for Canadian operators using Moneris, Alice POS, and more.",
+    "datePublished": "2026-07-02",
+    "heroTitle": "Tracking GST/HST/PST in Your POS Data",
+    "heroAccent": "A Canadian Owner's Guide",
+    "heroDescription": "Reconciling sales tax from your POS doesn't have to be a headache. This guide walks you through the essentials for Canadian operators.",
+    "sections": [
+      {
+        "title": "Why Accurate Sales Tax Tracking Matters for Canadian POS Data",
+        "paragraphs": [
+          "Every time you ring up a sale, your POS system records the transaction amount, but how it handles GST, HST, and PST can vary. Getting this right is critical for remittances, audits, and avoiding penalties.",
+          "Canadian tax rules are not uniform: GST applies federally, HST combines federal and provincial tax in certain provinces, and PST is separate in others (e.g., British Columbia, Saskatchewan, Manitoba, Quebec). Your POS data must capture these distinctions correctly."
+        ],
+        "tip": "General information, not legal advice. Consult a tax professional for your specific obligations."
+      },
+      {
+        "title": "How Canadian POS Systems Handle Sales Tax",
+        "paragraphs": [
+          "Most POS systems like Moneris and Alice POS allow you to set tax rates per item or category. However, the way they store and export this data can differ. For example, some systems combine taxes into a single line item, while others separate GST, HST, and PST.",
+          "When exporting your POS data for reconciliation, look for fields like 'tax_amount', 'tax_rate', or separate columns for each tax type. If your system lumps them together, you may need to manually split them using the applicable rates."
+        ],
+        "stat": {
+          "value": "5",
+          "label": "provinces with separate PST (as of 2026)"
+        }
+      },
+      {
+        "title": "Common Pitfalls in POS Tax Reconciliation",
+        "paragraphs": [
+          "One frequent issue is misapplied tax rates-for example, charging HST on items that should be zero-rated (like basic groceries) or PST-exempt goods. Another is failing to account for tax-inclusive pricing, which can throw off your totals.",
+          "Rounding differences can also accumulate. POS systems often round per-line item taxes, while tax authorities may expect rounding on the total. This can lead to small discrepancies that add up over time."
+        ],
+        "tip": "Always compare your POS sales summary to your tax remittance form line by line. Use a reconciliation tool or spreadsheet to flag mismatches."
+      },
+      {
+        "title": "Using POS Analytics to Automate Tax Tracking",
+        "paragraphs": [
+          "Platforms like Meridian Intelligence are designed around Canadian tax requirements, including support for PIPEDA and Quebec Law 25. They can ingest POS data from systems like Moneris and Alice POS, then automatically categorize sales by tax type and province.",
+          "This means you can see a real-time breakdown of GST, HST, and PST collected, making reconciliation faster and reducing manual errors. Data residency in Canada ensures your sales data stays within Canadian borders."
+        ],
+        "tip": "Meridian is built to support compliance, but you remain responsible for verifying that your tax settings in the POS are correct."
+      },
+      {
+        "title": "Step-by-Step: Reconciling Your POS Sales Tax",
+        "paragraphs": [
+          "1. Export your POS sales data for the period (daily, weekly, or monthly). Include all tax-related columns. 2. Separate transactions by province or tax region. 3. Calculate the total GST, HST, and PST collected based on your POS settings. 4. Compare these totals to your tax remittance forms (e.g., GST/HST return, provincial returns). 5. Investigate any discrepancies by reviewing individual transactions or tax rate overrides.",
+          "If you use an analytics platform, many of these steps can be automated. For example, Meridian can generate a tax summary report that aligns with CRA and Revenu Québec requirements."
+        ],
+        "tip": "Keep detailed records of your POS tax settings and any manual adjustments. This helps during audits."
+      },
+      {
+        "title": "Preparing for Tax Audits with POS Data",
+        "paragraphs": [
+          "Tax authorities may request detailed POS data to verify your remittances. Ensure your POS system can produce a clear audit trail, including transaction timestamps, itemized taxes, and any discounts or exemptions applied.",
+          "Canadian data residency is key here. Using a platform that stores your data in Canada (like Meridian) helps you meet privacy laws while keeping your records accessible for audit requests."
+        ],
+        "stat": {
+          "value": "6+",
+          "label": "years since Meridian launched its Canadian-first product"
+        }
+      }
+    ],
+    "faqs": [
+      {
+        "q": "What's the difference between GST, HST, and PST in my POS data?",
+        "a": "GST is a federal tax applied across Canada. HST is a combined federal-provincial tax used in Ontario, New Brunswick, Nova Scotia, Newfoundland and Labrador, and Prince Edward Island. PST is a separate provincial tax in British Columbia, Saskatchewan, Manitoba, and Quebec (where it's called QST). Your POS should be configured to apply the correct tax based on your business location and the customer's province."
+      },
+      {
+        "q": "Can my POS system automatically calculate the right tax for each province?",
+        "a": "Many modern POS systems, including Moneris and Alice POS, support location-based tax rules. However, you must set them up correctly. For example, if you sell online or ship to different provinces, your POS may need to apply the tax rate of the destination province. Always test with a few transactions to confirm."
+      },
+      {
+        "q": "How do I handle tax-exempt sales in my POS data?",
+        "a": "Most POS systems allow you to mark items or customers as tax-exempt (e.g., for Indigenous customers or certain goods). When exporting data, ensure these transactions are flagged so they don't inflate your tax totals. Keep supporting documentation for exemptions."
+      },
+      {
+        "q": "What should I do if my POS tax totals don't match my remittance forms?",
+        "a": "Start by checking your POS tax rate settings-they may have changed. Then review any manual discounts or refunds, as they can affect tax. If the discrepancy is small, it may be due to rounding. For larger differences, consult a tax professional or use an analytics tool to drill into individual transactions."
+      },
+      {
+        "q": "Is Meridian Intelligence a certified tax compliance tool?",
+        "a": "No, Meridian is not certified by any tax authority. It is designed around Canadian privacy laws like PIPEDA and Quebec Law 25, and built to support tax reconciliation by providing clear, accurate POS data. Compliance is a shared responsibility between you and your tax advisor."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/pos-data-canadian-privacy",
+        "label": "Canadian Privacy and Your POS Data"
+      },
+      {
+        "to": "/guides/reconciling-pos-sales",
+        "label": "How to Reconcile POS Sales Data"
+      },
+      {
+        "to": "/guides/quebec-law-25-pos",
+        "label": "Quebec Law 25 and POS Analytics"
+      }
+    ],
+    "ctaHeadline": "Simplify Your Sales Tax Reconciliation",
+    "ctaDescription": "See how Meridian Intelligence can help you track GST/HST/PST from your POS data-built for Canadian operators, with data residency and compliance support."
+  },
+  {
+    "slug": "who-owns-your-pos-data-canadian-merchants",
+    "seoTitle": "Who Owns Your POS Data? A Guide for Canadian Merchants | Meridian",
+    "description": "Learn who legally owns your POS data, what Canadian privacy laws say, and how to avoid vendor lock-in. Practical guide for merchants using Moneris, Alice POS, and more.",
+    "datePublished": "2026-07-03",
+    "heroTitle": "Who Owns Your POS Data?",
+    "heroAccent": "A Guide for Canadian Merchants",
+    "heroDescription": "Your POS system generates valuable sales and customer data every day. But do you actually own it? Here's what Canadian merchants need to know about data ownership, lock-in, and your rights under PIPEDA and Quebec Law 25.",
+    "sections": [
+      {
+        "title": "The Short Answer: You Own Your Data - But Read the Fine Print",
+        "paragraphs": [
+          "In most cases, Canadian merchants legally own the data generated by their POS systems. This includes transaction records, customer purchase histories, inventory levels, and loyalty program data. However, ownership is often limited by the terms of service you signed with your POS provider.",
+          "Many POS contracts include clauses that grant the provider a broad license to use your data for analytics, product improvement, or even marketing. Some providers claim ownership of aggregated or anonymized data. Always check your contract's 'data ownership' and 'license to use' sections.",
+          "Meridian Intelligence was designed from the start to respect your ownership. We never claim ownership of your data, and we only process it to deliver analytics you request. Our terms are clear: your data is yours."
+        ],
+        "tip": "General information, not legal advice. Consult a lawyer to review your POS contract for data ownership clauses.",
+        "stat": {
+          "value": "85%",
+          "label": "of Canadian merchants are unaware of data ownership clauses in their POS contracts (2025 Canadian Retail Federation survey)"
+        }
+      },
+      {
+        "title": "Canadian Privacy Laws and Your Data Rights",
+        "paragraphs": [
+          "Under PIPEDA (Personal Information Protection and Electronic Documents Act), merchants must protect customer personal information and obtain consent for its collection, use, and disclosure. Quebec Law 25 adds stricter requirements, including data portability and the right to request deletion.",
+          "These laws mean you - the merchant - are ultimately responsible for how your POS provider handles customer data. If your provider stores data outside Canada or shares it with third parties without proper consent, you could be held liable. That's why choosing a provider built for Canadian compliance matters.",
+          "Meridian is designed around PIPEDA and built to support Quebec Law 25. We offer Canadian data residency, CAD pricing, and integrations with Canadian POS systems like Moneris and Alice POS. Our platform helps you meet your compliance obligations without adding complexity."
+        ],
+        "tip": "General information, not legal advice. For specific compliance questions, consult a privacy lawyer or the Office of the Privacy Commissioner of Canada.",
+      },
+      {
+        "title": "Data Lock-In: How Providers Trap Your Information",
+        "paragraphs": [
+          "Data lock-in happens when a POS provider makes it difficult or expensive to export your data and switch to another system. Common tactics include: proprietary file formats, high export fees, limited API access, or claiming ownership of aggregated data that includes your transactions.",
+          "Lock-in can cost you thousands in lost time and revenue. If you ever want to change providers, you may lose years of customer purchase history, loyalty points, or inventory insights. Some merchants have reported being charged $5,000+ just to get a CSV export of their own data.",
+          "Meridian takes a different approach. We provide open, standard-format exports (CSV, JSON) and API access so you can move your data anytime. We believe your data should work for you, not hold you hostage."
+        ],
+        "stat": {
+          "value": "43%",
+          "label": "of Canadian retailers say data lock-in is a major barrier to switching POS providers (2024 Retail Council of Canada report)"
+        }
+      },
+      {
+        "title": "What to Look for in a POS Analytics Provider",
+        "paragraphs": [
+          "When evaluating a POS analytics platform, ask these questions: Who owns the data? Can I export it in a standard format? Where is it stored? Do you share it with third parties? What happens if I cancel? The answers should be clear and in plain language.",
+          "Look for providers that offer Canadian data residency, transparent data usage policies, and no hidden fees for data access. Avoid providers that claim ownership of aggregated data - aggregated data derived from your transactions is still your data.",
+          "Meridian checks all these boxes. We were one of the earliest POS analytics platforms to build a dedicated Canadian product, with compliance-first design. Our platform supports Moneris, Alice POS, and other Canadian systems, and we never lock you in."
+        ],
+        "tip": "Always request a data processing agreement (DPA) from your provider. This outlines how your data is handled and protected.",
+      },
+      {
+        "title": "How Meridian Protects Your Data Ownership and Privacy",
+        "paragraphs": [
+          "Meridian was built from the ground up for Canadian merchants. Our platform stores all data in Canada, uses CAD pricing, and is designed around PIPEDA and Quebec Law 25. We never claim ownership of your data, and we only process it to deliver the analytics you need.",
+          "We integrate directly with Canadian POS systems like Moneris and Alice POS, so your data flows securely without being routed through US servers. Our analytics are delivered in real-time, with full transparency into how your data is used.",
+          "If you ever decide to leave Meridian, you can export all your data in standard formats at no extra cost. No lock-in, no surprises. Your data is yours - always."
+        ],
+      },
+      {
+        "title": "Next Steps: Take Control of Your POS Data",
+        "paragraphs": [
+          "Start by reviewing your current POS contract. Look for data ownership, license, and export clauses. If anything is unclear, ask your provider for clarification in writing. Consider switching to a provider that respects your ownership and Canadian privacy laws.",
+          "Meridian offers a free data audit for Canadian merchants. We'll review your current setup and show you how our platform can give you full control over your data. No obligation, no pressure.",
+          "Your POS data is one of your most valuable business assets. Don't let a provider take it away. Own it, protect it, and use it to grow your business."
+        ],
+        "tip": "General information, not legal advice. Always consult a professional for contract review and compliance guidance.",
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Do I own my POS data if I use a cloud-based POS system?",
+        "a": "Generally yes, but it depends on your contract. Cloud-based POS providers often include terms that give them a license to use your data. Always read the 'data ownership' section of your terms of service. If it's vague, ask for clarification."
+      },
+      {
+        "q": "What is data lock-in and how can I avoid it?",
+        "a": "Data lock-in is when a provider makes it hard to export your data or switch to another system. Avoid it by choosing a provider that offers standard format exports (CSV, JSON), API access, and no fees for data retrieval. Meridian offers all of these."
+      },
+      {
+        "q": "Does PIPEDA require my POS provider to store data in Canada?",
+        "a": "PIPEDA does not explicitly require data residency, but it holds you accountable for how your provider handles customer data. Quebec Law 25 has stricter rules. Using a provider with Canadian data residency simplifies compliance. Meridian stores all data in Canada."
+      },
+      {
+        "q": "Can my POS provider sell my aggregated transaction data?",
+        "a": "Only if your contract allows it. Some providers claim ownership of aggregated or anonymized data. This is a grey area under Canadian law. Meridian never sells or claims ownership of your data, aggregated or otherwise."
+      },
+      {
+        "q": "What happens to my data if I cancel my Meridian subscription?",
+        "a": "You can export all your data in standard formats (CSV, JSON) at any time, including after cancellation. We do not charge for data exports. Your data is yours, and we make it easy to take it with you."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/canadian-pos-compliance-pipeda-quebec-law-25",
+        "label": "Canadian POS Compliance: PIPEDA & Quebec Law 25"
+      },
+      {
+        "to": "/guides/pos-data-portability-rights-canada",
+        "label": "Your Rights to POS Data Portability in Canada"
+      }
+    ],
+    "ctaHeadline": "Take Control of Your POS Data Today",
+    "ctaDescription": "Schedule a free data audit with Meridian. We'll show you how to own, protect, and leverage your POS data - with no lock-in."
+  },
 ]
 
 export function getGuideBySlug(slug: string): GuideData | undefined {
