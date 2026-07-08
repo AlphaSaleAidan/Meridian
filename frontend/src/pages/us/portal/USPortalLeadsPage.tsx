@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import {
-  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2, WifiOff, Trash2,
+  Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2, WifiOff, Trash2, Lock,
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { useTrainingLock } from '@/lib/training-progress'
 import { useToast } from '@/components/Toast'
 import { queueIfOffline, setupOfflineSync, getPendingCount } from '@/lib/offline-queue'
 import { requestNotificationPermission } from '@/lib/notifications'
@@ -103,6 +104,8 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
 export default function USPortalLeadsPage() {
   const { rep } = useSalesAuth()
   const { toast } = useToast()
+  const navigate = useNavigate()
+  const { locked: trainingLocked } = useTrainingLock()
   const [searchParams] = useSearchParams()
   const [deals, setDeals] = useState<Deal[]>([])
   const [loading, setLoading] = useState(true)
@@ -122,8 +125,17 @@ export default function USPortalLeadsPage() {
   const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
-    if (searchParams.get('new') === 'true') setShowNew(true)
-  }, [searchParams])
+    if (searchParams.get('new') === 'true' && !trainingLocked) setShowNew(true)
+  }, [searchParams, trainingLocked])
+
+  const openNewLead = () => {
+    if (trainingLocked) {
+      toast('Finish the Training Course to create leads', 'error')
+      navigate('/us/portal/training')
+      return
+    }
+    setShowNew(true)
+  }
 
   const [listError, setListError] = useState('')
 
@@ -229,10 +241,11 @@ export default function USPortalLeadsPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowNew(true)}
+          onClick={openNewLead}
           className="flex items-center gap-2 px-3.5 py-2 bg-[#17C5B0] text-[#0A0A0B] text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
+          title={trainingLocked ? 'Complete the Training Course to unlock lead creation' : undefined}
         >
-          <Plus size={16} /> New Lead
+          {trainingLocked ? <Lock size={16} /> : <Plus size={16} />} New Lead
         </button>
       </div>
 

@@ -1,15 +1,17 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { GraduationCap, Lock } from 'lucide-react'
 import { useTrainingLock, REQUIRED_MODULE_IDS } from '@/lib/training-progress'
 
 /**
  * Blocks a lead-creation surface until the rep finishes the Training Course.
  * Admins are exempt; while loading (or before the progress migration exists)
- * it fails open — the canada_leads RLS insert policy is the hard enforcement.
+ * it fails open — the {canada,us}_leads RLS insert policy is the hard enforcement.
  */
 export default function TrainingGate({ children }: { children: ReactNode }) {
   const { locked, state } = useTrainingLock()
+  const { pathname } = useLocation()
+  const trainingPath = pathname.startsWith('/us') ? '/us/portal/training' : '/canada/portal/training'
 
   if (!locked) return <>{children}</>
 
@@ -25,7 +27,7 @@ export default function TrainingGate({ children }: { children: ReactNode }) {
         quiz after each, and the Code of Conduct signature. You're {done} of 6 steps in.
       </p>
       <Link
-        to="/canada/portal/training"
+        to={trainingPath}
         className="mt-5 inline-flex items-center gap-2 rounded-lg bg-pm-accent px-4 py-2.5 text-xs font-semibold text-pm-canada-bg hover:bg-pm-accent/90 transition-all"
       >
         <GraduationCap size={15} /> Go to the Training Course
