@@ -1,0 +1,6 @@
+# Scoped build context for the connector image. BuildKit uses this INSTEAD of the
+# repo-root .dockerignore (which excludes edge/ for the lean app image). Whitelist:
+# ignore everything, then re-include only what local_agent.Dockerfile COPYs.
+*
+!edge
+!src
