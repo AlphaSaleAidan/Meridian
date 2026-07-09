@@ -368,9 +368,13 @@ class EdgeAgent:
     def __init__(self):
         self.cameras: list[CameraProcessor] = []
         self.running = True
+        # Device auth ONLY: a headless agent has no Supabase user JWT. All edge
+        # endpoints (ingest, heartbeat, live-state, device camera list) accept the
+        # per-org X-Device-Token. A stray Bearer here tripped the JWT guard and 401'd
+        # every ingest, so it's removed.
         self.http = httpx.AsyncClient(
             base_url=API_URL,
-            headers={"Authorization": f"Bearer {API_KEY}", "X-Device-Token": DEVICE_TOKEN},
+            headers={"X-Device-Token": DEVICE_TOKEN},
             timeout=30,
         )
         self._publishers: dict[str, LivePublisher] = {}
@@ -402,7 +406,9 @@ class EdgeAgent:
             logger.info(f"Loaded {len(self.cameras)} cameras from config")
         else:
             try:
-                resp = await self.http.get(f"/api/vision/cameras/{ORG_ID}")
+                # Device-authed list (per-org X-Device-Token) — NOT the JWT-gated
+                # dashboard endpoint, which a headless agent can't call.
+                resp = await self.http.get("/api/vision/device/cameras")
                 data = resp.json()
                 for cam in data.get("cameras", []):
                     if cam.get("status") != "disabled":

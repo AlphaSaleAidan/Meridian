@@ -199,11 +199,28 @@ class PairBody(BaseModel):
 @router.post("/connector/pair")
 async def connector_pair(body: PairBody):
     """Connector exchanges a wizard pairing code for a device token + its site/org.
-    The pairing code itself is the credential (stateless HMAC, short-lived)."""
+    The pairing code itself is the credential (stateless HMAC, short-lived).
+
+    Mints a PER-ORG device token (vision_device_tokens) scoped to this org+site so
+    one connector can't write to another merchant's data. Falls back to the legacy
+    global VISION_INGEST_TOKEN only when no DB is available (dev/single-tenant)."""
+    from ...camera.device_tokens import create_device_token
+
     info = verify_pairing_code(body.code)
     if not info:
         raise HTTPException(401, "Invalid or expired pairing code")
-    device_token = os.environ.get("VISION_INGEST_TOKEN", "")
+
+    db = _get_db()
+    device_token = None
+    if db:
+        try:
+            device_token = await create_device_token(
+                db, info["org"], site_id=info["site"], label="LAN connector"
+            )
+        except Exception as e:
+            logger.warning("per-org device token mint failed, falling back to global: %s", e)
+    if not device_token:
+        device_token = os.environ.get("VISION_INGEST_TOKEN", "")
     if not device_token:
         raise HTTPException(503, "Connector pairing not configured")
     return {
@@ -215,10 +232,14 @@ async def connector_pair(body: PairBody):
 
 
 async def require_device_token(x_device_token: str | None = Header(None)):
-    """Connector auth (mirrors vision ingest). Fails closed if unset."""
-    expected = os.environ.get("VISION_INGEST_TOKEN", "")
-    if not expected or x_device_token != expected:
+    """Connector auth. Accepts a per-org device token (vision_device_tokens) OR the
+    legacy global VISION_INGEST_TOKEN, via X-Device-Token. Fails closed."""
+    from ...camera.device_tokens import resolve_device_token
+
+    principal = await resolve_device_token(_get_db(), x_device_token)
+    if principal is None:
         raise HTTPException(401, "Invalid device token")
+    return principal
 
 
 class ConnectorCameraRegister(BaseModel):
@@ -228,10 +249,17 @@ class ConnectorCameraRegister(BaseModel):
     compliance_mode: str = "anonymous"
 
 
-@router.post("/sites/{site_id}/cameras", dependencies=[Depends(require_device_token)])
-async def register_connector_camera(site_id: str, body: ConnectorCameraRegister):
+@router.post("/sites/{site_id}/cameras")
+async def register_connector_camera(
+    site_id: str,
+    body: ConnectorCameraRegister,
+    principal: dict = Depends(require_device_token),
+):
     """Connector registers an auto-discovered ONVIF camera under a site (device-token auth)."""
+    from ...camera.device_tokens import enforce_org_match
+
     _uuid(site_id, "site_id")
+    enforce_org_match(principal, body.org_id)
     db = _get_db()
     if not db:
         raise HTTPException(503, "Database not available")
