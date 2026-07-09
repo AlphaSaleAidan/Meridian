@@ -188,7 +188,9 @@ async def connect_pairing_code(body: OrgBody):
         # QR encodes the code + api so a companion scan can hand off to a helper.
         "qr_payload": _json.dumps({"t": "meridian-connect", "code": code, "api": api}),
         "docs": "Run this one line on a PC/POS terminal on the same network as your cameras. "
-                "It auto-discovers your ONVIF cameras — no RTSP URLs, no hardware, no port forwarding.",
+                "It auto-discovers your ONVIF cameras and runs the analytics LOCALLY on that "
+                "machine — no RTSP URLs, no hardware, no port forwarding, and no video ever "
+                "leaves your network (only anonymous counts are sent).",
     }
 
 
