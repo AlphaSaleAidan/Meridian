@@ -28,17 +28,22 @@ router = APIRouter(prefix="/api/vision", tags=["vision"], dependencies=[Depends(
 
 
 async def require_device_token(x_device_token: Optional[str] = Header(None)):
-    """Auth for edge-device ingest endpoints (cameras, not browsers).
+    """Auth for edge-device endpoints (heartbeat, live-state) — cameras, not browsers.
 
-    Devices send X-Device-Token matching the VISION_INGEST_TOKEN env var.
-    Fails closed with 503 if the token is not configured server-side.
+    Accepts a per-org device token (vision_device_tokens) OR the legacy global
+    VISION_INGEST_TOKEN env var, both via X-Device-Token. See
+    camera/device_tokens.py. Fails closed: 503 if no token mechanism is
+    configured at all, 401 on a bad token. Returns the resolved principal.
     """
-    expected = os.environ.get("VISION_INGEST_TOKEN", "")
-    if not expected:
-        logger.error("VISION_INGEST_TOKEN not configured — rejecting vision ingest")
+    from ...camera.device_tokens import resolve_device_token
+
+    principal = await resolve_device_token(_get_db(), x_device_token)
+    if principal is not None:
+        return principal
+    if not (os.environ.get("VISION_INGEST_TOKEN") or _get_db()):
+        logger.error("Vision device auth not configured — rejecting")
         raise HTTPException(status_code=503, detail="Vision ingest not configured")
-    if not x_device_token or x_device_token != expected:
-        raise HTTPException(status_code=401, detail="Invalid device token")
+    raise HTTPException(status_code=401, detail="Invalid device token")
 
 
 def camera_identity_enabled() -> bool:
@@ -98,6 +103,12 @@ class HeartbeatRequest(BaseModel):
     edge_version: Optional[str] = None
     gpu_temp_c: Optional[float] = None
     fps: Optional[float] = None
+
+
+class DeviceTokenRequest(BaseModel):
+    org_id: str
+    site_id: Optional[str] = None
+    label: Optional[str] = None
 
 
 class TrafficIngestRequest(BaseModel):
@@ -403,114 +414,36 @@ async def live_state(camera_id: str):
             "rtsp_url": cam.get("rtsp_url") if publish else None}
 
 
-@router.post("/ingest/traffic", dependencies=[Depends(require_device_token)])
-async def ingest_traffic(req: TrafficIngestRequest):
+# NOTE: POST /api/vision/ingest/traffic and /ingest/visits moved to
+# routes/vision_ingest.py. They are DEVICE calls (on-site PC/POS agent or LAN
+# connector, no user JWT), and this router's require_org_access forced a JWT —
+# which returned 401 for every device and blocked ALL camera metrics. The ingest
+# router has no router-level JWT dep and authenticates with a per-org device
+# token instead. See routes/vision_ingest.py.
+
+
+@router.post("/device-token", dependencies=[Depends(require_org_access)])
+async def create_device_token_endpoint(body: DeviceTokenRequest):
+    """Dashboard mints a per-org device token for an on-site vision agent
+    (edge_agent.py on a back-office PC/POS, or a self-hosted connector). The RAW
+    token is returned ONCE — store it in the agent's env as MERIDIAN_DEVICE_TOKEN.
+    Only its sha256 hash is persisted. Auth: router-level require_org_access
+    verifies the caller's JWT + membership of body.org_id."""
+    from ...camera.device_tokens import create_device_token
+
     db = _get_db()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
-
-    # Anonymous-only: drop demographic estimates unless the identity tier is live.
-    if not camera_identity_enabled():
-        req.demographic_breakdown = {}
-
-    import json as json_mod
-
-    # Idempotency: double-submits (and retries) must not create duplicate
-    # cameras — the same org registering the same stream returns the existing
-    # row. (No unique constraint exists on (org_id, rtsp_url) yet.)
     try:
-        existing = await db.select(
-            "vision_cameras",
-            filters={"org_id": f"eq.{req.org_id}", "rtsp_url": f"eq.{req.rtsp_url}"},
-            limit=1,
-        )
-        if existing:
-            return existing[0]
+        raw = await create_device_token(db, body.org_id, site_id=body.site_id, label=body.label)
     except Exception as e:
-        logger.warning("register_camera dedupe check failed (continuing): %s", e)
-
-    row = {
-        "org_id": req.org_id,
-        "camera_id": req.camera_id,
-        "location_id": req.location_id,
-        "bucket": req.bucket,
-        "entries": req.entries,
-        "exits": req.exits,
-        "occupancy_avg": req.occupancy_avg,
-        "occupancy_peak": req.occupancy_peak,
-        "queue_length_avg": req.queue_length_avg,
-        "queue_wait_avg_sec": req.queue_wait_avg_sec,
-        "conversion_rate": req.conversion_rate,
-        "demographic_breakdown": json_mod.dumps(req.demographic_breakdown),
+        logger.error("Failed to mint device token: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to mint device token")
+    return {
+        "device_token": raw,
+        "org_id": body.org_id,
+        "note": "Store as MERIDIAN_DEVICE_TOKEN on the on-site agent. Shown once — not recoverable.",
     }
-    if req.depth_zone_occupancy is not None:
-        row["depth_zone_occupancy"] = json_mod.dumps(req.depth_zone_occupancy)
-    if req.avg_person_distance is not None:
-        row["avg_person_distance"] = req.avg_person_distance
-
-    try:
-        await db.upsert("vision_traffic", row, on_conflict="org_id,camera_id,bucket")
-    except Exception as e:
-        logger.warning("Traffic ingest failed: %s", e)
-    return {"status": "ok", "bucket": req.bucket}
-
-
-@router.post("/ingest/visits", dependencies=[Depends(require_device_token)])
-async def ingest_visits(req: VisitIngestRequest):
-    db = _get_db()
-    if not db:
-        raise HTTPException(status_code=503, detail="Database not available")
-
-    # Anonymous-only: no repeat-visitor face matching or demographics unless the
-    # identity tier is live. Strip the biometric identifier + demographics so a
-    # visit is recorded anonymously (dwell/zones/conversion only).
-    if not camera_identity_enabled():
-        req.visitor_hash = None
-        req.demographic = {}
-
-    import json as json_mod
-    visitor_id = None
-    if req.visitor_hash:
-        try:
-            existing = await db.select("vision_visitors", "id,visit_count", filters={
-                "org_id": f"eq.{req.org_id}",
-                "embedding_hash": f"eq.{req.visitor_hash}",
-            }, limit=1)
-            if existing:
-                visitor_id = existing[0]["id"]
-                await db.update("vision_visitors", {
-                    "last_seen": datetime.now(timezone.utc).isoformat(),
-                    "visit_count": existing[0].get("visit_count", 0) + 1,
-                }, filters={"id": f"eq.{visitor_id}"})
-            else:
-                new_rows = await db.insert("vision_visitors", {
-                    "org_id": req.org_id,
-                    "embedding_hash": req.visitor_hash,
-                    "first_seen": req.entered_at,
-                    "last_seen": req.entered_at,
-                    "demographic": json_mod.dumps(req.demographic),
-                })
-                if new_rows:
-                    visitor_id = new_rows[0]["id"]
-        except Exception as e:
-            logger.warning("Visitor lookup/insert failed: %s", e)
-
-    visit_row = {
-        "org_id": req.org_id,
-        "camera_id": req.camera_id,
-        "visitor_id": visitor_id,
-        "entered_at": req.entered_at,
-        "exited_at": req.exited_at,
-        "dwell_seconds": req.dwell_seconds,
-        "zones_visited": req.zones_visited,
-        "converted": req.converted,
-    }
-    try:
-        result = await db.insert("vision_visits", visit_row)
-        return {"status": "ok", "visit_id": result[0]["id"] if result else None}
-    except Exception as e:
-        logger.warning("Visit insert failed: %s", e)
-        return {"status": "ok", "visit_id": None}
 
 
 @router.get("/traffic/{org_id}")

@@ -1,0 +1,16 @@
+[Unit]
+Description=Meridian Vision Agent (local camera analytics)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=MERIDIAN_AGENT_CONF=/etc/meridian/agent.conf
+ExecStart=/opt/meridian-agent/meridian-agent
+Restart=always
+RestartSec=10
+# ONVIF discovery needs host networking; run as root for multicast + :1984 bind.
+User=root
+
+[Install]
+WantedBy=multi-user.target

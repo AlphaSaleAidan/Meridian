@@ -1,0 +1,65 @@
+name: Connector image (GHCR)
+
+# Builds the one-click local-processing connector image and pushes it to GHCR as
+# ghcr.io/alphasaleaidan/meridian-connector. Multi-arch so it runs on a normal
+# x86 PC/POS (amd64) and ARM boxes (arm64). Auth is the built-in GITHUB_TOKEN —
+# no extra secrets needed. The pairing-code wizard hands merchants:
+#   docker run ... ghcr.io/alphasaleaidan/meridian-connector
+
+on:
+  # Manual/tag only — a fragile multi-arch Docker build must NOT gate the Railway
+  # prod deploy (which waits on check suites). Trigger via `gh workflow run` or a
+  # connector-v* tag once merged.
+  push:
+    tags: ['connector-v*']
+  workflow_dispatch: {}
+
+env:
+  IMAGE: ghcr.io/alphasaleaidan/meridian-connector
+
+jobs:
+  build-push:
+    name: Build & push multi-arch image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (arm64 emulation)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short
+            type=ref,event=tag
+
+      # Build context is the REPO ROOT (the image bundles src/camera + weights).
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: edge/connector/local_agent.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

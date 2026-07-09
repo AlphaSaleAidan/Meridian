@@ -161,7 +161,7 @@ async def test_connector_register_site_not_owned_404():
     with patch.object(cc, "_get_db", return_value=db):
         body = cc.ConnectorCameraRegister(org_id=ORG, name="Front")
         with pytest.raises(HTTPException) as ei:
-            await cc.register_connector_camera(SITE, body)
+            await cc.register_connector_camera(SITE, body, principal={"org_id": ORG})
     assert ei.value.status_code == 404
 
 
@@ -172,7 +172,7 @@ async def test_connector_register_happy_path():
     db.insert.side_effect = lambda table, row: [dict(row)]
     with patch.object(cc, "_get_db", return_value=db):
         body = cc.ConnectorCameraRegister(org_id=ORG, name="Front Door")
-        res = await cc.register_connector_camera(SITE, body)
+        res = await cc.register_connector_camera(SITE, body, principal={"org_id": ORG})
     cam = res["camera"]
     assert cam["source"] == "onvif" and cam["name"] == "Front Door"
     assert cam["rtsp_url"] == ""        # blank on the ONVIF happy path

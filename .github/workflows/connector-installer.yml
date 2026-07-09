@@ -1,0 +1,150 @@
+name: Connector installers (native, no Docker)
+
+# Builds the one-click local agent as a native install for merchants who don't run
+# Docker: a signed Windows .exe installer, and a macOS/Linux tarball + one-command
+# installer. PyInstaller freezes the agent + pipeline + weights; go2rtc is bundled.
+# Code-signing is CONDITIONAL on secrets being present (unsigned artifacts otherwise).
+
+on:
+  push:
+    tags: ['agent-v*']
+  workflow_dispatch: {}
+
+env:
+  GO2RTC_VERSION: "1.9.4"   # pin; adjust to a current alexxit/go2rtc release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            go2rtc_asset: go2rtc_linux_amd64
+          - os: macos-latest
+            go2rtc_asset: go2rtc_mac_arm64
+          - os: windows-latest
+            go2rtc_asset: go2rtc_win64.zip
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # secrets can't be used in step `if:` directly — hoist to env flags.
+    env:
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERT_BASE64 != '' }}
+      HAS_WIN_CERT: ${{ secrets.WINDOWS_CERT_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build deps (CPU torch)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -r edge/connector/requirements.txt
+
+      - name: Fetch YOLO weights (bundled into the app)
+        shell: bash
+        run: python -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
+
+      - name: Fetch go2rtc binary
+        shell: bash
+        run: |
+          set -e
+          mkdir -p edge/installer/dist_bin
+          url="https://github.com/AlexxIT/go2rtc/releases/download/v${GO2RTC_VERSION}/${{ matrix.go2rtc_asset }}"
+          echo "Downloading $url"
+          curl -fsSL "$url" -o /tmp/go2rtc_asset
+          if [[ "${{ matrix.go2rtc_asset }}" == *.zip ]]; then
+            unzip -o /tmp/go2rtc_asset -d edge/installer/dist_bin
+            # normalize name
+            [ -f edge/installer/dist_bin/go2rtc_win64.exe ] && mv edge/installer/dist_bin/go2rtc_win64.exe edge/installer/dist_bin/go2rtc.exe || true
+          else
+            dest="edge/installer/dist_bin/go2rtc"
+            cp /tmp/go2rtc_asset "$dest"; chmod +x "$dest"
+          fi
+          ls -la edge/installer/dist_bin
+
+      - name: Freeze with PyInstaller
+        shell: bash
+        run: pyinstaller --noconfirm edge/installer/meridian-agent.spec
+
+      # ── Linux / macOS: tarball + one-command installer ──────────────────
+      - name: Package (unix tarball)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -e
+          mkdir -p stage
+          cp -R dist/meridian-agent stage/
+          cp edge/installer/install-unix.sh stage/
+          chmod +x stage/install-unix.sh
+          cp -R edge/installer/linux stage/linux
+          cp -R edge/installer/macos stage/macos
+          tar czf "meridian-agent-${{ runner.os }}.tar.gz" -C stage .
+          ls -la meridian-agent-*.tar.gz
+
+      # ── macOS: optional codesign + notarize ─────────────────────────────
+      - name: macOS codesign + notarize (if certs present)
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        env:
+          APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_NOTARY_USER: ${{ secrets.APPLE_NOTARY_USER }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+        run: |
+          set -e
+          echo "$APPLE_CERT_BASE64" | base64 -d > /tmp/cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+          codesign --deep --force --options runtime --team-id "$APPLE_TEAM_ID" \
+            -s "Developer ID Application" dist/meridian-agent/meridian-agent
+          # (Notarization of the tarball/pkg would follow via `xcrun notarytool submit`.)
+          echo "signed macOS binary"
+
+      # ── Windows: Inno Setup installer (+ optional Authenticode signing) ──
+      - name: Build Windows installer (Inno Setup)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAgentDir=dist\meridian-agent edge\installer\windows\meridian-agent.iss
+          Get-ChildItem Output
+
+      - name: Windows Authenticode sign (if cert present)
+        if: runner.os == 'Windows' && env.HAS_WIN_CERT == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          [IO.File]::WriteAllBytes("$env:TEMP\cert.pfx", [Convert]::FromBase64String($env:WINDOWS_CERT_BASE64))
+          $st = "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe"
+          $signtool = (Get-ChildItem $st | Select-Object -Last 1).FullName
+          & $signtool sign /f "$env:TEMP\cert.pfx" /p $env:WINDOWS_CERT_PASSWORD `
+            /tr http://timestamp.digicert.com /td sha256 /fd sha256 Output\meridian-agent-setup.exe
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: meridian-agent-${{ runner.os }}
+          path: |
+            meridian-agent-*.tar.gz
+            Output/meridian-agent-setup.exe
+          if-no-files-found: warn
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/agent-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            meridian-agent-*.tar.gz
+            Output/meridian-agent-setup.exe

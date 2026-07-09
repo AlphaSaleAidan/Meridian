@@ -56,6 +56,7 @@ from .routes.onboarding import router as onboarding_router
 from .routes.predictive import router as predictive_router
 from .routes.admin import router as admin_router
 from .routes.vision import router as vision_router
+from .routes.vision_ingest import router as vision_ingest_router
 from .routes.browser_camera import router as browser_camera_router
 from .routes.camera_connect import router as camera_connect_router
 from .routes.cline import router as cline_router
@@ -234,6 +235,7 @@ app.include_router(onboarding_router)
 app.include_router(predictive_router)
 app.include_router(admin_router)
 app.include_router(vision_router)
+app.include_router(vision_ingest_router)
 app.include_router(browser_camera_router)
 app.include_router(camera_connect_router)
 app.include_router(cline_router)
