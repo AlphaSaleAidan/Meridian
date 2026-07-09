@@ -7,13 +7,11 @@ name: Connector image (GHCR)
 #   docker run ... ghcr.io/alphasaleaidan/meridian-connector
 
 on:
+  # Manual/tag only — a fragile multi-arch Docker build must NOT gate the Railway
+  # prod deploy (which waits on check suites). Trigger via `gh workflow run` or a
+  # connector-v* tag once merged.
   push:
-    branches: [main]
     tags: ['connector-v*']
-    paths:
-      - 'edge/connector/**'
-      - 'src/camera/**'
-      - '.github/workflows/connector-image.yml'
   workflow_dispatch: {}
 
 env:
