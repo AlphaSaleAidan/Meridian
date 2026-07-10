@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { createCanadaQueryClient } from '@/lib/canada-queries'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard,
@@ -66,6 +68,10 @@ function getAvatarColor(name: string): string {
 }
 
 export default function USSalesLayout() {
+  // One query client for the whole /us/portal subtree — same config as Canada.
+  // Training-lock hooks (useTrainingLock) run on Leads/New Customer/Training and
+  // crash with "No QueryClient set" without this provider.
+  const [queryClient] = useState(() => createCanadaQueryClient())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -201,6 +207,7 @@ export default function USSalesLayout() {
   )
 
   return (
+    <QueryClientProvider client={queryClient}>
     <div className="flex h-screen overflow-hidden bg-[#0A0A0B]">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-[260px] flex-shrink-0 bg-[#0A0A0B] border-r border-[#1F1F23] flex-col">
@@ -273,5 +280,6 @@ export default function USSalesLayout() {
       {!isDesktop && <USSalesPortalMobileNav />}
       <ClineAIChatWidget />
     </div>
+    </QueryClientProvider>
   )
 }
