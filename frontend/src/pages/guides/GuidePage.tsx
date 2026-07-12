@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useParams, Navigate } from 'react-router-dom'
 import { ArrowRight, ChevronDown, ChevronRight, Lightbulb, BookOpen } from 'lucide-react'
 import SEO from '@/components/SEO'
-import { getGuideBySlug, guides } from '@/data/seo-guides'
+import { getGuideBySlug, guides, isGuidePublished } from '@/data/seo-guides'
 import type { GuideData } from '@/data/seo-guides'
 
 function FAQItem({ q, a }: { q: string; a: string }) {
@@ -75,9 +75,17 @@ export default function GuidePage() {
   const { slug } = useParams<{ slug: string }>()
   const guide = slug ? getGuideBySlug(slug) : undefined
 
-  if (!guide) return <Navigate to="/guides" replace />
+  // Scheduled-but-unreleased guides behave as if they don't exist yet.
+  if (!guide || !isGuidePublished(guide)) return <Navigate to="/guides" replace />
 
   const jsonLd = buildJsonLd(guide)
+
+  const visibleRelatedLinks = guide.relatedLinks.filter(link => {
+    const m = link.to.match(/^\/guides\/(.+)$/)
+    if (!m) return true
+    const target = getGuideBySlug(m[1])
+    return !!target && isGuidePublished(target)
+  })
 
   return (
     <>
@@ -147,10 +155,11 @@ export default function GuidePage() {
         </section>
 
         {/* Related Links */}
+        {visibleRelatedLinks.length > 0 && (
         <section className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
           <h3 className="text-lg font-semibold text-[#F5F5F7] mb-4">Related Guides</h3>
           <div className="flex flex-wrap gap-2">
-            {guide.relatedLinks.map(link => (
+            {visibleRelatedLinks.map(link => (
               <Link
                 key={link.to}
                 to={link.to}
@@ -162,6 +171,7 @@ export default function GuidePage() {
             ))}
           </div>
         </section>
+        )}
 
         {/* CTA */}
         <section className="py-20 border-t border-[#1F1F23]/40 relative">

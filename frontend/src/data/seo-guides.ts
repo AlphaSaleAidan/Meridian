@@ -1176,7 +1176,7 @@ export const guides: GuideData[] = [
     "slug": "alberta-pipa-small-business-guide",
     "seoTitle": "Alberta PIPA: A Small Business Privacy Guide | Meridian",
     "description": "Learn how Alberta's PIPA applies to small businesses. Plain-English guide to compliance, consent, and data handling for Alberta retailers.",
-    "datePublished": "2026-06-29",
+    "datePublished": "2026-07-15",
     "heroTitle": "Alberta PIPA",
     "heroAccent": "A Small Business Privacy Guide",
     "heroDescription": "If you run a business in Alberta, you need to know about PIPA - the Personal Information Protection Act. Here's what it means for your day-to-day operations.",
@@ -1217,7 +1217,7 @@ export const guides: GuideData[] = [
         "title": "Handling Customer Data with POS Analytics",
         "paragraphs": [
           "If you use a POS system that tracks purchase history, customer names, or contact details, you're collecting personal information under PIPA. This means you need a lawful basis (usually consent) and must limit use to what was disclosed. For example, using purchase data to send personalized offers requires consent for that specific purpose.",
-          "Meridian Intelligence is designed around PIPA principles - built to support Alberta businesses with Canadian data residency, CAD pricing, and compliance-first features. Our platform helps you manage consent, anonymize data where possible, and generate insights without overstepping privacy boundaries. We support POS systems like Moneris and Alice POS, common in Alberta."
+          "Meridian Intelligence is designed around PIPA principles - built to support Alberta businesses with privacy-by-design, CAD pricing, and compliance-first features. We are transparent about where data lives: our infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place. Our platform helps you manage consent, anonymize data where possible, and generate insights without overstepping privacy boundaries. We support POS systems like Moneris and Alice POS, common in Alberta."
         ],
         "tip": "General information, not legal advice. Compliance is a shared responsibility - your practices matter as much as the tools you use.",
       },
@@ -1249,20 +1249,20 @@ export const guides: GuideData[] = [
       },
       {
         "q": "Is Meridian Intelligence certified for PIPA compliance?",
-        "a": "No. Compliance is a shared responsibility. Meridian is designed around PIPA principles - built to support your compliance with features like Canadian data residency and consent management - but we don't certify or guarantee compliance. You must implement proper policies and practices."
+        "a": "No. Compliance is a shared responsibility. Meridian is designed around PIPA principles - built to support your compliance with features like consent management, documented retention, and transparency about where your data is processed - but we don't certify or guarantee compliance. You must implement proper policies and practices."
       }
     ],
     "relatedLinks": [
       {
-        "to": "/guides/ca-pipeda-small-business",
+        "to": "/guides/pipeda-compliance-small-business",
         "label": "PIPEDA: A Small Business Privacy Guide"
       },
       {
-        "to": "/guides/ca-quebec-law-25",
+        "to": "/guides/quebec-law-25-small-business",
         "label": "Quebec Law 25: What Retailers Need to Know"
       },
       {
-        "to": "/guides/pos-data-privacy-basics",
+        "to": "/guides/pos-data-residency-canada",
         "label": "POS Data Privacy Basics for Canadian Retailers"
       }
     ],
@@ -1273,7 +1273,7 @@ export const guides: GuideData[] = [
     "slug": "alice-pos-multi-location-analytics-canada",
     "seoTitle": "Alice POS Analytics: Multi-Location Reporting for Canadian Retail | Meridian",
     "description": "Learn how Meridian Intelligence delivers multi-location analytics for Alice POS users in Canada-compliance-first, built for PIPEDA and Quebec Law 25.",
-    "datePublished": "2026-07-05",
+    "datePublished": "2026-08-02",
     "heroTitle": "Alice POS Analytics:",
     "heroAccent": "Multi-Location Reporting Built for Canada",
     "heroDescription": "Meridian adds a Canadian-built analytics layer for Alice POS merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native Alice POS integration is on the roadmap.",
@@ -1282,18 +1282,18 @@ export const guides: GuideData[] = [
         "title": "Why Alice POS Users Need a Dedicated Analytics Layer",
         "paragraphs": [
           "Alice POS is a powerful point-of-sale system for Canadian retailers, but its native reporting is designed for single-store views. When you operate multiple locations-each with its own inventory, staff, and customer base-you need a consolidated view that respects Canadian data rules.",
-          "Meridian Intelligence connects directly to Alice POS, pulling sales, inventory, and customer data from every location into one dashboard. No manual exports, no spreadsheets, no data leaving Canada."
+          "Meridian Intelligence brings your Alice POS sales, inventory, and customer data from every location into one dashboard. Today that starts with a simple data export during onboarding; a native Alice POS integration is on the roadmap."
         ],
         "stat": {
-          "value": "100%",
-          "label": "Canadian data residency with Meridian"
+          "value": "CAD",
+          "label": "pricing and reporting built for Canadian retailers"
         }
       },
       {
         "title": "Multi-Location Dashboards That Make Sense",
         "paragraphs": [
           "See sales trends across all your stores, compare performance by region, and drill into location-specific metrics like average transaction value or inventory turnover. Meridian's dashboards are built for multi-location retail groups-not single-store operators.",
-          "You can set custom KPIs for each location (e.g., same-store sales growth, basket size) and get alerts when a store deviates from its baseline. All data stays in Canada, hosted on Canadian servers."
+          "You can set custom KPIs for each location (e.g., same-store sales growth, basket size) and get alerts when a store deviates from its baseline. Meridian is transparent about where data is processed: infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place."
         ],
         "tip": "General information, not legal advice. Consult your legal team for compliance obligations specific to your business."
       },
@@ -1301,7 +1301,7 @@ export const guides: GuideData[] = [
         "title": "Compliance-First: PIPEDA, Quebec Law 25, and Data Residency",
         "paragraphs": [
           "Meridian was one of the earliest POS analytics platforms to build a dedicated Canadian product. That means we designed our architecture around PIPEDA and Quebec Law 25 from day one-not as an afterthought.",
-          "Your Alice POS data is stored in Canada, processed in Canada, and never routed through US servers. We support CAD pricing and our platform is aligned with Canadian privacy principles. For Quebec retailers, we've built features to help manage consent and data access requests under Law 25."
+          "Meridian is upfront about where your Alice POS data lives: infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place. We support CAD pricing and our platform is aligned with Canadian privacy principles. For Quebec retailers, we've built features to help manage consent and data access requests under Law 25."
         ],
         "stat": {
           "value": "2019",
@@ -1339,7 +1339,7 @@ export const guides: GuideData[] = [
     "faqs": [
       {
         "q": "Does Meridian store Alice POS data outside Canada?",
-        "a": "No. All data is stored on Canadian servers with Canadian data residency. We never route data through US or international servers."
+        "a": "Meridian is transparent about this: data is processed on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place. Rather than claim residency it cannot guarantee, Meridian focuses on PIPEDA- and Law 25-aligned design \u2014 explicit consent, documented retention, role-based access, and encryption in transit and at rest."
       },
       {
         "q": "Can I compare performance across my Alice POS locations?",
@@ -1355,20 +1355,20 @@ export const guides: GuideData[] = [
       },
       {
         "q": "Does Meridian support Moneris payment data alongside Alice POS?",
-        "a": "Yes. Meridian integrates with Moneris, so you can tie payment data to your Alice POS transactions for a complete view of your retail operations."
+        "a": "Moneris works the same way as Alice POS today: start with a data export, with a native integration on the roadmap \u2014 so you can tie payment data to your Alice POS transactions for a complete view of your retail operations."
       }
     ],
     "relatedLinks": [
       {
-        "to": "/guides/moneris-analytics-canada",
+        "to": "/guides/moneris-pos-analytics-connect-meridian",
         "label": "Moneris Analytics for Canadian Retail"
       },
       {
-        "to": "/guides/quebec-law-25-pos-analytics",
+        "to": "/guides/quebec-law-25-small-business",
         "label": "Quebec Law 25 and POS Analytics"
       },
       {
-        "to": "/guides/multi-location-retail-reporting",
+        "to": "/guides/alice-pos-multi-location-analytics-canada",
         "label": "Multi-Location Retail Reporting Guide"
       }
     ],
@@ -1379,7 +1379,7 @@ export const guides: GuideData[] = [
     "slug": "bc-pipa-vs-pipeda-small-business",
     "seoTitle": "BC PIPA vs PIPEDA: What Small Businesses Need to Know | Meridian",
     "description": "Understand how British Columbia's PIPA differs from federal PIPEDA. A plain-English guide for BC small business owners navigating provincial privacy law.",
-    "datePublished": "2026-06-29",
+    "datePublished": "2026-07-12",
     "heroTitle": "BC PIPA vs PIPEDA",
     "heroAccent": "What Small Businesses Need to Know",
     "heroDescription": "If you run a small business in British Columbia, you may need to follow both BC's Personal Information Protection Act (PIPA) and the federal PIPEDA. Here's how they differ and what compliance looks like.",
@@ -1408,7 +1408,7 @@ export const guides: GuideData[] = [
         "title": "Data Residency and Cross-Border Transfers",
         "paragraphs": [
           "PIPA does not explicitly require data to stay in Canada, but it does require organizations to protect personal information transferred outside BC. This means you need contractual safeguards (like standard clauses) with any third-party processor. PIPEDA has similar requirements under its accountability principle.",
-          "For BC businesses using cloud-based POS analytics, this is critical. Meridian Intelligence is built around Canadian data residency-your data stays in Canada, aligning with PIPA's expectations and reducing cross-border compliance burden."
+          "For BC businesses using cloud-based POS analytics, this is critical. Meridian Intelligence takes a transparency-first approach: it is upfront that its infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards \u2014 exactly the information PIPA expects you to know and disclose about your vendors."
         ],
         "stat": {
           "value": "80%",
@@ -1437,7 +1437,7 @@ export const guides: GuideData[] = [
       {
         "title": "How Meridian Supports Your PIPA Compliance",
         "paragraphs": [
-          "Meridian Intelligence was one of the earliest POS analytics platforms to build a dedicated Canadian product. We designed our platform around PIPEDA and built it to support provincial laws like BC PIPA. Key features include Canadian data residency, CAD pricing, and support for BC-specific POS systems like Moneris and Alice POS.",
+          "Meridian Intelligence was one of the earliest POS analytics platforms to build a dedicated Canadian product. We designed our platform around PIPEDA and built it to support provincial laws like BC PIPA. Key features include privacy-by-design, CAD pricing, transparency about where data is processed, and support for BC-specific POS systems like Moneris and Alice POS.",
           "Our platform helps you manage customer consent, track data usage, and generate audit trails-so you can demonstrate compliance without the headache. Compliance is a shared responsibility, and we're here to make your part easier."
         ],
         "tip": "General information, not legal advice. Meridian provides tools to support your compliance efforts, but you remain responsible for your privacy program."
@@ -1454,7 +1454,7 @@ export const guides: GuideData[] = [
       },
       {
         "q": "Do I need to keep customer data in Canada under PIPA?",
-        "a": "PIPA does not mandate data residency, but it requires you to protect data transferred outside BC. Using a provider with Canadian data residency, like Meridian, simplifies compliance."
+        "a": "PIPA does not mandate data residency, but it requires you to protect data transferred outside BC and to be transparent about it. Meridian is upfront that its infrastructure runs in US cloud regions with contractual cross-border safeguards \u2014 the vendor transparency you need to meet that obligation."
       },
       {
         "q": "What happens if I violate BC PIPA?",
@@ -1462,16 +1462,16 @@ export const guides: GuideData[] = [
       },
       {
         "q": "Can Meridian help me comply with BC PIPA?",
-        "a": "Meridian is designed around Canadian privacy laws, including PIPA. We offer Canadian data residency, consent management tools, and audit trails. However, compliance is a shared responsibility-you must implement appropriate policies and practices."
+        "a": "Meridian is designed around Canadian privacy laws, including PIPA. We offer consent management tools, audit trails, and transparency about where data is processed (US cloud regions, with contractual cross-border safeguards). However, compliance is a shared responsibility-you must implement appropriate policies and practices."
       }
     ],
     "relatedLinks": [
       {
-        "to": "/guides/ca-pipeda-compliance-pos",
+        "to": "/guides/pipeda-compliance-small-business",
         "label": "PIPEDA Compliance for POS Systems"
       },
       {
-        "to": "/guides/ca-quebec-law-25-small-business",
+        "to": "/guides/quebec-law-25-small-business",
         "label": "Quebec Law 25: What Small Businesses Need to Know"
       }
     ],
@@ -1482,7 +1482,7 @@ export const guides: GuideData[] = [
     "slug": "canada-data-breach-playbook-small-business",
     "seoTitle": "Data Breach Reporting in Canada: A Small Business Playbook | Meridian",
     "description": "Learn exactly what to do if customer data is exposed. Step-by-step breach response for Canadian small businesses, including PIPEDA and Quebec Law 25 requirements.",
-    "datePublished": "2026-07-04",
+    "datePublished": "2026-07-30",
     "heroTitle": "Data Breach Reporting in Canada:",
     "heroAccent": "A Small Business Playbook",
     "heroDescription": "If customer data is exposed, you need a clear, calm plan. This playbook walks you through immediate steps, legal obligations, and how to communicate with affected customers-all in plain language.",
@@ -1550,7 +1550,7 @@ export const guides: GuideData[] = [
       {
         "title": "Why Canadian Businesses Choose Meridian Intelligence for Breach Preparedness",
         "paragraphs": [
-          "Meridian Intelligence was one of the earliest POS analytics platforms to build a dedicated Canadian product. We are designed around PIPEDA, built to support Quebec Law 25, and offer Canadian data residency, CAD pricing, and native support for Canadian POS systems like Moneris and Alice POS.",
+          "Meridian Intelligence was one of the earliest POS analytics platforms to build a dedicated Canadian product. We are designed around PIPEDA, built to support Quebec Law 25, and offer privacy-by-design, CAD pricing, transparency about where data is processed, and native support for Canadian POS systems like Moneris and Alice POS.",
           "Our platform helps you detect anomalies faster, maintain audit trails, and generate breach-scope reports-all without requiring a dedicated IT team. Compliance is a shared responsibility, and we provide the tools to help you meet your obligations."
         ],
         "tip": "General information, not legal advice. No platform can guarantee compliance; your practices and policies are equally important."
@@ -1575,20 +1575,20 @@ export const guides: GuideData[] = [
       },
       {
         "q": "How can Meridian Intelligence help me prepare for a breach?",
-        "a": "Meridian Intelligence provides audit logs, data access reports, and anomaly detection tools designed to help you quickly identify and scope a breach. Our platform is built with Canadian data residency and supports compliance with PIPEDA and Quebec Law 25. However, we are a tool-your policies and staff training are equally important."
+        "a": "Meridian Intelligence provides audit logs, data access reports, and anomaly detection tools designed to help you quickly identify and scope a breach. Our platform is built with privacy-by-design and supports compliance with PIPEDA and Quebec Law 25. However, we are a tool-your policies and staff training are equally important."
       }
     ],
     "relatedLinks": [
       {
-        "to": "/guides/canadian-privacy-compliance-pos",
+        "to": "/guides/pipeda-compliance-small-business",
         "label": "Canadian Privacy Compliance for POS Systems"
       },
       {
-        "to": "/guides/quebec-law-25-pos-analytics",
+        "to": "/guides/quebec-law-25-small-business",
         "label": "Quebec Law 25 and POS Analytics: What You Need to Know"
       },
       {
-        "to": "/guides/pos-data-security-best-practices",
+        "to": "/guides/canada-data-breach-playbook-small-business",
         "label": "POS Data Security Best Practices for Small Businesses"
       }
     ],
@@ -1599,7 +1599,7 @@ export const guides: GuideData[] = [
     "slug": "canadian-consent-loyalty-pos",
     "seoTitle": "Getting Valid Customer Consent for Loyalty and Marketing Data in Canada | Meridian",
     "description": "Learn how to get valid consent for loyalty and marketing data under PIPEDA and Quebec Law 25. Practical guide for Canadian POS operators.",
-    "datePublished": "2026-06-30",
+    "datePublished": "2026-07-18",
     "heroTitle": "Getting Valid Customer Consent",
     "heroAccent": "for Loyalty & Marketing Data in Canada",
     "heroDescription": "If you run a loyalty program, you need clear, informed consent. Here's what Canadian privacy law actually requires - and how to get it right.",
@@ -1634,7 +1634,7 @@ export const guides: GuideData[] = [
       {
         "title": "Managing Consent Records and Withdrawals",
         "paragraphs": [
-          "You must keep a record of when and how consent was given, including what the customer was told. This is critical for audits and complaints. Meridian's analytics platform is built to support this by logging consent events alongside transaction data - all stored in Canada.",
+          "You must keep a record of when and how consent was given, including what the customer was told. This is critical for audits and complaints. Meridian's analytics platform is built to support this by logging consent events alongside transaction data.",
           "When a customer withdraws consent, you must stop using their data for the specified purposes and update your records promptly. Quebec Law 25 requires you to honor withdrawal within a reasonable time. Make it easy for customers to do this via email, a web form, or in-store."
         ],
         "tip": "Set up automated alerts in your POS system when a consent withdrawal is received, so your marketing team can act immediately."
@@ -1683,15 +1683,15 @@ export const guides: GuideData[] = [
     ],
     "relatedLinks": [
       {
-        "to": "/guides/canadian-data-residency-pos",
+        "to": "/guides/pos-data-residency-canada",
         "label": "Why Canadian Data Residency Matters for POS Analytics"
       },
       {
-        "to": "/guides/quebec-law-25-compliance",
+        "to": "/guides/quebec-law-25-small-business",
         "label": "Quebec Law 25: What POS Operators Need to Know"
       },
       {
-        "to": "/guides/pos-loyalty-program-setup",
+        "to": "/guides/canadian-consent-loyalty-pos",
         "label": "Setting Up a Compliant Loyalty Program with Your POS"
       }
     ],
@@ -1702,7 +1702,7 @@ export const guides: GuideData[] = [
     "slug": "lightspeed-pos-analytics-canada",
     "seoTitle": "Lightspeed POS Analytics for Canadian Restaurants and Retail | Meridian",
     "description": "Learn how Lightspeed merchants can deepen analytics with Meridian's Canadian-built, PIPEDA-aligned platform. Supports Moneris, Alice POS, CAD pricing.",
-    "datePublished": "2026-07-06",
+    "datePublished": "2026-08-05",
     "heroTitle": "Go Beyond Lightspeed's Built-In Reports",
     "heroAccent": "with Canadian-First Analytics",
     "heroDescription": "Meridian adds a Canadian-built analytics layer for Lightspeed merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native Lightspeed integration is on the roadmap.",
@@ -1711,8 +1711,8 @@ export const guides: GuideData[] = [
         "title": "Why Lightspeed Merchants Need Deeper Analytics",
         "paragraphs": [
           "Lightspeed's native reporting covers sales, inventory, and staff performance. But as your business grows, you may want to combine data across locations, spot trends faster, or slice by customer segments. That's where Meridian steps in.",
-          "Meridian connects directly to your Lightspeed POS, pulling transaction data into a unified dashboard. You get real-time views of top-selling items, peak hours, and margin by category-without manual exports.",
-          "For Canadian merchants, Meridian also respects data residency. Your data stays in Canada, and the platform is built to support PIPEDA and Quebec Law 25 requirements."
+          "Meridian brings your Lightspeed transaction data into a unified dashboard with views of top-selling items, peak hours, and margin by category. Today that starts with a data export during onboarding; a native Lightspeed integration is on the roadmap.",
+          "For Canadian merchants, Meridian is transparent about where data lives \u2014 infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards \u2014 and the platform is built to support PIPEDA and Quebec Law 25 requirements."
         ],
         "tip": "General information, not legal advice. Compliance is a shared responsibility between your business and your analytics provider.",
         "stat": {
@@ -1723,7 +1723,7 @@ export const guides: GuideData[] = [
       {
         "title": "Designed for Canadian POS Systems: Moneris and Alice POS",
         "paragraphs": [
-          "Lightspeed integrates with many payment processors, but Canadian restaurants and retailers often rely on Moneris or Alice POS. Meridian was built with these systems in mind, ensuring seamless data flow.",
+          "Lightspeed integrates with many payment processors, but Canadian restaurants and retailers often rely on Moneris or Alice POS. Meridian was built with these systems in mind \u2014 Square and Clover connect with one-click OAuth today, while Moneris and Alice POS merchants start with a data export (native integrations on the roadmap).",
           "With Meridian, you can track payment method performance, detect chargeback patterns, and reconcile daily sales-all within a single view. No need to juggle multiple logins.",
           "Because Meridian is Canadian-built, it supports CAD pricing and avoids currency conversion headaches. You see your numbers in the currency you use every day."
         ]
@@ -1765,7 +1765,7 @@ export const guides: GuideData[] = [
       },
       {
         "q": "Is my data stored in Canada?",
-        "a": "Yes. Meridian hosts all customer data on Canadian servers, supporting data residency requirements under PIPEDA and Quebec Law 25."
+        "a": "Meridian is transparent about this: customer data is processed on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place, and the platform is designed around PIPEDA and built to support Quebec Law 25."
       },
       {
         "q": "Does Meridian work with Lightspeed's Quebec-based support?",
@@ -1777,31 +1777,31 @@ export const guides: GuideData[] = [
       },
       {
         "q": "What if I use a different POS system alongside Lightspeed?",
-        "a": "Meridian currently integrates with Lightspeed, Moneris, and Alice POS. If you use multiple systems, we can help consolidate data from each into one dashboard."
+        "a": "Meridian connects to Square and Clover with one-click OAuth today. For Lightspeed, Moneris, and Alice POS you can start with a data export while native integrations are built. If you use multiple systems, we can help consolidate data from each into one dashboard."
       }
     ],
     "relatedLinks": [
       {
-        "to": "/guides/pos-analytics-compliance-canada",
+        "to": "/guides/meridian-compliance-first-canada",
         "label": "POS Analytics Compliance in Canada"
       },
       {
-        "to": "/guides/moneris-integration-guide",
+        "to": "/guides/moneris-pos-analytics-connect-meridian",
         "label": "Moneris Integration Guide"
       },
       {
-        "to": "/guides/restaurant-metrics-dashboard",
+        "to": "/guides/pos-data-business-decisions",
         "label": "Restaurant Metrics Dashboard"
       }
     ],
     "ctaHeadline": "See Meridian in Action with Your Lightspeed Data",
-    "ctaDescription": "Start your free trial today-no credit card, no commitment. Connect Lightspeed in minutes and discover insights you've been missing."
+    "ctaDescription": "Start your free trial today-no credit card, no commitment. Bring your Lightspeed data into Meridian and discover insights you've been missing."
   },
   {
     "slug": "moneris-pos-analytics-connect-meridian",
     "seoTitle": "Moneris POS Analytics: Connect Moneris to Meridian | Meridian",
     "description": "Learn how to connect your Moneris POS system to Meridian for AI-powered analytics. Canadian-built, PIPEDA-aligned, with support for Quebec Law 25.",
-    "datePublished": "2026-07-01",
+    "datePublished": "2026-07-21",
     "heroTitle": "Moneris POS Analytics",
     "heroAccent": "Connect Your Data to Meridian",
     "heroDescription": "Meridian adds a Canadian-built analytics layer for Moneris merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native Moneris integration is on the roadmap.",
@@ -1817,7 +1817,7 @@ export const guides: GuideData[] = [
       {
         "title": "What Analytics Become Available?",
         "paragraphs": [
-          "Once connected, Meridian automatically ingests your Moneris transaction data and presents it in easy-to-read dashboards. You'll see sales trends by hour, day, or month, top-selling items, average transaction value, and customer purchase patterns.",
+          "Once your data is flowing \u2014 via export today, or the native integration when it ships \u2014 Meridian presents your Moneris transaction data in easy-to-read dashboards. You'll see sales trends by hour, day, or month, top-selling items, average transaction value, and customer purchase patterns.",
           "Meridian also provides AI-driven insights, such as demand forecasting and anomaly detection, helping you spot opportunities and issues early."
         ],
         "stat": {
@@ -1828,7 +1828,7 @@ export const guides: GuideData[] = [
       {
         "title": "Compliance and Data Residency",
         "paragraphs": [
-          "Meridian stores all Moneris data on Canadian servers, aligned with PIPEDA requirements and built to support Quebec Law 25's data localization and consent provisions. We do not transfer or sell your data.",
+          "Meridian handles Moneris data in line with PIPEDA requirements and is built to support Quebec Law 25's consent provisions. It is transparent about where data lives: infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place. We never sell your data.",
           "Our platform includes role-based access controls and audit logs to help you meet your compliance obligations. Meridian is designed for Canadian merchants who need to keep their data in Canada."
         ],
         "tip": "General information, not legal advice. Review your own data handling policies to ensure full compliance with applicable laws."
@@ -1836,7 +1836,7 @@ export const guides: GuideData[] = [
       {
         "title": "Troubleshooting Common Issues",
         "paragraphs": [
-          "If data doesn't appear after connecting, verify your Moneris API key is active and has not expired. Check that your Moneris terminal is sending transaction data to the correct endpoint.",
+          "If data doesn't appear after an upload, check that your export covers the date range you expect and re-upload it. Our team can help validate the file format.",
           "For persistent issues, Meridian's support team can review connection logs. Most problems are resolved within a few hours."
         ]
       }
@@ -1844,11 +1844,11 @@ export const guides: GuideData[] = [
     "faqs": [
       {
         "q": "Is Moneris data stored outside Canada when connected to Meridian?",
-        "a": "No. Meridian stores all Moneris transaction data on Canadian servers. We designed our platform around Canadian data residency requirements."
+        "a": "Meridian is transparent about this: Moneris transaction data is processed on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place, and the platform is designed around PIPEDA and built to support Quebec Law 25."
       },
       {
         "q": "Do I need to change my Moneris hardware or software?",
-        "a": "No. The connection uses your existing Moneris API credentials. No hardware or software changes are needed."
+        "a": "No. You keep your existing Moneris setup \u2014 no hardware or software changes. Today you share data via an export during onboarding; a native Moneris integration is on the roadmap."
       },
       {
         "q": "How long does it take to set up the integration?",
@@ -1865,26 +1865,26 @@ export const guides: GuideData[] = [
     ],
     "relatedLinks": [
       {
-        "to": "/guides/connect-alice-pos",
+        "to": "/guides/alice-pos-multi-location-analytics-canada",
         "label": "Connect Alice POS to Meridian"
       },
       {
-        "to": "/guides/canadian-pos-compliance",
+        "to": "/guides/pipeda-compliance-small-business",
         "label": "Canadian POS Compliance Guide"
       },
       {
-        "to": "/guides/pos-analytics-basics",
+        "to": "/guides/pos-data-business-decisions",
         "label": "POS Analytics Basics for Retailers"
       }
     ],
     "ctaHeadline": "Ready to Unlock Your Moneris Data?",
-    "ctaDescription": "Connect your Moneris POS to Meridian today and start making data-driven decisions with confidence. Get started free."
+    "ctaDescription": "Bring your Moneris data into Meridian today and start making data-driven decisions with confidence. Get started free."
   },
   {
     "slug": "touchbistro-analytics-revenue-insights",
     "seoTitle": "TouchBistro Analytics: Turn Your POS Data Into Revenue Insights | Meridian",
     "description": "Learn how TouchBistro restaurant operators can use AI-powered analytics to uncover revenue opportunities, optimize menus, and stay compliant with Canadian privacy laws.",
-    "datePublished": "2026-07-07",
+    "datePublished": "2026-08-08",
     "heroTitle": "TouchBistro Analytics:",
     "heroAccent": "Turn Your POS Data Into Revenue Insights",
     "heroDescription": "Meridian adds a Canadian-built analytics layer for TouchBistro merchants — PIPEDA-aligned, tuned for Quebec Law 25, and priced in CAD. Start with a data export today; native TouchBistro integration is on the roadmap.",
@@ -1893,9 +1893,9 @@ export const guides: GuideData[] = [
         "title": "Why TouchBistro Data Needs a Second Brain",
         "paragraphs": [
           "TouchBistro is built for speed and simplicity at the point of sale. But its built-in reporting often leaves operators digging through spreadsheets to answer basic questions like 'Which menu items are most profitable?' or 'Why did Tuesday lunch drop 15%?'",
-          "Meridian Intelligence connects directly to your TouchBistro data-plus payment processors like Moneris-and applies AI to surface trends, anomalies, and opportunities. No manual exports, no guesswork."
+          "Meridian Intelligence layers AI on top of your TouchBistro data to surface trends, anomalies, and opportunities. Start with a data export today; a native TouchBistro integration is on the roadmap."
         ],
-        "tip": "Look for a tool that integrates with your existing POS without requiring a hardware swap. Meridian works with TouchBistro's API to pull data securely.",
+        "tip": "Look for a tool that works alongside your existing POS without requiring a hardware swap. Meridian starts from your TouchBistro data exports \u2014 no hardware changes.",
         "stat": {
           "value": "73%",
           "label": "of restaurant operators say better data analytics would improve their profitability (Toast, 2023)"
@@ -1916,7 +1916,7 @@ export const guides: GuideData[] = [
       {
         "title": "Built for Canadian Compliance: PIPEDA, Quebec Law 25, and Data Residency",
         "paragraphs": [
-          "Meridian was one of the earliest POS analytics platforms to design a dedicated Canadian product. That means your data stays in Canada, with CAD pricing and support for local payment systems like Moneris and Alice POS.",
+          "Meridian was one of the earliest POS analytics platforms to design a dedicated Canadian product. That means CAD pricing, GST/HST-aware reporting, support for local payment systems like Moneris and Alice POS, and transparency about where your data is processed.",
           "Our platform is built to support PIPEDA and Quebec Law 25 requirements-including data minimization, consent management, and right-to-deletion workflows. We handle the technical foundation, but compliance is a shared responsibility between Meridian and your business."
         ],
         "tip": "General information, not legal advice. Consult with a privacy lawyer to ensure your data practices fully comply with Quebec Law 25 and PIPEDA.",
@@ -1961,11 +1961,11 @@ export const guides: GuideData[] = [
     "faqs": [
       {
         "q": "Does Meridian work with my existing TouchBistro setup?",
-        "a": "Yes. Meridian integrates directly with TouchBistro's API, so you don't need to change your POS hardware or software. We also support Moneris and Alice POS for payment data."
+        "a": "You keep TouchBistro as-is \u2014 no hardware or software changes. Today Meridian works from your TouchBistro data exports, with a native integration on the roadmap (the same export path covers Moneris and Alice POS payment data)."
       },
       {
         "q": "Is my customer data safe and compliant with Canadian privacy laws?",
-        "a": "Meridian is designed around PIPEDA and Quebec Law 25. Your data is stored in Canada, and we provide tools for consent management and data deletion. However, compliance is a shared responsibility-consult a legal expert for your specific obligations."
+        "a": "Meridian is designed around PIPEDA and Quebec Law 25. We are transparent about where data is processed (US cloud regions, with contractual cross-border safeguards), and we provide tools for consent management and data deletion. However, compliance is a shared responsibility-consult a legal expert for your specific obligations."
       },
       {
         "q": "How long does it take to see insights after connecting my POS?",
@@ -1982,15 +1982,15 @@ export const guides: GuideData[] = [
     ],
     "relatedLinks": [
       {
-        "to": "/guides/pos-analytics-canada",
+        "to": "/guides/pos-data-business-decisions",
         "label": "POS Analytics for Canadian Restaurants: A Buyer's Guide"
       },
       {
-        "to": "/guides/quebec-law-25-compliance",
+        "to": "/guides/quebec-law-25-small-business",
         "label": "Quebec Law 25: What Restaurant Operators Need to Know"
       },
       {
-        "to": "/guides/menu-engineering-data",
+        "to": "/guides/menu-pricing-strategy",
         "label": "Menu Engineering with Data: Boost Profit Without Raising Prices"
       }
     ],
@@ -2001,7 +2001,7 @@ export const guides: GuideData[] = [
     "slug": "tracking-gst-hst-pst-pos-canada",
     "seoTitle": "Tracking GST/HST/PST in Your POS Data: A Canadian Owner's Guide | Meridian",
     "description": "Learn how to reconcile GST, HST, and PST from your POS system. A practical guide for Canadian operators using Moneris, Alice POS, and more.",
-    "datePublished": "2026-07-02",
+    "datePublished": "2026-07-24",
     "heroTitle": "Tracking GST/HST/PST in Your POS Data",
     "heroAccent": "A Canadian Owner's Guide",
     "heroDescription": "Reconciling sales tax from your POS doesn't have to be a headache. This guide walks you through the essentials for Canadian operators.",
@@ -2053,7 +2053,7 @@ export const guides: GuideData[] = [
         "title": "Preparing for Tax Audits with POS Data",
         "paragraphs": [
           "Tax authorities may request detailed POS data to verify your remittances. Ensure your POS system can produce a clear audit trail, including transaction timestamps, itemized taxes, and any discounts or exemptions applied.",
-          "Canadian data residency is key here. Using a platform that stores your data in Canada (like Meridian) helps you meet privacy laws while keeping your records accessible for audit requests."
+          "Whatever platform you use, you are accountable for knowing where your tax records live. Meridian is upfront about this \u2014 data is processed in US cloud regions with contractual cross-border safeguards \u2014 while keeping your records accessible for audit requests."
         ],
         "stat": {
           "value": "6+",
@@ -2085,15 +2085,15 @@ export const guides: GuideData[] = [
     ],
     "relatedLinks": [
       {
-        "to": "/guides/pos-data-canadian-privacy",
+        "to": "/guides/pos-data-residency-canada",
         "label": "Canadian Privacy and Your POS Data"
       },
       {
-        "to": "/guides/reconciling-pos-sales",
+        "to": "/guides/tracking-gst-hst-pst-pos-canada",
         "label": "How to Reconcile POS Sales Data"
       },
       {
-        "to": "/guides/quebec-law-25-pos",
+        "to": "/guides/quebec-law-25-small-business",
         "label": "Quebec Law 25 and POS Analytics"
       }
     ],
@@ -2104,7 +2104,7 @@ export const guides: GuideData[] = [
     "slug": "who-owns-your-pos-data-canadian-merchants",
     "seoTitle": "Who Owns Your POS Data? A Guide for Canadian Merchants | Meridian",
     "description": "Learn who legally owns your POS data, what Canadian privacy laws say, and how to avoid vendor lock-in. Practical guide for merchants using Moneris, Alice POS, and more.",
-    "datePublished": "2026-07-03",
+    "datePublished": "2026-07-27",
     "heroTitle": "Who Owns Your POS Data?",
     "heroAccent": "A Guide for Canadian Merchants",
     "heroDescription": "Your POS system generates valuable sales and customer data every day. But do you actually own it? Here's what Canadian merchants need to know about data ownership, lock-in, and your rights under PIPEDA and Quebec Law 25.",
@@ -2127,7 +2127,7 @@ export const guides: GuideData[] = [
         "paragraphs": [
           "Under PIPEDA (Personal Information Protection and Electronic Documents Act), merchants must protect customer personal information and obtain consent for its collection, use, and disclosure. Quebec Law 25 adds stricter requirements, including data portability and the right to request deletion.",
           "These laws mean you - the merchant - are ultimately responsible for how your POS provider handles customer data. If your provider stores data outside Canada or shares it with third parties without proper consent, you could be held liable. That's why choosing a provider built for Canadian compliance matters.",
-          "Meridian is designed around PIPEDA and built to support Quebec Law 25. We offer Canadian data residency, CAD pricing, and integrations with Canadian POS systems like Moneris and Alice POS. Our platform helps you meet your compliance obligations without adding complexity."
+          "Meridian is designed around PIPEDA and built to support Quebec Law 25. We offer CAD pricing, transparency about where data is processed, one-click Square and Clover integrations, and a data-export path for Canadian systems like Moneris and Alice POS (native integrations on the roadmap). Our platform helps you meet your compliance obligations without adding complexity."
         ],
         "tip": "General information, not legal advice. For specific compliance questions, consult a privacy lawyer or the Office of the Privacy Commissioner of Canada.",
       },
@@ -2147,7 +2147,7 @@ export const guides: GuideData[] = [
         "title": "What to Look for in a POS Analytics Provider",
         "paragraphs": [
           "When evaluating a POS analytics platform, ask these questions: Who owns the data? Can I export it in a standard format? Where is it stored? Do you share it with third parties? What happens if I cancel? The answers should be clear and in plain language.",
-          "Look for providers that offer Canadian data residency, transparent data usage policies, and no hidden fees for data access. Avoid providers that claim ownership of aggregated data - aggregated data derived from your transactions is still your data.",
+          "Look for providers that are transparent about where data is stored and what cross-border safeguards apply, have clear data usage policies, and charge no hidden fees for data access. Avoid providers that claim ownership of aggregated data - aggregated data derived from your transactions is still your data.",
           "Meridian checks all these boxes. We were one of the earliest POS analytics platforms to build a dedicated Canadian product, with compliance-first design. Our platform supports Moneris, Alice POS, and other Canadian systems, and we never lock you in."
         ],
         "tip": "Always request a data processing agreement (DPA) from your provider. This outlines how your data is handled and protected.",
@@ -2155,8 +2155,8 @@ export const guides: GuideData[] = [
       {
         "title": "How Meridian Protects Your Data Ownership and Privacy",
         "paragraphs": [
-          "Meridian was built from the ground up for Canadian merchants. Our platform stores all data in Canada, uses CAD pricing, and is designed around PIPEDA and Quebec Law 25. We never claim ownership of your data, and we only process it to deliver the analytics you need.",
-          "We integrate directly with Canadian POS systems like Moneris and Alice POS, so your data flows securely without being routed through US servers. Our analytics are delivered in real-time, with full transparency into how your data is used.",
+          "Meridian was built from the ground up for Canadian merchants. Our platform uses CAD pricing, is designed around PIPEDA and Quebec Law 25, and is transparent about where data is processed: major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place. We never claim ownership of your data, and we only process it to deliver the analytics you need.",
+          "Square and Clover connect with one-click OAuth today; Canadian systems like Moneris and Alice POS start with a data export while native integrations are built. Our analytics are delivered in real-time, with full transparency into how your data is used.",
           "If you ever decide to leave Meridian, you can export all your data in standard formats at no extra cost. No lock-in, no surprises. Your data is yours - always."
         ],
       },
@@ -2181,7 +2181,7 @@ export const guides: GuideData[] = [
       },
       {
         "q": "Does PIPEDA require my POS provider to store data in Canada?",
-        "a": "PIPEDA does not explicitly require data residency, but it holds you accountable for how your provider handles customer data. Quebec Law 25 has stricter rules. Using a provider with Canadian data residency simplifies compliance. Meridian stores all data in Canada."
+        "a": "PIPEDA does not explicitly require data residency, but it holds you accountable for how your provider handles customer data. Quebec Law 25 has stricter rules. What matters is knowing exactly where your data lives and what safeguards apply. Meridian is transparent about this: data is processed on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place."
       },
       {
         "q": "Can my POS provider sell my aggregated transaction data?",
@@ -2194,16 +2194,531 @@ export const guides: GuideData[] = [
     ],
     "relatedLinks": [
       {
-        "to": "/guides/canadian-pos-compliance-pipeda-quebec-law-25",
+        "to": "/guides/pipeda-compliance-small-business",
         "label": "Canadian POS Compliance: PIPEDA & Quebec Law 25"
       },
       {
-        "to": "/guides/pos-data-portability-rights-canada",
+        "to": "/guides/who-owns-your-pos-data-canadian-merchants",
         "label": "Your Rights to POS Data Portability in Canada"
       }
     ],
     "ctaHeadline": "Take Control of Your POS Data Today",
     "ctaDescription": "Schedule a free data audit with Meridian. We'll show you how to own, protect, and leverage your POS data - with no lock-in."
+  },
+  {
+    "slug": "analytique-restaurant-montreal",
+    "seoTitle": "Analytique de restaurant à Montréal | Meridian",
+    "description": "Guide complet sur l'analytique de restaurant à Montréal : conformité Loi 25, PIPEDA, résidence des données au Canada, et solutions POS adaptées aux opérateurs francophones.",
+    "datePublished": "2026-08-11",
+    "heroTitle": "Analytique de restaurant à Montréal",
+    "heroAccent": "conçue pour la conformité et la performance",
+    "heroDescription": "Découvrez comment Meridian Intelligence aide les restaurateurs montréalais à exploiter leurs données POS tout en respectant la Loi 25 et la PIPEDA, avec une tarification en dollars canadiens.",
+    "sections": [
+      {
+        "title": "Pourquoi l'analytique de restaurant est cruciale à Montréal",
+        "paragraphs": [
+          "Dans un marché concurrentiel comme Montréal, comprendre les tendances de vente, les heures d'affluence et les préférences des clients est essentiel pour optimiser les marges. L'analytique POS transforme les données brutes en décisions éclairées.",
+          "Meridian Intelligence a été l'une des premières plateformes à offrir une solution dédiée au Canada, avec des fonctionnalités conçues autour des exigences de la Loi 25 du Québec et de la PIPEDA fédérale."
+        ],
+        "tip": "Informations générales – consultez un conseiller juridique pour la conformité spécifique à votre établissement."
+      },
+      {
+        "title": "Conformité Loi 25 et PIPEDA : une priorité pour votre restaurant",
+        "paragraphs": [
+          "La Loi 25 du Québec impose des règles strictes sur la collecte et le traitement des données personnelles, y compris celles des clients via les systèmes POS. Meridian est conçu pour soutenir ces obligations : gestion des consentements, conservation documentée des données et accès restreint par rôle.",
+          "Notre plateforme est alignée sur les principes de la PIPEDA, avec le chiffrement des données en transit et au repos ainsi que la minimisation des données. Meridian est aussi transparent sur l'emplacement des données : son infrastructure repose sur de grands fournisseurs infonuagiques situés aux États-Unis, avec des garanties contractuelles encadrant les transferts transfrontaliers de données."
+        ],
+        "tip": "Ce contenu est à titre informatif seulement et ne constitue pas un avis juridique. Consultez un expert en protection des données."
+      },
+      {
+        "title": "Intégration avec les systèmes POS canadiens : Moneris et Alice POS",
+        "paragraphs": [
+          "Meridian se connecte aujourd'hui à Square et Clover en un clic (OAuth). Pour Moneris, le leader des paiements au Canada, et Alice POS, populaire dans les restaurants montréalais, vous pouvez démarrer dès maintenant par un simple export de données — les intégrations natives sont sur la feuille de route.",
+          "Que vous utilisiez un terminal Moneris ou un système Alice POS, vos données de vente sont centralisées en temps réel dans un tableau de bord unifié."
+        ],
+        "stat": {
+          "value": "50+",
+          "label": "intégrations POS disponibles, dont Moneris et Alice POS"
+        }
+      },
+      {
+        "title": "Fonctionnalités clés pour les restaurateurs montréalais",
+        "paragraphs": [
+          "Tableaux de bord personnalisés, alertes en temps réel sur les écarts de vente, et rapports de performance par service. Meridian offre aussi des prévisions basées sur l'IA pour anticiper la demande.",
+          "La facturation en dollars canadiens élimine les frais de conversion et les surprises de taux de change pour les opérateurs locaux."
+        ]
+      },
+      {
+        "title": "Où sont hébergées vos données ? Transparence avant tout",
+        "paragraphs": [
+          "Plutôt que de faire une promesse de résidence des données qu'il ne peut garantir, Meridian mise sur la transparence : les données sont traitées par de grands fournisseurs infonuagiques dans des régions situées aux États-Unis, avec des garanties contractuelles encadrant les transferts transfrontaliers, conformément aux exigences de transparence de la Loi 25.",
+          "La Loi 25 n'interdit pas le transfert de données hors Québec : elle exige une évaluation des facteurs relatifs à la vie privée et des protections adéquates. Savoir précisément où vos données se trouvent et quelles garanties s'appliquent est exactement l'information dont vous avez besoin pour cette évaluation."
+        ],
+        "tip": "Demandez à chacun de vos fournisseurs où vos données sont hébergées et quelles garanties contractuelles s'appliquent — la Loi 25 vous en tient responsable."
+      },
+      {
+        "title": "Comment démarrer avec Meridian à Montréal",
+        "paragraphs": [
+          "L'inscription est simple : créez un compte, connectez Square ou Clover en un clic, ou importez un export de données de votre système POS (Moneris, Alice POS ou autre), et commencez à explorer vos données. Aucune installation matérielle requise.",
+          "Notre équipe vous accompagne dans la configuration initiale et la connexion de votre système POS."
+        ]
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Qu'est-ce que l'analytique de restaurant et en quoi est-ce utile à Montréal ?",
+        "a": "L'analytique de restaurant utilise les données de votre système POS pour analyser les ventes, les stocks, et le comportement client. À Montréal, cela aide à optimiser les menus, réduire le gaspillage, et améliorer la rentabilité, tout en respectant les lois locales sur la protection des données."
+      },
+      {
+        "q": "Meridian est-il conforme à la Loi 25 du Québec ?",
+        "a": "Meridian est conçu autour des principes de la Loi 25 et de la PIPEDA, avec la gestion des consentements, le chiffrement et une transparence complète sur l'emplacement des données. Cependant, la conformité finale dépend aussi de vos pratiques internes — consultez un conseiller juridique pour vos obligations spécifiques."
+      },
+      {
+        "q": "Puis-je utiliser Meridian avec mon système POS actuel (Moneris, Alice POS) ?",
+        "a": "Meridian se connecte en un clic à Square et Clover. Pour Moneris et Alice POS, très utilisés à Montréal, vous pouvez démarrer par un export de données — les intégrations natives sont sur la feuille de route. Aucun matériel supplémentaire requis."
+      },
+      {
+        "q": "Les données de mon restaurant sont-elles stockées au Canada ?",
+        "a": "Meridian est transparent à ce sujet : les données sont traitées par de grands fournisseurs infonuagiques dans des régions situées aux États-Unis, avec des garanties contractuelles encadrant les transferts transfrontaliers. La Loi 25 exige la transparence et des protections adéquates pour les transferts hors Québec — et c'est exactement l'information que Meridian vous fournit."
+      },
+      {
+        "q": "La tarification est-elle en dollars canadiens ?",
+        "a": "Oui, la facturation de Meridian est en dollars canadiens (CAD), sans frais de conversion ni surprises de taux de change. Meridian prend en charge les données des systèmes POS répandus au Québec, dont Moneris et Alice POS (par export de données aujourd'hui, intégrations natives à venir)."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/quebec-law-25-small-business",
+        "label": "Quebec Law 25 for Small Businesses (EN)"
+      },
+      {
+        "to": "/guides/moneris-pos-analytics-connect-meridian",
+        "label": "Moneris POS Analytics: Connect Moneris to Meridian (EN)"
+      }
+    ],
+    "ctaHeadline": "Prêt à transformer vos données en décisions ?",
+    "ctaDescription": "Essayez Meridian gratuitement pendant 14 jours – sans engagement. Découvrez comment l'analytique POS peut booster votre restaurant montréalais."
+  },
+  {
+    "slug": "canadian-food-inflation-margins-guide",
+    "seoTitle": "Protecting Restaurant Margins Through Canadian Food Inflation | Meridian",
+    "description": "Practical strategies for Canadian operators to protect margins as food costs rise. Learn how POS analytics and compliance-first tools can help.",
+    "datePublished": "2026-08-14",
+    "heroTitle": "Protecting Restaurant Margins",
+    "heroAccent": "Through Canadian Food Inflation",
+    "heroDescription": "Food costs are squeezing Canadian operators. Here's how to use data—not guesswork—to protect your margins while staying compliant with Canadian privacy laws.",
+    "sections": [
+      {
+        "title": "Why Canadian Operators Face Unique Pressure",
+        "paragraphs": [
+          "Food inflation in Canada has outpaced general inflation for several years, driven by supply chain disruptions, climate impacts, and higher input costs. For restaurants, this means ingredient costs rise faster than menu prices can adjust.",
+          "Unlike operators in other markets, Canadian restaurants also navigate a complex privacy landscape—PIPEDA and Quebec Law 25 require careful handling of customer data. Any analytics tool you use must be built for this reality."
+        ],
+        "tip": "General information, not legal advice. Consult a qualified professional for your specific compliance obligations.",
+        "stat": {
+          "value": "5.0%",
+          "label": "Average annual food inflation in Canada (2022–2025, StatCan)"
+        }
+      },
+      {
+        "title": "Know Your Real Food Cost—Per Dish",
+        "paragraphs": [
+          "Many operators track food cost as a percentage of total sales, but that hides where the real leaks are. A best-selling dish might have a razor-thin margin if its key ingredients have spiked.",
+          "With a POS analytics platform like Meridian, you can track cost-per-dish as your ingredient costs change. This lets you identify which menu items are dragging down overall margin—and which are still profitable."
+        ],
+        "tip": "Set up cost-per-dish tracking for your top 10 selling items first. You'll often find surprises.",
+        "stat": {
+          "value": "3–5%",
+          "label": "Typical margin improvement from dish-level cost tracking"
+        }
+      },
+      {
+        "title": "Dynamic Menu Pricing Without the Guesswork",
+        "paragraphs": [
+          "Raising prices is inevitable during inflation, but doing it blindly can drive away customers. Instead, use data to adjust strategically: identify dishes with inelastic demand (e.g., popular comfort foods) and raise those prices first.",
+          "Meridian's analytics surface demand elasticity per item, so you can test small price changes and see their impact on sales volume. This is far more precise than a blanket 5% menu increase."
+        ],
+        "tip": "Consider 'price anchoring'—keep a few low-margin, high-visibility items stable to maintain perceived value.",
+        "stat": {
+          "value": "2–4%",
+          "label": "Revenue increase from data-driven price optimization (industry studies)"
+        }
+      },
+      {
+        "title": "Reduce Waste with Predictive Ordering",
+        "paragraphs": [
+          "Food waste is a direct hit to margins, especially when ingredient costs are high. Canadian restaurants lose an estimated 4–10% of food purchased to waste, much of it avoidable.",
+          "Meridian's predictive ordering uses historical sales data and seasonal trends to recommend optimal stock levels—so you order what you'll actually sell. This reduces over-ordering and spoilage."
+        ],
+        "tip": "Start by tracking waste for your top 5 most-ordered ingredients. You'll see patterns within two weeks.",
+        "stat": {
+          "value": "15–20%",
+          "label": "Typical waste reduction with predictive ordering tools"
+        }
+      },
+      {
+        "title": "Compliance-First Analytics: A Canadian Advantage",
+        "paragraphs": [
+          "As food inflation pressures margins, the last thing you need is a privacy compliance headache. Many analytics platforms were never designed with PIPEDA or Quebec Law 25 in mind, leaving Canadian operators to figure out compliance alone.",
+          "Meridian was designed from the ground up for Canadian operators: CAD pricing, GST/HST-aware reporting, and a platform built to support PIPEDA and Quebec Law 25. It is also transparent about where data lives: its infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place, and the platform is designed around PIPEDA and built to support Quebec Law 25. This means you can focus on margins, not legal exposure."
+        ],
+        "tip": "General information, not legal advice. Review your data handling practices with a legal professional to ensure full compliance.",
+        "stat": {
+          "value": "CAD",
+          "label": "pricing with no exchange-rate surprises"
+        }
+      },
+      {
+        "title": "Take Action: Your Next Steps",
+        "paragraphs": [
+          "Start by auditing your current food cost tracking. Do you know the margin on each dish? Are you using supplier price updates? If not, you're flying blind.",
+          "Then, explore a POS analytics platform built with Canadian privacy laws in mind. Meridian offers a free demo for Canadian operators—no commitment, just data you can use today."
+        ],
+        "tip": "Even a 1% margin improvement on a $500k annual food cost saves $5,000. Small changes add up.",
+        "stat": {
+          "value": "1%",
+          "label": "Margin improvement = $5k savings on $500k food cost"
+        }
+      }
+    ],
+    "faqs": [
+      {
+        "q": "How does food inflation specifically affect Canadian restaurants?",
+        "a": "Canadian food inflation has been persistently higher than general inflation, driven by supply chain issues, climate impacts on agriculture, and higher energy costs. This means ingredient costs rise faster than operators can adjust menu prices, squeezing margins."
+      },
+      {
+        "q": "What is dish-level cost tracking and why does it matter?",
+        "a": "Dish-level cost tracking calculates the ingredient cost for each menu item as your costs change. It matters because it reveals which dishes are profitable and which are eroding margins—something overall food cost percentage can hide."
+      },
+      {
+        "q": "Can I raise menu prices without losing customers?",
+        "a": "Yes, if done strategically. Use data to identify dishes with inelastic demand (e.g., popular comfort foods) and raise those prices first. Test small changes and monitor sales volume. Avoid blanket increases that may drive away price-sensitive customers."
+      },
+      {
+        "q": "How does predictive ordering reduce waste?",
+        "a": "Predictive ordering uses historical sales data and seasonal trends to recommend optimal stock levels. This reduces over-ordering and spoilage, directly cutting food waste—which can be 4–10% of purchases in Canadian restaurants."
+      },
+      {
+        "q": "Is Meridian compliant with Canadian privacy laws?",
+        "a": "Meridian is designed around PIPEDA and built to support Quebec Law 25, with CAD pricing and transparency about where data is processed (major cloud providers in US regions, with contractual cross-border safeguards). Compliance is a shared responsibility, so we recommend consulting a legal professional to ensure your specific practices align."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/reduce-restaurant-food-waste",
+        "label": "How to Reduce Food Waste in Your Restaurant"
+      },
+      {
+        "to": "/guides/restaurant-food-cost-guide",
+        "label": "The Complete Restaurant Food Cost Guide"
+      },
+      {
+        "to": "/guides/menu-pricing-strategy",
+        "label": "Menu Pricing Strategy: A Data-Driven Approach"
+      }
+    ],
+    "ctaHeadline": "See Your Real Margins—Free",
+    "ctaDescription": "Get a personalized margin assessment for your Canadian restaurant. No commitment, just data you can act on."
+  },
+  {
+    "slug": "meridian-vs-toast-analytics-canada",
+    "seoTitle": "Meridian vs Toast Analytics for Canadian Restaurants | Meridian",
+    "description": "Compare Meridian and Toast Analytics for Canadian restaurants. See how compliance-first design, data transparency, and POS integration stack up.",
+    "datePublished": "2026-08-17",
+    "heroTitle": "Meridian vs Toast Analytics",
+    "heroAccent": "for Canadian Restaurants",
+    "heroDescription": "Choosing the right analytics platform? We compare Meridian's Canadian-built, compliance-first approach with Toast Analytics—so you can decide what fits your restaurant's needs.",
+    "sections": [
+      {
+        "title": "Why Canadian Compliance Matters",
+        "paragraphs": [
+          "Canadian privacy laws like PIPEDA and Quebec Law 25 impose strict rules on how customer data is collected, stored, and processed. Meridian was designed around these regulations from day one, with privacy-by-design, CAD pricing, and transparency about where data is processed. Toast Analytics, built primarily for the US market, may not offer the same level of alignment with Canadian requirements.",
+          "For operators in Quebec, Law 25 requires explicit consent and data portability. Meridian's platform is built to support these obligations, while Toast's compliance posture may vary by region. Always consult a legal professional for your specific situation."
+        ],
+        "tip": "General information, not legal advice. Compliance is a shared responsibility between you and your analytics provider."
+      },
+      {
+        "title": "Data Transparency and Control",
+        "paragraphs": [
+          "Neither platform can honestly promise your data never leaves Canada — and Meridian doesn't pretend otherwise. Meridian is upfront that its infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place. Under PIPEDA and Quebec Law 25, that transparency is exactly what you need from a vendor: you are accountable for knowing where your customers' data lives and what protections apply.",
+          "When comparing platforms, ask each vendor the same questions: where is data processed, what cross-border safeguards apply, and can you get a straight answer in writing?"
+        ],
+        "tip": "A vendor that answers the data-location question directly is showing you how it will handle the rest of your compliance questions."
+      },
+      {
+        "title": "POS Integration and Support",
+        "paragraphs": [
+          "Meridian is built around Canadian operators' stacks: Square and Clover connect with one-click OAuth today, and merchants on Canadian systems like Moneris and Alice POS can start with a simple data export while native integrations are built.",
+          "Toast Analytics is designed for Toast's own POS ecosystem. If you use a different POS — Moneris, Alice POS, Square, Lightspeed — Toast's analytics generally aren't an option without switching your POS. Meridian works with your existing setup."
+        ]
+      },
+      {
+        "title": "Pricing and Currency",
+        "paragraphs": [
+          "Meridian prices in CAD, so you avoid currency conversion fees and see costs in your local currency. This transparency helps with budgeting and avoids surprises on your monthly bill.",
+          "When comparing plans, check whether quotes are in CAD or USD, what's bundled with POS hardware contracts, and what add-on analytics tiers actually cost."
+        ],
+        "tip": "Check current exchange rates and any additional fees for cross-border transactions when comparing plans."
+      },
+      {
+        "title": "Feature Comparison: Analytics and Reporting",
+        "paragraphs": [
+          "Both platforms offer sales reporting, inventory tracking, and customer insights. However, Meridian's analytics are built with Canadian tax rules and reporting standards in mind, such as GST/HST and QST breakdowns.",
+          "Toast Analytics provides robust US-centric reports. Canadian users may need to customize or manually adjust for local tax structures, which can be time-consuming."
+        ],
+        "stat": {
+          "value": "Built-in",
+          "label": "Canadian tax reporting with Meridian"
+        }
+      },
+      {
+        "title": "Focus and Fit",
+        "paragraphs": [
+          "Toast is a large public company whose analytics exist to serve its own POS ecosystem — excellent if you're all-in on Toast hardware and software. Meridian is a focused analytics platform built specifically around the questions independent Canadian operators ask: GST/HST and QST breakdowns, Moneris and Alice POS integrations, and PIPEDA / Quebec Law 25 alignment.",
+          "The right choice depends on your stack: if you run Toast POS and mainly want built-in reporting, Toast Analytics is the path of least resistance. If you run a Canadian POS, want deeper AI-driven insights, or care about vendor transparency on privacy, Meridian is built for exactly that."
+        ]
+      }
+    ],
+    "faqs": [
+      {
+        "q": "Is Meridian certified for PIPEDA or Quebec Law 25?",
+        "a": "No, Meridian is not certified for any specific privacy law. The platform is designed around PIPEDA and built to support Quebec Law 25, but compliance is a shared responsibility. You should consult a legal advisor to ensure your use of the platform meets all requirements."
+      },
+      {
+        "q": "Can I use Toast Analytics if I have a non-Toast POS?",
+        "a": "Toast Analytics is optimized for Toast's own POS. If you use a different system like Moneris or Alice POS, you may need to manually export data or use third-party integrations, which can be less reliable and more labor-intensive."
+      },
+      {
+        "q": "Do I need to replace my POS to use Meridian?",
+        "a": "No. Meridian works with the data your existing POS already generates — one-click OAuth for Square and Clover, and a data-export path to start for Canadian systems like Moneris and Alice POS (native integrations on the roadmap). Toast Analytics, by contrast, is available as part of the Toast POS ecosystem."
+      },
+      {
+        "q": "How does Meridian handle data residency?",
+        "a": "Meridian is transparent about this: data is processed on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place. Rather than make a residency claim it cannot guarantee, Meridian focuses on PIPEDA- and Law 25-aligned design — explicit consent, documented retention, role-based access, and encryption in transit and at rest."
+      },
+      {
+        "q": "What if I already use Toast POS—should I still consider Meridian?",
+        "a": "If you use Toast POS, Toast Analytics may integrate more seamlessly. However, if PIPEDA / Law 25 alignment, working with a Canadian POS like Moneris or Alice POS, or vendor transparency about data handling are priorities, Meridian could still be a strong option. You can often run both in parallel for different needs."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/pipeda-compliance-small-business",
+        "label": "PIPEDA Compliance for Canadian Small Businesses"
+      },
+      {
+        "to": "/guides/who-owns-your-pos-data-canadian-merchants",
+        "label": "Who Owns Your POS Data?"
+      },
+      {
+        "to": "/guides/moneris-pos-analytics-connect-meridian",
+        "label": "Moneris POS Analytics: Connect Moneris to Meridian"
+      }
+    ],
+    "ctaHeadline": "Ready to Compare?",
+    "ctaDescription": "See how Meridian can support your Canadian restaurant with compliance-first analytics. Request a demo today."
+  },
+  {
+    "slug": "cafe-analytics-toronto-benchmarks-trends",
+    "seoTitle": "Cafe Analytics in Toronto: Benchmarks and Trends | Meridian",
+    "description": "Discover key cafe analytics benchmarks and trends for Toronto. Learn how local data, compliance, and POS insights can help your cafe thrive.",
+    "datePublished": "2026-08-20",
+    "heroTitle": "Cafe Analytics in Toronto",
+    "heroAccent": "Benchmarks and Trends for Local Owners",
+    "heroDescription": "Understand how your Toronto cafe stacks up against local benchmarks and what trends are shaping the city's coffee scene, with analytics built for Canadian compliance.",
+    "sections": [
+      {
+        "title": "Why Toronto Cafe Analytics Matter",
+        "paragraphs": [
+          "Toronto's cafe market is one of the most competitive in Canada, with over 2,000 coffee shops across the GTA. To stand out, owners need more than intuition—they need data on foot traffic, average transaction values, and peak hours. Analytics tailored to local conditions help you make informed decisions about staffing, inventory, and promotions.",
+          "Meridian Intelligence was one of the earliest POS analytics platforms to build a dedicated Canadian product, designed around PIPEDA and built to support Quebec Law 25, with CAD pricing aligned with the expectations of Toronto cafe owners."
+        ],
+        "tip": "General information, not legal advice. Compliance is a shared responsibility; consult a legal professional for your specific obligations.",
+        "stat": {
+          "value": "2,000+",
+          "label": "Coffee shops in the GTA (estimated)"
+        }
+      },
+      {
+        "title": "Key Benchmarks for Toronto Cafes",
+        "paragraphs": [
+          "Average transaction value (ATV) for Toronto cafes typically ranges from $6 to $9, depending on location and menu mix. Downtown locations near offices often see higher ATVs during morning rush, while neighbourhood cafes may have steadier, lower-value sales throughout the day.",
+          "Foot traffic patterns vary: peak hours are usually 7–9 AM on weekdays and 10 AM–2 PM on weekends. Understanding these benchmarks helps you optimize staff schedules and reduce wait times. Meridian's analytics can track these metrics in real time, with support for Canadian POS systems like Moneris and Alice POS."
+        ],
+        "stat": {
+          "value": "$6–$9",
+          "label": "Average transaction value (Toronto)"
+        }
+      },
+      {
+        "title": "Trends Shaping Toronto's Cafe Scene",
+        "paragraphs": [
+          "Toronto cafe owners are increasingly adopting loyalty programs and mobile ordering to boost repeat visits—industry studies suggest loyalty programs can lift customer retention by 20–30%. Another trend is the rise of specialty beverages, such as oat milk lattes and cold brews, which typically carry stronger margins.",
+          "Sustainability is also a growing focus: customers prefer cafes that use compostable cups and source local ingredients. Analytics can track which eco-friendly options drive sales, helping you align with customer values while managing costs."
+        ],
+        "stat": {
+          "value": "20–30%",
+          "label": "retention lift from loyalty programs (industry studies)"
+        }
+      },
+      {
+        "title": "How to Use Analytics for Better Decisions",
+        "paragraphs": [
+          "Start by identifying your busiest hours and days. Use this data to adjust staffing and inventory—for example, prepping more pastries for weekend brunch rushes. Next, analyze your top-selling items and their profit margins to refine your menu. Finally, track customer feedback and purchase patterns to tailor promotions.",
+          "Meridian's platform provides dashboards that visualize these insights. Whether you use Moneris or Alice POS, getting started is straightforward — begin with a data export today (native integrations are on the roadmap), and CAD pricing means no surprise exchange fees. Meridian is transparent about where data lives: its infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place, and the platform is designed around PIPEDA and built to support Quebec Law 25."
+        ],
+        "tip": "Start with one metric, like peak hour traffic, and build from there. Small changes can lead to big improvements."
+      },
+      {
+        "title": "Compliance and Data Privacy for Toronto Cafes",
+        "paragraphs": [
+          "As a Toronto cafe owner, you're subject to PIPEDA, Canada's federal privacy law. If you serve Quebec customers, Quebec Law 25 may also apply. Meridian's platform is built to support these regulations, with consent management tools and transparency about where data is processed.",
+          "Remember, compliance is a shared responsibility. While Meridian provides tools designed around privacy laws, you must ensure your own practices—like staff training and customer consent—are up to date. Always consult a legal expert for specific guidance."
+        ],
+        "tip": "General information, not legal advice. Review your privacy policies regularly and consult a professional."
+      },
+      {
+        "title": "Getting Started with Meridian Intelligence",
+        "paragraphs": [
+          "Meridian offers a free demo tailored to Toronto cafe owners. You'll see how our analytics can help you track benchmarks, spot trends, and make data-driven decisions—all while staying compliant with Canadian privacy laws. Square and Clover connect in one click; Moneris and Alice POS users can start with a data export. Pricing is in CAD.",
+          "Ready to see your cafe's data in a new light? Contact us to schedule a demo and discover how Meridian can help your business grow."
+        ]
+      }
+    ],
+    "faqs": [
+      {
+        "q": "What is the average transaction value for a Toronto cafe?",
+        "a": "The average transaction value typically ranges from $6 to $9, depending on location and menu. Downtown cafes near offices often see higher values during morning rush."
+      },
+      {
+        "q": "How can cafe analytics help me reduce costs?",
+        "a": "Analytics can identify peak hours, allowing you to optimize staffing and reduce labor costs. They also track inventory usage, helping you minimize waste and adjust orders."
+      },
+      {
+        "q": "Is Meridian compliant with Canadian privacy laws?",
+        "a": "Meridian is designed around PIPEDA and built to support Quebec Law 25, and is transparent about where data is processed: major cloud providers in US regions, with contractual cross-border data-transfer safeguards. Compliance is a shared responsibility, and we recommend consulting a legal professional for your specific obligations."
+      },
+      {
+        "q": "Which POS systems does Meridian support?",
+        "a": "Meridian connects to Square and Clover with one-click OAuth. For Canadian systems like Moneris and Alice POS, Toronto cafes can start with a data export while native integrations are built."
+      },
+      {
+        "q": "What trends are popular in Toronto cafes right now?",
+        "a": "Key trends include loyalty programs, specialty beverages like oat milk lattes, and sustainability efforts such as compostable cups. Analytics can help you track which trends resonate with your customers."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/moneris-pos-analytics-connect-meridian",
+        "label": "Moneris POS Analytics: Connect Moneris to Meridian"
+      },
+      {
+        "to": "/guides/canadian-consent-loyalty-pos",
+        "label": "Getting Valid Customer Consent for Loyalty and Marketing Data"
+      },
+      {
+        "to": "/guides/tracking-gst-hst-pst-pos-canada",
+        "label": "Tracking GST/HST/PST in Your POS Data"
+      }
+    ],
+    "ctaHeadline": "See Your Cafe's Potential",
+    "ctaDescription": "Book a free demo tailored for Toronto cafe owners. Discover how Meridian's analytics can help you benchmark, trend-spot, and grow—with Canadian compliance built in."
+  },
+  {
+    "slug": "vancouver-restaurant-analytics-guide",
+    "seoTitle": "Restaurant Analytics in Vancouver: What the Data Shows | Meridian",
+    "description": "Discover what restaurant analytics reveal about Vancouver's dining scene—from peak hours to menu trends—and how to use data to boost revenue and stay compliant.",
+    "datePublished": "2026-08-23",
+    "heroTitle": "Restaurant Analytics in Vancouver:",
+    "heroAccent": "What the Data Shows",
+    "heroDescription": "Vancouver's dining scene is fiercely competitive. Here's what the numbers tell us about customer behaviour, peak times, and menu performance—and how you can use those insights to grow your bottom line.",
+    "sections": [
+      {
+        "title": "Peak Dining Hours: When Vancouver Eats",
+        "paragraphs": [
+          "Across the industry, Vancouver dinner service typically peaks between 6:30 PM and 8:00 PM, with a secondary lunch spike from 11:30 AM to 1:00 PM. Hospitality reporting also points to weekend brunch as one of the city's fastest-growing dayparts, especially in neighbourhoods like Gastown and Kitsilano.",
+          "Knowing your own peak hours—not just city averages—lets you schedule staff more efficiently and reduce wait times. Meridian's analytics platform surfaces your restaurant's unique patterns, updated in real time."
+        ]
+      },
+      {
+        "title": "Menu Item Performance: What's Selling and What's Not",
+        "paragraphs": [
+          "Vancouver diners gravitate toward locally sourced ingredients and plant-based options, and menus that highlight 'local' or 'sustainable' items tend to convert better. Conversely, dishes with long prep times and low margins—like elaborate appetizers—often underperform.",
+          "By tracking item-level sales data, you can identify your top performers and cut underperformers. Meridian's dashboards let you compare profitability across menu categories, helping you optimize your menu for both customer satisfaction and margins."
+        ]
+      },
+      {
+        "title": "Customer Retention: The Loyalty Gap in Vancouver",
+        "paragraphs": [
+          "Industry data suggests that Vancouver restaurants see a 30-40% repeat customer rate within 90 days, but many leave money on the table by not tracking who returns. Analytics can identify your most valuable guests—those who visit weekly or spend above average—and help you tailor offers to keep them coming back.",
+          "Meridian's platform is designed around Canadian privacy laws, including PIPEDA and Quebec Law 25, and prices in CAD—so you can build loyalty programs with confidence."
+        ],
+        "stat": {
+          "value": "30-40%",
+          "label": "commonly cited industry range for 90-day repeat customer rates"
+        }
+      },
+      {
+        "title": "Payment Trends: Cash, Card, and Contactless",
+        "paragraphs": [
+          "Canada has one of the world's highest contactless adoption rates—industry payment reports put tap-to-pay at well over half of in-person card transactions, and cash keeps shrinking in most urban restaurants. This shift affects everything from tip pooling to accounting workflows.",
+          "Meridian automatically categorizes payment types so you can see trends at a glance — with one-click OAuth for Square and Clover today, and a data-export path for Canadian systems like Moneris and Alice POS (native integrations on the roadmap). Built to support Quebec Law 25, our platform ensures transaction data is handled in compliance with provincial and federal regulations."
+        ]
+      },
+      {
+        "title": "Seasonal Shifts: How Vancouver's Weather Affects Sales",
+        "paragraphs": [
+          "Rainy months (October through March) hit patio-dependent restaurants hardest—operators commonly report double-digit sales dips—while indoor-focused venues remain stable. December holiday parties and summer patio season reliably lift average cheque sizes.",
+          "With historical analytics, you can forecast these seasonal swings and adjust inventory, staffing, and marketing accordingly. Meridian's reporting tools let you compare year-over-year data to spot emerging trends before your competitors do."
+        ]
+      },
+      {
+        "title": "Compliance-First Analytics: A Canadian Advantage",
+        "paragraphs": [
+          "Vancouver restaurant owners face real data privacy requirements under PIPEDA and, for those serving Quebec customers, Law 25. Using analytics built with Canadian regulations in mind means fewer compliance surprises.",
+          "Meridian was one of the earliest POS-analytics platforms to build a dedicated Canadian product—compliance-first from day one, with CAD pricing and support for local POS systems. Meridian is transparent about where data lives: its infrastructure runs on major cloud providers in US regions, with contractual cross-border data-transfer safeguards in place, and the platform is designed around PIPEDA and built to support Quebec Law 25. So you can focus on your restaurant, not your paperwork."
+        ],
+        "tip": "General information, not legal advice. Compliance is a shared responsibility; consult a legal expert for your specific obligations."
+      }
+    ],
+    "faqs": [
+      {
+        "q": "What is restaurant analytics, and why does it matter for Vancouver owners?",
+        "a": "Restaurant analytics uses sales, customer, and operational data to help you make smarter decisions—like which menu items to promote, when to schedule staff, and how to retain guests. In a competitive market like Vancouver, data-driven insights can directly improve your margins and customer experience."
+      },
+      {
+        "q": "How does Meridian handle Canadian privacy laws like PIPEDA and Quebec Law 25?",
+        "a": "Meridian's platform is designed around PIPEDA and built to support Quebec Law 25, with CAD pricing and Canadian POS integrations. It is transparent about where data is processed: major cloud providers in US regions, with contractual cross-border data-transfer safeguards. Compliance is a shared responsibility—we recommend consulting a legal professional for your specific practices."
+      },
+      {
+        "q": "Can Meridian work with my existing POS system?",
+        "a": "Yes — you don't need to switch providers. Square and Clover connect with one-click OAuth; for popular Canadian systems like Moneris and Alice POS you can start with a data export, with native integrations on the roadmap."
+      },
+      {
+        "q": "What kind of data can I expect to see in my analytics dashboard?",
+        "a": "You'll see real-time and historical data on sales trends, peak hours, menu item performance, customer retention rates, payment method breakdowns, and seasonal patterns. All reports are customizable to your restaurant's specific needs."
+      },
+      {
+        "q": "Is Meridian suitable for small independent restaurants, or only large chains?",
+        "a": "Meridian is built for restaurants of all sizes—from single-location independents to multi-site groups. Our pricing is transparent and in CAD, with no hidden fees, making it accessible for Vancouver's diverse dining scene."
+      }
+    ],
+    "relatedLinks": [
+      {
+        "to": "/guides/pos-data-business-decisions",
+        "label": "Turning POS Data Into Business Decisions"
+      },
+      {
+        "to": "/guides/pos-data-residency-canada",
+        "label": "Where Does Your POS Data Live? Canadian Data Residency Explained"
+      },
+      {
+        "to": "/guides/forecast-restaurant-sales",
+        "label": "How to Forecast Restaurant Sales"
+      }
+    ],
+    "ctaHeadline": "See What Your Vancouver Restaurant's Data Is Telling You",
+    "ctaDescription": "Book a free demo of Meridian's analytics platform—built for Canadian restaurants, with compliance and local POS support included."
   },
 ]
 
@@ -2213,4 +2728,15 @@ export function getGuideBySlug(slug: string): GuideData | undefined {
 
 export function getAllGuideSlugs(): string[] {
   return guides.map(g => g.slug)
+}
+
+// Guides with a future datePublished are compiled in but hidden until their
+// scheduled release date — the release calendar lives in
+// /root/meridian-seo-engine/release-schedule.json on the edge host.
+export function isGuidePublished(g: GuideData): boolean {
+  return new Date(g.datePublished + 'T00:00:00') <= new Date()
+}
+
+export function publishedGuides(): GuideData[] {
+  return guides.filter(isGuidePublished)
 }

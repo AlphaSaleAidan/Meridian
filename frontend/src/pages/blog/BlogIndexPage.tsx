@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, Clock, TrendingUp, Camera, CreditCard } from 'lucide-react'
+import { ArrowRight, Clock, TrendingUp, Camera, CreditCard, BookOpen } from 'lucide-react'
 import SEO from '@/components/SEO'
+import { publishedGuides } from '@/data/seo-guides'
 
 interface ArticleCard {
   slug: string
@@ -47,6 +48,12 @@ const articles: ArticleCard[] = [
 ]
 
 export default function BlogIndexPage() {
+  // Newest guide releases surface here automatically — the SEO release
+  // calendar drips one date-gated guide every 3 days (see seo-guides.ts).
+  const latestGuides = [...publishedGuides()]
+    .sort((a, b) => b.datePublished.localeCompare(a.datePublished))
+    .slice(0, 6)
+
   return (
     <div className="min-h-screen bg-[#0A0A0B]">
       <SEO
@@ -93,6 +100,30 @@ export default function BlogIndexPage() {
             )
           })}
         </div>
+
+        {latestGuides.length > 0 && (
+          <div className="mt-16 border-t border-[#1F1F23] pt-12">
+            <h2 className="text-2xl font-bold text-[#F5F5F7] mb-6">Latest Guides</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {latestGuides.map(guide => (
+                <Link
+                  key={guide.slug}
+                  to={`/guides/${guide.slug}`}
+                  className="group flex flex-col bg-[#111113] border border-[#1F1F23] rounded-lg p-4 hover:border-[#17C5B0]/40 transition-colors"
+                >
+                  <span className="text-[#F5F5F7] font-medium group-hover:text-[#17C5B0] transition-colors leading-snug">
+                    {guide.heroTitle} {guide.heroAccent}
+                  </span>
+                  <p className="text-sm text-[#A1A1A8] mt-1 line-clamp-2 flex-1">{guide.description}</p>
+                  <span className="mt-3 inline-flex items-center gap-1.5 text-[12px] text-[#6B7280]">
+                    <BookOpen size={12} />
+                    {new Date(guide.datePublished + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-16 border-t border-[#1F1F23] pt-12">
           <h2 className="text-2xl font-bold text-[#F5F5F7] mb-6">Explore by Topic</h2>
