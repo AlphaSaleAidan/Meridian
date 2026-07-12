@@ -24,11 +24,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
-      - name: Install minimal deps
+      - name: Install deps
+        # Install the real backend requirements so `from src.api.app import app`
+        # resolves exactly as in prod (the route-auth matrix inspects the live
+        # app object). Plus the test-only deps.
         run: |
-          pip install --quiet fastapi uvicorn "httpx<1" pydantic supabase \
-            python-dotenv pytest pytest-asyncio pyyaml
+          pip install --quiet -r requirements.txt
+          pip install --quiet pytest pytest-asyncio pyyaml
 
       - name: Run SOC 2 control tests
         env:
