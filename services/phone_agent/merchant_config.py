@@ -11,7 +11,15 @@ from typing import Optional
 logger = logging.getLogger("meridian.phone_agent.config")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+# phone_agent_config is service-role-only under RLS (the anon role has no
+# SELECT grant), so reads must use the service key — anon-only made every
+# merchant lookup fail and silently served the demo fallback config on live
+# calls. Same key selection as payment_links.py / pay_on_phone.py.
+SUPABASE_KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    or os.getenv("SUPABASE_SERVICE_KEY", "")
+    or os.getenv("SUPABASE_ANON_KEY", "")
+)
 
 
 @dataclass
@@ -93,8 +101,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
         }
         async with httpx.AsyncClient() as client:
             res = await client.get(
-                f"{SUPABASE_URL}/rest/v1/phone_agent_config"
-                f"?merchant_id=eq.{merchant_id}&select=*",
+                f"{SUPABASE_URL}/rest/v1/phone_agent_config",
+                params={"merchant_id": f"eq.{merchant_id}", "select": "*"},
                 headers=headers,
             )
             if res.status_code != 200 or not res.json():
@@ -154,9 +162,11 @@ async def get_merchant_by_phone(phone_number: str) -> Optional[str]:
             "Authorization": f"Bearer {SUPABASE_KEY}",
         }
         async with httpx.AsyncClient() as client:
+            # params= so E.164 numbers percent-encode: a literal "+" in the query
+            # string decodes to a space at the gateway and matches nothing.
             res = await client.get(
-                f"{SUPABASE_URL}/rest/v1/phone_agent_config"
-                f"?phone_number=eq.{phone_number}&select=merchant_id",
+                f"{SUPABASE_URL}/rest/v1/phone_agent_config",
+                params={"phone_number": f"eq.{phone_number}", "select": "merchant_id"},
                 headers=headers,
             )
             if res.status_code == 200 and res.json():
