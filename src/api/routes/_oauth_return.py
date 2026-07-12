@@ -26,6 +26,7 @@ ALLOWED_RETURN_PREFIXES = (
     "/canada/dashboard",
     "/canada/setup",
     # US
+    "/us/merchant",
     "/us/onboard",
     "/us/dashboard",
     "/us/setup",

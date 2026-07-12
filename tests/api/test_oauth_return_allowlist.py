@@ -16,7 +16,8 @@ from src.api.routes._oauth_return import safe_return_to
 
 
 def test_us_surfaces_pass():
-    for p in ("/onboard", "/onboard?oauth=success", "/app/settings", "/dashboard", "/settings"):
+    for p in ("/onboard", "/onboard?oauth=success", "/app/settings", "/dashboard", "/settings",
+              "/us/merchant/onboard", "/us/merchant", "/us/setup"):
         assert safe_return_to(p) == p, p
 
 
