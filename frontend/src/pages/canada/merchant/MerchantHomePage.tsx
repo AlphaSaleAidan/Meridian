@@ -6,7 +6,7 @@ import {
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
-import { formatCad, formatCadMo, formatNumber, formatPercent } from '@/lib/format'
+import { formatMoney, formatMoneyMo, formatNumber, formatPercent } from '@/lib/format'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
 import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
@@ -321,7 +321,7 @@ export default function MerchantHomePage() {
           <div>
             <p className="text-2xs font-semibold uppercase tracking-wider text-pm-muted">Net sales · {periodLabel}</p>
             <p className="mt-1.5 text-4xl sm:text-5xl font-bold font-mono text-pm-text tracking-tight tabular-nums">
-              {formatCad(animatedNet / 100)}
+              {formatMoney(animatedNet / 100)}
             </p>
             {showLifetime ? (
               <p className="mt-2 text-sm font-semibold font-mono text-pm-muted">
@@ -346,7 +346,7 @@ export default function MerchantHomePage() {
                 <span className="text-2xs font-semibold uppercase tracking-wider">Recoverable</span>
               </div>
               <p className="mt-1 text-2xl font-bold font-mono text-pm-amber-gold tabular-nums">
-                {formatCadMo(recoverableCents / 100)}
+                {formatMoneyMo(recoverableCents / 100)}
               </p>
               <p className="mt-0.5 text-2xs text-pm-muted group-hover:text-pm-text transition-colors">
                 Money left on the table — see how →
@@ -360,7 +360,7 @@ export default function MerchantHomePage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <MoneyTile
           label="Net Sales"
-          value={formatCad(netCents / 100)}
+          value={formatMoney(netCents / 100)}
           icon={DollarSign}
           iconColor="text-pm-teal"
           sparkColor="text-pm-teal"
@@ -380,7 +380,7 @@ export default function MerchantHomePage() {
         />
         <MoneyTile
           label="Avg Ticket"
-          value={formatCad(avgTicket / 100)}
+          value={formatMoney(avgTicket / 100)}
           icon={Receipt}
           iconColor="text-pm-blue"
           sparkColor="text-pm-blue"
@@ -420,7 +420,7 @@ export default function MerchantHomePage() {
               <div className="sm:text-right">
                 <p className="text-2xs font-semibold uppercase tracking-wider text-pm-amber-orange">Margin leakage</p>
                 <p className="mt-0.5 text-2xl font-bold font-mono text-pm-amber-orange tabular-nums">
-                  {formatCadMo(totalLeakage / 100)}
+                  {formatMoneyMo(totalLeakage / 100)}
                 </p>
               </div>
             )}

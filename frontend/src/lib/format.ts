@@ -100,6 +100,21 @@ export function formatCadMo(amount: number | null | undefined): string {
   return formatCad(amount) + '/mo'
 }
 
+// ── Path-aware merchant-money helpers (whole-dollar input) ─────────────────
+// For surfaces mounted under BOTH portals (/canada/* and /us/* or /demo):
+// CA$ on Canada paths, plain $ elsewhere. Same output as formatCad on Canada.
+
+export function formatMoney(amount: number | null | undefined): string {
+  const { locale, currency } = getLocaleConfig()
+  if (currency === 'CAD') return formatCad(amount)
+  if (amount == null) return '$0'
+  return '$' + Math.round(amount).toLocaleString(locale)
+}
+
+export function formatMoneyMo(amount: number | null | undefined): string {
+  return formatMoney(amount) + '/mo'
+}
+
 // Canonical CAD pricing constants. Replaces hardcoded magic numbers across
 // the portal (was: `parseInt(prefill.price) : 250` in the onboarding wizard).
 export const PRICING = {

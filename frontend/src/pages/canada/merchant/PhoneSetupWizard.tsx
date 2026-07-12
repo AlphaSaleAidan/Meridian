@@ -110,10 +110,14 @@ const US_STAR_CODES = [
   { label: 'Forward on no-answer', on: '*92', note: 'for the Overflow option' },
 ]
 
+/** Region detection — this wizard mounts under /canada/* and /us/* + /demo. */
+function isCanadaMount(): boolean {
+  return typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
+}
+
 /** Region-aware star codes — the Canada mounts keep their existing list. */
 function starCodesForPath(): typeof CA_STAR_CODES {
-  const isCanada = typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
-  return isCanada ? CA_STAR_CODES : US_STAR_CODES
+  return isCanadaMount() ? CA_STAR_CODES : US_STAR_CODES
 }
 
 const PROVISION_TIMEOUT_MS = 30_000
@@ -354,9 +358,9 @@ export default function PhoneSetupWizard() {
     id: orgId || 'demo',
     name: businessName,
     vertical: 'restaurant',
-    country: 'CA',
-    currency: 'CA$',
-    taxRate: 0.13,
+    country: isCanadaMount() ? 'CA' : 'US',
+    currency: isCanadaMount() ? 'CA$' : '$',
+    taxRate: isCanadaMount() ? 0.13 : 0.08,
     phone: meridianNumber,
     greeting,
     voice,
@@ -683,7 +687,7 @@ export default function PhoneSetupWizard() {
                       onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, name: e.target.value } : m))}
                     />
                     <div className={clsx('flex items-center text-xs font-mono', noPrice ? 'text-amber-400' : 'text-[#17C5B0]')}>
-                      <span>CA$</span>
+                      <span>{isCanadaMount() ? 'CA$' : '$'}</span>
                       <input
                         className="w-14 bg-transparent text-right focus:outline-none"
                         type="number"
