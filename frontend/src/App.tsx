@@ -6,7 +6,6 @@ import { ToastProvider } from '@/components/Toast'
 import ErrorBoundary, { lazyRetry } from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
-import DemoLayout from '@/components/DemoLayout'
 import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
 import { merchantPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
@@ -51,6 +50,7 @@ const LandingPage = lazyRetry(() => import('@/pages/LandingPage'))
 const CanadaLayout = lazyRetry(() => import('@/components/CanadaLayout'))
 const MerchantLayout = lazyRetry(() => import('@/components/MerchantLayout'))
 const MerchantDemoLayout = lazyRetry(() => import('@/components/MerchantDemoLayout'))
+const USMerchantDemoLayout = lazyRetry(() => import('@/components/USMerchantDemoLayout'))
 const CustomerOnboardingWizard = lazyRetry(() => import('@/pages/customer/CustomerOnboardingWizard'))
 const CareersPage = lazyRetry(() => import('@/pages/CareersPage'))
 const AdminPage = lazyRetry(() => import('@/pages/AdminPage'))
@@ -401,13 +401,22 @@ export default function App() {
               </Route>
 
               {/* Demo — open access, no auth required */}
-              <Route path="/demo" element={<DemoLayout />}>
-                {CustomerDashboardRoutes()}
-                <Route path="pos-coverage" element={
-                  <Suspense fallback={<LazyFallback />}>
-                    <POSCoveragePage />
-                  </Suspense>
-                } />
+              {/* US Demo — public merchant portal with synthetic USD data,
+                  mirroring /canada/demo. The classic full-dashboard demo is
+                  archived on branch archive/us-classic-portal-20260712. */}
+              <Route path="/demo" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <USMerchantDemoLayout />
+                </Suspense>
+              }>
+                {merchantPillars.map(pillar => (
+                  <Route
+                    key={pillar.path || '_home'}
+                    index={pillar.path === ''}
+                    path={pillar.path ? `${pillar.path}/*` : undefined}
+                    element={<MerchantPillarPage pillar={pillar} />}
+                  />
+                ))}
                 <Route path="camera-analytics" element={
                   <Suspense fallback={<LazyFallback />}>
                     <CameraAnalyticsDemoPage />
@@ -538,6 +547,32 @@ export default function App() {
               {/* US — customer auth (returning login + first-login setup) */}
               <Route path="/us/login" element={<Suspense fallback={<LazyFallback />}><USLoginPage /></Suspense>} />
               <Route path="/us/setup" element={<Suspense fallback={<LazyFallback />}><USSetupPage /></Suspense>} />
+              {/* ══════════════════════════════════════════════
+                  US — merchant portal (3-pillar product, Canada parity)
+                  ══════════════════════════════════════════════ */}
+              <Route path="/us/merchant/onboard" element={
+                <ProtectedRoute loginPath="/us/login">
+                  <Suspense fallback={<LazyFallback />}>
+                    <MerchantOnboardingWizard />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+              <Route path="/us/merchant" element={
+                <ProtectedRoute loginPath="/us/login">
+                  <Suspense fallback={<LazyFallback />}>
+                    <MerchantLayout basePath="/us/merchant" />
+                  </Suspense>
+                </ProtectedRoute>
+              }>
+                {merchantPillars.map(pillar => (
+                  <Route
+                    key={pillar.path || '_home'}
+                    index={pillar.path === ''}
+                    path={pillar.path ? `${pillar.path}/*` : undefined}
+                    element={<MerchantPillarPage pillar={pillar} />}
+                  />
+                ))}
+              </Route>
               {/* US — dedicated customer dashboard (US-branded, full feature set) */}
               <Route path="/us/dashboard" element={
                 <ProtectedRoute loginPath="/us/login">

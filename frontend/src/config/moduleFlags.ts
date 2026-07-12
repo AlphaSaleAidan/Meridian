@@ -8,8 +8,9 @@ import { useLocation } from 'react-router-dom'
  * disabled here rather than deleted, so the underlying routes/components stay
  * intact and can be re-enabled by flipping a flag.
  *
- * Non-Canada surfaces (`/`, `/demo`, US portal) keep their existing behaviour
- * via `defaultModuleFlags`, so this switchboard cannot regress them.
+ * The US merchant portal (/us/merchant) and US demo (/demo) mirror the Canada
+ * product, so they share the trimmed set. Legacy surfaces (/app, /us/dashboard)
+ * keep their existing behaviour via `defaultModuleFlags`.
  */
 export interface ModuleFlags {
   // Money pillars (kept ON for Canada)
@@ -73,7 +74,11 @@ export const canadaModuleFlags: ModuleFlags = {
 
 /** Resolve flags for a route. Canada customer surfaces use the trimmed set. */
 export function flagsForPath(pathname: string): ModuleFlags {
-  return pathname.startsWith('/canada') ? canadaModuleFlags : defaultModuleFlags
+  if (pathname.startsWith('/canada')) return canadaModuleFlags
+  // US merchant portal + US demo mirror the Canada product exactly (same
+  // trimmed pillar set). Legacy surfaces (/app, /us/dashboard) keep the full set.
+  if (pathname.startsWith('/us/merchant') || pathname.startsWith('/demo')) return canadaModuleFlags
+  return defaultModuleFlags
 }
 
 /** Route-aware flags hook for shared components rendered under multiple layouts. */

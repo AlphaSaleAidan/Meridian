@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Loader2, Wifi, Store,
   AlertCircle, Sparkles, KeyRound,
@@ -35,6 +35,17 @@ const PROVINCES = [
   'Quebec', 'Saskatchewan', 'Yukon',
 ]
 
+const US_STATES = [
+  'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut',
+  'Delaware', 'District of Columbia', 'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois',
+  'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine', 'Maryland', 'Massachusetts',
+  'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
+  'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota',
+  'Ohio', 'Oklahoma', 'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina',
+  'South Dakota', 'Tennessee', 'Texas', 'Utah', 'Vermont', 'Virginia', 'Washington',
+  'West Virginia', 'Wisconsin', 'Wyoming',
+]
+
 type Step = 'welcome' | 'connect' | 'sync' | 'confirm' | 'payments' | 'done'
 
 const STEPS: { key: Step; label: string }[] = [
@@ -65,6 +76,14 @@ export default function MerchantOnboardingWizard() {
   const [searchParams] = useSearchParams()
   const { org } = useAuth()
   const orgId = org?.org_id
+
+  // Same wizard serves both regions: mounted at /canada/merchant/onboard and
+  // /us/merchant/onboard. The Canada mount keeps its existing behaviour.
+  const isUS = useLocation().pathname.startsWith('/us')
+  const returnTo = isUS ? '/us/merchant/onboard' : RETURN_TO
+  const merchantHome = isUS ? '/us/merchant' : MERCHANT_HOME
+  const regions = isUS ? US_STATES : PROVINCES
+  const regionLabel = isUS ? 'State' : 'Province'
 
   const [step, setStep] = useState<Step>('welcome')
   const [error, setError] = useState<string | null>(null)
@@ -209,7 +228,7 @@ export default function MerchantOnboardingWizard() {
   function startSquareConnect() {
     if (!orgId) { setError('Your account is still being set up — please refresh and try again.'); return }
     setError(null)
-    const url = `${API_BASE}/api/square/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(RETURN_TO)}`
+    const url = `${API_BASE}/api/square/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(returnTo)}`
     // Approve in a NEW tab; this tab moves to the sync step whose 4s status
     // polling picks up the completed connection.
     window.open(url, '_blank', 'noopener')
@@ -220,7 +239,7 @@ export default function MerchantOnboardingWizard() {
   function startCloverConnect() {
     if (!orgId) { setError('Your account is still being set up — please refresh and try again.'); return }
     setError(null)
-    const url = `${API_BASE}/api/clover/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(RETURN_TO)}`
+    const url = `${API_BASE}/api/clover/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(returnTo)}`
     window.open(url, '_blank', 'noopener')
     setProvider('clover')
     setStep('sync')
@@ -269,7 +288,7 @@ export default function MerchantOnboardingWizard() {
 
   function skipToPortal() {
     // Honest empty portal — no demo or seed data is written.
-    navigate(MERCHANT_HOME)
+    navigate(merchantHome)
   }
 
   async function handleConfirm() {
@@ -322,7 +341,7 @@ export default function MerchantOnboardingWizard() {
             <MeridianEmblem size={32} />
             <MeridianWordmark className="text-lg" />
           </div>
-          <span className="text-[10px] font-semibold text-[#00d4aa] uppercase tracking-widest">Canada</span>
+          <span className="text-[10px] font-semibold text-[#00d4aa] uppercase tracking-widest">{isUS ? 'US' : 'Canada'}</span>
         </div>
 
         {/* Progress */}
@@ -605,10 +624,10 @@ export default function MerchantOnboardingWizard() {
                     />
                   </div>
                   <div>
-                    <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>Province</label>
+                    <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>{regionLabel}</label>
                     <select value={province} onChange={e => setProvince(e.target.value)} className={inputCls}>
-                      <option value="">Select province…</option>
-                      {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                      <option value="">Select {regionLabel.toLowerCase()}…</option>
+                      {regions.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                 </div>
@@ -640,7 +659,7 @@ export default function MerchantOnboardingWizard() {
                   inventory, schedule, and phone-call insights keep filling in.
                 </p>
                 <button
-                  onClick={() => navigate(MERCHANT_HOME)}
+                  onClick={() => navigate(merchantHome)}
                   className={`flex items-center gap-2 px-8 py-3 text-[14px] font-medium text-[#0a0f0d] ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.2)]`}
                 >
                   Go to Dashboard <ArrowRight size={16} />

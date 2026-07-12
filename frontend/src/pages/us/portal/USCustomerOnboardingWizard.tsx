@@ -827,7 +827,7 @@ export default function USCustomerOnboardingWizard() {
                 /app/settings?oauth=success. */}
             {posProvider === 'square' && org?.org_id && (
               <a
-                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/us/dashboard')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                href={`${import.meta.env.VITE_API_URL || ''}/api/square/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/us/merchant')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
                 className={btnPrimary + ' justify-center w-full'}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -837,7 +837,7 @@ export default function USCustomerOnboardingWizard() {
             )}
             {posProvider === 'clover' && org?.org_id && (
               <a
-                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/us/dashboard')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                href={`${import.meta.env.VITE_API_URL || ''}/api/clover/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/us/merchant')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
                 className={btnPrimary + ' justify-center w-full'}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -1233,7 +1233,7 @@ export default function USCustomerOnboardingWizard() {
             <p className={`text-[14px] ${T.muted} text-center max-w-sm mb-8`}>
               Your dashboard is live. We're already analyzing your data and generating insights.
             </p>
-            <button onClick={() => navigate('/us/dashboard')}
+            <button onClick={() => navigate('/us/merchant')}
               className={`flex items-center gap-2 px-8 py-3 text-[14px] font-medium text-[#0A0A0B] ${T.accentBg} rounded-lg ${T.accentHover} transition-colors shadow-[0_0_30px_rgba(0,212,170,0.2)]`}>
               Go to Dashboard <ArrowRight size={16} />
             </button>
@@ -1265,7 +1265,7 @@ function ExtraPosConnectButtons({ orgId, repId }: { orgId: string; repId: string
       {providers.map(p => (
         <a
           key={p.key}
-          href={`${import.meta.env.VITE_API_URL || ''}${p.authorize_path}?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent('/us/dashboard')}${rep}`}
+          href={`${import.meta.env.VITE_API_URL || ''}${p.authorize_path}?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent('/us/merchant')}${rep}`}
           className={btnPrimary + ' justify-center w-full'}
           target="_blank"
           rel="noopener noreferrer"

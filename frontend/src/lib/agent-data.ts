@@ -249,6 +249,8 @@ export function generateAgents(): AgentInfo[] {
     { id: 'queue-monitor', name: 'Queue Monitor', status: 'idle', lastRun: hoursAgo(24), nextRun: hoursFromNow(24), findings: 2, confidence: 71, category: 'optimization', description: 'Tracks real-time queue length and wait times, estimates walkaway revenue loss', latestFinding: bizSub('Avg wait exceeds 3 min during 8-9AM — estimated $320/mo in walkaway losses') },
     { id: 'prime-cost-analyzer', name: 'Prime Cost Analyzer', status: 'active', lastRun: hoursAgo(2), nextRun: hoursFromNow(6), findings: 4, confidence: 84, category: 'analysis', description: 'Calculates real-time prime cost (COGS + labor) as percentage of revenue and flags when it exceeds 65% threshold', latestFinding: bizSub('Prime cost at 61.3% of revenue — labor running 2.1% above target during afternoon shifts') },
     { id: 'menu-pricing-optimizer', name: 'Menu Pricing Optimizer', status: 'active', lastRun: hoursAgo(1), nextRun: hoursFromNow(5), findings: 5, confidence: 81, category: 'optimization', description: 'Analyzes menu item pricing using food cost multiplier method and identifies underpriced items with exact dollar impact', latestFinding: bizSub('3 menu items priced 12-18% below optimal — combined repricing opportunity $1,060/mo') },
+    { id: 'path-to-purchase', name: 'Path to Purchase', status: 'idle', lastRun: hoursAgo(24), nextRun: hoursFromNow(24), findings: 2, confidence: 72, category: 'analysis', description: 'Fuses camera paths with POS baskets to map which in-store routes end in a purchase', latestFinding: bizSub('Visitors passing the pastry case before ordering convert 1.8x more often — reroute entry flow') },
+    { id: 'zone-conversion', name: 'Zone Conversion', status: 'idle', lastRun: hoursAgo(24), nextRun: hoursFromNow(24), findings: 2, confidence: 70, category: 'analysis', description: 'Scores each floor zone by visits-to-purchase conversion using camera + transaction fusion', latestFinding: bizSub('Window seating zone drives 22% of dwell but only 6% of purchases — add a menu QR stand') },
   ]
 }
 
@@ -1146,7 +1148,7 @@ export function generateAgentChains(): AgentChainLink[] {
     { from: 'menu-pricing-optimizer', to: 'pricing-power', trigger: 'pricing_analysis_complete', dataPassed: 'Underpriced items with food cost multiplier targets and dollar impact' },
     { from: 'margin-optimizer', to: 'prime-cost-analyzer', trigger: 'margin_updated', dataPassed: 'Per-item margin data for COGS component of prime cost' },
     { from: 'staffing', to: 'prime-cost-analyzer', trigger: 'labor_cost_updated', dataPassed: 'Total labor cost by shift for labor component of prime cost' },
-    { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'Synthesized findings from all 39 agents as narrative brief' },
+    { from: 'insight-narrator', to: 'action-prioritizer', trigger: 'all_agents_complete', dataPassed: 'Synthesized findings from all 41 agents as narrative brief' },
     { from: 'action-prioritizer', to: 'revenue-forecaster', trigger: 'action_ranked', dataPassed: 'Top actions for impact projection into forecast scenarios' },
     { from: 'revenue-forecaster', to: 'insight-narrator', trigger: 'forecast_updated', dataPassed: 'Updated projections + scenario analysis for executive brief' },
     { from: 'location-analyst', to: 'competitor-benchmarker', trigger: 'location_data_refreshed', dataPassed: 'Multi-location performance deltas for cross-store benchmarking' },

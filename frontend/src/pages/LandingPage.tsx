@@ -132,7 +132,7 @@ export default function LandingPage() {
               </MagneticButton>
             ))}
             <MagneticButton
-              onClick={() => navigate('/customer/signup')}
+              onClick={() => navigate('/us/onboard')}
               className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] rounded-md hover:brightness-110 transition-all duration-200"
               style={{ backgroundColor: ACCENT }}
             >
@@ -161,7 +161,7 @@ export default function LandingPage() {
             <div className="max-w-content mx-auto px-6 py-3 flex flex-col gap-1">
               {[
                 { label: 'Customer Login', path: '/customer/login', accent: true },
-                { label: 'Start Free', path: '/customer/signup' },
+                { label: 'Start Free', path: '/us/onboard' },
                 { label: 'Live Demo', path: '/demo' },
                 { label: 'Blog', path: '/blog' },
                 { label: 'Careers', path: '/careers' },
@@ -250,7 +250,7 @@ export default function LandingPage() {
             className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3"
           >
             <MagneticButton
-              onClick={() => navigate('/customer/signup')}
+              onClick={() => navigate('/us/onboard')}
               className="group px-6 py-3 text-[14px] font-medium text-white rounded-lg transition-all duration-300 flex items-center gap-2"
               style={{ backgroundColor: ACCENT, boxShadow: `0 0 32px ${ACCENT}30` }}
             >
@@ -386,13 +386,13 @@ export default function LandingPage() {
                 </div>
               </TiltCard>
 
-            {/* 39-Agent AI Swarm */}
+            {/* 41-Agent AI Swarm */}
             <TiltCard className="gsap-feature-card h-full bg-[#111113] border border-[#1F1F23] rounded-xl p-6 hover:border-[#2A2A30] transition-colors duration-300">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${ACCENT}15` }}>
                     <Bot size={18} style={{ color: ACCENT }} />
                   </div>
-                  <h3 className="text-[#F5F5F7] font-semibold">39-Agent AI Swarm</h3>
+                  <h3 className="text-[#F5F5F7] font-semibold">41-Agent AI Swarm</h3>
                 </div>
                 <p className="text-[#A1A1A8] text-[13px] leading-relaxed mb-4">
                   Specialized AI agents work 24/7 on forecasting, anomaly detection, customer segmentation, and competitive pricing.
@@ -411,7 +411,7 @@ export default function LandingPage() {
                       />
                     ))}
                   </div>
-                  <p className="text-[10px] text-[#A1A1A8] mt-3 font-mono">39 agents · 24/7 · real-time</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-3 font-mono">41 agents · 24/7 · real-time</p>
                 </div>
               </TiltCard>
 
@@ -465,7 +465,7 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
             {[
               { step: '01', title: 'Connect', desc: 'One-click Square, Clover, or Toast OAuth. No API keys, no config.' },
-              { step: '02', title: 'Analyze', desc: '39 AI agents process your entire transaction history instantly.' },
+              { step: '02', title: 'Analyze', desc: '41 AI agents process your entire transaction history instantly.' },
               { step: '03', title: 'Discover', desc: 'See specific dollar-denominated revenue opportunities.' },
               { step: '04', title: 'Capture', desc: 'Act on insights and start recovering hidden revenue today.' },
             ].map((s, i) => (
@@ -511,7 +511,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── CANADIAN PORTAL ──────────────────────── */}
+      {/* ─── REGIONAL PORTALS ─────────────────────── */}
       <section className="py-20 border-t border-[#1F1F23]/40 relative overflow-hidden">
         <div className="absolute top-1/3 right-1/4 aurora-glow" style={{ width: 500, height: 500, opacity: 0.06, background: `radial-gradient(circle, ${ACCENT_CA} 0%, transparent 70%)` }} />
         <div className="max-w-content mx-auto px-6 relative">
@@ -519,15 +519,17 @@ export default function LandingPage() {
             <div className="rounded-2xl border border-[#1F1F23] bg-[#111113] p-8 md:p-12 flex flex-col md:flex-row items-center gap-8 md:gap-12">
               <div className="flex-1">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#1F1F23] bg-[#0A0A0B] text-xs font-medium mb-4" style={{ color: ACCENT_CA }}>
-                  <MapPin size={12} /> Canadian Portal
+                  <MapPin size={12} /> North America
                 </div>
                 <h3 className="text-2xl md:text-3xl font-bold text-[#F5F5F7] tracking-tight leading-tight">
-                  Built for Canada.{' '}
-                  <span style={{ color: ACCENT_CA }}>Built for PIPEDA.</span>
+                  Built for the US.{' '}
+                  <span style={{ color: ACCENT_CA }}>Built for Canada.</span>
                 </h3>
                 <p className="mt-4 text-[#A1A1A8] text-[15px] leading-relaxed max-w-md">
-                  CAD pricing, Moneris &amp; Alice POS integration, aligned with Quebec Law 25.
-                  Built for Canadian privacy law — consent, retention, and encryption by design.
+                  The same merchant portal on both sides of the border — USD pricing with
+                  Square, Toast &amp; Clover in the US; CAD pricing with Moneris &amp; Alice POS
+                  in Canada, aligned with PIPEDA and Quebec Law 25. Consent, retention, and
+                  encryption by design.
                 </p>
                 <div className="mt-6 flex flex-wrap items-center gap-4">
                   <MagneticButton
@@ -589,7 +591,7 @@ export default function LandingPage() {
           {[
             {
               q: 'What is Meridian Intelligence?',
-              a: 'Meridian Intelligence is an AI-powered analytics platform that connects to your POS system — including Square, Toast, Clover, and 77 others — and generates revenue insights, anomaly alerts, and customer segmentation reports using a 39-agent AI swarm. Merchants see plain-English insights within minutes of connecting.',
+              a: 'Meridian Intelligence is an AI-powered analytics platform that connects to your POS system — including Square, Toast, Clover, and 77 others — and generates revenue insights, anomaly alerts, and customer segmentation reports using a 41-agent AI swarm. Merchants see plain-English insights within minutes of connecting.',
             },
             {
               q: 'How much does Meridian cost?',
@@ -638,7 +640,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-10">
               <MagneticButton
-                onClick={() => navigate('/customer/signup')}
+                onClick={() => navigate('/us/onboard')}
                 className="group px-8 py-3.5 text-[15px] font-medium text-white rounded-lg transition-all duration-300 inline-flex items-center gap-2 hover:brightness-110"
                 style={{ backgroundColor: ACCENT, boxShadow: `0 0 40px ${ACCENT}35` }}
               >
@@ -711,7 +713,7 @@ export default function LandingPage() {
                   { label: 'Canadian Portal', path: '/canada' },
                   { label: 'Careers', path: '/careers' },
                   { label: 'Customer Login', path: '/customer/login' },
-                  { label: 'Start Free', path: '/customer/signup' },
+                  { label: 'Start Free', path: '/us/onboard' },
                 ].map(l => (
                   <li key={l.path}>
                     <a onClick={() => navigate(l.path)} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">{l.label}</a>
