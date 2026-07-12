@@ -5,12 +5,14 @@ import WaveformVisualizer from './WaveformVisualizer'
 import { speakWithVoice } from './VoicePreview'
 import { ensureAnimStyles } from './phone-anim-styles'
 import { phoneService } from '@/lib/phone-service'
-import type { PhoneBizConfig } from '@/lib/phone-orders-demo-data'
+import type { PhoneBizConfig, VoicePersonality } from '@/lib/phone-orders-demo-data'
 
 interface Props {
   biz: PhoneBizConfig
   orgId: string
   onClose: () => void
+  /** Saved agent personality — forwarded so the test call behaves like the live agent. */
+  personality?: VoicePersonality | null
 }
 
 type Line = { speaker: 'agent' | 'caller'; text: string }
@@ -22,7 +24,7 @@ const SR: any =
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     : undefined
 
-export default function TestCallModal({ biz, orgId, onClose }: Props) {
+export default function TestCallModal({ biz, orgId, onClose, personality }: Props) {
   const [elapsed, setElapsed] = useState(0)
   const [phase, setPhase] = useState<'ringing' | 'active' | 'ended'>('ringing')
   const [lines, setLines] = useState<Line[]>([])
@@ -86,6 +88,7 @@ export default function TestCallModal({ biz, orgId, onClose }: Props) {
         greeting: biz.greeting,
         menu_items: (biz.menu || []).map(m => ({ name: m.name, price: m.price, category: (m as any).category })),
         order_types: biz.orderTypes as string[],
+        personality: personality || undefined,
       })
       setThinking(false)
       convoRef.current = [...convoRef.current, { role: 'assistant', content: res.reply }]

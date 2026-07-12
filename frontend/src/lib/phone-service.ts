@@ -144,6 +144,7 @@ export const phoneService = {
     greeting?: string
     menu_items?: { name: string; price: number; category?: string }[]
     order_types?: string[]
+    personality?: VoicePersonality
   }): Promise<TestChatResponse> {
     const res = await fetch(`${API_BASE}/api/phone/test-chat`, {
       method: 'POST',

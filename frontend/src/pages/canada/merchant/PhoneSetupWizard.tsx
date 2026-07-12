@@ -936,6 +936,7 @@ export default function PhoneSetupWizard() {
         <TestCallModal
           biz={bizForTest}
           orgId={orgId}
+          personality={phoneConfig?.personality}
           onClose={() => setShowTestCall(false)}
         />
       )}
