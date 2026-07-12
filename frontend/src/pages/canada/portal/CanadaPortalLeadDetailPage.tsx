@@ -12,7 +12,7 @@ import {
   CAD_VERTICALS,
 } from '@/data/cadVerticals'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
-import { closestMonthlyPlanCad, CAD_RATE } from '@/lib/canada-proposal-plans'
+import { closestMonthlyPlanCad, getPlan, PLAN_TIERS, REP_PRICE_HEADROOM_CAD, CAD_RATE, type PlanTier } from '@/lib/canada-proposal-plans'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import {
   useCanadaLead,
@@ -134,8 +134,11 @@ export default function CanadaPortalLeadDetailPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
 
-  // Step 2 state
-  const [monthlyPrice, setMonthlyPrice] = useState(500)
+  // Step 2 state — price = tier base + rep adjustment (0..REP_PRICE_HEADROOM_CAD)
+  const [planId, setPlanId] = useState<PlanTier['id']>('premium')
+  const [priceBump, setPriceBump] = useState(0)
+  const selectedPlan = getPlan(planId)
+  const monthlyPrice = selectedPlan.price + priceBump
   const [setupFee, setSetupFee] = useState('0')
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
@@ -734,7 +737,13 @@ export default function CanadaPortalLeadDetailPage() {
   useEffect(() => {
     if (deal && deal.id !== pricedForIdRef.current) {
       pricedForIdRef.current = deal.id
-      setMonthlyPrice(deal.monthly_value || 500)
+      // Legacy stored values snap to the closest tier; any remainder above
+      // the tier base becomes the rep adjustment (clamped to the headroom).
+      const stored = deal.monthly_value || 0
+      const plan = closestMonthlyPlanCad(stored || 500)
+      setPlanId(plan.id)
+      const bump = stored ? Math.round(stored - plan.price) : 0
+      setPriceBump(Math.min(REP_PRICE_HEADROOM_CAD, Math.max(0, bump)))
     }
   }, [deal])
 
@@ -960,22 +969,41 @@ export default function CanadaPortalLeadDetailPage() {
       <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Proposal</h2>
 
-        {/* Monthly Price Slider */}
+        {/* Plan tier + price adjustment */}
         <div>
-          <label className="text-xs text-pm-canada-text-muted block mb-1.5">Monthly Price (CAD)</label>
+          <label className="text-xs text-pm-canada-text-muted block mb-1.5">Plan (CAD)</label>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {PLAN_TIERS.map(plan => (
+              <button key={plan.id} onClick={() => { setPlanId(plan.id); setPriceBump(0) }}
+                className={`p-2.5 rounded-lg border text-left transition-colors ${
+                  planId === plan.id
+                    ? 'border-pm-accent/50 bg-pm-accent/5'
+                    : 'border-pm-canada-border hover:border-pm-canada-text-faint bg-pm-canada-bg'
+                }`}>
+                <p className="text-xs font-semibold text-white">{plan.label}</p>
+                <p className="text-sm font-bold text-pm-amber-gold">CA${plan.price}/mo</p>
+                <p className="text-2xs text-pm-canada-text-muted mt-0.5">
+                  {plan.phoneAgent ? `Phone agent · CA$${plan.orderFee.toFixed(2)}/order` : 'No phone agent'}
+                </p>
+              </button>
+            ))}
+          </div>
+          <label className="text-xs text-pm-canada-text-muted block mb-1.5">
+            Price Adjustment <span className="text-pm-canada-text-faint">(up to +CA${REP_PRICE_HEADROOM_CAD}/mo)</span>
+          </label>
           <div className="flex items-center gap-3">
             <input
               type="range"
-              min={350}
-              max={1400}
-              step={50}
-              value={monthlyPrice}
-              onChange={e => setMonthlyPrice(Number(e.target.value))}
+              min={0}
+              max={REP_PRICE_HEADROOM_CAD}
+              step={5}
+              value={priceBump}
+              onChange={e => setPriceBump(Number(e.target.value))}
               className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent"
             />
             <span className="text-sm font-semibold text-pm-amber-gold w-28 text-right">CA${monthlyPrice.toLocaleString()}/mo</span>
           </div>
-          <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / CAD_RATE).toLocaleString()}/mo</p>
+          <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / CAD_RATE).toLocaleString()}/mo. Base price is the floor — no discounts.</p>
         </div>
 
         {/* Setup Fee */}

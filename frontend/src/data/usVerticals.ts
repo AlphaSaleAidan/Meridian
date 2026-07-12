@@ -115,6 +115,79 @@ export const US_VERTICALS: UsVerticalDeck[] = [
   { slug: 'us-artgallery',   title: 'Art Galleries',                 group: 'culture', blurb: 'High-value collector inquiry, exhibition conversion, consignment workflow.', avgTicket: '$1,800', payback: 'First collector inquiry' },
 ]
 
+/** Lookup by slug — used by lead detail to find the deck for `lead.vertical`. */
+export function findUsVerticalBySlug(slug: string | null | undefined): UsVerticalDeck | undefined {
+  if (!slug) return undefined
+  return US_VERTICALS.find(v => v.slug === slug)
+}
+
+/**
+ * Lookup that also tolerates legacy free-text vertical labels stored on older leads
+ * (e.g. "Restaurant", "Bar", "Salon", "Smoke Shop", "Convenience Store", "Café").
+ * Returns undefined if no reasonable match is found — caller should prompt the rep
+ * to tag the lead with a canonical business_type.
+ */
+export function findUsVerticalByValue(value: string | null | undefined): UsVerticalDeck | undefined {
+  if (!value) return undefined
+  const exact = findUsVerticalBySlug(value)
+  if (exact) return exact
+  const v = value.trim().toLowerCase()
+  const legacy: Record<string, string> = {
+    'restaurant':         'us-qsr',
+    'cafe':               'us-coffee',
+    'café':               'us-coffee',
+    'bar':                'us-bar',
+    'smoke shop':         'us-smokeshop',
+    'vape':               'us-smokeshop',
+    'vape store':         'us-smokeshop',
+    'tobacconist':        'us-smokeshop',
+    'dispensary':         'us-dispensary',
+    'cannabis':           'us-dispensary',
+    'cannabis retail':    'us-dispensary',
+    'boutique':           'us-clothing',
+    'salon':              'us-salon',
+    'food truck':         'us-foodtruck',
+    'convenience store':  'us-liquor',
+  }
+  const mapped = legacy[v]
+  return mapped ? findUsVerticalBySlug(mapped) : undefined
+}
+
+/** Group verticals into [groupMeta, verticals[]] tuples in canonical order. */
+export function usVerticalsByGroup(): Array<{ group: UsGroupMeta; items: UsVerticalDeck[] }> {
+  return US_GROUP_ORDER.map(key => ({
+    group: US_GROUPS[key],
+    items: US_VERTICALS.filter(v => v.group === key),
+  }))
+}
+
+/**
+ * Build a personalized deck URL for sharing with a US prospect.
+ * Includes the rep's name/email/phone and the prospect's business name.
+ *
+ * When `pricing` is supplied, the deck overrides its hardcoded headline price
+ * (and ROI-calculator monthly rate) with the figure the rep quoted on this
+ * lead — so the proposal the prospect opens matches the number in the portal.
+ */
+export function buildPersonalizedUsDeckUrl(
+  slug: string,
+  rep?: { name?: string | null; email?: string | null; phone?: string | null } | null,
+  businessName?: string | null,
+  pricing?: { monthly?: number | null; setup?: number | null; currency?: 'CAD' | 'USD'; firstMonthFree?: boolean | null } | null,
+): string {
+  const params = new URLSearchParams()
+  if (rep?.name) params.set('rep', rep.name)
+  if (rep?.email) params.set('email', rep.email)
+  if (rep?.phone) params.set('phone', rep.phone)
+  if (businessName) params.set('business', businessName)
+  if (pricing?.monthly && pricing.monthly > 0) params.set('price', String(Math.round(pricing.monthly)))
+  if (pricing?.setup && pricing.setup > 0) params.set('setup', String(Math.round(pricing.setup)))
+  if (pricing?.currency) params.set('currency', pricing.currency)
+  if (pricing?.firstMonthFree) params.set('freemonth', '1')
+  const q = params.toString()
+  return `${US_DECK_BASE_URL}/${slug}${q ? `?${q}` : ''}`
+}
+
 /**
  * Build a personalized, USD-rendered deck URL for sharing with a US prospect.
  *

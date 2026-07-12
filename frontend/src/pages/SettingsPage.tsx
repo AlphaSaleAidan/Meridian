@@ -54,7 +54,8 @@ function NotificationPreferencesPanel({ orgId }: { orgId: string }) {
   })
 
   useEffect(() => {
-    if (!orgId) return
+    // Demo mode has no session — the best-effort server sync would only 40x.
+    if (!orgId || orgId === 'demo') return
     getAuthHeaders().then(headers => {
       fetch(`${API_URL}/api/settings/notifications?org_id=${orgId}`, { headers })
         .then(r => r.ok ? r.json() : null)
@@ -73,6 +74,7 @@ function NotificationPreferencesPanel({ orgId }: { orgId: string }) {
     const next = { ...prefs, [key]: !prefs[key] }
     setPrefs(next)
     localStorage.setItem(NOTIF_KEY, JSON.stringify(next))
+    if (orgId === 'demo') return
     getAuthHeaders().then(headers =>
       fetch(`${API_URL}/api/settings/notifications`, {
         method: 'PUT',
@@ -197,7 +199,8 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
   const [billingError, setBillingError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!orgId) return
+    // Demo org has no billing row and no session — skip instead of 401ing.
+    if (!orgId || orgId === 'demo') return
     setBillingError(null)
     getAuthHeaders().then(headers => {
       fetch(`${apiUrl}/api/billing/status/${orgId}`, { headers })

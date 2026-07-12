@@ -90,7 +90,7 @@ const STEPS: { key: Step; label: string }[] = [
 
 // Carrier star-codes vary. Bell Canada uses *21/*#21 for unconditional forward
 // while Rogers/Telus/Fido use the classic *72/*73 codes.
-const STAR_CODES = [
+const CA_STAR_CODES = [
   { label: 'Forward all calls (Rogers · Telus · Fido)', on: '*72', note: 'dial *72 then the Meridian number' },
   { label: 'Cancel forwarding (Rogers · Telus · Fido)', on: '*73', note: 'turns forwarding back off' },
   { label: 'Forward all calls (Bell Canada)', on: '*21', note: 'Bell\'s unconditional call-forward code' },
@@ -98,6 +98,27 @@ const STAR_CODES = [
   { label: 'Forward when busy', on: '*90', note: 'for the Overflow option' },
   { label: 'Forward on no-answer', on: '*92', note: 'for the Overflow option' },
 ]
+
+// US carriers (Verizon · AT&T · T-Mobile landline/wireless) share the classic
+// *72/*73 codes; AT&T wireless uses **21* for unconditional forward.
+const US_STAR_CODES = [
+  { label: 'Forward all calls (Verizon · AT&T · T-Mobile)', on: '*72', note: 'dial *72 then the Meridian number' },
+  { label: 'Cancel forwarding (Verizon · AT&T · T-Mobile)', on: '*73', note: 'turns forwarding back off' },
+  { label: 'Forward all calls (AT&T wireless)', on: '**21*', note: 'dial **21*, the Meridian number, then #' },
+  { label: 'Cancel forwarding (AT&T wireless)', on: '##21#', note: 'dial ##21# to cancel forwarding' },
+  { label: 'Forward when busy', on: '*90', note: 'for the Overflow option' },
+  { label: 'Forward on no-answer', on: '*92', note: 'for the Overflow option' },
+]
+
+/** Region detection — this wizard mounts under /canada/* and /us/* + /demo. */
+function isCanadaMount(): boolean {
+  return typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
+}
+
+/** Region-aware star codes — the Canada mounts keep their existing list. */
+function starCodesForPath(): typeof CA_STAR_CODES {
+  return isCanadaMount() ? CA_STAR_CODES : US_STAR_CODES
+}
 
 const PROVISION_TIMEOUT_MS = 30_000
 
@@ -337,9 +358,9 @@ export default function PhoneSetupWizard() {
     id: orgId || 'demo',
     name: businessName,
     vertical: 'restaurant',
-    country: 'CA',
-    currency: 'CA$',
-    taxRate: 0.13,
+    country: isCanadaMount() ? 'CA' : 'US',
+    currency: isCanadaMount() ? 'CA$' : '$',
+    taxRate: isCanadaMount() ? 0.13 : 0.08,
     phone: meridianNumber,
     greeting,
     voice,
@@ -481,9 +502,9 @@ export default function PhoneSetupWizard() {
                   <p className="text-[11px] text-[#A1A1A8] font-medium">
                     From your business phone, dial the star-code, then the Meridian number above:
                   </p>
-                  {STAR_CODES
+                  {starCodesForPath()
                     .filter(sc => mode === 'forward_all'
-                      ? (sc.on === '*72' || sc.on === '*73' || sc.on === '*21' || sc.on === '#21')
+                      ? (sc.on !== '*90' && sc.on !== '*92')
                       : true)
                     .map(sc => (
                       <div key={sc.on} className="flex items-center gap-3 bg-[#111113] border border-[#1F1F23] rounded-lg px-3 py-2">
@@ -666,7 +687,7 @@ export default function PhoneSetupWizard() {
                       onChange={e => setMenu(prev => prev.map((m, i) => i === idx ? { ...m, name: e.target.value } : m))}
                     />
                     <div className={clsx('flex items-center text-xs font-mono', noPrice ? 'text-amber-400' : 'text-[#17C5B0]')}>
-                      <span>CA$</span>
+                      <span>{isCanadaMount() ? 'CA$' : '$'}</span>
                       <input
                         className="w-14 bg-transparent text-right focus:outline-none"
                         type="number"

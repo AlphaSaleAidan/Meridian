@@ -124,6 +124,28 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
         except Exception as e:
             logger.warning("Could not upsert sales_reps row for CA applicant: %s", e)
 
+    # Email the hiring inbox (Postal primary, Resend fallback) — best-effort,
+    # never blocks the application: the DB rows above are the source of truth.
+    try:
+        from ...email.send import send_career_application
+        await send_career_application(
+            notify_email,
+            country_label=country_label,
+            position_label=position_label,
+            applicant_name=req.name,
+            applicant_email=req.email,
+            applicant_phone=req.phone,
+            location=f"{req.city}{', ' + state_province if state_province else ''}",
+            experience=req.experience,
+            availability=req.availability,
+            linkedin_url=req.linkedin_url,
+            referral_source=req.referral_source,
+            motivation=req.motivation,
+            application_id=app_id,
+        )
+    except Exception as e:
+        logger.warning("Could not email career application %s: %s", app_id, e)
+
     logger.info(
         "%s career application saved: %s (%s) for %s in %s [id=%s]",
         country_label, req.name, req.email, req.position, req.city, app_id,

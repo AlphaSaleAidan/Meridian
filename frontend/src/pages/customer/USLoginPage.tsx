@@ -10,7 +10,7 @@ export default function USLoginPage() {
   const location = useLocation()
   const { ready, authenticated, org, logout, isRecovery } = useAuth()
 
-  const from = (location.state as { from?: string })?.from || '/us/dashboard'
+  const from = (location.state as { from?: string })?.from || '/us/merchant'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

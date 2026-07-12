@@ -128,7 +128,7 @@ function CheckoutScreen({
 
   function handleGetStarted() {
     onClose()
-    navigate(isCanada ? '/canada/portal/signup' : '/customer/signup')
+    navigate(isCanada ? '/canada/portal/signup' : '/us/portal/signup')
   }
 
   return createPortal(

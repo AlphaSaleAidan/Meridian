@@ -134,3 +134,4 @@ export const merchantPillars: Pillar[] = [
 ]
 
 export const MERCHANT_BASE_PATH = '/canada/merchant'
+export const US_MERCHANT_BASE_PATH = '/us/merchant'

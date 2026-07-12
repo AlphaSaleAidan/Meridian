@@ -1,15 +1,20 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, Check, Sparkles, Wifi, X, Upload, Trash2, Clock,
   FileText, Mail, CheckCircle2, Loader2, Download, ChevronRight, Pencil, Save,
-  AlertTriangle, CreditCard, RefreshCw, Send, Eye, ExternalLink, Copy,
+  AlertTriangle, CreditCard, RefreshCw, Send, Eye, ExternalLink, Copy, Tag,
 } from 'lucide-react'
+import {
+  findUsVerticalByValue,
+  buildPersonalizedUsDeckUrl,
+  US_VERTICALS,
+} from '@/data/usVerticals'
 import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan, closestMonthlyPlan } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, type PlanTier } from '@/lib/proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
 import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type InvoiceInput } from '@/lib/generate-invoice-pdf-us'
@@ -100,16 +105,32 @@ export default function USPortalLeadDetailPage() {
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Step 2 state
-  const [monthlyPrice, setMonthlyPrice] = useState(500)
+  // Step 2 state — price = tier base + rep adjustment (0..REP_PRICE_HEADROOM)
+  const [planId, setPlanId] = useState<PlanTier['id']>('premium')
+  const [priceBump, setPriceBump] = useState(0)
+  const selectedPlan = getPlan(planId)
+  const monthlyPrice = selectedPlan.price + priceBump
   const [setupFee, setSetupFee] = useState('0')
   const [firstMonthFree, setFirstMonthFree] = useState(false)
+
+  // Seed tier + adjustment from a lead's stored monthly value (legacy values
+  // snap to the closest tier; any remainder above base becomes the adjustment).
+  const seedPricing = useCallback((stored?: number | null) => {
+    const plan = closestMonthlyPlan(stored || 350)
+    setPlanId(plan.id)
+    const bump = stored ? Math.round(stored - plan.price) : 0
+    setPriceBump(Math.min(REP_PRICE_HEADROOM, Math.max(0, bump)))
+  }, [])
 
   // Proposal state
   const [proposalBlob, setProposalBlob] = useState<Blob | null>(null)
   const [proposalGenerating, setProposalGenerating] = useState(false)
   const [proposalEmailing, setProposalEmailing] = useState(false)
   const [proposalSent, setProposalSent] = useState(false)
+
+  // Industry proposal-deck state
+  const [deckLinkCopied, setDeckLinkCopied] = useState(false)
+  const [deckTagging, setDeckTagging] = useState(false)
 
   // Invoice state
   const [invoiceBlob, setInvoiceBlob] = useState<Blob | null>(null)
@@ -652,7 +673,7 @@ export default function USPortalLeadDetailPage() {
 
   const buildProposalInput = useCallback(() => {
     if (!deal || !rep) return null
-    const plan = getPlan(closestMonthlyPlan(monthlyPrice).id)
+    const plan = selectedPlan
     return {
       businessName: deal.business_name,
       ownerName: deal.contact_name,
@@ -664,17 +685,42 @@ export default function USPortalLeadDetailPage() {
       firstMonthFree,
       rep,
     }
-  }, [deal, rep, monthlyPrice, setupFee, firstMonthFree])
+  }, [deal, rep, selectedPlan, monthlyPrice, setupFee, firstMonthFree])
+
+  // Opens the lead's industry-specific proposal deck (the live hosted deck on
+  // meridian-decks.vercel.app, personalized with rep + business name) — the
+  // current proposal format. Falls back to prompting the rep to tag the
+  // business type, since the deck is selected from deal.vertical.
+  function proposalDeckUrl(): string | null {
+    if (!deal || !rep) return null
+    const deck = findUsVerticalByValue(deal.vertical)
+    if (!deck) return null
+    return buildPersonalizedUsDeckUrl(deck.slug, rep, deal.business_name, {
+      monthly: monthlyPrice,
+      setup: Number(setupFee) || 0,
+      currency: 'USD',
+      firstMonthFree,
+    })
+  }
+
+  function openProposalDeck(): string | null {
+    if (!deal || !rep) return null
+    const url = proposalDeckUrl()
+    if (!url) {
+      toast("Tag this lead's business type first — the proposal is built from its industry deck.", 'info')
+      return null
+    }
+    window.open(url, '_blank')
+    return url
+  }
 
   async function handleGenerateProposal() {
-    const input = buildProposalInput()
-    if (!input) return
+    if (!deal) return
     setProposalGenerating(true)
     try {
-      const blob = await generateProposalPdf(input)
-      setProposalBlob(blob)
-      openBlobInNewTab(blob)
-      if (deal && (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted')) {
+      const url = openProposalDeck()
+      if (!url) return
+      if (deal.stage === 'appointment_set' || deal.stage === 'prospecting' || deal.stage === 'contacted') {
         await usLeadsService.updateStage(deal.id, 'proposal_shown')
         setDeal(prev => prev ? { ...prev, stage: 'proposal_shown' } : prev)
       }
@@ -685,7 +731,13 @@ export default function USPortalLeadDetailPage() {
     }
   }
 
-  async function handleViewProposal() {
+  function handleViewProposal() {
+    openProposalDeck()
+  }
+
+  // PDF fallback — generates the slide-deck PDF locally for reps who need a
+  // file to share offline. The primary proposal path is the live deck above.
+  async function handleDownloadProposal() {
     const input = buildProposalInput()
     if (!input) return
     setProposalGenerating(true)
@@ -700,14 +752,9 @@ export default function USPortalLeadDetailPage() {
     }
   }
 
-  function handleDownloadProposal() {
-    handleViewProposal()
-  }
-
   async function handleEmailProposal() {
     if (!deal || proposalEmailing) return
     setProposalEmailing(true)
-    if (!proposalBlob) await handleGenerateProposal()
     try {
       const API_BASE = import.meta.env.VITE_API_URL || ''
       const res = await fetch(`${API_BASE}/api/email/send`, {
@@ -726,6 +773,7 @@ export default function USPortalLeadDetailPage() {
             monthly_price: `$${monthlyPrice.toLocaleString()}`,
             setup_fee: (Number(setupFee) || 0) > 0 ? `$${(Number(setupFee) || 0).toLocaleString()}` : '',
             due_today: `$${((firstMonthFree ? 0 : monthlyPrice) + (Number(setupFee) || 0)).toLocaleString()}`,
+            proposal_url: proposalDeckUrl() || '',
           },
         }),
       })
@@ -755,7 +803,7 @@ export default function USPortalLeadDetailPage() {
     usLeadsService.getById(id).then(found => {
       setDeal(found)
       if (found) {
-        setMonthlyPrice(found.monthly_value || 500)
+        seedPricing(found.monthly_value)
       }
     }).catch(() => {
       setDeal(null)
@@ -769,7 +817,7 @@ export default function USPortalLeadDetailPage() {
           toast(`${updated.business_name} moved to ${updated.stage.replace(/_/g, ' ')}`, 'info')
         }
         setDeal(updated)
-        setMonthlyPrice(updated.monthly_value || 500)
+        seedPricing(updated.monthly_value)
       }
     })
     return () => { usLeadsService.unsubscribe(channel) }
@@ -894,6 +942,37 @@ export default function USPortalLeadDetailPage() {
         </div>
       )}
 
+      {/* Proposal deck for this lead (industry-specific) */}
+      <LeadDeckCard
+        deal={deal}
+        rep={rep}
+        monthly={monthlyPrice}
+        setup={Number(setupFee) || 0}
+        copied={deckLinkCopied}
+        tagging={deckTagging}
+        onCopy={async (url) => {
+          try {
+            await navigator.clipboard.writeText(url)
+            setDeckLinkCopied(true)
+            setTimeout(() => setDeckLinkCopied(false), 1800)
+          } catch {
+            toast('Could not copy link — try long-pressing the Open button.', 'error')
+          }
+        }}
+        onTagVertical={async (slug) => {
+          if (!deal) return
+          setDeckTagging(true)
+          try {
+            await usLeadsService.update(deal.id, { vertical: slug })
+            setDeal(prev => prev ? { ...prev, vertical: slug } : prev)
+          } catch (err) {
+            toast(err instanceof Error ? `Could not tag lead: ${err.message}` : 'Could not tag lead.', 'error')
+          } finally {
+            setDeckTagging(false)
+          }
+        }}
+      />
+
       {/* Stepper */}
       <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4">
         <HorizontalStepper currentStep={currentStep} />
@@ -903,22 +982,41 @@ export default function USPortalLeadDetailPage() {
       <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Proposal</h2>
 
-        {/* Monthly Price Slider */}
+        {/* Plan tier + price adjustment */}
         <div>
-          <label className="text-xs text-[#A1A1A8] block mb-1.5">Monthly Price (USD)</label>
+          <label className="text-xs text-[#A1A1A8] block mb-1.5">Plan (USD)</label>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {PLAN_TIERS.map(plan => (
+              <button key={plan.id} onClick={() => { setPlanId(plan.id); setPriceBump(0) }}
+                className={`p-2.5 rounded-lg border text-left transition-colors ${
+                  planId === plan.id
+                    ? 'border-[#17C5B0]/50 bg-[#17C5B0]/5'
+                    : 'border-[#1F1F23] hover:border-[#4a5550] bg-[#0A0A0B]'
+                }`}>
+                <p className="text-xs font-semibold text-white">{plan.label}</p>
+                <p className="text-sm font-bold text-[#f0b429]">${plan.price}/mo</p>
+                <p className="text-[10px] text-[#A1A1A8] mt-0.5">
+                  {plan.phoneAgent ? `Phone agent · $${plan.orderFee.toFixed(2)}/order` : 'No phone agent'}
+                </p>
+              </button>
+            ))}
+          </div>
+          <label className="text-xs text-[#A1A1A8] block mb-1.5">
+            Price Adjustment <span className="text-[#4a5550]">(up to +${REP_PRICE_HEADROOM}/mo)</span>
+          </label>
           <div className="flex items-center gap-3">
             <input
               type="range"
-              min={299}
-              max={1199}
-              step={50}
-              value={monthlyPrice}
-              onChange={e => setMonthlyPrice(Number(e.target.value))}
+              min={0}
+              max={REP_PRICE_HEADROOM}
+              step={5}
+              value={priceBump}
+              onChange={e => setPriceBump(Number(e.target.value))}
               className="flex-1 h-2 bg-[#1F1F23] rounded-full appearance-none cursor-pointer accent-[#17C5B0]"
             />
             <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">${monthlyPrice.toLocaleString()}/mo</span>
           </div>
-          <p className="text-[10px] text-[#4a5550] mt-1">Billed monthly in USD</p>
+          <p className="text-[10px] text-[#4a5550] mt-1">Billed monthly in USD. Base price is the floor — no discounts.</p>
         </div>
 
         {/* Setup Fee */}
@@ -1626,4 +1724,76 @@ export default function USPortalLeadDetailPage() {
       )}
     </div>
   )
+}
+
+/* ─── LeadDeckCard ─────────────────────────────────────────────────────────
+ * Industry-specific proposal-deck card.
+ *  - If deal.vertical resolves to a known US deck → the proposal entry point
+ *    lives in the Step 1 "Proposal" section, so this card renders nothing.
+ *  - If unknown/missing → show a quick-tag chip row with the most common verticals.
+ * ──────────────────────────────────────────────────────────────────────── */
+interface LeadDeckCardProps {
+  deal: Deal
+  rep: { name?: string | null; email?: string | null; phone?: string | null } | null
+  monthly: number
+  setup: number
+  copied: boolean
+  tagging: boolean
+  onCopy: (url: string) => void | Promise<void>
+  onTagVertical: (slug: string) => void | Promise<void>
+}
+
+function LeadDeckCard({ deal, rep, monthly, setup, copied, tagging, onCopy, onTagVertical }: LeadDeckCardProps) {
+  const deck = useMemo(() => findUsVerticalByValue(deal.vertical), [deal.vertical])
+  const personalizedUrl = useMemo(
+    () => (deck ? buildPersonalizedUsDeckUrl(deck.slug, rep, deal.business_name, { monthly, setup, currency: 'USD' }) : ''),
+    [deck, rep, deal.business_name, monthly, setup],
+  )
+
+  // Quick-tag chip selection — 6 most common US verticals for fast tagging.
+  const quickTagSlugs = ['us-qsr', 'us-coffee', 'us-bar', 'us-salon', 'us-dental', 'us-liquor']
+  const quickTags = useMemo(
+    () => quickTagSlugs.map(s => US_VERTICALS.find(v => v.slug === s)).filter(Boolean) as typeof US_VERTICALS,
+    [],
+  )
+
+  if (!deck) {
+    return (
+      <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Tag size={14} className="text-[#f0b429]" />
+          <h2 className="text-sm font-semibold text-white">Tag this lead with a business type</h2>
+        </div>
+        <p className="text-xs text-[#A1A1A8]">
+          Pick the industry to auto-generate the matching personalized proposal deck for {deal.business_name}.
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {quickTags.map(v => (
+            <button
+              key={v.slug}
+              disabled={tagging}
+              onClick={() => onTagVertical(v.slug)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-[#1F1F23] bg-[#0A0A0B] text-[11px] text-[#A1A1A8] hover:border-[#17C5B0]/40 hover:text-white disabled:opacity-50 transition-colors"
+            >
+              {tagging ? <Loader2 size={10} className="animate-spin" /> : null}
+              {v.title}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-[#4a5550]">
+          Looking for something else? Edit the lead or visit the Proposals page for all 43 verticals.
+        </p>
+      </div>
+    )
+  }
+
+  // Once a vertical is tagged, the proposal entry point lives in the Step 1
+  // "Proposal" section below (price slider + Generate/View/Email), so the
+  // redundant top-of-page "Open personalized deck" card is intentionally not
+  // rendered. `personalizedUrl`/`onCopy`/`copied` remain wired for the
+  // untagged tagging flow and any future reuse.
+  void personalizedUrl
+  void onCopy
+  void copied
+  return null
 }

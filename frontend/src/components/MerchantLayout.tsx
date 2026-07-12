@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
@@ -40,6 +40,10 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const closeSidebar = () => setSidebarOpen(false)
   const flags = useModuleFlags()
+  // Same chrome serves both regions: /canada/* keeps its existing branding,
+  // the US mounts (/us/merchant, /demo) show no region chip at all.
+  const isCanada = useLocation().pathname.startsWith('/canada')
+  const repLoginHref = isCanada ? '/canada/portal/login' : '/us/portal/login'
 
   // Filter pillars by their optional flag — disabled-never-delete pattern.
   const visiblePillars = merchantPillars.filter(p => !p.flag || flags[p.flag])
@@ -70,7 +74,9 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
           <MeridianEmblem size={28} animate />
           <div className="flex flex-col">
             <MeridianWordmark height={13} />
-            <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+            {isCanada && (
+              <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+            )}
           </div>
         </div>
 
@@ -95,7 +101,7 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
 
         <div className="px-3 py-3 border-t border-[#1F1F23] flex-shrink-0">
           <a
-            href="/canada/portal/login"
+            href={repLoginHref}
             className="text-[9px] text-[#A1A1A8]/20 hover:text-[#A1A1A8]/50 transition-colors block text-center py-1"
           >
             Sales Rep Access
@@ -111,10 +117,12 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
           </button>
           <MeridianEmblem size={24} animate />
           <MeridianWordmark height={11} />
-          <div className="flex items-center gap-1 ml-1">
-            <MapPin size={8} className="text-[#17C5B0]" />
-            <span className="text-[8px] text-[#17C5B0] font-medium uppercase tracking-wider">CA</span>
-          </div>
+          {isCanada && (
+            <div className="flex items-center gap-1 ml-1">
+              <MapPin size={8} className="text-[#17C5B0]" />
+              <span className="text-[8px] text-[#17C5B0] font-medium uppercase tracking-wider">CA</span>
+            </div>
+          )}
         </div>
 
         <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-32 lg:pb-8">

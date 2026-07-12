@@ -13,7 +13,7 @@ import CustomerWalkthrough from './CustomerWalkthrough'
 import { useAuth } from '@/lib/auth'
 import { useMobile } from '@/hooks/useMobile'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
-import { defaultModuleFlags, type ModuleFlags } from '@/config/moduleFlags'
+import { canadaModuleFlags, type ModuleFlags } from '@/config/moduleFlags'
 
 interface NavItem {
   path: string
@@ -76,8 +76,8 @@ export default function USLayout() {
     if (desktopOnlyItem) navigate(basePath, { replace: true })
   }, [isMobile, location.pathname, navigate])
 
-  // US customers get the full feature set (defaultModuleFlags).
-  const enabledNavItems = navItems.filter(i => !i.flag || defaultModuleFlags[i.flag])
+  // US customers mirror the Canada product — same trimmed pillar set.
+  const enabledNavItems = navItems.filter(i => !i.flag || canadaModuleFlags[i.flag])
   const visibleNavItems = isMobile
     ? enabledNavItems.filter(i => !i.desktopOnly)
     : enabledNavItems
