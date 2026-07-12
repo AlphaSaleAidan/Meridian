@@ -4,6 +4,7 @@ import {
   Plus, Search, X, ChevronRight, Store, Wifi, AlertTriangle, Loader2, WifiOff, Trash2, Lock,
 } from 'lucide-react'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
+import { usVerticalsByGroup, findUsVerticalByValue } from '@/data/usVerticals'
 import { usLeadsService } from '@/lib/us-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { useTrainingLock } from '@/lib/training-progress'
@@ -116,7 +117,7 @@ export default function USPortalLeadsPage() {
 
   const [newDeal, setNewDeal] = useState({
     business_name: '', contact_name: '', contact_email: '', contact_phone: '',
-    vertical: 'Restaurant', commission_rate: '70', notes: '',
+    vertical: '', commission_rate: '70', notes: '',
     source: 'Referral', city: '', province: '',
   })
   const [addError, setAddError] = useState('')
@@ -194,7 +195,7 @@ export default function USPortalLeadsPage() {
         toast('Lead added', 'success')
       }
       setShowNew(false)
-      setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: 'Restaurant', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '' })
+      setNewDeal({ business_name: '', contact_name: '', contact_email: '', contact_phone: '', vertical: '', commission_rate: '70', notes: '', source: 'Referral', city: '', province: '' })
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Failed to add lead')
       toast('Failed to save lead', 'error')
@@ -306,9 +307,16 @@ export default function USPortalLeadsPage() {
               <input required value={newDeal.contact_name} onChange={e => setNewDeal(p => ({ ...p, contact_name: e.target.value }))} className={inputClass} placeholder="Contact Name *" />
               <input type="email" value={newDeal.contact_email} onChange={e => setNewDeal(p => ({ ...p, contact_email: e.target.value }))} className={inputClass} placeholder="Contact Email" />
               <input type="tel" value={newDeal.contact_phone} onChange={e => setNewDeal(p => ({ ...p, contact_phone: e.target.value }))} className={inputClass} placeholder="Phone" />
-              <select value={newDeal.vertical} onChange={e => setNewDeal(p => ({ ...p, vertical: e.target.value }))} className={inputClass}>
-                {['Restaurant', 'Smoke Shop', 'Cafe', 'Bar', 'Food Truck', 'Salon', 'Boutique', 'Convenience Store', 'Other'].map(v => (
-                  <option key={v} value={v}>{v}</option>
+              {/* Canonical business type (deck slug) — drives which industry
+                  proposal deck this lead gets, so it must be a real selection. */}
+              <select required value={newDeal.vertical} onChange={e => setNewDeal(p => ({ ...p, vertical: e.target.value }))} className={inputClass}>
+                <option value="">Business Type *</option>
+                {usVerticalsByGroup().map(({ group, items }) => (
+                  <optgroup key={group.key} label={group.label}>
+                    {items.map(v => (
+                      <option key={v.slug} value={v.slug}>{v.title}</option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               <select value={newDeal.source} onChange={e => setNewDeal(p => ({ ...p, source: e.target.value }))} className={inputClass}>
@@ -395,7 +403,7 @@ export default function USPortalLeadsPage() {
                     <span className="text-sm font-semibold text-white truncate">{deal.business_name}</span>
                     {deal.vertical && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1F1F23] text-[#A1A1A8] font-medium">
-                        {deal.vertical}
+                        {findUsVerticalByValue(deal.vertical)?.title || deal.vertical}
                       </span>
                     )}
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0b429]/10 text-[#f0b429] font-medium">

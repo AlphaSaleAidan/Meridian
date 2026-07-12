@@ -10,6 +10,7 @@ import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, type PlanTier } from '@/lib/proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
+import { usVerticalsByGroup, findUsVerticalBySlug, US_DECK_BASE_URL, buildPersonalizedUsDeckUrl } from '@/data/usVerticals'
 
 type Step = 'details' | 'plan' | 'customize' | 'preview' | 'confirm'
 
@@ -49,6 +50,8 @@ function ProposalOverlay({
   repPhone,
   checkoutUrl,
   onDownloadPdf,
+  verticalTitle,
+  deckUrl,
 }: {
   open: boolean
   onClose: () => void
@@ -63,6 +66,8 @@ function ProposalOverlay({
   repPhone?: string
   checkoutUrl: string
   onDownloadPdf: () => void
+  verticalTitle?: string
+  deckUrl?: string
 }) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const totalSlides = 8
@@ -137,10 +142,15 @@ function ProposalOverlay({
           </div>
           <div className="relative z-10">
             <p className="text-[11px] font-mono tracking-[0.2em] text-[#17C5B0] uppercase mb-8">
-              MERIDIAN US · PROPOSAL (USD)
+              MERIDIAN US · {verticalTitle ? `${verticalTitle.toUpperCase()} ` : ''}PROPOSAL (USD)
             </p>
             <p className="text-[15px] text-[#A1A1A8] italic font-serif mb-2">Prepared for</p>
             <h1 className="text-4xl sm:text-6xl font-bold text-white leading-tight">{businessName}</h1>
+            {verticalTitle && (
+              <p className="mt-3 text-[13px] font-mono tracking-[0.14em] text-[#17C5B0] uppercase">
+                {verticalTitle}
+              </p>
+            )}
             <div className="mt-8 space-y-1">
               <p className="text-[13px] text-[#A1A1A8]">{today}</p>
               <p className="text-[13px] text-[#A1A1A8]">{ownerName} · {repEmail}</p>
@@ -412,6 +422,22 @@ function ProposalOverlay({
             </div>
           </div>
 
+          {deckUrl && (
+            <div className="mt-8 max-w-xl w-full bg-gradient-to-br from-[#17C5B0]/5 to-transparent border border-[#17C5B0]/25 rounded-xl p-4 text-center">
+              <p className="text-[11px] font-mono tracking-[0.14em] text-[#17C5B0] uppercase mb-2">
+                Explore the full {verticalTitle || ''} deck
+              </p>
+              <a
+                href={deckUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[12px] text-white underline decoration-[#17C5B0]/60 break-all"
+              >
+                {deckUrl}
+              </a>
+            </div>
+          )}
+
           {/* Footer stats */}
           <div className="flex flex-wrap justify-center gap-8 mt-10 text-center">
             <div>
@@ -513,6 +539,14 @@ export default function USPortalCreateCustomerPage() {
 
   const buildProposalInput = useCallback((): ProposalInput | null => {
     if (!rep) return null
+    const vertical = findUsVerticalBySlug(form.vertical)
+    const deckUrl = vertical
+      ? buildPersonalizedUsDeckUrl(
+          vertical.slug,
+          { name: rep.name, email: rep.email, phone: rep.phone },
+          form.businessName || null,
+        )
+      : undefined
     return {
       businessName: form.businessName,
       ownerName: form.ownerName,
@@ -524,6 +558,9 @@ export default function USPortalCreateCustomerPage() {
       firstMonthFree: form.firstMonthFree,
       rep,
       checkoutUrl: checkoutUrl || undefined,
+      verticalSlug: vertical?.slug,
+      verticalTitle: vertical?.title,
+      deckUrl,
     }
   }, [form, selectedPlan, setupFee, rep, checkoutUrl])
 
@@ -712,7 +749,10 @@ export default function USPortalCreateCustomerPage() {
     window.open(`sms:${form.phone}?body=${encodeURIComponent(msg)}`, '_blank')
   }
 
-  const verticals = ['Restaurant', 'Cafe', 'Bar', 'Smoke Shop', 'Boutique', 'Salon', 'Food Truck', 'Convenience Store', 'Other']
+  // Grouped US verticals (43 total) — values are deck slugs (e.g. "us-qsr"),
+  // matching the proposals catalog so the lead detail page can auto-link the right deck.
+  const verticalGroups = usVerticalsByGroup()
+  const selectedVertical = findUsVerticalBySlug(form.vertical)
   const stepLabels = ['Details', 'Plan', 'Price', 'Proposal', 'Confirm']
   const steps: Step[] = ['details', 'plan', 'customize', 'preview', 'confirm']
   const currentIdx = steps.indexOf(step)
@@ -794,12 +834,30 @@ export default function USPortalCreateCustomerPage() {
                   className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none transition-colors" />
               </div>
               <div>
-                <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Business Type</label>
-                <select value={form.vertical} onChange={e => update('vertical', e.target.value)}
-                  className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none transition-colors">
-                  <option value="">Select type...</option>
-                  {verticals.map(v => <option key={v} value={v}>{v}</option>)}
+                <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
+                  Business Type
+                  <span className="ml-1.5 text-[11px] text-[#4a5550] font-normal">(auto-links a proposal deck)</span>
+                </label>
+                <select
+                  value={form.vertical}
+                  onChange={e => update('vertical', e.target.value)}
+                  className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none transition-colors"
+                >
+                  <option value="">Select industry…</option>
+                  {verticalGroups.map(({ group, items }) => (
+                    <optgroup key={group.key} label={group.label}>
+                      {items.map(v => (
+                        <option key={v.slug} value={v.slug}>{v.title}</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
+                {selectedVertical && (
+                  <p className="mt-1.5 text-[11px] text-[#17C5B0]/80 leading-snug">
+                    Deck linked: <span className="text-[#17C5B0] font-medium">{selectedVertical.title}</span>
+                    <span className="text-[#4a5550]"> — {selectedVertical.blurb}</span>
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1404,6 +1462,20 @@ export default function USPortalCreateCustomerPage() {
         repPhone={rep?.phone || undefined}
         checkoutUrl={checkoutUrl}
         onDownloadPdf={handleDownloadPdf}
+        verticalTitle={selectedVertical?.title}
+        deckUrl={
+          selectedVertical
+            ? `${US_DECK_BASE_URL}/${selectedVertical.slug}` +
+              (rep?.name || rep?.email || form.businessName
+                ? `?${new URLSearchParams({
+                    ...(rep?.name ? { rep: rep.name } : {}),
+                    ...(rep?.email ? { email: rep.email } : {}),
+                    ...(rep?.phone ? { phone: rep.phone } : {}),
+                    ...(form.businessName ? { business: form.businessName } : {}),
+                  }).toString()}`
+                : '')
+            : undefined
+        }
       />
     </div>
   )
