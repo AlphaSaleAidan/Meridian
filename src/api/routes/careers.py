@@ -71,39 +71,10 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
 
     position_label = "Sales Representative" if req.position == "sales_rep" else "Sales Team Lead"
 
-    try:
-        await db.insert("notifications", {
-            "id": str(uuid4()),
-            "org_id": f"meridian-{country.lower()}-careers",
-            "title": f"New {country_label} Sales Application: {req.name}",
-            "body": (
-                f"New application for {position_label}\n\n"
-                f"Name: {req.name}\n"
-                f"Email: {req.email}\n"
-                f"Phone: {req.phone or 'Not provided'}\n"
-                f"Location: {req.city}{', ' + state_province if state_province else ''}\n"
-                f"Experience: {req.experience or 'Not specified'}\n"
-                f"Availability: {req.availability or 'Not specified'}\n"
-                f"LinkedIn: {req.linkedin_url or 'Not provided'}\n"
-                f"Heard from: {req.referral_source or 'Not specified'}\n\n"
-                f"Motivation:\n{req.motivation or 'Not provided'}"
-            ),
-            "priority": "high",
-            "source_type": "event",
-            "status": "active",
-            "created_at": now,
-            "metadata": {
-                "type": "career_application",
-                "application_id": app_id,
-                "country": country,
-                "notify_email": notify_email,
-                "applicant_email": req.email,
-                "position": req.position,
-                "state_province": state_province,
-            },
-        })
-    except Exception as e:
-        logger.warning("Could not create notification for career application: %s", e)
+    # (An earlier notifications insert lived here — it had never succeeded:
+    # notifications.org_id is a uuid and this passed "meridian-{cc}-careers",
+    # so every insert 400'd and nothing consumed the rows. The durable record
+    # is career_applications above; humans are notified via the email below.)
 
     # For Canadian applications, upsert a sales_reps row so it appears
     # in the SR portal Team > Applications tab for admin approval.

@@ -99,6 +99,7 @@ const USPortalOnboardingPage = lazyRetry(() => import('@/pages/us/portal/USPorta
 const USCustomerOnboardingWizard = lazyRetry(() => import('@/pages/us/portal/USCustomerOnboardingWizard'))
 const USLoginPage = lazyRetry(() => import('@/pages/customer/USLoginPage'))
 const USSetupPage = lazyRetry(() => import('@/pages/customer/USSetupPage'))
+const USInvoicePage = lazyRetry(() => import('@/pages/us/USInvoicePage'))
 const USLayout = lazyRetry(() => import('@/components/USLayout'))
 const USPortalBadgePage = lazyRetry(() => import('@/pages/us/portal/USPortalBadgePage'))
 const CanadaPortalBadgePage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalBadgePage'))
@@ -547,6 +548,9 @@ export default function App() {
               {/* US — customer auth (returning login + first-login setup) */}
               <Route path="/us/login" element={<Suspense fallback={<LazyFallback />}><USLoginPage /></Suspense>} />
               <Route path="/us/setup" element={<Suspense fallback={<LazyFallback />}><USSetupPage /></Suspense>} />
+              {/* Public invoice view — the /us/invoice/{number} links embedded in
+                  US invoice PDFs previously fell through to the landing catch-all */}
+              <Route path="/us/invoice/:invoiceId" element={<Suspense fallback={<LazyFallback />}><USInvoicePage /></Suspense>} />
               {/* ══════════════════════════════════════════════
                   US — merchant portal (3-pillar product, Canada parity)
                   ══════════════════════════════════════════════ */}
