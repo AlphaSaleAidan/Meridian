@@ -1,0 +1,60 @@
+name: SOC 2 Control Tests
+
+# Offline control tests run on every PR (fast, no secrets). The weekly
+# scheduled run additionally executes the read-only live collectors when
+# management credentials are configured, and uploads the evidence bundle —
+# that periodic artifact trail is what a Type II observation window samples.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 9 * * 1"   # Mondays 09:00 UTC
+
+jobs:
+  control-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal deps
+        run: |
+          pip install --quiet fastapi uvicorn "httpx<1" pydantic supabase \
+            python-dotenv pytest pytest-asyncio pyyaml
+
+      - name: Run SOC 2 control tests
+        env:
+          COMPLIANCE_EVIDENCE_DIR: compliance-evidence
+        run: python -m pytest tests/compliance -q
+
+      - name: Live evidence collectors (read-only, scheduled runs only)
+        if: github.event_name == 'schedule'
+        env:
+          COMPLIANCE_EVIDENCE_DIR: compliance-evidence
+          SUPABASE_MGMT_TOKEN: ${{ secrets.SUPABASE_MGMT_TOKEN }}
+          SUPABASE_PROJECT_REF_MERIDIAN: ${{ secrets.SUPABASE_PROJECT_REF_MERIDIAN }}
+        run: |
+          python scripts/compliance/collect_rls_evidence.py
+          python scripts/compliance/collect_backup_evidence.py
+
+      - name: Readiness report
+        if: always()
+        env:
+          COMPLIANCE_EVIDENCE_DIR: compliance-evidence
+        run: python scripts/compliance/readiness_report.py
+
+      - name: Upload evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-evidence-${{ github.run_id }}
+          path: compliance-evidence/
+          retention-days: 400
