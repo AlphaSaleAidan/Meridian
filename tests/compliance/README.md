@@ -29,7 +29,7 @@ fails on ANY regression — while every remediation forces the baseline to
 shrink (stale entries fail too). Readiness can only move one direction.
 
 Burn-down lists:
-- `public_endpoint_baseline.yaml` → `unreviewed:` (34 endpoints at freeze)
+- `public_endpoint_baseline.yaml` → `unreviewed:` (9 endpoints at freeze)
 - `test_cc6_1_rls_migrations.py` → `KNOWN_RLS_MIGRATION_DRIFT` (6 tables)
 
 ## Reports

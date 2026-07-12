@@ -1,16 +1,12 @@
-# CC6.6 public-endpoint baseline (RATCHET) — generated 2026-07-12 from origin/main c5bf0e1f.
+# CC6.6 public-endpoint baseline (RATCHET) — regenerated 2026-07-12 from origin/main.
 #
-# Every route listed here is served WITHOUT a FastAPI auth dependency
-# (require_admin / require_jwt / require_admin_jwt / require_service_auth /
-# require_org_access / require_org_member). The control test fails when a
-# route not in this file goes public — new endpoints must either take an
-# auth dependency or be added here deliberately, in review, with a category.
-# It also fails when an entry here is no longer public, so the list never
-# goes stale. Do NOT bulk-regenerate this file to make CI pass.
+# Routes here are served WITHOUT a recognized auth dependency (see
+# AUTH_DEPENDENCY_NAMES in conftest.py). A route not in this file going public
+# fails CI; an entry here that gained auth also fails, so the list only tightens.
+# Do NOT bulk-regenerate to make CI pass.
 #
 # Categories: health | webhook | oauth | payment-page | public-form |
-#             inline-auth (auth enforced inside the handler — cite it) |
-#             unreviewed (open CC6.6 gap, burn this list down)
+#             inline-auth (auth enforced in-handler — cite it) | unreviewed
 
 health:
   # Liveness probe — no data exposure.
@@ -82,38 +78,13 @@ webhook:
   - "POST /webhooks/postal"
 
 unreviewed:
-  # Lacked a recognized auth dependency at baseline time (2026-07-12). Each entry needs review: add an auth dependency, document the inline check (move to category inline-auth), or justify as public. Shrinking this list raises CC6.6 readiness; growing it fails CI.
+  # Lacked a recognized auth dependency at baseline time. Each needs review: add auth, document an inline check, or justify as public. Shrinking this list raises CC6.6 readiness; growing it fails CI.
   - "GET /api/content/director/styles"
   - "GET /api/content/models"
   - "GET /api/content/video/debug/{job_id}"
   - "GET /api/content/video/status/{job_id}"
   - "GET /api/credits/packs"
-  - "GET /api/inference/stats"
-  - "GET /api/inference/token-savings"
-  - "GET /api/payouts/balances"
-  - "GET /api/payouts/history"
-  - "GET /api/payouts/reps"
-  - "GET /api/payouts/reps/{rep_id}/commissions"
-  - "GET /api/payouts/summary"
   - "GET /api/phone/fees"
-  - "GET /api/vision/device/cameras"
-  - "PATCH /api/pos/status"
-  - "POST /api/billing/cancel"
   - "POST /api/connector/pair"
-  - "POST /api/inference/compress-sessions"
-  - "POST /api/inference/diff-summaries"
-  - "POST /api/inference/file-digest"
-  - "POST /api/inference/generate"
-  - "POST /api/inference/ingest"
-  - "POST /api/inference/rebuild-all"
-  - "POST /api/inference/rebuild-all/async"
-  - "POST /api/inference/rebuild-context"
-  - "POST /api/inference/rebuild-context/async"
-  - "POST /api/inference/search"
-  - "POST /api/onboarding/create-account"
   - "POST /api/onboarding/send-welcome"
-  - "POST /api/portal/generate"
-  - "POST /api/sites/{site_id}/cameras"
   - "POST /api/vision/camera/frame"
-  - "POST /api/vision/ingest/traffic"
-  - "POST /api/vision/ingest/visits"

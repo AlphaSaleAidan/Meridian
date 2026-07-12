@@ -59,13 +59,13 @@ def test_baseline_has_no_stale_entries(app):
 
 
 def test_unreviewed_bucket_never_grows(app):
-    """The 'unreviewed' category is a burn-down list frozen at 34 (2026-07-12).
+    """The 'unreviewed' category is a burn-down list frozen at 9 (2026-07-12).
 
     Reviewed endpoints move to an explicit category (or gain auth and leave
     the file); nothing new may be filed as unreviewed.
     """
     unreviewed = _baseline().get("unreviewed", [])
-    assert len(unreviewed) <= 34, (
+    assert len(unreviewed) <= 9, (
         f"'unreviewed' grew to {len(unreviewed)} — new public endpoints must "
         "be categorized deliberately, not parked as unreviewed."
     )

@@ -27,13 +27,22 @@ if str(REPO_ROOT) not in sys.path:
 # dependency tree. Inline checks inside handler bodies are NOT visible here —
 # such endpoints belong in the public-endpoint baseline with category
 # "inline-auth" and a pointer to the check.
+# The complete set of auth-gate dependency callables used in Depends() across
+# src/api/routes/*.py (discovered by grep, not hand-picked — an incomplete set
+# silently over-counts public routes and, because router-level dependencies
+# nest differently across FastAPI versions, makes detection env-dependent).
+# Keep in sync: grep -rhoE 'Depends\((require_[a-z_]+)\)' src/api/routes.
 AUTH_DEPENDENCY_NAMES = {
     "require_admin",
-    "require_jwt",
+    "require_admin_auth",
     "require_admin_jwt",
-    "require_service_auth",
+    "require_device_principal",
+    "require_device_token",
+    "require_jwt",
     "require_org_access",
     "require_org_member",
+    "require_service_auth",
+    "require_us_admin",
 }
 
 _results: list[dict] = []
