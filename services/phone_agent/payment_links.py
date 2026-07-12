@@ -59,6 +59,57 @@ def application_fee_cents(amount_cents: int) -> int:
     return min(fee, max(amount_cents - 1, 0))
 
 
+# FEE SPLIT (three-tier pricing model): when enabled, per-order economics move
+# from "merchant bears everything in transit" (Case B gross-up above) to a
+# customer/merchant split:
+#   • CUSTOMER pays: order subtotal + Meridian's per-order fee (by the
+#     merchant's plan tier) + Stripe's fixed 30¢ — added to checkout as its
+#     own "Service & processing fee" line item.
+#   • MERCHANT bears: MERCHANT_FEE_BPS (2.99%) of the order subtotal,
+#     deducted from their payout via the application fee.
+# The application fee routes surcharge + 2.99% to Meridian's balance; Stripe
+# debits its actual processing (2.9% + 30¢ of the grossed-up total) from the
+# platform, netting Meridian ≈ the tier's per-order fee on every order.
+# Default OFF: live behavior is byte-for-byte the gross-up model until the
+# flag is set.
+FEE_SPLIT_ENABLED = os.getenv("MERIDIAN_FEE_SPLIT_ENABLED", "0") == "1"
+MERCHANT_FEE_BPS = int(os.getenv("MERIDIAN_MERCHANT_FEE_BPS", "299") or 299)  # 2.99%
+CUSTOMER_FIXED_FEE_CENTS = int(os.getenv("MERIDIAN_CUSTOMER_FIXED_FEE_CENTS", "30") or 30)
+# Per-order Meridian fee in cents, by plan tier and charge currency:
+#   Standard — no phone agent, no per-order fee
+#   Premium  — US$1.49 / CA$2.49 per order
+#   Command  — US$1.00 / CA$1.69 per order
+TIER_ORDER_FEE_CENTS: dict[str, dict[str, int]] = {
+    "usd": {"standard": 0, "premium": 149, "command": 100},
+    "cad": {"standard": 0, "premium": 249, "command": 169},
+}
+# Merchants with no/unknown plan_tier bill at this tier's per-order rate.
+DEFAULT_ORDER_FEE_TIER = os.getenv("MERIDIAN_DEFAULT_ORDER_FEE_TIER", "premium")
+
+
+def tier_order_fee_cents(plan_tier: str, currency: str) -> int:
+    """Meridian's per-order fee for a merchant's plan tier, in the charge currency."""
+    fees = TIER_ORDER_FEE_CENTS.get((currency or "cad").lower(), TIER_ORDER_FEE_CENTS["cad"])
+    tier = (plan_tier or "").strip().lower()
+    if tier not in fees:
+        tier = DEFAULT_ORDER_FEE_TIER
+    return fees.get(tier, 0)
+
+
+def customer_surcharge_cents(plan_tier: str, currency: str) -> int:
+    """Customer-side per-order surcharge: Meridian's tier fee + the fixed 30¢."""
+    return tier_order_fee_cents(plan_tier, currency) + CUSTOMER_FIXED_FEE_CENTS
+
+
+def split_application_fee_cents(subtotal_cents: int, surcharge_cents: int) -> int:
+    """Application fee under the split model: the customer-paid surcharge plus
+    the merchant-side percentage of the order subtotal, capped below the total
+    charge (subtotal + surcharge) so we never take more than was charged."""
+    fee = surcharge_cents + int(round(subtotal_cents * MERCHANT_FEE_BPS / 10000))
+    total = subtotal_cents + surcharge_cents
+    return min(fee, max(total - 1, 0))
+
+
 # Demo test-charge override: when set, orders for a demo merchant charge this flat
 # amount (clamped to Stripe's $0.50 CAD minimum) instead of the real total, so
 # test runs cost ~$0.50 rather than full price. Real merchants are never touched.
@@ -165,6 +216,11 @@ async def _stripe_checkout(
     currency = (order.get("currency") or "cad").lower()
     amount = _order_amount_cents(order)
 
+    # Customer-side per-order surcharge (fee-split model): Meridian's tier fee
+    # + fixed 30¢, added to the total as its own line item. 0 when the split is
+    # disabled or on demo test charges.
+    surcharge = 0
+
     # Demo test-charge override → flat ~$0.50 line instead of the real total.
     if DEMO_TEST_CHARGE_CENTS and order.get("merchant_id", "") in _DEMO_MERCHANT_IDS:
         amount = max(50, DEMO_TEST_CHARGE_CENTS)  # Stripe CAD minimum is 50¢
@@ -175,6 +231,18 @@ async def _stripe_checkout(
                     amount, order.get("merchant_id"))
     else:
         line_items = _stripe_line_items(order, currency)
+        if FEE_SPLIT_ENABLED:
+            surcharge = customer_surcharge_cents(
+                getattr(merchant_config, "plan_tier", ""), currency)
+            if surcharge > 0:
+                line_items.append({
+                    "quantity": 1,
+                    "price_data": {
+                        "currency": currency,
+                        "unit_amount": surcharge,
+                        "product_data": {"name": "Service & processing fee"},
+                    },
+                })
 
     kwargs: dict[str, Any] = dict(
         mode="payment",
@@ -195,11 +263,15 @@ async def _stripe_checkout(
     )
     if connect_account:
         pi_data: dict[str, Any] = {"transfer_data": {"destination": connect_account}}
-        # Auto-take our fee at charge time: flat service fee + optional % +
-        # (Case B) Stripe's estimated processing gross-up. Stripe routes this to
-        # Meridian and pays the merchant the remainder (daily). Capped below the
-        # order so we never try to take more than was charged.
-        fee = application_fee_cents(amount)
+        # Auto-take our fee at charge time. Split model: the customer-paid
+        # surcharge + 2.99% of the subtotal (merchant-side). Legacy model:
+        # flat service fee + optional % + (Case B) Stripe gross-up. Stripe
+        # routes the fee to Meridian and pays the merchant the remainder
+        # (daily). Capped below the charge so we never take more than was paid.
+        if FEE_SPLIT_ENABLED and surcharge:
+            fee = split_application_fee_cents(amount, surcharge)
+        else:
+            fee = application_fee_cents(amount)
         if fee > 0:
             pi_data["application_fee_amount"] = fee
         kwargs["payment_intent_data"] = pi_data
@@ -211,12 +283,13 @@ async def _stripe_checkout(
     # Stripe's ~400-char URL. Only used if we can persist the mapping; otherwise
     # the customer still gets the full (always-working) Stripe URL.
     short_code = uuid.uuid4().hex[:8]
+    charge_total = amount + surcharge
     recorded = await _record_checkout_session(
-        order, merchant_config, pos_order_id, session, amount, currency, short_code)
+        order, merchant_config, pos_order_id, session, charge_total, currency, short_code)
     url = f"{PUBLIC_PAY_BASE}/p/{short_code}" if recorded else session["url"]
-    logger.info("Stripe checkout %s (%s) for merchant %s ($%.2f %s) -> %s",
+    logger.info("Stripe checkout %s (%s) for merchant %s ($%.2f %s, surcharge %d¢) -> %s",
                 session["id"], "connect" if connect_account else "platform",
-                order.get("merchant_id"), amount / 100, currency.upper(), url)
+                order.get("merchant_id"), charge_total / 100, currency.upper(), surcharge, url)
     return {"url": url, "checkout_url": session["url"], "method": "stripe",
             "link_id": session["id"], "session_id": session["id"], "short_code": short_code}
 

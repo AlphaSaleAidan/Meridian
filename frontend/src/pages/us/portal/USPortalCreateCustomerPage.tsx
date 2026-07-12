@@ -8,7 +8,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, type PlanTier } from '@/lib/proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 
 type Step = 'details' | 'plan' | 'customize' | 'preview' | 'confirm'
@@ -487,19 +487,19 @@ export default function USPortalCreateCustomerPage() {
     vertical: searchParams.get('vertical') || '',
     pos: '',
     plan: 'premium',
-    customPrice: '',
+    priceBump: 0,
     setupFee: '',
     firstMonthFree: false,
     notes: '',
   })
 
-  function update(key: string, value: string | boolean) {
+  function update(key: string, value: string | boolean | number) {
     setForm(f => ({ ...f, [key]: value }))
     setError(null)
   }
 
   const selectedPlan = getPlan(form.plan)
-  const price = form.customPrice ? parseInt(form.customPrice) : selectedPlan.price
+  const price = selectedPlan.price + form.priceBump
   const setupFee = form.setupFee ? parseInt(form.setupFee) : 0
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
@@ -519,7 +519,7 @@ export default function USPortalCreateCustomerPage() {
       email: form.email,
       phone: form.phone,
       plan: selectedPlan,
-      customPrice: form.customPrice ? parseInt(form.customPrice) : undefined,
+      customPrice: form.priceBump > 0 ? price : undefined,
       setupFee,
       firstMonthFree: form.firstMonthFree,
       rep,
@@ -552,7 +552,7 @@ export default function USPortalCreateCustomerPage() {
     try {
       const body = {
         org_id: orgId,
-        monthly_amount_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
+        monthly_amount_cents: price * 100,
         setup_fee_cents: setupFee * 100,
         first_month_free: form.firstMonthFree,
         business_name: form.businessName,
@@ -925,15 +925,19 @@ export default function USPortalCreateCustomerPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Custom Monthly Price (optional override)</label>
-              <div className="relative">
-                <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a5550]" />
-                <input type="number" value={form.customPrice}
-                  onChange={e => update('customPrice', e.target.value)}
-                  placeholder={selectedPlan.price.toString()}
-                  className="w-full pl-8 pr-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none transition-colors" />
+              <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
+                Price Adjustment <span className="text-[#4a5550]">(add up to ${REP_PRICE_HEADROOM}/mo on top of base)</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input type="range" min={0} max={REP_PRICE_HEADROOM} step={5}
+                  value={form.priceBump}
+                  onChange={e => update('priceBump', Number(e.target.value))}
+                  className="flex-1 h-2 bg-[#1F1F23] rounded-full appearance-none cursor-pointer accent-[#17C5B0]" />
+                <span className="text-[13px] font-semibold text-white w-32 text-right">
+                  {form.priceBump > 0 ? `+$${form.priceBump} = $${price}/mo` : `$${price}/mo`}
+                </span>
               </div>
-              <p className="text-[10px] text-[#4a5550] mt-1">All amounts in USD</p>
+              <p className="text-[10px] text-[#4a5550] mt-1">All amounts in USD. Base price is the floor — no discounts.</p>
             </div>
 
             <div className="mb-4">
@@ -1222,7 +1226,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1366,7 +1370,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

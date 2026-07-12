@@ -598,7 +598,14 @@ async def get_analytics_summary(merchant_id: str, principal=Depends(require_serv
 async def create_website_order(req: CreateOrderRequest):
     """
     Public endpoint — create an order from a merchant website.
-    Calculates subtotal from items, applies 2.99% platform fee, and stores the order.
+
+    Fee model (matches services/phone_agent/payment_links.py):
+      • fee split enabled → the CUSTOMER pays subtotal + Meridian's per-order
+        fee (by the merchant's plan tier) + the fixed 30¢ (fee_amount); the
+        MERCHANT-side 2.99% of the subtotal is recorded separately
+        (merchant_fee_amount) and settled out of the payout, never added to
+        the customer total.
+      • legacy → 2.99% added on top of the customer total (fee_amount).
     """
     db = get_db()
 
@@ -627,17 +634,41 @@ async def create_website_order(req: CreateOrderRequest):
     # Round to 2 decimal places
     subtotal = round(subtotal, 2)
 
-    # Apply platform fee (stored as decimal ratio, e.g. 0.0299 = 2.99%)
+    currency = "CAD" if site.get("portal_context") == "canada" else "USD"
+
+    # Platform fee rate (stored as decimal ratio, e.g. 0.0299 = 2.99%)
     fee_rate = site.get("ordering_fee_pct") or 0.0299
-    fee_amount = round(subtotal * float(fee_rate), 2)
+
+    # Fee helpers live in services/phone_agent — same sys.path trick phone.py uses.
+    import sys
+    from pathlib import Path as _Path
+    _phone_agent_dir = str(_Path(__file__).resolve().parents[3] / "services" / "phone_agent")
+    if _phone_agent_dir not in sys.path:
+        sys.path.insert(0, _phone_agent_dir)
+    import payment_links  # type: ignore[import]
+
+    if payment_links.FEE_SPLIT_ENABLED:
+        plan_tier = ""
+        try:
+            tier_rows = await db.select(
+                "phone_agent_config", "plan_tier",
+                filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
+            )
+            plan_tier = (tier_rows[0].get("plan_tier") if tier_rows else "") or ""
+        except Exception as e:  # noqa: BLE001 — unknown tier → default rate
+            logger.warning(f"plan_tier lookup failed for {merchant_id}: {e}")
+        fee_amount = round(
+            payment_links.customer_surcharge_cents(plan_tier, currency.lower()) / 100, 2)
+        merchant_fee_amount = round(subtotal * float(fee_rate), 2)
+    else:
+        fee_amount = round(subtotal * float(fee_rate), 2)
+        merchant_fee_amount = 0.0
     total = round(subtotal + fee_amount, 2)
 
     order_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    currency = "CAD" if site.get("portal_context") == "canada" else "USD"
-
-    await db.insert("website_orders", {
+    order_row = {
         "id": order_id,
         "merchant_id": merchant_id,
         "website_id": req.website_id,
@@ -652,7 +683,12 @@ async def create_website_order(req: CreateOrderRequest):
         "currency": currency,
         "status": "pending",
         "created_at": now,
-    })
+    }
+    if payment_links.FEE_SPLIT_ENABLED:
+        # Column ships in migration 036 — only referenced when the split is on,
+        # so deploys with the flag off don't depend on the migration.
+        order_row["merchant_fee_amount"] = merchant_fee_amount
+    await db.insert("website_orders", order_row)
 
     logger.info(f"Created order {order_id} for merchant {merchant_id}: ${total}")
     return {
@@ -660,6 +696,7 @@ async def create_website_order(req: CreateOrderRequest):
         "order_id": order_id,
         "subtotal": subtotal,
         "fee_amount": fee_amount,
+        "merchant_fee_amount": merchant_fee_amount,
         "total": total,
         "currency": currency,
         "status": "pending",

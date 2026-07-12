@@ -9,7 +9,7 @@ import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan, closestMonthlyPlan } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, type PlanTier } from '@/lib/proposal-plans'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
 import { generateProposalPdf } from '@/lib/generate-proposal-pdf'
 import { generateInvoicePdf, generateInvoiceNumber, generateInvoiceUrl, type InvoiceInput } from '@/lib/generate-invoice-pdf-us'
@@ -100,10 +100,22 @@ export default function USPortalLeadDetailPage() {
   const [showDelete, setShowDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  // Step 2 state
-  const [monthlyPrice, setMonthlyPrice] = useState(500)
+  // Step 2 state — price = tier base + rep adjustment (0..REP_PRICE_HEADROOM)
+  const [planId, setPlanId] = useState<PlanTier['id']>('premium')
+  const [priceBump, setPriceBump] = useState(0)
+  const selectedPlan = getPlan(planId)
+  const monthlyPrice = selectedPlan.price + priceBump
   const [setupFee, setSetupFee] = useState('0')
   const [firstMonthFree, setFirstMonthFree] = useState(false)
+
+  // Seed tier + adjustment from a lead's stored monthly value (legacy values
+  // snap to the closest tier; any remainder above base becomes the adjustment).
+  const seedPricing = useCallback((stored?: number | null) => {
+    const plan = closestMonthlyPlan(stored || 350)
+    setPlanId(plan.id)
+    const bump = stored ? Math.round(stored - plan.price) : 0
+    setPriceBump(Math.min(REP_PRICE_HEADROOM, Math.max(0, bump)))
+  }, [])
 
   // Proposal state
   const [proposalBlob, setProposalBlob] = useState<Blob | null>(null)
@@ -652,7 +664,7 @@ export default function USPortalLeadDetailPage() {
 
   const buildProposalInput = useCallback(() => {
     if (!deal || !rep) return null
-    const plan = getPlan(closestMonthlyPlan(monthlyPrice).id)
+    const plan = selectedPlan
     return {
       businessName: deal.business_name,
       ownerName: deal.contact_name,
@@ -664,7 +676,7 @@ export default function USPortalLeadDetailPage() {
       firstMonthFree,
       rep,
     }
-  }, [deal, rep, monthlyPrice, setupFee, firstMonthFree])
+  }, [deal, rep, selectedPlan, monthlyPrice, setupFee, firstMonthFree])
 
   async function handleGenerateProposal() {
     const input = buildProposalInput()
@@ -755,7 +767,7 @@ export default function USPortalLeadDetailPage() {
     usLeadsService.getById(id).then(found => {
       setDeal(found)
       if (found) {
-        setMonthlyPrice(found.monthly_value || 500)
+        seedPricing(found.monthly_value)
       }
     }).catch(() => {
       setDeal(null)
@@ -769,7 +781,7 @@ export default function USPortalLeadDetailPage() {
           toast(`${updated.business_name} moved to ${updated.stage.replace(/_/g, ' ')}`, 'info')
         }
         setDeal(updated)
-        setMonthlyPrice(updated.monthly_value || 500)
+        seedPricing(updated.monthly_value)
       }
     })
     return () => { usLeadsService.unsubscribe(channel) }
@@ -903,22 +915,41 @@ export default function USPortalLeadDetailPage() {
       <div className="bg-[#111113] border border-[#1F1F23] rounded-xl p-5 space-y-4">
         <h2 className="text-sm font-semibold text-white">Proposal</h2>
 
-        {/* Monthly Price Slider */}
+        {/* Plan tier + price adjustment */}
         <div>
-          <label className="text-xs text-[#A1A1A8] block mb-1.5">Monthly Price (USD)</label>
+          <label className="text-xs text-[#A1A1A8] block mb-1.5">Plan (USD)</label>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {PLAN_TIERS.map(plan => (
+              <button key={plan.id} onClick={() => { setPlanId(plan.id); setPriceBump(0) }}
+                className={`p-2.5 rounded-lg border text-left transition-colors ${
+                  planId === plan.id
+                    ? 'border-[#17C5B0]/50 bg-[#17C5B0]/5'
+                    : 'border-[#1F1F23] hover:border-[#4a5550] bg-[#0A0A0B]'
+                }`}>
+                <p className="text-xs font-semibold text-white">{plan.label}</p>
+                <p className="text-sm font-bold text-[#f0b429]">${plan.price}/mo</p>
+                <p className="text-[10px] text-[#A1A1A8] mt-0.5">
+                  {plan.phoneAgent ? `Phone agent · $${plan.orderFee.toFixed(2)}/order` : 'No phone agent'}
+                </p>
+              </button>
+            ))}
+          </div>
+          <label className="text-xs text-[#A1A1A8] block mb-1.5">
+            Price Adjustment <span className="text-[#4a5550]">(up to +${REP_PRICE_HEADROOM}/mo)</span>
+          </label>
           <div className="flex items-center gap-3">
             <input
               type="range"
-              min={299}
-              max={1199}
-              step={50}
-              value={monthlyPrice}
-              onChange={e => setMonthlyPrice(Number(e.target.value))}
+              min={0}
+              max={REP_PRICE_HEADROOM}
+              step={5}
+              value={priceBump}
+              onChange={e => setPriceBump(Number(e.target.value))}
               className="flex-1 h-2 bg-[#1F1F23] rounded-full appearance-none cursor-pointer accent-[#17C5B0]"
             />
             <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">${monthlyPrice.toLocaleString()}/mo</span>
           </div>
-          <p className="text-[10px] text-[#4a5550] mt-1">Billed monthly in USD</p>
+          <p className="text-[10px] text-[#4a5550] mt-1">Billed monthly in USD. Base price is the floor — no discounts.</p>
         </div>
 
         {/* Setup Fee */}
