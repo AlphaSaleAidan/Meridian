@@ -30,8 +30,18 @@ jobs:
         # Install the real backend requirements so `from src.api.app import app`
         # resolves exactly as in prod (the route-auth matrix inspects the live
         # app object). Plus the test-only deps.
+        #
+        # FastAPI is then pinned to 0.124.x: requirements.txt only floors it
+        # (`fastapi>=0.115.6`), and a clean install now resolves to 0.139, under
+        # which app.py's include_router registers 0 of 292 routes (breaking
+        # change) — the route matrix would inspect an empty app. 0.124.x is the
+        # version prod runs and the version public_endpoint_baseline.yaml is
+        # anchored to, so the ratchet must evaluate against it.
+        # NOTE (separate finding): requirements.txt needs a FastAPI upper bound;
+        # a fresh prod deploy would otherwise ship the broken 0.139 app.
         run: |
           pip install --quiet -r requirements.txt
+          pip install --quiet "fastapi>=0.124,<0.125"
           pip install --quiet pytest pytest-asyncio pyyaml
 
       - name: Run SOC 2 control tests
