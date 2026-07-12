@@ -718,11 +718,21 @@ class TestChatRequest(BaseModel):
     greeting: str | None = None
     menu_items: list | None = None
     order_types: list | None = None
+    # Same shape as phone_agent_config.personality — passed through so the
+    # in-app test call behaves like the live Vapi agent (which renders it via
+    # vapi_webhook._personality_style_lines / _upsell_step).
+    personality: dict | None = None
 
 
 def _build_test_prompt(req: TestChatRequest) -> str:
     """System prompt scoped to the merchant's own menu/greeting so the in-app
     test call behaves like the live agent for this specific business."""
+    # Reuse the live-call personality renderers so test calls and real Vapi
+    # calls express the panel settings identically. Unset personality → the
+    # prompt stays byte-for-byte what it was before this field existed.
+    from .vapi_webhook import _personality_style_lines, _upsell_step
+
+    p = req.personality if isinstance(req.personality, dict) else {}
     name = (req.business_name or "this restaurant").strip()
     lines = []
     for item in req.menu_items or []:
@@ -740,8 +750,17 @@ def _build_test_prompt(req: TestChatRequest) -> str:
         lines.append(line)
     menu_text = "\n".join(lines) if lines else " (menu not configured yet — take the order generally)"
     order_types = ", ".join(req.order_types or ["pickup", "delivery"])
-    greeting = (req.greeting or "").strip()
+    # customGreeting (personality) overrides the standard greeting when set —
+    # mirrors vapi_webhook._effective_greeting.
+    greeting = (str(p.get("customGreeting") or "").strip() or (req.greeting or "")).strip()
     greeting_line = f'\nOpen with a greeting like: "{greeting}"' if greeting else ""
+    style_lines = _personality_style_lines(p)
+    style_block = ("\n".join(style_lines) + "\n") if style_lines else ""
+    upsell = str(p.get("upsell") or "").strip().lower()
+    upsell_line = ""
+    if upsell in ("none", "gentle", "active"):
+        # _upsell_step returns the numbered live-call step; reduce to a rule line.
+        upsell_line = "- " + _upsell_step(p).split(". ", 1)[1].strip() + "\n"
     return (
         f"You are a friendly AI phone ordering assistant for {name}. "
         "Keep responses SHORT — 1-2 sentences. Sound warm and natural, not robotic. "
@@ -752,6 +771,7 @@ def _build_test_prompt(req: TestChatRequest) -> str:
         "- Help the customer build their order item by item.\n"
         "- When done, read back the order with total price and ask for their name.\n"
         "- For items not on the menu, let them know politely.\n"
+        f"{upsell_line}{style_block}"
         "- Keep it brief — phone conversations should be quick."
     )
 
