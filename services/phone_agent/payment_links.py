@@ -77,11 +77,11 @@ MERCHANT_FEE_BPS = int(os.getenv("MERIDIAN_MERCHANT_FEE_BPS", "299") or 299)  # 
 CUSTOMER_FIXED_FEE_CENTS = int(os.getenv("MERIDIAN_CUSTOMER_FIXED_FEE_CENTS", "30") or 30)
 # Per-order Meridian fee in cents, by plan tier and charge currency:
 #   Standard — no phone agent, no per-order fee
-#   Premium  — US$1.49 / CA$2.49 per order
-#   Command  — US$1.00 / CA$1.69 per order
+#   Premium  — US$1.49 / CA$1.99 per order
+#   Command  — US$1.00 / CA$1.39 per order
 TIER_ORDER_FEE_CENTS: dict[str, dict[str, int]] = {
     "usd": {"standard": 0, "premium": 149, "command": 100},
-    "cad": {"standard": 0, "premium": 249, "command": 169},
+    "cad": {"standard": 0, "premium": 199, "command": 139},
 }
 # Merchants with no/unknown plan_tier bill at this tier's per-order rate.
 DEFAULT_ORDER_FEE_TIER = os.getenv("MERIDIAN_DEFAULT_ORDER_FEE_TIER", "premium")

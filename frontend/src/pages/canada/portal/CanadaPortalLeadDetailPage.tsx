@@ -740,7 +740,7 @@ export default function CanadaPortalLeadDetailPage() {
       // Legacy stored values snap to the closest tier; any remainder above
       // the tier base becomes the rep adjustment (clamped to the headroom).
       const stored = deal.monthly_value || 0
-      const plan = closestMonthlyPlanCad(stored || 600)
+      const plan = closestMonthlyPlanCad(stored || 500)
       setPlanId(plan.id)
       const bump = stored ? Math.round(stored - plan.price) : 0
       setPriceBump(Math.min(REP_PRICE_HEADROOM_CAD, Math.max(0, bump)))

@@ -1,7 +1,7 @@
 -- 036: plan_tier on phone_agent_config — the merchant's subscription tier
 -- (standard | premium | command) driving the per-order Meridian fee under the
 -- fee-split model (MERIDIAN_FEE_SPLIT_ENABLED):
---   standard → no per-order fee · premium → US$1.49 / CA$2.49 · command → US$1.00 / CA$1.69
+--   standard → no per-order fee · premium → US$1.49 / CA$1.99 · command → US$1.00 / CA$1.39
 -- NULL/'' = unset → payment_links falls back to the default tier's rate.
 
 ALTER TABLE phone_agent_config

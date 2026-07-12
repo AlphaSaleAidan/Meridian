@@ -33,19 +33,19 @@ export const CANADA_PORTAL_TEMPLATE = {
   },
 
   pricing: {
-    // CAD tier bases: Standard 450 / Premium 600 / Command 850 (USD × 1.7,
+    // CAD tier bases: Standard 350 / Premium 500 / Command 700 (USD × 1.4,
     // nearest $50); reps can add up to CA$150 on top, never discount.
-    minMonthly: 450,
-    maxMonthly: 1000,
+    minMonthly: 350,
+    maxMonthly: 850,
     step: 5,
-    defaultMonthly: 600,
+    defaultMonthly: 500,
     defaultCommissionRate: 70,
     // minPrice thresholds sit at the midpoints between tier bases so a
     // rep-adjusted price maps to its nearest tier.
     plans: [
       { name: 'Standard', minPrice: 0 },
-      { name: 'Premium', minPrice: 525 },
-      { name: 'Command', minPrice: 725 },
+      { name: 'Premium', minPrice: 425 },
+      { name: 'Command', minPrice: 600 },
     ] as const,
   },
 
