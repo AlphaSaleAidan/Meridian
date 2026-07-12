@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      - '.github/workflows/deploy-frontend.yml'
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -16,8 +21,22 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: root
           password: ${{ secrets.DEPLOY_PASSWORD }}
+          command_timeout: 30m
           script: |
-            cd /root/Meridian
-            git pull origin main
+            set -euo pipefail
+            # Build in the dedicated deploy tree, pinned to EXACT origin/main.
+            # /root/Meridian is a working checkout that may sit on any feature
+            # branch — never `git pull` there; only its gitignored dist/ (the
+            # nginx docroot for meridian.tips) is swapped, atomically via rsync.
+            cd /root/meridian-us-ready
+            git fetch origin main
+            git checkout --detach origin/main
             cd frontend
+            # .env.local (gitignored) must exist or the build silently ships
+            # demo-mode with broken Supabase auth.
+            test -s .env.local
+            npm install --no-audit --no-fund
             npm run build
+            grep -rlq "supabase.co" dist/assets/*.js
+            rsync -a --delete dist/ /root/Meridian/frontend/dist/
+            echo "deployed $(git rev-parse --short HEAD) to /root/Meridian/frontend/dist"
