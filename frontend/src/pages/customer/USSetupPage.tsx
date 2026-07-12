@@ -115,7 +115,7 @@ export default function USSetupPage() {
         )}
 
         <p className="text-center text-[10px] text-[#A1A1A8]/30 mt-6 font-mono">
-          Meridian US v0.2.0
+          Meridian v0.2.0
         </p>
       </div>
     </div>

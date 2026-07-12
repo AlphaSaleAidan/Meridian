@@ -341,7 +341,9 @@ export default function MerchantOnboardingWizard() {
             <MeridianEmblem size={32} />
             <MeridianWordmark className="text-lg" />
           </div>
-          <span className="text-[10px] font-semibold text-[#00d4aa] uppercase tracking-widest">{isUS ? 'US' : 'Canada'}</span>
+          {!isUS && (
+            <span className="text-[10px] font-semibold text-[#00d4aa] uppercase tracking-widest">Canada</span>
+          )}
         </div>
 
         {/* Progress */}

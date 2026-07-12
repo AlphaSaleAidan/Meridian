@@ -41,10 +41,8 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   const closeSidebar = () => setSidebarOpen(false)
   const flags = useModuleFlags()
   // Same chrome serves both regions: /canada/* keeps its existing branding,
-  // the US mounts (/us/merchant, /demo) swap the region chip + rep-login link.
+  // the US mounts (/us/merchant, /demo) show no region chip at all.
   const isCanada = useLocation().pathname.startsWith('/canada')
-  const regionLabel = isCanada ? 'Canada' : 'US'
-  const regionShort = isCanada ? 'CA' : 'US'
   const repLoginHref = isCanada ? '/canada/portal/login' : '/us/portal/login'
 
   // Filter pillars by their optional flag — disabled-never-delete pattern.
@@ -76,7 +74,9 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
           <MeridianEmblem size={28} animate />
           <div className="flex flex-col">
             <MeridianWordmark height={13} />
-            <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">{regionLabel}</span>
+            {isCanada && (
+              <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+            )}
           </div>
         </div>
 
@@ -117,10 +117,12 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
           </button>
           <MeridianEmblem size={24} animate />
           <MeridianWordmark height={11} />
-          <div className="flex items-center gap-1 ml-1">
-            <MapPin size={8} className="text-[#17C5B0]" />
-            <span className="text-[8px] text-[#17C5B0] font-medium uppercase tracking-wider">{regionShort}</span>
-          </div>
+          {isCanada && (
+            <div className="flex items-center gap-1 ml-1">
+              <MapPin size={8} className="text-[#17C5B0]" />
+              <span className="text-[8px] text-[#17C5B0] font-medium uppercase tracking-wider">CA</span>
+            </div>
+          )}
         </div>
 
         <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto pb-32 lg:pb-8">
