@@ -1,0 +1,90 @@
+# CC6.6 public-endpoint baseline (RATCHET) — regenerated 2026-07-12 from origin/main.
+#
+# Routes here are served WITHOUT a recognized auth dependency (see
+# AUTH_DEPENDENCY_NAMES in conftest.py). A route not in this file going public
+# fails CI; an entry here that gained auth also fails, so the list only tightens.
+# Do NOT bulk-regenerate to make CI pass.
+#
+# Categories: health | webhook | oauth | payment-page | public-form |
+#             inline-auth (auth enforced in-handler — cite it) | unreviewed
+
+health:
+  # Liveness probe — no data exposure.
+  - "GET /api/webhooks/square/health"
+  - "GET /health"
+  - "GET /sms/health"
+  - "GET /twilio/health"
+
+payment-page:
+  # Customer-facing hosted payment redirect/result pages (opaque short code).
+  - "GET /p/{code}"
+  - "GET /pay/cancel"
+  - "GET /pay/success"
+
+oauth:
+  # OAuth dance / provider discovery — browser-redirect flow, no session yet.
+  - "GET /api/clover/authorize"
+  - "GET /api/clover/callback"
+  - "GET /api/clover/status"
+  - "GET /api/pos/providers"
+  - "GET /api/pos/{provider}/authorize"
+  - "GET /api/pos/{provider}/callback"
+  - "GET /api/square/authorize"
+  - "GET /api/square/callback"
+  - "GET /api/square/status"
+
+public-form:
+  # Deliberately public intake/consent surface (rate limiting tracked in PR #211).
+  - "GET /api/onboarding/checklist"
+  - "GET /api/portal/resolve/{token}"
+  - "GET /api/website/public/{slug}"
+  - "GET /subscribe/{token}"
+  - "POST /api/canada/careers/apply"
+  - "POST /api/canada/rep-signup"
+  - "POST /api/careers/apply"
+  - "POST /api/compliance/accept"
+  - "POST /api/pos/waitlist"
+  - "POST /api/privacy/request"
+  - "POST /api/privacy/unsubscribe"
+  - "POST /api/quote-request"
+  - "POST /api/us/rep-signup"
+  - "POST /api/website/analytics"
+  - "POST /api/website/order"
+
+webhook:
+  # Provider-called endpoint; MUST verify a signature/shared secret in the handler (CC6.6 spot tests cover the critical ones).
+  - "POST /api/billing/webhook"
+  - "POST /api/credits/webhook/square"
+  - "POST /api/marketplace/webhook"
+  - "POST /api/stripe/connect/webhook"
+  - "POST /api/stripe/webhook"
+  - "POST /api/vapi/webhook"
+  - "POST /api/webhooks/clover"
+  - "POST /api/webhooks/square"
+  - "POST /api/webhooks/toast"
+  - "POST /sms/inbound"
+  - "POST /sms/status"
+  - "POST /twilio/gather"
+  - "POST /twilio/pay/cvv"
+  - "POST /twilio/pay/expiry"
+  - "POST /twilio/pay/number"
+  - "POST /twilio/pay/start"
+  - "POST /twilio/pay/zip"
+  - "POST /twilio/payment-webhook"
+  - "POST /twilio/record_diag"
+  - "POST /twilio/status"
+  - "POST /twilio/transcribe_diag"
+  - "POST /twilio/voice"
+  - "POST /webhooks/postal"
+
+unreviewed:
+  # Lacked a recognized auth dependency at baseline time. Each needs review: add auth, document an inline check, or justify as public. Shrinking this list raises CC6.6 readiness; growing it fails CI.
+  - "GET /api/content/director/styles"
+  - "GET /api/content/models"
+  - "GET /api/content/video/debug/{job_id}"
+  - "GET /api/content/video/status/{job_id}"
+  - "GET /api/credits/packs"
+  - "GET /api/phone/fees"
+  - "POST /api/connector/pair"
+  - "POST /api/onboarding/send-welcome"
+  - "POST /api/vision/camera/frame"
