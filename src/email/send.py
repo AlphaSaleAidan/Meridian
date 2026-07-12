@@ -253,6 +253,57 @@ async def send_lead_assigned(
     return result
 
 
+async def send_career_application(
+    to: str,
+    *,
+    country_label: str,
+    position_label: str,
+    applicant_name: str,
+    applicant_email: str,
+    applicant_phone: str = "",
+    location: str = "",
+    experience: str = "",
+    availability: str = "",
+    linkedin_url: str = "",
+    referral_source: str = "",
+    motivation: str = "",
+    application_id: str = "",
+) -> dict:
+    """Notify the hiring inbox about a new careers-page application.
+
+    Plain inline HTML (no template module) — internal notification only, so
+    reply_to is set to the applicant for one-click responses.
+    """
+    from html import escape as _esc
+
+    def row(label: str, value: str) -> str:
+        return (
+            f'<tr><td style="padding:4px 12px 4px 0;color:#888;white-space:nowrap">{label}</td>'
+            f'<td style="padding:4px 0">{_esc(value) if value else "&mdash;"}</td></tr>'
+        )
+
+    html = (
+        f'<h2 style="margin:0 0 4px">New {_esc(country_label)} Sales Application</h2>'
+        f'<p style="margin:0 0 16px;color:#555">{_esc(position_label)}</p>'
+        '<table style="font:14px/1.5 sans-serif;border-collapse:collapse">'
+        + row("Name", applicant_name)
+        + row("Email", applicant_email)
+        + row("Phone", applicant_phone)
+        + row("Location", location)
+        + row("Experience", experience)
+        + row("Availability", availability)
+        + row("LinkedIn", linkedin_url)
+        + row("Heard from", referral_source)
+        + "</table>"
+        + (f'<p style="font:14px/1.5 sans-serif;margin:16px 0 0"><strong>Motivation</strong><br>{_esc(motivation)}</p>' if motivation else "")
+        + (f'<p style="font:12px/1.5 sans-serif;color:#999;margin:16px 0 0">Application ID: {_esc(application_id)}</p>' if application_id else "")
+    )
+    subject = f"New {country_label} application: {applicant_name} — {position_label}"
+    result = await _client.send(to, subject, html, tag="career_application", reply_to=applicant_email)
+    await _log_send(to, "career_application", subject, result, tag="career_application")
+    return result
+
+
 async def send_trial_expiring(
     to: str,
     first_name: str,

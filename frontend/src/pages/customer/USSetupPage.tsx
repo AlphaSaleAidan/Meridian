@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
@@ -17,15 +17,19 @@ type Step = 'welcome' | 'done'
 
 export default function USSetupPage() {
   const navigate = useNavigate()
-  const { user, org, markOnboarded } = useAuth()
+  const { ready, user, org, markOnboarded } = useAuth()
 
   const [step, setStep] = useState<Step>('welcome')
   const [loading, setLoading] = useState(false)
 
-  if (!user || !org) {
-    navigate('/us/login', { replace: true })
-    return null
-  }
+  // navigate() is a no-op during render — redirect from an effect once the
+  // auth provider has resolved (CanadaSetupPage still has the render-time
+  // call, which is why an unauthenticated visit sticks there).
+  useEffect(() => {
+    if (ready && (!user || !org)) navigate('/us/login', { replace: true })
+  }, [ready, user, org, navigate])
+
+  if (!user || !org) return null
 
   // Await markOnboarded so the flag is persisted server-side (with one retry)
   // before we leave — otherwise a reload mid-flight bounces back to /setup.

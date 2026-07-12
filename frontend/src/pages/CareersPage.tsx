@@ -52,10 +52,35 @@ export default function CareersPage() {
     message: '',
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In the future this would hit an API — for now just show confirmation
-    setSubmitted(true)
+    if (submitting) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || ''
+      const res = await fetch(`${API_BASE}/api/careers/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          position: formData.position,
+          experience: formData.experience,
+          motivation: formData.message,
+        }),
+      })
+      if (!res.ok) throw new Error(`apply failed: ${res.status}`)
+      setSubmitted(true)
+    } catch {
+      setSubmitError("Couldn't send your application — please try again, or email careers@meridian.tips directly.")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -254,12 +279,16 @@ export default function CareersPage() {
                   placeholder="Tell us a bit about yourself..."
                 />
               </div>
+              {submitError && (
+                <p className="text-[12px] text-red-400">{submitError}</p>
+              )}
               <button
                 type="submit"
-                className="w-full py-3 bg-[#1A8FD6] text-white font-medium rounded-lg hover:bg-[#1574B8] transition-colors duration-200 flex items-center justify-center gap-2"
+                disabled={submitting}
+                className="w-full py-3 bg-[#1A8FD6] text-white font-medium rounded-lg hover:bg-[#1574B8] disabled:opacity-60 transition-colors duration-200 flex items-center justify-center gap-2"
               >
                 <Send size={16} />
-                Submit Application
+                {submitting ? 'Sending…' : 'Submit Application'}
               </button>
             </form>
           )}
