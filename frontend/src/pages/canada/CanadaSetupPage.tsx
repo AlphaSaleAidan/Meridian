@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
@@ -16,15 +16,18 @@ type Step = 'welcome' | 'done'
 
 export default function CanadaSetupPage() {
   const navigate = useNavigate()
-  const { user, org, markOnboarded } = useAuth()
+  const { ready, user, org, markOnboarded } = useAuth()
 
   const [step, setStep] = useState<Step>('welcome')
   const [loading, setLoading] = useState(false)
 
-  if (!user || !org) {
-    navigate('/canada/login', { replace: true })
-    return null
-  }
+  // navigate() is a no-op during render — redirect from an effect once the
+  // auth provider has resolved (same fix as USSetupPage).
+  useEffect(() => {
+    if (ready && (!user || !org)) navigate('/canada/login', { replace: true })
+  }, [ready, user, org, navigate])
+
+  if (!user || !org) return null
 
   // Await markOnboarded so the flag is persisted server-side (with one retry)
   // before we leave — otherwise a reload mid-flight bounces back to /setup.
