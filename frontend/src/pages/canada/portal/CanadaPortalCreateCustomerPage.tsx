@@ -8,7 +8,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import { posSystems } from '@/data/pos-systems'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, type PlanTier } from '@/lib/canada-proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
 
@@ -513,19 +513,19 @@ export default function CanadaPortalCreateCustomerPage() {
     vertical: searchParams.get('vertical') || '',
     pos: '',
     plan: 'premium',
-    customPrice: '',
+    priceBump: 0,
     setupFee: '',
     firstMonthFree: false,
     notes: '',
   })
 
-  function update(key: string, value: string | boolean) {
+  function update(key: string, value: string | boolean | number) {
     setForm(f => ({ ...f, [key]: value }))
     setError(null)
   }
 
   const selectedPlan = getPlan(form.plan)
-  const price = form.customPrice ? parseInt(form.customPrice) : selectedPlan.price
+  const price = selectedPlan.price + form.priceBump
   const setupFee = form.setupFee ? parseInt(form.setupFee) : 0
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
@@ -553,7 +553,7 @@ export default function CanadaPortalCreateCustomerPage() {
       email: form.email,
       phone: form.phone,
       plan: selectedPlan,
-      customPrice: form.customPrice ? parseInt(form.customPrice) : undefined,
+      customPrice: form.priceBump > 0 ? price : undefined,
       setupFee,
       firstMonthFree: form.firstMonthFree,
       rep,
@@ -589,7 +589,7 @@ export default function CanadaPortalCreateCustomerPage() {
     try {
       const body = {
         org_id: orgId,
-        monthly_amount_cents: form.customPrice ? parseInt(form.customPrice) * 100 : selectedPlan.price * 100,
+        monthly_amount_cents: price * 100,
         setup_fee_cents: setupFee * 100,
         first_month_free: form.firstMonthFree,
         business_name: form.businessName,
@@ -987,15 +987,19 @@ export default function CanadaPortalCreateCustomerPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Custom Monthly Price (optional override)</label>
-              <div className="relative">
-                <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-pm-canada-text-faint" />
-                <input type="number" value={form.customPrice}
-                  onChange={e => update('customPrice', e.target.value)}
-                  placeholder={selectedPlan.price.toString()}
-                  className="w-full pl-8 pr-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none transition-colors" />
+              <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
+                Price Adjustment <span className="text-pm-canada-text-faint">(add up to CA${REP_PRICE_HEADROOM_CAD}/mo on top of base)</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input type="range" min={0} max={REP_PRICE_HEADROOM_CAD} step={5}
+                  value={form.priceBump}
+                  onChange={e => update('priceBump', Number(e.target.value))}
+                  className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent" />
+                <span className="text-sm-tight font-semibold text-white w-36 text-right">
+                  {form.priceBump > 0 ? `+CA$${form.priceBump} = CA$${price}/mo` : `CA$${price}/mo`}
+                </span>
               </div>
-              <p className="text-2xs text-pm-canada-text-faint mt-1">All amounts in CAD</p>
+              <p className="text-2xs text-pm-canada-text-faint mt-1">All amounts in CAD. Base price is the floor — no discounts.</p>
             </div>
 
             <div className="mb-4">
@@ -1284,7 +1288,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1431,7 +1435,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', customPrice: '', setupFee: '', firstMonthFree: false, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

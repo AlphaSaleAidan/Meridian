@@ -1,84 +1,89 @@
 /**
  * Meridian plan tiers — single source of truth for pricing and features.
+ *
+ * Three tiers (USD). Every tier includes all Meridian features; the axis is
+ * the AI phone agent and the per-order Meridian fee:
+ *   Standard $250 — everything except the phone agent, no per-order fee
+ *   Premium  $350 — phone agent included, $1.49 Meridian fee per order
+ *   Command  $500 — phone agent included, $1.00 Meridian fee per order
+ *
+ * Reps may add up to REP_PRICE_HEADROOM on top of any tier via the price
+ * slider — the base prices above are floors, never discounted.
  */
 
 export interface PlanTier {
-  id: 'standard' | 'premium' | 'command' | 'weekly'
+  id: 'standard' | 'premium' | 'command'
   label: string
   price: number
   interval?: 'month' | 'week'
   tag?: string
   features: string[]
+  /** AI phone agent included in this tier. */
+  phoneAgent: boolean
+  /** Per-order Meridian fee in the plan's currency (0 = no per-order fee). */
+  orderFee: number
 }
 
+/** Max amount (in the plan's currency) a rep can add on top of a tier's base price. */
+export const REP_PRICE_HEADROOM = 100
+
 export const PLAN_TIERS: PlanTier[] = [
-  {
-    id: 'weekly',
-    label: 'Weekly',
-    price: 65,
-    interval: 'week',
-    features: [
-      'POS analytics dashboard',
-      'Revenue + product insights',
-      'Anomaly detection',
-      'Email alerts',
-      '1 POS integration',
-      'Pay weekly — no long-term commitment',
-    ],
-  },
   {
     id: 'standard',
     label: 'Standard',
     price: 250,
     interval: 'month',
+    phoneAgent: false,
+    orderFee: 0,
     features: [
       'POS analytics dashboard',
       'Revenue + product insights',
-      'Anomaly detection',
-      'Email alerts',
-      '1 POS integration',
+      'Predictive engine (churn, demand)',
+      'Menu engineering AI',
+      'Camera intelligence',
+      'Email alerts + priority support',
     ],
   },
   {
     id: 'premium',
     label: 'Premium',
-    price: 500,
+    price: 350,
     interval: 'month',
     tag: 'MOST POPULAR',
+    phoneAgent: true,
+    orderFee: 1.49,
     features: [
       'Everything in Standard',
-      'Predictive engine (churn, demand)',
-      'Menu engineering AI',
-      'Staff optimization',
-      'Camera intelligence (1 feed)',
-      'Priority support',
+      'AI phone agent — answers calls + takes orders',
+      'Pay-by-text checkout',
+      '$1.49 per-order transaction fee',
     ],
   },
   {
     id: 'command',
     label: 'Command',
-    price: 1000,
+    price: 500,
     interval: 'month',
+    phoneAgent: true,
+    orderFee: 1.0,
     features: [
       'Everything in Premium',
-      'Unlimited camera feeds',
+      'Lowest per-order rate — $1.00 Meridian fee per order',
       'Multi-location support',
-      'Custom AI models',
-      'White-glove onboarding',
       'Dedicated account manager',
     ],
   },
 ]
 
 export function getPlan(id: string): PlanTier {
-  return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1] // default to Standard
+  return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1] // default to Premium
 }
 
 /**
- * Closest monthly tier for a custom monthly price. Reps can slide to any
- * value, so plan labels shown on SLAs/emails/checkout links are derived from
- * the canonical tier prices above rather than hardcoded thresholds. Weekly is
- * excluded — custom slider pricing is always monthly.
+ * Closest monthly tier for a custom monthly price. Reps can slide above a
+ * tier's base price, so plan labels shown on SLAs/emails/checkout links are
+ * derived from the canonical tier prices above rather than hardcoded
+ * thresholds.
  */
 export function closestMonthlyPlan(monthly: number, tiers: PlanTier[] = PLAN_TIERS): PlanTier {
   const monthlyTiers = tiers.filter(p => (p.interval ?? 'month') === 'month')

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight, BookOpen } from 'lucide-react'
 import SEO from '@/components/SEO'
-import { guides } from '@/data/seo-guides'
+import { guides, publishedGuides } from '@/data/seo-guides'
 
 const categories = [
   {
@@ -31,6 +31,13 @@ const jsonLd = {
 }
 
 export default function GuidesIndexPage() {
+  // Everything not hand-curated in `categories` appears here once its
+  // scheduled datePublished arrives (release calendar drips one guide every 3 days).
+  const curatedSlugs = new Set(categories.flatMap(c => c.slugs))
+  const latestGuides = publishedGuides()
+    .filter(g => !curatedSlugs.has(g.slug))
+    .sort((a, b) => b.datePublished.localeCompare(a.datePublished))
+
   return (
     <>
       <SEO
@@ -89,6 +96,39 @@ export default function GuidesIndexPage() {
               </div>
             </section>
           ))}
+
+          {latestGuides.length > 0 && (
+            <section>
+              <h2 className="text-lg font-semibold text-[#F5F5F7] mb-4 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[#1A8FD6]" />
+                Latest Guides
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {latestGuides.map(guide => (
+                  <Link
+                    key={guide.slug}
+                    to={`/guides/${guide.slug}`}
+                    className="group flex flex-col p-5 rounded-xl border border-[#1F1F23] bg-[#111113] hover:border-[#2A2A30] transition-all duration-200"
+                  >
+                    <h3 className="text-[15px] font-semibold text-[#F5F5F7] group-hover:text-[#17C5B0] transition-colors leading-snug">
+                      {guide.heroTitle} {guide.heroAccent}
+                    </h3>
+                    <p className="mt-2 text-[13px] text-[#6B7280] leading-relaxed line-clamp-3 flex-1">
+                      {guide.description}
+                    </p>
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 text-[12px] text-[#1A8FD6] font-medium">
+                        Read guide <ArrowRight size={12} className="transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                      <span className="text-[11px] text-[#6B7280]">
+                        {new Date(guide.datePublished + 'T00:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </main>
 
         {/* CTA */}

@@ -61,6 +61,10 @@ class MerchantPhoneConfig:
     # state. Demo / test merchants set this to keep live POS calls off
     # the demo path even after the merchant completes Square OAuth.
     demo_safe: bool = False
+    # Subscription plan tier (standard | premium | command) — drives the
+    # per-order Meridian fee under the fee-split model. "" = unset → the
+    # default tier's rate applies (payment_links.DEFAULT_ORDER_FEE_TIER).
+    plan_tier: str = ""
     # PER-RESTAURANT PERSONALIZATION BRIEF ──────────────────────────────
     # Generated on demand via POST /api/phone/build-brief/{merchant_id}.
     # Injected into the system prompt for tone/warmth only — the MENU is
@@ -134,6 +138,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 stripe_account_id=(row.get("stripe_account_id") or "").strip(),
                 stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
                 demo_safe=bool(row.get("demo_safe", False)),
+                plan_tier=(row.get("plan_tier") or "").strip().lower(),
                 website_url=(row.get("website_url") or "").strip(),
                 restaurant_brief=(row.get("restaurant_brief") or "").strip(),
             )
