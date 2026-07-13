@@ -265,7 +265,8 @@ export default function App() {
                   PUBLIC PAGES — no auth required
                   ══════════════════════════════════════════════ */}
               <Route path="/" element={<LandingPage />} />
-              <Route path="/landing" element={<LandingPage />} />
+              <Route path="/home" element={<LandingPage />} />
+              <Route path="/landing" element={<Navigate to="/home" replace />} />
               {/* Zero-hardware camera connect (Path A): merchant opens this on a phone
                   they already own via a dashboard QR code. No app, no install. */}
               <Route path="/cam" element={<Suspense fallback={<LazyFallback />}><CamConnectPage /></Suspense>} />

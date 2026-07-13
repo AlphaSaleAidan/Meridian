@@ -99,7 +99,7 @@ export default function CareersPage() {
             <MeridianLogo size={28} showWordmark showTagline={false} />
           </div>
           <MagneticButton
-            onClick={() => navigate('/landing')}
+            onClick={() => navigate('/home')}
             className="px-4 py-1.5 text-[13px] font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors duration-200 flex items-center gap-1.5"
           >
             <ArrowLeft size={14} />
