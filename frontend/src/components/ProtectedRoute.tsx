@@ -25,10 +25,13 @@ export default function ProtectedRoute({ children, loginPath = '/customer/login'
     return <Navigate to={loginPath} state={{ from: location.pathname + location.search }} replace />
   }
 
-  if (!allowSalesReps) {
-    if ((salesAuth.authenticated || isSalesRep) && !org) {
-      return <AccessDenied type="sales-rep" />
-    }
+  // Sales reps must NEVER reach the customer portal — even when the same
+  // account also resolves to a business/org (a stale localStorage org, or their
+  // email appearing in `organizations`). Section isolation is by design: reps
+  // belong in the sales portal. The previous `&& !org` let any rep with an org
+  // association walk straight in.
+  if (!allowSalesReps && (salesAuth.authenticated || isSalesRep)) {
+    return <AccessDenied type="sales-rep" />
   }
 
   if (!org) {
