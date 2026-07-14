@@ -1,4 +1,4 @@
-import { TrendingUp, DollarSign, Lightbulb, BarChart3, Bell, Zap } from 'lucide-react'
+import { TrendingUp, DollarSign, Lightbulb, BarChart3, Bell, Zap, Phone } from 'lucide-react'
 import TiltCard from './TiltCard'
 import ScrollReveal from './ScrollReveal'
 
@@ -105,10 +105,28 @@ const features = [
     ),
   },
   {
+    icon: Phone,
+    title: 'AI Phone Agent',
+    desc: 'An AI voice agent answers every call, takes orders conversationally, and texts the customer a secure payment link.',
+    span: 'md:col-span-2',
+    visual: (
+      <div className="mt-4 space-y-2 text-xs">
+        <div className="flex items-center gap-2 bg-[#0A0A0B] rounded-md px-3 py-2 border border-[#1F1F23]">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#17C5B0] animate-pulse flex-shrink-0" />
+          <span className="text-[#A1A1A8]">"Hi! Can I place an order for pickup?"</span>
+        </div>
+        <div className="flex items-center justify-between bg-[#0A0A0B] rounded-md px-3 py-2 border border-[#1F1F23]">
+          <span className="text-[#A1A1A8]">Order confirmed — 2 items, CA$34.50</span>
+          <span className="text-[#17C5B0] font-medium whitespace-nowrap">Pay link sent ✓</span>
+        </div>
+      </div>
+    ),
+  },
+  {
     icon: Zap,
     title: '60-Second Setup',
     desc: 'One-click Square, Clover, or Toast connection. No API keys, no config files.',
-    span: 'md:col-span-2 md:col-start-2',
+    span: 'md:col-span-2',
     visual: (
       <div className="mt-4 flex items-center gap-4">
         {['Connect', 'Analyze', 'Profit'].map((step, i) => (

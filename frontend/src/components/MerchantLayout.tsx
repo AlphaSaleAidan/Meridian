@@ -44,14 +44,23 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // the US mounts (/us/merchant, /demo) show no region chip at all.
   const isCanada = useLocation().pathname.startsWith('/canada')
   const repLoginHref = isCanada ? '/canada/portal/login' : '/us/portal/login'
+  // Public demos: no mobile sidebar/hamburger (the bottom bar carries every
+  // tab, Camera included) — real merchant portals keep the hamburger.
+  const isDemo = basePath === '/demo' || basePath === '/canada/demo'
 
   // Filter pillars by their optional flag — disabled-never-delete pattern.
   const visiblePillars = merchantPillars.filter(p => !p.flag || flags[p.flag])
   const moneyPillars = visiblePillars.filter(p => !p.secondary && p.path !== 'settings')
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
-  // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no overflow).
-  const mobileNavPillars = [...moneyPillars, ...(settingsPillar ? [settingsPillar] : [])]
+  // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no
+  // overflow) — except in the demo, where the secondary tabs (Camera) join the
+  // bar so the sidebar isn't needed at all on mobile.
+  const mobileNavPillars = [
+    ...moneyPillars,
+    ...(isDemo ? secondaryPillars : []),
+    ...(settingsPillar ? [settingsPillar] : []),
+  ]
 
   return (
     // h-dvh (not h-screen): the shell scrolls via <main>, never the document,
@@ -112,9 +121,11 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       {/* Main content */}
       <main id="main-content" className="flex-1 overflow-y-auto">
         <div className="lg:hidden sticky top-0 z-30 h-14 bg-[#0A0A0B]/95 backdrop-blur-sm border-b border-[#1F1F23] flex items-center gap-3 px-4">
-          <button aria-label="Open menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-[#111113]">
-            <Menu size={20} className="text-[#A1A1A8]" />
-          </button>
+          {!isDemo && (
+            <button aria-label="Open menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-[#111113]">
+              <Menu size={20} className="text-[#A1A1A8]" />
+            </button>
+          )}
           <MeridianEmblem size={24} animate />
           <MeridianWordmark height={11} />
           {isCanada && (

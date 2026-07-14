@@ -7,7 +7,7 @@ import ErrorBoundary, { lazyRetry } from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
-import { merchantPillars } from '@/config/merchantPillars'
+import { merchantPillars, demoMerchantPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 import CookieConsentBanner from '@/components/compliance/CookieConsentBanner'
@@ -42,7 +42,6 @@ const SchedulePage = lazyRetry(() => import('@/pages/SchedulePage'))
 const CamConnectPage = lazyRetry(() => import('@/pages/CamConnectPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const MerchantSitePage = lazyRetry(() => import('@/pages/MerchantSitePage'))
-const CameraAnalyticsDemoPage = lazyRetry(() => import('@/pages/CameraAnalyticsDemoPage'))
 const ContentDashboardPage = lazyRetry(() => import('@/pages/ContentDashboardPage'))
 const ContentSettingsPage = lazyRetry(() => import('@/pages/ContentSettingsPage'))
 
@@ -411,7 +410,7 @@ export default function App() {
                   <USMerchantDemoLayout />
                 </Suspense>
               }>
-                {merchantPillars.map(pillar => (
+                {demoMerchantPillars.map(pillar => (
                   <Route
                     key={pillar.path || '_home'}
                     index={pillar.path === ''}
@@ -419,11 +418,6 @@ export default function App() {
                     element={<MerchantPillarPage pillar={pillar} />}
                   />
                 ))}
-                <Route path="camera-analytics" element={
-                  <Suspense fallback={<LazyFallback />}>
-                    <CameraAnalyticsDemoPage />
-                  </Suspense>
-                } />
               </Route>
 
               {/* ══════════════════════════════════════════════
@@ -439,7 +433,7 @@ export default function App() {
                   <MerchantDemoLayout />
                 </Suspense>
               }>
-                {merchantPillars.map(pillar => (
+                {demoMerchantPillars.map(pillar => (
                   <Route
                     key={pillar.path || '_home'}
                     index={pillar.path === ''}
@@ -447,11 +441,6 @@ export default function App() {
                     element={<MerchantPillarPage pillar={pillar} />}
                   />
                 ))}
-                <Route path="camera-analytics" element={
-                  <Suspense fallback={<LazyFallback />}>
-                    <CameraAnalyticsDemoPage />
-                  </Suspense>
-                } />
               </Route>
 
               {/* ══════════════════════════════════════════════
