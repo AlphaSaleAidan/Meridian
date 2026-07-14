@@ -12,6 +12,7 @@ Clover goes through the dedicated clover_kitchen submitter (tagged order +
 line items + kitchen print event). Other connected systems reuse the generic
 order dispatcher with the tag folded into the order notes.
 """
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -23,6 +24,48 @@ from .registry import get_connector_config, resolve_alias
 logger = logging.getLogger("meridian.pos.website_dispatch")
 
 SOURCE_TAG = "Meridian Mobile Order"
+
+# Strong refs for background dispatch tasks spawned by the payment webhook —
+# without them the event loop may garbage-collect a task mid-flight.
+_DISPATCH_TASKS: set = set()
+
+
+async def mark_paid_and_dispatch(website_order_id: str, payment_txn_id: str = "") -> dict:
+    """Called by the Stripe Connect webhook when a website order's checkout
+    completes: flip the row to paid (idempotently — Stripe retries and the
+    payment_intent.succeeded twin both land here), then release the kitchen
+    ticket in the background so the webhook answers Stripe fast.
+
+    The status flip IS the idempotency gate: `status=neq.paid` matches once,
+    so a second event finds nothing to update and never double-prints."""
+    from ...db import get_db
+
+    db = get_db()
+    patch = {
+        "status": "paid",
+        "paid_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if payment_txn_id:
+        patch["stripe_session_id"] = payment_txn_id
+    filters = {"id": f"eq.{website_order_id}", "status": "neq.paid"}
+    try:
+        updated = await db.update("website_orders", patch, filters)
+    except Exception as e:  # noqa: BLE001 — pre-migration-040 schema: retry the critical flip alone
+        logger.warning("paid-flip full patch failed for %s (%s); retrying status only",
+                       website_order_id, e)
+        updated = await db.update("website_orders", {"status": "paid"}, filters)
+
+    if not updated:
+        logger.info("website order %s already paid/released — duplicate event ignored",
+                    website_order_id)
+        return {"released": False, "reason": "already_paid_or_missing"}
+
+    row = updated[0]
+    task = asyncio.create_task(dispatch_website_order_to_pos(dict(row)))
+    _DISPATCH_TASKS.add(task)
+    task.add_done_callback(_DISPATCH_TASKS.discard)
+    logger.info("website order %s marked PAID → kitchen dispatch released", website_order_id)
+    return {"released": True, "order_id": website_order_id}
 
 
 async def dispatch_website_order_to_pos(order_row: dict) -> dict:
@@ -85,7 +128,10 @@ async def _dispatch(order_row: dict, merchant_id: str) -> dict:
     if pos_config is None:
         return {"dispatched": False, "reason": f"unsupported_system:{system_key}"}
 
+    paid = order_row.get("status") == "paid"
     tag_note = f"{SOURCE_TAG} #{order_id[:8].upper()} — {order_row.get('customer_name', '')}"
+    if paid:
+        tag_note = f"{tag_note} — PAID ONLINE, do not collect"
     existing_notes = (order_row.get("special_instructions") or "").strip()
     order_data = {
         "customer_name": order_row.get("customer_name", ""),

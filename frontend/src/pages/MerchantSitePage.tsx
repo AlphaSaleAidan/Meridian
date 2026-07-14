@@ -13,6 +13,11 @@ import {
 } from 'lucide-react'
 import SceneRenderer from '@/components/website/SceneRenderer'
 import WebsiteTracker from '@/components/website/WebsiteTracker'
+import SiteOrderCart, {
+  OrderReturnBanner,
+  parsePrice,
+  type CartItem,
+} from '@/components/website/SiteOrderCart'
 import { getTemplateById } from '@/data/websiteTemplates'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -255,7 +260,18 @@ export default function MerchantSitePage() {
   const [data, setData] = useState<WebsiteData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [cart, setCart] = useState<CartItem[]>([])
   const reviewsRef = useRef<HTMLDivElement>(null)
+
+  const addToCart = (name: string, price: number) => {
+    setCart(prev => {
+      const found = prev.find(i => i.name === name && i.price === price)
+      if (found) {
+        return prev.map(i => (i === found ? { ...i, quantity: i.quantity + 1 } : i))
+      }
+      return [...prev, { name, price, quantity: 1 }]
+    })
+  }
 
   /* ── Fetch website data ─────────────────────────────────────── */
 
@@ -333,6 +349,20 @@ export default function MerchantSitePage() {
         <WebsiteTracker websiteId={data.id} merchantId={data.merchant_id} />
       )}
 
+      {/* Post-checkout return banner (?order=success|cancelled) */}
+      <OrderReturnBanner accent={accent} />
+
+      {/* Online ordering cart — pays via Stripe, kitchen gets a PAID ticket */}
+      {data.ordering_enabled && data.id && (
+        <SiteOrderCart
+          websiteId={data.id}
+          accent={accent}
+          currencyHint=""
+          cart={cart}
+          setCart={setCart}
+        />
+      )}
+
       {/* ────────────────────────────────────────────────────────
           SECTION 1 — HERO (full viewport)
           ──────────────────────────────────────────────────────── */}
@@ -403,7 +433,7 @@ export default function MerchantSitePage() {
             <div className="flex flex-wrap items-center justify-center gap-4">
               {data.ordering_enabled && (
                 <a
-                  href="#order"
+                  href="#services"
                   className="group inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full text-sm font-semibold transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-[1.03]"
                   style={{
                     background: accent,
@@ -543,24 +573,38 @@ export default function MerchantSitePage() {
               </p>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                {data.services.map((svc, i) => (
-                  <GlassCard key={i} className="p-6 hover:bg-white/[0.07] transition-colors duration-500">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-semibold text-white/95 mb-1.5">{svc.name}</h3>
-                        <p className="text-sm text-white/50 leading-relaxed">{svc.description}</p>
+                {data.services.map((svc, i) => {
+                  const numericPrice = parsePrice(svc.price)
+                  const orderable = data.ordering_enabled && numericPrice != null
+                  return (
+                    <GlassCard key={i} className="p-6 hover:bg-white/[0.07] transition-colors duration-500">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-base font-semibold text-white/95 mb-1.5">{svc.name}</h3>
+                          <p className="text-sm text-white/50 leading-relaxed">{svc.description}</p>
+                        </div>
+                        {svc.price && (
+                          <span
+                            className="text-sm font-bold whitespace-nowrap mt-0.5"
+                            style={{ color: accent }}
+                          >
+                            {svc.price}
+                          </span>
+                        )}
                       </div>
-                      {svc.price && (
-                        <span
-                          className="text-sm font-bold whitespace-nowrap mt-0.5"
-                          style={{ color: accent }}
+                      {orderable && (
+                        <button
+                          onClick={() => addToCart(svc.name, numericPrice)}
+                          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold transition-all hover:scale-[1.04]"
+                          style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}40` }}
                         >
-                          {svc.price}
-                        </span>
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                          Add to order
+                        </button>
                       )}
-                    </div>
-                  </GlassCard>
-                ))}
+                    </GlassCard>
+                  )
+                })}
               </div>
             </Section>
           </div>

@@ -157,16 +157,29 @@ async def connect_webhook(request: Request):
         merchant_id = meta.get("merchant_id", "")
         pos_order_id = meta.get("pos_order_id", "")
         caller_phone = meta.get("caller_phone", "")
+        website_order_id = meta.get("website_order_id", "")
         txn = obj.get("payment_intent") or obj.get("id", "")
-        try:
-            from pay_on_phone import mark_order_paid
-            result = await mark_order_paid(
-                merchant_id=merchant_id, caller_phone=caller_phone,
-                pos_order_id=pos_order_id, method="stripe", payment_txn_id=str(txn),
-            )
-            logger.info("Stripe payment confirmed → order released: %s", result)
-        except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
-            logger.error("mark_order_paid failed for %s: %s", merchant_id, e)
+        if website_order_id:
+            # Mobile/website order: payment is the gate — mark paid and release
+            # the kitchen ticket (dispatched as PAID). Idempotent inside.
+            try:
+                from ...services.pos_connectors.website_order_dispatch import (
+                    mark_paid_and_dispatch,
+                )
+                result = await mark_paid_and_dispatch(website_order_id, payment_txn_id=str(txn))
+                logger.info("Stripe payment confirmed → website order: %s", result)
+            except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
+                logger.error("mark_paid_and_dispatch failed for %s: %s", website_order_id, e)
+        else:
+            try:
+                from pay_on_phone import mark_order_paid
+                result = await mark_order_paid(
+                    merchant_id=merchant_id, caller_phone=caller_phone,
+                    pos_order_id=pos_order_id, method="stripe", payment_txn_id=str(txn),
+                )
+                logger.info("Stripe payment confirmed → order released: %s", result)
+            except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
+                logger.error("mark_order_paid failed for %s: %s", merchant_id, e)
 
         # Text the customer a paid receipt. Only on checkout.session.completed
         # (canonical, fires once) so payment_intent.succeeded can't double-send.
@@ -193,7 +206,9 @@ async def connect_webhook(request: Request):
         # checkout.session.completed (the one canonical event per order — the
         # session id is a stable idempotency ref); payment_intent.succeeded fires
         # for the same order and would double-post under a different ref.
-        if etype == "checkout.session.completed" and merchant_id:
+        # Phone orders only — website orders take their fee as a checkout line /
+        # application fee, so a ledger credit would double-count that revenue.
+        if etype == "checkout.session.completed" and merchant_id and not website_order_id:
             fee_cents = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
             if fee_cents > 0:
                 try:
