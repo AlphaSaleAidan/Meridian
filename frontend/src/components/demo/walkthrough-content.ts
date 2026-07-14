@@ -60,11 +60,11 @@ export const WALKTHROUGH_STEPS: WalkthroughStep[] = [
   },
   {
     id: 'camera',
-    // Route is registered as `camera-analytics` in App.tsx (CustomerDashboardRoutes
-    // + Canada demo block). Earlier `camera-intelligence` value didn't match,
-    // so the tour navigated to a non-existent path and the catch-all `*` route
-    // bounced the user to the US landing page mid-tour.
-    tabPath: 'camera-analytics',
+    // The demo's Camera pillar lives at `camera` (Analytics segment only — the
+    // live webcam demo route was removed). A tabPath that doesn't match a real
+    // route bounces the user to the landing page mid-tour, so keep this in
+    // sync with the demo route blocks in App.tsx.
+    tabPath: 'camera',
     elementSelector: '[data-walkthrough="camera-stats"]',
     fallbackSelector: '.card',
     spotlightPadding: 16,

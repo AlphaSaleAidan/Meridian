@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Video, Plus, Wifi, WifiOff, Activity, Users, Clock, TrendingUp, Eye, MapPin, ArrowUpRight, Timer } from 'lucide-react'
+import { Video, Plus, Wifi, WifiOff, Activity, Users, Clock, TrendingUp, MapPin, Timer } from 'lucide-react'
 import { useIsDemo, useOrgId } from '@/hooks/useOrg'
-import { getActiveBusinessType, isCanadaPath } from '@/lib/demo-context'
+import { getActiveBusinessType } from '@/lib/demo-context'
 import { api } from '@/lib/api'
 import { getAuthHeaders } from '@/lib/supabase'
 import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
@@ -245,14 +245,6 @@ export default function CameraIntelligencePage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {isDemo && (
-              <a
-                href={isCanadaPath() ? '/canada/demo/camera-analytics' : '/demo/camera-analytics'}
-                className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-lg border border-[#7c3aed]/30 bg-[#7c3aed]/10 text-[#7c3aed] hover:bg-[#7c3aed]/20 transition-colors"
-              >
-                <Eye size={13} /> Live Camera Demo <ArrowUpRight size={11} />
-              </a>
-            )}
             {!isDemo && (
               <button onClick={() => setShowAddCamera(true)} className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium rounded-lg bg-[#17C5B0] text-[#0A0A0B] hover:bg-[#14b3a0] transition-colors">
                 <Plus size={13} /> Add Camera

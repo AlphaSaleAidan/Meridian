@@ -133,5 +133,13 @@ export const merchantPillars: Pillar[] = [
   },
 ]
 
+// Public demos keep the Camera pillar (Analytics) but drop the Live segment —
+// no live-camera feed in the unauthenticated demo (US + Canada).
+export const demoMerchantPillars: Pillar[] = merchantPillars.map(p =>
+  p.path === 'camera'
+    ? { ...p, segments: p.segments.filter(s => s.view !== 'live') }
+    : p,
+)
+
 export const MERCHANT_BASE_PATH = '/canada/merchant'
 export const US_MERCHANT_BASE_PATH = '/us/merchant'

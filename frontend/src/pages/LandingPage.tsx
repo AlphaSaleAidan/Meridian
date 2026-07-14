@@ -610,18 +610,16 @@ export default function LandingPage() {
       {/* ─── FOOTER ───────────────────────────────── */}
       <footer className="border-t border-[#1F1F23]/40 py-8">
         <div className="max-w-content mx-auto px-6">
-          {/* Guides & Canada resources */}
+          {/* Guides & resources */}
           <div className="grid grid-cols-2 gap-x-6 gap-y-8 pb-8 mb-8 border-b border-[#1F1F23]/40 sm:grid-cols-4">
             <div>
-              <h4 className="text-[12px] font-semibold text-[#F5F5F7] mb-3 flex items-center gap-1.5">
-                <span style={{ color: ACCENT_CA }}>🇨🇦</span> Canada Compliance Guides
-              </h4>
+              <h4 className="text-[12px] font-semibold text-[#F5F5F7] mb-3">Popular Guides</h4>
               <ul className="space-y-2 text-[12px] text-[#A1A1A8]/60">
                 {[
-                  { label: 'Compliance-First for Canada', path: '/guides/meridian-compliance-first-canada' },
-                  { label: 'PIPEDA for Small Business', path: '/guides/pipeda-compliance-small-business' },
-                  { label: 'Quebec Law 25 Explained', path: '/guides/quebec-law-25-small-business' },
-                  { label: 'Where Your POS Data Lives', path: '/guides/pos-data-residency-canada' },
+                  { label: 'Restaurant Food Cost Guide', path: '/guides/restaurant-food-cost-guide' },
+                  { label: 'Menu Pricing Strategy', path: '/guides/menu-pricing-strategy' },
+                  { label: 'Reduce Restaurant Food Waste', path: '/guides/reduce-restaurant-food-waste' },
+                  { label: 'Forecast Restaurant Sales', path: '/guides/forecast-restaurant-sales' },
                 ].map(l => (
                   <li key={l.path}>
                     <a onClick={() => navigate(l.path)} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">{l.label}</a>
