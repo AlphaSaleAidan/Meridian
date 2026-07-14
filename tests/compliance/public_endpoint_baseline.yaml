@@ -50,6 +50,9 @@ public-form:
   - "POST /api/us/rep-signup"
   - "POST /api/website/analytics"
   - "POST /api/website/order"
+  # Post-checkout success page polls this; returns only coarse status strings
+  # (status/pos_status) keyed by an unguessable order UUID — no PII, no items.
+  - "GET /api/website/order/{order_id}/status"
 
 webhook:
   # Provider-called endpoint; MUST verify a signature/shared secret in the handler (CC6.6 spot tests cover the critical ones).
