@@ -57,6 +57,9 @@ public-form:
 webhook:
   # Provider-called endpoint; MUST verify a signature/shared secret in the handler (CC6.6 spot tests cover the critical ones).
   - "POST /api/billing/webhook"
+  # Clover Hosted Checkout payment webhook — HMAC-verified in-handler against a
+  # per-merchant secret (clover_hco_webhook_secret); 401 when unset (fail closed).
+  - "POST /api/clover/hco/webhook"
   - "POST /api/credits/webhook/square"
   - "POST /api/marketplace/webhook"
   - "POST /api/stripe/connect/webhook"

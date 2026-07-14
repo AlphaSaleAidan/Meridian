@@ -14,6 +14,7 @@ frontend SPA home page (the bug the old meridian.tips/pay/success default hit).
 """
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -49,7 +50,13 @@ def _page(title: str, heading: str, body: str, accent: str = "#0B6E4F") -> str:
 
 @router.get("/p/{code}")
 async def pay_redirect(code: str):
-    """Resolve a short pay-link code to its Stripe checkout URL and redirect."""
+    """Resolve a short pay-link code to its hosted checkout URL and redirect.
+
+    Stripe sessions are created up front, so the row already carries the URL.
+    Clover Hosted Checkout sessions EXPIRE 15 MINUTES after creation, so
+    provider='clover' rows are created LAZILY here on tap (and re-created when
+    the stored session has expired) — see _clover_redirect below.
+    """
     # codes are 8 hex chars; reject anything else fast (no DB hit for junk/scans)
     if not (4 <= len(code) <= 32 and code.isalnum()):
         raise HTTPException(404, "Unknown payment link")
@@ -57,17 +64,20 @@ async def pay_redirect(code: str):
     db = get_db()
     rows = await db.select(
         "checkout_sessions",
-        columns="checkout_url,status",
+        columns="id,merchant_id,provider,provider_ref,checkout_url,status,payload,expires_at",
         filters={"short_code": f"eq.{code}"},
         limit=1,
     )
-    if not rows or not rows[0].get("checkout_url"):
+    if not rows:
         raise HTTPException(404, "Payment link not found or expired")
+    row = rows[0]
 
-    # Don't bounce the customer to a dead Stripe page for a finished/expired
+    # Don't bounce the customer to a dead checkout page for a finished/voided
     # session — show a branded status page instead. Stripe checkout_session
-    # statuses: "open" (payable), "complete" (paid), "expired".
-    status = (rows[0].get("status") or "").lower()
+    # statuses: "open" (payable), "complete" (paid), "expired". (For Clover,
+    # 'expired'/'canceled' here means the ROW was voided; a merely-expired HCO
+    # session keeps status='created' and is transparently re-created below.)
+    status = (row.get("status") or "").lower()
     if status == "complete" or status == "paid":
         body = ("<h1>Already paid</h1><p>This order has already been paid — "
                 "no further action needed. Thanks!</p>")
@@ -77,8 +87,125 @@ async def pay_redirect(code: str):
                 "restaurant for a fresh link to complete your order.</p>")
         return HTMLResponse(_page("Link expired", "⌛", body, accent="#9A6700"), status_code=410)
 
+    if (row.get("provider") or "").lower() == "clover":
+        return await _clover_redirect(db, row)
+
+    if not row.get("checkout_url"):
+        raise HTTPException(404, "Payment link not found or expired")
     # 303 so the browser issues a clean GET to Stripe's hosted page.
-    return RedirectResponse(url=rows[0]["checkout_url"], status_code=303)
+    return RedirectResponse(url=row["checkout_url"], status_code=303)
+
+
+# ── Clover Hosted Checkout: lazy session creation ──────────────────────────
+
+def _hco_session_live(row: dict) -> bool:
+    """True when the stored HCO session can still be redirected to: it exists
+    and its expiry is safely in the future (30s margin so we never send a
+    customer to a page that dies mid-card-entry)."""
+    if not (row.get("provider_ref") and row.get("checkout_url")):
+        return False
+    from ...services.clover_hco import parse_expiration
+
+    expires = parse_expiration(row.get("expires_at"))
+    if expires is None:
+        return False  # unknown expiry on a 15-min-TTL session → re-create
+    return expires > datetime.now(timezone.utc) + timedelta(seconds=30)
+
+
+async def _resolve_clover_credentials(db, merchant_id: str, payload: dict) -> tuple[str, str]:
+    """(access_token, clover_merchant_id) for HCO creation, resolved at TAP
+    time — the token is never stored in the checkout_sessions row. Mirrors the
+    order-dispatch resolution (website_order_dispatch._resolve_connection):
+    newest connected Clover pos_connections row, token decrypted; manual creds
+    on phone_agent_config as fallback. merchant_id IS org_id in this system."""
+    mid_hint = ((payload or {}).get("clover_merchant_id") or "").strip()
+    if merchant_id:
+        try:
+            conns = await db.select(
+                "pos_connections",
+                filters={"org_id": f"eq.{merchant_id}", "provider": "eq.clover",
+                         "status": "eq.connected"},
+                order="updated_at.desc",
+                limit=1,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("clover pay: pos_connections lookup failed: %s", e)
+            conns = []
+        if conns:
+            from .phone_dashboard import _decrypt_connection_token
+
+            token = (_decrypt_connection_token(conns[0]) or "").strip()
+            mid = mid_hint or (conns[0].get("external_merchant_id") or "").strip()
+            if token and mid:
+                return token, mid
+        try:
+            cfg_rows = await db.select(
+                "phone_agent_config",
+                columns="pos_system,pos_access_token,pos_location_id",
+                filters={"merchant_id": f"eq.{merchant_id}"},
+                limit=1,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("clover pay: phone_agent_config lookup failed: %s", e)
+            cfg_rows = []
+        if cfg_rows and (cfg_rows[0].get("pos_system") or "") == "clover":
+            token = (cfg_rows[0].get("pos_access_token") or "").strip()
+            mid = mid_hint or (cfg_rows[0].get("pos_location_id") or "").strip()
+            if token and mid:
+                return token, mid
+    return "", ""
+
+
+async def _clover_redirect(db, row: dict):
+    """Redirect to a live Clover Hosted Checkout session, creating (or
+    re-creating, after the 15-min expiry) the session on demand."""
+    from ...services.clover_hco import (
+        HCO_SESSION_LIFETIME,
+        create_hco_session,
+        parse_expiration,
+    )
+
+    if _hco_session_live(row):
+        return RedirectResponse(url=row["checkout_url"], status_code=303)
+
+    payload = row.get("payload") or {}
+    try:
+        token, clover_mid = await _resolve_clover_credentials(
+            db, row.get("merchant_id") or "", payload)
+        if not (token and clover_mid):
+            raise RuntimeError("clover_credentials_unavailable")
+        hco = await create_hco_session(token, clover_mid, payload.get("hco_request") or {})
+        expires = parse_expiration(hco.get("expirationTime")) or (
+            datetime.now(timezone.utc) + HCO_SESSION_LIFETIME)
+        try:
+            await db.update(
+                "checkout_sessions",
+                {"provider_ref": hco["checkoutSessionId"],
+                 "checkout_url": hco["href"],
+                 "expires_at": expires.isoformat()},
+                filters={"id": f"eq.{row.get('id')}"},
+            )
+        except Exception as e:  # noqa: BLE001 — persisting is best-effort; the
+            # customer still pays on this session. A webhook for it would miss
+            # the provider_ref match, so log loudly for follow-up.
+            logger.error("clover pay: could not persist HCO session %s for row %s: %s",
+                         hco.get("checkoutSessionId"), row.get("id"), e)
+        logger.info("Clover HCO session %s created on tap for merchant %s (row %s)",
+                    hco.get("checkoutSessionId"), row.get("merchant_id"), row.get("id"))
+        return RedirectResponse(url=hco["href"], status_code=303)
+    except Exception as e:  # noqa: BLE001 — never 500 a paying customer
+        logger.error("clover pay: HCO creation failed for row %s: %s", row.get("id"), e)
+        # Meridian-hosted checkout only when one is EXPLICITLY configured — the
+        # default pay.meridian.ai/checkout page does not exist (it stranded CAD
+        # orders before), so a friendly retry page beats a dead redirect.
+        hosted_base = (os.getenv("MERIDIAN_CHECKOUT_URL") or "").rstrip("/")
+        if hosted_base and row.get("id"):
+            return RedirectResponse(url=f"{hosted_base}/checkout/{row['id']}", status_code=303)
+        body = ("<h1>We couldn't open the payment page</h1>"
+                "<p>Please try the link again in a moment, or pay at pickup — "
+                "your order is saved.</p>")
+        return HTMLResponse(_page("Payment page unavailable", "!", body,
+                                  accent="#9A6700"), status_code=503)
 
 
 @router.get("/pay/success", response_class=HTMLResponse)
