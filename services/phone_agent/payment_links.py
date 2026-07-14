@@ -1,6 +1,8 @@
 """
 Payment link generator — creates checkout URLs from connected POS systems.
-Square, Toast, and Clover have native payment link APIs.
+Square and Toast have native payment link APIs; Clover uses Hosted Checkout
+via a lazily-created session behind the branded /p short link (HCO sessions
+expire 15 minutes after creation, so they're created on tap, not at SMS time).
 All other POS systems get a Meridian-hosted checkout page.
 """
 import logging
@@ -187,7 +189,25 @@ async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: 
         platform account, so the customer can still pay now (no dead link).
     Stripe supports CAD, so this is the rail that actually works for Canada — the
     per-POS fallback below stranded CAD orders on a non-existent checkout page.
-    Same return shape ({url, method, ...}) so callers/SMS are unchanged."""
+    Same return shape ({url, method, ...}) so callers/SMS are unchanged.
+
+    PER-MERCHANT TOGGLE (payment_link_provider): merchants who opt into
+    "clover" get a Clover Hosted Checkout link via the lazy /p short-link flow
+    (session created when the customer taps, because HCO sessions expire 15
+    minutes after creation). Default is "stripe" → everything below runs
+    byte-for-byte unchanged. Any failure on the Clover path falls through to
+    the existing behavior so an order is never stranded."""
+    provider = (getattr(merchant_config, "payment_link_provider", "") or "").strip().lower()
+    if provider == "clover":
+        try:
+            if await _merchant_has_clover(merchant_config):
+                return await _clover_lazy_checkout(
+                    order, pos_order_id, _clover_merchant_id_hint(merchant_config))
+            logger.warning(
+                "payment_link_provider=clover but no Clover connection for %s — "
+                "falling back to default checkout", order.get("merchant_id", ""))
+        except Exception as e:  # noqa: BLE001 — never strand the order; fall through
+            logger.error("Clover HCO link failed, falling back to default checkout: %s", e)
     if UNIFIED_PAYMENTS_ENABLED and STRIPE_SECRET_KEY:
         try:
             acct = getattr(merchant_config, "stripe_account_id", "")
@@ -375,7 +395,12 @@ async def create_payment_link(
         elif pos_system == "toast":
             return await _toast_payment_link(order, access_token, location_id, pos_order_id)
         elif pos_system == "clover":
-            return await _clover_payment_link(order, access_token, location_id, pos_order_id)
+            # Clover has NO payment-link API (the old POST /v3/merchants/{mid}/
+            # pay_links endpoint never existed — it 405'd and silently fell back
+            # here). The real rail is Hosted Checkout, created lazily behind the
+            # /p short link because HCO sessions expire 15 min after creation.
+            # location_id carries the Clover merchant id on this branch.
+            return await _clover_lazy_checkout(order, pos_order_id, location_id)
         else:
             return await _create_meridian_checkout(order, pos_system)
     except Exception as e:
@@ -467,38 +492,179 @@ async def _toast_payment_link(
             return await _create_meridian_checkout(order, "toast")
 
 
-async def _clover_payment_link(
-    order: dict, access_token: str, merchant_id: str, pos_order_id: str
-) -> dict:
-    payload = {
-        "amount": int(order.get("total", 0) * 100),
-        "note": f"Phone order for {order.get('customer_name', '')}",
-        "redirectUrl": f"{MERIDIAN_CHECKOUT_BASE}/confirmation/{pos_order_id}",
-        "customer": {
-            "phoneNumber": order.get("caller_phone", ""),
-        },
-    }
+# ── Clover Hosted Checkout (text-to-pay) ─────────────────────────────────────
+#
+# Clover's real payment-page API is Hosted Checkout:
+#   POST {host}/invoicingcheckoutservice/v1/checkouts
+# (the previous _clover_payment_link posted to /v3/merchants/{mid}/pay_links,
+# which does not exist in Clover's API — it always errored and silently fell
+# back to the Meridian checkout page).
+#
+# HCO sessions EXPIRE 15 MINUTES after creation, so we must NOT create one at
+# SMS-send time (customers routinely tap later). Instead we persist everything
+# needed in checkout_sessions (payload JSONB) and the backend /p/{code} handler
+# creates the session lazily on tap — see src/api/routes/pay_redirect.py. The
+# merchant's Clover access token is deliberately NOT stored in the row; the /p
+# handler re-resolves it from the stored (encrypted) Clover connection.
 
-    from pos_connector import clover_api_base
-    async with httpx.AsyncClient() as client:
-        res = await client.post(
-            f"{clover_api_base()}/v3/merchants/{merchant_id}/pay_links",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
+
+def _split_name(full_name: str) -> tuple[str, str]:
+    """HCO requires at least one of customer firstName/lastName/email.
+    "Guest" when the caller gave no name (guess: docs don't cover empty)."""
+    parts = (full_name or "").strip().split()
+    if not parts:
+        return "Guest", ""
+    return parts[0], " ".join(parts[1:])
+
+
+def _clover_hco_line_items(order: dict[str, Any]) -> tuple[list[dict], int]:
+    """HCO shoppingCart lineItems (unit price in CENTS) + their total.
+
+    Hosted Checkout ignores the merchant's Clover tax configuration and
+    inventory, so tax must be computed INTO the cart: itemized lines get an
+    explicit "Tax" line; unpriced orders get a single tax-inclusive total line.
+    """
+    items, ok = [], True
+    for i in order.get("items", []):
+        price = i.get("unit_price", i.get("price"))
+        if price is None:
+            ok = False
+            break
+        name = i.get("name", "Item")
+        if i.get("size"):
+            name += f" ({i['size']})"
+        line = {
+            "name": name,
+            "price": int(round(float(price) * 100)),
+            "unitQty": int(i.get("quantity", 1) or 1),
+        }
+        note = (i.get("special_instructions") or "").strip()
+        if note:
+            line["note"] = note
+        items.append(line)
+    if ok and items:
+        tax_cents = int(round(float(order.get("tax", 0) or 0) * 100))
+        if tax_cents > 0:
+            items.append({"name": "Tax", "price": tax_cents, "unitQty": 1})
+    else:
+        # tax-inclusive single line (order total already includes tax)
+        items = [{"name": "Phone order", "price": _order_amount_cents(order), "unitQty": 1}]
+    total = sum(li["price"] * li["unitQty"] for li in items)
+    return items, total
+
+
+def _clover_merchant_id_hint(merchant_config) -> str:
+    """Best order-time guess at the Clover merchant id. Manual configs store it
+    in pos_location_id; OAuth merchants leave this empty and the /p handler
+    resolves external_merchant_id from pos_connections at tap time."""
+    if (getattr(merchant_config, "pos_system", "") or "") == "clover":
+        return (getattr(merchant_config, "pos_location_id", "") or "").strip()
+    return ""
+
+
+async def _merchant_has_clover(merchant_config) -> bool:
+    """Does this merchant have a usable Clover connection? Manual creds on the
+    phone config win; else check for a connected pos_connections row (existence
+    only — the token stays encrypted, the /p handler decrypts it at tap time)."""
+    if (
+        (getattr(merchant_config, "pos_system", "") or "") == "clover"
+        and (getattr(merchant_config, "pos_access_token", "") or "")
+        and (getattr(merchant_config, "pos_location_id", "") or "")
+    ):
+        return True
+    merchant_id = getattr(merchant_config, "merchant_id", "") or ""
+    if not (SUPABASE_URL and SUPABASE_KEY and merchant_id):
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(
+                f"{SUPABASE_URL}/rest/v1/pos_connections",
+                params={
+                    "org_id": f"eq.{merchant_id}",
+                    "provider": "eq.clover",
+                    "status": "eq.connected",
+                    "select": "id",
+                    "limit": "1",
+                },
+                headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            )
+        return res.status_code == 200 and bool(res.json())
+    except Exception as e:  # noqa: BLE001 — connection check is best-effort
+        logger.warning("Clover connection lookup failed: %s", e)
+        return False
+
+
+async def _clover_lazy_checkout(
+    order: dict[str, Any], pos_order_id: str, clover_merchant_id: str = ""
+) -> dict:
+    """Write the checkout_sessions row that backs a LAZY Clover Hosted Checkout
+    and return the branded short link. No Clover HTTP happens here — the /p
+    handler creates the HCO session on tap (15-min expiry starts then) and this
+    row carries everything it needs in `payload` (except the access token,
+    which it re-resolves from the merchant's stored Clover connection).
+
+    Raises when the row can't be persisted: a /p link that resolves to nothing
+    is worse than falling back to the caller's default checkout path."""
+    if not (SUPABASE_URL and SUPABASE_KEY):
+        raise RuntimeError("supabase_not_configured")
+
+    currency = (order.get("currency") or "cad").lower()
+    line_items, amount_cents = _clover_hco_line_items(order)
+    first, last = _split_name(order.get("customer_name", ""))
+    customer: dict[str, Any] = {"firstName": first}
+    if last:
+        customer["lastName"] = last
+    if order.get("caller_phone"):
+        customer["phoneNumber"] = order["caller_phone"]
+
+    short_code = uuid.uuid4().hex[:8]
+    row = {
+        "merchant_id": order.get("merchant_id", ""),
+        "pos_order_id": pos_order_id,
+        "provider": "clover",
+        "provider_ref": None,  # set by /p on first tap (HCO checkoutSessionId)
+        "amount_cents": amount_cents,
+        "currency": currency,
+        "status": "created",
+        "checkout_url": None,  # set by /p on first tap (HCO href)
+        "short_code": short_code,
+        "caller_phone": order.get("caller_phone", ""),
+        "payload": {
+            # ready-to-POST HCO body (see src/services/clover_hco.py)
+            "hco_request": {
+                "customer": customer,
+                "shoppingCart": {"lineItems": line_items},
             },
-            timeout=10,
+            "clover_merchant_id": clover_merchant_id or "",
+        },
+        # legacy meridian-checkout columns so a fallback page could render the
+        # order if HCO creation fails at tap time
+        "customer_name": order.get("customer_name", ""),
+        "customer_phone": order.get("caller_phone", ""),
+        "order_type": order.get("order_type", "pickup"),
+        "items": order.get("items", []),
+        "subtotal": order.get("subtotal", 0),
+        "tax": order.get("tax", 0),
+        "total": order.get("total", 0),
+        "pos_system": "clover",
+        "source": "phone_agent",
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        res = await client.post(
+            f"{SUPABASE_URL}/rest/v1/checkout_sessions",
+            json=row,
+            headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}",
+                     "Content-Type": "application/json", "Prefer": "return=minimal"},
         )
-        if res.status_code in (200, 201):
-            data = res.json()
-            url = data.get("url", data.get("paymentUrl", ""))
-            link_id = data.get("id", "")
-            logger.info("Clover payment link created: %s", link_id)
-            return {"url": url, "link_id": link_id, "method": "clover"}
-        else:
-            logger.warning("Clover payment link error %d", res.status_code)
-            return await _create_meridian_checkout(order, "clover")
+    if res.status_code not in (200, 201, 204):
+        logger.warning("clover checkout_sessions insert HTTP %s: %s",
+                       res.status_code, res.text[:200])
+        raise RuntimeError(f"checkout_sessions_insert_{res.status_code}")
+
+    url = f"{PUBLIC_PAY_BASE}/p/{short_code}"
+    logger.info("Clover HCO lazy link for merchant %s ($%.2f %s) -> %s",
+                order.get("merchant_id"), amount_cents / 100, currency.upper(), url)
+    return {"url": url, "method": "clover", "link_id": short_code, "short_code": short_code}
 
 
 async def _create_meridian_checkout(order: dict, pos_system: str = "") -> dict:
