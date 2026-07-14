@@ -257,7 +257,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const repRole = String(data.user.user_metadata?.role ?? '').toLowerCase() === 'sales_rep'
       const salesRep = repRole || await checkIsSalesRep(u.email)
       if (salesRep) {
-        await supabase.auth.signOut()
+        // scope:'local' — default signOut is GLOBAL: it revokes every session
+        // and refresh token for the user server-side, so a rep who merely hit
+        // the wrong login page got logged out of the sales portal on all their
+        // devices (root cause of the 2026-07-13 dead-session/RLS incident).
+        // This bounce only needs to drop THIS browser's session.
+        await supabase.auth.signOut({ scope: 'local' })
         setUser(null)
         setIsSalesRep(false)
         return 'This account belongs to a sales rep. Please use the sales portal login.'
@@ -341,7 +346,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(async () => {
-    if (supabase) await supabase.auth.signOut()
+    // scope:'local' — logging out on one device must not revoke the merchant's
+    // sessions on their other devices (default scope is global).
+    if (supabase) await supabase.auth.signOut({ scope: 'local' })
     setUser(null)
     setOrg(null)
     setIsAdmin(false)

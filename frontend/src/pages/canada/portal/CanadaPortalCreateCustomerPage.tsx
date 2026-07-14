@@ -623,10 +623,12 @@ export default function CanadaPortalCreateCustomerPage() {
   const [customerTempPassword, setCustomerTempPassword] = useState('')
   const [tempPwCopied, setTempPwCopied] = useState(false)
   const [autoSendStatus, setAutoSendStatus] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false })
+  const [crmRecordError, setCrmRecordError] = useState<string | null>(null)
 
   async function handleCreateCustomer() {
     setSaving(true)
     setError(null)
+    setCrmRecordError(null)
     try {
       if (!form.email.trim()) {
         throw new Error('Customer email is required to create their login')
@@ -684,8 +686,12 @@ export default function CanadaPortalCreateCustomerPage() {
       setCustomerPortalUrl(provData.portal_url || '')
 
       if (supabase) {
+        // Non-fatal (the customer is already provisioned) but must NOT be
+        // silent: supabase-js returns errors instead of throwing, so the old
+        // bare try/catch dropped RLS-rejected closed-won leads invisibly
+        // (dead session → anon insert → RLS violation → lead never existed).
         try {
-          await supabase.from('canada_leads').insert({
+          const { error: leadErr } = await supabase.from('canada_leads').insert({
             business_name: form.businessName,
             contact_name: form.ownerName,
             contact_email: form.email,
@@ -697,7 +703,10 @@ export default function CanadaPortalCreateCustomerPage() {
             notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
             rep_id: rep?.rep_id || null,
           })
-        } catch { }
+          if (leadErr) setCrmRecordError(leadErr.message)
+        } catch (e) {
+          setCrmRecordError(e instanceof Error ? e.message : 'Network error')
+        }
       }
 
       const link = `${window.location.origin}/canada/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&setup=${setupFee}&freemonth=${form.firstMonthFree ? '1' : '0'}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
@@ -1323,6 +1332,16 @@ export default function CanadaPortalCreateCustomerPage() {
               </div>
             </div>
           </div>
+
+          {crmRecordError && (
+            <div className="bg-pm-amber-orange/10 rounded-xl p-4 border border-pm-amber-orange/20">
+              <p className="text-sm font-semibold text-pm-amber-orange">Lead not recorded in the CRM</p>
+              <p className="text-xs text-pm-amber-orange/70 mt-1">
+                The customer account was created, but saving the closed-won lead failed ({crmRecordError}).
+                Add the lead manually from the Leads page — or log out and back in if your session expired, then retry.
+              </p>
+            </div>
+          )}
 
           {/* SOP Checklist */}
           <div className="bg-pm-canada-surface rounded-xl p-6 border border-pm-canada-border">
