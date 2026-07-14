@@ -16,6 +16,7 @@ Endpoints:
   DELETE /api/website/{merchant_id}         → Soft-delete merchant website
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -33,6 +34,10 @@ logger = logging.getLogger("meridian.api.website")
 router = APIRouter(prefix="/api/website", tags=["website"])
 
 _UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
+
+# Background POS pushes need a strong reference until done or the event loop
+# may garbage-collect the task mid-flight.
+_POS_DISPATCH_TASKS: set[asyncio.Task] = set()
 
 
 # ── Request/Response Models ───────────────────────────────────
@@ -689,6 +694,20 @@ async def create_website_order(req: CreateOrderRequest):
         # so deploys with the flag off don't depend on the migration.
         order_row["merchant_fee_amount"] = merchant_fee_amount
     await db.insert("website_orders", order_row)
+
+    # Push the ticket into the merchant's POS (Clover: tagged order + line
+    # items + kitchen print event) in the background — the customer's
+    # confirmation never waits on, or fails because of, the POS round-trip.
+    # The order row above is the source of truth either way.
+    try:
+        from ...services.pos_connectors.website_order_dispatch import (
+            dispatch_website_order_to_pos,
+        )
+        task = asyncio.create_task(dispatch_website_order_to_pos(dict(order_row)))
+        _POS_DISPATCH_TASKS.add(task)
+        task.add_done_callback(_POS_DISPATCH_TASKS.discard)
+    except Exception as e:  # noqa: BLE001 — ordering must survive a dispatch bug
+        logger.warning(f"POS dispatch scheduling failed for order {order_id}: {e}")
 
     logger.info(f"Created order {order_id} for merchant {merchant_id}: ${total}")
     return {
