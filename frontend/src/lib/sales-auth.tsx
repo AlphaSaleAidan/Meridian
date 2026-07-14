@@ -259,7 +259,10 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
       // route, and point them at the customer portal.
       const meta = data.user.user_metadata ?? {}
       const looksLikeCustomer = String(meta.role ?? '').toLowerCase() === 'owner' || !!meta.org_id
-      await supabase.auth.signOut()
+      // scope:'local' — default signOut is global and would revoke the
+      // customer's merchant-portal sessions on every device just because they
+      // tried the wrong login page (mirror of the auth.tsx rep-bounce fix).
+      await supabase.auth.signOut({ scope: 'local' })
       return looksLikeCustomer
         ? 'This is a customer account. Please sign in at /customer/login.'
         : 'Could not create sales rep profile'
@@ -349,7 +352,8 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
-    if (supabase) supabase.auth.signOut()
+    // scope:'local' — don't revoke the rep's sessions on other devices.
+    if (supabase) supabase.auth.signOut({ scope: 'local' })
     setRep(null)
     clearRep()
     // Drop the canada_leads module-level cache so a second rep on the

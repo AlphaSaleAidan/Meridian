@@ -38,5 +38,14 @@ jobs:
             npm install --no-audit --no-fund
             npm run build
             grep -rlq "supabase.co" dist/assets/*.js
+            # Re-bake per-route crawlable HTML. A plain `npm run build` ships the
+            # blank SPA shell for all ~245 routes, and rsync --delete below then
+            # wipes the prerendered pages from the docroot — this exact workflow
+            # caused the 2026-07-12 SEO regression (restored manually 07-13).
+            # PRERENDER_PORT: the 4188 default is often taken on this box; vite
+            # preview silently binds the next free port while prerender still
+            # queries the configured one, so pin an uncommon port.
+            PRERENDER_PORT=45177 bash scripts/prerender-all.sh
+            test -s dist/about/index.html
             rsync -a --delete dist/ /root/Meridian/frontend/dist/
             echo "deployed $(git rev-parse --short HEAD) to /root/Meridian/frontend/dist"
