@@ -1215,7 +1215,7 @@ export default function CustomerOnboardingWizard() {
             <p className="text-[14px] text-[#A1A1A8] text-center max-w-sm mb-8">
               Your dashboard is live. We're already analyzing your data and generating insights.
             </p>
-            <button onClick={() => navigate('/app')}
+            <button onClick={() => navigate('/us/merchant')}
               className="flex items-center gap-2 px-8 py-3 text-[14px] font-medium text-white bg-[#17C5B0] rounded-lg hover:bg-[#14B09D] transition-colors shadow-[0_0_30px_rgba(23,197,176,0.2)]">
               Go to Dashboard <ArrowRight size={16} />
             </button>
