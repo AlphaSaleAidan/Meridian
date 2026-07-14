@@ -105,9 +105,11 @@ async def test_clover_happy_path_tags_expands_qty_and_fires_kitchen(monkeypatch)
     li_calls = [c for c in calls if "/line_items" in c[0]]
     print_calls = [c for c in calls if c[0].endswith("/print_event")]
 
-    assert order_calls[0][1]["title"] == "Meridian Mobile Order"
+    assert order_calls[0][1]["title"] == "Meridian Mobile Order — Priya S"
     assert "Meridian Mobile Order" in order_calls[0][1]["note"]
     assert order_calls[0][1]["state"] == "open"
+    # ties the Clover order back to the Meridian order id (Square parity)
+    assert order_calls[0][1]["externalReferenceId"] == ORDER["id"][:32]
 
     # 2x Butter Chicken + 1x Naan → 3 line-item POSTs, per unit
     assert len(li_calls) == 3

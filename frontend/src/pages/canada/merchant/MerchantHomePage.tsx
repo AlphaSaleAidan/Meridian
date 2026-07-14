@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/auth'
 import { useMerchantBasePath } from '@/hooks/useMerchantBasePath'
 import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 import { HistoricalRevenueSection, OpenOrdersSection } from '@/components/SalesHistorySections'
+import PaymentsSetupCard from './PaymentsSetupCard'
 
 /**
  * Canada-merchant home — the payable hero surface.
@@ -314,6 +315,9 @@ export default function MerchantHomePage() {
           {data.connection.status === 'connected' ? 'Connected' : data.connection.status}
         </span>
       </div>
+
+      {/* Get-paid setup: persistent Stripe Connect status + CTA */}
+      <PaymentsSetupCard />
 
       {/* Hero: net sales (count-up) + recoverable revenue */}
       <div className="rounded-2xl bg-pm-surface border border-pm-border p-6 sm:p-8">

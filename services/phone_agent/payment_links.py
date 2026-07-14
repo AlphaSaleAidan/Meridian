@@ -178,6 +178,111 @@ def _stripe_line_items(order: dict[str, Any], currency: str) -> list[dict]:
     }]
 
 
+# Native Clover pay-by-text rail. Two INDEPENDENT gates, both default OFF:
+# this global env AND the merchant's phone_agent_config.native_pos_pay column.
+CLOVER_NATIVE_PAY_ENABLED = os.getenv("CLOVER_NATIVE_PAY_ENABLED", "0") == "1"
+
+
+def _clover_hco_base() -> str:
+    """Clover Hosted Checkout host — same CLOVER_ENVIRONMENT contract as the
+    order-writing connectors."""
+    if os.getenv("CLOVER_ENVIRONMENT", "").strip().lower() == "sandbox":
+        return "https://apisandbox.dev.clover.com"
+    return "https://www.clover.com"
+
+
+async def _clover_hosted_checkout(order: dict[str, Any], merchant_config, pos_order_id: str) -> dict:
+    """Clover Hosted Checkout — pay-by-text on the merchant's OWN Clover
+    processing (money settles like their in-store card sales; never touches
+    Meridian's Stripe). Meridian's fee still applies: under the fee split the
+    customer surcharge rides as a checkout line item, and the full fee is
+    booked to the voice ledger when the payment is server-side verified at
+    /pay/clover/return (the redirect alone is never trusted).
+
+    POST {host}/invoicingcheckoutservice/v1/checkouts with X-Clover-Merchant-Id;
+    the response href is Clover's hosted pay page."""
+    token = (getattr(merchant_config, "pos_access_token", "") or "").strip()
+    clover_mid = (getattr(merchant_config, "pos_location_id", "") or "").strip()
+    if not (token and clover_mid):
+        raise RuntimeError("clover_native_missing_credentials")
+
+    currency = (order.get("currency") or "cad").lower()
+    short_code = uuid.uuid4().hex[:8]
+
+    line_items = []
+    for i in order.get("items", []):
+        price = i.get("unit_price", i.get("price", 0)) or 0
+        name = i.get("name", "Item")
+        if i.get("size"):
+            name += f" ({i['size']})"
+        line_items.append({
+            "name": name[:127],
+            "unitQty": int(i.get("quantity", 1) or 1),
+            "price": int(round(float(price) * 100)),
+        })
+    if not line_items:
+        line_items = [{"name": "Phone order", "unitQty": 1,
+                       "price": _order_amount_cents(order)}]
+
+    if FEE_SPLIT_ENABLED:
+        surcharge = customer_surcharge_cents(
+            getattr(merchant_config, "plan_tier", ""), currency)
+        if surcharge > 0:
+            line_items.append({"name": "Service & processing fee",
+                               "unitQty": 1, "price": surcharge})
+
+    amount_total = sum(li["price"] * li["unitQty"] for li in line_items)
+
+    name_parts = (order.get("customer_name") or "").strip().split(" ", 1)
+    customer: dict[str, Any] = {
+        "firstName": (name_parts[0] if name_parts else "") or "Phone",
+        "lastName": (name_parts[1] if len(name_parts) > 1 else "") or "Order",
+    }
+    if order.get("caller_phone"):
+        customer["phoneNumber"] = order["caller_phone"]
+
+    payload = {
+        "customer": customer,
+        "shoppingCart": {"lineItems": line_items},
+        "redirectUrls": {
+            "success": f"{PUBLIC_PAY_BASE}/pay/clover/return/{short_code}",
+            "failure": f"{PUBLIC_PAY_BASE}/pay/cancel",
+            "cancel": f"{PUBLIC_PAY_BASE}/pay/cancel",
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.post(
+            f"{_clover_hco_base()}/invoicingcheckoutservice/v1/checkouts",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Clover-Merchant-Id": clover_mid,
+                "Content-Type": "application/json",
+            },
+        )
+    if res.status_code not in (200, 201):
+        raise RuntimeError(f"clover_hco_http_{res.status_code}: {res.text[:200]}")
+    data = res.json() or {}
+    href = data.get("href") or data.get("checkoutPageUrl") or ""
+    session_id = data.get("checkoutSessionId") or data.get("id") or ""
+    if not href:
+        raise RuntimeError("clover_hco_no_href")
+
+    recorded = await _record_checkout_session(
+        order, merchant_config, pos_order_id,
+        {"id": session_id, "url": href}, amount_total, currency, short_code,
+        provider="clover_hco",
+    )
+    url = f"{PUBLIC_PAY_BASE}/p/{short_code}" if recorded else href
+    logger.info("Clover hosted checkout %s for merchant %s ($%.2f %s) -> %s",
+                session_id, order.get("merchant_id"), amount_total / 100,
+                currency.upper(), url)
+    return {"url": url, "checkout_url": href, "method": "clover_native",
+            "link_id": session_id, "session_id": session_id,
+            "short_code": short_code}
+
+
 async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: str = "") -> dict:
     """Preferred checkout entry point. When unified payments are on and a Stripe
     key is configured, ALWAYS produce a real Stripe hosted-checkout link:
@@ -188,6 +293,17 @@ async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: 
     Stripe supports CAD, so this is the rail that actually works for Canada — the
     per-POS fallback below stranded CAD orders on a non-existent checkout page.
     Same return shape ({url, method, ...}) so callers/SMS are unchanged."""
+    # Native Clover rail first when BOTH gates are on and this is a Clover
+    # merchant with credentials — any failure falls straight through to Stripe
+    # so a broken native link never strands the order.
+    if (CLOVER_NATIVE_PAY_ENABLED
+            and getattr(merchant_config, "native_pos_pay", False)
+            and (getattr(merchant_config, "pos_system", "") or "").strip().lower() == "clover"):
+        try:
+            return await _clover_hosted_checkout(order, merchant_config, pos_order_id)
+        except Exception as e:  # noqa: BLE001 — Stripe rail is the safety net
+            logger.warning("Clover native checkout failed, using Stripe rail: %s", e)
+
     if UNIFIED_PAYMENTS_ENABLED and STRIPE_SECRET_KEY:
         try:
             acct = getattr(merchant_config, "stripe_account_id", "")
@@ -321,7 +437,7 @@ async def _stripe_checkout(
 
 
 async def _record_checkout_session(order, merchant_config, pos_order_id, session, amount, currency,
-                                   short_code: str = "") -> bool:
+                                   short_code: str = "", provider: str = "stripe") -> bool:
     """Persist the session so the /p/<short_code> redirect can resolve it.
     Returns True only if the row was written — the caller only hands out the
     branded short link when this succeeds (else it uses the full Stripe URL)."""
@@ -334,7 +450,7 @@ async def _record_checkout_session(order, merchant_config, pos_order_id, session
                 json={
                     "merchant_id": order.get("merchant_id", ""),
                     "pos_order_id": pos_order_id,
-                    "provider": "stripe",
+                    "provider": provider,
                     "provider_ref": session["id"],
                     "amount_cents": amount,
                     "currency": currency,
