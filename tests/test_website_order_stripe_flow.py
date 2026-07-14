@@ -227,6 +227,8 @@ async def test_mark_paid_retries_status_only_on_pre_migration_schema(monkeypatch
 
 @aio
 async def test_generic_path_note_carries_paid_tag(monkeypatch):
+    """Non-Clover/Square API systems (toast here) still get the tag + PAID
+    state folded into the order notes via the generic connector."""
     monkeypatch.delenv("POS_ORDERS_DISABLED", raising=False)
 
     async def silent(_oid, _res):
@@ -234,18 +236,19 @@ async def test_generic_path_note_carries_paid_tag(monkeypatch):
     monkeypatch.setattr(wod, "_record_outcome", silent)
 
     async def conn(_):
-        return {"system": "square", "token": "tok",
-                "external_merchant_id": "SQ_M", "location_id": "L1"}
+        return {"system": "toast", "token": "tok",
+                "external_merchant_id": "T_M", "location_id": "L1"}
     monkeypatch.setattr(wod, "_resolve_connection", conn)
 
     seen = {}
 
     async def fake_create(system_key, order_data, config=None):
         seen.update(order_data)
-        return SimpleNamespace(success=True, fallback_used=False, order_id="sq1",
+        return SimpleNamespace(success=True, fallback_used=False, order_id="t1",
                                fallback_reason="")
     monkeypatch.setattr(wod, "create_pos_order", fake_create)
 
-    await wod.dispatch_website_order_to_pos(dict(PAID_ORDER))
+    res = await wod.dispatch_website_order_to_pos(dict(PAID_ORDER))
+    assert res["dispatched"] is True and res["pos_system"] == "toast"
     assert "PAID ONLINE, do not collect" in seen["special_instructions"]
     assert "Meridian Mobile Order" in seen["special_instructions"]

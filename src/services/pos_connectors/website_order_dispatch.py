@@ -1,25 +1,31 @@
 """
-Website Order → POS Dispatch — pushes a completed mobile/website food order
-into the merchant's connected POS so the kitchen gets a normal ticket with a
-"Meridian Mobile Order" tag and the notes they need to make it.
+Website Order → POS Dispatch — pushes a PAID mobile/website food order into
+the merchant's connected POS so the kitchen gets a normal ticket tagged
+"Meridian Mobile Order" with the notes they need to make it.
 
-Runs after the order row is safely stored in website_orders: a POS failure
-never loses the order or breaks the customer's confirmation — the outcome is
-recorded on the row (pos_status / pos_order_id / pos_error, migration 039)
-and the order stays visible in the merchant dashboard either way.
+Routing (every paid order reaches the merchant SOMEWHERE — no silent drops):
+  clover (+ bank rebrands) → clover_kitchen: tagged order + line items + print
+  square (+ variants)      → square_kitchen: order + fulfillment (KDS/printing)
+  other API-capable        → generic REST connector (best effort)
+  API failed / CSV-only / no POS connected
+                           → SMS (then email) the full kitchen ticket to the
+                             merchant's contact from their website record
 
-Clover goes through the dedicated clover_kitchen submitter (tagged order +
-line items + kitchen print event). Other connected systems reuse the generic
-order dispatcher with the tag folded into the order notes.
+Runs after the order row is safely stored and (since the pay-first flow) only
+once Stripe has confirmed payment: mark_paid_and_dispatch is the webhook
+entry. A POS failure never loses the order — the outcome is recorded on the
+row (pos_status / pos_order_id / pos_error, migrations 039/040) and the order
+stays visible in the merchant dashboard either way.
 """
 import asyncio
 import logging
 import os
 from datetime import datetime, timezone
 
-from .clover_kitchen import submit_clover_kitchen_order
+from .clover_kitchen import build_kitchen_note, submit_clover_kitchen_order
 from .order_dispatcher import create_pos_order
 from .registry import get_connector_config, resolve_alias
+from .square_kitchen import submit_square_kitchen_order
 
 logger = logging.getLogger("meridian.pos.website_dispatch")
 
@@ -70,8 +76,9 @@ async def mark_paid_and_dispatch(website_order_id: str, payment_txn_id: str = ""
 
 async def dispatch_website_order_to_pos(order_row: dict) -> dict:
     """Best-effort push of a stored website_orders row into the merchant's
-    POS. Returns {dispatched, pos_system?, pos_order_id?, reason?} and
-    records the outcome on the row. Never raises."""
+    POS, with a guaranteed SMS/email ticket fallback. Returns
+    {dispatched, method?, pos_system?, pos_order_id?, reason?}, records the
+    outcome on the row, never raises."""
     order_id = order_row.get("id", "")
     merchant_id = order_row.get("merchant_id", "")
     try:
@@ -86,50 +93,77 @@ async def dispatch_website_order_to_pos(order_row: dict) -> dict:
 
 async def _dispatch(order_row: dict, merchant_id: str) -> dict:
     # Same killswitch the phone path honors — one env var stops all
-    # Meridian-originated POS writes.
+    # Meridian-originated POS writes AND the notify fallback.
     if os.environ.get("POS_ORDERS_DISABLED", "").strip() in ("1", "true", "yes"):
         return {"dispatched": False, "reason": "pos_orders_disabled"}
 
     conn = await _resolve_connection(merchant_id)
-    if not conn:
-        return {"dispatched": False, "reason": "no_pos_connection"}
-
-    system_key = resolve_alias(conn["system"])
+    system_key = resolve_alias(conn["system"]) if conn else ""
     order_id = order_row.get("id", "")
 
-    if system_key == "clover":
-        result = await submit_clover_kitchen_order(
-            access_token=conn["token"],
-            external_merchant_id=conn["external_merchant_id"],
-            order={**order_row, "order_ref": order_id},
-            source_tag=SOURCE_TAG,
-        )
-        if result.get("success"):
-            logger.info(
-                "website order %s → clover order %s (kitchen print %s)",
-                order_id, result.get("pos_order_id"),
-                "fired" if result.get("kitchen_print_fired") else "NOT fired",
+    api_result: dict | None = None
+    if conn:
+        if system_key == "clover":
+            api_result = await submit_clover_kitchen_order(
+                access_token=conn["token"],
+                external_merchant_id=conn["external_merchant_id"],
+                order={**order_row, "order_ref": order_id},
+                source_tag=SOURCE_TAG,
             )
-            return {
-                "dispatched": True,
-                "pos_system": "clover",
-                "pos_order_id": result.get("pos_order_id", ""),
-                "kitchen_print_fired": result.get("kitchen_print_fired", False),
-            }
-        return {
-            "dispatched": False,
-            "pos_system": "clover",
-            "reason": result.get("reason", "clover_error"),
+        elif system_key == "square":
+            api_result = await submit_square_kitchen_order(
+                access_token=conn["token"],
+                location_id=conn["location_id"],
+                order={**order_row, "order_ref": order_id},
+                source_tag=SOURCE_TAG,
+            )
+        else:
+            api_result = await _generic_api_dispatch(system_key, order_row, conn)
+
+    if api_result and api_result.get("success"):
+        logger.info("website order %s → %s order %s", order_id, system_key,
+                    api_result.get("pos_order_id"))
+        out = {
+            "dispatched": True,
+            "method": "api",
+            "pos_system": system_key,
+            "pos_order_id": api_result.get("pos_order_id", ""),
         }
+        if "kitchen_print_fired" in api_result:
+            out["kitchen_print_fired"] = api_result["kitchen_print_fired"]
+        return out
 
-    # Non-Clover systems: reuse the generic dispatcher; the tag rides in the
-    # order-level notes so it still shows on the ticket.
-    pos_config = _build_pos_config(system_key, conn)
-    if pos_config is None:
-        return {"dispatched": False, "reason": f"unsupported_system:{system_key}"}
+    # Universal fallback: a PAID order must never be stranded. Text (then
+    # email) the full kitchen ticket to the merchant's own contact info.
+    api_reason = (api_result or {}).get("reason", "") if conn else "no_pos_connection"
+    notify = await _notify_merchant(order_row, api_reason)
+    if notify.get("delivered"):
+        return {
+            "dispatched": True,
+            "method": notify["method"],
+            "pos_system": system_key or "none",
+            "pos_order_id": "",
+            "delivery_note": f"POS unavailable ({api_reason}); ticket sent via {notify['method']}",
+        }
+    return {
+        "dispatched": False,
+        "pos_system": system_key or "none",
+        "reason": f"{api_reason}; notify failed: {notify.get('reason', 'no merchant contact')}",
+    }
 
+
+async def _generic_api_dispatch(system_key: str, order_row: dict, conn: dict) -> dict:
+    """Non-Clover/Square API systems: best effort via the generic REST
+    connector. Merchant contact is deliberately NOT passed here — its internal
+    SMS/email fallback would race ours; we own the notify path."""
+    api_config = get_connector_config(system_key)
+    if not api_config or not api_config.get("supports_orders") \
+            or api_config.get("auth_type") == "csv_only":
+        return {"success": False, "reason": f"no_order_api:{system_key}"}
+
+    pos_config = _build_pos_config(system_key, conn, api_config)
     paid = order_row.get("status") == "paid"
-    tag_note = f"{SOURCE_TAG} #{order_id[:8].upper()} — {order_row.get('customer_name', '')}"
+    tag_note = f"{SOURCE_TAG} #{order_row.get('id', '')[:8].upper()} — {order_row.get('customer_name', '')}"
     if paid:
         tag_note = f"{tag_note} — PAID ONLINE, do not collect"
     existing_notes = (order_row.get("special_instructions") or "").strip()
@@ -142,16 +176,86 @@ async def _dispatch(order_row: dict, merchant_id: str) -> dict:
     }
     result = await create_pos_order(system_key, order_data, config=pos_config)
     if result.success and not result.fallback_used:
-        return {
-            "dispatched": True,
-            "pos_system": system_key,
-            "pos_order_id": result.order_id or "",
-        }
-    return {
-        "dispatched": False,
-        "pos_system": system_key,
-        "reason": result.fallback_reason or "pos_error",
-    }
+        return {"success": True, "pos_order_id": result.order_id or ""}
+    return {"success": False, "reason": result.fallback_reason or "pos_error"}
+
+
+async def _notify_merchant(order_row: dict, api_reason: str) -> dict:
+    """Deliver the full kitchen ticket to the merchant by SMS, then email.
+    Contact comes from their website record (phone/email shown on the site),
+    falling back to phone_agent_config."""
+    contact = await _merchant_contact(order_row)
+    if not (contact["phone"] or contact["email"]):
+        return {"delivered": False, "reason": "no_merchant_contact"}
+
+    ticket = build_kitchen_note(order_row, SOURCE_TAG)
+    header = f"🍽 NEW PAID MOBILE ORDER — {contact['name'] or 'your restaurant'}"
+    if api_reason and api_reason != "no_pos_connection":
+        header += "\n(POS delivery failed — ticket below; also in your Meridian dashboard)"
+    else:
+        header += "\n(ticket below; also in your Meridian dashboard)"
+    body = f"{header}\n\n{ticket}"
+
+    if contact["phone"]:
+        try:
+            from ...sms.client import send_sms
+
+            res = await send_sms(contact["phone"], body)
+            if res.get("sent"):
+                return {"delivered": True, "method": "sms"}
+            logger.warning("mobile-order SMS notify failed: %s", res.get("reason"))
+        except Exception as e:  # noqa: BLE001 — fall through to email
+            logger.warning("mobile-order SMS notify error: %s", e)
+
+    if contact["email"]:
+        try:
+            from ...email.postal_client import PostalClient
+
+            html = "<pre style='font-size:14px;line-height:1.5'>" + (
+                body.replace("&", "&amp;").replace("<", "&lt;")) + "</pre>"
+            res = await PostalClient().send(
+                to=contact["email"],
+                subject=f"New PAID mobile order — {order_row.get('customer_name', 'customer')}",
+                html=html,
+                tag="mobile-order",
+            )
+            if res.get("status") in ("sent", "queued") or res.get("id"):
+                return {"delivered": True, "method": "email"}
+            logger.warning("mobile-order email notify failed: %s", res)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("mobile-order email notify error: %s", e)
+
+    return {"delivered": False, "reason": "sms_and_email_failed"}
+
+
+async def _merchant_contact(order_row: dict) -> dict:
+    from ...db import get_db
+
+    db = get_db()
+    phone = email = name = ""
+    try:
+        website_id = order_row.get("website_id", "")
+        if website_id:
+            rows = await db.select(
+                "merchant_websites", "phone,email,business_name",
+                filters={"id": f"eq.{website_id}"}, limit=1,
+            )
+            if rows:
+                phone = (rows[0].get("phone") or "").strip()
+                email = (rows[0].get("email") or "").strip()
+                name = (rows[0].get("business_name") or "").strip()
+        if not (phone or email):
+            rows = await db.select(
+                "phone_agent_config", "merchant_phone,merchant_email,business_name",
+                filters={"merchant_id": f"eq.{order_row.get('merchant_id', '')}"}, limit=1,
+            )
+            if rows:
+                phone = phone or (rows[0].get("merchant_phone") or "").strip()
+                email = email or (rows[0].get("merchant_email") or "").strip()
+                name = name or (rows[0].get("business_name") or "").strip()
+    except Exception as e:  # noqa: BLE001 — no contact just means notify can't deliver
+        logger.warning("merchant contact lookup failed: %s", e)
+    return {"phone": phone, "email": email, "name": name}
 
 
 async def _resolve_connection(merchant_id: str) -> dict | None:
@@ -191,12 +295,9 @@ def _connection_token(conn: dict) -> str:
     return (_decrypt_connection_token(conn) or "").strip()
 
 
-def _build_pos_config(system_key: str, conn: dict):
+def _build_pos_config(system_key: str, conn: dict, api_config: dict):
     from .base import POSConnectionConfig
 
-    api_config = get_connector_config(system_key)
-    if not api_config or not api_config.get("supports_orders"):
-        return None
     return POSConnectionConfig(
         system_key=system_key,
         system_name=api_config.get("system_name") or system_key,
@@ -227,14 +328,15 @@ async def _record_outcome(order_id: str, result: dict) -> None:
         db = get_db()
         update: dict = {
             "pos_status": "sent" if result.get("dispatched") else (
-                "skipped" if result.get("reason") in ("no_pos_connection", "pos_orders_disabled")
-                else "failed"
+                "skipped" if result.get("reason") == "pos_orders_disabled" else "failed"
             ),
         }
         if result.get("pos_order_id"):
             update["pos_order_id"] = result["pos_order_id"]
         if result.get("dispatched"):
             update["pos_sent_at"] = datetime.now(timezone.utc).isoformat()
+            if result.get("delivery_note"):
+                update["pos_error"] = result["delivery_note"][:500]
         elif result.get("reason"):
             update["pos_error"] = str(result["reason"])[:500]
         await db.update("website_orders", update, {"id": f"eq.{order_id}"})
