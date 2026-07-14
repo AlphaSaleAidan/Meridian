@@ -25,19 +25,29 @@ export default function ProtectedRoute({ children, loginPath = '/customer/login'
     return <Navigate to={loginPath} state={{ from: location.pathname + location.search }} replace />
   }
 
-  if (!allowSalesReps) {
-    if ((salesAuth.authenticated || isSalesRep) && !org) {
-      return <AccessDenied type="sales-rep" />
-    }
+  // Sales reps must NEVER reach the customer portal — even when the same
+  // account also resolves to a business/org (a stale localStorage org, or their
+  // email appearing in `organizations`). Section isolation is by design: reps
+  // belong in the sales portal. The previous `&& !org` let any rep with an org
+  // association walk straight in.
+  if (!allowSalesReps && (salesAuth.authenticated || isSalesRep)) {
+    return <AccessDenied type="sales-rep" />
   }
 
   if (!org) {
     return <Navigate to={loginPath} state={{ from: location.pathname + location.search }} replace />
   }
 
-  const isCanada = location.pathname.startsWith('/canada/')
-  if (!org.onboarded && isCanada && !location.pathname.includes('/setup')) {
-    return <Navigate to="/canada/setup" replace />
+  // First-login gate: a not-yet-onboarded merchant is sent to the region's
+  // setup wizard (welcome + password reset + connect). US mirrors Canada — the
+  // redirect used to fire for Canada only, so US merchants skipped setup.
+  if (!org.onboarded && !location.pathname.includes('/setup')) {
+    if (location.pathname.startsWith('/canada/')) {
+      return <Navigate to="/canada/setup" replace />
+    }
+    if (location.pathname.startsWith('/us/')) {
+      return <Navigate to="/us/setup" replace />
+    }
   }
 
   return <>{children}</>
