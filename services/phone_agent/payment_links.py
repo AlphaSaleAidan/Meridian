@@ -205,8 +205,33 @@ async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: 
     )
 
 
+async def create_website_checkout(
+    order: dict[str, Any],
+    merchant_config,
+    website_order_id: str,
+    success_url: str = "",
+    cancel_url: str = "",
+) -> dict:
+    """Stripe-ONLY checkout for website/mobile orders. Unlike create_checkout
+    there is no per-POS payment-link fallback: mobile orders must be paid
+    through Stripe before the kitchen sees them, so this raises instead of
+    degrading. The session carries website_order_id in metadata — the Connect
+    webhook uses it to mark the order paid and release the kitchen ticket."""
+    if not (UNIFIED_PAYMENTS_ENABLED and STRIPE_SECRET_KEY):
+        raise RuntimeError("stripe_not_configured")
+    acct = getattr(merchant_config, "stripe_account_id", "")
+    charges_ok = getattr(merchant_config, "stripe_charges_enabled", False)
+    connect_account = acct if (acct and charges_ok) else ""
+    return await _stripe_checkout(
+        order, merchant_config, "", connect_account,
+        extra_metadata={"website_order_id": website_order_id},
+        success_url=success_url, cancel_url=cancel_url,
+    )
+
+
 async def _stripe_checkout(
-    order: dict[str, Any], merchant_config, pos_order_id: str, connect_account: str = ""
+    order: dict[str, Any], merchant_config, pos_order_id: str, connect_account: str = "",
+    extra_metadata: dict | None = None, success_url: str = "", cancel_url: str = "",
 ) -> dict:
     """Stripe hosted Checkout (POS-agnostic). With `connect_account` → a
     destination charge to that connected account + Meridian application fee.
@@ -247,8 +272,8 @@ async def _stripe_checkout(
     kwargs: dict[str, Any] = dict(
         mode="payment",
         line_items=line_items,
-        success_url=SUCCESS_URL,
-        cancel_url=CANCEL_URL,
+        success_url=success_url or SUCCESS_URL,
+        cancel_url=cancel_url or CANCEL_URL,
         # Show the promo-code field on Checkout — lets us apply a discount code on
         # test runs and supports real merchant promotions. (Stripe's minimum live
         # charge is $0.50 CAD, so a code can reduce the total to $0.50, or to $0
@@ -259,6 +284,7 @@ async def _stripe_checkout(
             "merchant_id": order.get("merchant_id", ""),
             "pos_order_id": pos_order_id,
             "caller_phone": order.get("caller_phone", ""),
+            **(extra_metadata or {}),
         },
     )
     if connect_account:

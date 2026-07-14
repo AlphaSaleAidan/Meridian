@@ -16,8 +16,8 @@ Endpoints:
   DELETE /api/website/{merchant_id}         → Soft-delete merchant website
 """
 
-import asyncio
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -34,10 +34,6 @@ logger = logging.getLogger("meridian.api.website")
 router = APIRouter(prefix="/api/website", tags=["website"])
 
 _UUID_RE = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.I)
-
-# Background POS pushes need a strong reference until done or the event loop
-# may garbage-collect the task mid-flight.
-_POS_DISPATCH_TASKS: set[asyncio.Task] = set()
 
 
 # ── Request/Response Models ───────────────────────────────────
@@ -452,6 +448,7 @@ async def get_public_website(slug: str):
     # Return full public data (exclude sensitive/internal fields)
     return {
         "active": True,
+        "id": site.get("id"),  # needed by the ordering cart to POST /order
         "business_name": site.get("business_name"),
         "business_type": site.get("business_type"),
         "tagline": site.get("tagline"),
@@ -652,16 +649,24 @@ async def create_website_order(req: CreateOrderRequest):
         sys.path.insert(0, _phone_agent_dir)
     import payment_links  # type: ignore[import]
 
+    # Merchant payment/tier config drives the fee model AND the Stripe Connect
+    # routing (destination charge to their account vs platform-direct).
+    plan_tier = ""
+    stripe_account_id = ""
+    stripe_charges_enabled = False
+    try:
+        cfg_rows = await db.select(
+            "phone_agent_config", "plan_tier,stripe_account_id,stripe_charges_enabled",
+            filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
+        )
+        if cfg_rows:
+            plan_tier = (cfg_rows[0].get("plan_tier") or "")
+            stripe_account_id = (cfg_rows[0].get("stripe_account_id") or "").strip()
+            stripe_charges_enabled = bool(cfg_rows[0].get("stripe_charges_enabled"))
+    except Exception as e:  # noqa: BLE001 — unknown tier → default rate, platform charge
+        logger.warning(f"payment config lookup failed for {merchant_id}: {e}")
+
     if payment_links.FEE_SPLIT_ENABLED:
-        plan_tier = ""
-        try:
-            tier_rows = await db.select(
-                "phone_agent_config", "plan_tier",
-                filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
-            )
-            plan_tier = (tier_rows[0].get("plan_tier") if tier_rows else "") or ""
-        except Exception as e:  # noqa: BLE001 — unknown tier → default rate
-            logger.warning(f"plan_tier lookup failed for {merchant_id}: {e}")
         fee_amount = round(
             payment_links.customer_surcharge_cents(plan_tier, currency.lower()) / 100, 2)
         merchant_fee_amount = round(subtotal * float(fee_rate), 2)
@@ -686,7 +691,10 @@ async def create_website_order(req: CreateOrderRequest):
         "fee_amount": fee_amount,
         "total": total,
         "currency": currency,
-        "status": "pending",
+        # Pay-first flow: every mobile order is paid through Stripe BEFORE the
+        # kitchen sees it. The Connect webhook flips this to "paid" and only
+        # then releases the POS/kitchen dispatch (as a PAID ticket).
+        "status": "awaiting_payment",
         "created_at": now,
     }
     if payment_links.FEE_SPLIT_ENABLED:
@@ -695,21 +703,64 @@ async def create_website_order(req: CreateOrderRequest):
         order_row["merchant_fee_amount"] = merchant_fee_amount
     await db.insert("website_orders", order_row)
 
-    # Push the ticket into the merchant's POS (Clover: tagged order + line
-    # items + kitchen print event) in the background — the customer's
-    # confirmation never waits on, or fails because of, the POS round-trip.
-    # The order row above is the source of truth either way.
-    try:
-        from ...services.pos_connectors.website_order_dispatch import (
-            dispatch_website_order_to_pos,
-        )
-        task = asyncio.create_task(dispatch_website_order_to_pos(dict(order_row)))
-        _POS_DISPATCH_TASKS.add(task)
-        task.add_done_callback(_POS_DISPATCH_TASKS.discard)
-    except Exception as e:  # noqa: BLE001 — ordering must survive a dispatch bug
-        logger.warning(f"POS dispatch scheduling failed for order {order_id}: {e}")
+    # Stripe Checkout for the full customer total. Item lines charge the
+    # subtotal; under the fee split _stripe_checkout adds the surcharge line
+    # itself (same helper that produced fee_amount above), under legacy we add
+    # the ordering fee as its own line — either way charge == `total`.
+    checkout_items = [
+        {
+            "name": item.get("name", "Item"),
+            "price": item.get("price", 0),
+            "quantity": item.get("quantity", 1),
+        }
+        for item in req.items
+    ]
+    if not payment_links.FEE_SPLIT_ENABLED and fee_amount > 0:
+        checkout_items.append({"name": "Online ordering fee", "price": fee_amount, "quantity": 1})
 
-    logger.info(f"Created order {order_id} for merchant {merchant_id}: ${total}")
+    site_base = os.getenv("PUBLIC_SITE_BASE", "https://meridian.tips").rstrip("/")
+    site_url = f"{site_base}/sites/{site.get('slug', '')}"
+    from types import SimpleNamespace
+    merchant_cfg = SimpleNamespace(
+        plan_tier=plan_tier,
+        stripe_account_id=stripe_account_id,
+        stripe_charges_enabled=stripe_charges_enabled,
+    )
+    try:
+        checkout = await payment_links.create_website_checkout(
+            {
+                "merchant_id": merchant_id,
+                "caller_phone": req.customer_phone or "",
+                "currency": currency.lower(),
+                "items": checkout_items,
+                "total": subtotal if payment_links.FEE_SPLIT_ENABLED else total,
+            },
+            merchant_cfg,
+            website_order_id=order_id,
+            success_url=f"{site_url}?order=success&oid={order_id}",
+            cancel_url=f"{site_url}?order=cancelled&oid={order_id}",
+        )
+    except Exception as e:  # noqa: BLE001 — fail closed: unpaid orders never reach the kitchen
+        logger.error(f"Stripe checkout create failed for order {order_id}: {e}")
+        try:
+            await db.update("website_orders", {"status": "payment_unavailable"},
+                            {"id": f"eq.{order_id}"})
+        except Exception:  # noqa: BLE001
+            pass
+        raise HTTPException(
+            503,
+            "Online payment is temporarily unavailable — please call the restaurant to order.",
+        )
+
+    try:
+        await db.update("website_orders", {"stripe_session_id": checkout.get("session_id", "")},
+                        {"id": f"eq.{order_id}"})
+    except Exception as e:  # noqa: BLE001 — pre-migration-040 schema; webhook metadata still links them
+        logger.warning(f"could not record stripe_session_id on order {order_id}: {e}")
+
+    logger.info(
+        f"Created order {order_id} for merchant {merchant_id}: ${total} → awaiting Stripe payment"
+    )
     return {
         "ok": True,
         "order_id": order_id,
@@ -718,7 +769,30 @@ async def create_website_order(req: CreateOrderRequest):
         "merchant_fee_amount": merchant_fee_amount,
         "total": total,
         "currency": currency,
-        "status": "pending",
+        "status": "awaiting_payment",
+        "checkout_url": checkout.get("checkout_url") or checkout.get("url", ""),
+        "pay_url": checkout.get("url", ""),
+    }
+
+
+@router.get("/order/{order_id}/status")
+async def get_order_status(order_id: str):
+    """Public, minimal order status — polled by the post-checkout success page
+    so the customer can see their ticket reach the kitchen. Exposes nothing but
+    coarse status strings for an unguessable UUID."""
+    if not _UUID_RE.match(order_id):
+        raise HTTPException(400, "Invalid order id")
+    db = get_db()
+    rows = await db.select(
+        "website_orders", "id,status,pos_status",
+        filters={"id": f"eq.{order_id}"}, limit=1,
+    )
+    if not rows:
+        raise HTTPException(404, "Order not found")
+    return {
+        "order_id": order_id,
+        "status": rows[0].get("status"),
+        "pos_status": rows[0].get("pos_status"),
     }
 
 
