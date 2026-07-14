@@ -2,8 +2,12 @@
 # Heavy packages (torch-dependent) are commented out to avoid OOM on Railway.
 
 # Vision — Camera Detection (lazy import in src/camera/detector.py)
-# ultralytics>=8.4.0    # pulls torch ~2GB — OOM on Railway
-# supervision>=0.28.0   # depends on ultralytics
+# ultralytics>=8.4.0    # pulls torch ~2GB — OOM on Railway; the API instead
+#                       # runs the bundled yolo11n.onnx via onnxruntime (below)
+# supervision installs WITHOUT ultralytics/torch (ByteTrack + PolygonZone only).
+# Pin <0.30: ByteTrack is removed in 0.30.
+supervision>=0.28.0,<0.30
+onnxruntime>=1.17
 opencv-python-headless>=4.8.0
 lapx>=0.9.0
 

@@ -8,13 +8,23 @@ import warnings
 
 import numpy as np
 
+# supervision (ByteTrack/PolygonZone) installs without torch and is required
+# for tracking either way; ultralytics (torch, ~2GB) is optional — when it's
+# absent we fall back to the ONNX backend, which runs the same yolo11n weights
+# on onnxruntime CPU. That's the production posture on Railway, where torch
+# OOMs the image build.
 try:
     import supervision as sv
-    from ultralytics import YOLO
     warnings.filterwarnings("ignore", message=".*ByteTrack.*deprecated.*")
 except ImportError:
     sv = None
+
+try:
+    from ultralytics import YOLO
+except ImportError:
     YOLO = None
+
+from .onnx_yolo import OnnxPersonModel, model_available as _onnx_available
 
 logger = logging.getLogger("meridian.camera.detector")
 
@@ -30,10 +40,35 @@ DEFAULT_CONFIDENCE = float(os.environ.get("MERIDIAN_VISION_CONFIDENCE", "0.45"))
 class MeridianDetector:
 
     def __init__(self, model_size: str = "yolo11n", confidence: float | None = None) -> None:
-        self._model = YOLO(model_size)
+        if sv is None:
+            raise RuntimeError(
+                "supervision is not installed — vision tracking unavailable"
+            )
+        if YOLO is not None:
+            self._model = YOLO(model_size)
+            self._onnx = None
+        elif _onnx_available():
+            self._model = None
+            self._onnx = OnnxPersonModel()
+            logger.info("ultralytics unavailable — using ONNX vision backend")
+        else:
+            raise RuntimeError(
+                "No vision backend: install ultralytics, or onnxruntime plus the "
+                "bundled yolo11n.onnx (src/camera/models/)"
+            )
         self._tracker = sv.ByteTrack()
         self._confidence = DEFAULT_CONFIDENCE if confidence is None else confidence
         self._polygon_zone_cache: dict[str, Any] = {}
+
+    def _infer_persons(self, frame: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Run the active backend → (xyxy [N,4] px, confidence [N]) for persons."""
+        if self._model is not None:
+            results = self._model(frame, verbose=False)[0]
+            boxes = results.boxes
+            mask = boxes.cls.cpu().numpy().astype(int) == PERSON_CLASS
+            person_boxes = boxes[mask]
+            return person_boxes.xyxy.cpu().numpy(), person_boxes.conf.cpu().numpy()
+        return self._onnx.infer(frame)
 
     def process_frame(
         self,
@@ -42,16 +77,12 @@ class MeridianDetector:
         camera_id: str,
         zone_map: dict[str, list[list[float]]] | None = None,
     ) -> dict[str, Any]:
-        results = self._model(frame, verbose=False)[0]
-
-        boxes = results.boxes
-        mask = boxes.cls.cpu().numpy().astype(int) == PERSON_CLASS
-        person_boxes = boxes[mask]
+        xyxy, conf = self._infer_persons(frame)
 
         detections = sv.Detections(
-            xyxy=person_boxes.xyxy.cpu().numpy(),
-            confidence=person_boxes.conf.cpu().numpy(),
-            class_id=person_boxes.cls.cpu().numpy().astype(int),
+            xyxy=xyxy,
+            confidence=conf,
+            class_id=np.zeros(len(conf), dtype=int),
         )
 
         detections = detections[detections.confidence >= self._confidence]
