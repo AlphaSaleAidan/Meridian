@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, ChevronRight, Shield, Clock, Menu, X, Bot, Phone, TrendingUp, MapPin } from 'lucide-react'
+import { ArrowRight, ChevronRight, Shield, Clock, Menu, X, Bot, Phone, TrendingUp } from 'lucide-react'
 
 import { useGsapTimeline, useGsapFrom } from '@/hooks/useGsapScrollTrigger'
 import SEO from '@/components/SEO'
@@ -136,7 +136,7 @@ export default function LandingPage() {
               className="px-4 py-1.5 text-[13px] font-medium text-[#F5F5F7] rounded-md hover:brightness-110 transition-all duration-200"
               style={{ backgroundColor: ACCENT }}
             >
-              Start Free
+              Start Today
             </MagneticButton>
           </div>
           <div className="flex md:hidden items-center gap-2">
@@ -161,7 +161,7 @@ export default function LandingPage() {
             <div className="max-w-content mx-auto px-6 py-3 flex flex-col gap-1">
               {[
                 { label: 'Customer Login', path: '/customer/login', accent: true },
-                { label: 'Start Free', path: '/us/onboard' },
+                { label: 'Start Today', path: '/us/onboard' },
                 { label: 'Live Demo', path: '/demo' },
                 { label: 'Blog', path: '/blog' },
                 { label: 'Careers', path: '/careers' },
@@ -254,7 +254,7 @@ export default function LandingPage() {
               className="group px-6 py-3 text-[14px] font-medium text-white rounded-lg transition-all duration-300 flex items-center gap-2"
               style={{ backgroundColor: ACCENT, boxShadow: `0 0 32px ${ACCENT}30` }}
             >
-              Start Free
+              Start Today
               <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
             </MagneticButton>
             <MagneticButton
@@ -511,51 +511,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── REGIONAL PORTALS ─────────────────────── */}
-      <section className="py-20 border-t border-[#1F1F23]/40 relative overflow-hidden">
-        <div className="absolute top-1/3 right-1/4 aurora-glow" style={{ width: 500, height: 500, opacity: 0.06, background: `radial-gradient(circle, ${ACCENT_CA} 0%, transparent 70%)` }} />
-        <div className="max-w-content mx-auto px-6 relative">
-          <ScrollReveal>
-            <div className="rounded-2xl border border-[#1F1F23] bg-[#111113] p-8 md:p-12 flex flex-col md:flex-row items-center gap-8 md:gap-12">
-              <div className="flex-1">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#1F1F23] bg-[#0A0A0B] text-xs font-medium mb-4" style={{ color: ACCENT_CA }}>
-                  <MapPin size={12} /> North America
-                </div>
-                <h3 className="text-2xl md:text-3xl font-bold text-[#F5F5F7] tracking-tight leading-tight">
-                  Built for the US.{' '}
-                  <span style={{ color: ACCENT_CA }}>Built for Canada.</span>
-                </h3>
-                <p className="mt-4 text-[#A1A1A8] text-[15px] leading-relaxed max-w-md">
-                  The same merchant portal on both sides of the border — USD pricing with
-                  Square, Toast &amp; Clover in the US; CAD pricing with Moneris &amp; Alice POS
-                  in Canada, aligned with PIPEDA and Quebec Law 25. Consent, retention, and
-                  encryption by design.
-                </p>
-                <div className="mt-6 flex flex-wrap items-center gap-4">
-                  <MagneticButton
-                    onClick={() => navigate('/canada')}
-                    className="group px-6 py-3 text-[14px] font-medium text-white rounded-lg transition-all duration-300 flex items-center gap-2 hover:brightness-110"
-                    style={{ backgroundColor: ACCENT_CA }}
-                  >
-                    Explore Canadian Portal
-                    <ArrowRight size={15} className="transition-transform duration-300 group-hover:translate-x-0.5" />
-                  </MagneticButton>
-                  <span className="text-[#A1A1A8] text-sm">From CA$339/mo</span>
-                </div>
-              </div>
-              <div className="flex-shrink-0 hidden md:flex flex-col items-center gap-3">
-                <div className="w-20 h-20 rounded-2xl flex items-center justify-center border border-[#1F1F23]" style={{ backgroundColor: `${ACCENT_CA}08` }}>
-                  <span className="text-4xl">🍁</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-[#A1A1A8]/60">
-                  <Shield size={12} /> PIPEDA · Law 25
-                </div>
-              </div>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
-
       {/* ─── TESTIMONIALS ─────────────────────────── */}
       <section className="py-24 border-t border-[#1F1F23]/40">
         <div className="max-w-content mx-auto px-6">
@@ -644,7 +599,7 @@ export default function LandingPage() {
                 className="group px-8 py-3.5 text-[15px] font-medium text-white rounded-lg transition-all duration-300 inline-flex items-center gap-2 hover:brightness-110"
                 style={{ backgroundColor: ACCENT, boxShadow: `0 0 40px ${ACCENT}35` }}
               >
-                Start Free
+                Start Today
                 <ArrowRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" />
               </MagneticButton>
             </div>
@@ -713,7 +668,7 @@ export default function LandingPage() {
                   { label: 'Canadian Portal', path: '/canada' },
                   { label: 'Careers', path: '/careers' },
                   { label: 'Customer Login', path: '/customer/login' },
-                  { label: 'Start Free', path: '/us/onboard' },
+                  { label: 'Start Today', path: '/us/onboard' },
                 ].map(l => (
                   <li key={l.path}>
                     <a onClick={() => navigate(l.path)} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">{l.label}</a>

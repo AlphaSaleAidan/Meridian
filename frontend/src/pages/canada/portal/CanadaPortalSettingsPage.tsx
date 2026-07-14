@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Settings, User, Bell, Shield, Check, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { supabase } from '@/lib/supabase'
+import { COMMISSION_TRACKING_PAUSED } from '@/lib/commission-flags'
 
 export default function CanadaPortalSettingsPage() {
   const { rep } = useSalesAuth()
@@ -119,7 +120,7 @@ export default function CanadaPortalSettingsPage() {
             { key: 'email_commission' as const, label: 'Commission earned', desc: 'Receive alerts when commissions are recorded' },
             { key: 'email_payout' as const, label: 'Payout processed', desc: 'Get notified when payouts are completed' },
             { key: 'email_weekly_report' as const, label: 'Weekly sales report', desc: 'Receive a weekly summary of your sales activity' },
-          ].map(item => (
+          ].filter(item => !COMMISSION_TRACKING_PAUSED || (item.key !== 'email_commission' && item.key !== 'email_payout')).map(item => (
             <label key={item.key} className="flex items-center justify-between py-2 cursor-pointer">
               <div>
                 <p className="text-2xs font-medium text-white">{item.label}</p>

@@ -6,6 +6,7 @@ import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
 import { formatCad } from '@/lib/format'
+import { COMMISSION_TRACKING_PAUSED } from '@/lib/commission-flags'
 import { PortalPage } from './PortalPage'
 
 interface TeamMember {
@@ -317,7 +318,10 @@ export default function CanadaPortalTeamPage() {
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
-        <p className="text-sm text-pm-canada-text-muted mt-0.5">{admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
+        <p className="text-sm text-pm-canada-text-muted mt-0.5">{admin ? (COMMISSION_TRACKING_PAUSED ? 'Manage your sales reps and applications.' : 'Manage your sales reps, commissions, and payouts.') : 'See how you stack up against the team.'}</p>
+        {COMMISSION_TRACKING_PAUSED && (
+          <p className="text-2xs text-pm-canada-text-faint mt-1">Commission tracking is temporarily paused.</p>
+        )}
       </div>
 
       <PortalPage
@@ -329,7 +333,7 @@ export default function CanadaPortalTeamPage() {
 
       {/* Stat Cards */}
       {admin ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={clsx('grid grid-cols-2 gap-4', COMMISSION_TRACKING_PAUSED ? 'lg:grid-cols-2' : 'lg:grid-cols-4')}>
           <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
@@ -354,32 +358,36 @@ export default function CanadaPortalTeamPage() {
               </div>
             </div>
           </div>
-          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-pm-purple/10 flex items-center justify-center">
-                <DollarSign size={16} className="text-pm-purple" />
-              </div>
-              <div>
-                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Total Commissions</p>
-                <p className="text-lg font-bold text-white">{formatCad(totalCommission)}</p>
-                <p className="text-2xs text-pm-canada-text-faint">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-pm-amber-orange/10 flex items-center justify-center">
-                <CreditCard size={16} className="text-pm-amber-orange" />
-              </div>
-              <div>
-                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Balance Owed</p>
-                <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-pm-amber-orange' : 'text-white')}>
-                  {formatCad(balanceOwed)}
-                </p>
-                <p className="text-2xs text-pm-canada-text-faint">{wonDeals.length} signed deals</p>
+          {!COMMISSION_TRACKING_PAUSED && (
+            <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-pm-purple/10 flex items-center justify-center">
+                  <DollarSign size={16} className="text-pm-purple" />
+                </div>
+                <div>
+                  <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Total Commissions</p>
+                  <p className="text-lg font-bold text-white">{formatCad(totalCommission)}</p>
+                  <p className="text-2xs text-pm-canada-text-faint">{formatCad(totalPaid)} paid · {formatCad(monthlyCommissionOwed)}/mo rate</p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+          {!COMMISSION_TRACKING_PAUSED && (
+            <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-pm-amber-orange/10 flex items-center justify-center">
+                  <CreditCard size={16} className="text-pm-amber-orange" />
+                </div>
+                <div>
+                  <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Balance Owed</p>
+                  <p className={clsx('text-lg font-bold', balanceOwed > 0 ? 'text-pm-amber-orange' : 'text-white')}>
+                    {formatCad(balanceOwed)}
+                  </p>
+                  <p className="text-2xs text-pm-canada-text-faint">{wonDeals.length} signed deals</p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
@@ -437,7 +445,7 @@ export default function CanadaPortalTeamPage() {
         >
           Leaderboard
         </button>
-        {admin && (
+        {admin && !COMMISSION_TRACKING_PAUSED && (
           <button
             onClick={() => setActiveTab('payouts')}
             className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'payouts' ? 'bg-pm-canada-border text-white' : 'text-pm-canada-text-muted hover:text-white')}
@@ -508,15 +516,17 @@ export default function CanadaPortalTeamPage() {
                             <p className="text-2xs text-pm-canada-text-faint">MRR</p>
                             <p className="text-xs font-bold text-pm-accent">{formatCad(member.total_mrr)}</p>
                           </div>
-                          <div>
-                            <p className="text-2xs text-pm-canada-text-faint">Comm/mo</p>
-                            <p className="text-xs font-bold text-pm-purple">{formatCad(monthlyComm)}</p>
-                          </div>
+                          {!COMMISSION_TRACKING_PAUSED && (
+                            <div>
+                              <p className="text-2xs text-pm-canada-text-faint">Comm/mo</p>
+                              <p className="text-xs font-bold text-pm-purple">{formatCad(monthlyComm)}</p>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>
 
-                    {admin && (
+                    {admin && !COMMISSION_TRACKING_PAUSED && (
                       <div className="hidden sm:block">
                         <span className="text-sm font-bold text-pm-purple">{member.commission_rate}%</span>
                       </div>
@@ -596,7 +606,7 @@ export default function CanadaPortalTeamPage() {
                           <p className="text-2xs text-pm-canada-text-faint">MRR</p>
                           <p className="text-sm font-bold text-pm-accent">{formatCad(member.total_mrr)}</p>
                         </div>
-                        {admin && (
+                        {admin && !COMMISSION_TRACKING_PAUSED && (
                           <div>
                             <p className="text-2xs text-pm-canada-text-faint">Comm/mo</p>
                             <p className="text-sm font-bold text-pm-purple">{formatCad(monthlyComm)}</p>
@@ -635,7 +645,7 @@ export default function CanadaPortalTeamPage() {
       )}
 
       {/* Payouts Tab */}
-      {activeTab === 'payouts' && (
+      {activeTab === 'payouts' && !COMMISSION_TRACKING_PAUSED && (
         <div className="space-y-6">
           <div>
             <h3 className="text-sm font-semibold text-white mb-3">Rep Balances</h3>
@@ -808,11 +818,15 @@ export default function CanadaPortalTeamPage() {
               type="text" value={editName} onChange={e => setEditName(e.target.value)}
               className="w-full px-3 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white focus:outline-none focus:border-pm-accent/50 mb-4"
             />
-            <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Commission Rate (%)</label>
-            <input
-              type="number" min={0} max={100} value={editRate} onChange={e => setEditRate(e.target.value)}
-              className="w-full px-3 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white focus:outline-none focus:border-pm-accent/50"
-            />
+            {!COMMISSION_TRACKING_PAUSED && (
+              <>
+                <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Commission Rate (%)</label>
+                <input
+                  type="number" min={0} max={100} value={editRate} onChange={e => setEditRate(e.target.value)}
+                  className="w-full px-3 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white focus:outline-none focus:border-pm-accent/50"
+                />
+              </>
+            )}
             <button
               onClick={() => editingMember && handleRemoveMember(editingMember)}
               disabled={removing}

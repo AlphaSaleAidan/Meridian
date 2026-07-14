@@ -21,7 +21,7 @@ export default function CustomerSignupPage() {
   const [success, setSuccess] = useState<string | null>(null)
 
   useEffect(() => {
-    if (authenticated) navigate('/app', { replace: true })
+    if (authenticated) navigate('/us/merchant', { replace: true })
   }, [authenticated, navigate])
 
   useEffect(() => {

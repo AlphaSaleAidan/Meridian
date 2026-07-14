@@ -9,7 +9,10 @@ export default function CustomerLoginPage() {
   const location = useLocation()
   const { authenticated, login, resetPassword } = useAuth()
 
-  const from = (location.state as { from?: string })?.from || '/app'
+  // Land customers on the current merchant portal (pillars + connect wizard),
+  // not the legacy /app dashboard. A deep-link in location.state (e.g. an OAuth
+  // return) still wins; only the bare-login default changed.
+  const from = (location.state as { from?: string })?.from || '/us/merchant'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
