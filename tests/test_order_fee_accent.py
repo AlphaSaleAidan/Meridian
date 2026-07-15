@@ -194,3 +194,56 @@ def test_assistant_payload_wires_accent_voice_and_language():
     a = _assistant_for(cfg)
     assert a["voice"]["voiceId"] == "Savannah"
     assert "language" not in a["transcriber"]
+
+
+# ── 5. hard call cap (auto-drop at 5 min) ─────────────────────
+
+
+def _cap_cfg():
+    return SimpleNamespace(
+        merchant_id="m1", business_name="Maple Tandoor", business_type="restaurant",
+        greeting="", voice="Naina", language="en", accent="",
+        menu_items=[], order_types=["pickup"], business_hours={}, personality=None,
+        transfer_number="", special_instructions_enabled=True,
+        reservation_config=None, restaurant_brief="",
+    )
+
+
+def test_assistant_caps_call_at_max_minutes(monkeypatch):
+    import src.api.routes.vapi_webhook as vw
+    monkeypatch.setattr(vw, "VOICE_MAX_CALL_MIN", 5)
+    a = _assistant_for(_cap_cfg())
+    assert a["maxDurationSeconds"] == 300
+    # the agent is told about the cap so it lands orders before the drop
+    prompt = a["model"]["messages"][0]["content"]
+    assert "end automatically at 5 minutes" in prompt
+
+
+def test_cap_disabled_when_zero(monkeypatch):
+    import src.api.routes.vapi_webhook as vw
+    monkeypatch.setattr(vw, "VOICE_MAX_CALL_MIN", 0)
+    a = _assistant_for(_cap_cfg())
+    assert "maxDurationSeconds" not in a
+    assert "end automatically" not in a["model"]["messages"][0]["content"]
+
+
+def test_worst_case_overage_under_cap():
+    """With a 5-min cap and 3 included minutes, the max billable overage per
+    call is 2 min × 45¢ = 90¢ — the number disclosed on the rep pages."""
+    import math
+    import src.api.routes.vapi_webhook as vw
+    cap_min, over_rate, included = 5, vw.VOICE_OVERAGE_CENTS_PER_MIN, vw.VOICE_INCLUDED_MIN
+    worst = max(0, math.ceil(cap_min) - included) * over_rate
+    assert worst == 90
+
+
+@aio
+async def test_fees_endpoint_exposes_cap(monkeypatch):
+    monkeypatch.setenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5")
+    from src.api.routes.phone_dashboard import get_fee_settings
+    fees = await get_fee_settings()
+    assert fees["max_call_minutes"] == 5
+    assert fees["included_minutes"] == 3
+    monkeypatch.setenv("MERIDIAN_VOICE_MAX_CALL_MIN", "0")
+    fees = await get_fee_settings()
+    assert fees["max_call_minutes"] == 0

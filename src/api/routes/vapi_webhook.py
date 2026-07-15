@@ -61,6 +61,11 @@ VOICE_BALANCE_FLOOR_CENTS = int(_floor_raw) if _floor_raw.lstrip("-").isdigit() 
 # as billable revenue rather than added to the customer's order charge.
 VOICE_INCLUDED_MIN = int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3)
 VOICE_OVERAGE_CENTS_PER_MIN = int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45)
+# Hard call cap: Vapi force-ends the call at this length (maxDurationSeconds on
+# the assistant), so the worst case a merchant is billed per call is
+# (cap − included) × overage — 5 min ⇒ 2 min over ⇒ 90¢ — and our own Vapi
+# spend per call is capped with it. 0 disables the cap.
+VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 0)
 
 
 # ── merchant resolution ──────────────────────────────────────────────
@@ -262,7 +267,21 @@ def _system_prompt(config) -> str:
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
         "- Frustrated caller → brief apology, repeat back only the unclear part, ask once to clarify."
+        f"{_pacing_line()}"
         f"{menu}"
+    )
+
+
+def _pacing_line() -> str:
+    """When a hard call cap is set, tell the agent so it lands the order before
+    Vapi force-ends the call — read back and submit rather than getting dropped
+    mid-confirmation."""
+    if VOICE_MAX_CALL_MIN <= 0:
+        return ""
+    return (
+        f"\n- Calls end automatically at {VOICE_MAX_CALL_MIN} minutes. Keep the order moving; "
+        "if the call is running long, skip the upsell, read back the order, and submit it "
+        "before time runs out."
     )
 
 
@@ -340,7 +359,7 @@ def _assistant_for(config) -> dict:
     # personality.customGreeting (when set) overrides the standard greeting as
     # the spoken opener; _system_prompt's step-1 greet line uses the same value
     # so the prompt never contradicts what the caller just heard.
-    return {
+    assistant = {
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
         "transcriber": _transcriber_for(config),
@@ -350,6 +369,11 @@ def _assistant_for(config) -> dict:
                   "tools": [_SUBMIT_ORDER_TOOL]},
         "endCallFunctionEnabled": True,
     }
+    if VOICE_MAX_CALL_MIN > 0:
+        # Vapi drops the call at the cap; the prompt pacing line in
+        # _system_prompt keeps the agent moving so orders land before it.
+        assistant["maxDurationSeconds"] = VOICE_MAX_CALL_MIN * 60
+    return assistant
 
 
 def _confirm(args: dict, routed: dict) -> str:
