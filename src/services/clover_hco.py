@@ -185,6 +185,17 @@ def clover_fee_cents(sess: dict[str, Any]) -> int:
             override_cents=(int(override) if override is not None else None))
         subtotal = max(amount - surcharge, 0)
         return _pl.split_application_fee_cents(subtotal, surcharge)
+    # Flat model: the rep-negotiated per-order fee still wins over the env
+    # default — mirrors the Stripe rail (application_fee_cents(service_fee_
+    # cents=override) / _merchant_service_fee_cents). Without this, live
+    # flat-model Clover settlements booked the env fee and silently ignored
+    # what the rep sold.
+    override = (sess.get("payload") or {}).get("fee_override_cents")
+    if override is not None:
+        try:
+            return max(int(override), 0)
+        except (TypeError, ValueError):
+            pass
     return int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
 
 

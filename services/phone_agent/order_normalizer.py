@@ -14,6 +14,8 @@ logger = logging.getLogger("meridian.phone_agent.normalizer")
 def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> dict:
     items = []
     subtotal = 0.0
+    unavailable: list[str] = []
+    has_menu = bool(getattr(config, "menu_items", None))
 
     for raw_item in raw_order.get("items", []):
         item_name = raw_item.get("name", "").strip()
@@ -50,6 +52,15 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
             if topping_price:
                 modifier_total = topping_price * len(modifications)
         else:
+            # A merchant WITH a menu: an unmatched item must never ride along
+            # at $0.00 (the kitchen would make it, the merchant would eat it).
+            # Drop it and report it so the agent can tell the caller. Merchants
+            # with NO configured menu keep the legacy pass-through behavior.
+            if has_menu:
+                logger.warning("Dropping off-menu item from order: %r", item_name)
+                if item_name:
+                    unavailable.append(item_name)
+                continue
             resolved_name = item_name
             unit_price = 0.0
 
@@ -101,6 +112,7 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
         "customer_name": raw_order.get("customer_name", ""),
         "order_type": order_type,
         "items": items,
+        "unavailable_items": unavailable,
         "subtotal": round(subtotal, 2),
         "tax": tax,
         "total": total,

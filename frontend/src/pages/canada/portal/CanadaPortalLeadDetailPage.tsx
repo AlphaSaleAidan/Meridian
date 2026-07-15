@@ -187,6 +187,7 @@ export default function CanadaPortalLeadDetailPage() {
 
   // Customer account creation state
   const [customerCreating, setCustomerCreating] = useState(false)
+  const creatingRef = useRef(false)
   const [customerCredentials, setCustomerCredentials] = useState<{ email: string; tempPassword?: string } | null>(null)
   const [customerError, setCustomerError] = useState<string | null>(null)
   const [credentialEmailing, setCredentialEmailing] = useState(false)
@@ -200,13 +201,17 @@ export default function CanadaPortalLeadDetailPage() {
   const [cardUpdateUrl, setCardUpdateUrl] = useState<string | null>(null)
 
   async function handleCreateCustomerAccount() {
-    if (!deal) return
+    // React state updates are async, so a fast double-click can enter twice
+    // before `customerCreating` re-renders — guard with a synchronous ref.
+    if (!deal || creatingRef.current) return
+    creatingRef.current = true
     setCustomerCreating(true)
     setCustomerError(null)
 
     const email = deal.contact_email
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setCustomerError('Invalid email address. Edit the lead to fix it before creating an account.')
+      creatingRef.current = false
       setCustomerCreating(false)
       return
     }
@@ -244,11 +249,17 @@ export default function CanadaPortalLeadDetailPage() {
       // forced reset on first login. Surface it so the rep can share it directly.
       const data = await res.json().catch(() => ({}))
       setCustomerCredentials({ email, tempPassword: data.temporary_password || '' })
+      // The fee seed is best-effort server-side — if it failed, creation still
+      // succeeded but the merchant is on the tier default fee. Tell the rep.
+      if (selectedPlan.phoneAgent && data.fee_seeded === false) {
+        setCustomerError('Account created, but the negotiated per-order fee did NOT save — the merchant is on the plan default. Set it manually or re-try before the walkthrough.')
+      }
       await updateStage.mutateAsync({ id: deal.id, stage: 'customer_walkthrough' })
       patchDeal(prev => prev ? { ...prev, stage: 'customer_walkthrough' } : prev)
     } catch (err) {
       setCustomerError(err instanceof Error ? err.message : 'Failed to create account')
     } finally {
+      creatingRef.current = false
       setCustomerCreating(false)
     }
   }

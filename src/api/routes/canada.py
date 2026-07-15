@@ -383,6 +383,7 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
             # fail customer creation (the fee falls back to the tier default).
             if req.order_fee_cents is not None:
                 fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id)
+                fee_seeded = False
                 try:
                     pac_headers = {
                         "Authorization": f"Bearer {service_key}",
@@ -416,6 +417,7 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                             },
                         )
                     if pac_resp.status_code in (200, 201, 204):
+                        fee_seeded = True
                         logger.info("Seeded order fee %d¢ (plan=%s) for %s",
                                     fee, req.plan_id or "-", org_id)
                     else:
@@ -423,6 +425,12 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                                      org_id, pac_resp.status_code, pac_resp.text[:200])
                 except Exception as e:  # noqa: BLE001
                     logger.error("order-fee seed failed for %s: %s", org_id, e)
+                # Creation still succeeds on a seed failure, but the rep must
+                # KNOW the negotiated fee didn't stick (it falls back to the
+                # tier default until set manually) — surface it in the response.
+                return {"ok": True, "org_id": org_id,
+                        "temporary_password": temp_password,
+                        "fee_seeded": fee_seeded, "order_fee_cents": fee}
 
     return {"ok": True, "org_id": org_id, "temporary_password": temp_password}
 

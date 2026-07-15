@@ -42,16 +42,15 @@ try:
         SMS_INBOUND,
         SMS_OUTBOUND,
         deduct,
-        has_balance,
         InsufficientCredits,
     )
     _CREDITS_AVAILABLE = True
 except ImportError:
     _CREDITS_AVAILABLE = False
 
-from src.services.llm_client import LLMClient
+from src.services.llm_client import LLMClient  # noqa: E402 — after sys.path setup
 
-from casl_compliance import (
+from casl_compliance import (  # noqa: E402 — after sys.path setup
     classify_keyword,
     is_canadian_number,
     record_optout,
@@ -262,7 +261,7 @@ async def _handle_order_submission(
     await _log_sms_order(normalized, pos_result, customer_phone)
 
     items = normalized.get("items", [])
-    sym = "CA$" if normalized.get("currency") == "CAD" else "$"
+    sym = "CA$" if (normalized.get("currency") or "").upper() == "CAD" else "$"
     total = normalized.get("total", 0)
     order_type = normalized.get("order_type", "pickup")
     name = normalized.get("customer_name", "")

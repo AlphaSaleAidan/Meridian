@@ -412,6 +412,7 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                 from .canada import _ORDER_FEE_FLOOR_CENTS_USD, _clamp_order_fee_cents
                 fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id,
                                              floors=_ORDER_FEE_FLOOR_CENTS_USD)
+                fee_seeded = False
                 try:
                     pac_headers = {
                         "Authorization": f"Bearer {service_key}",
@@ -445,6 +446,7 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                             },
                         )
                     if pac_resp.status_code in (200, 201, 204):
+                        fee_seeded = True
                         logger.info("Seeded order fee %d¢ (plan=%s) for %s",
                                     fee, req.plan_id or "-", org_id)
                     else:
@@ -452,6 +454,11 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                                      org_id, pac_resp.status_code, pac_resp.text[:200])
                 except Exception as e:  # noqa: BLE001
                     logger.error("order-fee seed failed for %s: %s", org_id, e)
+                # Surface a seed failure so the rep knows the negotiated fee
+                # fell back to the tier default (mirrors canada.create_customer).
+                return {"ok": True, "org_id": org_id,
+                        "temp_password": temp_password,
+                        "fee_seeded": fee_seeded, "order_fee_cents": fee}
 
     return {"ok": True, "org_id": org_id, "temp_password": temp_password}
 
