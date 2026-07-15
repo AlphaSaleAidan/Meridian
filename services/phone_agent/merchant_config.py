@@ -92,6 +92,12 @@ class MerchantPhoneConfig:
     # Empty string = no brief = prompt is byte-for-byte unchanged (no regression).
     website_url: str = ""
     restaurant_brief: str = ""
+    # Rep-negotiated per-order Meridian fee override in cents of the charge
+    # currency (rep-portal fee slider). None = plan-tier / env default.
+    order_fee_cents: Optional[int] = None
+    # Voice accent group picked in the setup wizard (north_american | indian |
+    # east_asian). Presentation-level grouping; `voice` carries the voice id.
+    accent: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -174,6 +180,9 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                     row.get("clover_hco_webhook_secret") or "").strip(),
                 website_url=(row.get("website_url") or "").strip(),
                 restaurant_brief=(row.get("restaurant_brief") or "").strip(),
+                order_fee_cents=(int(row["order_fee_cents"])
+                                 if row.get("order_fee_cents") is not None else None),
+                accent=(row.get("accent") or "").strip().lower(),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

@@ -103,11 +103,29 @@ class CreateCustomerRequest(BaseModel):
     deal_id: str | None = None
     monthly_price: int = 0
     portal: str = "canada"
+    # Rep fee slider: chosen plan + per-order Meridian fee in cents (charge
+    # currency). None = plan/tier default rate; the server re-clamps to the
+    # tier redline so a crafted request can't undercut the floor.
+    plan_id: str | None = None
+    order_fee_cents: int | None = None
 
     @field_validator("business_name", "contact_name")
     @classmethod
     def sanitize_names(cls, v: str) -> str:
         return _sanitize_text(v)
+
+
+# Per-order fee REDLINES (cents) — the floor the rep slider can reach, by plan.
+# Aidan 2026-07-15: premium (middle tier) floor $0.65/order, command (top tier)
+# floor $0.45/order. Unknown plan → the lowest non-zero floor, so a crafted
+# request can never zero out the fee.
+_ORDER_FEE_FLOOR_CENTS = {"standard": 0, "premium": 65, "command": 45}
+_ORDER_FEE_CAP_CENTS = 500
+
+
+def _clamp_order_fee_cents(fee: int, plan_id: str | None) -> int:
+    floor = _ORDER_FEE_FLOOR_CENTS.get((plan_id or "").strip().lower(), 45)
+    return max(min(int(fee), _ORDER_FEE_CAP_CENTS), floor)
 
 
 @router.post("/rep-signup", dependencies=[Depends(rate_limit_signup)])
@@ -351,6 +369,53 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                 )
                 raise HTTPException(500, "Customer account created but business profile failed to save")
             logger.info("Linked business %s -> user %s for %s", org_id, auth_user_id, req.email)
+
+            # Rep fee slider: pre-seed phone_agent_config with the negotiated
+            # per-order fee so every payment rail picks it up the moment the
+            # phone agent goes live. Best-effort — a fee-seed hiccup must never
+            # fail customer creation (the fee falls back to the tier default).
+            if req.order_fee_cents is not None:
+                fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id)
+                try:
+                    pac_headers = {
+                        "Authorization": f"Bearer {service_key}",
+                        "apikey": service_key,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal",
+                    }
+                    existing = await client.get(
+                        f"{supabase_url}/rest/v1/phone_agent_config",
+                        headers=pac_headers,
+                        params={"merchant_id": f"eq.{org_id}", "select": "id"},
+                    )
+                    seed = {"order_fee_cents": fee}
+                    if req.plan_id:
+                        seed["plan_tier"] = (req.plan_id or "").strip().lower()
+                    if existing.status_code == 200 and existing.json():
+                        pac_resp = await client.patch(
+                            f"{supabase_url}/rest/v1/phone_agent_config?merchant_id=eq.{org_id}",
+                            headers=pac_headers, json=seed,
+                        )
+                    else:
+                        pac_resp = await client.post(
+                            f"{supabase_url}/rest/v1/phone_agent_config",
+                            headers=pac_headers,
+                            json={
+                                "merchant_id": org_id,
+                                "business_name": req.business_name,
+                                "business_type": req.vertical or "restaurant",
+                                "active": False,
+                                **seed,
+                            },
+                        )
+                    if pac_resp.status_code in (200, 201, 204):
+                        logger.info("Seeded order fee %d¢ (plan=%s) for %s",
+                                    fee, req.plan_id or "-", org_id)
+                    else:
+                        logger.error("order-fee seed failed for %s: %s %s",
+                                     org_id, pac_resp.status_code, pac_resp.text[:200])
+                except Exception as e:  # noqa: BLE001
+                    logger.error("order-fee seed failed for %s: %s", org_id, e)
 
     return {"ok": True, "org_id": org_id, "temporary_password": temp_password}
 

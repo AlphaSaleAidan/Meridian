@@ -168,16 +168,21 @@ def clover_fee_cents(sess: dict[str, Any]) -> int:
     """Meridian's fee for a Clover-native payment — mirrors the Stripe rail's
     application fee: split model = customer surcharge (already charged as a
     cart line item) + merchant-side % of the subtotal, else the flat
-    MERIDIAN_SERVICE_FEE_CENTS. The merchant's plan tier travels in the
-    session payload (written at order time) so billing gets the exact tier."""
+    MERIDIAN_SERVICE_FEE_CENTS. The merchant's plan tier and any
+    rep-negotiated fee override travel in the session payload (written at
+    order time) so billing gets the exact negotiated fee."""
     _phone_agent_path()
     import payment_links as _pl
 
     amount = int(sess.get("amount_cents") or 0)
     if _pl.FEE_SPLIT_ENABLED and amount > 0:
         currency = (sess.get("currency") or "cad").lower()
-        plan_tier = ((sess.get("payload") or {}).get("plan_tier") or "").strip()
-        surcharge = _pl.customer_surcharge_cents(plan_tier, currency)
+        payload = sess.get("payload") or {}
+        plan_tier = (payload.get("plan_tier") or "").strip()
+        override = payload.get("fee_override_cents")
+        surcharge = _pl.customer_surcharge_cents(
+            plan_tier, currency,
+            override_cents=(int(override) if override is not None else None))
         subtotal = max(amount - surcharge, 0)
         return _pl.split_application_fee_cents(subtotal, surcharge)
     return int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)

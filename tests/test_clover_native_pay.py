@@ -54,8 +54,10 @@ ORDER = {
 def _wire_rails(monkeypatch):
     lazy_calls, stripe_calls = [], []
 
-    async def lazy(order, pos_order_id, mid_hint="", plan_tier=""):
-        lazy_calls.append((order, pos_order_id, mid_hint, plan_tier))
+    async def lazy(order, pos_order_id, mid_hint="", plan_tier="",
+                   fee_override_cents=None):
+        lazy_calls.append((order, pos_order_id, mid_hint, plan_tier,
+                           fee_override_cents))
         return {"method": "clover", "url": "/p/x"}
 
     async def has_clover(cfg):
@@ -296,9 +298,30 @@ async def test_already_paid_session_short_circuits(monkeypatch):
     assert released == [] and credits == []   # no double release/fee
 
 
-def test_native_fee_split_math(monkeypatch):
+@aio
+async def test_native_fee_split_math(monkeypatch):
     monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
     fee = svc.clover_fee_cents({"amount_cents": 3529, "currency": "cad",
                                 "payload": {"plan_tier": "premium"}})
     surcharge = pl.customer_surcharge_cents("premium", "cad")
+    assert fee == pl.split_application_fee_cents(3529 - surcharge, surcharge)
+
+
+def test_rep_fee_override_flows_through_clover_rail(monkeypatch):
+    """PR #323's rep-negotiated order_fee_cents must replace the tier fee on
+    the Clover rail too — in the charged cart line AND the settled ledger fee
+    (read from the payload written at order time, so the booked fee always
+    matches the surcharge actually charged)."""
+    monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
+
+    items, _ = pl._clover_hco_line_items(dict(ORDER), plan_tier="premium",
+                                         fee_override_cents=45)
+    assert items[-1] == {"name": "Service & processing fee",
+                         "price": 45 + pl.CUSTOMER_FIXED_FEE_CENTS, "unitQty": 1}
+
+    fee = svc.clover_fee_cents({"amount_cents": 3529, "currency": "cad",
+                                "payload": {"plan_tier": "premium",
+                                            "fee_override_cents": 45}})
+    surcharge = pl.customer_surcharge_cents("premium", "cad", override_cents=45)
+    assert surcharge == 45 + pl.CUSTOMER_FIXED_FEE_CENTS
     assert fee == pl.split_application_fee_cents(3529 - surcharge, surcharge)

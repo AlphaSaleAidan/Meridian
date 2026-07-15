@@ -30,7 +30,15 @@ export interface PhoneConfig {
   phone_number?: string
   greeting?: string
   voice?: string
+  // 'en' (default) or 'multi' — multilingual understanding (Hindi/Punjabi +
+  // English code-switching) on live calls.
   language?: string
+  // Accent group picked in the wizard (north_american | indian | east_asian).
+  accent?: string
+  // Rep-negotiated per-order Meridian fee override (cents). null/undefined =
+  // plan default. Read-only here — set from the sales portal, shown in the
+  // wizard's pricing disclosure.
+  order_fee_cents?: number | null
   active?: boolean
   menu_items?: any[]
   pos_system?: string

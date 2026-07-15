@@ -137,8 +137,13 @@ export default function CanadaPortalLeadDetailPage() {
   // Step 2 state — price = tier base + rep adjustment (0..REP_PRICE_HEADROOM_CAD)
   const [planId, setPlanId] = useState<PlanTier['id']>('premium')
   const [priceBump, setPriceBump] = useState(0)
+  // Per-order fee slider (cents): defaults to the tier's standard rate and
+  // slides DOWN only, to the tier redline (orderFeeFloor). Backend re-clamps.
+  const [orderFeeCents, setOrderFeeCents] = useState(() => Math.round(getPlan('premium').orderFee * 100))
   const selectedPlan = getPlan(planId)
   const monthlyPrice = selectedPlan.price + priceBump
+  const orderFeeFloorCents = Math.round(selectedPlan.orderFeeFloor * 100)
+  const orderFeeMaxCents = Math.round(selectedPlan.orderFee * 100)
   const [setupFee, setSetupFee] = useState('0')
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
@@ -223,6 +228,10 @@ export default function CanadaPortalLeadDetailPage() {
           deal_id: deal.id,
           monthly_price: monthlyPrice,
           portal: 'canada',
+          plan_id: planId,
+          // Rep-negotiated per-order fee (cents, CAD). Only meaningful on
+          // phone-agent tiers; the backend clamps to the tier redline.
+          ...(selectedPlan.phoneAgent ? { order_fee_cents: Math.min(Math.max(orderFeeCents, orderFeeFloorCents), orderFeeMaxCents) } : {}),
         }),
       })
 
@@ -974,7 +983,7 @@ export default function CanadaPortalLeadDetailPage() {
           <label className="text-xs text-pm-canada-text-muted block mb-1.5">Plan (CAD)</label>
           <div className="grid grid-cols-3 gap-2 mb-3">
             {PLAN_TIERS.map(plan => (
-              <button key={plan.id} onClick={() => { setPlanId(plan.id); setPriceBump(0) }}
+              <button key={plan.id} onClick={() => { setPlanId(plan.id); setPriceBump(0); setOrderFeeCents(Math.round(plan.orderFee * 100)) }}
                 className={`p-2.5 rounded-lg border text-left transition-colors ${
                   planId === plan.id
                     ? 'border-pm-accent/50 bg-pm-accent/5'
@@ -1004,6 +1013,35 @@ export default function CanadaPortalLeadDetailPage() {
             <span className="text-sm font-semibold text-pm-amber-gold w-28 text-right">CA${monthlyPrice.toLocaleString()}/mo</span>
           </div>
           <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / CAD_RATE).toLocaleString()}/mo. Base price is the floor — no discounts.</p>
+
+          {/* Per-order fee slider — phone-agent tiers only. Slides DOWN from the
+              tier's standard rate to the redline; the backend clamps to the
+              same floor so the redline is enforced server-side too. */}
+          {selectedPlan.phoneAgent && (
+            <div className="mt-4">
+              <label className="text-xs text-pm-canada-text-muted block mb-1.5">
+                Per-Order Fee <span className="text-pm-canada-text-faint">(redline CA${selectedPlan.orderFeeFloor.toFixed(2)}/order)</span>
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={orderFeeFloorCents}
+                  max={orderFeeMaxCents}
+                  step={1}
+                  value={Math.min(Math.max(orderFeeCents, orderFeeFloorCents), orderFeeMaxCents)}
+                  onChange={e => setOrderFeeCents(Number(e.target.value))}
+                  className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent"
+                />
+                <span className="text-sm font-semibold text-pm-amber-gold w-28 text-right">CA${(orderFeeCents / 100).toFixed(2)}/order</span>
+              </div>
+              <p className="text-2xs text-pm-canada-text-faint mt-1">
+                Standard rate CA${selectedPlan.orderFee.toFixed(2)} — negotiate down only, never below the redline.
+              </p>
+              <p className="text-2xs text-pm-canada-text-muted mt-1.5 px-2.5 py-1.5 rounded-md bg-pm-canada-bg border border-pm-canada-border">
+                Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-pm-amber-gold">CA$0.45/min</span> billed automatically to the merchant's Meridian account.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Setup Fee */}
