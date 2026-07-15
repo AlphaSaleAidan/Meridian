@@ -34,16 +34,24 @@ def _to_cents(value) -> int | None:
 
 
 @router.get("/{org_id}")
-async def list_docs(org_id: str):
+async def list_docs(org_id: str, limit: int = 200, offset: int = 0):
     from ...db import _db_instance as db
     if not db:
         raise HTTPException(503, "Database not available")
 
+    # Bound the query — inventory_document_uploads grows unbounded and each row
+    # carries a large extracted_data JSONB, so an all-rows select could OOM the
+    # worker. Newest first, paginated.
+    limit = max(1, min(int(limit), 500))
+    offset = max(0, int(offset))
     docs = await db.select(
         "inventory_document_uploads",
         filters={"org_id": f"eq.{org_id}"},
+        order="created_at.desc",
+        limit=limit,
+        offset=offset,
     )
-    return {"documents": docs or []}
+    return {"documents": docs or [], "limit": limit, "offset": offset}
 
 
 @router.post("/{org_id}/process/{doc_id}")
@@ -67,7 +75,7 @@ async def process_doc(org_id: str, doc_id: str, background_tasks: BackgroundTask
     await db.update(
         "inventory_document_uploads",
         {"status": "processing"},
-        filters={"id": f"eq.{doc_id}"},
+        filters={"id": f"eq.{doc_id}", "org_id": f"eq.{org_id}"},
     )
 
     background_tasks.add_task(_process_inventory_doc, org_id, doc)
@@ -167,11 +175,14 @@ async def _process_inventory_doc(org_id: str, doc: dict):
 
                 match = None
                 if sku and sku.lower() in by_sku:
-                    match = by_sku[sku.lower()]; matched_by["sku"] += 1
+                    match = by_sku[sku.lower()]
+                    matched_by["sku"] += 1
                 elif upc and upc.lower() in by_barcode:
-                    match = by_barcode[upc.lower()]; matched_by["barcode"] += 1
+                    match = by_barcode[upc.lower()]
+                    matched_by["barcode"] += 1
                 elif name and name.lower() in by_name:
-                    match = by_name[name.lower()]; matched_by["name"] += 1
+                    match = by_name[name.lower()]
+                    matched_by["name"] += 1
 
                 if match:
                     update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
@@ -213,7 +224,7 @@ async def _process_inventory_doc(org_id: str, doc: dict):
                 "extracted_data": extracted,
                 "processed_at": datetime.now(timezone.utc).isoformat(),
             },
-            filters={"id": f"eq.{doc_id}"},
+            filters={"id": f"eq.{doc_id}", "org_id": f"eq.{org_id}"},
         )
         logger.info(
             f"Inventory doc processed for org={org_id}: "
@@ -225,7 +236,7 @@ async def _process_inventory_doc(org_id: str, doc: dict):
         await db.update(
             "inventory_document_uploads",
             {"status": "failed", "error_message": str(e)[:500]},
-            filters={"id": f"eq.{doc_id}"},
+            filters={"id": f"eq.{doc_id}", "org_id": f"eq.{org_id}"},
         )
 
 
