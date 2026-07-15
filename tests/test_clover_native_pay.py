@@ -1,14 +1,16 @@
 """
-Clover-native pay-by-text (Hosted Checkout) — experimental rail coverage.
+Clover-native pay-by-text (Hosted Checkout) — unified-rail coverage.
 
 Money invariants under test:
-  1. TWO independent gates (global env + per-merchant column), both default
-     OFF, tested in BOTH directions — one flag alone never routes native.
+  1. TWO independent gates (global CLOVER_NATIVE_PAY_ENABLED env + the
+     merchant's payment_link_provider column), both default OFF, tested in
+     BOTH directions — one flag alone never routes native.
   2. Native failure falls through to the Stripe rail (no stranded orders).
-  3. The Hosted Checkout cart charges items + the fee-split surcharge line.
+  3. The lazily-stored Hosted Checkout cart charges items + tax + the
+     fee-split surcharge line, and redirects back to /pay/clover/return.
   4. The success REDIRECT alone never marks an order paid — only a payment
      verified against the merchant's Clover does. Fee is booked to the voice
-     ledger only on verification.
+     ledger only on verification, idempotent on the payment id.
 """
 import sys
 from pathlib import Path
@@ -23,12 +25,14 @@ if _PA not in sys.path:
 
 import payment_links as pl  # noqa: E402
 import src.api.routes.pay_redirect as pr  # noqa: E402
+import src.services.clover_hco as svc  # noqa: E402
 
 aio = pytest.mark.asyncio
 
 CLOVER_CFG = SimpleNamespace(
     pos_system="clover", pos_access_token="clov_tok", pos_location_id="CLV_MID",
-    native_pos_pay=True, plan_tier="", stripe_account_id="", stripe_charges_enabled=False,
+    payment_link_provider="clover", plan_tier="", merchant_id="org-1",
+    stripe_account_id="", stripe_charges_enabled=False,
 )
 
 ORDER = {
@@ -44,24 +48,113 @@ ORDER = {
 }
 
 
-class _Resp:
-    def __init__(self, status, data=None):
-        self.status_code = status
-        self._d = data or {}
-        self.text = ""
-
-    def json(self):
-        return self._d
+# ── gating: both directions ───────────────────────────────────
 
 
-class _Client:
-    def __init__(self, calls, status=200, data=None):
-        self.calls = calls
-        self.status = status
-        self.data = data if data is not None else {
-            "href": "https://www.clover.com/checkout/CHK123",
-            "checkoutSessionId": "CHK123",
-        }
+def _wire_rails(monkeypatch):
+    lazy_calls, stripe_calls = [], []
+
+    async def lazy(order, pos_order_id, mid_hint="", plan_tier="",
+                   fee_override_cents=None):
+        lazy_calls.append((order, pos_order_id, mid_hint, plan_tier,
+                           fee_override_cents))
+        return {"method": "clover", "url": "/p/x"}
+
+    async def has_clover(cfg):
+        return True
+
+    async def stripe(*a, **k):
+        stripe_calls.append(a)
+        return {"method": "stripe", "url": "s"}
+
+    monkeypatch.setattr(pl, "_clover_lazy_checkout", lazy)
+    monkeypatch.setattr(pl, "_merchant_has_clover", has_clover)
+    monkeypatch.setattr(pl, "_stripe_checkout", stripe)
+    monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
+    monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_x")
+    return lazy_calls, stripe_calls
+
+
+@aio
+async def test_native_rail_needs_both_gates(monkeypatch):
+    lazy_calls, _ = _wire_rails(monkeypatch)
+
+    # global OFF + merchant ON → stripe
+    monkeypatch.setenv("CLOVER_NATIVE_PAY_ENABLED", "0")
+    res = await pl.create_checkout(dict(ORDER), CLOVER_CFG)
+    assert res["method"] == "stripe" and lazy_calls == []
+
+    # global ON + merchant OFF (default stripe provider) → stripe
+    monkeypatch.setenv("CLOVER_NATIVE_PAY_ENABLED", "1")
+    cfg_off = SimpleNamespace(**{**CLOVER_CFG.__dict__,
+                                 "payment_link_provider": "stripe"})
+    res = await pl.create_checkout(dict(ORDER), cfg_off)
+    assert res["method"] == "stripe" and lazy_calls == []
+
+    # both ON → native lazy link, plan tier forwarded for the fee line
+    tier_cfg = SimpleNamespace(**{**CLOVER_CFG.__dict__, "plan_tier": "command"})
+    res = await pl.create_checkout(dict(ORDER), tier_cfg)
+    assert res["method"] == "clover"
+    assert lazy_calls[0][3] == "command"
+
+
+@aio
+async def test_no_clover_connection_falls_back_even_when_both_gates_on(monkeypatch):
+    lazy_calls, stripe_calls = _wire_rails(monkeypatch)
+    monkeypatch.setenv("CLOVER_NATIVE_PAY_ENABLED", "1")
+
+    async def no_clover(cfg):
+        return False
+    monkeypatch.setattr(pl, "_merchant_has_clover", no_clover)
+
+    res = await pl.create_checkout(dict(ORDER), CLOVER_CFG)
+    assert res["method"] == "stripe"
+    assert lazy_calls == [] and len(stripe_calls) == 1
+
+
+@aio
+async def test_native_failure_falls_back_to_stripe(monkeypatch):
+    _, stripe_calls = _wire_rails(monkeypatch)
+    monkeypatch.setenv("CLOVER_NATIVE_PAY_ENABLED", "1")
+
+    async def lazy_boom(*a, **k):
+        raise RuntimeError("checkout_sessions_insert_500")
+    monkeypatch.setattr(pl, "_clover_lazy_checkout", lazy_boom)
+
+    res = await pl.create_checkout(dict(ORDER), CLOVER_CFG)
+    assert res["method"] == "stripe" and len(stripe_calls) == 1
+
+
+# ── lazily-stored hosted checkout payload ─────────────────────
+
+
+def test_hco_cart_charges_fee_split_surcharge_line(monkeypatch):
+    monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
+    items, total = pl._clover_hco_line_items(dict(ORDER), plan_tier="premium")
+
+    assert items[0] == {"name": "Butter Chicken", "price": 1550, "unitQty": 2}
+    # fee-split surcharge rides as its own line so we can reclaim it
+    assert items[-1]["name"] == "Service & processing fee"
+    assert items[-1]["price"] == pl.customer_surcharge_cents("premium", "cad")
+    assert total == sum(i["price"] * i["unitQty"] for i in items)
+
+    # flag OFF → no surcharge line (byte-for-byte existing cart)
+    monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", False)
+    items_off, _ = pl._clover_hco_line_items(dict(ORDER), plan_tier="premium")
+    assert all(i["name"] != "Service & processing fee" for i in items_off)
+
+
+class _SupaResp:
+    status_code = 201
+    text = ""
+
+
+class _SupaClient:
+    """Captures the checkout_sessions insert the lazy path makes."""
+    posts: list = []
+
+    def __init__(self, timeout=None):
+        pass
 
     async def __aenter__(self):
         return self
@@ -70,114 +163,42 @@ class _Client:
         return False
 
     async def post(self, url, json=None, headers=None):
-        self.calls.append((url, json, headers))
-        return _Resp(self.status, self.data)
-
-
-# ── gating: both directions ───────────────────────────────────
+        _SupaClient.posts.append((url, json))
+        return _SupaResp()
 
 
 @aio
-async def test_native_rail_needs_both_gates(monkeypatch):
-    async def native(*a, **k):
-        return {"method": "clover_native", "url": "x"}
+async def test_lazy_row_stores_return_redirects_and_plan_tier(monkeypatch):
+    monkeypatch.setattr(pl, "SUPABASE_URL", "https://supa.test")
+    monkeypatch.setattr(pl, "SUPABASE_KEY", "svc-key")
+    monkeypatch.setattr(pl.httpx, "AsyncClient", _SupaClient)
+    _SupaClient.posts = []
 
-    async def stripe(*a, **k):
-        return {"method": "stripe", "url": "s"}
-    monkeypatch.setattr(pl, "_clover_hosted_checkout", native)
-    monkeypatch.setattr(pl, "_stripe_checkout", stripe)
-    monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
-    monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_x")
-
-    # global OFF + merchant ON → stripe
-    monkeypatch.setattr(pl, "CLOVER_NATIVE_PAY_ENABLED", False)
-    res = await pl.create_checkout(dict(ORDER), CLOVER_CFG)
-    assert res["method"] == "stripe"
-
-    # global ON + merchant OFF → stripe
-    monkeypatch.setattr(pl, "CLOVER_NATIVE_PAY_ENABLED", True)
-    cfg_off = SimpleNamespace(**{**CLOVER_CFG.__dict__, "native_pos_pay": False})
-    res = await pl.create_checkout(dict(ORDER), cfg_off)
-    assert res["method"] == "stripe"
-
-    # both ON + clover → native
-    res = await pl.create_checkout(dict(ORDER), CLOVER_CFG)
-    assert res["method"] == "clover_native"
-
-    # both ON but NOT a clover merchant → stripe
-    cfg_sq = SimpleNamespace(**{**CLOVER_CFG.__dict__, "pos_system": "square"})
-    res = await pl.create_checkout(dict(ORDER), cfg_sq)
-    assert res["method"] == "stripe"
-
-
-@aio
-async def test_native_failure_falls_back_to_stripe(monkeypatch):
-    async def native_boom(*a, **k):
-        raise RuntimeError("clover_hco_http_500")
-
-    async def stripe(*a, **k):
-        return {"method": "stripe", "url": "s"}
-    monkeypatch.setattr(pl, "_clover_hosted_checkout", native_boom)
-    monkeypatch.setattr(pl, "_stripe_checkout", stripe)
-    monkeypatch.setattr(pl, "CLOVER_NATIVE_PAY_ENABLED", True)
-    monkeypatch.setattr(pl, "UNIFIED_PAYMENTS_ENABLED", True)
-    monkeypatch.setattr(pl, "STRIPE_SECRET_KEY", "sk_x")
-
-    res = await pl.create_checkout(dict(ORDER), CLOVER_CFG)
-    assert res["method"] == "stripe"
-
-
-# ── hosted checkout payload ───────────────────────────────────
-
-
-@aio
-async def test_hco_payload_cart_fee_line_and_redirects(monkeypatch):
-    calls = []
-    monkeypatch.setattr(pl.httpx, "AsyncClient", lambda timeout=None: _Client(calls))
-    monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
-
-    async def recorded(*a, **k):
-        assert k.get("provider") == "clover_hco"
-        return True
-    monkeypatch.setattr(pl, "_record_checkout_session", recorded)
-
-    res = await pl._clover_hosted_checkout(dict(ORDER), CLOVER_CFG, "")
-
-    url, payload, headers = calls[0]
-    assert url.endswith("/invoicingcheckoutservice/v1/checkouts")
-    assert headers["X-Clover-Merchant-Id"] == "CLV_MID"
-
-    items = payload["shoppingCart"]["lineItems"]
-    assert items[0] == {"name": "Butter Chicken", "unitQty": 2, "price": 1550}
-    # fee-split surcharge rides as its own line so we can reclaim it
-    assert items[-1]["name"] == "Service & processing fee"
-    assert items[-1]["price"] == pl.customer_surcharge_cents("", "cad")
-
-    assert payload["customer"]["firstName"] == "Priya"
-    assert payload["customer"]["phoneNumber"] == "+16045551234"
-    assert "/pay/clover/return/" in payload["redirectUrls"]["success"]
-    assert payload["redirectUrls"]["cancel"].endswith("/pay/cancel")
-
-    assert res["method"] == "clover_native"
-    assert res["session_id"] == "CHK123"
-    assert "/p/" in res["url"]  # branded short link when recorded
-
-
-@aio
-async def test_hco_missing_credentials_raises(monkeypatch):
-    cfg = SimpleNamespace(pos_access_token="", pos_location_id="", plan_tier="")
-    with pytest.raises(RuntimeError):
-        await pl._clover_hosted_checkout(dict(ORDER), cfg, "")
+    res = await pl._clover_lazy_checkout(dict(ORDER), "POS9", "CLV_MID",
+                                         plan_tier="premium")
+    assert res["method"] == "clover"
+    url, row = _SupaClient.posts[0]
+    assert "checkout_sessions" in url
+    req = row["payload"]["hco_request"]
+    assert req["redirectUrls"]["success"].endswith(
+        f"/pay/clover/return/{row['short_code']}")
+    assert req["redirectUrls"]["cancel"].endswith("/pay/cancel")
+    assert row["payload"]["plan_tier"] == "premium"
+    assert row["payload"]["clover_merchant_id"] == "CLV_MID"
+    # no Clover HTTP at order time, and never the token in the row
+    assert all("clover.com" not in u for u, _ in _SupaClient.posts)
+    assert "clov_tok" not in str(row)
 
 
 # ── return route: verification is the gate, not the redirect ──
 
 
 SESSION_ROW = {
-    "merchant_id": "org-1", "pos_order_id": "POS9", "provider": "clover_hco",
-    "provider_ref": "CHK123", "amount_cents": 3529, "currency": "cad",
-    "status": "created", "caller_phone": "+16045551234",
-    "created_at": "2026-07-14T20:00:00+00:00",
+    "id": "row-1", "merchant_id": "org-1", "pos_order_id": "POS9",
+    "provider": "clover", "provider_ref": "CHK123", "amount_cents": 3529,
+    "currency": "cad", "status": "created", "caller_phone": "+16045551234",
+    "created_at": "2026-07-14T20:00:00+00:00", "short_code": "abcd1234",
+    "payload": {"plan_tier": ""},
 }
 
 
@@ -186,7 +207,7 @@ class _FakeDB:
         self.row = row
         self.updates = []
 
-    async def select(self, table, columns=None, filters=None, limit=None):
+    async def select(self, table, columns=None, filters=None, limit=None, order=None):
         return [dict(self.row)]
 
     async def update(self, table, data, filters=None):
@@ -280,11 +301,27 @@ async def test_already_paid_session_short_circuits(monkeypatch):
 @aio
 async def test_native_fee_split_math(monkeypatch):
     monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
+    fee = svc.clover_fee_cents({"amount_cents": 3529, "currency": "cad",
+                                "payload": {"plan_tier": "premium"}})
+    surcharge = pl.customer_surcharge_cents("premium", "cad")
+    assert fee == pl.split_application_fee_cents(3529 - surcharge, surcharge)
 
-    class _NoCfgDB:
-        async def select(self, *a, **k):
-            return []
-    monkeypatch.setattr(pr, "get_db", lambda: _NoCfgDB())
-    fee = await pr._clover_native_fee_cents({"amount_cents": 3529, "currency": "cad"})
-    surcharge = pl.customer_surcharge_cents("", "cad")
+
+def test_rep_fee_override_flows_through_clover_rail(monkeypatch):
+    """PR #323's rep-negotiated order_fee_cents must replace the tier fee on
+    the Clover rail too — in the charged cart line AND the settled ledger fee
+    (read from the payload written at order time, so the booked fee always
+    matches the surcharge actually charged)."""
+    monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
+
+    items, _ = pl._clover_hco_line_items(dict(ORDER), plan_tier="premium",
+                                         fee_override_cents=45)
+    assert items[-1] == {"name": "Service & processing fee",
+                         "price": 45 + pl.CUSTOMER_FIXED_FEE_CENTS, "unitQty": 1}
+
+    fee = svc.clover_fee_cents({"amount_cents": 3529, "currency": "cad",
+                                "payload": {"plan_tier": "premium",
+                                            "fee_override_cents": 45}})
+    surcharge = pl.customer_surcharge_cents("premium", "cad", override_cents=45)
+    assert surcharge == 45 + pl.CUSTOMER_FIXED_FEE_CENTS
     assert fee == pl.split_application_fee_cents(3529 - surcharge, surcharge)
