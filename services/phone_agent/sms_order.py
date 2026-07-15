@@ -15,6 +15,8 @@ Flow:
 
 Conversation state is stored in-memory keyed by (merchant_id, customer_phone).
 """
+import hashlib
+import hmac
 import logging
 import os
 import sys
@@ -52,6 +54,7 @@ from src.services.llm_client import LLMClient  # noqa: E402 — after sys.path s
 
 from casl_compliance import (  # noqa: E402 — after sys.path setup
     classify_keyword,
+    fetch_optout_status,
     is_canadian_number,
     record_optout,
     record_optin,
@@ -329,12 +332,51 @@ async def _log_sms_order(order: dict, pos_result: dict, customer_phone: str):
         logger.error("Failed to log SMS order: %s", e)
 
 
+def _verify_twilio_signature(request: Request, form: dict) -> bool:
+    """Validate Twilio's X-Twilio-Signature over the public URL + sorted POST
+    params (base64 HMAC-SHA1 with the account auth token). Without this the
+    inbound webhook is unauthenticated — anyone could POST forged 'From'/'Body'
+    to inject orders and drain a merchant's SMS credits.
+
+    Fail-closed when TWILIO_AUTH_TOKEN is set (prod). If it's unset the sidecar
+    can't verify, so we reject too — set SMS_SKIP_TWILIO_VERIFY=1 to bypass for
+    local/dev only."""
+    if os.getenv("SMS_SKIP_TWILIO_VERIFY", "0") == "1":
+        return True
+    token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    if not token:
+        logger.error("SMS inbound REJECTED — TWILIO_AUTH_TOKEN not set (cannot verify signature)")
+        return False
+    provided = request.headers.get("X-Twilio-Signature", "")
+    if not provided:
+        return False
+    # Reconstruct the exact public URL Twilio signed (honor the TLS-terminating
+    # proxy: Railway/nginx forward the real scheme + host).
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    url = f"{proto}://{host}{request.url.path}"
+    if request.url.query:
+        url += f"?{request.url.query}"
+    payload = url + "".join(f"{k}{form[k]}" for k in sorted(form.keys()))
+    import base64
+    digest = hmac.new(token.encode(), payload.encode("utf-8"), hashlib.sha1).digest()
+    expected = base64.b64encode(digest).decode()
+    return hmac.compare_digest(expected, provided)
+
+
 @router.post("/inbound")
 async def handle_inbound_sms(request: Request):
     """Twilio SMS webhook — receives incoming text messages."""
     _cleanup_old_sessions()
 
     form = await request.form()
+    # Auth FIRST — before any session/credit/LLM work — so a forged webhook
+    # can't inject orders or burn credits.
+    if not _verify_twilio_signature(request, {k: str(v) for k, v in form.items()}):
+        logger.warning("SMS inbound rejected: bad/missing Twilio signature (from=%s)",
+                       form.get("From", "?"))
+        return Response(status_code=403, content="Invalid signature")
+
     customer_phone = form.get("From", "")
     merchant_phone = form.get("To", "")
     body = str(form.get("Body", "")).strip()
@@ -380,6 +422,21 @@ async def handle_inbound_sms(request: Request):
     if keyword == "start":
         await record_optin(merchant_id, customer_phone)
         return _twiml_sms(start_ack_reply(config.business_name))
+
+    # ─── CASL: honor a prior opt-out before replying ────────────────────
+    # A customer who texted STOP must not get conversational replies (the
+    # voice→SMS handoff path already checks this; the inbound SMS path did
+    # not). START above re-subscribes; everything else stops here.
+    try:
+        optout = await fetch_optout_status(merchant_id, customer_phone)
+        if optout.get("marketing_optout"):
+            logger.info("SMS inbound from opted-out %s — not replying", customer_phone)
+            return _twiml_sms(
+                "You're unsubscribed from texts with "
+                f"{config.business_name}. Reply START to re-subscribe."
+            )
+    except Exception as e:  # noqa: BLE001 — opt-out check never hard-fails the webhook
+        logger.warning("opt-out check failed for %s: %s", customer_phone, e)
 
     # ─── CASL: Canada-only inbound guard ────────────────────────────────
     # Reserved keywords above are exempt; everything else must come from

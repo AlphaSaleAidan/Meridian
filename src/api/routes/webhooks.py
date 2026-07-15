@@ -143,6 +143,33 @@ async def _record_webhook_event(event_id: str, provider: str = "square") -> bool
     return bool(rows)
 
 
+def _decrypt_conn_token(conn: dict) -> str:
+    """Decrypt a pos_connections access token for API use. Handles both storage
+    shapes (access_token_enc string; credentials_encrypted JSONB dict) and
+    legacy/tampered ciphertext (→ "", logged). Mirrors
+    phone_dashboard._decrypt_connection_token but kept local so route modules
+    don't import each other."""
+    from ...security.encryption import decrypt_token
+
+    enc = conn.get("access_token_enc")
+    if enc:
+        try:
+            return decrypt_token(enc)
+        except Exception:  # noqa: BLE001 — tampered/legacy ciphertext → absent
+            logger.warning("webhook: could not decrypt access_token_enc for %s",
+                           conn.get("external_merchant_id", "?"))
+    creds = conn.get("credentials_encrypted")
+    if isinstance(creds, dict):
+        for key in ("access_token", "api_key", "token"):
+            val = creds.get(key)
+            if val:
+                try:
+                    return decrypt_token(val)
+                except Exception:  # noqa: BLE001
+                    logger.warning("webhook: could not decrypt credentials_encrypted[%s]", key)
+    return ""
+
+
 async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
     """Look up an active connection by Square merchant ID."""
     from ...db import _db_instance
@@ -161,8 +188,10 @@ async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
         return None
 
     conn = rows[0]
-    # Inject access_token for the SquareClient
-    conn["access_token"] = conn.get("access_token_enc", "")
+    # Inject the DECRYPTED access token for the SquareClient. access_token_enc is
+    # AES-GCM ciphertext — passing it raw made every webhook-triggered Square API
+    # call fail, silently dropping order/catalog/inventory sync.
+    conn["access_token"] = _decrypt_conn_token(conn)
     return conn
 
 
@@ -518,5 +547,7 @@ async def _get_connection_by_provider_merchant(provider: str, merchant_id: str) 
         return None
 
     conn = rows[0]
-    conn["access_token"] = conn.get("access_token_enc", "")
+    # Decrypt before use (see _get_connection_by_merchant) — raw ciphertext here
+    # silently broke Toast/Clover webhook order sync.
+    conn["access_token"] = _decrypt_conn_token(conn)
     return conn

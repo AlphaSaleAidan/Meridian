@@ -6,6 +6,7 @@ Auth dependencies for Meridian API.
 - require_admin_jwt: JWT + admin email check
 - require_service_auth: Authorization Bearer token OR X-Admin-Key (service/internal endpoints)
 """
+import hmac
 import json
 import logging
 import os
@@ -35,7 +36,9 @@ async def require_admin(key: str = Depends(_admin_key_header)):
     expected = os.environ.get("MERIDIAN_ADMIN_KEY", "")
     if not expected:
         raise HTTPException(503, "Admin access not configured")
-    if not key or key != expected:
+    # Constant-time compare — a plain != leaks the correct prefix length via
+    # timing, letting an attacker brute-force the key byte-by-byte.
+    if not key or not hmac.compare_digest(key, expected):
         raise HTTPException(403, "Invalid admin key")
 
 
@@ -273,11 +276,11 @@ async def require_service_auth(
     admin_expected = os.environ.get("MERIDIAN_ADMIN_KEY", "")
     service_token = os.environ.get("MERIDIAN_SERVICE_TOKEN", "")
 
-    if admin_key and admin_expected and admin_key == admin_expected:
+    if admin_key and admin_expected and hmac.compare_digest(admin_key, admin_expected):
         return {"kind": "admin"}
     if auth_header:
         token = auth_header.removeprefix("Bearer ").strip()
-        if service_token and token == service_token:
+        if service_token and hmac.compare_digest(token, service_token):
             return {"kind": "service"}
         user = await _verify_supabase_token(token)
         if user:
@@ -296,11 +299,11 @@ async def require_admin_auth(
     admin_expected = os.environ.get("MERIDIAN_ADMIN_KEY", "")
     service_token = os.environ.get("MERIDIAN_SERVICE_TOKEN", "")
 
-    if admin_key and admin_expected and admin_key == admin_expected:
+    if admin_key and admin_expected and hmac.compare_digest(admin_key, admin_expected):
         return {"kind": "admin"}
     if auth_header:
         token = auth_header.removeprefix("Bearer ").strip()
-        if service_token and token == service_token:
+        if service_token and hmac.compare_digest(token, service_token):
             return {"kind": "service"}
         user = await _verify_supabase_token(token)
         if user:
