@@ -73,6 +73,18 @@ class MerchantPhoneConfig:
     # per-order Meridian fee under the fee-split model. "" = unset → the
     # default tier's rate applies (payment_links.DEFAULT_ORDER_FEE_TIER).
     plan_tier: str = ""
+    # TEXT-TO-PAY PROVIDER: which rail generates the texted payment link.
+    #   "stripe" (DEFAULT) — current behavior, byte-for-byte unchanged.
+    #   "clover"          — Clover Hosted Checkout via the lazy /p short link.
+    # HCO sessions expire 15 minutes after creation, so the Clover session is
+    # created when the customer TAPS the link (backend /p/{code} handler), not
+    # at SMS-send time. Unknown/missing values normalize to "stripe".
+    payment_link_provider: str = "stripe"
+    # Per-merchant signing secret for the Clover Hosted Checkout payment
+    # webhook (merchant pastes our URL in Clover dashboard → Settings →
+    # Ecommerce → Hosted Checkout, and copies the generated secret to us).
+    # Empty = webhook rejected 401 for this merchant (fail closed).
+    clover_hco_webhook_secret: str = ""
     # PER-RESTAURANT PERSONALIZATION BRIEF ──────────────────────────────
     # Generated on demand via POST /api/phone/build-brief/{merchant_id}.
     # Injected into the system prompt for tone/warmth only — the MENU is
@@ -80,19 +92,24 @@ class MerchantPhoneConfig:
     # Empty string = no brief = prompt is byte-for-byte unchanged (no regression).
     website_url: str = ""
     restaurant_brief: str = ""
-    # Per-merchant opt-in: text a Clover-native Hosted Checkout link instead of
-    # Stripe (only honored when the global CLOVER_NATIVE_PAY_ENABLED env is on
-    # — two independent gates, both default OFF).
-    native_pos_pay: bool = False
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
+
+_VALID_PAYMENT_LINK_PROVIDERS = ("stripe", "clover")
 
 
 def _norm_payment_mode(value: Optional[str]) -> str:
     """Normalize the configured payment_mode; unknown/missing → pay_now (default)."""
     mode = (value or "").strip().lower()
     return mode if mode in _VALID_PAYMENT_MODES else "pay_now"
+
+
+def _norm_payment_link_provider(value: Optional[str]) -> str:
+    """Normalize payment_link_provider; unknown/missing → stripe (default,
+    zero behavior change for existing merchants)."""
+    provider = (value or "").strip().lower()
+    return provider if provider in _VALID_PAYMENT_LINK_PROVIDERS else "stripe"
 
 
 async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]:
@@ -151,9 +168,12 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
                 demo_safe=bool(row.get("demo_safe", False)),
                 plan_tier=(row.get("plan_tier") or "").strip().lower(),
+                payment_link_provider=_norm_payment_link_provider(
+                    row.get("payment_link_provider")),
+                clover_hco_webhook_secret=(
+                    row.get("clover_hco_webhook_secret") or "").strip(),
                 website_url=(row.get("website_url") or "").strip(),
                 restaurant_brief=(row.get("restaurant_brief") or "").strip(),
-                native_pos_pay=bool(row.get("native_pos_pay", False)),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
