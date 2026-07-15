@@ -22,10 +22,21 @@ export interface PlanTier {
   phoneAgent: boolean
   /** Per-order Meridian fee in the plan's currency (0 = no per-order fee). */
   orderFee: number
+  /** REDLINE: lowest per-order fee a rep may negotiate down to on the fee
+   *  slider (Aidan 2026-07-15: premium $0.65, command $0.45). The backend
+   *  clamps to the same floor. */
+  orderFeeFloor: number
 }
 
 /** Max amount (in the plan's currency) a rep can add on top of a tier's base price. */
 export const REP_PRICE_HEADROOM = 100
+
+/** Voice-call overage billing — every call includes the first
+ *  VOICE_INCLUDED_MINUTES; each additional (whole) minute bills at
+ *  VOICE_OVERAGE_PER_MIN to the merchant's Meridian account. Mirrors the
+ *  live backend dials (GET /api/phone/fees); shown wherever pricing is. */
+export const VOICE_INCLUDED_MINUTES = 3
+export const VOICE_OVERAGE_PER_MIN = 0.45
 
 export const PLAN_TIERS: PlanTier[] = [
   {
@@ -35,6 +46,7 @@ export const PLAN_TIERS: PlanTier[] = [
     interval: 'month',
     phoneAgent: false,
     orderFee: 0,
+    orderFeeFloor: 0,
     features: [
       'POS analytics dashboard',
       'Revenue + product insights',
@@ -52,11 +64,13 @@ export const PLAN_TIERS: PlanTier[] = [
     tag: 'MOST POPULAR',
     phoneAgent: true,
     orderFee: 1.49,
+    orderFeeFloor: 0.65,
     features: [
       'Everything in Standard',
       'AI phone agent — answers calls + takes orders',
       'Pay-by-text checkout',
       '$1.49 per-order transaction fee',
+      'Calls: first 3 min included, then $0.45/min',
     ],
   },
   {
@@ -66,9 +80,11 @@ export const PLAN_TIERS: PlanTier[] = [
     interval: 'month',
     phoneAgent: true,
     orderFee: 1.0,
+    orderFeeFloor: 0.45,
     features: [
       'Everything in Premium',
       'Lowest per-order rate — $1.00 Meridian fee per order',
+      'Calls: first 3 min included, then $0.45/min',
       'Multi-location support',
       'Dedicated account manager',
     ],

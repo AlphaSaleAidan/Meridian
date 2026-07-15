@@ -173,7 +173,7 @@ async def clover_return(code: str):
     # was auto-deducted — the ledger is how this fee gets settled at billing.
     # Idempotent on (source, ref): a reload can't double-post.
     try:
-        fee_cents = _clover_native_fee_cents(sess)
+        fee_cents = await _clover_native_fee_cents(sess)
         if fee_cents > 0 and merchant_id:
             from ...services.voice_ledger import credit
             await credit(merchant_id, fee_cents, source="clover_native_fee",
@@ -255,10 +255,12 @@ async def _verify_clover_payment(sess: dict) -> dict | None:
     return None
 
 
-def _clover_native_fee_cents(sess: dict) -> int:
+async def _clover_native_fee_cents(sess: dict) -> int:
     """Meridian's fee for a Clover-native payment — mirrors the Stripe rail's
     application fee: split model = customer surcharge (already charged as a
-    line item) + merchant-side %, else the flat MERIDIAN_SERVICE_FEE_CENTS."""
+    line item) + merchant-side %, else the flat MERIDIAN_SERVICE_FEE_CENTS.
+    The rep-set per-merchant override (phone_agent_config.order_fee_cents)
+    replaces the tier/env per-order fee in both models."""
     import sys as _sys
     from pathlib import Path as _Path
 
@@ -267,14 +269,27 @@ def _clover_native_fee_cents(sess: dict) -> int:
         _sys.path.insert(0, _pa)
     import payment_links as _pl
 
+    override = None
+    try:
+        rows = await get_db().select(
+            "phone_agent_config", "order_fee_cents",
+            filters={"merchant_id": f"eq.{sess.get('merchant_id', '')}"}, limit=1,
+        )
+        if rows and rows[0].get("order_fee_cents") is not None:
+            override = max(int(rows[0]["order_fee_cents"]), 0)
+    except Exception as e:  # noqa: BLE001 — fee lookup never blocks the page
+        logger.warning("order-fee override lookup failed: %s", e)
+
     amount = int(sess.get("amount_cents") or 0)
     if _pl.FEE_SPLIT_ENABLED and amount > 0:
         currency = (sess.get("currency") or "cad").lower()
         # plan tier isn't on the session row; standard-tier surcharge is the
         # floor — billing can true-up from the ledger note if needed.
-        surcharge = _pl.customer_surcharge_cents("", currency)
+        surcharge = _pl.customer_surcharge_cents("", currency, override_cents=override)
         subtotal = max(amount - surcharge, 0)
         return _pl.split_application_fee_cents(subtotal, surcharge)
+    if override is not None:
+        return override
     return int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
 
 

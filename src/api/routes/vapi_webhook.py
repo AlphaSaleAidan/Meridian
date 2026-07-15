@@ -285,9 +285,31 @@ KOKORO_TO_VAPI = {
     "bm_george": "Neil",
 }
 
+# The live Vapi roster (accents per docs.vapi.ai/providers/voice/vapi-voices):
+# Savannah/Layla American F · Naina Indian F · Emma Asian-American F ·
+# Elliot Canadian M · Kai/Sid American M · Neil Indian M. The accent picker in
+# the setup wizard writes these names directly to phone_agent_config.voice.
+VAPI_LIVE_VOICES = {"Savannah", "Layla", "Naina", "Emma", "Sid", "Elliot", "Kai", "Neil"}
+
 
 def _vapi_voice(voice_id: str) -> str:
-    return KOKORO_TO_VAPI.get((voice_id or "").strip(), "Elliot")
+    v = (voice_id or "").strip()
+    if v in VAPI_LIVE_VOICES:
+        return v
+    if v.title() in VAPI_LIVE_VOICES:  # tolerate "naina" from the UI
+        return v.title()
+    return KOKORO_TO_VAPI.get(v, "Elliot")
+
+
+def _transcriber_for(config) -> dict:
+    """Deepgram nova-3; language=multi enables code-switch understanding
+    (Hindi/Punjabi + English on one call) — set by the wizard's multilingual
+    toggle under the Indian accent group. Default stays EN-only."""
+    t = {"provider": "deepgram", "model": "nova-3"}
+    lang = (getattr(config, "language", "") or "").strip().lower()
+    if lang in ("multi", "multilingual"):
+        t["language"] = "multi"
+    return t
 
 
 _SUBMIT_ORDER_TOOL = {
@@ -321,7 +343,7 @@ def _assistant_for(config) -> dict:
     return {
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
-        "transcriber": {"provider": "deepgram", "model": "nova-3"},
+        "transcriber": _transcriber_for(config),
         "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
         "model": {"provider": "openai", "model": "gpt-4.1",
                   "messages": [{"role": "system", "content": _system_prompt(config)}],

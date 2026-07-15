@@ -320,15 +320,27 @@ export function getPhoneDemoData(bizId?: string) {
 // Labels/descriptions = the Vapi native voice actually used on live calls
 // (see KOKORO_TO_VAPI in src/api/routes/vapi_webhook.py). The stored `id`
 // stays the legacy kokoro-style value so existing merchant configs remain valid.
-export const VOICE_OPTIONS = [
-  { id: 'af_bella', label: 'Savannah', desc: 'Realistic, straightforward (female)', sampleText: "Thank you for calling! I'd be happy to help you place an order today." },
-  { id: 'af_sarah', label: 'Layla', desc: 'Warm, bright, cheerful (female)', sampleText: "Hey there! Welcome in -- what can I get started for you?" },
-  { id: 'af_nicole', label: 'Naina', desc: 'Calm, collected, professional (female)', sampleText: "Hi, you've reached us -- take your time, I'm here whenever you're ready." },
-  { id: 'bf_emma', label: 'Emma', desc: 'Warm, conversational (female)', sampleText: "Good day, thank you for ringing -- how may I help with your order?" },
-  { id: 'am_adam', label: 'Sid', desc: 'Smooth, deep-toned, laid-back (male)', sampleText: "Good evening. I'll take your order whenever you're ready." },
-  { id: 'am_michael', label: 'Elliot', desc: 'Friendly, professional (male) -- default', sampleText: "Hi! Thanks for calling -- let me know what sounds good to you." },
-  { id: 'am_echo', label: 'Kai', desc: 'Friendly, relaxed, approachable (male)', sampleText: "Hey, great to hear from you -- what can I grab for you tonight?" },
-  { id: 'bm_george', label: 'Neil', desc: 'Clear, professional (male)', sampleText: "Hello there, lovely to hear from you -- what shall I put together?" },
+// Accent groups follow the roster's documented accents
+// (docs.vapi.ai/providers/voice/vapi-voices): Savannah/Layla/Sid/Kai American,
+// Elliot Canadian, Naina + Neil Indian, Emma Asian American.
+export type VoiceAccent = 'north_american' | 'indian' | 'east_asian'
+
+export const ACCENT_OPTIONS: { id: 'all' | VoiceAccent; label: string; desc: string }[] = [
+  { id: 'all', label: 'All voices', desc: 'Browse the full roster' },
+  { id: 'north_american', label: 'North American', desc: 'US & Canadian accents' },
+  { id: 'indian', label: 'Indian', desc: 'Indian accents — can also understand Hindi & Punjabi callers' },
+  { id: 'east_asian', label: 'East Asian', desc: 'Asian-American accent' },
+]
+
+export const VOICE_OPTIONS: { id: string; label: string; desc: string; accent: VoiceAccent; sampleText: string }[] = [
+  { id: 'af_bella', label: 'Savannah', desc: 'American — realistic, straightforward (female)', accent: 'north_american', sampleText: "Thank you for calling! I'd be happy to help you place an order today." },
+  { id: 'af_sarah', label: 'Layla', desc: 'American — warm, bright, cheerful (female)', accent: 'north_american', sampleText: "Hey there! Welcome in -- what can I get started for you?" },
+  { id: 'af_nicole', label: 'Naina', desc: 'Indian — calm, collected, professional (female)', accent: 'indian', sampleText: "Hi, you've reached us -- take your time, I'm here whenever you're ready." },
+  { id: 'bf_emma', label: 'Emma', desc: 'Asian American — warm, conversational (female)', accent: 'east_asian', sampleText: "Good day, thank you for ringing -- how may I help with your order?" },
+  { id: 'am_adam', label: 'Sid', desc: 'American — smooth, deep-toned, laid-back (male)', accent: 'north_american', sampleText: "Good evening. I'll take your order whenever you're ready." },
+  { id: 'am_michael', label: 'Elliot', desc: 'Canadian — friendly, professional (male) -- default', accent: 'north_american', sampleText: "Hi! Thanks for calling -- let me know what sounds good to you." },
+  { id: 'am_echo', label: 'Kai', desc: 'American — friendly, relaxed, approachable (male)', accent: 'north_american', sampleText: "Hey, great to hear from you -- what can I grab for you tonight?" },
+  { id: 'bm_george', label: 'Neil', desc: 'Indian — clear, professional (male)', accent: 'indian', sampleText: "Hello there, lovely to hear from you -- what shall I put together?" },
 ]
 
 export const DEFAULT_PERSONALITY: VoicePersonality = {

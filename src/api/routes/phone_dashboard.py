@@ -46,7 +46,12 @@ class PhoneConfigRequest(BaseModel):
     phone_number: str | None = None
     greeting: str | None = None
     voice: str | None = None
+    # 'en' (default) or 'multi' — multi turns on Deepgram multilingual
+    # transcription (Hindi/Punjabi + English code-switching on one call).
     language: str | None = None
+    # Accent group chosen in the wizard (north_american | indian | east_asian).
+    # Presentation-level; `voice` carries the actual Vapi voice name.
+    accent: str | None = None
     active: bool | None = None
     menu_items: list | None = None
     pos_system: str | None = None
