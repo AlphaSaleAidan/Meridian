@@ -215,9 +215,12 @@ export default function OnboardingWizard() {
                   className="w-full px-3 py-2.5 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] placeholder-[#A1A1A8]/40 focus:outline-none focus:border-[#1A8FD6]/50 focus:ring-1 focus:ring-[#1A8FD6]/20 transition-colors"
                   placeholder="Enter code (optional)"
                 />
-                {promoCode.toUpperCase() === 'FREEMONTH' && (
-                  <p className="text-[11px] text-[#17C5B0] mt-1.5 flex items-center gap-1">
-                    <Check size={10} /> First month free!
+                {/* No client-side promo validation: this used to flash "First
+                    month free!" for a hardcoded code while nothing billing-side
+                    honored it — a promise the first invoice would break. */}
+                {promoCode.trim() !== '' && (
+                  <p className="text-[11px] text-[#A1A1A8] mt-1.5">
+                    Your account manager will apply this at billing setup.
                   </p>
                 )}
               </div>

@@ -82,7 +82,7 @@ async def _send_via_telnyx(phone: str, message: str) -> dict:
 def _format_checkout_sms(
     order: dict, payment_link: str, business_name: str, template: str = ""
 ) -> str:
-    sym = "CA$" if order.get("currency") == "CAD" else "$"
+    sym = "CA$" if (order.get("currency") or "").upper() == "CAD" else "$"
     total = order.get("total", 0)
     item_count = sum(i.get("quantity", 1) for i in order.get("items", []))
     order_type = order.get("order_type", "pickup").replace("_", " ").title()

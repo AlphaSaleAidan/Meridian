@@ -17,6 +17,7 @@ stripe_connect). They're dep-light (no pipecat), so the backend can import them.
 build_system_prompt lives in pipecat-heavy bot.py, so the prompt is rebuilt here.
 """
 import hmac
+import json
 import logging
 import os
 import sys
@@ -66,6 +67,11 @@ VOICE_OVERAGE_CENTS_PER_MIN = int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MI
 # (cap − included) × overage — 5 min ⇒ 2 min over ⇒ 90¢ — and our own Vapi
 # spend per call is capped with it. 0 disables the cap.
 VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 0)
+# Grace past the advertised cap so a call that submits an order at ~4:55 still
+# hears the spoken confirmation instead of dead air (order + SMS land either
+# way). Billing is unaffected: the end-of-call overage is clamped to
+# (cap − included) minutes, so the disclosed per-call maximum holds.
+VOICE_CAP_GRACE_SEC = int(os.getenv("MERIDIAN_VOICE_CAP_GRACE_SEC", "15") or 0)
 
 
 # ── merchant resolution ──────────────────────────────────────────────
@@ -370,9 +376,10 @@ def _assistant_for(config) -> dict:
         "endCallFunctionEnabled": True,
     }
     if VOICE_MAX_CALL_MIN > 0:
-        # Vapi drops the call at the cap; the prompt pacing line in
+        # Vapi drops the call at the cap (+ a short grace so the confirmation
+        # sentence isn't cut mid-word); the prompt pacing line in
         # _system_prompt keeps the agent moving so orders land before it.
-        assistant["maxDurationSeconds"] = VOICE_MAX_CALL_MIN * 60
+        assistant["maxDurationSeconds"] = VOICE_MAX_CALL_MIN * 60 + VOICE_CAP_GRACE_SEC
     return assistant
 
 
@@ -400,6 +407,13 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
     if caller_phone and not args.get("caller_phone"):
         args["caller_phone"] = caller_phone
     normalized = normalize_order(args, config)
+    # Off-menu items are DROPPED by the normalizer (never billed at $0.00) —
+    # the agent must say so, and an order with nothing left must not dispatch.
+    missing = normalized.get("unavailable_items") or []
+    if missing and not normalized.get("items"):
+        names = " or ".join(missing[:3])
+        return (f"I'm sorry — I couldn't find {names} on our menu, so I "
+                "haven't placed the order. Would you like to try something else?")
     # the pay-link SMS only fires when the order carries caller_phone —
     # force it from the call's caller id so the SMS always goes out.
     if caller_phone:
@@ -409,10 +423,15 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
         pay_choice=args.get("pay_choice", ""),
     )
     pos_result = routed.get("pos_result", {})
-    logger.info("VAPI order placed: merchant=%s caller=%s items=%d pos=%s sms=%s",
+    logger.info("VAPI order placed: merchant=%s caller=%s items=%d dropped=%d pos=%s sms=%s",
                 config.merchant_id, caller_phone or "?", len(normalized.get("items", [])),
-                pos_result.get("success"), routed.get("sms_sent"))
-    return _confirm(args, routed or {})
+                len(missing), pos_result.get("success"), routed.get("sms_sent"))
+    confirm = _confirm({**args, "items": normalized.get("items", [])}, routed or {})
+    if missing:
+        names = " or ".join(missing[:3])
+        confirm += (f" One thing — I couldn't find {names} on the menu, "
+                    "so I left that off.")
+    return confirm
 
 
 @router.post("/webhook")
@@ -464,7 +483,6 @@ async def vapi_webhook(request: Request):
             fn = tc.get("function", {}) or {}
             args = fn.get("arguments", {}) or {}
             if isinstance(args, str):
-                import json
                 try:
                     args = json.loads(args)
                 except Exception:
@@ -505,22 +523,47 @@ async def vapi_webhook(request: Request):
         dur_min = float(dur_sec) / 60.0
         logger.info("VAPI end-of-call: ended=%s cost=%s dur=%.1fmin call=%s",
                     ended, cost, dur_min, call_id)
+        if not call_id:
+            # The voice ledger dedupes on (source, ref) ONLY when a ref exists.
+            # A retried report with no call id would double-bill, so synthesize
+            # a stable ref from the payload — identical retries hash identically.
+            import hashlib
+            digest = hashlib.sha256(
+                json.dumps(msg, sort_keys=True, default=str).encode()).hexdigest()
+            call_id = f"noid-{digest[:16]}"
+            logger.warning("end-of-call with no call id — synthesized ref %s", call_id)
         try:
-            config = await _resolve_config(_dialed_number(msg))
+            dialed = _dialed_number(msg)
+            config = await _resolve_config(dialed)
             merchant_id = getattr(config, "merchant_id", "") or "demo"
+            if merchant_id == "demo":
+                # Unmapped DID: the real merchant is NOT being metered. Bill
+                # demo (visibility) but scream with the dialed number so ops
+                # can map it and reattribute.
+                logger.error("end-of-call for UNMAPPED number %s — costs booked "
+                             "to 'demo' (call %s); map this DID to a merchant",
+                             dialed or "?", call_id)
             from ...services.voice_ledger import credit, debit
             # Our cost (Vapi) — debit.
             cents = int(round(float(cost) * 100)) if cost is not None else 0
             if cents > 0:
+                note = str(ended or "")
+                if merchant_id == "demo" and dialed:
+                    note = f"unmapped:{dialed} {note}".strip()
                 await debit(merchant_id, cents, source="vapi_call",
-                            ref=call_id or None, note=str(ended or ""))
+                            ref=call_id, note=note)
             # Duration overage we bill the merchant: $0.45/min over 3 min (billed
             # per whole minute over the included block). Credit = billable revenue.
+            # With a hard cap the overage is CLAMPED to (cap − included) so the
+            # bill can never exceed the disclosed maximum (5-min cap ⇒ 90¢) even
+            # when the drop lands a rounding-minute past the cap.
             over_min = max(0, math.ceil(dur_min) - VOICE_INCLUDED_MIN)
+            if VOICE_MAX_CALL_MIN > 0:
+                over_min = min(over_min, max(VOICE_MAX_CALL_MIN - VOICE_INCLUDED_MIN, 0))
             overage = over_min * VOICE_OVERAGE_CENTS_PER_MIN
             if overage > 0:
                 await credit(merchant_id, overage, source="duration_overage",
-                             ref=call_id or None, note=f"{over_min}min over @ {dur_min:.1f}min")
+                             ref=call_id, note=f"{over_min}min over @ {dur_min:.1f}min")
                 logger.info("Duration overage billed: merchant=%s %dmin over → %d¢",
                             merchant_id, over_min, overage)
         except Exception as e:  # noqa: BLE001 — accounting never affects the call

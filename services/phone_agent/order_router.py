@@ -91,7 +91,7 @@ def _format_order_summary(order: dict) -> str:
             lines.append(f"     → {item['special_instructions']}")
 
     lines.append("")
-    sym = "CA$" if order.get("currency") == "CAD" else "$"
+    sym = "CA$" if (order.get("currency") or "").upper() == "CAD" else "$"
     lines.append(f"Subtotal: {sym}{order.get('subtotal', 0):.2f}")
     lines.append(f"Tax: {sym}{order.get('tax', 0):.2f}")
     lines.append(f"Total: {sym}{order.get('total', 0):.2f}")

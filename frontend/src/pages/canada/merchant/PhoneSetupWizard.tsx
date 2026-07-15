@@ -702,9 +702,9 @@ export default function PhoneSetupWizard() {
             <div className="rounded-lg border border-[#1F1F23] bg-[#0F0F12] px-3 py-2.5">
               <p className="text-[11px] font-semibold text-[#F5F5F7] mb-1">Call &amp; order pricing</p>
               <ul className="text-[10px] text-[#A1A1A8] space-y-0.5">
-                <li>• Per-order fee: <span className="text-[#F5F5F7] font-medium">{phoneConfig?.order_fee_cents != null ? `CA$${(phoneConfig.order_fee_cents / 100).toFixed(2)}` : 'per your plan'}</span> on each paid phone order</li>
+                <li>• Per-order fee: <span className="text-[#F5F5F7] font-medium">{phoneConfig?.order_fee_cents != null ? `${isCanadaMount() ? 'CA$' : '$'}${(phoneConfig.order_fee_cents / 100).toFixed(2)}` : 'per your plan'}</span> on each paid phone order</li>
                 <li>• Every call includes the first <span className="text-[#F5F5F7] font-medium">{feeDials.included_minutes} minutes</span> free of call charges</li>
-                <li>• After that: <span className="text-[#F5F5F7] font-medium">CA${(feeDials.overage_cents_per_min / 100).toFixed(2)}/min</span>, billed automatically to your Meridian account</li>
+                <li>• After that: <span className="text-[#F5F5F7] font-medium">{isCanadaMount() ? 'CA$' : '$'}{(feeDials.overage_cents_per_min / 100).toFixed(2)}/min</span>, billed automatically to your Meridian account</li>
                 {feeDials.max_call_minutes > 0 && (
                   <li>• Calls end automatically at <span className="text-[#F5F5F7] font-medium">{feeDials.max_call_minutes} minutes</span> — the agent wraps up and submits the order before then</li>
                 )}

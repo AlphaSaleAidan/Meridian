@@ -138,10 +138,12 @@ def test_clover_native_fee_uses_override(monkeypatch):
     surcharge = pl.customer_surcharge_cents("premium", "cad", override_cents=77)
     assert clover_fee_cents(sess) == pl.split_application_fee_cents(3400 - surcharge, surcharge)
 
-    # flat model → env fee, payload ignored
+    # flat model → the negotiated override STILL wins (bug-hunt fix: the env
+    # fee only applies when no override travels in the payload)
     monkeypatch.setenv("MERIDIAN_SERVICE_FEE_CENTS", "149")
     monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", False)
-    assert clover_fee_cents(sess) == 149
+    assert clover_fee_cents(sess) == 77
+    assert clover_fee_cents({**sess, "payload": {}}) == 149
 
 
 # ── 2. redline enforcement ────────────────────────────────────
@@ -223,7 +225,8 @@ def test_assistant_caps_call_at_max_minutes(monkeypatch):
     import src.api.routes.vapi_webhook as vw
     monkeypatch.setattr(vw, "VOICE_MAX_CALL_MIN", 5)
     a = _assistant_for(_cap_cfg())
-    assert a["maxDurationSeconds"] == 300
+    # advertised cap + confirmation grace; billing clamps to the advertised cap
+    assert a["maxDurationSeconds"] == 300 + vw.VOICE_CAP_GRACE_SEC
     # the agent is told about the cap so it lands orders before the drop
     prompt = a["model"]["messages"][0]["content"]
     assert "end automatically at 5 minutes" in prompt

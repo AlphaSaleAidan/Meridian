@@ -755,7 +755,8 @@ async def create_website_order(req: CreateOrderRequest):
             pass
         raise HTTPException(
             503,
-            "Online payment is temporarily unavailable — please call the restaurant to order.",
+            "Online payment is temporarily unavailable — please try again in a "
+            "minute, or call the restaurant to order. Your card was not charged.",
         )
 
     try:

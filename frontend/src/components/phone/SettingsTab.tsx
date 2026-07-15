@@ -69,11 +69,16 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
     if (!orgId) return
     setSaving(true)
     setSaveError(null)
+    // This grid isn't filtered by accent group (unlike the setup wizard), so
+    // picking a voice here also re-syncs the stored accent to the voice's
+    // group — the saved config never ends up with a voice/accent mismatch.
+    const voiceAccent = VOICE_OPTIONS.find(v => v.id === cfg.voice)?.accent
     const res = await phoneService.saveConfig({
       merchant_id: orgId,
       business_name: cfg.businessName,
       greeting: cfg.greeting,
       voice: cfg.voice,
+      ...(voiceAccent ? { accent: voiceAccent } : {}),
       order_types: cfg.orderTypes,
       active: cfg.active,
       sms_pay_template: smsPayTemplate.trim() || undefined,

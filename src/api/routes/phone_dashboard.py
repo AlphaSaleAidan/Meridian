@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..auth import enforce_service_member, require_service_auth
 from ...db import get_db
@@ -52,6 +52,17 @@ class PhoneConfigRequest(BaseModel):
     # Accent group chosen in the wizard (north_american | indian | east_asian).
     # Presentation-level; `voice` carries the actual Vapi voice name.
     accent: str | None = None
+
+    @field_validator("accent")
+    @classmethod
+    def _valid_accent(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return v
+        allowed = {"north_american", "indian", "east_asian"}
+        s = v.strip().lower()
+        if s not in allowed:
+            raise ValueError(f"accent must be one of {sorted(allowed)}")
+        return s
     active: bool | None = None
     menu_items: list | None = None
     pos_system: str | None = None
