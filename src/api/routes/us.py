@@ -409,8 +409,9 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
             # per-order fee (mirrors canada.create_customer). Best-effort: a
             # seed failure never fails customer creation.
             if req.order_fee_cents is not None:
-                from .canada import _clamp_order_fee_cents
-                fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id)
+                from .canada import _ORDER_FEE_FLOOR_CENTS_USD, _clamp_order_fee_cents
+                fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id,
+                                             floors=_ORDER_FEE_FLOOR_CENTS_USD)
                 try:
                     pac_headers = {
                         "Authorization": f"Bearer {service_key}",

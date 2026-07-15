@@ -89,22 +89,16 @@ class _HcoClient:
         return _Resp(200, {"href": "https://x/chk", "checkoutSessionId": "C1"})
 
 
-@aio
-async def test_clover_hco_fee_line_uses_override(monkeypatch):
-    calls = []
-    monkeypatch.setattr(pl.httpx, "AsyncClient", lambda timeout=None: _HcoClient(calls))
+def test_clover_hco_fee_line_uses_override(monkeypatch):
+    # #322's unified lazy rail: the override reaches the HCO cart's fee line
+    # via _clover_hco_line_items (called at /p tap time with the payload's
+    # fee_override_cents).
     monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
-
-    async def recorded(*a, **k):
-        return True
-    monkeypatch.setattr(pl, "_record_checkout_session", recorded)
-
-    cfg = SimpleNamespace(pos_access_token="t", pos_location_id="M", plan_tier="premium",
-                          order_fee_cents=65)
     order = {"merchant_id": "m1", "currency": "cad", "total": 10.0,
              "items": [{"name": "Samosa", "quantity": 1, "unit_price": 10.0}]}
-    await pl._clover_hosted_checkout(order, cfg, "")
-    fee_line = calls[0][1]["shoppingCart"]["lineItems"][-1]
+    items, _total = pl._clover_hco_line_items(order, plan_tier="premium",
+                                              fee_override_cents=65)
+    fee_line = items[-1]
     assert fee_line["name"] == "Service & processing fee"
     assert fee_line["price"] == 65 + pl.CUSTOMER_FIXED_FEE_CENTS  # NOT the CA$1.99 tier rate
 
@@ -133,28 +127,44 @@ async def test_webhook_ledger_credit_uses_override(monkeypatch):
     assert await sc._merchant_service_fee_cents("m1") == 149
 
 
-@aio
-async def test_clover_native_fee_uses_override(monkeypatch):
+def test_clover_native_fee_uses_override(monkeypatch):
+    # #322's settlement reads the override from the session PAYLOAD (written
+    # at order time) — billing books the exact negotiated fee even if the
+    # config changes between order and payment.
+    from src.services.clover_hco import clover_fee_cents
+    monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
+    sess = {"merchant_id": "m1", "amount_cents": 3400, "currency": "cad",
+            "payload": {"plan_tier": "premium", "fee_override_cents": 77}}
+    surcharge = pl.customer_surcharge_cents("premium", "cad", override_cents=77)
+    assert clover_fee_cents(sess) == pl.split_application_fee_cents(3400 - surcharge, surcharge)
+
+    # flat model → env fee, payload ignored
     monkeypatch.setenv("MERIDIAN_SERVICE_FEE_CENTS", "149")
     monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", False)
-    monkeypatch.setattr(pr, "get_db", lambda: _CfgDB({"order_fee_cents": 77}))
-    sess = {"merchant_id": "m1", "amount_cents": 3400, "currency": "cad"}
-    assert await pr._clover_native_fee_cents(sess) == 77
-    monkeypatch.setattr(pr, "get_db", lambda: _CfgDB(None))
-    assert await pr._clover_native_fee_cents(sess) == 149
+    assert clover_fee_cents(sess) == 149
 
 
 # ── 2. redline enforcement ────────────────────────────────────
 
 
 def test_clamp_enforces_tier_redlines():
-    assert _clamp_order_fee_cents(50, "premium") == 65    # below premium floor → 65
-    assert _clamp_order_fee_cents(65, "premium") == 65
+    # Default floors are CANADA's (CA$0.85 premium / CA$0.65 command) — higher
+    # than US because CA$ is worth less while per-call costs bill in USD.
+    assert _clamp_order_fee_cents(50, "premium") == 85    # below premium floor → 85
+    assert _clamp_order_fee_cents(85, "premium") == 85
     assert _clamp_order_fee_cents(149, "premium") == 149  # in range untouched
-    assert _clamp_order_fee_cents(10, "command") == 45    # command floor 45
-    assert _clamp_order_fee_cents(0, None) == 45          # unknown plan → lowest non-zero floor
+    assert _clamp_order_fee_cents(10, "command") == 65    # command floor 65
+    assert _clamp_order_fee_cents(0, None) == 65          # unknown plan → lowest non-zero floor
     assert _clamp_order_fee_cents(0, "standard") == 0     # standard has no phone agent fee
     assert _clamp_order_fee_cents(99999, "premium") == 500  # cap
+
+
+def test_clamp_us_floors_unchanged():
+    from src.api.routes.canada import _ORDER_FEE_FLOOR_CENTS_USD as US
+    assert _clamp_order_fee_cents(50, "premium", floors=US) == 65
+    assert _clamp_order_fee_cents(10, "command", floors=US) == 45
+    assert _clamp_order_fee_cents(0, None, floors=US) == 45
+    assert _clamp_order_fee_cents(0, "standard", floors=US) == 0
 
 
 # ── 3+4. accent / voice / multilingual ────────────────────────
