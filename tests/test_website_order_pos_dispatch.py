@@ -105,9 +105,11 @@ async def test_clover_happy_path_tags_expands_qty_and_fires_kitchen(monkeypatch)
     li_calls = [c for c in calls if "/line_items" in c[0]]
     print_calls = [c for c in calls if c[0].endswith("/print_event")]
 
-    assert order_calls[0][1]["title"] == "Meridian Mobile Order"
+    assert order_calls[0][1]["title"] == "Meridian Mobile Order — Priya S"
     assert "Meridian Mobile Order" in order_calls[0][1]["note"]
     assert order_calls[0][1]["state"] == "open"
+    # ties the Clover order back to the Meridian order id (Square parity)
+    assert order_calls[0][1]["externalReferenceId"] == ORDER["id"][:32]
 
     # 2x Butter Chicken + 1x Naan → 3 line-item POSTs, per unit
     assert len(li_calls) == 3
@@ -187,7 +189,9 @@ async def test_killswitch_blocks_before_connection_lookup(monkeypatch):
 
 
 @aio
-async def test_no_connection_skips_cleanly(monkeypatch):
+async def test_no_connection_falls_back_to_merchant_notify(monkeypatch):
+    """No POS connected is no longer a silent skip: the ticket goes to the
+    merchant by SMS/email. With no contact either, it's a recorded failure."""
     monkeypatch.delenv("POS_ORDERS_DISABLED", raising=False)
     recorded = []
     _silence_recording(monkeypatch, recorded)
@@ -196,8 +200,24 @@ async def test_no_connection_skips_cleanly(monkeypatch):
         return None
     monkeypatch.setattr(wod, "_resolve_connection", none_conn)
 
+    notified = []
+
+    async def fake_notify(order_row, api_reason):
+        notified.append(api_reason)
+        return {"delivered": True, "method": "sms"}
+    monkeypatch.setattr(wod, "_notify_merchant", fake_notify)
+
     res = await wod.dispatch_website_order_to_pos(dict(ORDER))
-    assert res == {"dispatched": False, "reason": "no_pos_connection"}
+    assert res["dispatched"] is True and res["method"] == "sms"
+    assert notified == ["no_pos_connection"]
+
+    # and when the merchant has no contact info at all → failed, with reason
+    async def no_contact(order_row, api_reason):
+        return {"delivered": False, "reason": "no_merchant_contact"}
+    monkeypatch.setattr(wod, "_notify_merchant", no_contact)
+    res2 = await wod.dispatch_website_order_to_pos(dict(ORDER))
+    assert res2["dispatched"] is False
+    assert "no_pos_connection" in res2["reason"]
 
 
 @aio
@@ -257,7 +277,7 @@ async def test_clover_bank_rebrand_alias_still_routes_to_clover(monkeypatch):
 
 
 @aio
-async def test_clover_failure_is_reported_not_raised(monkeypatch):
+async def test_clover_failure_falls_back_to_notify_then_reports(monkeypatch):
     monkeypatch.delenv("POS_ORDERS_DISABLED", raising=False)
     recorded = []
     _silence_recording(monkeypatch, recorded)
@@ -271,10 +291,23 @@ async def test_clover_failure_is_reported_not_raised(monkeypatch):
         return {"success": False, "reason": "clover_order_http_500"}
     monkeypatch.setattr(wod, "submit_clover_kitchen_order", fake_submit)
 
+    # API failed but the merchant is reachable by SMS → still delivered
+    async def fake_notify(order_row, api_reason):
+        assert api_reason == "clover_order_http_500"
+        return {"delivered": True, "method": "sms"}
+    monkeypatch.setattr(wod, "_notify_merchant", fake_notify)
+
     res = await wod.dispatch_website_order_to_pos(dict(ORDER))
-    assert res == {"dispatched": False, "pos_system": "clover",
-                   "reason": "clover_order_http_500"}
-    assert recorded[0][1]["reason"] == "clover_order_http_500"
+    assert res["dispatched"] is True and res["method"] == "sms"
+    assert "clover_order_http_500" in res["delivery_note"]
+
+    # API failed AND notify failed → recorded failure carrying both reasons
+    async def notify_fail(order_row, api_reason):
+        return {"delivered": False, "reason": "sms_and_email_failed"}
+    monkeypatch.setattr(wod, "_notify_merchant", notify_fail)
+    res2 = await wod.dispatch_website_order_to_pos(dict(ORDER))
+    assert res2["dispatched"] is False
+    assert "clover_order_http_500" in res2["reason"]
 
 
 @aio

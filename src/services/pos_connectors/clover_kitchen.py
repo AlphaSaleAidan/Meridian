@@ -97,15 +97,27 @@ async def submit_clover_kitchen_order(
     }
     note = build_kitchen_note(order, source_tag)
 
+    customer = (order.get("customer_name") or "").strip()
+    # Customer name in the title so the register's order list shows WHO at a
+    # glance (parity with Square's fulfillment recipient).
+    title = f"{source_tag} — {customer}"[:120] if customer else source_tag
+    order_ref = str(order.get("order_ref") or order.get("id") or "")
+
+    order_body = {
+        "state": "open",
+        "title": title,
+        "note": note,
+        "manualTransaction": False,
+    }
+    if order_ref:
+        # Traceability + dedup handle: ties the Clover order back to the
+        # Meridian order id (parity with Square's reference_id).
+        order_body["externalReferenceId"] = order_ref[:32]
+
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         res = await client.post(
             f"{base}/orders",
-            json={
-                "state": "open",
-                "title": source_tag,
-                "note": note,
-                "manualTransaction": False,
-            },
+            json=order_body,
             headers=headers,
         )
         if res.status_code not in (200, 201):

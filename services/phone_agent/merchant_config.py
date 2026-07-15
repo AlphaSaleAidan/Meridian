@@ -80,6 +80,10 @@ class MerchantPhoneConfig:
     # Empty string = no brief = prompt is byte-for-byte unchanged (no regression).
     website_url: str = ""
     restaurant_brief: str = ""
+    # Per-merchant opt-in: text a Clover-native Hosted Checkout link instead of
+    # Stripe (only honored when the global CLOVER_NATIVE_PAY_ENABLED env is on
+    # — two independent gates, both default OFF).
+    native_pos_pay: bool = False
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -149,6 +153,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 plan_tier=(row.get("plan_tier") or "").strip().lower(),
                 website_url=(row.get("website_url") or "").strip(),
                 restaurant_brief=(row.get("restaurant_brief") or "").strip(),
+                native_pos_pay=bool(row.get("native_pos_pay", False)),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

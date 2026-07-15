@@ -19,6 +19,9 @@ payment-page:
   # Customer-facing hosted payment redirect/result pages (opaque short code).
   - "GET /p/{code}"
   - "GET /pay/cancel"
+  # Clover-native checkout return: opaque short code; the page itself verifies
+  # payment server-side against the merchant's Clover before releasing anything.
+  - "GET /pay/clover/return/{code}"
   - "GET /pay/success"
 
 oauth:
