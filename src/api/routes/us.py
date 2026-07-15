@@ -163,6 +163,11 @@ class CreateCustomerRequest(BaseModel):
     vertical: str | None = None
     deal_id: str | None = None
     monthly_price: int = 0
+    # Rep fee slider (mirrors canada.create_customer): chosen plan + per-order
+    # Meridian fee in cents (USD). None = tier default; server re-clamps to the
+    # tier redline (premium ≥ 65¢, command ≥ 45¢).
+    plan_id: str | None = None
+    order_fee_cents: int | None = None
 
     @field_validator("business_name", "contact_name")
     @classmethod
@@ -399,6 +404,53 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                 )
                 raise HTTPException(500, "Customer account created but business profile failed to save")
             logger.info("Linked business %s -> user %s for %s", org_id, auth_user_id, req.email)
+
+            # Rep fee slider — pre-seed phone_agent_config with the negotiated
+            # per-order fee (mirrors canada.create_customer). Best-effort: a
+            # seed failure never fails customer creation.
+            if req.order_fee_cents is not None:
+                from .canada import _clamp_order_fee_cents
+                fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id)
+                try:
+                    pac_headers = {
+                        "Authorization": f"Bearer {service_key}",
+                        "apikey": service_key,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=minimal",
+                    }
+                    existing = await client.get(
+                        f"{supabase_url}/rest/v1/phone_agent_config",
+                        headers=pac_headers,
+                        params={"merchant_id": f"eq.{org_id}", "select": "id"},
+                    )
+                    seed = {"order_fee_cents": fee}
+                    if req.plan_id:
+                        seed["plan_tier"] = (req.plan_id or "").strip().lower()
+                    if existing.status_code == 200 and existing.json():
+                        pac_resp = await client.patch(
+                            f"{supabase_url}/rest/v1/phone_agent_config?merchant_id=eq.{org_id}",
+                            headers=pac_headers, json=seed,
+                        )
+                    else:
+                        pac_resp = await client.post(
+                            f"{supabase_url}/rest/v1/phone_agent_config",
+                            headers=pac_headers,
+                            json={
+                                "merchant_id": org_id,
+                                "business_name": req.business_name,
+                                "business_type": req.vertical or "restaurant",
+                                "active": False,
+                                **seed,
+                            },
+                        )
+                    if pac_resp.status_code in (200, 201, 204):
+                        logger.info("Seeded order fee %d¢ (plan=%s) for %s",
+                                    fee, req.plan_id or "-", org_id)
+                    else:
+                        logger.error("order-fee seed failed for %s: %s %s",
+                                     org_id, pac_resp.status_code, pac_resp.text[:200])
+                except Exception as e:  # noqa: BLE001
+                    logger.error("order-fee seed failed for %s: %s", org_id, e)
 
     return {"ok": True, "org_id": org_id, "temp_password": temp_password}
 

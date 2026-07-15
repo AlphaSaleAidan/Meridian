@@ -84,6 +84,12 @@ class MerchantPhoneConfig:
     # Stripe (only honored when the global CLOVER_NATIVE_PAY_ENABLED env is on
     # — two independent gates, both default OFF).
     native_pos_pay: bool = False
+    # Rep-negotiated per-order Meridian fee override in cents of the charge
+    # currency (rep-portal fee slider). None = plan-tier / env default.
+    order_fee_cents: Optional[int] = None
+    # Voice accent group picked in the setup wizard (north_american | indian |
+    # east_asian). Presentation-level grouping; `voice` carries the voice id.
+    accent: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -154,6 +160,9 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 website_url=(row.get("website_url") or "").strip(),
                 restaurant_brief=(row.get("restaurant_brief") or "").strip(),
                 native_pos_pay=bool(row.get("native_pos_pay", False)),
+                order_fee_cents=(int(row["order_fee_cents"])
+                                 if row.get("order_fee_cents") is not None else None),
+                accent=(row.get("accent") or "").strip().lower(),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

@@ -55,6 +55,24 @@ async def _set_config(db, merchant_id: str, patch: dict) -> None:
         await db.insert("phone_agent_config", {"merchant_id": merchant_id, **patch})
 
 
+async def _merchant_service_fee_cents(merchant_id: str) -> int:
+    """Per-order fee to credit for a paid phone order: the merchant's rep-set
+    override (phone_agent_config.order_fee_cents) when present, else the
+    MERIDIAN_SERVICE_FEE_CENTS env default. Lookup failures (including a
+    pre-migration-042 schema) fall back to the env value."""
+    fee = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
+    try:
+        rows = await get_db().select(
+            "phone_agent_config", "order_fee_cents",
+            filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
+        )
+        if rows and rows[0].get("order_fee_cents") is not None:
+            fee = max(int(rows[0]["order_fee_cents"]), 0)
+    except Exception as e:  # noqa: BLE001 — fee lookup never breaks the webhook
+        logger.warning("order-fee override lookup failed for %s: %s", merchant_id, e)
+    return fee
+
+
 @router.post("/onboard/{merchant_id}")
 async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
     """Create the merchant's Stripe connected account (once) and return a hosted
@@ -209,7 +227,7 @@ async def connect_webhook(request: Request):
         # Phone orders only — website orders take their fee as a checkout line /
         # application fee, so a ledger credit would double-count that revenue.
         if etype == "checkout.session.completed" and merchant_id and not website_order_id:
-            fee_cents = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
+            fee_cents = await _merchant_service_fee_cents(merchant_id)
             if fee_cents > 0:
                 try:
                     from ...services.voice_ledger import credit

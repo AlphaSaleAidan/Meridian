@@ -654,21 +654,26 @@ async def create_website_order(req: CreateOrderRequest):
     plan_tier = ""
     stripe_account_id = ""
     stripe_charges_enabled = False
+    order_fee_cents = None
     try:
         cfg_rows = await db.select(
-            "phone_agent_config", "plan_tier,stripe_account_id,stripe_charges_enabled",
+            "phone_agent_config",
+            "plan_tier,stripe_account_id,stripe_charges_enabled,order_fee_cents",
             filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
         )
         if cfg_rows:
             plan_tier = (cfg_rows[0].get("plan_tier") or "")
             stripe_account_id = (cfg_rows[0].get("stripe_account_id") or "").strip()
             stripe_charges_enabled = bool(cfg_rows[0].get("stripe_charges_enabled"))
+            if cfg_rows[0].get("order_fee_cents") is not None:
+                order_fee_cents = int(cfg_rows[0]["order_fee_cents"])
     except Exception as e:  # noqa: BLE001 — unknown tier → default rate, platform charge
         logger.warning(f"payment config lookup failed for {merchant_id}: {e}")
 
     if payment_links.FEE_SPLIT_ENABLED:
         fee_amount = round(
-            payment_links.customer_surcharge_cents(plan_tier, currency.lower()) / 100, 2)
+            payment_links.customer_surcharge_cents(
+                plan_tier, currency.lower(), override_cents=order_fee_cents) / 100, 2)
         merchant_fee_amount = round(subtotal * float(fee_rate), 2)
     else:
         fee_amount = round(subtotal * float(fee_rate), 2)
@@ -725,6 +730,7 @@ async def create_website_order(req: CreateOrderRequest):
         plan_tier=plan_tier,
         stripe_account_id=stripe_account_id,
         stripe_charges_enabled=stripe_charges_enabled,
+        order_fee_cents=order_fee_cents,
     )
     try:
         checkout = await payment_links.create_website_checkout(

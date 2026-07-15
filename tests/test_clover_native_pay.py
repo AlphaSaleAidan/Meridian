@@ -277,8 +277,14 @@ async def test_already_paid_session_short_circuits(monkeypatch):
     assert released == [] and credits == []   # no double release/fee
 
 
-def test_native_fee_split_math(monkeypatch):
+@aio
+async def test_native_fee_split_math(monkeypatch):
     monkeypatch.setattr(pl, "FEE_SPLIT_ENABLED", True)
-    fee = pr._clover_native_fee_cents({"amount_cents": 3529, "currency": "cad"})
+
+    class _NoCfgDB:
+        async def select(self, *a, **k):
+            return []
+    monkeypatch.setattr(pr, "get_db", lambda: _NoCfgDB())
+    fee = await pr._clover_native_fee_cents({"amount_cents": 3529, "currency": "cad"})
     surcharge = pl.customer_surcharge_cents("", "cad")
     assert fee == pl.split_application_fee_cents(3529 - surcharge, surcharge)

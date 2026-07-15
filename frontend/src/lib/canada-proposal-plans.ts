@@ -22,6 +22,15 @@ const CAD_ORDER_FEES: Record<PlanTier['id'], number> = {
   command: 1.39,
 }
 
+// REDLINES for the rep fee slider — Aidan's quoted floors (2026-07-15) applied
+// verbatim in CAD: premium CA$0.65/order, command CA$0.45/order. The backend
+// clamps to the same cents values.
+const CAD_ORDER_FEE_FLOORS: Record<PlanTier['id'], number> = {
+  standard: 0,
+  premium: 0.65,
+  command: 0.45,
+}
+
 function roundToNearest50(n: number): number {
   return Math.round(n / 50) * 50
 }
@@ -30,10 +39,12 @@ export const PLAN_TIERS: PlanTier[] = US_PLAN_TIERS.map(p => ({
   ...p,
   price: roundToNearest50(p.price * CAD_RATE),
   orderFee: CAD_ORDER_FEES[p.id],
+  orderFeeFloor: CAD_ORDER_FEE_FLOORS[p.id],
   features: p.features.map(f =>
     f
       .replace('$1.49 per-order transaction fee', 'CA$1.99 per-order transaction fee')
       .replace('$1.00 Meridian fee per order', 'CA$1.39 Meridian fee per order')
+      .replace('then $0.45/min', 'then CA$0.45/min')
   ),
 }))
 

@@ -49,11 +49,14 @@ STRIPE_FEE_BPS = int(os.getenv("STRIPE_FEE_BPS", "290") or 290)          # 2.9%
 STRIPE_FEE_FIXED_CENTS = int(os.getenv("STRIPE_FEE_FIXED_CENTS", "30") or 30)
 
 
-def application_fee_cents(amount_cents: int) -> int:
+def application_fee_cents(amount_cents: int, service_fee_cents: int | None = None) -> int:
     """Total application fee on a destination charge of `amount_cents`:
     Meridian's service fee + optional bps + (when grossed up) Stripe's
-    estimated processing cost. Always capped below the charge amount."""
-    fee = SERVICE_FEE_CENTS + int(round(amount_cents * PLATFORM_FEE_BPS / 10000))
+    estimated processing cost. Always capped below the charge amount.
+    `service_fee_cents` is the per-merchant override (rep fee slider,
+    phone_agent_config.order_fee_cents); None = the env default."""
+    base = SERVICE_FEE_CENTS if service_fee_cents is None else int(service_fee_cents)
+    fee = base + int(round(amount_cents * PLATFORM_FEE_BPS / 10000))
     if STRIPE_GROSSUP_ENABLED:
         fee += int(round(amount_cents * STRIPE_FEE_BPS / 10000)) + STRIPE_FEE_FIXED_CENTS
     return min(fee, max(amount_cents - 1, 0))
@@ -96,9 +99,27 @@ def tier_order_fee_cents(plan_tier: str, currency: str) -> int:
     return fees.get(tier, 0)
 
 
-def customer_surcharge_cents(plan_tier: str, currency: str) -> int:
-    """Customer-side per-order surcharge: Meridian's tier fee + the fixed 30¢."""
-    return tier_order_fee_cents(plan_tier, currency) + CUSTOMER_FIXED_FEE_CENTS
+def customer_surcharge_cents(plan_tier: str, currency: str,
+                             override_cents: int | None = None) -> int:
+    """Customer-side per-order surcharge: Meridian's per-order fee + the fixed
+    30¢. `override_cents` is the rep-negotiated per-merchant fee
+    (phone_agent_config.order_fee_cents); None = the plan-tier rate."""
+    fee = (int(override_cents) if override_cents is not None
+           else tier_order_fee_cents(plan_tier, currency))
+    return max(fee, 0) + CUSTOMER_FIXED_FEE_CENTS
+
+
+def merchant_order_fee_cents(merchant_config, currency: str) -> int:
+    """Meridian's per-order fee for THIS merchant: the per-merchant override
+    when set, else the plan-tier default. One rule for every rail (Stripe
+    split/legacy, Clover-native, ledger credits)."""
+    override = getattr(merchant_config, "order_fee_cents", None)
+    if override is not None:
+        try:
+            return max(int(override), 0)
+        except (TypeError, ValueError):
+            pass
+    return tier_order_fee_cents(getattr(merchant_config, "plan_tier", "") or "", currency)
 
 
 def split_application_fee_cents(subtotal_cents: int, surcharge_cents: int) -> int:
@@ -226,7 +247,8 @@ async def _clover_hosted_checkout(order: dict[str, Any], merchant_config, pos_or
 
     if FEE_SPLIT_ENABLED:
         surcharge = customer_surcharge_cents(
-            getattr(merchant_config, "plan_tier", ""), currency)
+            getattr(merchant_config, "plan_tier", ""), currency,
+            override_cents=getattr(merchant_config, "order_fee_cents", None))
         if surcharge > 0:
             line_items.append({"name": "Service & processing fee",
                                "unitQty": 1, "price": surcharge})
@@ -374,7 +396,8 @@ async def _stripe_checkout(
         line_items = _stripe_line_items(order, currency)
         if FEE_SPLIT_ENABLED:
             surcharge = customer_surcharge_cents(
-                getattr(merchant_config, "plan_tier", ""), currency)
+                getattr(merchant_config, "plan_tier", ""), currency,
+                override_cents=getattr(merchant_config, "order_fee_cents", None))
             if surcharge > 0:
                 line_items.append({
                     "quantity": 1,
@@ -413,7 +436,9 @@ async def _stripe_checkout(
         if FEE_SPLIT_ENABLED and surcharge:
             fee = split_application_fee_cents(amount, surcharge)
         else:
-            fee = application_fee_cents(amount)
+            fee = application_fee_cents(
+                amount,
+                service_fee_cents=getattr(merchant_config, "order_fee_cents", None))
         if fee > 0:
             pi_data["application_fee_amount"] = fee
         kwargs["payment_intent_data"] = pi_data

@@ -16,8 +16,8 @@ import { api } from '@/lib/api'
 import { posSystems } from '@/data/pos-systems'
 import { VoicePlayButton, VoicePreviewCard, TestCallModal } from '@/components/phone'
 import {
-  VOICE_OPTIONS,
-  type PhoneBizConfig, type PhoneMenuItem,
+  VOICE_OPTIONS, ACCENT_OPTIONS,
+  type PhoneBizConfig, type PhoneMenuItem, type VoiceAccent,
 } from '@/lib/phone-orders-demo-data'
 
 /**
@@ -171,6 +171,28 @@ export default function PhoneSetupWizard() {
   const [businessName, setBusinessName] = useState(org?.business_name || 'My Business')
   const [greeting, setGreeting] = useState('')
   const [voice, setVoice] = useState('af_bella')
+  // Accent group filter for the voice roster (persisted as phone_agent_config
+  // .accent). 'all' shows everything. Indian additionally offers multilingual
+  // understanding (Deepgram language=multi → Hindi/Punjabi code-switching).
+  const [accent, setAccent] = useState<'all' | VoiceAccent>('all')
+  const [multilingual, setMultilingual] = useState(false)
+  // Live pricing dials for the disclosure card (env-tunable server-side).
+  // Fallbacks mirror the backend defaults so the card never shows blanks.
+  const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 45 })
+  useEffect(() => {
+    const API_BASE = import.meta.env.VITE_API_URL || ''
+    fetch(`${API_BASE}/api/phone/fees`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (d && typeof d.overage_cents_per_min === 'number') {
+          setFeeDials({
+            included_minutes: d.included_minutes ?? 3,
+            overage_cents_per_min: d.overage_cents_per_min,
+          })
+        }
+      })
+      .catch(() => {})
+  }, [])
   const [orderTypes, setOrderTypes] = useState<string[]>(['pickup', 'delivery'])
   const [reservationConfig, setReservationConfig] = useState<ReservationConfig | null>(null)
   const [routing, setRouting] = useState<'pos' | 'webhook' | 'sms' | 'email'>(connectedPos ? 'pos' : 'sms')
@@ -188,6 +210,8 @@ export default function PhoneSetupWizard() {
       if (cfg.business_name) setBusinessName(cfg.business_name)
       if (cfg.greeting) setGreeting(cfg.greeting)
       if (cfg.voice) setVoice(cfg.voice)
+      if (cfg.accent === 'north_american' || cfg.accent === 'indian' || cfg.accent === 'east_asian') setAccent(cfg.accent)
+      if (cfg.language === 'multi') setMultilingual(true)
       if (cfg.order_types?.length) setOrderTypes(cfg.order_types)
       if (cfg.reservation_config) setReservationConfig(cfg.reservation_config)
       if (cfg.order_routing) setRouting(cfg.order_routing)
@@ -334,6 +358,10 @@ export default function PhoneSetupWizard() {
       phone_number: phoneConfig?.phone_number || undefined,
       greeting: greeting || undefined,
       voice,
+      // Accent group + language: 'multi' turns on Hindi/Punjabi + English
+      // code-switch understanding on live calls (Deepgram multilingual).
+      accent: accent !== 'all' ? accent : undefined,
+      language: multilingual ? 'multi' : 'en',
       order_types: orderTypes,
       reservation_config: reservationConfig ?? undefined,
       menu_items: menu.map(m => ({ name: m.name, price: m.price, category: m.category })),
@@ -350,7 +378,7 @@ export default function PhoneSetupWizard() {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
     setStep('test')
-  }, [isDemo, orgId, businessName, phoneConfig?.phone_number, greeting, voice, orderTypes, menu, transferTrimmed, routing])
+  }, [isDemo, orgId, businessName, phoneConfig?.phone_number, greeting, voice, accent, multilingual, orderTypes, menu, transferTrimmed, routing])
 
   const currentStepIdx = STEPS.findIndex(s => s.key === step)
 
@@ -608,9 +636,45 @@ export default function PhoneSetupWizard() {
               />
             </div>
             <div>
+              <label className="text-xs text-[#A1A1A8] block mb-2">Accent</label>
+              <p className="text-[10px] text-[#A1A1A8]/60 -mt-1.5 mb-2">
+                Match the agent's voice to your restaurant's identity — pick an accent, then a voice.
+              </p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {ACCENT_OPTIONS.map(a => (
+                  <button key={a.id} type="button" title={a.desc}
+                    onClick={() => {
+                      setAccent(a.id)
+                      // keep a voice from the chosen group selected
+                      const inGroup = VOICE_OPTIONS.filter(v => a.id === 'all' || v.accent === a.id)
+                      if (!inGroup.some(v => v.id === voice) && inGroup.length) setVoice(inGroup[0].id)
+                      if (a.id !== 'indian') setMultilingual(false)
+                    }}
+                    className={clsx('px-2.5 py-1 rounded-full border text-[11px] transition-all',
+                      accent === a.id
+                        ? 'border-[#1A8FD6]/40 bg-[#1A8FD6]/10 text-[#F5F5F7]'
+                        : 'border-[#1F1F23] text-[#A1A1A8] hover:border-[#2A2A30]')}>
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+              {accent === 'indian' && (
+                <label className="flex items-center gap-2.5 mb-3 px-3 py-2 rounded-lg border border-[#1F1F23] bg-[#0F0F12] cursor-pointer">
+                  <div
+                    className={clsx('w-9 h-5 rounded-full transition-colors relative flex-shrink-0', multilingual ? 'bg-[#1A8FD6]' : 'bg-[#1F1F23]')}
+                    onClick={() => setMultilingual(m => !m)}
+                  >
+                    <div className={clsx('absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform', multilingual ? 'translate-x-4' : 'translate-x-0.5')} />
+                  </div>
+                  <span className="text-xs text-[#F5F5F7]">
+                    Understand Hindi &amp; Punjabi too
+                    <span className="block text-[10px] text-[#A1A1A8]/60">Callers can switch languages mid-call — the agent still replies in English.</span>
+                  </span>
+                </label>
+              )}
               <label className="text-xs text-[#A1A1A8] block mb-2">Agent Voice</label>
               <div className="grid grid-cols-2 gap-2">
-                {VOICE_OPTIONS.map(v => (
+                {VOICE_OPTIONS.filter(v => accent === 'all' || v.accent === accent).map(v => (
                   <div key={v.id} onClick={() => setVoice(v.id)}
                     role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setVoice(v.id) }}
                     className={clsx('px-3 py-2 rounded-lg border text-left transition-all cursor-pointer',
@@ -628,6 +692,20 @@ export default function PhoneSetupWizard() {
 
             {/* Voice preview with waveform — plays the real studio sample */}
             <VoicePreviewCard voiceId={voice} />
+
+            {/* Pricing disclosure — the per-order fee and the call-overage
+                rate are billed automatically; they must be listed clearly
+                wherever the agent is configured. Live dials from
+                GET /api/phone/fees; per-order fee prefers the merchant's
+                rep-negotiated override. */}
+            <div className="rounded-lg border border-[#1F1F23] bg-[#0F0F12] px-3 py-2.5">
+              <p className="text-[11px] font-semibold text-[#F5F5F7] mb-1">Call &amp; order pricing</p>
+              <ul className="text-[10px] text-[#A1A1A8] space-y-0.5">
+                <li>• Per-order fee: <span className="text-[#F5F5F7] font-medium">{phoneConfig?.order_fee_cents != null ? `CA$${(phoneConfig.order_fee_cents / 100).toFixed(2)}` : 'per your plan'}</span> on each paid phone order</li>
+                <li>• Every call includes the first <span className="text-[#F5F5F7] font-medium">{feeDials.included_minutes} minutes</span> free of call charges</li>
+                <li>• After that: <span className="text-[#F5F5F7] font-medium">CA${(feeDials.overage_cents_per_min / 100).toFixed(2)}/min</span>, billed automatically to your Meridian account</li>
+              </ul>
+            </div>
 
             <div>
               <label className="text-xs text-[#A1A1A8] block mb-2">Order Types</label>
