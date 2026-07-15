@@ -1,4 +1,4 @@
--- 041: Clover Hosted Checkout text-to-pay (per-merchant toggle, default OFF)
+-- 042: Clover Hosted Checkout text-to-pay (per-merchant toggle, default OFF)
 --
 -- The old Clover payment-link path posted to /v3/merchants/{mid}/pay_links,
 -- which does not exist in Clover's API — it never worked and silently fell
@@ -42,3 +42,7 @@ COMMENT ON COLUMN checkout_sessions.payload IS
   'Provider-specific lazy-creation payload (clover: {hco_request, clover_merchant_id, plan_tier}). Never contains access tokens.';
 COMMENT ON COLUMN checkout_sessions.expires_at IS
   'Expiry of the currently-stored provider session (clover HCO: ~15 min after creation). /p re-creates past this.';
+
+-- NOTE: 041's phone_agent_config.native_pos_pay boolean is superseded by
+-- payment_link_provider above and is no longer read anywhere; harmless if
+-- already applied, safe to drop in a later cleanup migration.
