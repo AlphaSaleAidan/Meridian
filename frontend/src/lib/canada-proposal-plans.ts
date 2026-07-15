@@ -22,13 +22,15 @@ const CAD_ORDER_FEES: Record<PlanTier['id'], number> = {
   command: 1.39,
 }
 
-// REDLINES for the rep fee slider — Aidan's quoted floors (2026-07-15) applied
-// verbatim in CAD: premium CA$0.65/order, command CA$0.45/order. The backend
-// clamps to the same cents values.
+// REDLINES for the rep fee slider — Canada floors run HIGHER than the US
+// $0.65/$0.45: CA$ is worth ~27% less while our per-call costs bill in USD,
+// so CA$0.45 nets only ~US$0.07/order (redline simulation, 2026-07-15).
+// These floors preserve roughly the US-floor margin. The backend clamps to
+// the same cents values (_ORDER_FEE_FLOOR_CENTS_CAD in canada.py).
 const CAD_ORDER_FEE_FLOORS: Record<PlanTier['id'], number> = {
   standard: 0,
-  premium: 0.65,
-  command: 0.45,
+  premium: 0.85,
+  command: 0.65,
 }
 
 function roundToNearest50(n: number): number {

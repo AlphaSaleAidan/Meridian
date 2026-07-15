@@ -1051,7 +1051,7 @@ export default function USPortalLeadDetailPage() {
                 Standard rate ${selectedPlan.orderFee.toFixed(2)} — negotiate down only, never below the redline.
               </p>
               <p className="text-[10px] text-[#A1A1A8] mt-1.5 px-2.5 py-1.5 rounded-md bg-[#0A0A0B] border border-[#1F1F23]">
-                Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-[#f0b429]">$0.45/min</span> billed automatically to the merchant's Meridian account.
+                Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-[#f0b429]">$0.45/min</span> billed automatically to the merchant's Meridian account. Calls end automatically at 5 minutes, so overage never exceeds $0.90/call.
               </p>
             </div>
           )}

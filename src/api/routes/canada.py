@@ -117,14 +117,21 @@ class CreateCustomerRequest(BaseModel):
 
 # Per-order fee REDLINES (cents) — the floor the rep slider can reach, by plan.
 # Aidan 2026-07-15: premium (middle tier) floor $0.65/order, command (top tier)
-# floor $0.45/order. Unknown plan → the lowest non-zero floor, so a crafted
-# request can never zero out the fee.
-_ORDER_FEE_FLOOR_CENTS = {"standard": 0, "premium": 65, "command": 45}
+# floor $0.45/order in USD. Canada floors run HIGHER (CA$0.85 / CA$0.65):
+# CA$ is worth ~27% less while Vapi bills in USD — at CA$0.45 the margin
+# simulation nets only ~US$0.07/order (redline sim, 2026-07-15), so the CAD
+# floors preserve roughly the US-floor margin. Unknown plan → the lowest
+# non-zero floor, so a crafted request can never zero out the fee.
+_ORDER_FEE_FLOOR_CENTS_USD = {"standard": 0, "premium": 65, "command": 45}
+_ORDER_FEE_FLOOR_CENTS_CAD = {"standard": 0, "premium": 85, "command": 65}
 _ORDER_FEE_CAP_CENTS = 500
 
 
-def _clamp_order_fee_cents(fee: int, plan_id: str | None) -> int:
-    floor = _ORDER_FEE_FLOOR_CENTS.get((plan_id or "").strip().lower(), 45)
+def _clamp_order_fee_cents(fee: int, plan_id: str | None,
+                           floors: dict[str, int] | None = None) -> int:
+    floors = floors if floors is not None else _ORDER_FEE_FLOOR_CENTS_CAD
+    default_floor = min(v for v in floors.values() if v > 0)
+    floor = floors.get((plan_id or "").strip().lower(), default_floor)
     return max(min(int(fee), _ORDER_FEE_CAP_CENTS), floor)
 
 

@@ -178,7 +178,7 @@ export default function PhoneSetupWizard() {
   const [multilingual, setMultilingual] = useState(false)
   // Live pricing dials for the disclosure card (env-tunable server-side).
   // Fallbacks mirror the backend defaults so the card never shows blanks.
-  const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 45 })
+  const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 45, max_call_minutes: 5 })
   useEffect(() => {
     const API_BASE = import.meta.env.VITE_API_URL || ''
     fetch(`${API_BASE}/api/phone/fees`)
@@ -188,6 +188,7 @@ export default function PhoneSetupWizard() {
           setFeeDials({
             included_minutes: d.included_minutes ?? 3,
             overage_cents_per_min: d.overage_cents_per_min,
+            max_call_minutes: d.max_call_minutes ?? 5,
           })
         }
       })
@@ -704,6 +705,9 @@ export default function PhoneSetupWizard() {
                 <li>• Per-order fee: <span className="text-[#F5F5F7] font-medium">{phoneConfig?.order_fee_cents != null ? `CA$${(phoneConfig.order_fee_cents / 100).toFixed(2)}` : 'per your plan'}</span> on each paid phone order</li>
                 <li>• Every call includes the first <span className="text-[#F5F5F7] font-medium">{feeDials.included_minutes} minutes</span> free of call charges</li>
                 <li>• After that: <span className="text-[#F5F5F7] font-medium">CA${(feeDials.overage_cents_per_min / 100).toFixed(2)}/min</span>, billed automatically to your Meridian account</li>
+                {feeDials.max_call_minutes > 0 && (
+                  <li>• Calls end automatically at <span className="text-[#F5F5F7] font-medium">{feeDials.max_call_minutes} minutes</span> — the agent wraps up and submits the order before then</li>
+                )}
               </ul>
             </div>
 

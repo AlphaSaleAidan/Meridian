@@ -1038,7 +1038,7 @@ export default function CanadaPortalLeadDetailPage() {
                 Standard rate CA${selectedPlan.orderFee.toFixed(2)} — negotiate down only, never below the redline.
               </p>
               <p className="text-2xs text-pm-canada-text-muted mt-1.5 px-2.5 py-1.5 rounded-md bg-pm-canada-bg border border-pm-canada-border">
-                Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-pm-amber-gold">CA$0.45/min</span> billed automatically to the merchant's Meridian account.
+                Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-pm-amber-gold">CA$0.45/min</span> billed automatically to the merchant's Meridian account. Calls end automatically at 5 minutes, so overage never exceeds CA$0.90/call.
               </p>
             </div>
           )}

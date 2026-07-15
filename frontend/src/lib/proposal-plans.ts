@@ -37,6 +37,9 @@ export const REP_PRICE_HEADROOM = 100
  *  live backend dials (GET /api/phone/fees); shown wherever pricing is. */
 export const VOICE_INCLUDED_MINUTES = 3
 export const VOICE_OVERAGE_PER_MIN = 0.45
+/** Hard cap — Vapi force-ends every call at this length, so per-call overage
+ *  never exceeds (cap − included) × rate = $0.90. */
+export const VOICE_MAX_CALL_MINUTES = 5
 
 export const PLAN_TIERS: PlanTier[] = [
   {
@@ -70,7 +73,7 @@ export const PLAN_TIERS: PlanTier[] = [
       'AI phone agent — answers calls + takes orders',
       'Pay-by-text checkout',
       '$1.49 per-order transaction fee',
-      'Calls: first 3 min included, then $0.45/min',
+      'Calls: first 3 min included, then $0.45/min (auto-end at 5 min)',
     ],
   },
   {
@@ -84,7 +87,7 @@ export const PLAN_TIERS: PlanTier[] = [
     features: [
       'Everything in Premium',
       'Lowest per-order rate — $1.00 Meridian fee per order',
-      'Calls: first 3 min included, then $0.45/min',
+      'Calls: first 3 min included, then $0.45/min (auto-end at 5 min)',
       'Multi-location support',
       'Dedicated account manager',
     ],

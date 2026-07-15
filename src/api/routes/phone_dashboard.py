@@ -102,7 +102,9 @@ async def get_fee_settings():
     return {
         "service_fee_cents": int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0),
         "overage_cents_per_min": int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45),
-        "included_minutes": 3,
+        "included_minutes": int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3),
+        # Hard cap: Vapi force-ends calls at this length (0 = no cap)
+        "max_call_minutes": int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 0),
     }
 
 
