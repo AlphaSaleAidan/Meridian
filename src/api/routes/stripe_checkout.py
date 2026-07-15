@@ -9,7 +9,7 @@ Endpoints:
 import logging
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
@@ -131,7 +131,7 @@ async def stripe_webhook(request: Request):
                             "stripe_subscription_id": data.get("subscription"),
                             "payment_status": "active",
                             "setup_fee_cents": setup_fee,
-                            "activated_at": datetime.utcnow().isoformat(),
+                            "activated_at": datetime.now(timezone.utc).isoformat(),
                         }),
                     }, filters={"id": f"eq.{org_id}"})
                 except Exception as e:
@@ -157,7 +157,7 @@ async def stripe_webhook(request: Request):
                 try:
                     await db.update("checkout_sessions", {
                         "status": "completed",
-                        "completed_at": datetime.utcnow().isoformat(),
+                        "completed_at": datetime.now(timezone.utc).isoformat(),
                     }, filters={"stripe_session_id": f"eq.{session_id}"})
                 except Exception as e:
                     logger.error(f"Webhook processing error: {e}")
