@@ -24,6 +24,7 @@ from fastapi.responses import RedirectResponse
 
 from ...clover.oauth import CloverOAuthManager, CloverOAuthError
 from ...config import clover as clover_config
+from ...db.supabase_rest import SupabaseRESTError, is_uuid_cast_error
 from ...security.encryption import encrypt_token
 # Shared post-OAuth return-path + origin allowlists (also used by oauth.py/Square).
 from ._oauth_return import (
@@ -375,11 +376,37 @@ async def connection_status(org_id: str):
             "clover_available": clover_available,
         }
 
-    conns = await _db_instance.select(
-        "pos_connections",
-        filters={"org_id": f"eq.{org_id}", "provider": "eq.clover"},
-        limit=1,
-    )
+    # pos_connections.org_id is a UUID column in prod; `biz_` merchant ids are
+    # the TEXT businesses.id with NO businesses→organizations mapping, so a
+    # biz_ id can never match a row — querying with it raises a 22P02 uuid cast
+    # → 500 → the onboarding wizard read oauth_available as false and hid the
+    # Clover 1-click button. Report not-connected but keep the REAL capability
+    # flags (computed from env above, exactly as the happy path does).
+    if not _UUID_RE.match(org_id):
+        return {
+            "connected": False,
+            "reason": "org_not_uuid_keyed",
+            "oauth_available": oauth_available,
+            "clover_available": clover_available,
+        }
+
+    try:
+        conns = await _db_instance.select(
+            "pos_connections",
+            filters={"org_id": f"eq.{org_id}", "provider": "eq.clover"},
+            limit=1,
+        )
+    except SupabaseRESTError as exc:
+        # Backstop: no validated id shape may 500 this read-only status
+        # endpoint — a uuid-cast 400 (22P02) simply means "no such row".
+        if exc.status_code == 400 and is_uuid_cast_error(exc):
+            logger.info(
+                "clover status: org_id=%s not UUID-shaped for pos_connections "
+                "(message=%r) — reporting not connected", org_id, exc.message,
+            )
+            conns = []
+        else:
+            raise
     if conns:
         conn = conns[0]
         return {

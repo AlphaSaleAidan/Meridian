@@ -18,6 +18,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Request, HTTPException
 from fastapi.responses import RedirectResponse
 
+from ...db.supabase_rest import SupabaseRESTError, is_uuid_cast_error
 from ...square.oauth import OAuthManager, OAuthError
 from ...security.encryption import encrypt_token
 # Shared post-OAuth return-path allowlist (also used by clover_oauth.py) so the
@@ -379,7 +380,26 @@ async def connection_status(org_id: str):
     if not _db_instance:
         return {"connected": False, "reason": "db_unavailable"}
 
-    conn = await _db_instance.get_pos_connection(org_id)
+    # pos_connections.org_id is a UUID column in prod; `biz_` merchant ids are
+    # the TEXT businesses.id with NO businesses→organizations mapping, so a
+    # biz_ id can never match a row — querying with it raises a 22P02 uuid cast
+    # error → 500. Report not-connected instead of querying the uuid column.
+    if not _UUID_RE.match(org_id):
+        return {"connected": False, "reason": "org_not_uuid_keyed"}
+
+    try:
+        conn = await _db_instance.get_pos_connection(org_id)
+    except SupabaseRESTError as exc:
+        # Backstop: no validated id shape may 500 this read-only status
+        # endpoint — a uuid-cast 400 (22P02) simply means "no such row".
+        if exc.status_code == 400 and is_uuid_cast_error(exc):
+            logger.info(
+                "square status: org_id=%s not UUID-shaped for pos_connections "
+                "(message=%r) — reporting not connected", org_id, exc.message,
+            )
+            conn = None
+        else:
+            raise
     if conn:
         return {
             "connected": True,

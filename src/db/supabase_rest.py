@@ -56,6 +56,21 @@ class SupabaseRESTError(Exception):
         super().__init__(f"Supabase {status_code}: {message}")
 
 
+def is_uuid_cast_error(exc: SupabaseRESTError) -> bool:
+    """True if a PostgREST error is a UUID type-cast failure (SQLSTATE 22P02).
+
+    PostgREST surfaces ``invalid input syntax for type uuid: "..."`` as HTTP
+    400 with Postgres code ``22P02``. This happens when a non-UUID org id
+    (e.g. a TEXT ``biz_`` businesses.id) is compared against a UUID ``org_id``
+    column — a "no such row" condition, not a server fault. Read-only status
+    endpoints should treat it as empty, never as a 500.
+    """
+    haystack = f"{getattr(exc, 'message', '')} {getattr(exc, 'details', '')}".lower()
+    return "22p02" in haystack or (
+        "invalid input syntax for type uuid" in haystack
+    ) or ("uuid" in haystack and "invalid input syntax" in haystack)
+
+
 class SupabaseREST:
     """
     Async Supabase client using the PostgREST API.
