@@ -800,7 +800,10 @@ async def get_leads(request: Request, user: dict = Depends(require_jwt)):
             rows = resp.json()
 
     # Backend scoping plane. For us_leads this is the PRIMARY hierarchy guard
-    # (the 20260716 migration intentionally leaves us_leads policies alone).
+    # today: the 20260716 migration left us_leads policies alone, but the US
+    # portal ALSO reads us_leads directly via Supabase (us-leads-service.ts),
+    # which this plane cannot cover — the mirror RLS policy is authored in
+    # 20260717_us_leads_downline_read.sql (NOT applied yet).
     scope = await hierarchy.resolve_scope(user)
     allowed = await hierarchy.visible_rep_ids(scope)
     return {"leads": hierarchy.scope_lead_rows(rows, allowed)}
