@@ -94,7 +94,7 @@ def test_manager_sees_own_subtree_lead(monkeypatch):
     scope = _run(_scope_for("dm1@meridian.test"))
     allowed = _run(hierarchy.visible_rep_ids(scope))
     kept = hierarchy.scope_lead_rows(LEADS, allowed)
-    assert any(l["id"] == "lead-1" for l in kept), "manager must see own-subtree lead"
+    assert any(ld["id"] == "lead-1" for ld in kept), "manager must see own-subtree lead"
 
 
 def test_manager_cannot_see_sibling_branch_lead(monkeypatch):
@@ -103,7 +103,7 @@ def test_manager_cannot_see_sibling_branch_lead(monkeypatch):
     scope = _run(_scope_for("dm1@meridian.test"))
     allowed = _run(hierarchy.visible_rep_ids(scope))
     kept = hierarchy.scope_lead_rows(LEADS, allowed)
-    assert not any(l["id"] == "lead-2" for l in kept), "sibling-branch lead leaked to manager"
+    assert not any(ld["id"] == "lead-2" for ld in kept), "sibling-branch lead leaked to manager"
 
 
 def test_manager_upline_cannot_be_widened_downward(monkeypatch):
@@ -124,8 +124,8 @@ def test_rep_sees_only_self(monkeypatch):
     scope = _run(_scope_for("rep1@meridian.test"))
     allowed = _run(hierarchy.visible_rep_ids(scope))
     kept = hierarchy.scope_lead_rows(LEADS, allowed)
-    assert any(l["id"] == "lead-1" for l in kept), "rep must keep own lead"
-    assert not any(l["id"] == "lead-2" for l in kept), "rep must not see another rep's lead"
+    assert any(ld["id"] == "lead-1" for ld in kept), "rep must keep own lead"
+    assert not any(ld["id"] == "lead-2" for ld in kept), "rep must not see another rep's lead"
 
 
 def test_unknown_user_sees_nothing_assigned(monkeypatch):
@@ -134,7 +134,7 @@ def test_unknown_user_sees_nothing_assigned(monkeypatch):
     scope = _run(_scope_for("stranger@evil.test"))
     allowed = _run(hierarchy.visible_rep_ids(scope))
     kept = hierarchy.scope_lead_rows(LEADS, allowed)
-    assert all(l["rep_id"] is None for l in kept), "assigned leads leaked to a non-rep session"
+    assert all(ld["rep_id"] is None for ld in kept), "assigned leads leaked to a non-rep session"
 
 
 # ── Admin: sees all ──────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ def test_admin_sees_all(monkeypatch):
     allowed = _run(hierarchy.visible_rep_ids(scope))
     assert allowed is None, "admin scope is unrestricted (None sentinel)"
     kept = hierarchy.scope_lead_rows(LEADS, allowed)
-    assert {l["id"] for l in kept} == {"lead-1", "lead-2", "lead-3"}
+    assert {ld["id"] for ld in kept} == {"lead-1", "lead-2", "lead-3"}
 
 
 def test_allowlist_email_is_admin_without_rep_row(monkeypatch):
@@ -273,6 +273,6 @@ def test_us_leads_endpoint_filters_service_role_superset(monkeypatch):
     from src.api.routes import us as us_mod
     _wire_route_env(monkeypatch)
     out = _run(us_mod.get_leads(_FakeRequest(), {"email": "rep1@meridian.test"}))
-    ids = {l["id"] for l in out["leads"]}
+    ids = {ld["id"] for ld in out["leads"]}
     assert "lead-2" not in ids, "us_leads leaked a sibling rep's lead through the backend plane"
     assert "lead-1" in ids, "rep lost their own lead in /api/us/leads"
