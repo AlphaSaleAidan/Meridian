@@ -2,6 +2,7 @@
 Merchant configuration loader.
 Pulls merchant settings from Supabase for phone agent behavior.
 """
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -20,6 +21,27 @@ SUPABASE_KEY = (
     or os.getenv("SUPABASE_SERVICE_KEY", "")
     or os.getenv("SUPABASE_ANON_KEY", "")
 )
+
+# ONE shared httpx client for every Supabase read in this module (lazy — created
+# on first use, recreated if closed or if the running event loop changed, e.g.
+# per-test asyncio.run loops). The old per-call `async with httpx.AsyncClient()`
+# paid a fresh TCP+TLS handshake on every query, which is pure dead air on the
+# assistant-request hot path (the caller is listening to silence until the
+# agent greets). httpx.AsyncClient is safe for concurrent use; error handling
+# stays with the callers exactly as before.
+_http_client = None
+_http_client_loop = None
+
+
+def _get_http_client():
+    global _http_client, _http_client_loop
+    loop = asyncio.get_running_loop()
+    if _http_client is None or _http_client.is_closed or _http_client_loop is not loop:
+        import httpx
+
+        _http_client = httpx.AsyncClient()
+        _http_client_loop = loop
+    return _http_client
 
 
 @dataclass
@@ -225,105 +247,107 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
         return _demo_config(merchant_id)
 
     try:
-        import httpx
-
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}",
         }
-        async with httpx.AsyncClient() as client:
-            res = await client.get(
-                f"{SUPABASE_URL}/rest/v1/phone_agent_config",
-                params={"merchant_id": f"eq.{merchant_id}", "select": "*"},
-                headers=headers,
-            )
-            if res.status_code != 200 or not res.json():
-                logger.warning("No phone config for merchant %s", merchant_id)
-                return None
+        client = _get_http_client()
+        res = await client.get(
+            f"{SUPABASE_URL}/rest/v1/phone_agent_config",
+            params={"merchant_id": f"eq.{merchant_id}", "select": "*"},
+            headers=headers,
+        )
+        if res.status_code != 200 or not res.json():
+            logger.warning("No phone config for merchant %s", merchant_id)
+            return None
 
-            row = res.json()[0]
-            config = MerchantPhoneConfig(
-                merchant_id=row["merchant_id"],
-                business_name=row.get("business_name", ""),
-                business_type=row.get("business_type", "restaurant"),
-                phone_number=row.get("phone_number", ""),
-                greeting=row.get("greeting", ""),
-                voice=row.get("voice", "af_bella"),
-                language=row.get("language", "en"),
-                active=row.get("active", False),
-                menu_items=row.get("menu_items", []),
-                pos_system=row.get("pos_system", ""),
-                pos_access_token=row.get("pos_access_token", ""),
-                pos_location_id=row.get("pos_location_id", ""),
-                business_hours=row.get("business_hours", {}),
-                after_hours_message=row.get("after_hours_message", ""),
-                max_concurrent_calls=row.get("max_concurrent_calls", 5),
-                order_types=row.get("order_types", ["pickup", "delivery"]),
-                special_instructions_enabled=row.get("special_instructions_enabled", True),
-                transfer_number=row.get("transfer_number", ""),
-                pos_webhook_url=row.get("pos_webhook_url", ""),
-                sms_checkout_enabled=row.get("sms_checkout_enabled", True),
-                sms_ordering_enabled=row.get("sms_ordering_enabled", True),
-                tax_rate=row.get("tax_rate", 0.13),
-                sms_pay_template=(row.get("sms_pay_template") or "").strip(),
-                reservation_config=row.get("reservation_config") or None,
-                personality=row.get("personality") or None,
-                # Default to pay_now if the column is missing/null (anti-scam default).
-                payment_mode=_norm_payment_mode(row.get("payment_mode")),
-                business_timezone=(row.get("business_timezone") or "").strip(),
-                stripe_account_id=(row.get("stripe_account_id") or "").strip(),
-                stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
-                demo_safe=bool(row.get("demo_safe", False)),
-                plan_tier=(row.get("plan_tier") or "").strip().lower(),
-                payment_link_provider=_norm_payment_link_provider(
-                    row.get("payment_link_provider")),
-                clover_hco_webhook_secret=(
-                    row.get("clover_hco_webhook_secret") or "").strip(),
-                website_url=(row.get("website_url") or "").strip(),
-                restaurant_brief=(row.get("restaurant_brief") or "").strip(),
-                order_fee_cents=(int(row["order_fee_cents"])
-                                 if row.get("order_fee_cents") is not None else None),
-                accent=(row.get("accent") or "").strip().lower(),
-                max_call_minutes=(int(row["max_call_minutes"])
-                                  if row.get("max_call_minutes") is not None else None),
-                business_line_number=(row.get("business_line_number") or "").strip(),
-                delivery_channels=(row.get("delivery_channels")
-                                   if isinstance(row.get("delivery_channels"), dict)
-                                   else None),
-                script_pack=(row.get("script_pack") or "").strip().lower(),
-            )
-            # MENU STORE (single source of truth): merchants with rows in the
-            # normalized menu_items table get their menu from the store —
-            # sold-out-aware and always current. Merchants without store rows
-            # (or if the table doesn't exist yet / the read fails) keep the
-            # JSONB menu loaded above — zero-migration safety, and the JSONB
-            # is a write-through mirror of the store anyway (menu_store.py).
-            try:
-                menu_res = await client.get(
+        row = res.json()[0]
+        config = MerchantPhoneConfig(
+            merchant_id=row["merchant_id"],
+            business_name=row.get("business_name", ""),
+            business_type=row.get("business_type", "restaurant"),
+            phone_number=row.get("phone_number", ""),
+            greeting=row.get("greeting", ""),
+            voice=row.get("voice", "af_bella"),
+            language=row.get("language", "en"),
+            active=row.get("active", False),
+            menu_items=row.get("menu_items", []),
+            pos_system=row.get("pos_system", ""),
+            pos_access_token=row.get("pos_access_token", ""),
+            pos_location_id=row.get("pos_location_id", ""),
+            business_hours=row.get("business_hours", {}),
+            after_hours_message=row.get("after_hours_message", ""),
+            max_concurrent_calls=row.get("max_concurrent_calls", 5),
+            order_types=row.get("order_types", ["pickup", "delivery"]),
+            special_instructions_enabled=row.get("special_instructions_enabled", True),
+            transfer_number=row.get("transfer_number", ""),
+            pos_webhook_url=row.get("pos_webhook_url", ""),
+            sms_checkout_enabled=row.get("sms_checkout_enabled", True),
+            sms_ordering_enabled=row.get("sms_ordering_enabled", True),
+            tax_rate=row.get("tax_rate", 0.13),
+            sms_pay_template=(row.get("sms_pay_template") or "").strip(),
+            reservation_config=row.get("reservation_config") or None,
+            personality=row.get("personality") or None,
+            # Default to pay_now if the column is missing/null (anti-scam default).
+            payment_mode=_norm_payment_mode(row.get("payment_mode")),
+            business_timezone=(row.get("business_timezone") or "").strip(),
+            stripe_account_id=(row.get("stripe_account_id") or "").strip(),
+            stripe_charges_enabled=bool(row.get("stripe_charges_enabled")),
+            demo_safe=bool(row.get("demo_safe", False)),
+            plan_tier=(row.get("plan_tier") or "").strip().lower(),
+            payment_link_provider=_norm_payment_link_provider(
+                row.get("payment_link_provider")),
+            clover_hco_webhook_secret=(
+                row.get("clover_hco_webhook_secret") or "").strip(),
+            website_url=(row.get("website_url") or "").strip(),
+            restaurant_brief=(row.get("restaurant_brief") or "").strip(),
+            order_fee_cents=(int(row["order_fee_cents"])
+                             if row.get("order_fee_cents") is not None else None),
+            accent=(row.get("accent") or "").strip().lower(),
+            max_call_minutes=(int(row["max_call_minutes"])
+                              if row.get("max_call_minutes") is not None else None),
+            business_line_number=(row.get("business_line_number") or "").strip(),
+            delivery_channels=(row.get("delivery_channels")
+                               if isinstance(row.get("delivery_channels"), dict)
+                               else None),
+            script_pack=(row.get("script_pack") or "").strip().lower(),
+        )
+        # MENU STORE (single source of truth): merchants with rows in the
+        # normalized menu_items table get their menu from the store —
+        # sold-out-aware and always current. Merchants without store rows
+        # (or if the table doesn't exist yet / the read fails) keep the
+        # JSONB menu loaded above — zero-migration safety, and the JSONB
+        # is a write-through mirror of the store anyway (menu_store.py).
+        # The two reads are independent → issued CONCURRENTLY (one round-trip
+        # of latency instead of two on the assistant-request hot path).
+        try:
+            menu_res, menus_res = await asyncio.gather(
+                client.get(
                     f"{SUPABASE_URL}/rest/v1/menu_items",
                     params={"merchant_id": f"eq.{merchant_id}",
                             "published": "is.true", "select": "*", "limit": "1000"},
                     headers=headers,
-                )
-                if menu_res.status_code == 200 and menu_res.json():
-                    items, sold_out = _store_rows_to_menu(menu_res.json())
-                    if items or sold_out:
-                        config.menu_items = items
-                        config.sold_out_items = sold_out
-                menus_res = await client.get(
+                ),
+                client.get(
                     f"{SUPABASE_URL}/rest/v1/merchant_menus",
                     params={"merchant_id": f"eq.{merchant_id}",
                             "published": "is.true", "select": "public_slug"},
                     headers=headers,
-                )
-                if menus_res.status_code == 200 and menus_res.json():
-                    slug = (menus_res.json()[0].get("public_slug") or "").strip()
-                    if slug:
-                        config.menu_public_url = f"{PUBLIC_MENU_BASE}/m/{slug}"
-            except Exception as menu_exc:  # noqa: BLE001 — store read never breaks a call
-                logger.warning("menu store read failed for %s (JSONB fallback): %s",
-                               merchant_id, menu_exc)
-            return config
+                ),
+            )
+            if menu_res.status_code == 200 and menu_res.json():
+                items, sold_out = _store_rows_to_menu(menu_res.json())
+                if items or sold_out:
+                    config.menu_items = items
+                    config.sold_out_items = sold_out
+            if menus_res.status_code == 200 and menus_res.json():
+                slug = (menus_res.json()[0].get("public_slug") or "").strip()
+                if slug:
+                    config.menu_public_url = f"{PUBLIC_MENU_BASE}/m/{slug}"
+        except Exception as menu_exc:  # noqa: BLE001 — store read never breaks a call
+            logger.warning("menu store read failed for %s (JSONB fallback): %s",
+                           merchant_id, menu_exc)
+        return config
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
         return None
@@ -334,22 +358,19 @@ async def get_merchant_by_phone(phone_number: str) -> Optional[str]:
         return "demo-merchant"
 
     try:
-        import httpx
-
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}",
         }
-        async with httpx.AsyncClient() as client:
-            # params= so E.164 numbers percent-encode: a literal "+" in the query
-            # string decodes to a space at the gateway and matches nothing.
-            res = await client.get(
-                f"{SUPABASE_URL}/rest/v1/phone_agent_config",
-                params={"phone_number": f"eq.{phone_number}", "select": "merchant_id"},
-                headers=headers,
-            )
-            if res.status_code == 200 and res.json():
-                return res.json()[0]["merchant_id"]
+        # params= so E.164 numbers percent-encode: a literal "+" in the query
+        # string decodes to a space at the gateway and matches nothing.
+        res = await _get_http_client().get(
+            f"{SUPABASE_URL}/rest/v1/phone_agent_config",
+            params={"phone_number": f"eq.{phone_number}", "select": "merchant_id"},
+            headers=headers,
+        )
+        if res.status_code == 200 and res.json():
+            return res.json()[0]["merchant_id"]
     except Exception as e:
         logger.error("Failed to lookup merchant by phone: %s", e)
     return None

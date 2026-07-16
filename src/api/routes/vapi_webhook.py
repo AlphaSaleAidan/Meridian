@@ -16,6 +16,7 @@ Phone-agent modules live in a sibling dir (same sys.path trick as
 stripe_connect). They're dep-light (no pipecat), so the backend can import them.
 build_system_prompt lives in pipecat-heavy bot.py, so the prompt is rebuilt here.
 """
+import asyncio
 import hmac
 import json
 import logging
@@ -774,20 +775,43 @@ async def vapi_webhook(request: Request):
                 except Exception as e:  # noqa: BLE001 — verification never strands a call
                     logger.error("forwarding-verification check failed: %s", e)
 
-            # Runtime loop guard: a caller id that IS one of our agent DIDs
-            # means the call has been forwarded back into the fleet (transfer →
-            # store line → full-forward → agent). Serve the message-taker
-            # assistant instead of feeding the loop. Fail-open on any error.
-            try:
-                if caller and await _is_loop_caller(caller, dialed, config):
-                    logger.error(
-                        "VAPI LOOP GUARD: caller %s dialed %s (merchant=%s) is an agent "
-                        "DID — forwarding loop detected, serving message-taker assistant. "
-                        "Check this merchant's transfer_number / carrier forwarding.",
-                        caller, dialed or "?", getattr(config, "merchant_id", "?"))
-                    return {"assistant": _loop_guard_assistant(config)}
-            except Exception as e:  # noqa: BLE001 — loop check never strands the call
-                logger.error("loop-guard check failed (serving normal assistant): %s", e)
+            # Runtime loop guard + transfer fleet check hit the same table and
+            # are independent of each other, so they run CONCURRENTLY — one
+            # round-trip of caller-hears-silence latency instead of two. Each
+            # keeps its own fail-open contract (return_exceptions=True): a
+            # loop-guard error serves the normal assistant; a fleet-check error
+            # keeps the merchant's configured transfer.
+            transfer = _safe_transfer_number(config)
+
+            async def _loop_check() -> bool:
+                # a caller id that IS one of our agent DIDs means the call has
+                # been forwarded back into the fleet (transfer → store line →
+                # full-forward → agent).
+                return bool(caller) and await _is_loop_caller(caller, dialed, config)
+
+            async def _fleet_check():
+                # loop layer 3: a transfer number that is ANOTHER merchant's
+                # agent DID would bounce callers around the fleet.
+                if not transfer:
+                    return None
+                from merchant_config import get_merchant_by_phone
+                return await get_merchant_by_phone(transfer)
+
+            loop_hit, fleet_owner = await asyncio.gather(
+                _loop_check(), _fleet_check(), return_exceptions=True)
+
+            # Loop guard: serve the message-taker assistant instead of feeding
+            # the loop. Fail-open on any error.
+            if isinstance(loop_hit, BaseException):
+                logger.error("loop-guard check failed (serving normal assistant): %s",
+                             loop_hit)
+            elif loop_hit:
+                logger.error(
+                    "VAPI LOOP GUARD: caller %s dialed %s (merchant=%s) is an agent "
+                    "DID — forwarding loop detected, serving message-taker assistant. "
+                    "Check this merchant's transfer_number / carrier forwarding.",
+                    caller, dialed or "?", getattr(config, "merchant_id", "?"))
+                return {"assistant": _loop_guard_assistant(config)}
 
             # Voice-ledger gate: if this merchant is underwater past the floor,
             # forward the call to the Telnyx/Pipecat agent instead of burning
@@ -803,24 +827,19 @@ async def vapi_webhook(request: Request):
                 except Exception as e:  # noqa: BLE001 — fallback check never strands the call
                     logger.error("voice-ledger fallback check failed: %s", e)
 
-            # Transfer number fleet check (loop layer 3): a transfer number that
-            # is ANOTHER merchant's agent DID would bounce callers around the
-            # fleet — suppress the transfer tool for this call. Fail-open: an
-            # error keeps the merchant's configured transfer.
+            # Transfer number fleet check result (gathered above): suppress the
+            # transfer tool for this call when the number is another merchant's
+            # agent DID. Fail-open: an error keeps the configured transfer.
             transfer_override: str | None = None
-            transfer = _safe_transfer_number(config)
-            if transfer:
-                try:
-                    from merchant_config import get_merchant_by_phone
-                    owner = await get_merchant_by_phone(transfer)
-                    if owner and owner != "demo-merchant":
-                        logger.error(
-                            "transfer_number %s for merchant %s is agent DID of merchant "
-                            "%s — suppressing transfer tool (loop guard)",
-                            transfer, getattr(config, "merchant_id", "?"), owner)
-                        transfer_override = ""
-                except Exception as e:  # noqa: BLE001
-                    logger.error("transfer fleet check failed (keeping transfer): %s", e)
+            if isinstance(fleet_owner, BaseException):
+                logger.error("transfer fleet check failed (keeping transfer): %s",
+                             fleet_owner)
+            elif transfer and fleet_owner and fleet_owner != "demo-merchant":
+                logger.error(
+                    "transfer_number %s for merchant %s is agent DID of merchant "
+                    "%s — suppressing transfer tool (loop guard)",
+                    transfer, getattr(config, "merchant_id", "?"), fleet_owner)
+                transfer_override = ""
 
             return {"assistant": _assistant_for(config, transfer_number=transfer_override)}
         except Exception as e:  # noqa: BLE001 — never strand the call
@@ -883,6 +902,7 @@ async def vapi_webhook(request: Request):
                 json.dumps(msg, sort_keys=True, default=str).encode()).hexdigest()
             call_id = f"noid-{digest[:16]}"
             logger.warning("end-of-call with no call id — synthesized ref %s", call_id)
+        config = None
         try:
             dialed = _dialed_number(msg)
             config = await _resolve_config(dialed)
@@ -941,8 +961,12 @@ async def vapi_webhook(request: Request):
 
         # Reason-code telemetry: one voice_call_endings row per call — the
         # instrument for "how many orders is the call cap killing".
+        # config is passed through from the ledger block above so the merchant
+        # isn't re-resolved (3 more Supabase round-trips) per report; if the
+        # ledger block failed before resolving, the recorder resolves its own.
         try:
-            await _record_call_ending(msg, call_id, ended, int(dur_sec or 0))
+            await _record_call_ending(msg, call_id, ended, int(dur_sec or 0),
+                                      config=config)
         except Exception as e:  # noqa: BLE001 — telemetry never affects the call
             logger.error("voice_call_endings record failed: %s", e)
 
@@ -971,11 +995,15 @@ def _had_order(msg: dict) -> bool | None:
 
 
 async def _record_call_ending(msg: dict, call_id: str, ended: str | None,
-                              duration_seconds: int) -> None:
-    """Persist a voice_call_endings row (deduped on vapi_call_id for retries)."""
+                              duration_seconds: int, config=None) -> None:
+    """Persist a voice_call_endings row (deduped on vapi_call_id for retries).
+
+    ``config`` is the already-resolved MerchantPhoneConfig passed through from
+    the end-of-call handler; None (e.g. the ledger block failed before
+    resolving) falls back to resolving it here, exactly as before."""
     from ...db import get_db
-    dialed = _dialed_number(msg)
-    config = await _resolve_config(dialed)
+    if config is None:
+        config = await _resolve_config(_dialed_number(msg))
     merchant_id = getattr(config, "merchant_id", "") or "demo"
     db = get_db()
     if call_id:
