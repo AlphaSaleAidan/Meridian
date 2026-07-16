@@ -263,13 +263,96 @@ def test_create_customer_paths_provision_fee_terms():
 
 def test_provision_customer_copies_lead_terms():
     from src.api.routes import onboarding as onboarding_mod
-    src = inspect.getsource(onboarding_mod.provision_customer)
+    # endpoint delegates to the unit-tested helper
+    assert "_record_provision_fee_terms" in inspect.getsource(onboarding_mod.provision_customer)
+    src = inspect.getsource(onboarding_mod._record_provision_fee_terms)
     assert "set_merchant_billing_terms" in src
     assert "terms_from_lead_row" in src
     assert "manual_provision" in src
+    assert "lock_lead_fee_terms" in src
     # request carries the lead linkage
     fields = onboarding_mod.ProvisionCustomerRequest.model_fields
     assert "lead_id" in fields and "lead_market" in fields
+
+
+# ── provision-customer fee-terms order of operations (New Customer flow) ─────
+# The New Customer pages insert the CRM lead FIRST, then provision with its
+# lead_id — the helper must end with (1) merchant_billing_terms linked to that
+# lead and (2) the lead carrying locked fee-term columns.
+
+def _prov_req(**over):
+    from src.api.routes.onboarding import ProvisionCustomerRequest
+    base = dict(
+        org_id="7a5ba1f6-1111-4222-8333-944445555666", email="owner@example.com", owner_name="Owner",
+        business_name="Biz", plan="premium", monthly_price=350,
+        rep_id="rep-1", rep_name="Rep One", country="US",
+    )
+    base.update(over)
+    return ProvisionCustomerRequest(**base)
+
+
+async def test_provision_locks_fresh_lead_and_links_billing_terms():
+    """New Customer flow: unlocked lead → server-side lock + linked contract."""
+    from src.api.routes.onboarding import _record_provision_fee_terms
+    db = MockDB(select_results={"us_leads": [{"id": "lead-nc", "stage": "closed_won"}]})
+    recorded, terms = await _record_provision_fee_terms(
+        db, _prov_req(lead_id="lead-nc", lead_market="us"))
+    assert recorded and terms["plan_tier"] == "premium"
+    # (2) the lead got locked — first-lock-wins update on us_leads
+    lock = [u for u in db.ops("update") if u[1] == "us_leads"]
+    assert len(lock) == 1
+    _, _, patch, filters = lock[0]
+    assert filters == {"id": "eq.lead-nc", "fee_terms_locked_at": "is.null"}
+    assert patch["fee_terms_locked_at"] and patch["fee_terms_locked_by"] == "Rep One"
+    assert patch["plan_tier"] == "premium"
+    # (1) billing contract links back to the lead, not flagged manual
+    _, _, row = db.ops("insert")[-1]
+    assert row["source_lead_id"] == "lead-nc"
+    assert row["source_market"] == "us"
+    assert row["override_reason"] is None
+
+
+async def test_provision_copies_already_locked_lead_verbatim():
+    """LeadDetail close path: locked lead terms are the contract of record."""
+    from src.api.routes.onboarding import _record_provision_fee_terms
+    db = MockDB(select_results={"us_leads": [{
+        "id": "lead-lk", "plan_tier": "command", "monthly_fee_cents": 50000,
+        "order_fee_cents": 100, "call_overage_cents_per_min": 45,
+        "included_call_min": 3, "fee_terms_locked_at": "2026-07-01T00:00:00Z",
+    }]})
+    recorded, terms = await _record_provision_fee_terms(
+        db, _prov_req(lead_id="lead-lk", lead_market="us", plan="premium"))
+    assert recorded and terms["plan_tier"] == "command"  # lead wins over req.plan
+    # already locked → no rewrite of the lead
+    assert [u for u in db.ops("update") if u[1] == "us_leads"] == []
+    _, _, row = db.ops("insert")[-1]
+    assert row["source_lead_id"] == "lead-lk" and row["override_reason"] is None
+
+
+async def test_provision_without_lead_stays_manual_provision():
+    """Backward compat: self-serve wizards send no lead_id — unchanged path."""
+    from src.api.routes.onboarding import _record_provision_fee_terms
+    db = MockDB()
+    recorded, terms = await _record_provision_fee_terms(db, _prov_req())
+    assert recorded and terms["plan_tier"] == "premium"
+    # nothing to lock (only the merchant_billing_terms supersede update runs)
+    assert [u for u in db.ops("update") if u[1] in ("us_leads", "canada_leads")] == []
+    _, _, row = db.ops("insert")[-1]
+    assert row["source_lead_id"] is None
+    assert row["override_reason"] == "manual_provision"
+
+
+async def test_provision_with_missing_lead_falls_back_to_manual():
+    """A lead_id that matches no row must not link or lock anything."""
+    from src.api.routes.onboarding import _record_provision_fee_terms
+    db = MockDB(select_results={"us_leads": []})
+    recorded, _ = await _record_provision_fee_terms(
+        db, _prov_req(lead_id="ghost", lead_market="us"))
+    assert recorded
+    assert [u for u in db.ops("update") if u[1] in ("us_leads", "canada_leads")] == []
+    _, _, row = db.ops("insert")[-1]
+    assert row["source_lead_id"] is None
+    assert row["override_reason"] == "manual_provision"
 
 
 def test_billing_service_reads_contracted_monthly_and_prechecks():
