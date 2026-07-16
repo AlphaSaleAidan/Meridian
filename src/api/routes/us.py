@@ -24,6 +24,7 @@ from ..auth import (
     require_jwt,
     rate_limit_signup,
 )
+from .. import hierarchy
 from ._supabase_admin import delete_auth_user_by_email
 
 logger = logging.getLogger("meridian.api.us")
@@ -567,24 +568,41 @@ async def get_team(request: Request, user: dict = Depends(require_jwt)):
     if not supabase_url or not user_token:
         return {"reps": [], "applicants": []}
 
+    base_cols = "id,name,email,phone,commission_rate,is_active,created_at,portal_context"
+    hier_cols = base_cols + ",role,manager_id,path,level"
+    headers = {"Authorization": f"Bearer {user_token}", "apikey": anon_key}
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{supabase_url}/rest/v1/sales_reps?portal_context=in.(us,all)&order=created_at.asc"
-            "&select=id,name,email,phone,commission_rate,is_active,created_at,portal_context",
-            headers={
-                "Authorization": f"Bearer {user_token}",
-                "apikey": anon_key,
-            },
+            f"&select={hier_cols}",
+            headers=headers,
         )
+        if resp.status_code != 200:
+            # Pre-migration prod: hierarchy columns unknown → legacy column set.
+            resp = await client.get(
+                f"{supabase_url}/rest/v1/sales_reps?portal_context=in.(us,all)&order=created_at.asc"
+                f"&select={base_cols}",
+                headers=headers,
+            )
         if resp.status_code != 200:
             logger.error("US team fetch failed: %s", resp.text)
             return {"reps": [], "applicants": []}
 
         rows = resp.json()
 
+    # Backend scoping plane (independent of RLS): subtree + upline only.
+    scope = await hierarchy.resolve_scope(user)
+    allowed = await hierarchy.visible_rep_ids(scope)
+    rows = hierarchy.scope_roster_rows(rows, scope, allowed)
+
     reps = [r for r in rows if r.get("is_active")]
     applicants = [r for r in rows if not r.get("is_active")]
-    return {"reps": reps, "applicants": applicants}
+    return {
+        "reps": reps,
+        "applicants": applicants,
+        "viewer": {"role": scope.role, "rep_id": scope.rep_id, "is_admin": scope.is_admin},
+    }
 
 
 @router.post("/rep-approve")
@@ -772,15 +790,20 @@ async def get_leads(request: Request, user: dict = Depends(require_jwt)):
 
     headers = {"Authorization": f"Bearer {user_token}", "apikey": anon_key}
 
+    rows: list = []
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
             f"{supabase_url}/rest/v1/us_leads?order=created_at.desc&select=*",
             headers=headers,
         )
         if resp.status_code == 200:
-            return {"leads": resp.json()}
+            rows = resp.json()
 
-    return {"leads": []}
+    # Backend scoping plane. For us_leads this is the PRIMARY hierarchy guard
+    # (the 20260716 migration intentionally leaves us_leads policies alone).
+    scope = await hierarchy.resolve_scope(user)
+    allowed = await hierarchy.visible_rep_ids(scope)
+    return {"leads": hierarchy.scope_lead_rows(rows, allowed)}
 
 
 @router.get("/stats")
