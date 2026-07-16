@@ -112,8 +112,13 @@ def delivery_columns(outcomes: dict[str, dict]) -> dict:
 
 
 def base_order_row(order: dict, pos_result: dict) -> dict:
-    """Common phone_orders insert fields shared by held + released orders."""
-    return {
+    """Common phone_orders insert fields shared by held + released orders.
+
+    The full pos_result (incl. Clover's kitchen_fired / kitchen_fire_status)
+    also lands verbatim in delivery_detail.pos.pos_result via pos_outcome, so
+    support always sees whether the printer actually fired.
+    """
+    row = {
         "merchant_id": order.get("merchant_id", ""),
         "customer_name": order.get("customer_name", ""),
         "order_type": order.get("order_type", "pickup"),
@@ -130,6 +135,12 @@ def base_order_row(order: dict, pos_result: dict) -> dict:
         # test orders mark themselves so dashboards/support can filter them
         "source": order.get("source", "phone_agent"),
     }
+    if (pos_result or {}).get("kitchen_fired"):
+        # Clover print_event accepted: the ticket fired to the order printer.
+        # (Read-back verification — pos_fulfillment — may later overwrite this
+        # with the confirmed POS state, which is strictly stronger evidence.)
+        row["fulfillment_state"] = "kitchen_fired"
+    return row
 
 
 async def save_order_row(row: dict) -> str | None:

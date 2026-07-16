@@ -48,6 +48,25 @@ Nearly the full POS-analytics suite. Clover's data is solid; the gap vs Square i
 
 - Real-time alerts within seconds of a transaction — currently hourly batch. Webhooks shipping in the roadmap.
 
+## How direct kitchen injection works (built, pending live verification)
+
+Phone orders can now land in a Clover merchant's kitchen the way a normal ticket does — no staff re-keying. Three API calls, in order:
+
+1. **Order created** via the Clover API (`POST /v3/merchants/{mId}/orders`, state `open`) — it appears in the merchant's Orders app.
+2. **Line items added** — one per unit, with per-item special instructions, so the ticket reads like a staff-entered order.
+3. **Print event fired** (`POST /v3/merchants/{mId}/print_event` with the order id) — this is the step that actually makes the ticket print. An API-created Clover order **never prints on its own**; the print event routes it to the merchant's order printer (or the device's onboard printer when no order printer is set).
+
+Print failure is deliberately non-fatal: if the merchant has no printer configured or no device online, the order still exists on the register and support can see `kitchen_fired` / `kitchen_fire_status` on the order record. Ops kill-switch: `CLOVER_KITCHEN_FIRE_ENABLED=0` skips the print step without touching order creation.
+
+**Two human prerequisites before this goes live for a merchant:**
+
+1. Grant **ORDERS and INVENTORY write** permissions on the Meridian Clover app in the Clover developer dashboard (app-level setting).
+2. The merchant **re-OAuths via the 1-click connect link** so their token picks up the new write scopes.
+
+Note: Clover App Market approval gates *marketplace distribution* only — it does **not** gate these API writes for merchants we onboard directly through our own OAuth link.
+
+**The live prove-out:** connect a real Clover merchant, hit the **"send test order"** button in setup, and watch their printer. The button pushes a clearly-marked $-minimal test ticket through the exact live pipeline, then reads the order back from Clover (exists + open + line items) to confirm end-to-end. Until a real merchant's printer has fired, treat this leg as built-but-unproven.
+
 ## Common failure modes
 
 | Symptom | Cause | Fix |
@@ -88,5 +107,5 @@ Nearly the full POS-analytics suite. Clover's data is solid; the gap vs Square i
 
 ---
 
-_Last updated: 2026-05-31 (enhanced with Phase 1 research)_
+_Last updated: 2026-07-16 (direct kitchen injection: built, pending live verification)_
 _Sourced from: src/services/pos_connectors/registry.py (clover config) + docs/playbook/_status/phase-2-decisions.md (Wave 1 #2, production issue #1) + docs/playbook/_status/pos/clover.md (Phase 1)_

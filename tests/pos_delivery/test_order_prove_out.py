@@ -327,7 +327,9 @@ async def test_verify_and_record_sets_confirmed_at(fake_square, monkeypatch):
 
 
 async def test_non_square_verifier_reports_unsupported():
-    for system in ("toast", "clover", "", "some-webhook-pos"):
+    # clover left this list 2026-07-16: it now has a real read-back verifier
+    # (tests/pos_delivery/test_clover_kitchen_fire.py).
+    for system in ("toast", "", "some-webhook-pos"):
         result = await pf.verify_fulfillment(system, "X1", "tok")
         assert result["supported"] is False
         assert result["confirmed"] is False
