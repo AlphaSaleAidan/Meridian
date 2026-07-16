@@ -251,6 +251,23 @@ def test_replace_menu_from_agent_items_is_authoritative():
     _assert_mirror_integrity(db)
 
 
+def test_replace_menu_preserves_sold_out_and_pending_rows():
+    """The wizard hydrates from the mirror, which EXCLUDES sold-out and
+    pending-review rows — a wizard save must not delete them."""
+    db = FakeDB({"merchant_id": MID, "menu_items": [
+        {"name": "Wings", "price": 12.0}, {"name": "Coke", "price": 3.0}]})
+    _run(menu_store.import_jsonb_menu(db, MID))
+    wings_id = next(r["id"] for r in db.tables["menu_items"] if r["name"] == "Wings")
+    _run(menu_store.update_item(db, MID, wings_id, {"sold_out": True}))
+    _run(menu_store.ingest_items(db, MID, [{"name": "Pad Thai", "price": 15.0}],
+                                 source="scrape"))
+    # Wizard saves the mirror view (Coke only — Wings is sold out, Pad Thai pending).
+    _run(menu_store.replace_menu_from_agent_items(db, MID, [{"name": "Coke", "price": 3.0}]))
+    names = {r["name"] for r in db.tables["menu_items"]}
+    assert names == {"Wings", "Coke", "Pad Thai"}
+    _assert_mirror_integrity(db)
+
+
 def test_replace_menu_noop_without_store_rows():
     db = FakeDB({"merchant_id": MID, "menu_items": [{"name": "Coke", "price": 3.0}]})
     assert not _run(menu_store.replace_menu_from_agent_items(

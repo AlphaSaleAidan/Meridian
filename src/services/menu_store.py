@@ -426,7 +426,11 @@ async def replace_menu_from_agent_items(db, merchant_id: str, items: list[dict])
             await db.insert("menu_items", row)
     if incoming:  # never nuke the store on an empty payload
         for key, row in by_name.items():
-            if key not in incoming and row.get("published"):
+            # Only prune LIVE items the merchant removed. Sold-out rows are
+            # excluded from the mirror the wizard hydrated from, so their
+            # absence from the payload is not a deletion; pending-review rows
+            # likewise never appear in the wizard list.
+            if key not in incoming and row.get("published") and not row.get("sold_out"):
                 await db.delete("menu_items", filters={
                     "id": f"eq.{row['id']}", "merchant_id": f"eq.{merchant_id}"})
     await mirror_to_config(db, merchant_id)
