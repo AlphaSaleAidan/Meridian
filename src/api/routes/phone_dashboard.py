@@ -209,6 +209,19 @@ async def save_phone_config(req: PhoneConfigRequest, principal=Depends(require_s
         await db.insert("phone_agent_config", payload)
         logger.info("Created phone config for %s", req.merchant_id)
 
+    # WRITE-THROUGH (menu store): once a merchant's menu lives in menu_items,
+    # a wizard/settings save that carries the full menu list must update the
+    # store too — otherwise the next store mutation's JSONB mirror would
+    # clobber this save. No store rows → no-op (legacy JSONB-only world).
+    # Best-effort: a missing table (migration not applied) never breaks saves.
+    if req.menu_items is not None:
+        try:
+            from ...services.menu_store import replace_menu_from_agent_items
+            if await replace_menu_from_agent_items(db, req.merchant_id, req.menu_items):
+                logger.info("menu store write-through on config save for %s", req.merchant_id)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("menu store write-through failed for %s: %s", req.merchant_id, e)
+
     return {"ok": True, "merchant_id": req.merchant_id}
 
 

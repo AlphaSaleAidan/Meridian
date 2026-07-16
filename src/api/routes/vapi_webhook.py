@@ -230,6 +230,19 @@ def _system_prompt(config, transfer_number: str = "") -> str:
             menu_lines.append(line)
 
     menu = ("\n\nMENU:\n" + "\n".join(menu_lines)) if menu_lines else ""
+
+    # SOLD OUT section (menu store): items are EXCLUDED from the menu above
+    # (never offered) but the agent must know they exist — if a caller asks
+    # for one, apologize instead of treating it as off-menu.
+    sold_out = [str(n).strip()
+                for n in (getattr(config, "sold_out_items", None) or [])
+                if str(n).strip()]
+    if sold_out:
+        menu += (
+            "\n\nSOLD OUT TODAY (do NOT offer these; if the caller asks for one, "
+            "apologize, say it's sold out today, and suggest a similar item):\n"
+            + "\n".join(f"- {n}" for n in sold_out)
+        )
     raw_types = list(getattr(config, "order_types", ["pickup", "delivery"]))
     # "dine_in" was renamed to "reservation" in the product; old configs persist.
     display_types = ["reservation" if t == "dine_in" else t for t in raw_types]
@@ -299,6 +312,7 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
         "- Frustrated caller → brief apology, repeat back only the unclear part, ask once to clarify."
+        f"{_menu_link_line(config)}"
         f"{_pacing_line(_effective_cap_min(config))}"
         f"{transfer_block}"
         f"{menu}"
@@ -331,6 +345,20 @@ def _overage_minutes(dur_min: float, included_min: int, cap_min: int) -> int:
     if cap_min > 0:
         over = min(over, max(cap_min - included_min, 0))
     return over
+
+
+def _menu_link_line(config) -> str:
+    """One guard-rule line when the merchant has a published hosted menu page
+    (merchant_menus.public_slug → meridian.tips/m/{slug}). Absent → "" so the
+    prompt stays byte-for-byte unchanged for merchants without one."""
+    url = (getattr(config, "menu_public_url", "") or "").strip()
+    if not url:
+        return ""
+    return (
+        f"\n- The full menu is online at {url} — if the caller asks to see the "
+        "menu or asks for it to be texted, tell them that address clearly "
+        "(say it once, slowly)."
+    )
 
 
 def _pacing_line(cap_min: int) -> str:
