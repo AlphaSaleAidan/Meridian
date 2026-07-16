@@ -233,7 +233,7 @@ async def get_open_orders(
         orders = []
         async with SquareClient(access_token=token) as client:
             locs = await client.list_locations()
-            loc_ids = [l["id"] for l in (locs or [])]
+            loc_ids = [loc["id"] for loc in (locs or [])]
             raw = await client.search_all_orders(location_ids=loc_ids, states=["OPEN", "DRAFT"])
             for o in raw:
                 line_items = o.get("line_items") or []
