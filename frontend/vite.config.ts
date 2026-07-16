@@ -12,15 +12,44 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-charts': ['recharts'],
-          'vendor-pdf': ['jspdf', 'html2canvas'],
-          'vendor-motion': ['framer-motion'],
-          'vendor-three': ['three', '@react-three/fiber', '@react-three/drei'],
-          'vendor-postprocessing': ['postprocessing', '@react-three/postprocessing'],
-          'vendor-lucide': ['lucide-react'],
+        // FUNCTION form, not the object map. The object form makes Rollup
+        // hoist a shared commonjs-interop helper into every manual chunk,
+        // which turns the entry chunk into a STATIC importer of vendor-three
+        // (1.1MB) / vendor-pdf / vendor-charts — all render-blocking on the
+        // landing page even though every consumer is behind React.lazy.
+        // With the function form only the matched modules are assigned, the
+        // helper stays where it's used, and the heavy vendors load on demand.
+        manualChunks(id: string) {
+          // Vite/Rollup VIRTUAL helper modules (the dynamic-import preload
+          // helper, commonjs interop) and tiny shared utils like clsx: left
+          // unassigned, Rollup colocates them into whichever vendor chunk it
+          // emits first — which turns the entry into a static importer of
+          // vendor-pdf / vendor-charts all over again. Pin them to 'vendor'
+          // (always preloaded anyway). The virtual-id check must run BEFORE
+          // the node_modules gate — virtual ids don't contain node_modules.
+          if (id.startsWith('\0vite/') || id.includes('commonjsHelpers')) return 'vendor'
+          if (!id.includes('node_modules')) return undefined
+          if (id.includes('/node_modules/clsx/')) return 'vendor'
+          if (
+            id.includes('/node_modules/three/') ||
+            id.includes('/node_modules/three-stdlib/') ||
+            id.includes('@react-three/fiber') ||
+            id.includes('@react-three/drei')
+          ) return 'vendor-three'
+          if (id.includes('postprocessing')) return 'vendor-postprocessing'
+          if (id.includes('/node_modules/jspdf') || id.includes('html2canvas')) return 'vendor-pdf'
+          if (id.includes('/node_modules/recharts')) return 'vendor-charts'
+          if (id.includes('/node_modules/framer-motion/')) return 'vendor-motion'
+          if (id.includes('@supabase/')) return 'vendor-supabase'
+          if (id.includes('/node_modules/lucide-react/')) return 'vendor-lucide'
+          if (
+            id.includes('/node_modules/react/') ||
+            id.includes('/node_modules/react-dom/') ||
+            id.includes('/node_modules/react-router/') ||
+            id.includes('/node_modules/react-router-dom/') ||
+            id.includes('/node_modules/scheduler/')
+          ) return 'vendor'
+          return undefined
         },
       },
     },
