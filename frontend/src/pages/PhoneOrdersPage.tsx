@@ -19,7 +19,7 @@ import {
 import { phoneService, type PhoneConfig } from '@/lib/phone-service'
 import { getAuthHeaders } from '@/lib/supabase'
 import {
-  LiveCallsBanner, RecordingPlayback, SettingsTab,
+  LiveCallsBanner, RecordingPlayback, SettingsTab, ForwardingWizard,
 } from '@/components/phone'
 
 /* ---------- Config maps ---------- */
@@ -160,16 +160,16 @@ function TranscriptModal({ call, biz, onClose }: { call: PhoneCallEntry; biz: Ph
 }
 
 /* ---------- Connect Phone Modal ---------- */
-function ConnectPhoneModal({ biz, onClose }: { biz: PhoneBizConfig; onClose: () => void }) {
+function ConnectPhoneModal({ biz, orgId, isDemo, onClose }: { biz: PhoneBizConfig; orgId: string; isDemo: boolean; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md bg-[#0A0A0B] border border-[#1F1F23] rounded-xl shadow-2xl" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23]">
+      <div className="w-full max-w-xl bg-[#0A0A0B] border border-[#1F1F23] rounded-xl shadow-2xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1F1F23] flex-shrink-0">
           <div className="flex items-center gap-2"><Link2 size={16} className="text-[#1A8FD6]" /><h3 className="text-sm font-semibold text-[#F5F5F7]">Connect Your Store Phone</h3></div>
           <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#1F1F23] transition-colors"><X size={16} className="text-[#A1A1A8]" /></button>
         </div>
-        <div className="px-5 py-5 space-y-5">
+        <div className="px-5 py-5 space-y-5 overflow-y-auto">
           <div className="bg-[#111113] border border-[#1F1F23] rounded-lg p-4">
             <p className="text-[10px] text-[#A1A1A8] mb-1">Your AI Agent Phone Number</p>
             <div className="flex items-center gap-2">
@@ -183,10 +183,12 @@ function ConnectPhoneModal({ biz, onClose }: { biz: PhoneBizConfig; onClose: () 
             <div className="flex items-start gap-2">
               <Info size={12} className="text-[#17C5B0] mt-0.5 flex-shrink-0" />
               <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
-                <span className="text-[#17C5B0] font-medium">No hardware needed.</span>{' '}Forward your store line to this number, or publish it as your dedicated order line.
+                <span className="text-[#17C5B0] font-medium">No hardware needed.</span>{' '}Forward your store line to this number (guided setup below with a live check), or publish it as your dedicated order line.
               </p>
             </div>
           </div>
+          {/* Guided carrier forwarding setup + live verification */}
+          <ForwardingWizard agentNumber={biz.phone} merchantId={orgId} isDemo={isDemo} />
           <button onClick={onClose} className="w-full py-2.5 bg-[#1A8FD6] text-white text-sm font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors">Got It</button>
         </div>
       </div>
@@ -741,7 +743,7 @@ export default function PhoneOrdersPage() {
       {tab === 'get_paid' && <GetPaidTab calls={calls} biz={business} orgId={orgId} isDemo={isDemo} />}
       {tab === 'settings' && <SettingsTab biz={business} phoneConfig={phoneConfig} onReconfigure={inPillar ? goToSetup : undefined} connectedPos={connectedPos} onConnect={() => setShowConnect(true)} orgId={orgId} />}
       {selectedCall && <TranscriptModal call={selectedCall} biz={business} onClose={() => setSelectedCall(null)} />}
-      {showConnect && <ConnectPhoneModal biz={business} onClose={() => setShowConnect(false)} />}
+      {showConnect && <ConnectPhoneModal biz={business} orgId={orgId} isDemo={isDemo} onClose={() => setShowConnect(false)} />}
     </div>
   )
 }
