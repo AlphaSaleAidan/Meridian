@@ -72,11 +72,11 @@ VOICE_INCLUDED_MIN = int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3)
 VOICE_OVERAGE_CENTS_PER_MIN = int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45)
 # Hard call cap: Vapi force-ends the call at this length (maxDurationSeconds on
 # the assistant), so the worst case a merchant is billed per call is
-# (cap − included) × overage — 8 min ⇒ 5 min over ⇒ $2.25 — and our own Vapi
+# (cap − included) × overage — 5 min ⇒ 2 min over ⇒ 90¢ — and our own Vapi
 # spend per call is capped with it. 0 disables the cap. This is the GLOBAL
 # default; phone_agent_config.max_call_minutes overrides it per merchant
 # (see _effective_cap_min).
-VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "8") or 0)
+VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 0)
 # Grace past the advertised cap so a call that submits an order at ~4:55 still
 # hears the spoken confirmation instead of dead air (order + SMS land either
 # way). Billing is unaffected: the end-of-call overage is clamped to
