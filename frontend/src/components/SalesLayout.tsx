@@ -66,7 +66,7 @@ export default function SalesLayout() {
   const sidebarContent = (
     <>
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-[#1F1F23] flex-shrink-0">
-        <Link to="/sales/dashboard" aria-label="Meridian sales portal home" className="flex items-center gap-2.5">
+        <Link to="/" aria-label="Meridian home" className="flex items-center gap-2.5">
           <MeridianEmblem size={28} />
           <div className="flex flex-col">
             <span className="text-sm font-bold text-[#F5F5F7] leading-tight">Meridian</span>
@@ -176,7 +176,7 @@ export default function SalesLayout() {
           >
             <Menu size={20} />
           </button>
-          <Link to="/sales/dashboard" aria-label="Meridian sales portal home" className="flex items-center gap-3">
+          <Link to="/" aria-label="Meridian home" className="flex items-center gap-3">
             <MeridianEmblem size={24} />
             <div className="flex flex-col">
               <span className="text-sm font-bold text-[#F5F5F7] leading-tight">Meridian</span>
