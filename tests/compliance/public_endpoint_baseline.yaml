@@ -38,6 +38,8 @@ oauth:
 
 public-form:
   # Deliberately public intake/consent surface (rate limiting tracked in PR #211).
+  - "GET /api/menu/csv-template"
+  - "GET /api/menu/public/{slug}"
   - "GET /api/onboarding/checklist"
   - "GET /api/portal/resolve/{token}"
   - "GET /api/website/public/{slug}"
