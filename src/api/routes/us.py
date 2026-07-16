@@ -288,6 +288,7 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
     supabase_url, service_key = _supabase_creds()
     org_id = str(uuid.uuid4())
     auth_user_id = None
+    fee_parity = {"fee_terms_locked": False, "billing_terms_recorded": False}
 
     logger.info("US create-customer requested by %s for %s", caller.get("email"), req.email)
 
@@ -405,6 +406,19 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                 raise HTTPException(500, "Customer account created but business profile failed to save")
             logger.info("Linked business %s -> user %s for %s", org_id, auth_user_id, req.email)
 
+            # Fee parity: lock the deal terms on the us_leads row + record the
+            # billing contract for the new org (shared helper in canada.py).
+            from .canada import _provision_fee_terms
+            fee_parity = await _provision_fee_terms(
+                market="us",
+                org_id=org_id,
+                deal_id=req.deal_id,
+                plan_id=req.plan_id,
+                monthly_price=req.monthly_price,
+                order_fee_cents=req.order_fee_cents,
+                locked_by=caller.get("email") or caller.get("id", ""),
+            )
+
             # Rep fee slider — pre-seed phone_agent_config with the negotiated
             # per-order fee (mirrors canada.create_customer). Best-effort: a
             # seed failure never fails customer creation.
@@ -458,9 +472,11 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                 # fell back to the tier default (mirrors canada.create_customer).
                 return {"ok": True, "org_id": org_id,
                         "temp_password": temp_password,
-                        "fee_seeded": fee_seeded, "order_fee_cents": fee}
+                        "fee_seeded": fee_seeded, "order_fee_cents": fee,
+                        **fee_parity}
 
-    return {"ok": True, "org_id": org_id, "temp_password": temp_password}
+    return {"ok": True, "org_id": org_id, "temp_password": temp_password,
+            **fee_parity}
 
 
 @router.post("/sign-sla")

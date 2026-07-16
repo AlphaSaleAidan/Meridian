@@ -135,6 +135,61 @@ def _clamp_order_fee_cents(fee: int, plan_id: str | None,
     return max(min(int(fee), _ORDER_FEE_CAP_CENTS), floor)
 
 
+async def _provision_fee_terms(
+    *,
+    market: str,
+    org_id: str,
+    deal_id: str | None,
+    plan_id: str | None,
+    monthly_price: int,
+    order_fee_cents: int | None,
+    locked_by: str,
+) -> dict:
+    """Fee parity at deal close (shared by canada + us create-customer).
+
+    1. Locks the structured fee terms onto the lead row (canada_leads /
+       us_leads) — the deal's contract of record. Fields the client omitted
+       are REQUIRED server-side by defaulting them from the selected tier's
+       canonical values (src/billing/fee_terms.py), so old clients keep working.
+    2. Records the provisioned billing contract (merchant_billing_terms) for
+       the new org — the source of truth live billing reads. No deal_id
+       (manual creation) → override_reason='manual_provision'.
+
+    Loud-but-non-fatal: a terms failure must never fail customer creation,
+    but it is surfaced in the response so the rep KNOWS the contract did not
+    stick (mirrors the order-fee seed contract)."""
+    out = {"fee_terms_locked": False, "billing_terms_recorded": False}
+    try:
+        from ...billing.fee_terms import (
+            lock_lead_fee_terms,
+            resolve_fee_terms,
+            set_merchant_billing_terms,
+        )
+        from ...db import get_db
+
+        db = get_db()
+        terms = resolve_fee_terms(
+            market,
+            plan_tier=plan_id,
+            monthly_fee_cents=monthly_price * 100 if monthly_price else None,
+            order_fee_cents=order_fee_cents,
+        )
+        lead_id = deal_id if (deal_id and _UUID_RE.match(deal_id)) else None
+        if lead_id:
+            out["fee_terms_locked"] = await lock_lead_fee_terms(
+                db, market, lead_id, terms, locked_by)
+        out["billing_terms_recorded"] = bool(await set_merchant_billing_terms(
+            db, org_id, terms,
+            source_lead_id=lead_id,
+            source_market=market,
+            created_by=locked_by,
+            override_reason=None if lead_id else "manual_provision",
+        ))
+    except Exception as e:  # noqa: BLE001 — never fail customer creation
+        logger.error("fee-terms provisioning failed for org %s: %s", org_id, e)
+    return out
+
+
 @router.post("/rep-signup", dependencies=[Depends(rate_limit_signup)])
 async def rep_signup(req: RepSignupRequest):
     """Create a new sales rep: auth user + sales_reps row.
@@ -252,6 +307,7 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
     # must_reset_password flag below — no reliance on Supabase recovery email.
     temp_password = _generate_temp_password()
     auth_user_id = None
+    fee_parity = {"fee_terms_locked": False, "billing_terms_recorded": False}
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.post(
@@ -377,6 +433,18 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                 raise HTTPException(500, "Customer account created but business profile failed to save")
             logger.info("Linked business %s -> user %s for %s", org_id, auth_user_id, req.email)
 
+            # Fee parity: lock the deal terms on the lead + record the billing
+            # contract for the new org (see _provision_fee_terms).
+            fee_parity = await _provision_fee_terms(
+                market="ca",
+                org_id=org_id,
+                deal_id=req.deal_id,
+                plan_id=req.plan_id,
+                monthly_price=req.monthly_price,
+                order_fee_cents=req.order_fee_cents,
+                locked_by=claims.get("email") or user_id,
+            )
+
             # Rep fee slider: pre-seed phone_agent_config with the negotiated
             # per-order fee so every payment rail picks it up the moment the
             # phone agent goes live. Best-effort — a fee-seed hiccup must never
@@ -430,9 +498,11 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                 # tier default until set manually) — surface it in the response.
                 return {"ok": True, "org_id": org_id,
                         "temporary_password": temp_password,
-                        "fee_seeded": fee_seeded, "order_fee_cents": fee}
+                        "fee_seeded": fee_seeded, "order_fee_cents": fee,
+                        **fee_parity}
 
-    return {"ok": True, "org_id": org_id, "temporary_password": temp_password}
+    return {"ok": True, "org_id": org_id, "temporary_password": temp_password,
+            **fee_parity}
 
 
 @router.post("/careers/apply")
