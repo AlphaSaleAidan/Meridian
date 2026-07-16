@@ -433,6 +433,9 @@ async def mark_order_paid(
                 pos_result = await _create_pos(order, cfg)
                 patch["pos_order_id"] = pos_result.get("pos_order_id", "")
                 patch["pos_success"] = bool(pos_result.get("success"))
+                if pos_result.get("kitchen_fired"):
+                    # Clover print_event accepted on the deferred push.
+                    patch["fulfillment_state"] = "kitchen_fired"
                 pos_pushed = bool(pos_result.get("success"))
                 released_pos = pos_outcome(pos_result)
                 released_pos["released_at_payment"] = True

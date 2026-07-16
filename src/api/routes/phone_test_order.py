@@ -87,8 +87,9 @@ async def send_test_order(
     phone_order_id = routed.get("phone_order_id")
 
     # Kitchen prove-out: when the ticket actually reached the POS, verify it in
-    # the background (Square: poll until OPEN + line items; others record
-    # 'unsupported'). The status endpoint surfaces the result.
+    # the background (Square: poll until OPEN + line items; Clover: poll until
+    # open + line items — for Clover the location slot carries the merchant id;
+    # others record 'unsupported'). The status endpoint surfaces the result.
     verifying = False
     if pos_leg.get("status") == "sent" and pos_result.get("pos_order_id") and phone_order_id:
         from ...services.pos_fulfillment import verify_and_record
