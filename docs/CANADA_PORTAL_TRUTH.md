@@ -54,6 +54,11 @@ The **US portal is a separate product** (`USPortal*` pages). US and Canada are
 | Top 3 Actions | Dedicated "Top Actions" nav page; home hero "Money left on the table" = sum of action impacts |
 | Data | Synthetic CAD; pre-connection pages show real empty chart/heatmap shells |
 
+### Cross-surface UX (2026-07-16)
+
+- **Logo links home** on all three Canada surfaces: public/auth pages (`/canada` landing, careers, `/canada/login`, `/canada/portal/login|signup`) link the header logo to `/canada`; authenticated layouts (`CanadaLayout`, `MerchantLayout`, `CanadaSalesLayout`, `CanadaDemoLayout`) link it to that surface's own dashboard home. Styling unchanged — the logo is wrapped in a react-router `Link`, not restyled.
+- **Password visibility toggle**: every Canada password/credential field now uses the shared `components/ui/PasswordInput` (Eye/EyeOff inside the field). Covers CanadaLoginPage, portal login/signup/onboarding, customer + merchant onboarding wizards, and POS credential inputs. Same component is used by the US and shared surfaces (intentionally identical UX, not drift).
+
 ---
 
 ## 5. Progression timeline (how we got here — and how it broke)

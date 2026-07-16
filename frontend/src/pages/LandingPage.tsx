@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, ChevronRight, Shield, Clock, Menu, X, Bot, Phone, TrendingUp } from 'lucide-react'
 
@@ -114,7 +114,9 @@ export default function LandingPage() {
       {/* ─── NAV ──────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-content mx-auto px-6 h-14 flex items-center justify-between">
-          <MeridianLogo size={28} showWordmark showTagline={false} />
+          <Link to="/" aria-label="Meridian home">
+            <MeridianLogo size={28} showWordmark showTagline={false} />
+          </Link>
           <div className="hidden md:flex items-center gap-2">
             {[
               { label: 'Live Demo', path: '/demo' },
@@ -677,7 +679,9 @@ export default function LandingPage() {
           </div>
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
             <div className="flex items-center gap-3">
-              <MeridianLogo size={20} showWordmark showTagline={false} />
+              <Link to="/" aria-label="Meridian home">
+                <MeridianLogo size={20} showWordmark showTagline={false} />
+              </Link>
               <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
                 <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: ACCENT_CA }} />
                 All systems operational

@@ -5,6 +5,7 @@ import {
   AlertCircle, Sparkles, KeyRound,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import StripeConnectStep from './StripeConnectStep'
@@ -494,8 +495,7 @@ export default function MerchantOnboardingWizard() {
                       </div>
                       <div>
                         <label className={`block text-[11px] font-medium ${T.muted} mb-1.5`}>API Token</label>
-                        <input
-                          type="password"
+                        <PasswordInput
                           value={cloverApiToken}
                           onChange={e => setCloverApiToken(e.target.value)}
                           placeholder="Your Clover API token"

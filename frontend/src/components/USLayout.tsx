@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard, TrendingUp, Package, Layers, Lightbulb,
@@ -96,11 +96,13 @@ export default function USLayout() {
       )}>
         {/* Logo */}
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-[#1F1F23] flex-shrink-0">
-          <MeridianEmblem size={28} animate />
-          <div className="flex flex-col">
-            <MeridianWordmark height={13} />
-            <span className="text-[8px] font-bold text-[#1A8FD6] uppercase tracking-[0.2em] mt-0.5">United States</span>
-          </div>
+          <Link to={basePath} aria-label="Meridian dashboard home" className="flex items-center gap-2.5">
+            <MeridianEmblem size={28} animate />
+            <div className="flex flex-col">
+              <MeridianWordmark height={13} />
+              <span className="text-[8px] font-bold text-[#1A8FD6] uppercase tracking-[0.2em] mt-0.5">United States</span>
+            </div>
+          </Link>
         </div>
 
         {/* Nav */}
@@ -156,8 +158,10 @@ export default function USLayout() {
           <button aria-label="Open menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-[#111113]">
             <Menu size={20} className="text-[#A1A1A8]" />
           </button>
-          <MeridianEmblem size={24} animate />
-          <MeridianWordmark height={11} />
+          <Link to={basePath} aria-label="Meridian dashboard home" className="flex items-center gap-3">
+            <MeridianEmblem size={24} animate />
+            <MeridianWordmark height={11} />
+          </Link>
           <div className="flex items-center gap-1 ml-1">
             <MapPin size={8} className="text-[#1A8FD6]" />
             <span className="text-[8px] text-[#1A8FD6] font-medium uppercase tracking-wider">US</span>

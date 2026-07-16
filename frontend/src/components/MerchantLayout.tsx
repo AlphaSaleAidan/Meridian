@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
@@ -80,13 +80,15 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
         sidebarOpen ? 'translate-x-0' : '-translate-x-full',
       )}>
         <div className="h-14 flex items-center gap-2.5 px-4 border-b border-[#1F1F23] flex-shrink-0">
-          <MeridianEmblem size={28} animate />
-          <div className="flex flex-col">
-            <MeridianWordmark height={13} />
-            {isCanada && (
-              <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
-            )}
-          </div>
+          <Link to={basePath} aria-label="Meridian dashboard home" className="flex items-center gap-2.5">
+            <MeridianEmblem size={28} animate />
+            <div className="flex flex-col">
+              <MeridianWordmark height={13} />
+              {isCanada && (
+                <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+              )}
+            </div>
+          </Link>
         </div>
 
         <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 no-scrollbar">
@@ -126,8 +128,10 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
               <Menu size={20} className="text-[#A1A1A8]" />
             </button>
           )}
-          <MeridianEmblem size={24} animate />
-          <MeridianWordmark height={11} />
+          <Link to={basePath} aria-label="Meridian dashboard home" className="flex items-center gap-3">
+            <MeridianEmblem size={24} animate />
+            <MeridianWordmark height={11} />
+          </Link>
           {isCanada && (
             <div className="flex items-center gap-1 ml-1">
               <MapPin size={8} className="text-[#17C5B0]" />

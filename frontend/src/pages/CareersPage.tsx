@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2 } from 'lucide-react'
 import SEO from '@/components/SEO'
@@ -96,7 +96,9 @@ export default function CareersPage() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <MeridianLogo size={28} showWordmark showTagline={false} />
+            <Link to="/" aria-label="Meridian home">
+              <MeridianLogo size={28} showWordmark showTagline={false} />
+            </Link>
           </div>
           <MagneticButton
             onClick={() => navigate('/home')}

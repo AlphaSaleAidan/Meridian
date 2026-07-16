@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useNavigate, useLocation } from 'react-router-dom'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 interface PlatformRow {
   id: string
@@ -121,8 +122,7 @@ export default function ContentSettings() {
           </div>
           <div>
             <label className="text-[11px] text-[#A1A1A8] font-medium mb-1 block">Application Password</label>
-            <input
-              type="password"
+            <PasswordInput
               placeholder="xxxx xxxx xxxx xxxx"
               value={wpPassword}
               onChange={e => setWpPassword(e.target.value)}

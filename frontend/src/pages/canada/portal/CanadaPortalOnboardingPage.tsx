@@ -2,11 +2,12 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import {
   Lock, Sparkles, User, Users, CheckSquare,
-  ChevronRight, ChevronLeft, Check, Eye, EyeOff,
+  ChevronRight, ChevronLeft, Check,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { onboardingEmails } from '@/lib/email-service'
 import { MeridianEmblem } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import EmailPreviewModal from '@/components/EmailPreviewModal'
 import { supabase } from '@/lib/supabase'
 
@@ -40,7 +41,6 @@ export default function CanadaPortalOnboardingPage() {
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [passwordError, setPasswordError] = useState('')
 
   const [profile, setProfile] = useState({
@@ -174,22 +174,16 @@ export default function CanadaPortalOnboardingPage() {
               )}
               <div>
                 <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">New Password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    className={inputClass}
-                    placeholder="Min 8 characters"
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-pm-canada-text-muted">
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
+                <PasswordInput
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  className={inputClass}
+                  placeholder="Min 8 characters"
+                />
               </div>
               <div>
                 <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Confirm Password</label>
-                <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Confirm your password" />
+                <PasswordInput value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Confirm your password" />
               </div>
               <div className="flex justify-end">
                 <button onClick={handlePasswordSubmit} className={btnPrimary}>

@@ -6,6 +6,7 @@ import {
   X, CreditCard, AlertCircle, FileText,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSystemPicker from '@/components/POSSystemPicker'
@@ -675,12 +676,12 @@ export default function CanadaCustomerOnboardingWizard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Password</label>
-                  <input type="password" value={account.password} onChange={e => updateAccount('password', e.target.value)}
+                  <PasswordInput value={account.password} onChange={e => updateAccount('password', e.target.value)}
                     placeholder="Min 6 characters" className={inputCls} />
                 </div>
                 <div>
                   <label className={`block text-2xs font-medium ${T.muted} mb-1.5`}>Confirm Password</label>
-                  <input type="password" value={account.confirmPassword} onChange={e => updateAccount('confirmPassword', e.target.value)}
+                  <PasswordInput value={account.confirmPassword} onChange={e => updateAccount('confirmPassword', e.target.value)}
                     placeholder="Confirm password" className={inputCls} />
                 </div>
               </div>

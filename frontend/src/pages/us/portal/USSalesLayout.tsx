@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createCanadaQueryClient } from '@/lib/canada-queries'
 import { clsx } from 'clsx'
@@ -126,13 +126,15 @@ export default function USSalesLayout() {
     <>
       {/* Logo area */}
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-[#1F1F23] flex-shrink-0">
-        <MeridianEmblem size={28} />
-        <div className="flex flex-col">
-          <span className="text-sm font-bold text-white leading-tight">Meridian</span>
-          <span className="text-[8px] font-semibold text-[#17C5B0] uppercase tracking-widest">
-            US Sales Portal
-          </span>
-        </div>
+        <Link to="/us/portal/dashboard" aria-label="Meridian sales portal home" className="flex items-center gap-2.5">
+          <MeridianEmblem size={28} />
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-white leading-tight">Meridian</span>
+            <span className="text-[8px] font-semibold text-[#17C5B0] uppercase tracking-widest">
+              US Sales Portal
+            </span>
+          </div>
+        </Link>
         <button
           onClick={() => setSidebarOpen(false)}
           className="ml-auto lg:hidden p-1.5 rounded-lg text-[#A1A1A8] hover:text-white hover:bg-[#1F1F23] transition-colors"
@@ -243,13 +245,15 @@ export default function USSalesLayout() {
           >
             <Menu size={20} />
           </button>
-          <MeridianEmblem size={24} />
-          <div className="flex flex-col">
-            <span className="text-sm font-bold text-white leading-tight">Meridian</span>
-            <span className="text-[7px] font-semibold text-[#17C5B0] uppercase tracking-widest">
-              US Sales Portal
-            </span>
-          </div>
+          <Link to="/us/portal/dashboard" aria-label="Meridian sales portal home" className="flex items-center gap-3">
+            <MeridianEmblem size={24} />
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-white leading-tight">Meridian</span>
+              <span className="text-[7px] font-semibold text-[#17C5B0] uppercase tracking-widest">
+                US Sales Portal
+              </span>
+            </div>
+          </Link>
           <button
             onClick={() => navigate('/us/portal/leads?new=true&t=' + Date.now())}
             className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-xs font-semibold hover:bg-[#17C5B0]/90 transition-colors"

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { clsx } from 'clsx'
 import {
@@ -165,7 +165,9 @@ export default function Layout() {
     <>
       {/* Logo */}
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-[#1F1F23] flex-shrink-0">
-        <MeridianLogo size={32} showWordmark />
+        <Link to={basePath} aria-label="Meridian dashboard home">
+          <MeridianLogo size={32} showWordmark />
+        </Link>
         {basePath === '/demo' && (
           <span className="ml-auto text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 px-1.5 py-0.5 rounded">
             DEMO
@@ -287,8 +289,10 @@ export default function Layout() {
           >
             <Menu size={20} />
           </button>
-          <MeridianEmblem size={24} />
-          <MeridianWordmark className="text-sm" />
+          <Link to={basePath} aria-label="Meridian dashboard home" className="flex items-center gap-3">
+            <MeridianEmblem size={24} />
+            <MeridianWordmark className="text-sm" />
+          </Link>
           {basePath === '/demo' && (
             <span className="text-[10px] font-medium text-[#1A8FD6] bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 px-1.5 py-0.5 rounded">
               DEMO

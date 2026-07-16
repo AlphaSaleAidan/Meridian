@@ -6,6 +6,7 @@ import {
   X, CreditCard, AlertCircle,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSelectorPanel from '@/components/POSSelectorPanel'
@@ -751,12 +752,12 @@ export default function CustomerOnboardingWizard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Password</label>
-                  <input type="password" value={account.password} onChange={e => updateAccount('password', e.target.value)}
+                  <PasswordInput value={account.password} onChange={e => updateAccount('password', e.target.value)}
                     placeholder="Min 6 characters" className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#1F1F23] border border-[#2A2A2E] text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:border-[#1A8FD6]/50 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Confirm Password</label>
-                  <input type="password" value={account.confirmPassword} onChange={e => updateAccount('confirmPassword', e.target.value)}
+                  <PasswordInput value={account.confirmPassword} onChange={e => updateAccount('confirmPassword', e.target.value)}
                     placeholder="Confirm password" className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#1F1F23] border border-[#2A2A2E] text-[#F5F5F7] placeholder-[#A1A1A8]/30 focus:border-[#1A8FD6]/50 focus:outline-none" />
                 </div>
               </div>
