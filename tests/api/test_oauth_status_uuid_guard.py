@@ -114,6 +114,176 @@ def test_square_status_still_rejects_bad_shapes(org_id):
     assert result.get("reason") == "invalid_org_id"
 
 
+# --- biz_ org ids must not 500 the read-only status endpoints ----------------
+# pos_connections.org_id is a UUID column in prod; biz_ ids are the TEXT
+# businesses.id with no businesses→organizations mapping. Querying the uuid
+# column with a biz_ id raised 22P02 → 500 → SettingsPage ErrorState + the
+# onboarding wizard hid the Clover 1-click (oauth_available defaulted false).
+# The handlers now short-circuit non-uuid org ids to the graceful empty shape
+# (with REAL capability flags) and soft-fail 22P02 as a backstop.
+
+from types import SimpleNamespace  # noqa: E402
+
+from src.api.routes import dashboard  # noqa: E402
+from src.db.supabase_rest import SupabaseRESTError  # noqa: E402
+
+UUID_CAST_ERROR = SupabaseRESTError(
+    400,
+    'invalid input syntax for type uuid: "biz_43e5ff96db22436096c83c9280a4009f"',
+    "22P02",
+)
+
+
+class _StubDB:
+    """Minimal pos_connections store stub for the status routes."""
+
+    def __init__(self, rows=None, error: Exception | None = None):
+        self.rows = rows or []
+        self.error = error
+        self.calls: list = []
+
+    async def select(self, table, **kwargs):
+        self.calls.append((table, kwargs))
+        if self.error:
+            raise self.error
+        return self.rows
+
+    async def get_pos_connection(self, org_id):
+        self.calls.append(("pos_connections", {"org_id": org_id}))
+        if self.error:
+            raise self.error
+        return self.rows[0] if self.rows else None
+
+
+@pytest.fixture
+def _clover_flags(monkeypatch):
+    # Real capability flags as computed from env on the happy path.
+    monkeypatch.setattr(
+        clover_oauth, "clover_config",
+        SimpleNamespace(has_oauth_credentials=True, is_enabled=True),
+    )
+
+
+CONNECTED_ROW = {
+    "id": "conn-1",
+    "provider": "clover",
+    "status": "connected",
+    "external_merchant_id": "MID123",
+    "last_sync_at": "2026-07-16T00:00:00Z",
+    "historical_import_complete": True,
+}
+
+
+# dashboard /api/dashboard/connection ----------------------------------------
+
+def test_dashboard_connection_uuid_org_unchanged(monkeypatch):
+    stub = _StubDB(rows=[CONNECTED_ROW])
+    result = _run(dashboard.get_connection(org_id=VALID_UUID, db=stub))
+    assert len(result["connections"]) == 1
+    assert result["connections"][0]["merchant_id"] == "MID123"
+    assert stub.calls, "uuid org must still hit the store"
+
+
+@pytest.mark.parametrize("org_id", [VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
+def test_dashboard_connection_biz_org_returns_empty_without_query(org_id):
+    stub = _StubDB(rows=[CONNECTED_ROW])
+    result = _run(dashboard.get_connection(org_id=org_id, db=stub))
+    assert result == {"connections": []}
+    assert stub.calls == [], "biz_ ids must never reach the uuid column"
+
+
+def test_dashboard_connection_uuid_cast_error_soft_fails():
+    # Backstop: even if a non-uuid shape reaches the store, 22P02 → empty, not 500.
+    stub = _StubDB(error=UUID_CAST_ERROR)
+    result = _run(dashboard.get_connection(org_id=VALID_UUID, db=stub))
+    assert result == {"connections": []}
+
+
+def test_dashboard_connection_other_store_errors_still_raise():
+    stub = _StubDB(error=SupabaseRESTError(500, "connection pool exhausted"))
+    with pytest.raises(SupabaseRESTError):
+        _run(dashboard.get_connection(org_id=VALID_UUID, db=stub))
+
+
+def test_dashboard_validate_org_id_rejects_garbage():
+    from fastapi import HTTPException as HTTPExc
+    with pytest.raises(HTTPExc) as exc:
+        dashboard._validate_org_id("not-a-uuid-or-biz-id")
+    assert exc.value.status_code == 422
+
+
+# clover /api/clover/status ---------------------------------------------------
+
+@pytest.mark.parametrize("org_id", [VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
+def test_clover_status_biz_org_empty_with_real_flags(monkeypatch, _clover_flags, org_id):
+    stub = _StubDB(rows=[CONNECTED_ROW])
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    result = _run(clover_oauth.connection_status(org_id))
+    assert result["connected"] is False
+    # The wizard gates the 1-click button on oauth_available — must be REAL, not
+    # the pre-fix 500→false default.
+    assert result["oauth_available"] is True
+    assert result["clover_available"] is True
+    assert stub.calls == [], "biz_ ids must never reach the uuid column"
+
+
+def test_clover_status_uuid_org_unchanged(monkeypatch, _clover_flags):
+    stub = _StubDB(rows=[CONNECTED_ROW])
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    result = _run(clover_oauth.connection_status(VALID_UUID))
+    assert result["connected"] is True
+    assert result["merchant_id"] == "MID123"
+    assert result["oauth_available"] is True
+
+
+def test_clover_status_uuid_cast_error_soft_fails(monkeypatch, _clover_flags):
+    stub = _StubDB(error=UUID_CAST_ERROR)
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    result = _run(clover_oauth.connection_status(VALID_UUID))
+    assert result["connected"] is False
+    assert result["oauth_available"] is True
+
+
+def test_clover_status_other_store_errors_still_raise(monkeypatch, _clover_flags):
+    stub = _StubDB(error=SupabaseRESTError(500, "connection pool exhausted"))
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    with pytest.raises(SupabaseRESTError):
+        _run(clover_oauth.connection_status(VALID_UUID))
+
+
+# square /api/square/status ---------------------------------------------------
+
+@pytest.mark.parametrize("org_id", [VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
+def test_square_status_biz_org_empty_without_query(monkeypatch, org_id):
+    stub = _StubDB(rows=[CONNECTED_ROW])
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    result = _run(oauth.connection_status(org_id))
+    assert result["connected"] is False
+    assert stub.calls == [], "biz_ ids must never reach the uuid column"
+
+
+def test_square_status_uuid_org_unchanged(monkeypatch):
+    stub = _StubDB(rows=[CONNECTED_ROW])
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    result = _run(oauth.connection_status(VALID_UUID))
+    assert result["connected"] is True
+    assert result["merchant_id"] == "MID123"
+
+
+def test_square_status_uuid_cast_error_soft_fails(monkeypatch):
+    stub = _StubDB(error=UUID_CAST_ERROR)
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    result = _run(oauth.connection_status(VALID_UUID))
+    assert result["connected"] is False
+
+
+def test_square_status_other_store_errors_still_raise(monkeypatch):
+    stub = _StubDB(error=SupabaseRESTError(500, "connection pool exhausted"))
+    monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
+    with pytest.raises(SupabaseRESTError):
+        _run(oauth.connection_status(VALID_UUID))
+
+
 # --- BUG-3: phone_dashboard._validate_merchant_id ---------------------------
 from fastapi import HTTPException  # noqa: E402
 from src.api.routes import phone_dashboard  # noqa: E402

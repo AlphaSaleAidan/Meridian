@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 from ..auth import require_admin, require_org_access
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
-from ...db.supabase_rest import SupabaseRESTError
+from ...db.supabase_rest import SupabaseRESTError, is_uuid_cast_error as _is_uuid_cast_error
 
 logger = logging.getLogger("meridian.api.dashboard")
 
@@ -47,20 +47,6 @@ def _validate_org_id(org_id: str = Query(..., description="Organization ID")) ->
 
 
 OrgId = Annotated[str, Depends(_validate_org_id)]
-
-
-def _is_uuid_cast_error(exc: SupabaseRESTError) -> bool:
-    """True if a PostgREST error is a UUID type-cast failure (SQLSTATE 22P02).
-
-    PostgREST surfaces ``invalid input syntax for type uuid: "..."`` as HTTP
-    400 with Postgres code ``22P02``. This happens when a non-UUID org id
-    (e.g. a ``biz_`` merchant id) is compared against a UUID ``org_id``
-    column — a "no such row" condition, not a server fault.
-    """
-    haystack = f"{getattr(exc, 'message', '')} {getattr(exc, 'details', '')}".lower()
-    return "22p02" in haystack or (
-        "invalid input syntax for type uuid" in haystack
-    ) or ("uuid" in haystack and "invalid input syntax" in haystack)
 
 
 def _get_db():
@@ -247,7 +233,7 @@ async def get_open_orders(
         orders = []
         async with SquareClient(access_token=token) as client:
             locs = await client.list_locations()
-            loc_ids = [l["id"] for l in (locs or [])]
+            loc_ids = [loc["id"] for loc in (locs or [])]
             raw = await client.search_all_orders(location_ids=loc_ids, states=["OPEN", "DRAFT"])
             for o in raw:
                 line_items = o.get("line_items") or []
@@ -1055,11 +1041,35 @@ async def get_connection(
     db=Depends(_get_db),
 ):
     """POS connection status and sync info."""
-    connections = await db.select(
-        "pos_connections",
-        filters={"org_id": f"eq.{org_id}"},
-        order="created_at.desc",
-    )
+    # pos_connections.org_id is a UUID column in prod, but newer merchants are
+    # keyed by the TEXT businesses.id (`biz_<hex>`). There is NO
+    # businesses→organizations mapping (businesses carries no org column, the
+    # OAuth callbacks store the raw org id, and business_locations.
+    # pos_connection_id is never written), so a biz_ id can never match a row —
+    # querying with it raises a 22P02 uuid cast that PostgREST returns as 400
+    # and the db layer re-raises → 500 → SettingsPage full-page ErrorState.
+    # Short-circuit to the empty shape instead of querying the uuid column.
+    if not _UUID_RE.match(org_id):
+        return {"connections": []}
+
+    try:
+        connections = await db.select(
+            "pos_connections",
+            filters={"org_id": f"eq.{org_id}"},
+            order="created_at.desc",
+        )
+    except SupabaseRESTError as exc:
+        # Backstop: no validated id shape may 500 this read-only status
+        # endpoint (same soft-fail pattern as get_notifications above).
+        if exc.status_code == 400 and _is_uuid_cast_error(exc):
+            logger.info(
+                "connection: org_id=%s not UUID-shaped for pos_connections "
+                "(status=%d message=%r) — returning empty list",
+                org_id, exc.status_code, exc.message,
+            )
+            connections = []
+        else:
+            raise
 
     return {
         "connections": [
