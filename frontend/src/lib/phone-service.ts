@@ -17,6 +17,14 @@ export function isValidE164(value: string): boolean {
   return E164_RE.test(value.trim())
 }
 
+/** Normalise a raw North-American number to +1XXXXXXXXXX E.164 format. */
+export function normalizeToE164(raw: string): string {
+  const digits = raw.replace(/[^\d]/g, '')
+  if (digits.length === 10) return `+1${digits}`
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`
+  return raw.trim() // already E.164 or unknown format — pass through as-is
+}
+
 export interface ReservationConfig {
   on_website: boolean
   website_url: string
@@ -49,6 +57,12 @@ export interface PhoneConfig {
   order_types?: string[]
   special_instructions_enabled?: boolean
   transfer_number?: string
+  // Per-merchant hard call cap (minutes). null/undefined = platform default
+  // (8 min); 0 = uncapped.
+  max_call_minutes?: number | null
+  // The merchant's real store line (the number they forward FROM) — used by
+  // the forwarding verification flow.
+  business_line_number?: string
   // How confirmed orders are routed, chosen in the setup wizard.
   order_routing?: 'pos' | 'webhook' | 'sms' | 'email'
   // Merchant-customized Text-to-Pay SMS body. Supports {name} {business}
@@ -78,7 +92,9 @@ export function saveConfigErrorMessage(res: SaveConfigResult): string {
   if (res.status === 401 || res.status === 403) {
     return 'Session issue — log out and back in, then try again.'
   }
-  if (res.status === 400 && res.detail) return res.detail
+  // 400 = format errors; 422 = safety validation (e.g. the transfer-loop
+  // guard) — both carry a merchant-readable reason in `detail`.
+  if ((res.status === 400 || res.status === 422) && res.detail) return res.detail
   if (res.detail) return `Could not save (${res.status}): ${res.detail}`
   return `Could not save — the server responded with ${res.status}. Please try again.`
 }
@@ -230,6 +246,64 @@ export const phoneService = {
     }
     return res.json()
   },
+
+  // ── Forwarding verification (setup wizard "Verify forwarding") ──
+
+  /** Place a live test call to the merchant's store line; if their carrier
+   * forward is set up, it lands on the Meridian agent and the pending
+   * verification flips to `verified` (poll verifyForwardingStatus). */
+  async verifyForwardingStart(merchantId: string, businessLineNumber?: string): Promise<ForwardingVerifyStart> {
+    const res = await fetch(`${API_BASE}/api/phone/forwarding/verify-start`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ merchant_id: merchantId, business_line_number: businessLineNumber || undefined }),
+    })
+    if (!res.ok) {
+      let detail = `verification failed to start (${res.status})`
+      try { detail = (await res.json()).detail || detail } catch { /* noop */ }
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+
+  async verifyForwardingStatus(merchantId: string): Promise<ForwardingVerifyStatus> {
+    const res = await fetch(
+      `${API_BASE}/api/phone/forwarding/verify-status/${merchantId}`,
+      { headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return { status: 'none' }
+    return res.json()
+  },
+
+  /** Fire-and-forget activation-funnel event — never throws, never awaited
+   * by callers (a telemetry failure must not disturb the wizard). */
+  activationEvent(merchantId: string, step: ActivationStep, meta?: Record<string, unknown>): void {
+    if (!merchantId) return
+    getAuthHeaders()
+      .then(headers => fetch(`${API_BASE}/api/phone/activation-event`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ merchant_id: merchantId, step, meta: meta || {} }),
+      }))
+      .catch(() => { /* fire-and-forget */ })
+  },
+}
+
+export type ActivationStep =
+  | 'wizard_opened' | 'carrier_selected' | 'codes_viewed'
+  | 'verify_started' | 'verified' | 'verify_failed'
+
+export interface ForwardingVerifyStart {
+  ok: boolean
+  status: 'pending'
+  verification_id?: string | null
+  timeout_seconds: number
+}
+
+export interface ForwardingVerifyStatus {
+  status: 'none' | 'pending' | 'verified' | 'failed'
+  started_at?: string
+  verified_at?: string | null
 }
 
 export interface MenuScanResult {

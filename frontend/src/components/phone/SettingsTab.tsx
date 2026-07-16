@@ -4,6 +4,7 @@ import { ConnectReservationSystem, ORDER_TYPE_OPTIONS, hasOrderType, toggleOrder
 import {
   Settings, Volume2, Link2, Phone, ListOrdered, Route,
   CheckCircle2, CreditCard, SendHorizontal, MessageSquare, AlertCircle,
+  PhoneForwarded,
 } from 'lucide-react'
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import PersonalityPanel from './PersonalityPanel'
@@ -11,7 +12,10 @@ import {
   VOICE_OPTIONS, DEFAULT_PERSONALITY,
   type PhoneBizConfig, type VoicePersonality,
 } from '@/lib/phone-orders-demo-data'
-import { phoneService, saveConfigErrorMessage, type PhoneConfig , type ReservationConfig } from '@/lib/phone-service'
+import {
+  phoneService, saveConfigErrorMessage, isValidE164, normalizeToE164,
+  type PhoneConfig, type ReservationConfig,
+} from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
 import MenuBuildStatus from '@/components/menu/MenuBuildStatus'
 import MenuPhotoScanner from '@/components/menu/MenuPhotoScanner'
@@ -65,8 +69,22 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
     if (phoneConfig?.reservation_config) setReservationConfig(phoneConfig.reservation_config)
   }, [phoneConfig?.reservation_config])
 
+  // Human warm-transfer target. Validated client-side for shape; the backend
+  // additionally rejects (422) numbers that would loop back to an AI agent —
+  // that message surfaces inline via saveError.
+  const [transferNumber, setTransferNumber] = useState('')
+  useEffect(() => {
+    if (phoneConfig?.transfer_number) setTransferNumber(phoneConfig.transfer_number)
+  }, [phoneConfig?.transfer_number])
+  const transferTrimmed = transferNumber.trim()
+  const transferValid = transferTrimmed === '' || isValidE164(normalizeToE164(transferTrimmed))
+
   async function handleSave() {
     if (!orgId) return
+    if (!transferValid) {
+      setSaveError('Enter a valid transfer number (include the area code), e.g. +14165551234.')
+      return
+    }
     setSaving(true)
     setSaveError(null)
     // This grid isn't filtered by accent group (unlike the setup wizard), so
@@ -82,6 +100,7 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
       order_types: cfg.orderTypes,
       active: cfg.active,
       sms_pay_template: smsPayTemplate.trim() || undefined,
+      transfer_number: transferTrimmed ? normalizeToE164(transferTrimmed) : undefined,
       personality,
     })
     setSaving(false)
@@ -294,6 +313,31 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
             <p className="text-xs text-[#A1A1A8]">No POS connected. Orders sent via SMS/email notification.</p>
           </div>
         )}
+
+        {/* Human warm-transfer target */}
+        <div className="pt-3 mt-3 border-t border-[#1F1F23]">
+          <label className="text-xs text-[#A1A1A8] flex items-center gap-1.5 mb-1">
+            <PhoneForwarded size={12} className="text-[#A1A1A8]" /> Transfer to a human at
+            <span className="text-[#A1A1A8]/50">(optional)</span>
+          </label>
+          <input
+            type="text"
+            inputMode="tel"
+            autoComplete="off"
+            placeholder="+1 (555) 123-4567"
+            value={transferNumber}
+            onChange={e => { setTransferNumber(e.target.value); setSaveError(null) }}
+            className={clsx(
+              'w-full px-3 py-2 bg-[#111113] border rounded-lg text-sm text-[#F5F5F7] font-mono focus:outline-none',
+              transferValid ? 'border-[#1F1F23] focus:border-[#1A8FD6]/50' : 'border-red-400/50 focus:border-red-400/50',
+            )}
+          />
+          <p className={clsx('text-[9px] mt-1', transferValid ? 'text-[#A1A1A8]/50' : 'text-red-400/80')}>
+            {transferValid
+              ? 'Use a manager\'s cell or a dedicated back line — not the store line you forwarded to Meridian (that would loop callers back to the AI). If it must be the same line, use conditional (busy / no-answer) forwarding instead.'
+              : 'That doesn\'t look like a complete phone number yet — e.g. +14165551234.'}
+          </p>
+        </div>
       </div>
 
       {/* Auto menu-builder progress — populates from the connected POS catalog. */}

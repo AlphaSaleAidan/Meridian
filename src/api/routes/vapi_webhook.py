@@ -19,12 +19,20 @@ build_system_prompt lives in pipecat-heavy bot.py, so the prompt is rebuilt here
 import hmac
 import json
 import logging
+import math
 import os
 import sys
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+
+from ...services.phone_safety import (
+    FORWARD_VERIFY_CALLER,
+    map_ended_reason,
+    normalize_e164,
+    same_number,
+)
 
 logger = logging.getLogger("meridian.api.vapi")
 
@@ -64,9 +72,11 @@ VOICE_INCLUDED_MIN = int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3)
 VOICE_OVERAGE_CENTS_PER_MIN = int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45)
 # Hard call cap: Vapi force-ends the call at this length (maxDurationSeconds on
 # the assistant), so the worst case a merchant is billed per call is
-# (cap − included) × overage — 5 min ⇒ 2 min over ⇒ 90¢ — and our own Vapi
-# spend per call is capped with it. 0 disables the cap.
-VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 0)
+# (cap − included) × overage — 8 min ⇒ 5 min over ⇒ $2.25 — and our own Vapi
+# spend per call is capped with it. 0 disables the cap. This is the GLOBAL
+# default; phone_agent_config.max_call_minutes overrides it per merchant
+# (see _effective_cap_min).
+VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "8") or 0)
 # Grace past the advertised cap so a call that submits an order at ~4:55 still
 # hears the spoken confirmation instead of dead air (order + SMS land either
 # way). Billing is unaffected: the end-of-call overage is clamped to
@@ -173,7 +183,7 @@ def _upsell_step(p: dict) -> str:
     return _UPSELL_STEP_GENTLE
 
 
-def _system_prompt(config) -> str:
+def _system_prompt(config, transfer_number: str = "") -> str:
     """Build a polished, money-flow-showcasing call script for any merchant.
 
     Improvements over the previous version:
@@ -249,6 +259,22 @@ def _system_prompt(config) -> str:
     style_lines = _personality_style_lines(personality)
     style_block = ("\n\nSTYLE:\n" + "\n".join(style_lines)) if style_lines else ""
 
+    # Human transfer: only rendered when the caller passed a validated transfer
+    # number (see _safe_transfer_number / the assistant-request handler), so
+    # merchants without one keep the prompt byte-for-byte unchanged.
+    transfer_block = ""
+    if transfer_number:
+        transfer_block = (
+            "\n\nTRANSFER TO A HUMAN:\n"
+            "- If the caller asks for a person or a manager, has a complaint, or a "
+            "question you can't answer, say \"One moment — connecting you to the team.\" "
+            "and use the transferCall tool.\n"
+            "- If the transfer fails or nobody picks up, apologize, take a message — "
+            "their name, phone number, and what they need — promise a callback, then "
+            "resume the order if they still want it, or end the call politely.\n"
+            "- Never attempt more than one transfer per call."
+        )
+
     return (
         f"You are the AI phone order-taker for {business}.\n"
         "Keep every reply to 1-2 sentences — warm, friendly, phone-natural. Never robotic."
@@ -273,21 +299,54 @@ def _system_prompt(config) -> str:
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
         "- Frustrated caller → brief apology, repeat back only the unclear part, ask once to clarify."
-        f"{_pacing_line()}"
+        f"{_pacing_line(_effective_cap_min(config))}"
+        f"{transfer_block}"
         f"{menu}"
     )
 
 
-def _pacing_line() -> str:
+def _effective_cap_min(config) -> int:
+    """Effective hard call cap in minutes for this merchant.
+
+    phone_agent_config.max_call_minutes overrides the env default when set
+    (0 = explicitly uncapped for this merchant); NULL/absent falls back to
+    VOICE_MAX_CALL_MIN. Every consumer of the cap — maxDurationSeconds, the
+    spoken pacing line, and the end-of-call overage CLAMP — must use this same
+    value or the disclosed per-call billing maximum breaks.
+    """
+    v = getattr(config, "max_call_minutes", None)
+    if isinstance(v, int) and not isinstance(v, bool) and v >= 0:
+        return v
+    return VOICE_MAX_CALL_MIN
+
+
+def _overage_minutes(dur_min: float, included_min: int, cap_min: int) -> int:
+    """Billable whole minutes over the included block, clamped to the cap.
+
+    With a hard cap the overage can never exceed (cap − included) minutes, so
+    the bill holds to the disclosed maximum even when the drop lands a
+    rounding-minute past the cap (grace period). cap_min <= 0 = uncapped.
+    """
+    over = max(0, math.ceil(dur_min) - included_min)
+    if cap_min > 0:
+        over = min(over, max(cap_min - included_min, 0))
+    return over
+
+
+def _pacing_line(cap_min: int) -> str:
     """When a hard call cap is set, tell the agent so it lands the order before
     Vapi force-ends the call — read back and submit rather than getting dropped
-    mid-confirmation."""
-    if VOICE_MAX_CALL_MIN <= 0:
+    mid-confirmation. Vapi has no mid-call timer webhook, so this prompt line is
+    the lever: the agent must SAY a heads-up as the cap approaches instead of
+    the caller being dropped cold."""
+    if cap_min <= 0:
         return ""
     return (
-        f"\n- Calls end automatically at {VOICE_MAX_CALL_MIN} minutes. Keep the order moving; "
+        f"\n- Calls end automatically at {cap_min} minutes. Keep the order moving; "
         "if the call is running long, skip the upsell, read back the order, and submit it "
-        "before time runs out."
+        "before time runs out. As the call approaches the limit, give the caller a brief "
+        "spoken heads-up — e.g. \"we're almost out of time — let me read your order back\" — "
+        "so the call never just cuts off on them."
     )
 
 
@@ -361,26 +420,157 @@ _SUBMIT_ORDER_TOOL = {
 }
 
 
-def _assistant_for(config) -> dict:
+def _safe_transfer_number(config) -> str:
+    """The merchant's transfer number, normalized — or "" when unset OR when it
+    would guarantee a loop (equals the merchant's own agent DID). The async
+    fleet-wide DID check lives in the assistant-request handler; this is the
+    synchronous last line of defence used when no override is passed in."""
+    transfer = normalize_e164(getattr(config, "transfer_number", "") or "")
+    if not transfer:
+        return ""
+    if same_number(transfer, getattr(config, "phone_number", "") or ""):
+        logger.error("transfer_number equals the agent DID for merchant %s — "
+                     "suppressing transfer tool (loop guard)",
+                     getattr(config, "merchant_id", "?"))
+        return ""
+    return transfer
+
+
+def _transfer_tool(number: str) -> dict:
+    """Vapi native transferCall tool — minimal shape, one destination."""
+    return {
+        "type": "transferCall",
+        "destinations": [{
+            "type": "number",
+            "number": number,
+            "message": "One moment — connecting you to the team.",
+        }],
+    }
+
+
+def _assistant_for(config, transfer_number: str | None = None) -> dict:
     # personality.customGreeting (when set) overrides the standard greeting as
     # the spoken opener; _system_prompt's step-1 greet line uses the same value
     # so the prompt never contradicts what the caller just heard.
+    #
+    # transfer_number: None → derive from config (own-DID loop guard applied);
+    # "" → explicitly suppress (the handler found the number is a fleet agent
+    # DID); non-empty → use as given (already validated by the handler).
+    if transfer_number is None:
+        transfer_number = _safe_transfer_number(config)
+    tools = [_SUBMIT_ORDER_TOOL]
+    if transfer_number:
+        tools.append(_transfer_tool(transfer_number))
     assistant = {
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
         "transcriber": _transcriber_for(config),
         "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
         "model": {"provider": "openai", "model": "gpt-4.1",
-                  "messages": [{"role": "system", "content": _system_prompt(config)}],
-                  "tools": [_SUBMIT_ORDER_TOOL]},
+                  "messages": [{"role": "system", "content": _system_prompt(config, transfer_number)}],
+                  "tools": tools},
         "endCallFunctionEnabled": True,
     }
-    if VOICE_MAX_CALL_MIN > 0:
+    cap_min = _effective_cap_min(config)
+    if cap_min > 0:
         # Vapi drops the call at the cap (+ a short grace so the confirmation
         # sentence isn't cut mid-word); the prompt pacing line in
         # _system_prompt keeps the agent moving so orders land before it.
-        assistant["maxDurationSeconds"] = VOICE_MAX_CALL_MIN * 60 + VOICE_CAP_GRACE_SEC
+        assistant["maxDurationSeconds"] = cap_min * 60 + VOICE_CAP_GRACE_SEC
     return assistant
+
+
+def _loop_guard_assistant(config) -> dict:
+    """Assistant served when a forwarding loop is detected on the call.
+
+    No submit_order and no transfer tool — the only job is to apologize, take
+    the caller's name/number/message, and promise a callback. Anything else
+    (ordering, transferring) would feed the loop or confuse the caller."""
+    business = getattr(config, "business_name", "") or "this business"
+    prompt = (
+        f"You answer the phone for {business}. A phone-routing loop was detected on "
+        "this call, so you CANNOT take an order and CANNOT transfer the call right now.\n"
+        "1. Apologize briefly — the ordering line is having a routing hiccup.\n"
+        "2. Take a message: the caller's name, the best number to call them back on, "
+        "and what they need.\n"
+        "3. Read the message back, promise the team will call them back shortly, and "
+        "end the call politely.\n"
+        "Never mention technical details or 'loops'. Keep every reply to 1-2 sentences."
+    )
+    return {
+        "name": f"{business} — Message Taker",
+        "firstMessage": (
+            f"Thanks for calling {business}! Our ordering line is having a hiccup right "
+            "now — can I take your name and number so the team can call you right back?"
+        ),
+        "transcriber": _transcriber_for(config),
+        "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
+        "model": {"provider": "openai", "model": "gpt-4.1",
+                  "messages": [{"role": "system", "content": prompt}],
+                  "tools": []},
+        "endCallFunctionEnabled": True,
+        "maxDurationSeconds": 120,
+    }
+
+
+def _forwarding_verified_assistant(config) -> dict:
+    """Minimal assistant answering our own forwarding-verification test call:
+    confirm out loud and hang up — the DB row is already marked verified."""
+    return {
+        "name": "Meridian — Forwarding Check",
+        "firstMessage": "Forwarding verified — you're all set. Goodbye!",
+        "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
+        "model": {"provider": "openai", "model": "gpt-4.1",
+                  "messages": [{"role": "system", "content":
+                                "This is an automated forwarding test call. Say goodbye "
+                                "briefly and end the call. Do not take orders."}],
+                  "tools": []},
+        "endCallFunctionEnabled": True,
+        "maxDurationSeconds": 15,
+    }
+
+
+async def _is_loop_caller(caller: str, dialed: str, config) -> bool:
+    """Runtime loop detection: is the INBOUND caller one of our own agent DIDs?
+
+    A legit customer never calls FROM an agent DID; if the caller id equals the
+    dialed DID itself, this merchant's DID, or any DID in phone_agent_config,
+    the call has been forwarded back into the fleet (e.g. transfer → store line
+    → *72 forward → agent). Callers own the try/except — this must fail open."""
+    c = normalize_e164(caller)
+    if not c:
+        return False
+    if same_number(c, dialed) or same_number(c, getattr(config, "phone_number", "") or ""):
+        return True
+    from merchant_config import get_merchant_by_phone
+    owner = await get_merchant_by_phone(c)
+    # "demo-merchant" is the unconfigured-Supabase fallback (returned for ANY
+    # number), not a real DID match — never treat it as a loop.
+    return bool(owner) and owner != "demo-merchant"
+
+
+async def _complete_forwarding_verification(merchant_id: str) -> bool:
+    """Mark the newest pending forwarding verification for this merchant as
+    verified. True when a pending row existed. Callers own error handling."""
+    from datetime import datetime, timezone
+    from ...db import get_db
+    db = get_db()
+    rows = await db.select(
+        "forwarding_verifications",
+        filters={"merchant_id": f"eq.{merchant_id}", "status": "eq.pending"},
+        order="started_at.desc",
+        limit=1,
+    )
+    if not rows:
+        return False
+    await db.update(
+        "forwarding_verifications",
+        {"status": "verified", "verified_at": datetime.now(timezone.utc).isoformat()},
+        filters={"id": f"eq.{rows[0]['id']}"},
+    )
+    logger.info("forwarding verified for merchant %s (verification %s)",
+                merchant_id, rows[0]["id"])
+    return True
 
 
 def _confirm(args: dict, routed: dict) -> str:
@@ -456,7 +646,36 @@ async def vapi_webhook(request: Request):
     # Inbound call → hand Vapi the merchant's dynamic assistant.
     if mtype == "assistant-request":
         try:
-            config = await _resolve_config(_dialed_number(msg))
+            dialed = _dialed_number(msg)
+            caller = _caller_number(msg)
+            config = await _resolve_config(dialed)
+
+            # Forwarding-verification test call: our own Twilio caller-id
+            # dialing the merchant's business line arrived here, so the
+            # carrier forward works. Mark it verified and confirm out loud.
+            if FORWARD_VERIFY_CALLER and caller and same_number(caller, FORWARD_VERIFY_CALLER):
+                try:
+                    merchant_id = getattr(config, "merchant_id", "") or ""
+                    if merchant_id and await _complete_forwarding_verification(merchant_id):
+                        return {"assistant": _forwarding_verified_assistant(config)}
+                except Exception as e:  # noqa: BLE001 — verification never strands a call
+                    logger.error("forwarding-verification check failed: %s", e)
+
+            # Runtime loop guard: a caller id that IS one of our agent DIDs
+            # means the call has been forwarded back into the fleet (transfer →
+            # store line → full-forward → agent). Serve the message-taker
+            # assistant instead of feeding the loop. Fail-open on any error.
+            try:
+                if caller and await _is_loop_caller(caller, dialed, config):
+                    logger.error(
+                        "VAPI LOOP GUARD: caller %s dialed %s (merchant=%s) is an agent "
+                        "DID — forwarding loop detected, serving message-taker assistant. "
+                        "Check this merchant's transfer_number / carrier forwarding.",
+                        caller, dialed or "?", getattr(config, "merchant_id", "?"))
+                    return {"assistant": _loop_guard_assistant(config)}
+            except Exception as e:  # noqa: BLE001 — loop check never strands the call
+                logger.error("loop-guard check failed (serving normal assistant): %s", e)
+
             # Voice-ledger gate: if this merchant is underwater past the floor,
             # forward the call to the Telnyx/Pipecat agent instead of burning
             # Vapi minutes. Fail-open — any error/None balance serves via Vapi.
@@ -470,7 +689,27 @@ async def vapi_webhook(request: Request):
                         return {"destination": {"type": "number", "number": TELNYX_FALLBACK_NUMBER}}
                 except Exception as e:  # noqa: BLE001 — fallback check never strands the call
                     logger.error("voice-ledger fallback check failed: %s", e)
-            return {"assistant": _assistant_for(config)}
+
+            # Transfer number fleet check (loop layer 3): a transfer number that
+            # is ANOTHER merchant's agent DID would bounce callers around the
+            # fleet — suppress the transfer tool for this call. Fail-open: an
+            # error keeps the merchant's configured transfer.
+            transfer_override: str | None = None
+            transfer = _safe_transfer_number(config)
+            if transfer:
+                try:
+                    from merchant_config import get_merchant_by_phone
+                    owner = await get_merchant_by_phone(transfer)
+                    if owner and owner != "demo-merchant":
+                        logger.error(
+                            "transfer_number %s for merchant %s is agent DID of merchant "
+                            "%s — suppressing transfer tool (loop guard)",
+                            transfer, getattr(config, "merchant_id", "?"), owner)
+                        transfer_override = ""
+                except Exception as e:  # noqa: BLE001
+                    logger.error("transfer fleet check failed (keeping transfer): %s", e)
+
+            return {"assistant": _assistant_for(config, transfer_number=transfer_override)}
         except Exception as e:  # noqa: BLE001 — never strand the call
             logger.error("assistant-request failed: %s", e)
             return {"error": "Sorry, we couldn't connect your call. Please try again."}
@@ -512,7 +751,6 @@ async def vapi_webhook(request: Request):
         return {"result": "ok"}
 
     if mtype == "end-of-call-report":
-        import math
         ended = msg.get("endedReason")
         # Vapi reports the all-in call cost (USD) + duration on the report message.
         call = msg.get("call", {}) or {}
@@ -555,8 +793,10 @@ async def vapi_webhook(request: Request):
             # Duration overage we bill the merchant: $0.45/min over 3 min (billed
             # per whole minute over the included block). Credit = billable revenue.
             # With a hard cap the overage is CLAMPED to (cap − included) so the
-            # bill can never exceed the disclosed maximum (5-min cap ⇒ 90¢) even
-            # when the drop lands a rounding-minute past the cap.
+            # bill can never exceed the disclosed maximum, even when the drop
+            # lands a rounding-minute past the cap. The clamp uses the SAME
+            # per-merchant effective cap as maxDurationSeconds (a merchant with
+            # a raised cap is billed to their cap, not the global one).
             # Fee parity: the merchant's provisioned billing terms
             # (merchant_billing_terms) override the env dials when present.
             # STRICTLY fail-open — any lookup problem bills the env defaults.
@@ -575,9 +815,8 @@ async def vapi_webhook(request: Request):
                 except Exception as terms_err:  # noqa: BLE001
                     logger.warning("billing-terms lookup failed for %s — env defaults: %s",
                                    merchant_id, terms_err)
-            over_min = max(0, math.ceil(dur_min) - included_min)
-            if VOICE_MAX_CALL_MIN > 0:
-                over_min = min(over_min, max(VOICE_MAX_CALL_MIN - included_min, 0))
+            over_min = _overage_minutes(dur_min, included_min,
+                                        _effective_cap_min(config))
             overage = over_min * overage_rate
             if overage > 0:
                 await credit(merchant_id, overage, source="duration_overage",
@@ -587,4 +826,58 @@ async def vapi_webhook(request: Request):
         except Exception as e:  # noqa: BLE001 — accounting never affects the call
             logger.error("voice_ledger end-of-call failed: %s", e)
 
+        # Reason-code telemetry: one voice_call_endings row per call — the
+        # instrument for "how many orders is the call cap killing".
+        try:
+            await _record_call_ending(msg, call_id, ended, int(dur_sec or 0))
+        except Exception as e:  # noqa: BLE001 — telemetry never affects the call
+            logger.error("voice_call_endings record failed: %s", e)
+
     return {"received": True}
+
+
+def _had_order(msg: dict) -> bool | None:
+    """Best-effort: did a submit_order tool call land during this call?
+    True/False when the report carries the conversation messages; None when
+    it can't be determined from the payload."""
+    artifact = msg.get("artifact") or {}
+    messages = artifact.get("messages") or msg.get("messages")
+    if not isinstance(messages, list):
+        return None
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        candidates = m.get("toolCalls") or []
+        if m.get("name") == "submit_order":  # tool-result message shape
+            return True
+        for tc in candidates if isinstance(candidates, list) else []:
+            fn = (tc or {}).get("function", {}) or {}
+            if fn.get("name") == "submit_order":
+                return True
+    return False
+
+
+async def _record_call_ending(msg: dict, call_id: str, ended: str | None,
+                              duration_seconds: int) -> None:
+    """Persist a voice_call_endings row (deduped on vapi_call_id for retries)."""
+    from ...db import get_db
+    dialed = _dialed_number(msg)
+    config = await _resolve_config(dialed)
+    merchant_id = getattr(config, "merchant_id", "") or "demo"
+    db = get_db()
+    if call_id:
+        existing = await db.select(
+            "voice_call_endings",
+            filters={"vapi_call_id": f"eq.{call_id}"},
+            limit=1,
+        )
+        if existing:
+            return  # retried report — already recorded
+    await db.insert("voice_call_endings", {
+        "merchant_id": merchant_id,
+        "vapi_call_id": call_id or None,
+        "ended_reason": str(ended or "") or None,
+        "disposition": map_ended_reason(ended),
+        "duration_seconds": duration_seconds,
+        "had_order": _had_order(msg),
+    })

@@ -73,7 +73,26 @@ class PhoneConfigRequest(BaseModel):
     max_concurrent_calls: int | None = None
     order_types: list | None = None
     special_instructions_enabled: bool | None = None
+    # Human warm-transfer target. Validated on save against the transfer-loop
+    # scenario (transfer → store line → carrier full-forward → agent DID →
+    # infinite loop): rejected with a 422 when it equals this merchant's own
+    # agent DID or ANY agent DID in phone_agent_config. Stored normalized E.164.
     transfer_number: str | None = None
+    # Per-merchant hard call cap (minutes). None leaves the stored value
+    # untouched; 0 = uncapped; otherwise overrides the env default (8).
+    max_call_minutes: int | None = None
+    # The merchant's real store line (the number they forward FROM), used by
+    # the forwarding verification flow. Stored normalized E.164.
+    business_line_number: str | None = None
+
+    @field_validator("max_call_minutes")
+    @classmethod
+    def _valid_cap(cls, v: int | None) -> int | None:
+        if v is None:
+            return v
+        if v < 0 or v > 60:
+            raise ValueError("max_call_minutes must be between 0 (uncapped) and 60")
+        return v
     # How the wizard routes confirmed orders: 'pos' | 'webhook' | 'sms' | 'email'.
     # Persisted to phone_agent_config.order_routing (migration 032). Optional and
     # back-compat: omitting it leaves the stored value untouched (save_phone_config
@@ -114,8 +133,9 @@ async def get_fee_settings():
         "service_fee_cents": int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0),
         "overage_cents_per_min": int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45),
         "included_minutes": int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3),
-        # Hard cap: Vapi force-ends calls at this length (0 = no cap)
-        "max_call_minutes": int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 0),
+        # Hard cap DEFAULT: Vapi force-ends calls at this length (0 = no cap).
+        # Merchants can override per-account via phone_agent_config.max_call_minutes.
+        "max_call_minutes": int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "8") or 0),
     }
 
 
@@ -158,6 +178,24 @@ async def save_phone_config(req: PhoneConfigRequest, principal=Depends(require_s
         if v is not None and k != "merchant_id"
     }
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Transfer-loop guard (onboarding layer): reject a transfer number that is
+    # this merchant's own agent DID or any agent DID in the fleet — either
+    # would bounce "transfer to a human" straight back to an AI agent.
+    if (req.transfer_number or "").strip():
+        from ...services.phone_safety import normalize_e164, transfer_number_conflict
+        own_did = (
+            req.phone_number
+            or (rows[0].get("phone_number") if rows else "")
+            or ""
+        )
+        conflict = await transfer_number_conflict(db, req.transfer_number, own_did)
+        if conflict:
+            raise HTTPException(status_code=422, detail=conflict)
+        payload["transfer_number"] = normalize_e164(req.transfer_number)
+    if (req.business_line_number or "").strip():
+        from ...services.phone_safety import normalize_e164
+        payload["business_line_number"] = normalize_e164(req.business_line_number)
 
     if rows:
         await db.update(

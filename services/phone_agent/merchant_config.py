@@ -98,6 +98,14 @@ class MerchantPhoneConfig:
     # Voice accent group picked in the setup wizard (north_american | indian |
     # east_asian). Presentation-level grouping; `voice` carries the voice id.
     accent: str = ""
+    # Per-merchant hard call cap (minutes). None = use the env default
+    # (MERIDIAN_VOICE_MAX_CALL_MIN); 0 = explicitly uncapped. Threaded through
+    # maxDurationSeconds, the spoken pacing line, AND the end-of-call overage
+    # clamp by vapi_webhook._effective_cap_min.
+    max_call_minutes: Optional[int] = None
+    # The merchant's real store line (the number they forward FROM) — used by
+    # the forwarding verification flow (POST /api/phone/forwarding/verify-start).
+    business_line_number: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -183,6 +191,9 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 order_fee_cents=(int(row["order_fee_cents"])
                                  if row.get("order_fee_cents") is not None else None),
                 accent=(row.get("accent") or "").strip().lower(),
+                max_call_minutes=(int(row["max_call_minutes"])
+                                  if row.get("max_call_minutes") is not None else None),
+                business_line_number=(row.get("business_line_number") or "").strip(),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

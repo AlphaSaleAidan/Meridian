@@ -14,7 +14,7 @@ import {
 } from '@/lib/phone-service'
 import { api } from '@/lib/api'
 import { posSystems } from '@/data/pos-systems'
-import { VoicePlayButton, VoicePreviewCard, TestCallModal } from '@/components/phone'
+import { VoicePlayButton, VoicePreviewCard, TestCallModal, ForwardingWizard } from '@/components/phone'
 import {
   VOICE_OPTIONS, ACCENT_OPTIONS,
   type PhoneBizConfig, type PhoneMenuItem, type VoiceAccent,
@@ -88,36 +88,9 @@ const STEPS: { key: Step; label: string }[] = [
   { key: 'test', label: 'Test' },
 ]
 
-// Carrier star-codes vary. Bell Canada uses *21/*#21 for unconditional forward
-// while Rogers/Telus/Fido use the classic *72/*73 codes.
-const CA_STAR_CODES = [
-  { label: 'Forward all calls (Rogers · Telus · Fido)', on: '*72', note: 'dial *72 then the Meridian number' },
-  { label: 'Cancel forwarding (Rogers · Telus · Fido)', on: '*73', note: 'turns forwarding back off' },
-  { label: 'Forward all calls (Bell Canada)', on: '*21', note: 'Bell\'s unconditional call-forward code' },
-  { label: 'Cancel forwarding (Bell Canada)', on: '#21', note: 'dial #21 to cancel Bell forwarding' },
-  { label: 'Forward when busy', on: '*90', note: 'for the Overflow option' },
-  { label: 'Forward on no-answer', on: '*92', note: 'for the Overflow option' },
-]
-
-// US carriers (Verizon · AT&T · T-Mobile landline/wireless) share the classic
-// *72/*73 codes; AT&T wireless uses **21* for unconditional forward.
-const US_STAR_CODES = [
-  { label: 'Forward all calls (Verizon · AT&T · T-Mobile)', on: '*72', note: 'dial *72 then the Meridian number' },
-  { label: 'Cancel forwarding (Verizon · AT&T · T-Mobile)', on: '*73', note: 'turns forwarding back off' },
-  { label: 'Forward all calls (AT&T wireless)', on: '**21*', note: 'dial **21*, the Meridian number, then #' },
-  { label: 'Cancel forwarding (AT&T wireless)', on: '##21#', note: 'dial ##21# to cancel forwarding' },
-  { label: 'Forward when busy', on: '*90', note: 'for the Overflow option' },
-  { label: 'Forward on no-answer', on: '*92', note: 'for the Overflow option' },
-]
-
 /** Region detection — this wizard mounts under /canada/* and /us/* + /demo. */
 function isCanadaMount(): boolean {
   return typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
-}
-
-/** Region-aware star codes — the Canada mounts keep their existing list. */
-function starCodesForPath(): typeof CA_STAR_CODES {
-  return isCanadaMount() ? CA_STAR_CODES : US_STAR_CODES
 }
 
 const PROVISION_TIMEOUT_MS = 30_000
@@ -178,7 +151,7 @@ export default function PhoneSetupWizard() {
   const [multilingual, setMultilingual] = useState(false)
   // Live pricing dials for the disclosure card (env-tunable server-side).
   // Fallbacks mirror the backend defaults so the card never shows blanks.
-  const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 45, max_call_minutes: 5 })
+  const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 45, max_call_minutes: 8 })
   useEffect(() => {
     const API_BASE = import.meta.env.VITE_API_URL || ''
     fetch(`${API_BASE}/api/phone/fees`)
@@ -188,7 +161,7 @@ export default function PhoneSetupWizard() {
           setFeeDials({
             included_minutes: d.included_minutes ?? 3,
             overage_cents_per_min: d.overage_cents_per_min,
-            max_call_minutes: d.max_call_minutes ?? 5,
+            max_call_minutes: d.max_call_minutes ?? 8,
           })
         }
       })
@@ -524,38 +497,16 @@ export default function PhoneSetupWizard() {
               )}
             </div>
 
-            {/* Forward instructions — shown for forwarding-based options */}
+            {/* Forward instructions — carrier-specific guided setup with a
+                live verification test call (ForwardingWizard). Overflow mode
+                preselects the conditional (busy / no-answer) codes. */}
             {(mode === 'forward_all' || mode === 'overflow') && (
-              <>
-                <div className="space-y-2">
-                  <p className="text-[11px] text-[#A1A1A8] font-medium">
-                    From your business phone, dial the star-code, then the Meridian number above:
-                  </p>
-                  {starCodesForPath()
-                    .filter(sc => mode === 'forward_all'
-                      ? (sc.on !== '*90' && sc.on !== '*92')
-                      : true)
-                    .map(sc => (
-                      <div key={sc.on} className="flex items-center gap-3 bg-[#111113] border border-[#1F1F23] rounded-lg px-3 py-2">
-                        <code className="text-sm font-mono font-semibold text-[#17C5B0] flex-shrink-0">{sc.on}</code>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-[#F5F5F7]">{sc.label}</p>
-                          <p className="text-[10px] text-[#A1A1A8]">{sc.note}</p>
-                        </div>
-                        <CopyButton text={sc.on} />
-                      </div>
-                    ))}
-                </div>
-
-                <div className="bg-amber-400/5 border border-amber-400/15 rounded-lg p-3 flex items-start gap-2">
-                  <Info size={12} className="text-amber-400 mt-0.5 flex-shrink-0" />
-                  <p className="text-[10px] text-[#A1A1A8] leading-relaxed">
-                    Star-codes vary by carrier. If <code className="text-[#F5F5F7]">*72</code> doesn’t work, search
-                    “{`call forwarding`}” in your carrier’s help (Bell, Rogers, Telus, etc.) — they all support it,
-                    sometimes via the carrier app instead of a star-code.
-                  </p>
-                </div>
-              </>
+              <ForwardingWizard
+                agentNumber={meridianNumber}
+                merchantId={orgId}
+                isDemo={isDemo}
+                defaultMode={mode === 'overflow' ? 'conditional' : 'unconditional'}
+              />
             )}
 
             {/* Port / new number */}
@@ -905,7 +856,10 @@ export default function PhoneSetupWizard() {
               />
               {transferValid ? (
                 <p className="text-[9px] text-[#A1A1A8]/50 mt-1">
-                  Callers who ask for a person are warm-transferred here. Leave blank to keep every call with the AI agent.
+                  Callers who ask for a person are warm-transferred here. Use a manager's cell or a back line —
+                  not the store line you forwarded to Meridian (that would loop transferred calls straight back
+                  to the AI; if it must be the same line, use busy / no-answer forwarding in the Connect step).
+                  Leave blank to keep every call with the AI agent.
                 </p>
               ) : (
                 <p className="text-[9px] text-red-400/80 mt-1">

@@ -73,7 +73,7 @@ export const PLAN_TIERS: PlanTier[] = [
       'AI phone agent — answers calls + takes orders',
       'Pay-by-text checkout',
       '$1.49 per-order transaction fee',
-      'Calls: first 3 min included, then $0.45/min (auto-end at 5 min)',
+      'Calls: first 3 min included, then $0.45/min (calls are capped — default 8 min)',
     ],
   },
   {
@@ -87,7 +87,7 @@ export const PLAN_TIERS: PlanTier[] = [
     features: [
       'Everything in Premium',
       'Lowest per-order rate — $1.00 Meridian fee per order',
-      'Calls: first 3 min included, then $0.45/min (auto-end at 5 min)',
+      'Calls: first 3 min included, then $0.45/min (calls are capped — default 8 min)',
       'Multi-location support',
       'Dedicated account manager',
     ],
