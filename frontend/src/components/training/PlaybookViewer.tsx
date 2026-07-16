@@ -1,12 +1,25 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Search, BookOpen, Plug, Camera as CameraIcon, Sparkles, Wrench, ClipboardList, FileText } from 'lucide-react'
 import { clsx } from 'clsx'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import playbookData from '@/data/playbook.json'
 import PlaybookVideo from './PlaybookVideo'
 
-const PLAYBOOK = playbookData as Record<string, string>
+type Playbook = Record<string, string>
+
+// The playbook (~1MB of markdown) is a build-generated static asset
+// (public/data/playbook.json via scripts/build-playbook-data.mjs), fetched on
+// demand — importing it baked the whole thing into the training JS chunk.
+// Module-level cache so tab switches / remounts never refetch.
+let playbookCache: Playbook | null = null
+
+async function loadPlaybook(): Promise<Playbook> {
+  if (playbookCache) return playbookCache
+  const res = await fetch('/data/playbook.json')
+  if (!res.ok) throw new Error(`playbook fetch failed: ${res.status}`)
+  playbookCache = (await res.json()) as Playbook
+  return playbookCache
+}
 
 interface PlaybookViewerProps {
   country: 'canada' | 'us'
@@ -153,23 +166,47 @@ function sortTree(nodes: TreeNode[]) {
 }
 
 export function PlaybookViewer({ country }: PlaybookViewerProps) {
-  const tree = useMemo(
-    () => buildTree(Object.keys(PLAYBOOK).filter(p => visibleForCountry(p, country))),
-    [country],
-  )
+  const [playbook, setPlaybook] = useState<Playbook | null>(playbookCache)
+  const [loadError, setLoadError] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['00-getting-started']))
   const [selectedPath, setSelectedPath] = useState<string>('00-getting-started/01-welcome.md')
   const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    if (playbook) return
+    let cancelled = false
+    loadPlaybook()
+      .then(p => { if (!cancelled) setPlaybook(p) })
+      .catch(() => { if (!cancelled) setLoadError(true) })
+    return () => { cancelled = true }
+  }, [playbook])
+
+  const tree = useMemo(
+    () => buildTree(Object.keys(playbook ?? {}).filter(p => visibleForCountry(p, country))),
+    [playbook, country],
+  )
 
   const filteredTree = useMemo(() => {
     if (!query.trim()) return tree
     const q = query.toLowerCase()
     return tree
-      .map(section => filterNode(section, q))
+      .map(section => filterNode(section, q, playbook ?? {}))
       .filter((s): s is TreeNode => s !== null)
-  }, [tree, query])
+  }, [tree, query, playbook])
 
-  const content = PLAYBOOK[selectedPath] ?? '# Not found\n\nSelect a topic from the left.'
+  if (!playbook) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px] bg-[#0f1512] border border-[#1a2420] rounded-xl">
+        <p className="text-[12px] text-[#6b7a74]">
+          {loadError
+            ? 'Couldn’t load the playbook — check your connection and refresh.'
+            : 'Loading the playbook…'}
+        </p>
+      </div>
+    )
+  }
+
+  const content = playbook[selectedPath] ?? '# Not found\n\nSelect a topic from the left.'
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-[600px]">
@@ -337,17 +374,17 @@ function TreeSection({ node, level, expanded, setExpanded, selectedPath, onSelec
   )
 }
 
-function filterNode(node: TreeNode, q: string): TreeNode | null {
+function filterNode(node: TreeNode, q: string, playbook: Playbook): TreeNode | null {
   // match on label OR on file content
   const labelHit = node.label.toLowerCase().includes(q)
-  const contentHit = node.filePath ? (PLAYBOOK[node.filePath] ?? '').toLowerCase().includes(q) : false
+  const contentHit = node.filePath ? (playbook[node.filePath] ?? '').toLowerCase().includes(q) : false
 
   if (node.children.length === 0) {
     return (labelHit || contentHit) ? node : null
   }
 
   const filteredChildren = node.children
-    .map(c => filterNode(c, q))
+    .map(c => filterNode(c, q, playbook))
     .filter((c): c is TreeNode => c !== null)
 
   if (filteredChildren.length === 0 && !labelHit) return null
