@@ -5,6 +5,7 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
+import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
 import { isUsAdmin } from '@/lib/us-admins'
 import { getOrgRoleBadge, isOrgRole } from '@/lib/role-colors'
 import { useToast } from '@/components/Toast'
@@ -125,6 +126,22 @@ export default function USPortalTeamPage() {
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
   const [removing, setRemoving] = useState(false)
+  // Peer-visible aggregate board (non-admin Leaderboard): the scoped roster
+  // collapses to self+downline+upline (#334), so a leaf rep saw a board of
+  // one. /api/leaderboard returns ALL active portal reps with aggregate-only
+  // fields. Admin Team Management keeps the scoped roster endpoints unchanged.
+  const [board, setBoard] = useState<LeaderboardEntry[] | null>(null)
+  const [boardLoading, setBoardLoading] = useState(!admin)
+
+  useEffect(() => {
+    if (admin || !rep?.rep_id) { setBoardLoading(false); return }
+    let cancelled = false
+    fetchLeaderboard()
+      .then(entries => { if (!cancelled) setBoard(entries) })
+      .catch(() => { /* board stays null → fall back to the scoped roster */ })
+      .finally(() => { if (!cancelled) setBoardLoading(false) })
+    return () => { cancelled = true }
+  }, [admin, rep?.rep_id])
 
   useEffect(() => {
     if (!rep?.rep_id) return
@@ -194,6 +211,15 @@ export default function USPortalTeamPage() {
 
   // Enrich team with computed deal stats
   const enrichedTeam = computeTeamStats(team, deals)
+
+  // Rows the Leaderboard tab renders: the aggregate board for non-admins,
+  // the enriched scoped roster for admins (unchanged).
+  const boardMembers: TeamMember[] = (admin || !board) ? enrichedTeam : board.map(e => ({
+    id: e.id, name: e.name, email: '', phone: '', commission_rate: 0,
+    deals_open: e.deals_open, deals_won: e.deals_won, total_mrr: e.total_mrr,
+    total_earned: 0, total_paid: 0, is_active: true, joined: '',
+    role: 'active' as const, org_role: e.role, location: 'US',
+  }))
 
   const filtered = enrichedTeam.filter(m => {
     if (!search) return true
@@ -303,7 +329,7 @@ export default function USPortalTeamPage() {
     setApplicants(prev => prev.filter(a => a.id !== applicant.id))
   }
 
-  if (loading) {
+  if (loading || boardLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-8 h-8 rounded-lg bg-[#17C5B0]/15 border border-[#17C5B0]/30 flex items-center justify-center animate-pulse">
@@ -515,7 +541,7 @@ export default function USPortalTeamPage() {
 
           {/* Ranked List */}
           <div className="space-y-2">
-            {[...enrichedTeam]
+            {[...boardMembers]
               .sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won)
               .map((member, idx) => {
                 const avatarColor = getAvatarColor(member.name)

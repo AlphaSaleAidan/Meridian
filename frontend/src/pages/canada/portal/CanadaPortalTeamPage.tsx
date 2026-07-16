@@ -6,6 +6,7 @@ import { useSalesAuth } from '@/lib/sales-auth'
 import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
+import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
 import { formatCad } from '@/lib/format'
 import { COMMISSION_TRACKING_PAUSED } from '@/lib/commission-flags'
 import { getOrgRoleBadge, isOrgRole, ORG_ROLES, ROLE_LABELS, ROLE_LEVELS, type OrgRole } from '@/lib/role-colors'
@@ -180,6 +181,12 @@ export default function CanadaPortalTeamPage() {
   const [editRole, setEditRole] = useState<OrgRole>('sales_rep')
   const [editManagerId, setEditManagerId] = useState('')
   const [removing, setRemoving] = useState(false)
+  // Peer-visible aggregate board (non-admin Leaderboard): the scoped roster
+  // collapses to self+downline+upline (#334), so a leaf rep saw a board of
+  // one. /api/leaderboard returns ALL active portal reps with aggregate-only
+  // fields. Admin Team Management keeps the scoped roster endpoints unchanged.
+  const [board, setBoard] = useState<LeaderboardEntry[] | null>(null)
+  const [boardLoading, setBoardLoading] = useState(!admin)
 
   // Deals come from the shared React Query cache so creates/updates on the
   // Leads page refresh team stats automatically.
@@ -190,7 +197,7 @@ export default function CanadaPortalTeamPage() {
   // PortalPage wraps the page body; either source of failure surfaces the
   // banner, and the page only shows the skeleton on a truly cold start
   // (both team list and deals empty).
-  const pageIsLoading = teamLoading || dealsLoading
+  const pageIsLoading = teamLoading || dealsLoading || boardLoading
   const pageError = teamError ?? dealsError ?? null
   const pageIsEmpty = team.length === 0 && deals.length === 0
 
@@ -252,8 +259,28 @@ export default function CanadaPortalTeamPage() {
     return () => { cancelled = true }
   }, [rep?.rep_id])
 
+  useEffect(() => {
+    if (admin || !rep?.rep_id) { setBoardLoading(false); return }
+    let cancelled = false
+    fetchLeaderboard()
+      .then(entries => { if (!cancelled) setBoard(entries) })
+      .catch(() => { /* board stays null → fall back to the scoped roster */ })
+      .finally(() => { if (!cancelled) setBoardLoading(false) })
+    return () => { cancelled = true }
+  }, [admin, rep?.rep_id])
+
   // Enrich team with computed deal stats
   const enrichedTeam = computeTeamStats(team, deals)
+
+  // Rows the Leaderboard tab (and non-admin stat cards) render: the aggregate
+  // board for non-admins, the enriched scoped roster for admins (unchanged).
+  const boardMembers: TeamMember[] = (admin || !board) ? enrichedTeam : board.map(e => ({
+    id: e.id, name: e.name, email: '', phone: '', commission_rate: 0,
+    deals_open: e.deals_open, deals_won: e.deals_won, total_mrr: e.total_mrr,
+    total_earned: 0, total_paid: 0, is_active: true, joined: '',
+    role: 'active' as const, org_role: e.role, manager_id: null, location: 'Canada',
+  }))
+  const isSelf = (m: TeamMember) => m.id === rep?.rep_id || (!!m.email && m.email === rep?.email)
 
   const filtered = enrichedTeam.filter(m => {
     if (!search) return true
@@ -454,7 +481,7 @@ export default function CanadaPortalTeamPage() {
               </div>
               <div>
                 <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Team Size</p>
-                <p className="text-lg font-bold text-white">{enrichedTeam.length}</p>
+                <p className="text-lg font-bold text-white">{boardMembers.length}</p>
               </div>
             </div>
           </div>
@@ -466,7 +493,7 @@ export default function CanadaPortalTeamPage() {
               <div>
                 <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Your Rank</p>
                 <p className="text-lg font-bold text-white">
-                  #{[...enrichedTeam].sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won).findIndex(m => m.email === rep?.email) + 1 || '—'}
+                  #{[...boardMembers].sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won).findIndex(isSelf) + 1 || '—'}
                 </p>
               </div>
             </div>
@@ -478,7 +505,7 @@ export default function CanadaPortalTeamPage() {
               </div>
               <div>
                 <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Your Deals</p>
-                <p className="text-lg font-bold text-white">{enrichedTeam.find(m => m.email === rep?.email)?.deals_won || 0} won</p>
+                <p className="text-lg font-bold text-white">{boardMembers.find(isSelf)?.deals_won || 0} won</p>
               </div>
             </div>
           </div>
@@ -642,7 +669,7 @@ export default function CanadaPortalTeamPage() {
 
           {/* Ranked List */}
           <div className="space-y-2">
-            {[...enrichedTeam]
+            {[...boardMembers]
               .sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won)
               .map((member, idx) => {
                 const avatar = getAvatarClasses(member.name)
