@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -364,7 +365,15 @@ export default function CanadaPortalTeamPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+          {/* Recruiting is deliberately not a nav tab — reachable from here. */}
+          {admin && (
+            <Link to="/canada/portal/recruiting" className="text-xs text-pm-accent hover:underline">
+              Recruiting pipeline →
+            </Link>
+          )}
+        </div>
         <p className="text-sm text-pm-canada-text-muted mt-0.5">{admin ? (COMMISSION_TRACKING_PAUSED ? 'Manage your sales reps and applications.' : 'Manage your sales reps, commissions, and payouts.') : 'See how you stack up against the team.'}</p>
         {COMMISSION_TRACKING_PAUSED && (
           <p className="text-2xs text-pm-canada-text-faint mt-1">Commission tracking is temporarily paused.</p>
