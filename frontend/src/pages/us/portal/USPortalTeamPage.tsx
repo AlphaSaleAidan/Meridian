@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useSalesAuth } from '@/lib/sales-auth'
@@ -343,7 +344,15 @@ export default function USPortalTeamPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+          {/* Recruiting is deliberately not a nav tab — reachable from here (mirrors Canada). */}
+          {admin && (
+            <Link to="/us/portal/recruiting" className="text-xs text-[#17C5B0] hover:underline">
+              Recruiting pipeline →
+            </Link>
+          )}
+        </div>
         <p className="text-sm text-[#A1A1A8] mt-0.5">{admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
       </div>
 
