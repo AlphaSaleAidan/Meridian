@@ -13,6 +13,9 @@ import {
   type ReservationConfig,
 } from '@/lib/phone-service'
 import { api } from '@/lib/api'
+import { menuService, type MenuStoreItem } from '@/lib/menu-service'
+import MenuIngestPanel from '@/components/menu/MenuIngestPanel'
+import MenuReviewTable from '@/components/menu/MenuReviewTable'
 import { posSystems } from '@/data/pos-systems'
 import { VoicePlayButton, VoicePreviewCard, TestCallModal, ForwardingWizard } from '@/components/phone'
 import { TestOrderProveOut } from '@/components/phone/TestOrderProveOut'
@@ -175,6 +178,36 @@ export default function PhoneSetupWizard() {
   const [menu, setMenu] = useState<PhoneMenuItem[]>([])
   const [newItem, setNewItem] = useState({ name: '', price: '', category: '' })
   const [addItemError, setAddItemError] = useState<string | null>(null)
+  // Menu-store review queue (scrape/CSV/photo land here, never silently live).
+  const [pendingItems, setPendingItems] = useState<MenuStoreItem[]>([])
+
+  // Pull the live menu + review queue from the normalized store. Locally
+  // typed items that haven't been saved yet are KEPT (merged after the store
+  // list) — the wizard only persists on Activate.
+  const refreshMenuFromStore = useCallback(async () => {
+    if (!orgId || isDemo) return
+    try {
+      const res = await menuService.getItems(orgId)
+      setPendingItems(res.items.filter(i => i.needs_review))
+      const published = res.items.filter(i => i.published && !i.sold_out && !i.needs_review)
+      if (published.length) {
+        setMenu(prev => {
+          const fromStore: PhoneMenuItem[] = published.map(m => ({
+            id: m.id,
+            name: m.name,
+            price: m.price ?? 0,
+            category: m.category || 'General',
+          }))
+          const names = new Set(fromStore.map(i => i.name.toLowerCase()))
+          return [...fromStore, ...prev.filter(p => !names.has(p.name.toLowerCase()))]
+        })
+      }
+    } catch { /* store not adopted yet — the local list stays authoritative */ }
+  }, [orgId, isDemo])
+
+  useEffect(() => {
+    if (step === 'menu') refreshMenuFromStore()
+  }, [step, refreshMenuFromStore])
 
   // Load existing config (authed only) and hydrate everything the wizard edits.
   // Demo never hits the backend.
@@ -703,8 +736,27 @@ export default function PhoneSetupWizard() {
             <h3 className="text-sm font-semibold text-[#F5F5F7]">Menu Items</h3>
             <p className="text-xs text-[#A1A1A8]">
               {posInfo ? `Menu synced from ${posInfo.name}. Edit or add items below — this is what your agent reads to callers.`
-                : 'Add the items your agent should take orders for. Callers can order anything on this list.'}
+                : 'Build the menu your agent takes orders from — import it one of these ways, or add items by hand below.'}
             </p>
+
+            {/* Four ranked import options (menu store). Imports (except POS)
+                land in the review queue below — nothing goes live unchecked. */}
+            {!isDemo && !!orgId && (
+              <MenuIngestPanel
+                merchantId={orgId}
+                posConnected={!!posInfo}
+                posName={posInfo?.name}
+                onIngested={refreshMenuFromStore}
+              />
+            )}
+            {!isDemo && !!orgId && pendingItems.length > 0 && (
+              <MenuReviewTable
+                merchantId={orgId}
+                items={pendingItems}
+                onChanged={refreshMenuFromStore}
+              />
+            )}
+
             <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
               {menu.length === 0 && (
                 <p className="text-[10px] text-[#A1A1A8]/60 py-3 text-center">No items yet — add your first below.</p>
@@ -781,7 +833,7 @@ export default function PhoneSetupWizard() {
               )}
             </div>
             <p className="text-[10px] text-[#A1A1A8]/60">
-              Tip: you can also scan a paper menu or import a CSV from Phone Orders → Settings.
+              Tip: manage sold-out items and your public menu page anytime from Phone Orders → Settings.
             </p>
           </div>
 

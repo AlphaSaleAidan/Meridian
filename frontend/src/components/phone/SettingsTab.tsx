@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { clsx } from 'clsx'
 import { ConnectReservationSystem, ORDER_TYPE_OPTIONS, hasOrderType, toggleOrderType } from './ConnectReservationSystem'
 import {
-  Settings, Volume2, Link2, Phone, ListOrdered, Route,
+  Settings, Volume2, Link2, Phone, Route,
   CheckCircle2, CreditCard, SendHorizontal, MessageSquare, AlertCircle,
   PhoneForwarded,
 } from 'lucide-react'
@@ -18,7 +18,7 @@ import {
 } from '@/lib/phone-service'
 import { posSystems } from '@/data/pos-systems'
 import MenuBuildStatus from '@/components/menu/MenuBuildStatus'
-import MenuPhotoScanner from '@/components/menu/MenuPhotoScanner'
+import MenuManager from '@/components/menu/MenuManager'
 
 const DIRECT_API_SYSTEMS = new Set(['square', 'toast', 'clover'])
 
@@ -205,26 +205,16 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
         </button>
       </div>
 
-      {/* Menu */}
-      <div className="card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <ListOrdered size={14} className="text-[#1A8FD6]" />
-          <h3 className="text-sm font-semibold text-[#F5F5F7]">Menu ({biz.menu.length} items)</h3>
-        </div>
-        <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
-          {biz.menu.map(item => (
-            <div key={item.id} className="flex items-center justify-between px-3 py-1.5 bg-[#111113] rounded-lg">
-              <div>
-                <p className="text-xs text-[#F5F5F7]">{item.name}</p>
-                <p className="text-[9px] text-[#A1A1A8]">{item.category}</p>
-              </div>
-              <span className="text-xs font-mono text-[#17C5B0]">{biz.currency}{item.price.toFixed(2)}</span>
-            </div>
-          ))}
-        </div>
-        {/* Supplementary builders — scan a paper menu or import a CSV. */}
-        <MenuPhotoScanner />
-      </div>
+      {/* Menu — store-backed manager: review queue, sold-out toggles, the four
+          ingestion options, and the hosted public /m/{slug} page. Falls back
+          to the read-only demo list when there's no live merchant. */}
+      <MenuManager
+        merchantId={orgId}
+        posConnected={!!connectedPos}
+        posName={posInfo?.name}
+        fallbackMenu={biz.menu}
+        currency={biz.currency}
+      />
 
       {/* Text-to-Pay — always on; merchants customize the SMS body below. */}
       <div className="card p-4 sm:p-5">

@@ -209,6 +209,19 @@ async def save_phone_config(req: PhoneConfigRequest, principal=Depends(require_s
         await db.insert("phone_agent_config", payload)
         logger.info("Created phone config for %s", req.merchant_id)
 
+    # WRITE-THROUGH (menu store): once a merchant's menu lives in menu_items,
+    # a wizard/settings save that carries the full menu list must update the
+    # store too — otherwise the next store mutation's JSONB mirror would
+    # clobber this save. No store rows → no-op (legacy JSONB-only world).
+    # Best-effort: a missing table (migration not applied) never breaks saves.
+    if req.menu_items is not None:
+        try:
+            from ...services.menu_store import replace_menu_from_agent_items
+            if await replace_menu_from_agent_items(db, req.merchant_id, req.menu_items):
+                logger.info("menu store write-through on config save for %s", req.merchant_id)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("menu store write-through failed for %s: %s", req.merchant_id, e)
+
     return {"ok": True, "merchant_id": req.merchant_id}
 
 
@@ -324,6 +337,7 @@ async def _sync_menu_from_pos_impl(merchant_id: str, db) -> dict:
             token,
             merchant_id=external_merchant_id,
             location_id=location_id,
+            max_items=300,
         )
         if not items:
             return {
@@ -333,18 +347,41 @@ async def _sync_menu_from_pos_impl(merchant_id: str, db) -> dict:
                 "source": source,
             }
 
-        payload = {"menu_items": items, "updated_at": datetime.now(timezone.utc).isoformat()}
-        if config_rows:
-            await db.update(
-                "phone_agent_config",
-                payload,
-                filters={"merchant_id": f"eq.{merchant_id}"},
-            )
-        else:
-            await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
+        # MENU STORE write-through: POS imports are trusted (source='pos',
+        # published immediately) but items with no price land in the review
+        # queue. ingest_items keeps the phone_agent_config.menu_items JSONB
+        # mirror in sync, so the legacy write below only runs when the store
+        # is unavailable (migration not applied yet).
+        needs_review = 0
+        stored = False
+        try:
+            from ...services.menu_store import ingest_items
+            summary = await ingest_items(db, merchant_id, items, source="pos")
+            needs_review = summary["needs_review"]
+            stored = True
+        except Exception as e:  # noqa: BLE001 — store unavailable → legacy path
+            logger.warning("menu store unavailable for %s — JSONB-only sync: %s",
+                           merchant_id, e)
+        if not stored:
+            legacy_items = [
+                {k: v for k, v in it.items() if k != "source_external_id"}
+                for it in items
+            ]
+            payload = {"menu_items": legacy_items,
+                       "updated_at": datetime.now(timezone.utc).isoformat()}
+            if config_rows:
+                await db.update(
+                    "phone_agent_config",
+                    payload,
+                    filters={"merchant_id": f"eq.{merchant_id}"},
+                )
+            else:
+                await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
 
-        logger.info("Synced %d menu items from %s (%s) for %s", len(items), system, source, merchant_id)
-        return {"synced": True, "item_count": len(items), "source": source, "sample": items[:5]}
+        logger.info("Synced %d menu items from %s (%s) for %s (store=%s, review=%d)",
+                    len(items), system, source, merchant_id, stored, needs_review)
+        return {"synced": True, "item_count": len(items), "needs_review": needs_review,
+                "source": source, "sample": items[:5]}
     finally:
         _MENU_BUILDING.discard(merchant_id)
 
@@ -421,6 +458,67 @@ async def get_menu_status(merchant_id: str, principal=Depends(require_service_au
     }
 
 
+async def _persist_scanned_items(db, merchant_id: str, scanned: list[dict],
+                                 source: str, replace: bool) -> dict:
+    """Shared persistence for the legacy photo/CSV menu builders.
+
+    Store-first: items land in menu_items behind the review gate (source=
+    photo|csv, published=false + needs_review=true — never silently live;
+    `replace` is moot there). Pre-migration fallback: the original JSONB
+    merge (or replace) so nothing breaks before the table exists.
+    """
+    try:
+        from ...services.menu_store import ingest_items
+        summary = await ingest_items(db, merchant_id, scanned, source=source)
+        return {
+            "scanned": True,
+            "added": summary["inserted"] + summary["updated"],
+            "scanned_count": len(scanned),
+            "pending_review": summary["needs_review"],
+            "skipped_existing": summary["skipped_existing"],
+            "item_count": len(scanned),
+            "mode": "review",
+            "sample": scanned[:5],
+        }
+    except Exception as e:  # noqa: BLE001 — store unavailable → legacy path
+        logger.warning("menu store unavailable for %s — legacy JSONB merge: %s",
+                       merchant_id, e)
+
+    from ...services.menu_vision import merge_menu_items
+
+    config_rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{merchant_id}"},
+        limit=1,
+    )
+    existing = (config_rows[0].get("menu_items") if config_rows else None) or []
+    if replace:
+        menu, added = scanned, len(scanned)
+    else:
+        before = len(existing) if isinstance(existing, list) else 0
+        menu = merge_menu_items(existing, scanned)
+        added = len(menu) - before
+
+    payload = {"menu_items": menu, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if config_rows:
+        await db.update(
+            "phone_agent_config",
+            payload,
+            filters={"merchant_id": f"eq.{merchant_id}"},
+        )
+    else:
+        await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
+
+    return {
+        "scanned": True,
+        "added": added,
+        "scanned_count": len(scanned),
+        "item_count": len(menu),
+        "mode": "replace" if replace else "merge",
+        "sample": scanned[:5],
+    }
+
+
 # Max upload accepted for a menu photo (vision models cap input size anyway).
 _MAX_MENU_PHOTO_BYTES = 12 * 1024 * 1024  # 12 MB
 
@@ -440,11 +538,7 @@ async def scan_menu_photo(
     picks the new items up. Pass ``?replace=true`` to overwrite instead of
     merge (e.g. a full reprint). The image itself is never stored.
     """
-    from ...services.menu_vision import (
-        MenuVisionError,
-        extract_menu_from_image,
-        merge_menu_items,
-    )
+    from ...services.menu_vision import MenuVisionError, extract_menu_from_image
 
     await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
@@ -469,41 +563,16 @@ async def scan_menu_photo(
         }
 
     db = get_db()
-    config_rows = await db.select(
-        "phone_agent_config",
-        filters={"merchant_id": f"eq.{merchant_id}"},
-        limit=1,
-    )
-    existing = (config_rows[0].get("menu_items") if config_rows else None) or []
-    if replace:
-        menu, added = scanned, len(scanned)
-    else:
-        before = len(existing) if isinstance(existing, list) else 0
-        menu = merge_menu_items(existing, scanned)
-        added = len(menu) - before
-
-    payload = {"menu_items": menu, "updated_at": datetime.now(timezone.utc).isoformat()}
-    if config_rows:
-        await db.update(
-            "phone_agent_config",
-            payload,
-            filters={"merchant_id": f"eq.{merchant_id}"},
-        )
-    else:
-        await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
-
+    # MENU STORE: scanned items land behind the review gate (source='photo',
+    # never silently live) — `replace` is ignored on this path since nothing
+    # goes live until the merchant confirms. Legacy JSONB merge only when the
+    # store is unavailable (migration not applied yet).
+    result = await _persist_scanned_items(db, merchant_id, scanned, "photo", replace)
     logger.info(
-        "Scanned %d menu items from photo for %s (%s, +%d, total %d)",
-        len(scanned), merchant_id, "replace" if replace else "merge", added, len(menu),
+        "Scanned %d menu items from photo for %s (%s)",
+        len(scanned), merchant_id, result.get("mode"),
     )
-    return {
-        "scanned": True,
-        "added": added,
-        "scanned_count": len(scanned),
-        "item_count": len(menu),
-        "mode": "replace" if replace else "merge",
-        "sample": scanned[:5],
-    }
+    return result
 
 
 # Max upload accepted for a menu CSV (spreadsheet exports are tiny).
@@ -587,8 +656,6 @@ async def import_menu_csv(
     shape and **merged onto** the merchant's existing ``menu_items`` — same
     persistence as the photo scanner. Pass ``?replace=true`` to overwrite.
     """
-    from ...services.menu_vision import merge_menu_items
-
     await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
 
@@ -625,41 +692,12 @@ async def import_menu_csv(
         }
 
     db = get_db()
-    config_rows = await db.select(
-        "phone_agent_config",
-        filters={"merchant_id": f"eq.{merchant_id}"},
-        limit=1,
-    )
-    existing = (config_rows[0].get("menu_items") if config_rows else None) or []
-    if replace:
-        menu, added = parsed, len(parsed)
-    else:
-        before = len(existing) if isinstance(existing, list) else 0
-        menu = merge_menu_items(existing, parsed)
-        added = len(menu) - before
-
-    payload = {"menu_items": menu, "updated_at": datetime.now(timezone.utc).isoformat()}
-    if config_rows:
-        await db.update(
-            "phone_agent_config",
-            payload,
-            filters={"merchant_id": f"eq.{merchant_id}"},
-        )
-    else:
-        await db.insert("phone_agent_config", {"merchant_id": merchant_id, **payload})
-
+    result = await _persist_scanned_items(db, merchant_id, parsed, "csv", replace)
     logger.info(
-        "Imported %d menu items from CSV for %s (%s, +%d, total %d)",
-        len(parsed), merchant_id, "replace" if replace else "merge", added, len(menu),
+        "Imported %d menu items from CSV for %s (%s)",
+        len(parsed), merchant_id, result.get("mode"),
     )
-    return {
-        "scanned": True,
-        "added": added,
-        "scanned_count": len(parsed),
-        "item_count": len(menu),
-        "mode": "replace" if replace else "merge",
-        "sample": parsed[:5],
-    }
+    return result
 
 
 @router.get("/calls/{merchant_id}")

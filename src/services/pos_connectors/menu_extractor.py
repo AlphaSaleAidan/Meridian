@@ -45,13 +45,19 @@ async def extract_menu_items(
     *,
     location_id: str = "",
     merchant_id: str = "",
-    max_items: int = 80,
+    max_items: int = 300,
 ) -> list[dict]:
     """Read-only pull of a merchant's POS catalog → phone-agent menu items.
 
-    Returns a list of ``{"name", "price"?, "category"?}`` dicts where ``price``
-    is in dollars (omitted when the POS doesn't expose one). Returns ``[]`` on
-    any failure so the caller can fall back to the existing stored menu.
+    Returns a list of ``{"name", "price"?, "category"?, "source_external_id"?}``
+    dicts where ``price`` is in dollars (omitted when the POS doesn't expose
+    one) and ``source_external_id`` is the POS catalog object id when exposed
+    (menu_store's dedupe key across re-syncs). Returns ``[]`` on any failure so
+    the caller can fall back to the existing stored menu.
+
+    The connector layer already paginates (GenericRESTConnector.fetch_catalog,
+    page_size×max_pages); ``max_items`` caps what we keep — anything past the
+    cap is logged as dropped, never silently lost.
     """
     key = resolve_alias(system_key)
     api_config = get_connector_config(key)
@@ -105,6 +111,7 @@ def _coerce_catalog(raw: Any, *, max_items: int) -> list[dict]:
     records = _flatten_records(raw)
     out: list[dict] = []
     seen: set[str] = set()
+    dropped = 0
 
     for rec in records:
         if not isinstance(rec, dict):
@@ -117,7 +124,14 @@ def _coerce_catalog(raw: Any, *, max_items: int) -> list[dict]:
             continue
         seen.add(dedup_key)
 
+        if len(out) >= max_items:
+            dropped += 1
+            continue
+
         item: dict[str, Any] = {"name": name}
+        external_id = _extract_external_id(rec)
+        if external_id:
+            item["source_external_id"] = external_id
         price = _extract_price_dollars(rec)
         if price is not None:
             item["price"] = price
@@ -126,10 +140,20 @@ def _coerce_catalog(raw: Any, *, max_items: int) -> list[dict]:
             item["category"] = category
         out.append(item)
 
-        if len(out) >= max_items:
-            break
-
+    if dropped:
+        logger.warning(
+            "menu extract: item cap %d reached — %d unique catalog items dropped",
+            max_items, dropped)
     return out
+
+
+def _extract_external_id(rec: dict) -> str:
+    """POS catalog object id (Square/Clover expose top-level `id`)."""
+    for key in ("id", "item_id", "itemId", "guid", "uuid"):
+        val = rec.get(key)
+        if val and isinstance(val, (str, int)):
+            return str(val).strip()
+    return ""
 
 
 def _flatten_records(raw: Any) -> list[Any]:

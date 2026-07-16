@@ -110,6 +110,16 @@ class MerchantPhoneConfig:
     # {"pos": true, "customer_sms": true, "merchant_sms": false}. None/missing
     # keys default to enabled (see delivery_channels.resolve_channels).
     delivery_channels: dict | None = None
+    # MENU STORE (migration 20260716_menu_store): when the merchant has rows in
+    # the normalized menu_items table, `menu_items` above is served from the
+    # store's published/non-sold-out projection and these fields activate:
+    #   sold_out_items  — published-but-sold-out names; rendered as a SOLD OUT
+    #                     section in the prompt (excluded from the menu proper).
+    #   menu_public_url — hosted public menu page (merchant_menus.public_slug,
+    #                     https://meridian.tips/m/{slug}) mentioned by the agent.
+    # None/"" (no store rows) → JSONB fallback, prompt byte-for-byte unchanged.
+    sold_out_items: Optional[list] = None
+    menu_public_url: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -128,6 +138,79 @@ def _norm_payment_link_provider(value: Optional[str]) -> str:
     zero behavior change for existing merchants)."""
     provider = (value or "").strip().lower()
     return provider if provider in _VALID_PAYMENT_LINK_PROVIDERS else "stripe"
+
+
+# Base URL for the hosted public menu page (/m/{slug}).
+PUBLIC_MENU_BASE = os.getenv("PUBLIC_SITE_BASE", "https://meridian.tips").rstrip("/")
+
+
+def _store_row_to_agent_item(row: dict) -> dict:
+    """menu_items store row (integer CENTS) → the legacy agent dict shape
+    (dollars) that _system_prompt / order_normalizer consume.
+
+    Dependency-free twin of src/services/menu_store.to_agent_shape — this
+    module is imported standalone (sys.path) by vapi_webhook and must not
+    import src.*. Keep the two in lockstep; tests/test_menu_agent_path.py
+    asserts byte-for-byte parity.
+    """
+    def dollars(cents):
+        return round(cents / 100, 2) if isinstance(cents, (int, float)) and cents else None
+
+    item: dict = {"name": row.get("name") or "item"}
+    price = dollars(row.get("price_cents"))
+    if price is not None:
+        item["price"] = price
+    if row.get("category"):
+        item["category"] = row["category"]
+    if row.get("description"):
+        item["description"] = row["description"]
+    sizes = row.get("sizes")
+    if isinstance(sizes, list) and sizes:
+        item["sizes"] = list(sizes)
+    size_prices = row.get("size_prices")
+    if isinstance(size_prices, dict) and size_prices:
+        converted = {}
+        for size, cents in size_prices.items():
+            d = dollars(cents if isinstance(cents, (int, float)) else None)
+            if d is not None:
+                converted[str(size)] = d
+        if converted:
+            item["size_prices"] = converted
+            item.setdefault("sizes", list(converted.keys()))
+    topping = dollars(row.get("topping_price_cents"))
+    if topping is not None:
+        item["topping_price"] = topping
+    mods = row.get("modifications")
+    if isinstance(mods, list) and mods:
+        item["modifications"] = list(mods)
+    return item
+
+
+def _store_rows_to_menu(rows: list[dict]) -> tuple[list[dict], list[str]]:
+    """Published store rows → (available agent-shape items, sold-out names).
+
+    Sold-out items are EXCLUDED from the orderable menu (the mirror does the
+    same, so legacy readers never offer them) but their names are returned so
+    the prompt can tell the agent the item exists and is sold out if asked.
+    """
+    ordered = sorted(rows or [], key=lambda r: (
+        r.get("position") is None, r.get("position") or 0,
+        (r.get("name") or "").lower()))
+    items: list[dict] = []
+    sold_out: list[str] = []
+    seen: set = set()
+    for row in ordered:
+        if not row.get("published"):
+            continue
+        name = (row.get("name") or "").strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        if row.get("sold_out"):
+            sold_out.append(name)
+        else:
+            items.append(_store_row_to_agent_item(row))
+    return items, sold_out
 
 
 async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]:
@@ -153,7 +236,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 return None
 
             row = res.json()[0]
-            return MerchantPhoneConfig(
+            config = MerchantPhoneConfig(
                 merchant_id=row["merchant_id"],
                 business_name=row.get("business_name", ""),
                 business_type=row.get("business_type", "restaurant"),
@@ -202,6 +285,38 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                                    if isinstance(row.get("delivery_channels"), dict)
                                    else None),
             )
+            # MENU STORE (single source of truth): merchants with rows in the
+            # normalized menu_items table get their menu from the store —
+            # sold-out-aware and always current. Merchants without store rows
+            # (or if the table doesn't exist yet / the read fails) keep the
+            # JSONB menu loaded above — zero-migration safety, and the JSONB
+            # is a write-through mirror of the store anyway (menu_store.py).
+            try:
+                menu_res = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/menu_items",
+                    params={"merchant_id": f"eq.{merchant_id}",
+                            "published": "is.true", "select": "*", "limit": "1000"},
+                    headers=headers,
+                )
+                if menu_res.status_code == 200 and menu_res.json():
+                    items, sold_out = _store_rows_to_menu(menu_res.json())
+                    if items or sold_out:
+                        config.menu_items = items
+                        config.sold_out_items = sold_out
+                menus_res = await client.get(
+                    f"{SUPABASE_URL}/rest/v1/merchant_menus",
+                    params={"merchant_id": f"eq.{merchant_id}",
+                            "published": "is.true", "select": "public_slug"},
+                    headers=headers,
+                )
+                if menus_res.status_code == 200 and menus_res.json():
+                    slug = (menus_res.json()[0].get("public_slug") or "").strip()
+                    if slug:
+                        config.menu_public_url = f"{PUBLIC_MENU_BASE}/m/{slug}"
+            except Exception as menu_exc:  # noqa: BLE001 — store read never breaks a call
+                logger.warning("menu store read failed for %s (JSONB fallback): %s",
+                               merchant_id, menu_exc)
+            return config
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
         return None
