@@ -10,12 +10,18 @@
 --   psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260512_sales_reps_table.sql
 --   psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260507_canada_leads.sql
 --   psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260628_canada_leads_rep_isolation.sql
---   psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260716_sales_hierarchy.sql   -- policies under test
+--   psql -v ON_ERROR_STOP=1 -f tests/rls/_us_leads_stub.sql                       -- prod us_leads has no in-repo CREATE migration
+--   psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260628_us_leads_rep_isolation.sql
+--   psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260716_sales_hierarchy.sql   -- policies under test (canada + roster)
+--   psql -v ON_ERROR_STOP=1 -f supabase/migrations/20260717_us_leads_downline_read.sql  -- policies under test (US downline)
 --   psql -v ON_ERROR_STOP=1 -f tests/rls/hierarchy_policies.test.sql
 --
 -- Written BEFORE 20260716_sales_hierarchy.sql exists: with only the baseline
 -- migrations applied this file FAILS (columns/policies missing), which is the
--- red state. It passes once the hierarchy migration is applied.
+-- red state. It passes once the hierarchy migration is applied. The us_leads
+-- cases were added the same red-first way for 20260717_us_leads_downline_read:
+-- with only 20260628 applied, the "manager sees downline US lead" assertion
+-- FAILS (own-leads-only), and passes once 20260717 is applied.
 --
 -- Every guard is asserted in BOTH directions (allowed ✓ / denied ✓).
 --
@@ -59,6 +65,12 @@ INSERT INTO canada_leads (id, business_name, contact_name, contact_email, rep_id
   ('22222222-0000-4000-8000-000000000002', 'Branch2 Cafe',    'P Two', 'p2@biz.test', 'ffffffff-0000-4000-8000-000000000006'),
   ('33333333-0000-4000-8000-000000000003', 'Unassigned Deli', 'P Nil', 'p3@biz.test', NULL);
 
+-- US mirror fixture (same tree, us_leads table — 20260717 policy under test)
+INSERT INTO us_leads (id, business_name, rep_id) VALUES
+  ('44444444-0000-4000-8000-000000000004', 'US Branch1 Diner',    'dddddddd-0000-4000-8000-000000000004'),
+  ('55555555-0000-4000-8000-000000000005', 'US Branch2 Grill',    'ffffffff-0000-4000-8000-000000000006'),
+  ('66666666-0000-4000-8000-000000000006', 'US Unassigned Truck', NULL);
+
 -- ── Persona: dm1 (manager) ───────────────────────────────────────────────────
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claims', '{"email":"dm1@rls.test","role":"authenticated"}', true);
@@ -91,6 +103,23 @@ BEGIN
   IF n <> 0 THEN RAISE EXCEPTION 'FAIL: sibling branch visible in roster (% rows)', n; END IF;
   RAISE NOTICE 'PASS: roster scoped to subtree + upline';
 
+  -- ── us_leads (20260717 mirror policy) — BOTH directions ──
+  -- direction 1: manager CAN read own-subtree US lead
+  SELECT count(*) INTO n FROM us_leads WHERE id = '44444444-0000-4000-8000-000000000004';
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL: manager cannot see own-subtree US lead'; END IF;
+  RAISE NOTICE 'PASS: manager sees own-subtree US lead';
+
+  -- direction 2: manager CANNOT read sibling-branch US lead
+  SELECT count(*) INTO n FROM us_leads WHERE id = '55555555-0000-4000-8000-000000000005';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: sibling-branch US lead visible to manager'; END IF;
+  RAISE NOTICE 'PASS: sibling-branch US lead hidden from manager';
+
+  -- downline read is READ-ONLY: manager UPDATE on downline US lead affects 0 rows
+  UPDATE us_leads SET notes = 'manager-write' WHERE id = '44444444-0000-4000-8000-000000000004';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: manager WROTE a downline US lead (% row(s)) — 20260717 must be SELECT-only', n; END IF;
+  RAISE NOTICE 'PASS: US downline read is read-only (writes stay owner-only)';
+
   -- privilege escalation: manager cannot self-promote via direct UPDATE
   UPDATE sales_reps SET role = 'admin' WHERE email = 'dm1@rls.test';
   RAISE EXCEPTION 'FAIL: non-admin self-promoted to admin via sales_reps UPDATE';
@@ -119,6 +148,13 @@ BEGIN
   SELECT count(*) INTO n FROM sales_reps WHERE email IN ('dm2@rls.test', 'rep2@rls.test');
   IF n <> 0 THEN RAISE EXCEPTION 'FAIL: leaf rep sees lateral branch in roster'; END IF;
   RAISE NOTICE 'PASS: leaf rep roster limited to own chain';
+
+  -- us_leads: leaf rep stays self-only under the additive 20260717 policy
+  SELECT count(*) INTO n FROM us_leads WHERE id = '44444444-0000-4000-8000-000000000004';
+  IF n <> 1 THEN RAISE EXCEPTION 'FAIL: rep cannot see own US lead'; END IF;
+  SELECT count(*) INTO n FROM us_leads WHERE id = '55555555-0000-4000-8000-000000000005';
+  IF n <> 0 THEN RAISE EXCEPTION 'FAIL: rep sees another rep''s US lead (20260717 widened leaf reps)'; END IF;
+  RAISE NOTICE 'PASS: US leaf rep sees only self (both directions)';
 END $$;
 
 RESET ROLE;
@@ -132,6 +168,8 @@ DECLARE n int;
 BEGIN
   SELECT count(*) INTO n FROM canada_leads;
   IF n <> 3 THEN RAISE EXCEPTION 'FAIL: admin sees % leads, expected all 3', n; END IF;
+  SELECT count(*) INTO n FROM us_leads;
+  IF n <> 3 THEN RAISE EXCEPTION 'FAIL: admin sees % US leads, expected all 3', n; END IF;
   SELECT count(*) INTO n FROM sales_reps;
   IF n <> 6 THEN RAISE EXCEPTION 'FAIL: admin sees % reps, expected all 6', n; END IF;
   RAISE NOTICE 'PASS: admin sees the full forest';
