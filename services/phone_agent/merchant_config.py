@@ -120,6 +120,12 @@ class MerchantPhoneConfig:
     # None/"" (no store rows) → JSONB fallback, prompt byte-for-byte unchanged.
     sold_out_items: Optional[list] = None
     menu_public_url: str = ""
+    # SCRIPT PACK (migration 20260717_phone_script_pack): named, versioned
+    # call-script variant composed by services/phone_agent/script_packs.py.
+    # ""/NULL/"legacy"/unknown → the untouched generic prompt, byte-for-byte
+    # (vapi_webhook._resolve_script_pack is strictly fail-legacy). NEVER
+    # auto-derived from business_type — packs are opt-in per merchant.
+    script_pack: str = ""
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -284,6 +290,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 delivery_channels=(row.get("delivery_channels")
                                    if isinstance(row.get("delivery_channels"), dict)
                                    else None),
+                script_pack=(row.get("script_pack") or "").strip().lower(),
             )
             # MENU STORE (single source of truth): merchants with rows in the
             # normalized menu_items table get their menu from the store —
