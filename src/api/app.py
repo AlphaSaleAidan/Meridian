@@ -71,6 +71,7 @@ from .routes.training import router as training_router
 from .routes.email import router as email_api_router
 from ..email.webhooks import router as email_webhook_router
 from .routes.phone import router as phone_router
+from .routes.phone_activation import router as phone_activation_router
 from .routes.phone_dashboard import router as phone_dashboard_router
 from .routes.stripe_connect import router as stripe_connect_router
 from .routes.stripe_checkout import router as stripe_checkout_router
@@ -251,6 +252,7 @@ app.include_router(training_router)
 app.include_router(email_api_router)
 app.include_router(email_webhook_router)
 app.include_router(phone_router)
+app.include_router(phone_activation_router)
 app.include_router(phone_dashboard_router)
 app.include_router(stripe_connect_router)
 app.include_router(stripe_checkout_router)
