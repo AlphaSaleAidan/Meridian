@@ -17,7 +17,7 @@
 
 Typical time to connect: **2–3 minutes**.
 
-**Partner program:** Meridian is published in the Clover App Market (https://www.clover.com/developers). Initial App Market review takes ~1–2 weeks; we're already approved, so merchants can install us immediately.
+**Partner program:** Meridian's Clover App Market listing (https://www.clover.com/developers) is **pending approval** — read-only OAuth sync works today, but write access (order injection) stays gated until the review lands. See [Clover — read-only today](clover-read-only.md) for the exact merchant-expectation language; never tell a merchant we're already approved.
 
 ## What data we pull
 
