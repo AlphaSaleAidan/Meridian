@@ -13,17 +13,41 @@ This reuses the existing payment plumbing unchanged:
 PCI-safe by construction: card data never touches us — Square/Apple Pay/Google
 Pay handle it on the hosted link. DTMF keypad capture is a deliberately-OFF
 stretch (see PHONE_DTMF_PAYMENT below).
+
+DELIVERY FAN-OUT (2026-07-16): the release path (pay_at_pickup, and the
+post-payment release for pay_now) runs the POS push, the customer SMS and a
+merchant notification SMS as PARALLEL legs with per-leg exception isolation —
+never either/or — and records each leg's outcome on the phone_orders row
+(pos_delivery_status / sms_delivery_status / merchant_notify_status /
+delivery_detail) so support can see exactly what fired and what failed.
+Per-merchant toggles: phone_agent_config.delivery_channels (JSONB).
 """
 import logging
 import os
+from functools import partial
 from typing import Any
 
 import httpx
 
+from delivery_channels import (
+    DEFERRED,
+    SKIPPED_DISABLED,
+    SKIPPED_NO_NUMBER,
+    base_order_row,
+    create_pos_for_config,
+    customer_sms_leg,
+    delivery_columns,
+    leg_outcome,
+    merchant_sms_leg,
+    pos_delivery_leg,
+    pos_outcome,
+    resolve_channels,
+    run_legs,
+    save_order_row,
+)
 from merchant_config import MerchantPhoneConfig
 from payment_links import create_checkout
 from sms_checkout import send_checkout_sms
-from order_router import route_order
 
 logger = logging.getLogger("meridian.phone_agent.pay_on_phone")
 
@@ -53,15 +77,8 @@ POS_PUSH_AFTER_PAYMENT = os.getenv("POS_PUSH_AFTER_PAYMENT", "1") == "1"
 
 async def _create_pos(order: dict, config: MerchantPhoneConfig) -> dict:
     """Create the POS order with the merchant's creds (env fallback for the
-    Square demo, same rule as bot.py / the Vapi route)."""
-    from pos_connector import create_pos_order
-    pos_system = getattr(config, "pos_system", "") or ""
-    token = getattr(config, "pos_access_token", "") or ""
-    location = getattr(config, "pos_location_id", "") or ""
-    if pos_system == "square" and not token:
-        token = os.getenv("SQUARE_ACCESS_TOKEN", "")
-        location = location or os.getenv("SQUARE_LOCATION_ID", "")
-    return await create_pos_order(order, pos_system, token, location)
+    Square demo). Honors the per-merchant demo_safe guard."""
+    return await create_pos_for_config(order, config)
 
 
 def is_demo(merchant_id: str) -> bool:
@@ -91,15 +108,19 @@ async def dispatch_order(
 
       pay_now       → POS push DEFERRED until payment confirms (mark_order_paid
                       creates the ticket) — an unpaid order never reaches the
-                      kitchen. Pay link + SMS go out now.
-      pay_at_pickup → today's behavior: POS ticket now, release via route_order.
+                      kitchen. Pay link + SMS go out now; the merchant
+                      notification is deferred with the ticket.
+      pay_at_pickup → POS push, customer SMS and merchant notification SMS run
+                      NOW as parallel legs (per-leg exception isolation).
 
     `pos_result` may be passed by legacy callers that already created the POS
     order; when it carries a real pos_order_id it is honored (too late to defer).
 
-    Returns {"mode", "released", "pos_result", "sms_sent", "payment_link", ...}.
+    Returns {"mode", "released", "pos_result", "sms_sent", "payment_link",
+    "delivery" (per-leg outcomes), "phone_order_id", ...}.
     """
     mode = resolve_mode(config, pay_choice)
+    channels = resolve_channels(config)
     if mode == "pay_now":
         already_created = bool((pos_result or {}).get("pos_order_id"))
         if POS_PUSH_AFTER_PAYMENT and not already_created:
@@ -108,22 +129,82 @@ async def dispatch_order(
                           "pos_order_id": "", "deferred": True}
         elif pos_result is None:
             pos_result = await _create_pos(order, config)
-        result = await collect_pay_now(order, config, caller_info, pos_result)
+        result = await collect_pay_now(order, config, caller_info, pos_result, channels)
         result["mode"] = "pay_now"
         result["released"] = False  # held until paid
         result["pos_deferred"] = bool(pos_result.get("deferred"))
         result["pos_result"] = pos_result
         return result
-    # pay_at_pickup — release to kitchen now (unchanged legacy path).
-    if pos_result is None:
-        pos_result = await _create_pos(order, config)
-    routed = await route_order(order, config, caller_info, pos_result) or {}
+    # pay_at_pickup — release to kitchen now, all legs in parallel.
+    return await _fanout_release(order, config, caller_info, pos_result, channels)
+
+
+async def _fanout_release(
+    order: dict[str, Any],
+    config: MerchantPhoneConfig,
+    caller_info: dict,
+    pos_result: dict | None,
+    channels: dict[str, bool],
+) -> dict:
+    """pay_at_pickup: fire every enabled delivery leg NOW, concurrently.
+
+    A POS failure never suppresses the SMS legs (and vice versa); each leg's
+    outcome lands in the phone_orders per-channel columns.
+    """
+    order.setdefault("caller_phone", caller_info.get("phone") or order.get("caller_phone", ""))
+
+    legs = {}
+    outcomes: dict[str, dict] = {}
+    if channels.get("pos", True) or pos_result is not None:
+        legs["pos"] = partial(pos_delivery_leg, order, config, pos_result)
+    else:
+        outcomes["pos"] = leg_outcome(SKIPPED_DISABLED)
+    if channels.get("customer_sms", True):
+        legs["customer_sms"] = partial(customer_sms_leg, order, config)
+    else:
+        outcomes["customer_sms"] = leg_outcome(SKIPPED_DISABLED)
+    if channels.get("merchant_sms", True):
+        legs["merchant_sms"] = partial(merchant_sms_leg, order, config)
+    else:
+        outcomes["merchant_sms"] = leg_outcome(SKIPPED_DISABLED)
+
+    outcomes.update(await run_legs(legs))
+
+    final_pos = (outcomes.get("pos") or {}).get("pos_result") or pos_result \
+        or {"success": False, "reason": "channel_disabled", "pos_order_id": ""}
+    sms_out = outcomes.get("customer_sms") or {}
+    payment_link = sms_out.get("payment_link", "")
+
+    row = {
+        **base_order_row(order, final_pos),
+        # kitchen released now (legacy pay_at_pickup semantics)
+        "status": "placed",
+        "kitchen_released": True,
+        "sms_sent": sms_out.get("status") == "sent",
+        **delivery_columns(outcomes),
+    }
+    if payment_link:
+        row["payment_link"] = payment_link
+        row["payment_method"] = sms_out.get("method", "")
+        row["payment_status"] = "pending"
+    phone_order_id = await save_order_row(row)
+
+    logger.info(
+        "Order fan-out (pay_at_pickup): merchant=%s pos=%s customer_sms=%s merchant_sms=%s",
+        config.merchant_id,
+        (outcomes.get("pos") or {}).get("status"),
+        (outcomes.get("customer_sms") or {}).get("status"),
+        (outcomes.get("merchant_sms") or {}).get("status"),
+    )
+
     return {
         "mode": "pay_at_pickup",
         "released": True,
-        "sms_sent": routed.get("sms_sent", False),
-        "payment_link": routed.get("payment_link", ""),
-        "pos_result": pos_result,
+        "sms_sent": sms_out.get("status") == "sent",
+        "payment_link": payment_link,
+        "pos_result": final_pos,
+        "delivery": outcomes,
+        "phone_order_id": phone_order_id,
     }
 
 
@@ -132,14 +213,21 @@ async def collect_pay_now(
     config: MerchantPhoneConfig,
     caller_info: dict,
     pos_result: dict,
+    channels: dict[str, bool] | None = None,
 ) -> dict:
     """
-    Pay-now path: create the Square payment link (order already OPEN in POS),
-    text it to the caller, and write the phone_orders row as `awaiting_payment`
-    with `payment_status='pending'` — the kitchen ticket is HELD until paid.
+    Pay-now path: create the Square payment link (POS ticket deferred), text it
+    to the caller, and write the phone_orders row as `awaiting_payment` with
+    `payment_status='pending'` — the kitchen ticket is HELD until paid.
 
-    Returns {"payment_link", "sms_sent", "method", "simulated_paid"}.
+    The pay-link SMS is payment-critical and always attempts regardless of the
+    customer_sms channel toggle (disabling it would strand pay_now orders).
+    The merchant notification is deferred alongside the ticket and sent by
+    mark_order_paid() on release.
+
+    Returns {"payment_link", "sms_sent", "method", "simulated_paid", ...}.
     """
+    channels = channels or resolve_channels(config)
     phone = caller_info.get("phone") or order.get("caller_phone", "")
     order["caller_phone"] = phone
 
@@ -158,8 +246,35 @@ async def collect_pay_now(
             sms_pay_template=getattr(config, "sms_pay_template", "") or "",
         )
 
+    # Per-channel outcomes for the held order.
+    if pos_result.get("deferred"):
+        pos_leg = leg_outcome(DEFERRED, pos_result=pos_result)
+    else:
+        pos_leg = pos_outcome(pos_result, already_created=True)
+    if not payment_result.get("url"):
+        sms_leg = leg_outcome("skipped_no_link",
+                              method=payment_result.get("method", "none"))
+    elif sms_result.get("sent"):
+        sms_leg = leg_outcome("sent", payment_link=payment_result["url"],
+                              method=payment_result.get("method", ""))
+    else:
+        sms_leg = leg_outcome("failed",
+                              error=str(sms_result.get("reason", "sms_failed")),
+                              payment_link=payment_result.get("url", ""),
+                              method=payment_result.get("method", ""))
+    if not channels.get("merchant_sms", True):
+        merchant_leg = leg_outcome(SKIPPED_DISABLED)
+    elif not (getattr(config, "transfer_number", "") or "").strip():
+        merchant_leg = leg_outcome(SKIPPED_NO_NUMBER)
+    else:
+        # Held with the ticket — released (sent) by mark_order_paid.
+        merchant_leg = leg_outcome(DEFERRED)
+    outcomes = {"pos": pos_leg, "customer_sms": sms_leg, "merchant_sms": merchant_leg}
+
     # Write the held order: pending payment, ticket NOT released to the kitchen.
-    await _save_held_order(order, pos_result, payment_result, sms_result)
+    phone_order_id = await _save_held_order(
+        order, pos_result, payment_result, sms_result, outcomes,
+    )
 
     simulated_paid = False
     if is_demo(config.merchant_id):
@@ -185,32 +300,20 @@ async def collect_pay_now(
         "sms_sent": sms_result.get("sent", False),
         "method": payment_result.get("method", "none"),
         "simulated_paid": simulated_paid,
+        "delivery": outcomes,
+        "phone_order_id": phone_order_id,
     }
 
 
 async def _save_held_order(
-    order: dict, pos_result: dict, payment_result: dict, sms_result: dict
-) -> None:
+    order: dict, pos_result: dict, payment_result: dict, sms_result: dict,
+    outcomes: dict[str, dict] | None = None,
+) -> str | None:
     """Insert the phone_orders row in the HELD state (anti-scam): the order is
     created but `status='awaiting_payment'` and `kitchen_released=false`, so the
     kitchen ticket / staff SMS is NOT sent until payment confirms."""
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return
     row = {
-        "merchant_id": order.get("merchant_id", ""),
-        "customer_name": order.get("customer_name", ""),
-        "order_type": order.get("order_type", "pickup"),
-        "items": order.get("items", []),
-        "subtotal": order.get("subtotal", 0),
-        "tax": order.get("tax", 0),
-        "total": order.get("total", 0),
-        "delivery_address": order.get("delivery_address", ""),
-        "special_requests": order.get("special_requests", ""),
-        "caller_phone": order.get("caller_phone", ""),
-        "pos_system": order.get("pos_system", ""),
-        "pos_order_id": pos_result.get("pos_order_id", ""),
-        "pos_success": pos_result.get("success", False),
-        "source": "phone_agent",
+        **base_order_row(order, pos_result),
         # anti-scam: held until paid
         "status": "awaiting_payment",
         "kitchen_released": False,
@@ -219,21 +322,9 @@ async def _save_held_order(
         "payment_method": payment_result.get("method", ""),
         "sms_sent": sms_result.get("sent", False),
     }
-    try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{SUPABASE_URL}/rest/v1/phone_orders",
-                json=row,
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal",
-                },
-                timeout=10,
-            )
-    except Exception as e:
-        logger.error("Failed to save held order: %s", e)
+    if outcomes:
+        row.update(delivery_columns(outcomes))
+    return await save_order_row(row)
 
 
 async def mark_order_paid(
@@ -249,6 +340,10 @@ async def mark_order_paid(
     """Payment confirmed → flip the held order to paid AND release the kitchen
     ticket. Matches by pos_order_id when known (most precise), else by
     merchant+phone (latest). Idempotent.
+
+    Release now fans out too: the deferred POS ticket is pushed AND the
+    merchant notification SMS goes to the merchant's line, each recorded on the
+    row's per-channel columns.
 
     `method`/`card_*`/`payment_txn_id` record HOW it was paid (e.g. the
     card-on-phone keypad fallback) so the order/receipt shows brand + last-4.
@@ -301,28 +396,76 @@ async def mark_order_paid(
     if simulate:
         patch["payment_note"] = "simulated (demo)"
 
+    # RELEASE FAN-OUT: what still needs to fire now that payment confirmed?
+    #  - deferred POS ticket (no pos_order_id yet)
+    #  - merchant notification SMS — only for a HELD row (pay_now deferral;
+    #    pay_at_pickup rows already notified at order time).
+    needs_pos_push = POS_PUSH_AFTER_PAYMENT and not (row.get("pos_order_id") or "")
+    row_was_held = not row.get("kitchen_released")
+    notify_deferred = row_was_held and (
+        (row.get("merchant_notify_status") or DEFERRED) == DEFERRED
+    )
+
+    cfg = None
+    if needs_pos_push or notify_deferred:
+        try:
+            from merchant_config import get_merchant_config
+            cfg = await get_merchant_config(merchant_id or row.get("merchant_id", ""))
+        except Exception as e:  # noqa: BLE001 — release must survive a config hiccup
+            logger.error("mark_order_paid: config load failed: %s", e)
+
+    order = {k: row.get(k) for k in (
+        "merchant_id", "customer_name", "order_type", "items",
+        "subtotal", "tax", "total", "delivery_address",
+        "special_requests", "caller_phone",
+    )}
+    detail = dict(row.get("delivery_detail") or {})
+
     # POS PUSH AFTER PAYMENT: the ticket was deferred at order time — payment
     # is now confirmed, so push it to the kitchen. Idempotent: only when the
     # row has no pos_order_id yet (a webhook retry won't create a second one).
     # (simulate/demo included: the immediate simulated "paid" plays the same
     # release path, and demo_safe merchants are logs-only in the connector.)
     pos_pushed = False
-    if POS_PUSH_AFTER_PAYMENT and not (row.get("pos_order_id") or ""):
+    if needs_pos_push:
         try:
-            from merchant_config import get_merchant_config
-            cfg = await get_merchant_config(merchant_id or row.get("merchant_id", ""))
             if cfg is not None:
-                order = {k: row.get(k) for k in (
-                    "merchant_id", "customer_name", "order_type", "items",
-                    "subtotal", "tax", "total", "delivery_address",
-                    "special_requests", "caller_phone",
-                )}
                 pos_result = await _create_pos(order, cfg)
                 patch["pos_order_id"] = pos_result.get("pos_order_id", "")
                 patch["pos_success"] = bool(pos_result.get("success"))
                 pos_pushed = bool(pos_result.get("success"))
+                released_pos = pos_outcome(pos_result)
+                released_pos["released_at_payment"] = True
+                patch["pos_delivery_status"] = released_pos["status"]
+                detail["pos"] = released_pos
         except Exception as e:  # noqa: BLE001 — never lose the paid flag over a POS hiccup
             logger.error("deferred POS push failed (order stays SMS/email ticket): %s", e)
+            patch["pos_delivery_status"] = "failed"
+            detail["pos"] = leg_outcome("failed", error=str(e), released_at_payment=True)
+
+    # MERCHANT NOTIFICATION RELEASE: the staff SMS was held with the ticket —
+    # send it now so a merchant WITHOUT a connected POS still gets the order.
+    if cfg is not None and notify_deferred:
+        try:
+            if resolve_channels(cfg).get("merchant_sms", True):
+                from order_router import _format_order_summary
+                summary = "✅ PAID — make this order now.\n" + _format_order_summary(
+                    {**order, "business_name": getattr(cfg, "business_name", "") or ""}
+                )
+                notify = await merchant_sms_leg(order, cfg, body=summary)
+            else:
+                notify = leg_outcome(SKIPPED_DISABLED)
+            notify["released_at_payment"] = True
+            patch["merchant_notify_status"] = notify["status"]
+            detail["merchant_sms"] = notify
+        except Exception as e:  # noqa: BLE001 — notification failure never blocks the paid flag
+            logger.error("merchant release SMS failed: %s", e)
+            patch["merchant_notify_status"] = "failed"
+            detail["merchant_sms"] = leg_outcome("failed", error=str(e),
+                                                 released_at_payment=True)
+
+    if detail:
+        patch["delivery_detail"] = detail
 
     try:
         async with httpx.AsyncClient() as client:
@@ -337,8 +480,8 @@ async def mark_order_paid(
                 },
                 timeout=10,
             )
-        logger.info("Order paid + kitchen released (matched_by=%s pos_pushed=%s)",
-                    matched_by, pos_pushed)
+        logger.info("Order paid + kitchen released (matched_by=%s pos_pushed=%s notify=%s)",
+                    matched_by, pos_pushed, patch.get("merchant_notify_status", "n/a"))
         return {"released": True, "matched_by": matched_by, "pos_pushed": pos_pushed}
     except Exception as e:
         logger.error("mark_order_paid failed: %s", e)

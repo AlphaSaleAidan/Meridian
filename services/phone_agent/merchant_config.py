@@ -106,6 +106,10 @@ class MerchantPhoneConfig:
     # The merchant's real store line (the number they forward FROM) — used by
     # the forwarding verification flow (POST /api/phone/forwarding/verify-start).
     business_line_number: str = ""
+    # DELIVERY FAN-OUT: per-merchant channel toggles, e.g.
+    # {"pos": true, "customer_sms": true, "merchant_sms": false}. None/missing
+    # keys default to enabled (see delivery_channels.resolve_channels).
+    delivery_channels: dict | None = None
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -194,6 +198,9 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 max_call_minutes=(int(row["max_call_minutes"])
                                   if row.get("max_call_minutes") is not None else None),
                 business_line_number=(row.get("business_line_number") or "").strip(),
+                delivery_channels=(row.get("delivery_channels")
+                                   if isinstance(row.get("delivery_channels"), dict)
+                                   else None),
             )
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)

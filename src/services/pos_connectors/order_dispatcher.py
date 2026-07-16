@@ -51,19 +51,32 @@ async def create_pos_order(
 
         if not result.success:
             logger.warning(f"[{system_key}] API order failed, trying fallback: {result.fallback_reason}")
-            return await _fallback_order(system_key, order_data, api_config)
+            return await _fallback_order(
+                system_key, order_data, api_config,
+                api_result={"attempted": True, "sent": False,
+                            "error": result.fallback_reason or "api_error"},
+            )
 
+        # Record what actually delivered the order so callers/support can see it
+        # (channel ledger, mirrors the phone-agent fan-out columns).
+        result.raw_response.setdefault(
+            "channel_results", {"api": {"attempted": True, "sent": True}}
+        )
         return result
 
     except Exception as e:
         logger.error(f"[{system_key}] Order dispatch error: {e}")
-        return await _fallback_order(system_key, order_data, api_config)
+        return await _fallback_order(
+            system_key, order_data, api_config,
+            api_result={"attempted": True, "sent": False, "error": str(e)},
+        )
 
 
 async def _fallback_order(
     system_key: str,
     order_data: dict,
     api_config: dict,
+    api_result: dict | None = None,
 ) -> OrderResult:
     order_id = _generate_fallback_order_id(system_key, order_data)
 
@@ -73,17 +86,32 @@ async def _fallback_order(
 
     message = _format_order_message(order_data, merchant_name)
 
+    # Channel ledger: record every attempt (and every skip + why), not just the
+    # first success — support must be able to see exactly what fired and failed.
+    channel_results: dict = {
+        "api": api_result or {"attempted": False, "reason": "no direct API"},
+    }
+
     sent_via = None
 
     if merchant_phone:
         sent = await _send_sms(merchant_phone, message)
+        channel_results["sms"] = {"attempted": True, "sent": sent}
         if sent:
             sent_via = "sms"
+    else:
+        channel_results["sms"] = {"attempted": False, "reason": "no merchant phone on file"}
 
-    if not sent_via and merchant_email:
-        sent = await _send_email(merchant_email, "New Phone Order", message)
-        if sent:
-            sent_via = "email"
+    if not sent_via:
+        if merchant_email:
+            sent = await _send_email(merchant_email, "New Phone Order", message)
+            channel_results["email"] = {"attempted": True, "sent": sent}
+            if sent:
+                sent_via = "email"
+        else:
+            channel_results["email"] = {"attempted": False, "reason": "no merchant email on file"}
+    else:
+        channel_results["email"] = {"attempted": False, "reason": "sms already delivered"}
 
     if not sent_via:
         # Nothing actually delivered the order (no API, no merchant SMS/email).
@@ -96,7 +124,8 @@ async def _fallback_order(
             pos_system=system_key,
             fallback_used=True,
             fallback_reason="Undelivered: no POS API and no merchant phone/email on file",
-            raw_response={"delivery_method": "none", "message": message},
+            raw_response={"delivery_method": "none", "message": message,
+                          "channel_results": channel_results},
         )
 
     return OrderResult(
@@ -105,7 +134,8 @@ async def _fallback_order(
         pos_system=system_key,
         fallback_used=True,
         fallback_reason=f"Sent via {sent_via} (no direct API)",
-        raw_response={"delivery_method": sent_via, "message": message},
+        raw_response={"delivery_method": sent_via, "message": message,
+                      "channel_results": channel_results},
     )
 
 
