@@ -8,7 +8,7 @@ import PasswordInput from '@/components/ui/PasswordInput'
 export default function CustomerLoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { authenticated, login, resetPassword } = useAuth()
+  const { authenticated, org, login, resetPassword } = useAuth()
 
   // Land customers on the current merchant portal (pillars + connect wizard),
   // not the legacy /app dashboard. A deep-link in location.state (e.g. an OAuth
@@ -27,9 +27,15 @@ export default function CustomerLoginPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  // Navigate only once BOTH the session AND the org profile are hydrated —
+  // mirrors USLoginPage's gating. `authenticated` flips true the moment
+  // onAuthStateChange fires (before the deferred org fetch resolves); if we
+  // navigate on that alone, ProtectedRoute sees `!org`, bounces to /us/login,
+  // and USLoginPage's auto-logout branch kills the fresh session — the
+  // sign-in-then-logged-out loop.
   useEffect(() => {
-    if (authenticated && !mustReset) navigate(from, { replace: true })
-  }, [authenticated, mustReset, from, navigate])
+    if (authenticated && org && !mustReset) navigate(from, { replace: true })
+  }, [authenticated, org, mustReset, from, navigate])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -52,7 +58,9 @@ export default function CustomerLoginPage() {
       }
     }
     setLoading(false)
-    navigate(from, { replace: true })
+    // No direct navigate here: the effect above fires once org hydrates. A
+    // direct navigate can outrun the org fetch (login() only sets org when the
+    // business lookup succeeds) and re-trigger the logout loop.
   }
 
   async function handleSetNewPassword(e: React.FormEvent) {
@@ -78,7 +86,8 @@ export default function CustomerLoginPage() {
       return
     }
     setMustReset(false)
-    navigate(from, { replace: true })
+    // Effect above navigates once org is hydrated (org was fetched during
+    // login(), before the must-reset gate held us on this page).
   }
 
   async function handleForgot(e: React.FormEvent) {
