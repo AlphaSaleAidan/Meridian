@@ -22,6 +22,7 @@ never either/or — and records each leg's outcome on the phone_orders row
 delivery_detail) so support can see exactly what fired and what failed.
 Per-merchant toggles: phone_agent_config.delivery_channels (JSONB).
 """
+import asyncio
 import logging
 import os
 from functools import partial
@@ -148,6 +149,14 @@ async def _fanout_release(
 ) -> dict:
     """pay_at_pickup: fire every enabled delivery leg NOW, concurrently.
 
+    ORDERING EXCEPTION (P1 fix, post-#332): when the POS channel is enabled the
+    customer_sms leg is chained AFTER the pos leg so the checkout link carries
+    the REAL pos_order_id (Stripe client_reference_id + metadata) and the
+    payment webhook matches the exact row — not merchant+phone-latest, which
+    can mark the WRONG order paid for a repeat caller with two open orders.
+    If the pos leg fails, the SMS still goes out with "" (degraded matching,
+    same as pre-fix). merchant_sms stays fully parallel.
+
     A POS failure never suppresses the SMS legs (and vice versa); each leg's
     outcome lands in the phone_orders per-channel columns.
     """
@@ -155,14 +164,36 @@ async def _fanout_release(
 
     legs = {}
     outcomes: dict[str, dict] = {}
-    if channels.get("pos", True) or pos_result is not None:
+    pos_enabled = channels.get("pos", True) or pos_result is not None
+    sms_enabled = channels.get("customer_sms", True)
+
+    pos_task: asyncio.Task | None = None
+    if pos_enabled and sms_enabled:
+        # Shared task: run_legs awaits it as the pos leg, and the customer_sms
+        # leg awaits the SAME task to pick up the real pos_order_id first.
+        pos_task = asyncio.create_task(pos_delivery_leg(order, config, pos_result))
+        legs["pos"] = lambda: pos_task
+    elif pos_enabled:
         legs["pos"] = partial(pos_delivery_leg, order, config, pos_result)
     else:
         outcomes["pos"] = leg_outcome(SKIPPED_DISABLED)
-    if channels.get("customer_sms", True):
-        legs["customer_sms"] = partial(customer_sms_leg, order, config)
-    else:
+
+    if not sms_enabled:
         outcomes["customer_sms"] = leg_outcome(SKIPPED_DISABLED)
+    elif pos_task is not None:
+        async def _sms_after_pos() -> dict:
+            try:
+                pos_out = await pos_task
+                pos_id = str((pos_out.get("pos_result") or {}).get("pos_order_id") or "")
+            except BaseException:  # noqa: BLE001 — a pos blow-up never strands the SMS
+                pos_id = ""
+            return await customer_sms_leg(order, config, pos_order_id=pos_id)
+        legs["customer_sms"] = _sms_after_pos
+    else:
+        # POS disabled / not configured: SMS goes out immediately, unmatched
+        # checkout ("") exactly as before.
+        legs["customer_sms"] = partial(customer_sms_leg, order, config)
+
     if channels.get("merchant_sms", True):
         legs["merchant_sms"] = partial(merchant_sms_leg, order, config)
     else:
@@ -419,6 +450,10 @@ async def mark_order_paid(
         "subtotal", "tax", "total", "delivery_address",
         "special_requests", "caller_phone",
     )}
+    # Fan-out telemetry goes in a SEPARATE best-effort PATCH: a missing/renamed
+    # telemetry column 400s the whole PostgREST call and must never hold the
+    # paid flag / kitchen release hostage.
+    telemetry: dict[str, Any] = {}
     detail = dict(row.get("delivery_detail") or {})
 
     # POS PUSH AFTER PAYMENT: the ticket was deferred at order time — payment
@@ -439,11 +474,11 @@ async def mark_order_paid(
                 pos_pushed = bool(pos_result.get("success"))
                 released_pos = pos_outcome(pos_result)
                 released_pos["released_at_payment"] = True
-                patch["pos_delivery_status"] = released_pos["status"]
+                telemetry["pos_delivery_status"] = released_pos["status"]
                 detail["pos"] = released_pos
         except Exception as e:  # noqa: BLE001 — never lose the paid flag over a POS hiccup
             logger.error("deferred POS push failed (order stays SMS/email ticket): %s", e)
-            patch["pos_delivery_status"] = "failed"
+            telemetry["pos_delivery_status"] = "failed"
             detail["pos"] = leg_outcome("failed", error=str(e), released_at_payment=True)
 
     # MERCHANT NOTIFICATION RELEASE: the staff SMS was held with the ticket —
@@ -459,36 +494,60 @@ async def mark_order_paid(
             else:
                 notify = leg_outcome(SKIPPED_DISABLED)
             notify["released_at_payment"] = True
-            patch["merchant_notify_status"] = notify["status"]
+            telemetry["merchant_notify_status"] = notify["status"]
             detail["merchant_sms"] = notify
         except Exception as e:  # noqa: BLE001 — notification failure never blocks the paid flag
             logger.error("merchant release SMS failed: %s", e)
-            patch["merchant_notify_status"] = "failed"
+            telemetry["merchant_notify_status"] = "failed"
             detail["merchant_sms"] = leg_outcome("failed", error=str(e),
                                                  released_at_payment=True)
 
-    if detail:
-        patch["delivery_detail"] = detail
+    if telemetry:
+        # Only ship delivery_detail when this release actually changed it.
+        telemetry["delivery_detail"] = detail
 
+    # PATCH 1 (critical): paid flag + kitchen release (+ pos ids / payment
+    # method columns that predate the fan-out). This one gates the result.
     try:
-        async with httpx.AsyncClient() as client:
-            await client.patch(
-                f"{SUPABASE_URL}/rest/v1/phone_orders?id=eq.{row.get('id')}",
-                json=patch,
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal",
-                },
-                timeout=10,
-            )
-        logger.info("Order paid + kitchen released (matched_by=%s pos_pushed=%s notify=%s)",
-                    matched_by, pos_pushed, patch.get("merchant_notify_status", "n/a"))
-        return {"released": True, "matched_by": matched_by, "pos_pushed": pos_pushed}
-    except Exception as e:
+        await _patch_order_row(row.get("id"), patch)
+    except Exception as e:  # noqa: BLE001
         logger.error("mark_order_paid failed: %s", e)
         return {"released": False, "matched_by": matched_by}
+
+    # PATCH 2 (best-effort): fan-out telemetry columns. Logged, never raised —
+    # the kitchen is already released; support just loses a ledger update.
+    if telemetry:
+        try:
+            await _patch_order_row(row.get("id"), telemetry)
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "mark_order_paid: telemetry update failed (paid flag already committed): %s", e,
+            )
+
+    logger.info("Order paid + kitchen released (matched_by=%s pos_pushed=%s notify=%s)",
+                matched_by, pos_pushed, telemetry.get("merchant_notify_status", "n/a"))
+    return {"released": True, "matched_by": matched_by, "pos_pushed": pos_pushed}
+
+
+async def _patch_order_row(row_id: str | None, patch: dict) -> None:
+    """PATCH a phone_orders row by primary key. Raises on transport errors or a
+    non-2xx PostgREST response so callers can decide criticality."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/phone_orders?id=eq.{row_id}",
+            json=patch,
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            },
+            timeout=10,
+        )
+        if resp.status_code >= 300:
+            raise RuntimeError(
+                f"phone_orders PATCH {resp.status_code}: {resp.text[:200]}"
+            )
 
 
 async def _fetch_held_order(query: str) -> dict | None:

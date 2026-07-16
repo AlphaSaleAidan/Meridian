@@ -151,6 +151,8 @@ async def test_fanout_records_all_channels(monkeypatch, saved_rows, sms_calls):
     # both SMS legs actually fired
     assert len(sms_calls["customer_sms"]) == 1
     assert sms_calls["merchant_sms"][0]["to"] == "+15550001111"
+    # the checkout carries the REAL pos_order_id (precise webhook matching)
+    assert sms_calls["checkout"] == ["SQ123"]
 
 
 # ─── 2. POS failure still sends SMS + records the error ──────────────────────
@@ -174,6 +176,8 @@ async def test_pos_failure_still_sends_sms_and_records_error(monkeypatch, saved_
     assert row["pos_success"] is False
     assert row["delivery_detail"]["pos"]["error"] == "square_api_error"
     assert row["sms_delivery_status"] == "sent"
+    # POS failed → checkout still goes out, degraded "" matching (pre-#332 parity)
+    assert sms_calls["checkout"] == [""]
 
 
 # ─── 3. Exception isolation: a raising leg never kills its siblings ──────────
@@ -188,6 +192,60 @@ async def test_leg_exception_is_isolated(monkeypatch, saved_rows, sms_calls):
     assert "token decrypt exploded" in d["pos"]["error"]
     assert d["customer_sms"]["status"] == "sent"
     assert d["merchant_sms"]["status"] == "sent"
+    # raising POS leg → checkout still sent, with the degraded "" id
+    assert sms_calls["checkout"] == [""]
+
+
+# ─── 3b. P1 fix (post-#332): checkout link carries the real pos_order_id ─────
+
+async def test_checkout_created_after_pos_and_carries_its_id(monkeypatch, saved_rows, sms_calls):
+    """pay_at_pickup + POS enabled: the POS leg completes FIRST and the
+    checkout is created with its real pos_order_id — so the Stripe webhook
+    matches the exact row instead of merchant+phone-latest (which can mark the
+    WRONG order paid for a repeat caller with two open orders)."""
+    import payment_links as pl
+
+    events: list[str] = []
+
+    async def _ordered_pos(order, config, pos_result=None):
+        events.append("pos")
+        return {"success": True, "pos_order_id": "SQ777", "pos_system": "square"}
+
+    async def _ordered_checkout(order, config, pos_order_id="", **kw):
+        events.append(f"checkout:{pos_order_id}")
+        return {"url": "https://pay.test/abc", "method": "stripe"}
+
+    monkeypatch.setattr(dc, "create_pos_for_config", _ordered_pos)
+    monkeypatch.setattr(pl, "create_checkout", _ordered_checkout)
+
+    routed = await pop.dispatch_order(_order(), _cfg(), {"phone": "+15559990000"})
+
+    # POS strictly before checkout, and the checkout got the POS's order id.
+    assert events == ["pos", "checkout:SQ777"]
+    assert routed["delivery"]["pos"]["status"] == "sent"
+    assert routed["delivery"]["customer_sms"]["status"] == "sent"
+    assert saved_rows[0]["pos_order_id"] == "SQ777"
+
+
+async def test_pos_channel_disabled_checkout_immediate_with_empty_id(
+    monkeypatch, saved_rows, sms_calls,
+):
+    """POS channel disabled/not configured: customer SMS fires immediately with
+    the unmatched "" checkout — unchanged pre-fix behavior, no POS wait."""
+    async def _boom(order, config, pos_result=None):
+        raise AssertionError("POS channel disabled — the POS leg must not run")
+
+    monkeypatch.setattr(dc, "create_pos_for_config", _boom)
+
+    routed = await pop.dispatch_order(
+        _order(), _cfg(delivery_channels={"pos": False}), {"phone": "+15559990000"},
+    )
+
+    assert routed["delivery"]["pos"]["status"] == "skipped_disabled"
+    assert routed["delivery"]["customer_sms"]["status"] == "sent"
+    assert routed["delivery"]["merchant_sms"]["status"] == "sent"
+    assert sms_calls["checkout"] == [""]
+    assert saved_rows[0]["pos_order_id"] == ""
 
 
 # ─── 4. pay_now defers the POS ticket (anti-scam preserved) ──────────────────

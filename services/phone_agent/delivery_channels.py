@@ -9,6 +9,11 @@ An order has up to three delivery legs, run in PARALLEL (not either/or):
                   so a merchant WITHOUT a connected POS still hears about the
                   order, and a merchant WITH one gets a belt-and-braces alert.
 
+One ordering exception (pay_at_pickup, POS enabled): the customer_sms leg is
+CHAINED AFTER the pos leg so the checkout link carries the real pos_order_id
+and the payment webhook can match the exact order row (see
+pay_on_phone._fanout_release). merchant_sms stays fully parallel.
+
 Per-merchant override lives in phone_agent_config.delivery_channels (JSONB,
 e.g. {"pos": true, "customer_sms": true, "merchant_sms": false}); missing
 keys / NULL default to enabled. Each leg's outcome is recorded on the
@@ -231,12 +236,15 @@ async def pos_delivery_leg(order: dict, config, pos_result: dict | None = None) 
     return pos_outcome(result, already_created=pos_result is not None)
 
 
-async def customer_sms_leg(order: dict, config) -> dict:
+async def customer_sms_leg(order: dict, config, pos_order_id: str = "") -> dict:
     """Customer SMS leg: payment link / order confirmation to the caller.
 
-    NOTE: runs in parallel with the POS leg, so the checkout is created without
-    a pos_order_id (same as the deferred pay_now path); payment matching falls
-    back to merchant+phone.
+    NOTE: when the POS channel is enabled the fan-out sequences the POS leg
+    FIRST and passes its real pos_order_id here, so the checkout (Stripe
+    client_reference_id + metadata) lets the payment webhook match the exact
+    order row. `pos_order_id=""` (POS disabled / not configured / failed)
+    degrades payment matching to merchant+phone-latest — same as the deferred
+    pay_now path.
     """
     from payment_links import create_checkout
     from sms_checkout import send_checkout_sms
@@ -247,7 +255,7 @@ async def customer_sms_leg(order: dict, config) -> dict:
     if not getattr(config, "sms_checkout_enabled", True):
         return leg_outcome(SKIPPED_DISABLED)
 
-    payment_result = await create_checkout(order, config, "")
+    payment_result = await create_checkout(order, config, pos_order_id or "")
     url = payment_result.get("url", "")
     if not url:
         return leg_outcome(SKIPPED_NO_LINK,
