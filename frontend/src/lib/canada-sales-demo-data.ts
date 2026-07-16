@@ -25,6 +25,16 @@ export interface Deal {
   province?: string
   created_at: string
   updated_at: string
+  // Locked fee terms (fee-parity provisioning, migration 20260716_lead_fee_terms).
+  // Written server-side at deal close / customer creation; canonical per-tier
+  // values live in src/billing/fee_terms.py (mirrors proposal-plans.ts).
+  // Optional + nullable: absent on pre-migration rows and unlocked leads.
+  plan_tier?: string | null
+  monthly_fee_cents?: number | null
+  order_fee_cents?: number | null
+  call_overage_cents_per_min?: number | null
+  included_call_min?: number | null
+  fee_terms_locked_at?: string | null
 }
 
 export interface Commission {

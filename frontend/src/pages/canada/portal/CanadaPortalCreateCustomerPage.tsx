@@ -691,7 +691,7 @@ export default function CanadaPortalCreateCustomerPage() {
         // bare try/catch dropped RLS-rejected closed-won leads invisibly
         // (dead session → anon insert → RLS violation → lead never existed).
         try {
-          const { error: leadErr } = await supabase.from('canada_leads').insert({
+          const { data: leadRows, error: leadErr } = await supabase.from('canada_leads').insert({
             business_name: form.businessName,
             contact_name: form.ownerName,
             contact_email: form.email,
@@ -702,8 +702,24 @@ export default function CanadaPortalCreateCustomerPage() {
             commission_rate: rep?.commission_rate ?? 70,
             notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
             rep_id: rep?.rep_id || null,
-          })
+          }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
+          // Fee parity: stamp the sold fee terms onto the CRM record so it can
+          // be reconciled against live billing. SEPARATE best-effort write —
+          // a not-yet-applied 20260716_lead_fee_terms migration must never
+          // break the closed-won insert above.
+          const leadId = leadRows?.[0]?.id
+          if (leadId && ['standard', 'premium', 'command'].includes(form.plan)) {
+            await supabase.from('canada_leads').update({
+              plan_tier: form.plan,
+              monthly_fee_cents: Math.round(price * 100),
+              order_fee_cents: Math.round(selectedPlan.orderFee * 100),
+              call_overage_cents_per_min: 45,
+              included_call_min: 3,
+              fee_terms_locked_at: new Date().toISOString(),
+              fee_terms_locked_by: rep?.email || rep?.name || 'rep-portal',
+            }).eq('id', leadId)
+          }
         } catch (e) {
           setCrmRecordError(e instanceof Error ? e.message : 'Network error')
         }

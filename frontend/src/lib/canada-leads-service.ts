@@ -63,6 +63,13 @@ const CanadaLeadRowSchema = z.object({
   province: z.string().nullish(),
   created_at: z.string(),
   updated_at: z.string(),
+  // Locked fee terms (fee-parity) — optional: absent pre-migration.
+  plan_tier: z.string().nullish(),
+  monthly_fee_cents: z.union([z.number(), z.string()]).nullish(),
+  order_fee_cents: z.union([z.number(), z.string()]).nullish(),
+  call_overage_cents_per_min: z.union([z.number(), z.string()]).nullish(),
+  included_call_min: z.union([z.number(), z.string()]).nullish(),
+  fee_terms_locked_at: z.string().nullish(),
 }).passthrough()
 
 export type CanadaLeadRow = z.infer<typeof CanadaLeadRowSchema>
@@ -91,6 +98,12 @@ function rowToDeal(row: unknown): Deal {
     province: r.province || '',
     created_at: r.created_at,
     updated_at: r.updated_at,
+    plan_tier: r.plan_tier ?? null,
+    monthly_fee_cents: r.monthly_fee_cents == null ? null : Number(r.monthly_fee_cents),
+    order_fee_cents: r.order_fee_cents == null ? null : Number(r.order_fee_cents),
+    call_overage_cents_per_min: r.call_overage_cents_per_min == null ? null : Number(r.call_overage_cents_per_min),
+    included_call_min: r.included_call_min == null ? null : Number(r.included_call_min),
+    fee_terms_locked_at: r.fee_terms_locked_at ?? null,
   }
 }
 
