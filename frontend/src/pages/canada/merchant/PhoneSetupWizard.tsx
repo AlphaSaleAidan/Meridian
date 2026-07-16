@@ -15,6 +15,7 @@ import {
 import { api } from '@/lib/api'
 import { posSystems } from '@/data/pos-systems'
 import { VoicePlayButton, VoicePreviewCard, TestCallModal, ForwardingWizard } from '@/components/phone'
+import { TestOrderProveOut } from '@/components/phone/TestOrderProveOut'
 import {
   VOICE_OPTIONS, ACCENT_OPTIONS,
   type PhoneBizConfig, type PhoneMenuItem, type VoiceAccent,
@@ -951,6 +952,10 @@ export default function PhoneSetupWizard() {
                 )
               })()}
             </div>
+
+            {/* Kitchen prove-out: send a clearly-marked test order through the
+                REAL dispatch path and watch each delivery leg confirm live. */}
+            <TestOrderProveOut orgId={orgId} isDemo={isDemo} />
 
             <div className="space-y-2.5">
               {[

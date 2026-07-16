@@ -266,6 +266,21 @@ export const phoneService = {
     return res.json()
   },
 
+  // Kitchen prove-out: fire a clearly-marked test order through the REAL
+  // dispatch pipeline (POS + merchant SMS in parallel), honoring demo_safe.
+  async sendTestOrder(merchantId: string): Promise<TestOrderResponse> {
+    const res = await fetch(`${API_BASE}/api/phone/test-order/${merchantId}`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+    })
+    if (!res.ok) {
+      let detail = `test order failed: ${res.status}`
+      try { detail = (await res.json()).detail || detail } catch { /* noop */ }
+      throw new Error(detail)
+    }
+    return res.json()
+  },
+
   async verifyForwardingStatus(merchantId: string): Promise<ForwardingVerifyStatus> {
     const res = await fetch(
       `${API_BASE}/api/phone/forwarding/verify-status/${merchantId}`,
@@ -286,6 +301,16 @@ export const phoneService = {
         body: JSON.stringify({ merchant_id: merchantId, step, meta: meta || {} }),
       }))
       .catch(() => { /* fire-and-forget */ })
+  },
+
+  // Poll the per-channel delivery + fulfillment confirmation of a test order.
+  async getTestOrderStatus(merchantId: string, orderId: string): Promise<TestOrderStatus | null> {
+    const res = await fetch(
+      `${API_BASE}/api/phone/test-order/${merchantId}/status/${orderId}`,
+      { headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return null
+    return res.json()
   },
 }
 
@@ -335,6 +360,47 @@ export interface TestChatResponse {
   reply: string
   ended: boolean
   order: Record<string, unknown> | null
+}
+
+// Per-channel leg outcome from the delivery fan-out
+// (sent | failed | deferred_pending_payment | skipped_* | demo_safe).
+export interface TestOrderChannel {
+  status?: string
+  error?: string
+  at?: string
+  [key: string]: unknown
+}
+
+export interface TestOrderResponse {
+  ok: boolean
+  order_id: string | null
+  pos_order_id: string
+  pos_system: string
+  demo_safe: boolean
+  verifying: boolean
+  channels: {
+    pos?: TestOrderChannel | null
+    customer_sms?: TestOrderChannel | null
+    merchant_sms?: TestOrderChannel | null
+  }
+  item: string
+  total: number
+}
+
+export interface TestOrderStatus {
+  order_id: string
+  source?: string
+  status?: string
+  pos_system?: string | null
+  pos_order_id?: string | null
+  pos_success?: boolean
+  pos_delivery_status?: string | null
+  sms_delivery_status?: string | null
+  merchant_notify_status?: string | null
+  delivery_detail?: Record<string, TestOrderChannel>
+  fulfillment_state?: string | null
+  fulfillment_confirmed_at?: string | null
+  created_at?: string
 }
 
 function mapCallRow(row: any): PhoneCallEntry {
