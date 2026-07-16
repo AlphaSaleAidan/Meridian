@@ -215,6 +215,24 @@ async def test_pay_at_pickup_releases_no_link(monkeypatch):
     assert row["pos_order_id"] == "POS-1"
 
 
+async def test_pay_at_pickup_checkout_carries_pos_order_id(monkeypatch):
+    """P1 regression (post-#332): with checkout SMS enabled, the pay-at-pickup
+    checkout link is created AFTER the POS leg and carries its pos_order_id —
+    Stripe webhook matching stays precise instead of merchant+phone-latest."""
+    spy = Spy().install(monkeypatch)
+    cfg = replace(_cfg("real-merchant", "pay_at_pickup"), sms_checkout_enabled=True)
+
+    result = await pay_on_phone.dispatch_order(_order(), cfg, {"phone": "+15555550111"})
+
+    assert result["mode"] == "pay_at_pickup"
+    assert result["released"] is True
+    assert len(spy.link_calls) == 1
+    assert spy.link_calls[0]["pos_order_id"] == "POS-ABC-123"   # real id, not ""
+    row = spy.release_rows[0]
+    assert row["pos_order_id"] == "POS-ABC-123"
+    assert row["sms_delivery_status"] == "sent"
+
+
 # ─── optional path respects pay_choice ───────────────────────────────────────
 async def test_optional_pay_now_choice_holds_kitchen(monkeypatch):
     spy = Spy().install(monkeypatch)
@@ -386,18 +404,28 @@ async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
     assert res["pos_pushed"] is True
     assert len(spy.pos_calls) == 1                            # ticket pushed on payment
     assert spy.pos_calls[0]["items"][0]["name"] == "Cheeseburger"
-    assert len(patches) == 1
+    # PATCH SPLIT: critical paid/kitchen flags first, telemetry second — a
+    # telemetry-column 400 can never hold the kitchen release hostage.
+    assert len(patches) == 2
     assert "id=eq.row-42" in patches[0]["url"]                # patched by primary key
     p = patches[0]["json"]
     assert p["payment_status"] == "paid"
     assert p["kitchen_released"] is True
     assert p["pos_order_id"] == "POS-DEFERRED-1"
     assert p["pos_success"] is True
-    # release fan-out ledger: POS pushed on payment; merchant notification
-    # attempted (demo config has no transfer_number → recorded as skipped).
-    assert p["pos_delivery_status"] == "sent"
-    assert p["merchant_notify_status"] == "skipped_no_number"
-    assert p["delivery_detail"]["pos"]["released_at_payment"] is True
+    # the critical PATCH carries NO fan-out telemetry columns
+    assert "pos_delivery_status" not in p
+    assert "merchant_notify_status" not in p
+    assert "delivery_detail" not in p
+    # release fan-out ledger (best-effort PATCH 2): POS pushed on payment;
+    # merchant notification attempted (demo config has no transfer_number →
+    # recorded as skipped).
+    assert "id=eq.row-42" in patches[1]["url"]
+    t = patches[1]["json"]
+    assert "payment_status" not in t                          # telemetry only
+    assert t["pos_delivery_status"] == "sent"
+    assert t["merchant_notify_status"] == "skipped_no_number"
+    assert t["delivery_detail"]["pos"]["released_at_payment"] is True
 
 
 async def test_mark_paid_skips_push_when_ticket_exists(monkeypatch):
@@ -422,3 +450,97 @@ async def test_mark_paid_skips_push_when_ticket_exists(monkeypatch):
     assert res["released"] is True
     assert res["pos_pushed"] is False
     assert spy.pos_calls == []                                # idempotent — no duplicate
+
+
+# ─── PATCH split: paid flag isolated from fan-out telemetry ──────────────────
+
+def _held_row():
+    return {
+        "id": "row-42", "merchant_id": "real-merchant", "customer_name": "Sam",
+        "order_type": "pickup", "items": [{"name": "Cheeseburger", "quantity": 1}],
+        "subtotal": 12.99, "tax": 1.69, "total": 14.68,
+        "delivery_address": "", "special_requests": "",
+        "caller_phone": "+15555550111", "pos_order_id": "",
+        "kitchen_released": False,
+        "merchant_notify_status": "deferred_pending_payment",
+    }
+
+
+def _install_release_env(monkeypatch, spy):
+    """Common mark_order_paid release fixture: deferred POS + held row + config."""
+    _install_pos_spy(monkeypatch, spy)
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", True)
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_KEY", "fake-key")
+
+    async def fake_fetch(query):
+        return _held_row()
+    monkeypatch.setattr(pay_on_phone, "_fetch_held_order", fake_fetch)
+
+    import merchant_config as mc
+    async def fake_get_config(merchant_id):
+        return _demo_config(merchant_id)
+    monkeypatch.setattr(mc, "get_merchant_config", fake_get_config)
+
+
+def _install_scripted_patch_client(monkeypatch, patches, fail_when):
+    """PATCH client that fails (400) any request matching `fail_when(json)`."""
+    class FakeResp:
+        def __init__(self, code, text=""):
+            self.status_code = code
+            self.text = text
+
+    class FakeClient:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+
+        async def patch(self, url, json=None, headers=None, timeout=None):
+            patches.append({"url": url, "json": json})
+            if fail_when(json or {}):
+                return FakeResp(400, 'column "does_not_exist" of relation "phone_orders"')
+            return FakeResp(204)
+
+    monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
+
+
+async def test_telemetry_patch_failure_never_blocks_kitchen_release(monkeypatch):
+    """Hardening: the telemetry PATCH (fan-out ledger columns) failing with a
+    400 is logged and swallowed — the paid/kitchen_released PATCH already
+    committed and the release is reported as successful."""
+    spy = Spy()
+    _install_release_env(monkeypatch, spy)
+    patches: list[dict] = []
+    _install_scripted_patch_client(
+        monkeypatch, patches,
+        fail_when=lambda body: "delivery_detail" in body,   # telemetry PATCH only
+    )
+
+    res = await pay_on_phone.mark_order_paid(
+        merchant_id="real-merchant", caller_phone="+15555550111", method="stripe",
+    )
+
+    assert res["released"] is True                          # NOT held hostage
+    assert res["pos_pushed"] is True
+    assert len(patches) == 2                                # both attempted
+    assert patches[0]["json"]["payment_status"] == "paid"   # critical committed first
+    assert patches[0]["json"]["kitchen_released"] is True
+    assert "delivery_detail" in patches[1]["json"]          # telemetry tried + failed
+
+
+async def test_critical_patch_failure_reports_not_released(monkeypatch):
+    """Converse guard: a 400 on the CRITICAL paid-flag PATCH is a real failure
+    — released=False, and the telemetry PATCH is not even attempted."""
+    spy = Spy()
+    _install_release_env(monkeypatch, spy)
+    patches: list[dict] = []
+    _install_scripted_patch_client(
+        monkeypatch, patches,
+        fail_when=lambda body: "payment_status" in body,    # critical PATCH
+    )
+
+    res = await pay_on_phone.mark_order_paid(
+        merchant_id="real-merchant", caller_phone="+15555550111",
+    )
+
+    assert res["released"] is False
+    assert len(patches) == 1                                # stopped at the critical PATCH
