@@ -7,6 +7,7 @@ import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/ca
 import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
 import { formatCad } from '@/lib/format'
 import { COMMISSION_TRACKING_PAUSED } from '@/lib/commission-flags'
+import { getOrgRoleBadge, isOrgRole, ORG_ROLES, ROLE_LABELS, ROLE_LEVELS, type OrgRole } from '@/lib/role-colors'
 import { PortalPage } from './PortalPage'
 
 interface TeamMember {
@@ -23,6 +24,9 @@ interface TeamMember {
   is_active: boolean
   joined: string
   role: 'admin' | 'active' | 'inactive' | 'onboarding'
+  /** 7-level org role from the hierarchy migration (absent pre-migration). */
+  org_role?: string
+  manager_id?: string | null
   location: string
 }
 
@@ -75,6 +79,8 @@ function getAvatarClasses(name: string): AvatarClasses {
   return AVATAR_CLASSES[Math.abs(hash) % AVATAR_CLASSES.length]
 }
 
+// Status badges (legacy). Org-role badges come from '@/lib/role-colors' —
+// getMemberBadge below prefers the 7-level org role when the API provides it.
 function getRoleBadge(role: string) {
   switch (role) {
     case 'admin':
@@ -86,6 +92,42 @@ function getRoleBadge(role: string) {
     default:
       return { text: 'Inactive', bg: 'bg-pm-canada-text-muted/10', textColor: 'text-pm-canada-text-muted', border: 'border-pm-canada-text-muted/20' }
   }
+}
+
+function getMemberBadge(member: Pick<TeamMember, 'role' | 'org_role'>) {
+  if (member.org_role && isOrgRole(member.org_role)) return getOrgRoleBadge(member.org_role)
+  return getRoleBadge(member.role)
+}
+
+interface TreeRow<T extends TeamMember> {
+  member: T
+  depth: number
+  directReports: number
+}
+
+/** Flatten the org tree into indent-annotated rows (roots = no visible manager). */
+function buildTeamTree<T extends TeamMember>(members: T[]): TreeRow<T>[] {
+  const ids = new Set(members.map(m => m.id))
+  const byManager = new Map<string, T[]>()
+  const roots: T[] = []
+  for (const m of members) {
+    const mid = m.manager_id || ''
+    if (mid && ids.has(mid) && mid !== m.id) {
+      byManager.set(mid, [...(byManager.get(mid) || []), m])
+    } else {
+      roots.push(m)
+    }
+  }
+  const rank = (m: T) => (m.org_role && isOrgRole(m.org_role) ? ROLE_LEVELS[m.org_role] : ROLE_LEVELS.sales_rep)
+  const sortFn = (a: T, b: T) => rank(a) - rank(b) || a.name.localeCompare(b.name)
+  const out: TreeRow<T>[] = []
+  const walk = (m: T, depth: number) => {
+    const kids = [...(byManager.get(m.id) || [])].sort(sortFn)
+    out.push({ member: m, depth, directReports: kids.length })
+    kids.forEach(k => walk(k, depth + 1))
+  }
+  roots.sort(sortFn).forEach(r => walk(r, 0))
+  return out
 }
 
 function isAdmin(email: string | undefined): boolean {
@@ -134,6 +176,8 @@ export default function CanadaPortalTeamPage() {
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
+  const [editRole, setEditRole] = useState<OrgRole>('sales_rep')
+  const [editManagerId, setEditManagerId] = useState('')
   const [removing, setRemoving] = useState(false)
 
   // Deals come from the shared React Query cache so creates/updates on the
@@ -165,7 +209,8 @@ export default function CanadaPortalTeamPage() {
         if (reps && reps.length > 0) {
           setTeam(reps.map((r: Record<string, unknown>) => {
             const email = (r.email as string) || ''
-            const adminRole = ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
+            const adminRole = (r.role as string) === 'admin'
+              || ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
             return {
               id: r.id as string || '',
               name: r.name as string,
@@ -180,6 +225,8 @@ export default function CanadaPortalTeamPage() {
               is_active: true,
               joined: (r.created_at as string || '').slice(0, 10),
               role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
+              org_role: (r.role as string) || (adminRole ? 'admin' : 'sales_rep'),
+              manager_id: (r.manager_id as string) || null,
               location: 'Canada',
             }
           }))
@@ -481,13 +528,17 @@ export default function CanadaPortalTeamPage() {
           </div>
 
           <div className="space-y-3">
-            {filtered.map(member => {
-              const badge = getRoleBadge(member.role)
+            {(search ? filtered.map(m => ({ member: m, depth: 0, directReports: 0 })) : buildTeamTree(filtered)).map(({ member, depth, directReports }) => {
+              const badge = getMemberBadge(member)
               const avatar = getAvatarClasses(member.name)
               const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
 
               return (
-                <div key={member.id} className="bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-4">
+                <div
+                  key={member.id}
+                  className={clsx('bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-4', depth > 0 && 'border-l-2 border-l-pm-canada-border')}
+                  style={depth > 0 ? { marginLeft: Math.min(depth, 5) * 22 } : undefined}
+                >
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${avatar.softBg}`}>
                       <span className={`text-xs font-bold ${avatar.text}`}>{getInitials(member.name)}</span>
@@ -499,6 +550,11 @@ export default function CanadaPortalTeamPage() {
                         <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border', badge.bg, badge.textColor, badge.border)}>
                           {badge.text}
                         </span>
+                        {directReports > 0 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-pm-canada-border/60 text-pm-canada-text-muted">
+                            <Users size={10} /> {directReports}
+                          </span>
+                        )}
                       </div>
                       {admin && <p className="text-xs text-pm-canada-text-muted mt-0.5">{member.email}</p>}
                       <p className="text-2xs text-pm-canada-text-faint">{member.location}</p>
@@ -534,7 +590,13 @@ export default function CanadaPortalTeamPage() {
 
                     {admin && (
                       <button
-                        onClick={() => { setEditingMember(member); setEditRate(String(member.commission_rate)); setEditName(member.name) }}
+                        onClick={() => {
+                          setEditingMember(member)
+                          setEditRate(String(member.commission_rate))
+                          setEditName(member.name)
+                          setEditRole(isOrgRole(member.org_role) ? member.org_role : 'sales_rep')
+                          setEditManagerId(member.manager_id || '')
+                        }}
                         className="p-1.5 rounded-lg hover:bg-pm-canada-border text-pm-canada-text-muted transition-colors"
                       >
                         <MoreVertical size={14} />
@@ -827,6 +889,39 @@ export default function CanadaPortalTeamPage() {
                 />
               </>
             )}
+            {/* Org placement — role + manager, saved via POST /api/team/assign */}
+            <div className="mt-4 pt-4 border-t border-pm-canada-border">
+              <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Role</label>
+              <select
+                value={editRole}
+                onChange={e => setEditRole(e.target.value as OrgRole)}
+                className="w-full px-3 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white focus:outline-none focus:border-pm-accent/50 mb-3"
+              >
+                {ORG_ROLES.map(r => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
+              </select>
+              <label className="block text-xs font-medium text-pm-canada-text-muted mb-1.5">Reports To</label>
+              <select
+                value={editManagerId}
+                onChange={e => setEditManagerId(e.target.value)}
+                className="w-full px-3 py-2 bg-pm-canada-bg border border-pm-canada-border rounded-lg text-sm text-white focus:outline-none focus:border-pm-accent/50"
+              >
+                <option value="">— No manager (top level) —</option>
+                {team
+                  .filter(m => m.id !== editingMember.id)
+                  .filter(m => {
+                    const mgrRole = isOrgRole(m.org_role) ? m.org_role : 'sales_rep'
+                    return ROLE_LEVELS[mgrRole] < ROLE_LEVELS[editRole]
+                  })
+                  .map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({isOrgRole(m.org_role) ? ROLE_LABELS[m.org_role] : 'Sales Rep'})
+                    </option>
+                  ))}
+              </select>
+              <p className="text-2xs text-pm-canada-text-faint mt-1.5">Only roles that outrank the selected role can be chosen as manager. Cycles are rejected server-side.</p>
+            </div>
             <button
               onClick={() => editingMember && handleRemoveMember(editingMember)}
               disabled={removing}
@@ -841,6 +936,8 @@ export default function CanadaPortalTeamPage() {
                   const rate = Math.max(0, Math.min(100, Number(editRate) || 0))
                   const name = editName.trim() || editingMember.name
                   const apiBase = import.meta.env.VITE_API_URL || ''
+                  const orgChanged = editRole !== (editingMember.org_role || 'sales_rep')
+                    || (editManagerId || null) !== (editingMember.manager_id || null)
                   try {
                     const headers = await getAuthHeaders()
                     const resp = await fetch(`${apiBase}/api/canada/rep-update`, {
@@ -853,11 +950,25 @@ export default function CanadaPortalTeamPage() {
                       alert(err.detail || 'Failed to save')
                       return
                     }
+                    if (orgChanged) {
+                      const assignResp = await fetch(`${apiBase}/api/team/assign`, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({ rep_id: editingMember.id, role: editRole, manager_id: editManagerId || null }),
+                      })
+                      if (!assignResp.ok) {
+                        const err = await assignResp.json().catch(() => ({}))
+                        alert(err.detail || 'Saved profile, but the org placement was rejected')
+                        return
+                      }
+                    }
                   } catch {
                     alert('Network error — please try again')
                     return
                   }
-                  setTeam(prev => prev.map(m => m.id === editingMember.id ? { ...m, name, commission_rate: rate } : m))
+                  setTeam(prev => prev.map(m => m.id === editingMember.id
+                    ? { ...m, name, commission_rate: rate, org_role: editRole, manager_id: editManagerId || null, role: editRole === 'admin' ? 'admin' : m.role }
+                    : m))
                   setEditingMember(null)
                 }}
                 className="flex items-center gap-1.5 px-4 py-2 bg-pm-accent text-pm-canada-bg text-sm font-semibold rounded-lg hover:bg-pm-accent/90 transition-all"

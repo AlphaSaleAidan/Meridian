@@ -6,6 +6,7 @@ import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
 import { isUsAdmin } from '@/lib/us-admins'
+import { getOrgRoleBadge, isOrgRole } from '@/lib/role-colors'
 import { useToast } from '@/components/Toast'
 
 interface TeamMember {
@@ -22,6 +23,8 @@ interface TeamMember {
   is_active: boolean
   joined: string
   role: 'admin' | 'active' | 'inactive' | 'onboarding'
+  /** 7-level org role from the hierarchy migration (absent pre-migration). */
+  org_role?: string
   location: string
 }
 
@@ -67,6 +70,13 @@ function getRoleBadge(role: string) {
     default:
       return { text: 'Inactive', bg: 'bg-[#A1A1A8]/10', textColor: 'text-[#A1A1A8]', border: 'border-[#A1A1A8]/20' }
   }
+}
+
+// Prefer the shared 7-role palette (@/lib/role-colors) when the API sends an
+// org role; fall back to the legacy status badge otherwise.
+function getMemberBadge(member: Pick<TeamMember, 'role' | 'org_role'>) {
+  if (member.org_role && isOrgRole(member.org_role)) return getOrgRoleBadge(member.org_role)
+  return getRoleBadge(member.role)
 }
 
 const isAdmin = isUsAdmin
@@ -130,7 +140,7 @@ export default function USPortalTeamPage() {
           if (reps) {
             setTeam(reps.map((r: Record<string, unknown>) => {
               const email = (r.email as string) || ''
-              const adminRole = isUsAdmin(email)
+              const adminRole = (r.role as string) === 'admin' || isUsAdmin(email)
               return {
                 id: r.id as string || '',
                 name: r.name as string,
@@ -145,6 +155,7 @@ export default function USPortalTeamPage() {
                 is_active: true,
                 joined: (r.created_at as string || '').slice(0, 10),
                 role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
+                org_role: (r.role as string) || (adminRole ? 'admin' : 'sales_rep'),
                 location: 'US',
               }
             }))
@@ -417,7 +428,7 @@ export default function USPortalTeamPage() {
 
           <div className="space-y-3">
             {filtered.map(member => {
-              const badge = getRoleBadge(member.role)
+              const badge = getMemberBadge(member)
               const avatarColor = getAvatarColor(member.name)
               const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
 

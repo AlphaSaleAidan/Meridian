@@ -67,6 +67,8 @@ from .routes.canada import router as canada_router
 from .routes.us import router as us_router
 from .routes.compliance import router as compliance_router
 from .routes.careers import router as careers_router
+from .routes.careers_pipeline import router as careers_pipeline_router
+from .routes.team import router as team_router
 from .routes.training import router as training_router
 from .routes.email import router as email_api_router
 from ..email.webhooks import router as email_webhook_router
@@ -251,6 +253,8 @@ app.include_router(canada_router)
 app.include_router(us_router)
 app.include_router(compliance_router)
 app.include_router(careers_router)
+app.include_router(careers_pipeline_router)
+app.include_router(team_router)
 app.include_router(training_router)
 app.include_router(email_api_router)
 app.include_router(email_webhook_router)

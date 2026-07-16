@@ -64,6 +64,11 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
             "availability": req.availability,
             "motivation": req.motivation,
             "status": "pending",
+            # Recruiting pipeline entry point (careers_pipeline.py). The
+            # SupabaseREST client drops unknown columns, so this stays
+            # backward-compatible until the 20260716 migration is applied.
+            "stage": "applied",
+            "stage_history": [],
             "created_at": now,
         })
     except Exception as e:
@@ -76,24 +81,13 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
     # so every insert 400'd and nothing consumed the rows. The durable record
     # is career_applications above; humans are notified via the email below.)
 
-    # For Canadian applications, upsert a sales_reps row so it appears
-    # in the SR portal Team > Applications tab for admin approval.
-    if country == "CA":
-        try:
-            await db.upsert("sales_reps", {
-                "id": str(uuid4()),
-                "org_id": "168b6df2-e9af-4b00-8fec-51e51149ff19",
-                "name": req.name,
-                "email": req.email,
-                "phone": req.phone or None,
-                "commission_rate": 0.70,
-                "is_active": False,
-                "portal_context": "canada",
-                "created_at": now,
-            }, on_conflict="email")
-            logger.info("Upserted pending sales_reps row for CA applicant %s", req.email)
-        except Exception as e:
-            logger.warning("Could not upsert sales_reps row for CA applicant: %s", e)
+    # NOTE (2026-07-16, careers pipeline): applications NO LONGER auto-upsert an
+    # inactive sales_reps row here. They live in the recruiting pipeline
+    # (career_applications.stage, careers_pipeline.py) and the sales_reps row is
+    # created only at stage='hired', with manager_id = recruiter_id — the org
+    # tree grows from recruiting. Applicants who already got an inactive row
+    # from the old flow keep it (Team > Applications approve/reject still works
+    # for them); nothing is orphaned.
 
     # Email the hiring inbox (Postal primary, Resend fallback) — best-effort,
     # never blocks the application: the DB rows above are the source of truth.

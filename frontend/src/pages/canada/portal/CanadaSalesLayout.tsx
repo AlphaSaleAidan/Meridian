@@ -18,6 +18,7 @@ import {
   Settings,
   Trophy,
   CreditCard,
+  UserPlus,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import SalesPortalMobileNav from './SalesPortalMobileNav'
@@ -36,6 +37,9 @@ const salesNavBase = [
 
 const teamNavAdmin = { path: '/canada/portal/team', icon: Users, label: 'Team' } as const
 const teamNavRep = { path: '/canada/portal/team', icon: Trophy, label: 'Leaderboard' } as const
+// Recruiting pipeline — visible to everyone; the API scopes managers to their
+// branch and a leaf rep just sees an empty pipeline.
+const recruitingNav = { path: '/canada/portal/recruiting', icon: UserPlus, label: 'Recruiting' } as const
 
 const salesNavTail = [
   { path: '/canada/portal/badge', icon: CreditCard, label: 'My Badge' },
@@ -144,7 +148,7 @@ export default function CanadaSalesLayout() {
   }, [])
 
   const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
-  const salesNavItems = [...salesNavBase, isAdmin ? teamNavAdmin : teamNavRep, ...salesNavTail]
+  const salesNavItems = [...salesNavBase, isAdmin ? teamNavAdmin : teamNavRep, recruitingNav, ...salesNavTail]
   const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 
   const sidebarContent = (
