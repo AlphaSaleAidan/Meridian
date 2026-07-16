@@ -70,6 +70,7 @@ const CanadaPortalLeadsPage = lazyRetry(() => import('@/pages/canada/portal/Cana
 const CanadaPortalLeadDetailPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalLeadDetailPage'))
 const CanadaPortalAccountsPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalAccountsPage'))
 const CanadaPortalTeamPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalTeamPage'))
+const CanadaPortalRecruitingPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalRecruitingPage'))
 const CanadaPortalTrainingPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalTrainingPage'))
 const CanadaPortalProposalsPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalProposalsPage'))
 const CanadaPortalSettingsPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalSettingsPage'))
@@ -532,6 +533,7 @@ export default function App() {
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTrainingPage /></Suspense>} />
                 <Route path="proposals" element={<Suspense fallback={<InlineFallback />}><CanadaPortalProposalsPage /></Suspense>} />
                 <Route path="team" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTeamPage /></Suspense>} />
+                <Route path="recruiting" element={<Suspense fallback={<InlineFallback />}><CanadaPortalRecruitingPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><CanadaPortalSettingsPage /></Suspense>} />
                 <Route path="badge" element={<Suspense fallback={<InlineFallback />}><CanadaPortalBadgePage /></Suspense>} />
               </Route>
