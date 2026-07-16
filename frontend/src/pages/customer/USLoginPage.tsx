@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import { MapPin } from 'lucide-react'
 
 export default function USLoginPage() {
@@ -146,10 +147,10 @@ export default function USLoginPage() {
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="flex items-center gap-2.5">
+          <Link to="/" aria-label="Meridian home" className="flex items-center gap-2.5">
             <MeridianEmblem size={36} />
             <MeridianWordmark className="text-xl" />
-          </div>
+          </Link>
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1A8FD6]/10 border border-[#1A8FD6]/20">
             <MapPin size={12} className="text-[#1A8FD6]" />
             <span className="text-[11px] text-[#1A8FD6] font-semibold uppercase tracking-wider">United States</span>
@@ -179,11 +180,11 @@ export default function USLoginPage() {
             <form onSubmit={handleSetNewPassword} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">New password</label>
-                <input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" autoFocus />
+                <PasswordInput required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" autoFocus />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Confirm password</label>
-                <input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Re-enter your password" />
+                <PasswordInput required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Re-enter your password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Saving...' : 'Set password & continue'}
@@ -197,7 +198,7 @@ export default function USLoginPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
-                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
+                <PasswordInput required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Signing in...' : 'Sign In'}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 export default function CustomerSignupPage() {
   const navigate = useNavigate()
@@ -85,9 +86,11 @@ export default function CustomerSignupPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="flex items-center justify-center gap-2.5 mb-8">
-          <MeridianEmblem size={36} />
-          <MeridianWordmark className="text-xl" />
+        <div className="flex items-center justify-center mb-8">
+          <Link to="/" aria-label="Meridian home" className="flex items-center gap-2.5">
+            <MeridianEmblem size={36} />
+            <MeridianWordmark className="text-xl" />
+          </Link>
         </div>
 
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
@@ -146,7 +149,7 @@ export default function CustomerSignupPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
-                <input type="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Min 8 characters" />
+                <PasswordInput required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Min 8 characters" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Creating account...' : 'Get Started Free'}

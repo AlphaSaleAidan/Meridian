@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { MeridianEmblem, MeridianWordmark } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 export default function CustomerLoginPage() {
   const navigate = useNavigate()
@@ -96,9 +97,11 @@ export default function CustomerLoginPage() {
   return (
     <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="flex items-center justify-center gap-2.5 mb-8">
-          <MeridianEmblem size={36} />
-          <MeridianWordmark className="text-xl" />
+        <div className="flex items-center justify-center mb-8">
+          <Link to="/" aria-label="Meridian home" className="flex items-center gap-2.5">
+            <MeridianEmblem size={36} />
+            <MeridianWordmark className="text-xl" />
+          </Link>
         </div>
 
         <div className="card p-6 sm:p-8 border border-[#1F1F23]">
@@ -122,11 +125,11 @@ export default function CustomerLoginPage() {
             <form onSubmit={handleSetNewPassword} className="space-y-4">
               <div>
                 <label htmlFor="new-password" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">New password</label>
-                <input id="new-password" type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" />
+                <PasswordInput id="new-password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" />
               </div>
               <div>
                 <label htmlFor="confirm-password" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Confirm password</label>
-                <input id="confirm-password" type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Repeat your new password" />
+                <PasswordInput id="confirm-password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Repeat your new password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Saving...' : 'Save & Continue'}
@@ -140,7 +143,7 @@ export default function CustomerLoginPage() {
               </div>
               <div>
                 <label htmlFor="login-password" className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
-                <input id="login-password" type="password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
+                <PasswordInput id="login-password" required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Signing in...' : 'Sign In'}

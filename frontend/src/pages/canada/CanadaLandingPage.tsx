@@ -1,5 +1,5 @@
 import { lazy, Suspense, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { ArrowRight, ChevronRight, Shield, Clock, Menu, X, MapPin, Lock, Scale } from 'lucide-react'
 
@@ -70,13 +70,13 @@ export default function CanadaLandingPage() {
       {/* NAV */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-[#1F1F23]/60 bg-[#0A0A0B]/70 backdrop-blur-[20px]">
         <div className="max-w-content mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+          <Link to="/canada" aria-label="Meridian Canada home" className="flex items-center gap-2.5">
             <MeridianEmblem size={28} />
             <div className="flex flex-col">
               <MeridianWordmark height={14} />
               <span className="text-[8px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
             </div>
-          </div>
+          </Link>
 
           {/* Desktop nav links */}
           <div className="hidden md:flex items-center gap-2">
@@ -448,11 +448,13 @@ export default function CanadaLandingPage() {
           <div className="flex flex-col gap-4 sm:gap-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <MeridianEmblem size={20} />
-                <div className="flex flex-col">
-                  <MeridianWordmark height={10} />
-                  <span className="text-[7px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
-                </div>
+                <Link to="/canada" aria-label="Meridian Canada home" className="flex items-center gap-3">
+                  <MeridianEmblem size={20} />
+                  <div className="flex flex-col">
+                    <MeridianWordmark height={10} />
+                    <span className="text-[7px] font-bold text-[#17C5B0] uppercase tracking-[0.2em] mt-0.5">Canada</span>
+                  </div>
+                </Link>
                 <div className="flex items-center gap-1.5 text-[11px] text-[#A1A1A8]/50">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#17C5B0]" />
                   All systems operational

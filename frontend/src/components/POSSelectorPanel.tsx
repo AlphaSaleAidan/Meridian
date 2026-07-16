@@ -5,6 +5,7 @@ import {
   AlertTriangle, Wifi,
 } from 'lucide-react'
 import POSLogo, { POSStatusBadge } from './POSLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 import { posSystems, type POSSystem, type POSSystemKey } from '@/data/pos-systems'
 import { useIsDemo, useOrgId } from '@/hooks/useOrg'
 
@@ -494,8 +495,7 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
           {fields.map(f => (
             <div key={f.key} className="space-y-1">
               <label className="text-[11px] font-medium text-[#A1A1A8]">{f.label}</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={creds[f.key] || ''}
                 onChange={e => {
                   setCreds(prev => ({ ...prev, [f.key]: e.target.value }))

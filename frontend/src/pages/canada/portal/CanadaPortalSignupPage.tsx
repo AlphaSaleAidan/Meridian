@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { MeridianEmblem } from '@/components/MeridianLogo'
+import PasswordInput from '@/components/ui/PasswordInput'
 
 export default function CanadaPortalSignupPage() {
   const navigate = useNavigate()
@@ -44,7 +45,9 @@ export default function CanadaPortalSignupPage() {
     <div className="min-h-screen bg-pm-bg flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center gap-1 mb-8">
-          <MeridianEmblem size={40} />
+          <Link to="/canada" aria-label="Meridian Canada home">
+            <MeridianEmblem size={40} />
+          </Link>
           <span className="text-xl font-bold text-pm-text mt-2">Join Meridian Sales</span>
           <span className="text-2xs font-semibold text-pm-teal uppercase tracking-widest flex items-center gap-1">
             Canada — New Rep Registration {'\u{1F1E8}\u{1F1E6}'}
@@ -80,7 +83,7 @@ export default function CanadaPortalSignupPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-pm-muted mb-1.5">Password</label>
-              <input type="password" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Min 8 characters" />
+              <PasswordInput required minLength={8} value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Min 8 characters" />
               {password.length > 0 && (() => {
                 let strength = 0
                 if (password.length >= 8) strength++
