@@ -81,6 +81,34 @@ const OPTIONS: ConnectOption[] = [
   },
 ]
 
+// Call-script packs — mirrors the services/phone_agent/script_packs.py
+// registry. A pack is a set of conversation GUIDELINES the agent adapts to
+// the call (establish order type early, confirm in small batches, one
+// compact read-back), never a script it recites. 'Standard' is the current
+// generic script and the default for every merchant. '(beta)' marks packs
+// that have not yet beaten the Standard script on the sim harness
+// (scripts/phone_pack_bench.py) — merchants can opt in, but reps must not
+// recommend them (docs/playbook 30-features/phone-orders/script-packs.md).
+const SCRIPT_PACK_OPTIONS = [
+  { id: 'legacy', label: 'Standard (current)' },
+  { id: 'efficient_v1', label: 'Efficient — any business (beta)' },
+  { id: 'pizzeria_v1', label: 'Pizzeria' },
+  { id: 'cafe_quickserve_v1', label: 'Cafe / quick-serve' },
+  { id: 'indian_v1', label: 'Indian restaurant' },
+]
+
+// Business type informs the SUGGESTION only — it never switches the script
+// by itself (script changes are always an explicit merchant choice), and
+// only packs that beat the Standard script on the harness are suggested.
+const BUSINESS_TYPE_OPTIONS: { id: string; label: string; suggestedPack?: string }[] = [
+  { id: 'restaurant', label: 'Restaurant (general)' },
+  { id: 'pizzeria', label: 'Pizzeria', suggestedPack: 'pizzeria_v1' },
+  { id: 'cafe', label: 'Cafe / coffee shop', suggestedPack: 'cafe_quickserve_v1' },
+  { id: 'quick_serve', label: 'Quick-serve / takeout', suggestedPack: 'cafe_quickserve_v1' },
+  { id: 'indian_restaurant', label: 'Indian restaurant', suggestedPack: 'indian_v1' },
+  { id: 'other', label: 'Other' },
+]
+
 type Step = 'choose' | 'doit' | 'agent' | 'menu' | 'routing' | 'test'
 
 const STEPS: { key: Step; label: string }[] = [
@@ -153,6 +181,10 @@ export default function PhoneSetupWizard() {
   // understanding (Deepgram language=multi → Hindi/Punjabi code-switching).
   const [accent, setAccent] = useState<'all' | VoiceAccent>('all')
   const [multilingual, setMultilingual] = useState(false)
+  // Business type + call-script pack. Pack default is 'legacy' (Standard) —
+  // the exact current script; anything else is an explicit opt-in.
+  const [businessType, setBusinessType] = useState('restaurant')
+  const [scriptPack, setScriptPack] = useState('legacy')
   // Live pricing dials for the disclosure card (env-tunable server-side).
   // Fallbacks mirror the backend defaults so the card never shows blanks.
   const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 45, max_call_minutes: 8 })
@@ -220,6 +252,8 @@ export default function PhoneSetupWizard() {
       if (cfg.voice) setVoice(cfg.voice)
       if (cfg.accent === 'north_american' || cfg.accent === 'indian' || cfg.accent === 'east_asian') setAccent(cfg.accent)
       if (cfg.language === 'multi') setMultilingual(true)
+      if (cfg.business_type) setBusinessType(cfg.business_type)
+      if (cfg.script_pack) setScriptPack(cfg.script_pack)
       if (cfg.order_types?.length) setOrderTypes(cfg.order_types)
       if (cfg.reservation_config) setReservationConfig(cfg.reservation_config)
       if (cfg.order_routing) setRouting(cfg.order_routing)
@@ -370,6 +404,10 @@ export default function PhoneSetupWizard() {
       // code-switch understanding on live calls (Deepgram multilingual).
       accent: accent !== 'all' ? accent : undefined,
       language: multilingual ? 'multi' : 'en',
+      business_type: businessType,
+      // 'legacy' (Standard) is stored explicitly and behaves exactly like an
+      // unset value — the generic script, byte-for-byte.
+      script_pack: scriptPack,
       order_types: orderTypes,
       reservation_config: reservationConfig ?? undefined,
       menu_items: menu.map(m => ({ name: m.name, price: m.price, category: m.category })),
@@ -386,7 +424,7 @@ export default function PhoneSetupWizard() {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
     setStep('test')
-  }, [isDemo, orgId, businessName, phoneConfig?.phone_number, greeting, voice, accent, multilingual, orderTypes, menu, transferTrimmed, routing])
+  }, [isDemo, orgId, businessName, phoneConfig?.phone_number, greeting, voice, accent, multilingual, businessType, scriptPack, orderTypes, menu, transferTrimmed, routing])
 
   const currentStepIdx = STEPS.findIndex(s => s.key === step)
 
@@ -611,6 +649,30 @@ export default function PhoneSetupWizard() {
             <div>
               <label className="text-xs text-[#A1A1A8] block mb-1">Business Name</label>
               <input className={inputCls} value={businessName} onChange={e => setBusinessName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-[#A1A1A8] block mb-1">Business type</label>
+                <select className={inputCls} value={businessType} onChange={e => setBusinessType(e.target.value)}>
+                  {BUSINESS_TYPE_OPTIONS.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[#A1A1A8] block mb-1">Call script</label>
+                <select className={inputCls} value={scriptPack} onChange={e => setScriptPack(e.target.value)}>
+                  {SCRIPT_PACK_OPTIONS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+                {(() => {
+                  const suggested = BUSINESS_TYPE_OPTIONS.find(b => b.id === businessType)?.suggestedPack
+                  if (!suggested || suggested === scriptPack) return null
+                  const label = SCRIPT_PACK_OPTIONS.find(p => p.id === suggested)?.label
+                  return (
+                    <p className="text-[10px] text-[#A1A1A8]/60 mt-1">
+                      Suggested for your business type: <button type="button" className="text-[#1A8FD6] hover:underline" onClick={() => setScriptPack(suggested)}>{label}</button>. Standard keeps today's script unchanged.
+                    </p>
+                  )
+                })()}
+              </div>
             </div>
             <div>
               <label className="text-xs text-[#A1A1A8] block mb-1">Greeting Message</label>
