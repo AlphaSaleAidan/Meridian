@@ -266,3 +266,76 @@ def test_had_order_detection():
     assert vw._had_order(with_order) is True
     assert vw._had_order(without) is False
     assert vw._had_order({}) is None  # undeterminable → NULL, not False
+
+
+# ── 8. voice_call_endings dedupe (concurrent retry race) ──────
+
+
+class _EndingsDB:
+    """voice_call_endings store enforcing the partial unique index on
+    vapi_call_id (20260717_voice_call_endings_unique) the way PostgREST +
+    ignore-duplicates resolve it: the losing duplicate write is dropped."""
+
+    def __init__(self, race: bool = False):
+        self.rows: list[dict] = []
+        self.upsert_calls = 0
+        # race=True simulates two concurrent retries that BOTH pass the
+        # select-then-insert pre-check before either row lands.
+        self.race = race
+
+    async def select(self, table, columns="*", filters=None, limit=None):
+        assert table == "voice_call_endings"
+        if self.race:
+            return []
+        cid = (filters or {}).get("vapi_call_id", "").removeprefix("eq.")
+        return [r for r in self.rows if r.get("vapi_call_id") == cid]
+
+    async def upsert(self, table, data, on_conflict="", return_data=True,
+                     ignore_duplicates=False):
+        assert table == "voice_call_endings"
+        assert ignore_duplicates, "call-endings write must be first-write-wins"
+        assert not on_conflict, (
+            "on_conflict can't name the partial index — must stay empty")
+        self.upsert_calls += 1
+        cid = data.get("vapi_call_id")
+        if cid is not None and any(r.get("vapi_call_id") == cid for r in self.rows):
+            return []  # unique index rejects the row; ignore-duplicates swallows
+        self.rows.append(dict(data))
+        return [dict(data)]
+
+    async def insert(self, table, data, return_data=True):
+        raise AssertionError(
+            "plain insert races on retries — use the ignore-duplicates upsert")
+
+
+async def _demo_config(_dialed):
+    return SimpleNamespace(merchant_id="m-endings")
+
+
+@aio
+async def test_record_call_ending_dedupes_concurrent_retries(monkeypatch):
+    """Two racing end-of-call reports for the same call → exactly one row."""
+    import src.db as dbmod
+    db = _EndingsDB(race=True)
+    monkeypatch.setattr(vw, "_resolve_config", _demo_config)
+    monkeypatch.setattr(dbmod, "get_db", lambda: db)
+    msg = {"endedReason": "customer-ended-call"}
+    await vw._record_call_ending(msg, "call-123", "customer-ended-call", 42)
+    await vw._record_call_ending(msg, "call-123", "customer-ended-call", 42)
+    assert db.upsert_calls == 2  # both writers reached the insert...
+    assert len(db.rows) == 1     # ...but the unique index kept one row
+
+
+@aio
+async def test_record_call_ending_serial_retry_skips_rewrite(monkeypatch):
+    """The common serial retry short-circuits on the pre-check (no 2nd write)."""
+    import src.db as dbmod
+    db = _EndingsDB(race=False)
+    monkeypatch.setattr(vw, "_resolve_config", _demo_config)
+    monkeypatch.setattr(dbmod, "get_db", lambda: db)
+    msg = {"endedReason": "customer-ended-call"}
+    await vw._record_call_ending(msg, "call-456", "customer-ended-call", 30)
+    await vw._record_call_ending(msg, "call-456", "customer-ended-call", 30)
+    assert db.upsert_calls == 1
+    assert len(db.rows) == 1
+    assert db.rows[0]["merchant_id"] == "m-endings"
