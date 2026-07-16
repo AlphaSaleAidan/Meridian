@@ -557,10 +557,28 @@ async def vapi_webhook(request: Request):
             # With a hard cap the overage is CLAMPED to (cap − included) so the
             # bill can never exceed the disclosed maximum (5-min cap ⇒ 90¢) even
             # when the drop lands a rounding-minute past the cap.
-            over_min = max(0, math.ceil(dur_min) - VOICE_INCLUDED_MIN)
+            # Fee parity: the merchant's provisioned billing terms
+            # (merchant_billing_terms) override the env dials when present.
+            # STRICTLY fail-open — any lookup problem bills the env defaults.
+            included_min = VOICE_INCLUDED_MIN
+            overage_rate = VOICE_OVERAGE_CENTS_PER_MIN
+            if merchant_id != "demo":
+                try:
+                    from ...billing.fee_terms import get_active_terms
+                    from ...db import get_db
+                    terms = await get_active_terms(get_db(), merchant_id)
+                    if terms:
+                        if terms.get("included_call_min") is not None:
+                            included_min = int(terms["included_call_min"])
+                        if terms.get("call_overage_cents_per_min") is not None:
+                            overage_rate = int(terms["call_overage_cents_per_min"])
+                except Exception as terms_err:  # noqa: BLE001
+                    logger.warning("billing-terms lookup failed for %s — env defaults: %s",
+                                   merchant_id, terms_err)
+            over_min = max(0, math.ceil(dur_min) - included_min)
             if VOICE_MAX_CALL_MIN > 0:
-                over_min = min(over_min, max(VOICE_MAX_CALL_MIN - VOICE_INCLUDED_MIN, 0))
-            overage = over_min * VOICE_OVERAGE_CENTS_PER_MIN
+                over_min = min(over_min, max(VOICE_MAX_CALL_MIN - included_min, 0))
+            overage = over_min * overage_rate
             if overage > 0:
                 await credit(merchant_id, overage, source="duration_overage",
                              ref=call_id, note=f"{over_min}min over @ {dur_min:.1f}min")

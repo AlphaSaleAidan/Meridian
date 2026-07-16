@@ -56,10 +56,12 @@ async def _set_config(db, merchant_id: str, patch: dict) -> None:
 
 
 async def _merchant_service_fee_cents(merchant_id: str) -> int:
-    """Per-order fee to credit for a paid phone order: the merchant's rep-set
-    override (phone_agent_config.order_fee_cents) when present, else the
-    MERIDIAN_SERVICE_FEE_CENTS env default. Lookup failures (including a
-    pre-migration-042 schema) fall back to the env value."""
+    """Per-order fee to credit for a paid phone order, in precedence order:
+      1. rep-set override (phone_agent_config.order_fee_cents, migration 042)
+      2. provisioned billing contract (merchant_billing_terms.order_fee_cents)
+      3. MERIDIAN_SERVICE_FEE_CENTS env default
+    Lookup failures at any layer (including pre-migration schemas) fall
+    through to the next — the fee lookup never breaks the webhook."""
     fee = int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0)
     try:
         rows = await get_db().select(
@@ -67,9 +69,16 @@ async def _merchant_service_fee_cents(merchant_id: str) -> int:
             filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
         )
         if rows and rows[0].get("order_fee_cents") is not None:
-            fee = max(int(rows[0]["order_fee_cents"]), 0)
+            return max(int(rows[0]["order_fee_cents"]), 0)
     except Exception as e:  # noqa: BLE001 — fee lookup never breaks the webhook
         logger.warning("order-fee override lookup failed for %s: %s", merchant_id, e)
+    try:
+        from ...billing.fee_terms import get_active_terms  # fail-open internally
+        terms = await get_active_terms(get_db(), merchant_id)
+        if terms and terms.get("order_fee_cents") is not None:
+            return max(int(terms["order_fee_cents"]), 0)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("billing-terms fee lookup failed for %s: %s", merchant_id, e)
     return fee
 
 

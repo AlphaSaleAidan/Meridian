@@ -266,6 +266,14 @@ class ProvisionCustomerRequest(BaseModel):
     setup_fee: int = 0
     first_month_free: bool = False
     country: str = "CA"
+    # Fee parity: the closed lead this provision fulfils. When set, the lead's
+    # LOCKED fee terms are copied verbatim into merchant_billing_terms — no
+    # manual re-entry. When absent (legacy/manual provision), terms are built
+    # from the explicit params below and recorded with
+    # override_reason='manual_provision'.
+    lead_id: str | None = None
+    lead_market: str | None = None  # 'ca' | 'us'; defaults from `country`
+    order_fee_cents: int | None = None
     # When true (self-serve onboarding wizard), the customer already created
     # their account with a self-chosen password — do NOT overwrite it with a
     # temp password or force a reset, and skip the credentials email. Default
@@ -284,6 +292,10 @@ class ProvisionCustomerResponse(BaseModel):
     invoice_sms_sent: bool = False
     invoice_error: str | None = None
     email_error: str | None = None
+    # Fee parity: whether the billing contract (merchant_billing_terms) was
+    # recorded. False = loud follow-up needed (terms table missing / write
+    # failed) — the merchant would otherwise drift from the deal.
+    billing_terms_recorded: bool = False
 
 
 # `businesses.plan_tier` is constrained to ('trial','starter','growth','enterprise')
@@ -410,6 +422,82 @@ async def provision_customer(req: ProvisionCustomerRequest):
         except Exception as e:
             logger.error(f"Business record creation failed for {req.email}: {e}", exc_info=True)
             raise HTTPException(500, "Account created but business profile failed to save. Please retry or contact support.")
+
+    # 2b. Fee parity: record the billing contract WITH activation, before any
+    # invoicing — merchant_billing_terms is the source of truth billing reads.
+    # lead_id present → copy the lead's locked terms (no manual re-entry);
+    # absent → build from the explicit params and flag 'manual_provision'.
+    # Loud-but-non-fatal until migration 20260716_merchant_billing_terms is
+    # applied everywhere: a terms failure must not strand a paying customer,
+    # but it is surfaced in the response and the logs.
+    billing_terms_recorded = False
+    try:
+        from ...billing.fee_terms import (
+            LEAD_TABLE_BY_MARKET,
+            normalize_market,
+            resolve_fee_terms,
+            set_merchant_billing_terms,
+            terms_from_lead_row,
+        )
+
+        market = normalize_market(req.lead_market or req.country)
+        terms = None
+        override_reason: str | None = "manual_provision"
+        if req.lead_id:
+            lead_rows = await db.select(
+                LEAD_TABLE_BY_MARKET[market],
+                filters={"id": f"eq.{req.lead_id}"}, limit=1,
+            )
+            if lead_rows:
+                terms = terms_from_lead_row(market, lead_rows[0])
+                override_reason = (
+                    None if lead_rows[0].get("fee_terms_locked_at")
+                    else "lead_terms_not_locked"
+                )
+            else:
+                logger.warning("provision-customer: lead %s not found in %s — falling back to explicit params",
+                               req.lead_id, LEAD_TABLE_BY_MARKET[market])
+        if terms is None:
+            terms = resolve_fee_terms(
+                market,
+                plan_tier=req.plan,
+                monthly_fee_cents=req.monthly_price * 100 if req.monthly_price else None,
+                order_fee_cents=req.order_fee_cents,
+            )
+        billing_terms_recorded = bool(await set_merchant_billing_terms(
+            db, req.org_id, terms,
+            source_lead_id=req.lead_id,
+            source_market=market,
+            created_by=req.rep_name or req.rep_id or "provision_customer",
+            override_reason=override_reason,
+        ))
+        # Seed the live phone/website order-fee rail (phone_agent_config) from
+        # the same terms so the negotiated per-order fee applies the moment the
+        # phone agent goes live (mirrors canada/us create-customer seeding).
+        if billing_terms_recorded and terms.get("order_fee_cents") is not None:
+            try:
+                pac_seed = {"order_fee_cents": int(terms["order_fee_cents"]),
+                            "plan_tier": terms.get("plan_tier")}
+                existing_pac = await db.select(
+                    "phone_agent_config", "id",
+                    filters={"merchant_id": f"eq.{req.org_id}"}, limit=1)
+                if existing_pac:
+                    await db.update("phone_agent_config", pac_seed,
+                                    filters={"merchant_id": f"eq.{req.org_id}"})
+                else:
+                    await db.insert("phone_agent_config", {
+                        "merchant_id": req.org_id,
+                        "business_name": req.business_name,
+                        "business_type": req.business_type or "restaurant",
+                        "active": False,
+                        **pac_seed,
+                    })
+            except Exception as pac_err:  # noqa: BLE001
+                logger.error("provision-customer: order-fee seed failed for %s: %s",
+                             req.org_id, pac_err)
+    except Exception as terms_err:  # noqa: BLE001
+        logger.error("provision-customer: billing terms provisioning FAILED for %s: %s",
+                     req.org_id, terms_err, exc_info=True)
 
     # 3. Send setup fee invoice (card stored on payment → auto-billing starts)
     invoices_sent = False
@@ -551,6 +639,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
         invoice_sms_sent=sms_sent,
         invoice_error=invoice_error,
         email_error=email_error,
+        billing_terms_recorded=billing_terms_recorded,
     )
 
 

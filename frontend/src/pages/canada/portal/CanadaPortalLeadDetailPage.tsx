@@ -910,6 +910,22 @@ export default function CanadaPortalLeadDetailPage() {
             <p className="text-sm text-pm-canada-text-muted mt-1">
               {deal.contact_name} &middot; <span className="text-pm-amber-gold font-semibold">CA${deal.monthly_value.toLocaleString()}/mo</span> &middot; {deal.contact_email}
             </p>
+            {/* Fee parity: read-only summary of the LOCKED fee terms — the deal's
+                contract of record, written server-side at customer creation and
+                provisioned straight into live billing (no manual re-entry). */}
+            {deal.fee_terms_locked_at && (
+              <p className="text-xs mt-1.5 flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-pm-accent/10 border border-pm-accent/30 text-pm-accent font-semibold">
+                  <CheckCircle2 size={11} /> Fees locked
+                </span>
+                <span className="text-pm-canada-text-muted">
+                  {(deal.plan_tier || 'premium').replace(/^./, c => c.toUpperCase())}
+                  {deal.monthly_fee_cents != null && <> &middot; CA${(deal.monthly_fee_cents / 100).toLocaleString()}/mo</>}
+                  {deal.order_fee_cents != null && deal.order_fee_cents > 0 && <> &middot; CA${(deal.order_fee_cents / 100).toFixed(2)}/order</>}
+                  {deal.call_overage_cents_per_min != null && <> &middot; CA${(deal.call_overage_cents_per_min / 100).toFixed(2)}/min after {deal.included_call_min ?? 3} min</>}
+                </span>
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <button

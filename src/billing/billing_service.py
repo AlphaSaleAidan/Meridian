@@ -374,6 +374,34 @@ class BillingService:
 
                 org_id = sub["org_id"]
                 amount = sub["monthly_price_cents"]
+                # Fee parity: the provisioned billing contract
+                # (merchant_billing_terms) is the source of truth for the
+                # monthly fee. Fall back to the subscription row when the
+                # merchant has no terms row (legacy) or the lookup fails.
+                try:
+                    from .fee_terms import get_active_terms
+                    terms = await get_active_terms(self.db, org_id)
+                    contracted = terms.get("monthly_fee_cents") if terms else None
+                    if contracted is not None and int(contracted) != int(amount):
+                        logger.warning(
+                            "fee-parity: org %s contracted monthly %s¢ != subscription "
+                            "monthly_price_cents %s¢ — billing the contracted amount",
+                            org_id, contracted, amount,
+                        )
+                        amount = int(contracted)
+                except Exception as terms_err:  # noqa: BLE001 — fail-open to current behavior
+                    logger.warning("fee-parity terms lookup failed for %s: %s", org_id, terms_err)
+                # Pre-charge reconciliation guard: warn (never block) when the
+                # merchant's live billing config drifts from the contract.
+                try:
+                    from .fee_reconciliation import check_merchant
+                    for mm in await check_merchant(self.db, org_id):
+                        logger.warning(
+                            "fee-parity pre-invoice mismatch org=%s field=%s contracted=%s applied=%s",
+                            org_id, mm["field"], mm["contracted"], mm["applied"],
+                        )
+                except Exception:  # noqa: BLE001 — guard must never affect billing
+                    pass
                 email = sub.get("contact_email") or sub.get("email", "")
                 owner_name = sub.get("owner_name", "")
                 business_name = sub.get("business_name", "")

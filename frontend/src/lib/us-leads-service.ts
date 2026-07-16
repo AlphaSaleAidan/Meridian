@@ -24,6 +24,13 @@ function rowToDeal(row: Record<string, unknown>): Deal {
     province: (row.province as string) || '',
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
+    // Locked fee terms (fee-parity) — optional: absent pre-migration.
+    plan_tier: (row.plan_tier as string) ?? null,
+    monthly_fee_cents: row.monthly_fee_cents == null ? null : Number(row.monthly_fee_cents),
+    order_fee_cents: row.order_fee_cents == null ? null : Number(row.order_fee_cents),
+    call_overage_cents_per_min: row.call_overage_cents_per_min == null ? null : Number(row.call_overage_cents_per_min),
+    included_call_min: row.included_call_min == null ? null : Number(row.included_call_min),
+    fee_terms_locked_at: (row.fee_terms_locked_at as string) ?? null,
   }
 }
 

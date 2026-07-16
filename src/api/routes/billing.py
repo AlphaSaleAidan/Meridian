@@ -18,7 +18,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, field_validator
 
-from ..auth import require_admin, require_admin_auth, require_jwt, require_service_auth
+from ..auth import (
+    require_admin,
+    require_admin_auth,
+    require_admin_jwt,
+    require_jwt,
+    require_service_auth,
+)
 from ...db import get_db
 
 logger = logging.getLogger("meridian.billing.routes")
@@ -614,3 +620,88 @@ async def handle_billing_webhook(request: Request):
     except Exception:
         logger.exception("Billing webhook processing failed")
         return Response(status_code=500)
+
+
+# ── Fee parity: billing terms + reconciliation ──
+
+
+class TermsOverrideRequest(BaseModel):
+    """Admin override of a merchant's billing terms. Supersedes the active
+    merchant_billing_terms row (never updates in place) — the row history is
+    the audit trail. override_reason is mandatory."""
+
+    override_reason: str
+    plan_tier: str | None = None
+    monthly_fee_cents: int | None = None
+    order_fee_cents: int | None = None
+    call_overage_cents_per_min: int | None = None
+    included_call_min: int | None = None
+
+    @field_validator("override_reason")
+    @classmethod
+    def reason_required(cls, v: str) -> str:
+        v = (v or "").strip()
+        if len(v) < 5:
+            raise ValueError("override_reason is required (min 5 characters) — it is the audit record")
+        return v
+
+    @field_validator("monthly_fee_cents", "order_fee_cents",
+                     "call_overage_cents_per_min", "included_call_min")
+    @classmethod
+    def non_negative(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("fee values must be >= 0")
+        return v
+
+
+@router.post("/terms/{merchant_id}/override")
+async def override_billing_terms(
+    merchant_id: str,
+    req: TermsOverrideRequest,
+    admin: dict = Depends(require_admin_jwt),
+):
+    """Admin-only manual correction of a merchant's billing terms.
+
+    Merges the provided fields over the current active terms (or, when the
+    merchant has none, over nothing — only the provided fields are recorded),
+    then supersedes the old row and inserts the new one. At least one fee
+    field must be provided."""
+    from ...billing.fee_terms import FEE_TERM_FIELDS, get_active_terms, set_merchant_billing_terms
+
+    patch = {
+        "plan_tier": (req.plan_tier or "").strip().lower() or None,
+        "monthly_fee_cents": req.monthly_fee_cents,
+        "order_fee_cents": req.order_fee_cents,
+        "call_overage_cents_per_min": req.call_overage_cents_per_min,
+        "included_call_min": req.included_call_min,
+    }
+    if all(v is None for v in patch.values()):
+        raise HTTPException(400, "Provide at least one fee field to override")
+
+    db = get_db()
+    current = await get_active_terms(db, merchant_id) or {}
+    terms = {f: current.get(f) for f in FEE_TERM_FIELDS}
+    terms.update({k: v for k, v in patch.items() if v is not None})
+
+    row = await set_merchant_billing_terms(
+        db, merchant_id, terms,
+        source_lead_id=current.get("source_lead_id"),
+        source_market=current.get("source_market"),
+        created_by=admin.get("email", ""),
+        override_reason=req.override_reason,
+    )
+    if row is None:
+        raise HTTPException(502, "Could not record billing terms (is migration 20260716_merchant_billing_terms applied?)")
+    logger.info("billing terms OVERRIDE for %s by %s: %s", merchant_id, admin.get("email"), req.override_reason)
+    return {"ok": True, "merchant_id": merchant_id, "terms": row}
+
+
+@router.get("/reconciliation")
+async def billing_reconciliation(_admin: dict = Depends(require_admin_jwt)):
+    """Pre-invoice fee reconciliation: for every merchant with a live
+    subscription, diff the contracted terms (merchant_billing_terms, falling
+    back to the closed lead) against what live billing actually applies.
+    Zero mismatches = healthy."""
+    from ...billing.fee_reconciliation import reconcile_all
+
+    return await reconcile_all(get_db())
