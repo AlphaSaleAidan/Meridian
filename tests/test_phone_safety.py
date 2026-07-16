@@ -169,13 +169,13 @@ def test_loop_guard_assistant_has_no_tools():
 # ── 5. per-merchant cap threading ─────────────────────────────
 
 
-def test_default_cap_is_8_minutes(monkeypatch):
-    """The env default was RAISED 5 → 8 min; with no env override the module
-    constant must land on 8."""
+def test_default_cap_is_5_minutes(monkeypatch):
+    """The 5-minute rule stays (decision 2026-07-16, reverting the brief 8-min
+    default): with no env override the module constant must land on 5."""
     import importlib
     monkeypatch.delenv("MERIDIAN_VOICE_MAX_CALL_MIN", raising=False)
     importlib.reload(vw)
-    assert vw.VOICE_MAX_CALL_MIN == 8
+    assert vw.VOICE_MAX_CALL_MIN == 5
 
 
 def test_merchant_cap_overrides_max_duration(monkeypatch):
