@@ -78,6 +78,7 @@ class WebhookProcessor:
         disconnect_merchant: Callable | None = None,
         send_notification: Callable | None = None,
         record_webhook_event: Callable | None = None,
+        update_phone_order_fulfillment: Callable | None = None,
     ):
         """
         Inject database/notification callbacks.
@@ -88,6 +89,10 @@ class WebhookProcessor:
         the row was newly inserted (first delivery), False if it already existed
         (duplicate), or None if the DB is unavailable (fall back to the
         in-process cache). When omitted, dedupe is in-process only.
+
+        `update_phone_order_fulfillment(pos_order_id, state)` lets kitchen/KDS
+        side state changes flow back onto phone_orders.fulfillment_state when
+        an order.created/updated event's id matches a phone-agent order.
         """
         self._get_connection = get_connection
         self._upsert_transaction = upsert_transaction
@@ -96,6 +101,7 @@ class WebhookProcessor:
         self._disconnect_merchant = disconnect_merchant
         self._send_notification = send_notification
         self._record_webhook_event = record_webhook_event
+        self._update_phone_order_fulfillment = update_phone_order_fulfillment
 
         # event_id → first-seen unix timestamp (insertion-ordered, oldest first)
         self._seen_events: dict[str, float] = {}
@@ -224,6 +230,20 @@ class WebhookProcessor:
 
         if self._upsert_transaction:
             await self._upsert_transaction(txn, items)
+
+        # Kitchen prove-out: if this Square order is a phone-agent order, mirror
+        # its state onto phone_orders.fulfillment_state (kitchen/KDS-side
+        # OPEN → COMPLETED/CANCELED changes flow in). Best-effort — never let
+        # this break transaction sync.
+        if self._update_phone_order_fulfillment:
+            try:
+                await self._update_phone_order_fulfillment(
+                    order_id, order.get("state", "")
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning(
+                    f"phone-order fulfillment update failed for {order_id}: {e}"
+                )
 
         return {
             "action": "inserted",

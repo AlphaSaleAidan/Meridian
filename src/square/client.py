@@ -219,6 +219,15 @@ class SquareClient:
 
     # ─── Orders ───────────────────────────────────────────────
 
+    async def get_order(self, order_id: str) -> dict:
+        """Retrieve a single order by ID (state, line_items, fulfillments).
+
+        Used by the kitchen prove-out flow to confirm a phone/test order
+        actually reached a make-able state (state OPEN + line items present).
+        """
+        resp = await self.get(f"/v2/orders/{order_id}")
+        return resp.get("order", {})
+
     async def search_orders(
         self,
         location_ids: list[str],

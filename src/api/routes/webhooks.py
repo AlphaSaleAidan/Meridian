@@ -170,6 +170,39 @@ def _decrypt_conn_token(conn: dict) -> str:
     return ""
 
 
+async def _update_phone_order_fulfillment(pos_order_id: str, state: str):
+    """Mirror a Square order state onto the matching phone_orders row.
+
+    Kitchen prove-out: when an order.created/updated webhook's order id matches
+    a phone-agent order, record the POS-side state in fulfillment_state and
+    stamp fulfillment_confirmed_at the first time it reaches a make-able state
+    (OPEN, or already COMPLETED). No-op for non-phone orders (no row matches).
+    """
+    from ...db import _db_instance
+    if not _db_instance or not pos_order_id or not state:
+        return
+
+    rows = await _db_instance.select(
+        "phone_orders",
+        filters={"pos_order_id": f"eq.{pos_order_id}"},
+        limit=1,
+    )
+    if not rows:
+        return  # not a phone-agent order
+
+    row = rows[0]
+    patch: dict = {"fulfillment_state": state}
+    if state in ("OPEN", "COMPLETED") and not row.get("fulfillment_confirmed_at"):
+        patch["fulfillment_confirmed_at"] = datetime.now(timezone.utc).isoformat()
+
+    await _db_instance.update(
+        "phone_orders", patch, filters={"id": f"eq.{row['id']}"},
+    )
+    logger.info(
+        "phone_orders fulfillment updated: pos_order_id=%s state=%s", pos_order_id, state
+    )
+
+
 async def _get_connection_by_merchant(merchant_id: str) -> dict | None:
     """Look up an active connection by Square merchant ID."""
     from ...db import _db_instance
@@ -204,6 +237,7 @@ processor = WebhookProcessor(
     disconnect_merchant=_disconnect_merchant,
     send_notification=_send_notification,
     record_webhook_event=_record_webhook_event,
+    update_phone_order_fulfillment=_update_phone_order_fulfillment,
 )
 
 

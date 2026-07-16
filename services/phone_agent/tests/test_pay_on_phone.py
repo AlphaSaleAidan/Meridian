@@ -6,7 +6,8 @@ Asserts, with fakes (no network):
     payment_status='pending', and does NOT release the kitchen ticket.
   - payment confirmation (webhook / demo simulate) flips to payment_status='paid'
     and releases the kitchen ticket.
-  - pay_at_pickup: unchanged — releases to the kitchen via route_order, no link.
+  - pay_at_pickup: releases to the kitchen NOW via the parallel delivery
+    fan-out (POS + customer SMS + merchant SMS legs, per-channel statuses).
   - optional: respects the caller's pay_choice.
 
 These exercise pay_on_phone (the dispatch surface bot._on_submit_order calls)
@@ -35,13 +36,21 @@ class Spy:
         self.pos_calls = []
         self.link_calls = []
         self.sms_calls = []
-        self.saved_rows = []
+        self.staff_sms = []      # merchant notification leg
+        self.saved_rows = []     # held (pay_now) rows
+        self.release_rows = []   # fan-out (pay_at_pickup) rows
         self.patched = []  # (query_or_key, patch_dict)
 
     def install(self, monkeypatch, *, demo=False):
-        async def fake_create_pos_order(order, pos_system, token, location):
+        import delivery_channels as dc
+        import payment_links as pl
+        import sms_checkout as sc
+
+        async def fake_create_pos_for_config(order, config, pos_result=None):
+            if pos_result is not None:
+                return pos_result
             self.pos_calls.append(order)
-            return {"success": True, "pos_order_id": "POS-ABC-123", "pos_system": pos_system}
+            return {"success": True, "pos_order_id": "POS-ABC-123", "pos_system": "square"}
 
         async def fake_create_checkout(order, config, pos_order_id=""):
             self.link_calls.append({"order": order, "pos_order_id": pos_order_id})
@@ -51,14 +60,28 @@ class Spy:
             self.sms_calls.append({"link": payment_link, "phone": order.get("caller_phone")})
             return {"sent": True, "method": "twilio", "message_sid": "SM1"}
 
-        async def fake_save_held(order, pos_result, payment_result, sms_result):
+        async def fake_send_sms(to, body):
+            self.staff_sms.append({"to": to, "body": body})
+            return {"sent": True, "method": "twilio"}
+
+        async def fake_save_held(order, pos_result, payment_result, sms_result, outcomes=None):
             self.saved_rows.append({
                 "status": "awaiting_payment",
                 "kitchen_released": False,
                 "payment_status": "pending",
                 "payment_link": payment_result.get("url", ""),
                 "sms_sent": sms_result.get("sent", False),
+                "delivery": outcomes or {},
             })
+            return "row-1"
+
+        async def fake_save_row(row):
+            # pay_at_pickup fan-out row: the released-to-kitchen record.
+            self.release_rows.append(row)
+            self.patched.append(
+                ("fanout_release", {"kitchen_released": row.get("kitchen_released", False)})
+            )
+            return "row-1"
 
         async def fake_mark_paid(merchant_id, caller_phone="", pos_order_id="", simulate=False):
             patch = {"payment_status": "paid", "status": "paid", "kitchen_released": True}
@@ -66,18 +89,20 @@ class Spy:
             self.patched.append((key, patch))
             return {"released": True, "matched_by": "pos_order_id" if pos_order_id else "merchant_phone"}
 
-        async def fake_route_order(order, config, caller_info, pos_result):
-            # pay_at_pickup path: release to kitchen (record it as a patch=released)
-            self.patched.append(("route_order", {"kitchen_released": True}))
-            return {"pos": pos_result}
-
+        # POS + SMS primitives at the module the fan-out legs resolve them from…
+        monkeypatch.setattr(dc, "create_pos_for_config", fake_create_pos_for_config)
+        monkeypatch.setattr(pl, "create_checkout", fake_create_checkout)
+        monkeypatch.setattr(sc, "send_checkout_sms", fake_send_checkout_sms)
+        monkeypatch.setattr(sc, "send_sms", fake_send_sms)
+        # …and at the names pay_on_phone bound at import time (pay_now path).
         monkeypatch.setattr(pay_on_phone, "create_checkout", fake_create_checkout)
         monkeypatch.setattr(pay_on_phone, "send_checkout_sms", fake_send_checkout_sms)
         monkeypatch.setattr(pay_on_phone, "_save_held_order", fake_save_held)
+        monkeypatch.setattr(pay_on_phone, "save_order_row", fake_save_row)
+        monkeypatch.setattr(dc, "save_order_row", fake_save_row)
         monkeypatch.setattr(pay_on_phone, "mark_order_paid", fake_mark_paid)
-        monkeypatch.setattr(pay_on_phone, "route_order", fake_route_order)
         monkeypatch.setattr(pay_on_phone, "DEMO_MERCHANT_ID", "demo-merchant")
-        self._fake_pos = fake_create_pos_order
+        self._fake_pos = fake_create_pos_for_config
         return self
 
 
@@ -118,8 +143,12 @@ async def test_pay_now_creates_link_sends_sms_holds_kitchen(monkeypatch):
     assert row["payment_status"] == "pending"               # pending, not paid
     assert row["status"] == "awaiting_payment"
     assert row["kitchen_released"] is False                 # NOT released
-    # pay_now must NOT have released the kitchen via route_order
-    assert all(k != "route_order" for k, _ in spy.patched)
+    # pay_now must NOT have written a released fan-out row
+    assert all(k != "fanout_release" for k, _ in spy.patched)
+    # per-channel ledger: merchant notification is HELD with the ticket
+    assert row["delivery"]["merchant_sms"]["status"] in (
+        "deferred_pending_payment", "skipped_no_number",
+    )
 
 
 async def test_pay_now_does_not_mark_paid_for_real_merchant(monkeypatch):
@@ -174,10 +203,16 @@ async def test_pay_at_pickup_releases_no_link(monkeypatch):
     )
     assert result["mode"] == "pay_at_pickup"
     assert result["released"] is True
+    # demo config has sms_checkout_enabled=False → no pay link / checkout SMS
     assert spy.link_calls == []        # no pay link
     assert spy.sms_calls == []         # no checkout SMS from this path
     assert spy.saved_rows == []        # held-order row not written
-    assert ("route_order", {"kitchen_released": True}) in spy.patched
+    assert ("fanout_release", {"kitchen_released": True}) in spy.patched
+    # fan-out ledger: POS honored the pre-created ticket, SMS legs recorded
+    row = spy.release_rows[0]
+    assert row["pos_delivery_status"] == "sent"
+    assert row["sms_delivery_status"] == "skipped_disabled"
+    assert row["pos_order_id"] == "POS-1"
 
 
 # ─── optional path respects pay_choice ───────────────────────────────────────
@@ -226,10 +261,19 @@ async def test_resolve_mode_invalid_falls_back_to_pay_now():
 
 # ─── POS PUSH AFTER PAYMENT (deferred ticket) ────────────────────────────────
 def _install_pos_spy(monkeypatch, spy):
+    import delivery_channels as dc
+
     async def fake_create_pos(order, config):
         spy.pos_calls.append(order)
         return {"success": True, "pos_order_id": "POS-DEFERRED-1", "pos_system": "square"}
+
+    async def fake_create_pos_for_config(order, config, pos_result=None):
+        if pos_result is not None:
+            return pos_result
+        return await fake_create_pos(order, config)
+
     monkeypatch.setattr(pay_on_phone, "_create_pos", fake_create_pos)
+    monkeypatch.setattr(dc, "create_pos_for_config", fake_create_pos_for_config)
 
 
 def _install_patch_client(monkeypatch, patches=None):
@@ -298,7 +342,8 @@ async def test_pickup_pushes_pos_immediately(monkeypatch):
     assert result["mode"] == "pay_at_pickup"
     assert result["released"] is True
     assert len(spy.pos_calls) == 1                            # ticket created now
-    assert ("route_order", {"kitchen_released": True}) in spy.patched
+    assert ("fanout_release", {"kitchen_released": True}) in spy.patched
+    assert spy.release_rows[0]["pos_delivery_status"] == "sent"
 
 
 async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
@@ -316,6 +361,8 @@ async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
         "subtotal": 12.99, "tax": 1.69, "total": 14.68,
         "delivery_address": "", "special_requests": "",
         "caller_phone": "+15555550111", "pos_order_id": "",
+        "kitchen_released": False,
+        "merchant_notify_status": "deferred_pending_payment",
     }
 
     async def fake_fetch(query):
@@ -346,6 +393,11 @@ async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
     assert p["kitchen_released"] is True
     assert p["pos_order_id"] == "POS-DEFERRED-1"
     assert p["pos_success"] is True
+    # release fan-out ledger: POS pushed on payment; merchant notification
+    # attempted (demo config has no transfer_number → recorded as skipped).
+    assert p["pos_delivery_status"] == "sent"
+    assert p["merchant_notify_status"] == "skipped_no_number"
+    assert p["delivery_detail"]["pos"]["released_at_payment"] is True
 
 
 async def test_mark_paid_skips_push_when_ticket_exists(monkeypatch):
@@ -358,7 +410,8 @@ async def test_mark_paid_skips_push_when_ticket_exists(monkeypatch):
 
     async def fake_fetch(query):
         return {"id": "row-7", "merchant_id": "real-merchant",
-                "caller_phone": "+15555550111", "pos_order_id": "POS-EXISTING"}
+                "caller_phone": "+15555550111", "pos_order_id": "POS-EXISTING",
+                "kitchen_released": True, "merchant_notify_status": "sent"}
     monkeypatch.setattr(pay_on_phone, "_fetch_held_order", fake_fetch)
 
     _install_patch_client(monkeypatch)
