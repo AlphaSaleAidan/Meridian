@@ -42,6 +42,7 @@ const SchedulePage = lazyRetry(() => import('@/pages/SchedulePage'))
 const CamConnectPage = lazyRetry(() => import('@/pages/CamConnectPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const MerchantSitePage = lazyRetry(() => import('@/pages/MerchantSitePage'))
+const PublicMenuPage = lazyRetry(() => import('@/pages/PublicMenuPage'))
 const ContentDashboardPage = lazyRetry(() => import('@/pages/ContentDashboardPage'))
 const ContentSettingsPage = lazyRetry(() => import('@/pages/ContentSettingsPage'))
 
@@ -322,6 +323,14 @@ export default function App() {
               <Route path="/sites/:slug" element={
                 <Suspense fallback={<LazyFallback />}>
                   <MerchantSitePage />
+                </Suspense>
+              } />
+
+              {/* PUBLIC HOSTED MENUS — no auth. Same mechanism as /sites:
+                  an SPA route served by the vercel.json catch-all rewrite. */}
+              <Route path="/m/:slug" element={
+                <Suspense fallback={<LazyFallback />}>
+                  <PublicMenuPage />
                 </Suspense>
               } />
 
