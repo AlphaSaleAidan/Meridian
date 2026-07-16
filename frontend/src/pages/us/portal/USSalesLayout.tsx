@@ -126,7 +126,7 @@ export default function USSalesLayout() {
     <>
       {/* Logo area */}
       <div className="h-16 flex items-center gap-2.5 px-5 border-b border-[#1F1F23] flex-shrink-0">
-        <Link to="/us/portal/dashboard" aria-label="Meridian sales portal home" className="flex items-center gap-2.5">
+        <Link to="/" aria-label="Meridian home" className="flex items-center gap-2.5">
           <MeridianEmblem size={28} />
           <div className="flex flex-col">
             <span className="text-sm font-bold text-white leading-tight">Meridian</span>
@@ -245,7 +245,7 @@ export default function USSalesLayout() {
           >
             <Menu size={20} />
           </button>
-          <Link to="/us/portal/dashboard" aria-label="Meridian sales portal home" className="flex items-center gap-3">
+          <Link to="/" aria-label="Meridian home" className="flex items-center gap-3">
             <MeridianEmblem size={24} />
             <div className="flex flex-col">
               <span className="text-sm font-bold text-white leading-tight">Meridian</span>
