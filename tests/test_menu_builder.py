@@ -50,13 +50,27 @@ def _run(coro):
     return asyncio.run(coro)
 
 
+def _row_matches(row: dict, filters: dict | None) -> bool:
+    """Minimal PostgREST filter emulation (eq. / is.true / is.false)."""
+    for col, expr in (filters or {}).items():
+        if expr.startswith("eq."):
+            if str(row.get(col)) != expr[3:]:
+                return False
+        elif expr in ("is.true", "is.false"):
+            if bool(row.get(col)) is not (expr == "is.true"):
+                return False
+    return True
+
+
 class FakeDB:
     """Records writes; serves canned reads. `config_row` is the current
-    phone_agent_config row state (mutated by update/insert)."""
+    phone_agent_config row state (mutated by update/insert). `menu_rows`
+    models the normalized menu_items store the sync now writes through."""
 
     def __init__(self, config_row=None, connection=None, existing_org=True):
         self.inserts, self.updates, self.batch = [], [], []
         self.config_row = dict(config_row) if config_row else None
+        self.menu_rows: list[dict] = []
         self._connection = connection
         self._existing_org = existing_org
 
@@ -67,16 +81,35 @@ class FakeDB:
             return [self._connection] if self._connection else []
         if table == "organizations":
             return [{"id": ORG}] if self._existing_org else []
+        if table == "menu_items":
+            rows = [dict(r) for r in self.menu_rows if _row_matches(r, filters)]
+            return rows[:limit] if limit else rows
         return []
 
     async def insert(self, table, row, return_data=True):
         self.inserts.append((table, row))
         if table == "phone_agent_config":
             self.config_row = dict(row)
+        if table == "menu_items":
+            import uuid as _uuid
+            rows = row if isinstance(row, list) else [row]
+            for r in rows:
+                r = dict(r)
+                r.setdefault("id", str(_uuid.uuid4()))
+                self.menu_rows.append(r)
         return [row] if isinstance(row, dict) else row
+
+    async def delete(self, table, filters=None):
+        if table == "menu_items":
+            self.menu_rows = [r for r in self.menu_rows if not _row_matches(r, filters)]
+        return True
 
     async def update(self, table, vals, filters=None):
         self.updates.append((table, vals, filters))
+        if table == "menu_items":
+            for r in self.menu_rows:
+                if _row_matches(r, filters):
+                    r.update(vals)
         if table == "phone_agent_config" and self.config_row is not None:
             self.config_row.update(vals)
 
