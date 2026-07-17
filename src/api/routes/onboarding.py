@@ -313,6 +313,70 @@ def _plan_tier(plan: str | None) -> str:
     return _PLAN_TIER_MAP.get(p, "starter")
 
 
+async def _record_provision_fee_terms(db, req: ProvisionCustomerRequest) -> tuple[bool, dict]:
+    """Fee parity for provision-customer: resolve the deal's fee terms, lock
+    them onto the source lead, and record the billing contract.
+
+    Order of operations (the invariant the New Customer flow relies on):
+      1. lead_id + already-locked lead → the locked columns are the contract
+         of record; copy them verbatim (no re-entry, no drift).
+      2. lead_id + unlocked lead (New Customer inserts the lead immediately
+         before provisioning) → resolve terms from the explicit request params
+         and lock them onto the lead server-side (first-lock-wins), so the CRM
+         row carries fee_terms_locked_at and matches what billing records.
+      3. no lead_id (self-serve wizards, legacy callers) → resolve from params
+         and flag override_reason='manual_provision'. Unchanged behavior.
+
+    Returns (billing_terms_recorded, terms). Raises on unexpected errors —
+    the caller owns the loud-but-non-fatal handling.
+    """
+    from ...billing.fee_terms import (
+        LEAD_TABLE_BY_MARKET,
+        lock_lead_fee_terms,
+        normalize_market,
+        resolve_fee_terms,
+        set_merchant_billing_terms,
+        terms_from_lead_row,
+    )
+
+    market = normalize_market(req.lead_market or req.country)
+    locked_by = req.rep_name or req.rep_id or "provision_customer"
+    terms: dict | None = None
+    override_reason: str | None = "manual_provision"
+    lead_row: dict | None = None
+    if req.lead_id:
+        lead_rows = await db.select(
+            LEAD_TABLE_BY_MARKET[market],
+            filters={"id": f"eq.{req.lead_id}"}, limit=1,
+        )
+        if lead_rows:
+            lead_row = lead_rows[0]
+            if lead_row.get("fee_terms_locked_at"):
+                terms = terms_from_lead_row(market, lead_row)
+                override_reason = None
+        else:
+            logger.warning("provision-customer: lead %s not found in %s — falling back to explicit params",
+                           req.lead_id, LEAD_TABLE_BY_MARKET[market])
+    if terms is None:
+        terms = resolve_fee_terms(
+            market,
+            plan_tier=req.plan,
+            monthly_fee_cents=req.monthly_price * 100 if req.monthly_price else None,
+            order_fee_cents=req.order_fee_cents,
+        )
+        if lead_row is not None:
+            locked = await lock_lead_fee_terms(db, market, req.lead_id, terms, locked_by)
+            override_reason = None if locked else "lead_terms_not_locked"
+    recorded = bool(await set_merchant_billing_terms(
+        db, req.org_id, terms,
+        source_lead_id=req.lead_id if lead_row is not None else None,
+        source_market=market,
+        created_by=locked_by,
+        override_reason=override_reason,
+    ))
+    return recorded, terms
+
+
 @router.post("/provision-customer", response_model=ProvisionCustomerResponse, dependencies=[Depends(require_service_auth)])
 async def provision_customer(req: ProvisionCustomerRequest):
     """
@@ -425,52 +489,16 @@ async def provision_customer(req: ProvisionCustomerRequest):
 
     # 2b. Fee parity: record the billing contract WITH activation, before any
     # invoicing — merchant_billing_terms is the source of truth billing reads.
-    # lead_id present → copy the lead's locked terms (no manual re-entry);
-    # absent → build from the explicit params and flag 'manual_provision'.
+    # lead_id present → lock/copy the lead's fee terms so the CRM row and the
+    # contract can't drift; absent → build from the explicit params and flag
+    # 'manual_provision'. (Order of operations lives in
+    # _record_provision_fee_terms — unit-tested in tests/test_fee_parity_terms.py.)
     # Loud-but-non-fatal until migration 20260716_merchant_billing_terms is
     # applied everywhere: a terms failure must not strand a paying customer,
     # but it is surfaced in the response and the logs.
     billing_terms_recorded = False
     try:
-        from ...billing.fee_terms import (
-            LEAD_TABLE_BY_MARKET,
-            normalize_market,
-            resolve_fee_terms,
-            set_merchant_billing_terms,
-            terms_from_lead_row,
-        )
-
-        market = normalize_market(req.lead_market or req.country)
-        terms = None
-        override_reason: str | None = "manual_provision"
-        if req.lead_id:
-            lead_rows = await db.select(
-                LEAD_TABLE_BY_MARKET[market],
-                filters={"id": f"eq.{req.lead_id}"}, limit=1,
-            )
-            if lead_rows:
-                terms = terms_from_lead_row(market, lead_rows[0])
-                override_reason = (
-                    None if lead_rows[0].get("fee_terms_locked_at")
-                    else "lead_terms_not_locked"
-                )
-            else:
-                logger.warning("provision-customer: lead %s not found in %s — falling back to explicit params",
-                               req.lead_id, LEAD_TABLE_BY_MARKET[market])
-        if terms is None:
-            terms = resolve_fee_terms(
-                market,
-                plan_tier=req.plan,
-                monthly_fee_cents=req.monthly_price * 100 if req.monthly_price else None,
-                order_fee_cents=req.order_fee_cents,
-            )
-        billing_terms_recorded = bool(await set_merchant_billing_terms(
-            db, req.org_id, terms,
-            source_lead_id=req.lead_id,
-            source_market=market,
-            created_by=req.rep_name or req.rep_id or "provision_customer",
-            override_reason=override_reason,
-        ))
+        billing_terms_recorded, terms = await _record_provision_fee_terms(db, req)
         # Seed the live phone/website order-fee rail (phone_agent_config) from
         # the same terms so the negotiated per-order fee applies the moment the
         # phone agent goes live (mirrors canada/us create-customer seeding).

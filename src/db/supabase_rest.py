@@ -191,20 +191,27 @@ class SupabaseREST:
         data: dict | list[dict],
         on_conflict: str = "",
         return_data: bool = True,
+        ignore_duplicates: bool = False,
     ) -> list[dict]:
         """
         Insert or update on conflict.
-        
+
         Args:
             table: Table name
             data: Row dict or list of row dicts
             on_conflict: Comma-separated conflict columns (e.g. "org_id,external_id")
             return_data: Whether to return the upserted rows
+            ignore_duplicates: Keep the existing row on conflict instead of
+                merging (PostgREST resolution=ignore-duplicates → ON CONFLICT
+                DO NOTHING). First write wins.
         """
         await self._load_schema()
         data = self._clean_rows(table, data)
         http = await self._get_http()
-        prefer_parts = ["resolution=merge-duplicates"]
+        prefer_parts = [
+            "resolution=ignore-duplicates" if ignore_duplicates
+            else "resolution=merge-duplicates"
+        ]
         if return_data:
             prefer_parts.append("return=representation")
         

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send, Check,
@@ -623,6 +623,8 @@ export default function USPortalCreateCustomerPage() {
   const [customerTempPassword, setCustomerTempPassword] = useState('')
   const [autoSendStatus, setAutoSendStatus] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false })
   const [crmRecordError, setCrmRecordError] = useState<string | null>(null)
+  // Survives a failed provision → retry doesn't insert a duplicate lead.
+  const createdLeadIdRef = useRef<string | null>(null)
 
   async function handleCreateCustomer() {
     setSaving(true)
@@ -635,6 +637,36 @@ export default function USPortalCreateCustomerPage() {
 
       const token = generateToken()
       const apiUrl = import.meta.env.VITE_API_URL || ''
+
+      // Create the closed-won CRM lead FIRST so provision-customer can link
+      // the billing contract to it (merchant_billing_terms.source_lead_id)
+      // and lock the sold fee terms onto the lead server-side — the invariant
+      // behind the LeadDetail "Fees locked" chip. Non-fatal (must NOT be
+      // silent): supabase-js returns errors instead of throwing, so an
+      // RLS-rejected insert surfaces via crmRecordError and provisioning
+      // proceeds without a lead link (the pre-fee-parity behavior).
+      let leadId: string | null = createdLeadIdRef.current
+      if (!leadId && supabase) {
+        try {
+          const { data: leadRows, error: leadErr } = await supabase.from('us_leads').insert({
+            business_name: form.businessName,
+            contact_name: form.ownerName,
+            contact_email: form.email,
+            contact_phone: form.phone || '',
+            vertical: form.vertical || '',
+            stage: 'closed_won',
+            monthly_value: price,
+            commission_rate: rep?.commission_rate ?? 70,
+            notes: form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
+            rep_id: rep?.rep_id || null,
+          }).select('id')
+          if (leadErr) setCrmRecordError(leadErr.message)
+          leadId = leadRows?.[0]?.id || null
+          createdLeadIdRef.current = leadId
+        } catch (e) {
+          setCrmRecordError(e instanceof Error ? e.message : 'Network error')
+        }
+      }
 
       const authHeaders = await getAuthHeaders()
       const controller = new AbortController()
@@ -661,6 +693,10 @@ export default function USPortalCreateCustomerPage() {
             country: 'US',
             rep_id: rep?.rep_id || null,
             rep_name: rep?.name || null,
+            // Fee parity: the backend locks the sold terms onto this lead
+            // (first-lock-wins) and records merchant_billing_terms against it.
+            lead_id: leadId,
+            lead_market: 'us',
           }),
         })
       } catch (fetchErr: any) {
@@ -687,45 +723,9 @@ export default function USPortalCreateCustomerPage() {
       setCustomerLoginUrl(provData.login_url || `${window.location.origin}/customer/login`)
       setCustomerPortalUrl(provData.portal_url || '')
 
-      if (supabase) {
-        // Non-fatal (the customer is already provisioned) but must NOT be
-        // silent: supabase-js returns errors instead of throwing, so the old
-        // bare try/catch dropped RLS-rejected closed-won leads invisibly
-        // (dead session → anon insert → RLS violation → lead never existed).
-        try {
-          const { data: leadRows, error: leadErr } = await supabase.from('us_leads').insert({
-            business_name: form.businessName,
-            contact_name: form.ownerName,
-            contact_email: form.email,
-            contact_phone: form.phone || '',
-            vertical: form.vertical || '',
-            stage: 'closed_won',
-            monthly_value: price,
-            commission_rate: rep?.commission_rate ?? 70,
-            notes: form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
-            rep_id: rep?.rep_id || null,
-          }).select('id')
-          if (leadErr) setCrmRecordError(leadErr.message)
-          // Fee parity: stamp the sold fee terms onto the CRM record so it can
-          // be reconciled against live billing. SEPARATE best-effort write —
-          // a not-yet-applied 20260716_lead_fee_terms migration must never
-          // break the closed-won insert above.
-          const leadId = leadRows?.[0]?.id
-          if (leadId && ['standard', 'premium', 'command'].includes(form.plan)) {
-            await supabase.from('us_leads').update({
-              plan_tier: form.plan,
-              monthly_fee_cents: Math.round(price * 100),
-              order_fee_cents: Math.round(selectedPlan.orderFee * 100),
-              call_overage_cents_per_min: 45,
-              included_call_min: 3,
-              fee_terms_locked_at: new Date().toISOString(),
-              fee_terms_locked_by: rep?.email || rep?.name || 'rep-portal',
-            }).eq('id', leadId)
-          }
-        } catch (e) {
-          setCrmRecordError(e instanceof Error ? e.message : 'Network error')
-        }
-      }
+      // (CRM lead + fee-terms lock now happen BEFORE/DURING provisioning —
+      // the lead is inserted above and provision-customer locks its terms
+      // server-side, so the client-side stamp is gone.)
 
       const link = `${window.location.origin}/us/onboard?token=${token}&biz=${encodeURIComponent(form.businessName)}&name=${encodeURIComponent(form.ownerName)}&email=${encodeURIComponent(form.email)}&phone=${encodeURIComponent(form.phone)}&plan=${encodeURIComponent(form.plan)}&price=${price}&setup=${setupFee}&freemonth=${form.firstMonthFree ? '1' : '0'}&rep=${encodeURIComponent(rep?.rep_id || '')}&rep_name=${encodeURIComponent(rep?.name || '')}`
       setOnboardingLink(link)

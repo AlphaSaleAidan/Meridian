@@ -894,6 +894,10 @@ async def _record_call_ending(msg: dict, call_id: str, ended: str | None,
     merchant_id = getattr(config, "merchant_id", "") or "demo"
     db = get_db()
     if call_id:
+        # Fast path for Vapi's serial retry (report re-sent after we already
+        # recorded it). The true race — two concurrent retries both passing
+        # this check — is closed by the partial unique index on vapi_call_id
+        # (20260717_voice_call_endings_unique) + ignore-duplicates below.
         existing = await db.select(
             "voice_call_endings",
             filters={"vapi_call_id": f"eq.{call_id}"},
@@ -901,11 +905,14 @@ async def _record_call_ending(msg: dict, call_id: str, ended: str | None,
         )
         if existing:
             return  # retried report — already recorded
-    await db.insert("voice_call_endings", {
+    # ignore_duplicates (first write wins) with NO on_conflict target: the
+    # vapi_call_id index is partial, which PostgREST's on_conflict inference
+    # can't name — the losing concurrent insert resolves as a swallowed 409.
+    await db.upsert("voice_call_endings", {
         "merchant_id": merchant_id,
         "vapi_call_id": call_id or None,
         "ended_reason": str(ended or "") or None,
         "disposition": map_ended_reason(ended),
         "duration_seconds": duration_seconds,
         "had_order": _had_order(msg),
-    })
+    }, ignore_duplicates=True)
