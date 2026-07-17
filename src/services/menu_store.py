@@ -475,6 +475,24 @@ async def ensure_public_menu(db, merchant_id: str, display_name: str = "") -> di
     return row
 
 
+async def unpublish_public_menu(db, merchant_id: str) -> dict:
+    """Take the merchant's hosted menu offline: flip ``published`` to false so
+    GET /api/menu/public/{slug} 404s. The ``public_slug`` is retained so a later
+    republish reuses the same URL (no dead links, no slug churn). No-op-safe when
+    the merchant has no menu row yet."""
+    rows = await db.select(
+        "merchant_menus", filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
+    if not rows or not rows[0].get("public_slug"):
+        return {"published": False, "public_slug": None}
+    row = rows[0]
+    if row.get("published"):
+        patch = {"published": False, "updated_at": _now()}
+        await db.update("merchant_menus", patch,
+                        filters={"merchant_id": f"eq.{merchant_id}"})
+        row = {**row, **patch}
+    return row
+
+
 async def get_public_menu(db, slug: str) -> Optional[dict]:
     """Published menu payload for GET /api/menu/public/{slug}; None → 404."""
     menus = await db.select(

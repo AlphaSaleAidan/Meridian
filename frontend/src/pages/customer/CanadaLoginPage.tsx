@@ -26,6 +26,11 @@ export default function CanadaLoginPage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  // Give the tab a real title instead of inheriting the generic landing title.
+  useEffect(() => {
+    document.title = 'Sign in — Meridian Canada'
+  }, [])
+
   // When Supabase fires PASSWORD_RECOVERY (user clicked email reset link), show
   // the set-password form instead of auto-logging the recovery session out.
   useEffect(() => {
@@ -193,11 +198,11 @@ export default function CanadaLoginPage() {
             <form onSubmit={handleSetNewPassword} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">New password</label>
-                <PasswordInput required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" autoFocus />
+                <PasswordInput required value={newPassword} onChange={e => setNewPassword(e.target.value)} className={inputClass} placeholder="At least 8 characters" autoComplete="new-password" autoFocus />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Confirm password</label>
-                <PasswordInput required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Re-enter your password" />
+                <PasswordInput required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className={inputClass} placeholder="Re-enter your password" autoComplete="new-password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Saving...' : 'Set password & continue'}
@@ -207,11 +212,11 @@ export default function CanadaLoginPage() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Email</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@email.com" />
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={inputClass} placeholder="you@email.com" autoComplete="username" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-[#A1A1A8] mb-1.5">Password</label>
-                <PasswordInput required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" />
+                <PasswordInput required value={password} onChange={e => setPassword(e.target.value)} className={inputClass} placeholder="Enter your password" autoComplete="current-password" />
               </div>
               <button type="submit" disabled={loading} className={btnClass}>
                 {loading ? 'Signing in...' : 'Sign In'}

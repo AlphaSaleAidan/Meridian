@@ -641,6 +641,10 @@ export default function App() {
               {/* Unsubscribe -- public, no auth */}
               <Route path="/unsubscribe" element={<Suspense fallback={<LazyFallback />}><UnsubscribePage /></Suspense>} />
 
+              {/* Unknown /canada/* paths stay in the Canada context (land on the
+                  Canada home) instead of dumping into the US landing page. */}
+              <Route path="/canada/*" element={<Navigate to="/canada" replace />} />
+
               {/* Catch-all → landing page */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
