@@ -221,6 +221,13 @@ def test_record_call_ending_uses_passed_config(monkeypatch):
             inserted.append((table, row))
             return [row]
 
+        async def upsert(self, table, row, on_conflict="", return_data=True,
+                         ignore_duplicates=False):
+            # _record_call_ending now writes via ignore-duplicates upsert
+            # (first-write-wins) after the #349 dedupe change — same row payload.
+            inserted.append((table, row))
+            return [row]
+
     import src.db as db_mod
     monkeypatch.setattr(db_mod, "_db_instance", _FakeDB())
 
