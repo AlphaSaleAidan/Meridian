@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter
-from pydantic import BaseModel, EmailStr
+from pydantic import AliasChoices, BaseModel, ConfigDict, EmailStr, Field
 
 from ...db import get_db
 
@@ -23,6 +23,16 @@ _NOTIFY_EMAIL_CA = os.environ.get("CANADA_CAREERS_NOTIFY_EMAIL", "careers-canada
 
 
 class CareerApplication(BaseModel):
+    # The US careers form (CareersPage.tsx) posts the canonical backend keys
+    # (experience / current_employer / linkedin_url / referral_source /
+    # motivation). The Canada form (CanadaCareersPage.tsx) posts UI-shaped keys
+    # (yearsExperience / employer / linkedin / heardFrom / message) plus two
+    # answers that had NO backend home and were silently dropped by Pydantic:
+    # commissionExperience and the referral *name*. AliasChoices accepts either
+    # spelling so both forms round-trip; the two new fields below make the
+    # commission + referral-name answers durable.
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     email: EmailStr
     phone: str = ""
@@ -30,12 +40,29 @@ class CareerApplication(BaseModel):
     city: str = ""
     province: str = ""
     state: str = ""
-    experience: str = ""
-    current_employer: str = ""
-    linkedin_url: str = ""
-    referral_source: str = ""
+    experience: str = Field(
+        "", validation_alias=AliasChoices("experience", "yearsExperience"),
+    )
+    current_employer: str = Field(
+        "", validation_alias=AliasChoices("current_employer", "employer"),
+    )
+    linkedin_url: str = Field(
+        "", validation_alias=AliasChoices("linkedin_url", "linkedin"),
+    )
+    referral_source: str = Field(
+        "", validation_alias=AliasChoices("referral_source", "heardFrom"),
+    )
     availability: str = ""
-    motivation: str = ""
+    motivation: str = Field(
+        "", validation_alias=AliasChoices("motivation", "message"),
+    )
+    # Previously-dropped answers, now durable (see 038 migration).
+    commission_experience: str = Field(
+        "", validation_alias=AliasChoices("commission_experience", "commissionExperience"),
+    )
+    referral_name: str = Field(
+        "", validation_alias=AliasChoices("referral_name", "referral"),
+    )
 
 
 async def submit_application(req: CareerApplication, country: str = "US") -> dict:
@@ -61,6 +88,8 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
             "current_employer": req.current_employer,
             "linkedin_url": req.linkedin_url,
             "referral_source": req.referral_source,
+            "referral_name": req.referral_name,
+            "commission_experience": req.commission_experience,
             "availability": req.availability,
             "motivation": req.motivation,
             "status": "pending",
@@ -102,9 +131,11 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
             applicant_phone=req.phone,
             location=f"{req.city}{', ' + state_province if state_province else ''}",
             experience=req.experience,
+            commission_experience=req.commission_experience,
             availability=req.availability,
             linkedin_url=req.linkedin_url,
             referral_source=req.referral_source,
+            referral_name=req.referral_name,
             motivation=req.motivation,
             application_id=app_id,
         )

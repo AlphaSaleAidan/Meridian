@@ -81,7 +81,7 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
   },
 ]
 
-const empty = { name: '', email: '', phone: '', position: '', city: '', province: '', experience: '', yearsExperience: '', commissionExperience: '', employer: '', linkedin: '', heardFrom: '', availability: '', referral: '', message: '' }
+const empty = { name: '', email: '', phone: '', position: '', city: '', province: '', yearsExperience: '', commissionExperience: '', employer: '', linkedin: '', heardFrom: '', availability: '', referral: '', message: '' }
 
 export default function CanadaCareersPage() {
   const navigate = useNavigate()
@@ -115,10 +115,30 @@ export default function CanadaCareersPage() {
     setError('')
     setLoading(true)
     try {
+      // Map UI-shaped keys to the backend contract explicitly so no answer is
+      // silently dropped (the backend also accepts these UI keys via
+      // AliasChoices, but sending the canonical keys keeps the wire format
+      // unambiguous and matches the US careers form).
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        position: formData.position,
+        city: formData.city,
+        province: formData.province,
+        experience: formData.yearsExperience,
+        commission_experience: formData.commissionExperience,
+        current_employer: formData.employer,
+        linkedin_url: formData.linkedin,
+        referral_source: formData.heardFrom,
+        referral_name: formData.referral,
+        availability: formData.availability,
+        motivation: formData.message,
+      }
       const res = await fetch(`${API_BASE}/api/canada/careers/apply`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       })
       if (res.ok) { setSubmitted(true); return }
       const errData = await res.json().catch(() => null)

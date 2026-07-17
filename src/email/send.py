@@ -263,9 +263,11 @@ async def send_career_application(
     applicant_phone: str = "",
     location: str = "",
     experience: str = "",
+    commission_experience: str = "",
     availability: str = "",
     linkedin_url: str = "",
     referral_source: str = "",
+    referral_name: str = "",
     motivation: str = "",
     application_id: str = "",
 ) -> dict:
@@ -291,9 +293,11 @@ async def send_career_application(
         + row("Phone", applicant_phone)
         + row("Location", location)
         + row("Experience", experience)
+        + row("Commission sales exp.", commission_experience)
         + row("Availability", availability)
         + row("LinkedIn", linkedin_url)
         + row("Heard from", referral_source)
+        + row("Referred by", referral_name)
         + "</table>"
         + (f'<p style="font:14px/1.5 sans-serif;margin:16px 0 0"><strong>Motivation</strong><br>{_esc(motivation)}</p>' if motivation else "")
         + (f'<p style="font:12px/1.5 sans-serif;color:#999;margin:16px 0 0">Application ID: {_esc(application_id)}</p>' if application_id else "")
