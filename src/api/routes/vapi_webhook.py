@@ -183,19 +183,9 @@ def _upsell_step(p: dict) -> str:
     return _UPSELL_STEP_GENTLE
 
 
-def _system_prompt(config, transfer_number: str = "") -> str:
-    """Build a polished, money-flow-showcasing call script for any merchant.
-
-    Improvements over the previous version:
-    - Renders size_prices correctly so per-size items (e.g. pizzas) show real
-      prices instead of $0.00.
-    - Adds ONE suggestive upsell if the caller hasn't added a drink or side.
-    - Explicitly collects the delivery address when order_type == delivery.
-    - Instructs the assistant to read back the complete order with the total
-      before calling submit_order.
-    - Tells the caller about the pay-by-text link + receipt after the order
-      is placed, making the full money flow visible in every demo call.
-    """
+def _menu_block(config) -> str:
+    """The prompt's MENU (+ SOLD OUT) block — shared by the legacy prompt and
+    every script pack, so pricing/sold-out behavior never varies by pack."""
     menu_lines: list[str] = []
     if getattr(config, "menu_items", None):
         for it in config.menu_items:
@@ -243,12 +233,19 @@ def _system_prompt(config, transfer_number: str = "") -> str:
             "apologize, say it's sold out today, and suggest a similar item):\n"
             + "\n".join(f"- {n}" for n in sold_out)
         )
-    raw_types = list(getattr(config, "order_types", ["pickup", "delivery"]))
-    # "dine_in" was renamed to "reservation" in the product; old configs persist.
-    display_types = ["reservation" if t == "dine_in" else t for t in raw_types]
-    order_types = ", ".join(display_types)
-    business = config.business_name
+    return menu
 
+
+def _display_order_types(config) -> list[str]:
+    """order_types for display — "dine_in" was renamed to "reservation" in the
+    product; old configs persist."""
+    raw_types = list(getattr(config, "order_types", ["pickup", "delivery"]))
+    return ["reservation" if t == "dine_in" else t for t in raw_types]
+
+
+def _reservation_block(config, display_types: list[str]) -> str:
+    """RESERVATIONS prompt lines — shared by the legacy prompt and every
+    script pack. "" when reservations aren't an order type."""
     reservation_lines = ""
     if "reservation" in display_types:
         resv = getattr(config, "reservation_config", None) or {}
@@ -265,6 +262,108 @@ def _system_prompt(config, transfer_number: str = "") -> str:
                 "back, then call submit_order with order_type 'reservation' and the details in "
                 "the notes."
             )
+    return reservation_lines
+
+
+def _transfer_block(transfer_number: str) -> str:
+    """TRANSFER TO A HUMAN prompt block — shared by the legacy prompt and
+    every script pack. Only rendered when the caller passed a validated
+    transfer number (see _safe_transfer_number / the assistant-request
+    handler), so merchants without one keep the prompt unchanged."""
+    if not transfer_number:
+        return ""
+    return (
+        "\n\nTRANSFER TO A HUMAN:\n"
+        "- If the caller asks for a person or a manager, has a complaint, or a "
+        "question you can't answer, say \"One moment — connecting you to the team.\" "
+        "and use the transferCall tool.\n"
+        "- If the transfer fails or nobody picks up, apologize, take a message — "
+        "their name, phone number, and what they need — promise a callback, then "
+        "resume the order if they still want it, or end the call politely.\n"
+        "- Never attempt more than one transfer per call."
+    )
+
+
+def _resolve_script_pack(config) -> str | None:
+    """The merchant's selected script pack id, or None for the legacy prompt.
+
+    STRICTLY fail-legacy: any problem in the pack layer (module missing,
+    unknown/typo'd id, NULL column) resolves to None so a live call always
+    has the proven generic prompt as its floor.
+    """
+    try:
+        from script_packs import resolve_pack_id
+        return resolve_pack_id(getattr(config, "script_pack", None))
+    except Exception:  # noqa: BLE001 — pack selection never breaks a call
+        return None
+
+
+def _pack_system_prompt(pack_id: str, config, transfer_number: str) -> str:
+    """System prompt for a selected script pack (see script_packs.compose).
+
+    The merchant-level blocks (menu/sold-out, personality style, reservations,
+    transfer, menu link, cap pacing) are rendered with the SAME helpers the
+    legacy prompt uses, so every safety/billing feature behaves identically
+    regardless of pack — packs only change the CALL FLOW + extra guard lines.
+    """
+    from script_packs import PromptContext, compose
+    personality = _personality(config)
+    display_types = _display_order_types(config)
+    style_lines = _personality_style_lines(personality)
+    ctx = PromptContext(
+        business_name=config.business_name,
+        greeting=_effective_greeting(config),
+        order_types=", ".join(display_types),
+        has_delivery="delivery" in display_types,
+        upsell_mode=str(personality.get("upsell") or "").strip().lower(),
+        multilingual=(getattr(config, "language", "") or "").strip().lower()
+        in ("multi", "multilingual"),
+    )
+    return compose(
+        pack_id,
+        ctx,
+        style_block=("\n\nSTYLE:\n" + "\n".join(style_lines)) if style_lines else "",
+        reservation_lines=_reservation_block(config, display_types),
+        transfer_block=_transfer_block(transfer_number),
+        menu_link_line=_menu_link_line(config),
+        pacing_line=_pacing_line(_effective_cap_min(config)),
+        menu_block=_menu_block(config),
+    )
+
+
+def _system_prompt(config, transfer_number: str = "") -> str:
+    """Build a polished, money-flow-showcasing call script for any merchant.
+
+    SCRIPT PACKS: when phone_agent_config.script_pack selects a known pack,
+    the prompt is composed by script_packs.compose (per-vertical,
+    time-optimized CALL FLOW; same guard rules and merchant blocks). NULL /
+    "legacy" / unknown values — and ANY error in the pack layer — fall
+    through to the legacy prompt below, byte-for-byte unchanged
+    (tests/api/test_script_packs.py holds golden snapshots proving it).
+
+    Improvements over the previous version:
+    - Renders size_prices correctly so per-size items (e.g. pizzas) show real
+      prices instead of $0.00.
+    - Adds ONE suggestive upsell if the caller hasn't added a drink or side.
+    - Explicitly collects the delivery address when order_type == delivery.
+    - Instructs the assistant to read back the complete order with the total
+      before calling submit_order.
+    - Tells the caller about the pay-by-text link + receipt after the order
+      is placed, making the full money flow visible in every demo call.
+    """
+    pack_id = _resolve_script_pack(config)
+    if pack_id:
+        try:
+            return _pack_system_prompt(pack_id, config, transfer_number)
+        except Exception as e:  # noqa: BLE001 — packs never break a call
+            logger.error("script pack '%s' failed for merchant %s — legacy prompt: %s",
+                         pack_id, getattr(config, "merchant_id", "?"), e)
+
+    menu = _menu_block(config)
+    display_types = _display_order_types(config)
+    order_types = ", ".join(display_types)
+    business = config.business_name
+    reservation_lines = _reservation_block(config, display_types)
 
     # Merchant personality: tone/humor/custom-phrase lines only when set, so
     # an absent or empty personality leaves the prompt byte-for-byte unchanged.
@@ -272,21 +371,7 @@ def _system_prompt(config, transfer_number: str = "") -> str:
     style_lines = _personality_style_lines(personality)
     style_block = ("\n\nSTYLE:\n" + "\n".join(style_lines)) if style_lines else ""
 
-    # Human transfer: only rendered when the caller passed a validated transfer
-    # number (see _safe_transfer_number / the assistant-request handler), so
-    # merchants without one keep the prompt byte-for-byte unchanged.
-    transfer_block = ""
-    if transfer_number:
-        transfer_block = (
-            "\n\nTRANSFER TO A HUMAN:\n"
-            "- If the caller asks for a person or a manager, has a complaint, or a "
-            "question you can't answer, say \"One moment — connecting you to the team.\" "
-            "and use the transferCall tool.\n"
-            "- If the transfer fails or nobody picks up, apologize, take a message — "
-            "their name, phone number, and what they need — promise a callback, then "
-            "resume the order if they still want it, or end the call politely.\n"
-            "- Never attempt more than one transfer per call."
-        )
+    transfer_block = _transfer_block(transfer_number)
 
     return (
         f"You are the AI phone order-taker for {business}.\n"

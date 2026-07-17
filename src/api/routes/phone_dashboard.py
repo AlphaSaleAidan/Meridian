@@ -113,6 +113,29 @@ class PhoneConfigRequest(BaseModel):
     # 20260706_personality) and rendered into the live Vapi system prompt by
     # vapi_webhook._system_prompt.
     personality: dict | None = None
+    # Call-script pack (migration 20260717_phone_script_pack). 'legacy' or
+    # unset keeps the current generic prompt byte-for-byte; other values must
+    # be a known pack id (services/phone_agent/script_packs.py). None leaves
+    # the stored value untouched; "" / "legacy" explicitly selects legacy.
+    script_pack: str | None = None
+
+    @field_validator("script_pack")
+    @classmethod
+    def _valid_script_pack(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        s = v.strip().lower()
+        if s in ("", "legacy"):
+            return s
+        try:
+            from .vapi_webhook import _PHONE_AGENT_DIR  # ensures sys.path  # noqa: F401
+            from script_packs import PACK_DEFS  # type: ignore[import]
+        except Exception:  # noqa: BLE001 — call-time resolution is fail-legacy anyway
+            return s
+        if s not in PACK_DEFS:
+            raise ValueError(
+                f"script_pack must be 'legacy' or one of {sorted(PACK_DEFS)}")
+        return s
 
 
 def _validate_merchant_id(merchant_id: str):
@@ -137,6 +160,24 @@ async def get_fee_settings():
         # Merchants can override per-account via phone_agent_config.max_call_minutes.
         "max_call_minutes": int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "8") or 0),
     }
+
+
+@router.get("/script-packs")
+async def get_script_packs(principal=Depends(require_service_auth)):
+    """Available call-script packs (registry metadata, no merchant data).
+
+    Drives the wizard/settings dropdown. 'legacy' (Standard) is always first
+    and is the default for every merchant — selecting anything else is
+    opt-in per merchant and only recommended for packs whose status is
+    'beat_baseline' (see docs/playbook 30-features/phone-orders/script-packs.md).
+    """
+    import sys as _sys
+    from pathlib import Path as _Path
+    _dir = str(_Path(__file__).resolve().parents[3] / "services" / "phone_agent")
+    if _dir not in _sys.path:
+        _sys.path.insert(0, _dir)
+    from script_packs import list_packs  # type: ignore[import]
+    return {"packs": list_packs()}
 
 
 @router.get("/config/{merchant_id}")

@@ -73,6 +73,10 @@ export interface PhoneConfig {
   // Persisted to phone_agent_config.personality (JSONB) and rendered into the
   // live Vapi system prompt by vapi_webhook._system_prompt.
   personality?: VoicePersonality | null
+  // Call-script pack (services/phone_agent/script_packs.py). 'legacy' or
+  // unset = the standard generic script (default, zero behavior change);
+  // other values opt into a per-vertical time-optimized script.
+  script_pack?: string
 }
 
 /** Result of POST /api/phone/config — carries enough to explain a failure. */
