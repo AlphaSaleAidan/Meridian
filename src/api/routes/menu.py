@@ -152,12 +152,30 @@ async def delete_menu_item(merchant_id: str, item_id: str,
     return {"ok": True}
 
 
+class PublishRequest(BaseModel):
+    """Publish toggle. Defaults to True so a bodyless POST still publishes
+    (backward-compatible); ``{"published": false}`` takes the page offline."""
+    published: bool = True
+
+
 @router.post("/{merchant_id}/publish")
-async def publish_public_menu(merchant_id: str, principal=Depends(require_service_auth)):
-    """Publish the hosted menu page; generates the slug on first publish."""
+async def publish_public_menu(
+    merchant_id: str,
+    body: PublishRequest = PublishRequest(),
+    principal=Depends(require_service_auth),
+):
+    """Publish or unpublish the hosted menu page. Publishing generates the slug
+    on first publish; unpublishing (``published:false``) flips the page offline
+    while retaining the slug so a later republish reuses the same URL."""
     await enforce_service_member(principal, merchant_id)
     _validate_merchant_id(merchant_id)
     db = get_db()
+    if not body.published:
+        meta = await menu_store.unpublish_public_menu(db, merchant_id)
+        slug = meta.get("public_slug") or ""
+        return {"ok": True, "slug": slug or None,
+                "url": f"{PUBLIC_MENU_BASE}/m/{slug}" if slug else None,
+                "published": False}
     config = await db.select(
         "phone_agent_config", filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
     display_name = (config[0].get("business_name") if config else "") or ""

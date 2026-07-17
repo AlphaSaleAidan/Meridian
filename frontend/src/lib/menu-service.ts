@@ -159,11 +159,21 @@ export const menuService = {
     return jsonOrThrow(res, `could not load public menu info: ${res.status}`)
   },
 
-  async publish(merchantId: string): Promise<{ ok: boolean; slug: string; url: string }> {
+  async publish(merchantId: string): Promise<{ ok: boolean; slug: string; url: string; published: boolean }> {
     const res = await fetch(`${API_BASE}/api/menu/${merchantId}/publish`, {
       method: 'POST',
-      headers: await getAuthHeaders(),
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ published: true }),
     })
     return jsonOrThrow(res, `publish failed: ${res.status}`)
+  },
+
+  async unpublish(merchantId: string): Promise<{ ok: boolean; slug: string | null; url: string | null; published: boolean }> {
+    const res = await fetch(`${API_BASE}/api/menu/${merchantId}/publish`, {
+      method: 'POST',
+      headers: { ...(await getAuthHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ published: false }),
+    })
+    return jsonOrThrow(res, `unpublish failed: ${res.status}`)
   },
 }

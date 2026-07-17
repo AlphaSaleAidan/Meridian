@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { clsx } from 'clsx'
-import { Copy, ExternalLink, Globe, ListOrdered, Loader2, Trash2 } from 'lucide-react'
+import { Copy, ExternalLink, EyeOff, Globe, ListOrdered, Loader2, Trash2 } from 'lucide-react'
 import { menuService, type MenuStoreItem, type PublicMenuInfo } from '@/lib/menu-service'
 import MenuIngestPanel from './MenuIngestPanel'
 import MenuReviewTable from './MenuReviewTable'
@@ -93,6 +93,19 @@ export default function MenuManager({ merchantId, posConnected, posName, fallbac
       setPublicInfo({ published: true, slug: res.slug, url: res.url })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'publish failed')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
+  const unpublish = async () => {
+    setPublishing(true); setError(null)
+    try {
+      const res = await menuService.unpublish(merchantId)
+      // Keep the slug so republishing reuses the same URL; the page is offline.
+      setPublicInfo({ published: false, slug: res.slug, url: res.url })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'unpublish failed')
     } finally {
       setPublishing(false)
     }
@@ -235,6 +248,14 @@ export default function MenuManager({ merchantId, posConnected, posName, fallbac
             >
               <ExternalLink size={10} /> View
             </a>
+            <button
+              type="button"
+              onClick={unpublish}
+              disabled={publishing}
+              className="px-2 py-1.5 rounded-md border border-[#1F1F23] text-[10px] text-[#A1A1A8] hover:text-red-400 hover:border-red-400/30 disabled:opacity-40 transition-colors flex items-center gap-1"
+            >
+              {publishing ? <Loader2 size={10} className="animate-spin" /> : <EyeOff size={10} />} Unpublish
+            </button>
           </div>
         ) : (
           <div className="flex items-center justify-between gap-3">
