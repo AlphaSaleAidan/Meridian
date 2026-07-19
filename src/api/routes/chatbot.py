@@ -20,14 +20,15 @@ SECURITY:
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from ..auth import require_service_auth
+from ..auth import RateLimiter, _client_ip, require_service_auth
 from .. import rbac
 from ...db import get_db
 
@@ -35,6 +36,33 @@ logger = logging.getLogger("meridian.api.chatbot")
 router = APIRouter(prefix="/api/chatbot", tags=["team-management"])
 
 _MAX_MSG = 1000
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        v = int(os.environ.get(name, "") or default)
+        return v if v > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
+# Abuse throttling for the UNAUTHENTICATED public widget endpoint (/send).
+# Reuses the shared RateLimiter (auth.py). Two INDEPENDENT sliding windows:
+#   - per client IP  (blocks a single abusive visitor / scripted loop)
+#   - per org_id     (caps total spend fan-out for one merchant's widget,
+#                     even across many IPs — the org_id is the widget's owning
+#                     org from the request; it's a throttle key, NOT a security
+#                     boundary, which is fine here).
+# Both defend the shared LiteLLM gateway against the documented token-drain
+# failure mode. Limits are env-configurable like the other auth limiters.
+_CHATBOT_IP_RPM = _int_env("CHATBOT_SEND_IP_RPM", 20)
+_CHATBOT_ORG_RPM = _int_env("CHATBOT_SEND_ORG_RPM", 60)
+# Hard cap on a single visitor message (bytes/chars) — reject absurdly long
+# inputs BEFORE any DB write or LLM call to prevent unbounded-write abuse.
+_CHATBOT_MAX_INPUT = _int_env("CHATBOT_SEND_MAX_INPUT", 8000)
+
+_ip_limiter = RateLimiter(requests_per_minute=_CHATBOT_IP_RPM)
+_org_limiter = RateLimiter(requests_per_minute=_CHATBOT_ORG_RPM)
 _TONE_HINT = {
     "friendly": "warm, upbeat, and approachable",
     "professional": "polished, concise, and professional",
@@ -180,17 +208,32 @@ async def _log_transcript(org_id: str, session_id: str, role: str, content: str,
 
 
 @router.post("/send")
-async def send(body: ChatSend):
+async def send(body: ChatSend, request: Request):
     """Public widget endpoint — NO auth (it's the merchant's own site widget).
 
     Gated instead by a required, ENABLED org config. Unknown/disabled orgs never
-    reach the LLM.
+    reach the LLM. Rate-limited per-IP AND per-org (independent windows) to
+    protect the shared LLM gateway from abuse / runaway-loop token drain.
     """
-    message = (body.message or "").strip()
+    raw = body.message or ""
+    # 1) Reject absurdly long inputs up front — before any DB write or LLM call.
+    if len(raw) > _CHATBOT_MAX_INPUT:
+        raise HTTPException(413, "message too long")
+
+    message = raw.strip()
     if not message:
         raise HTTPException(400, "message required")
     if len(message) > _MAX_MSG:
         message = message[:_MAX_MSG]
+
+    # 2) Throttle: per-IP and per-org are checked INDEPENDENTLY. Either tripping
+    #    returns 429 (short retry hint). Check IP first so a single abusive
+    #    client can't burn a shared org's budget window.
+    if not _ip_limiter.check(_client_ip(request)):
+        raise HTTPException(429, "Too many requests — try again in a minute")
+    org_key = (body.org_id or "").strip() or "unknown"
+    if not _org_limiter.check(org_key):
+        raise HTTPException(429, "This chatbot is busy — try again in a minute")
 
     db = get_db()
     rows = await db.select("chatbot_config", filters={"org_id": f"eq.{body.org_id}"}, limit=1)

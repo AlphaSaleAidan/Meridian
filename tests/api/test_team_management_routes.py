@@ -235,3 +235,86 @@ def test_chatbot_send_canned_answer_no_llm(db):
     body = r.json()
     assert body["source"] == "canned"
     assert body["reply"] == "9-5"
+
+
+# ── Chatbot abuse throttling (per-IP + per-org rate limit, input size cap) ────
+from src.api.auth import RateLimiter  # noqa: E402
+
+
+@pytest.fixture
+def throttle(monkeypatch):
+    """Shrink the two chatbot limiters to tiny, fresh windows for fast tests.
+
+    per-IP = 3/min, per-org = 5/min. Fresh RateLimiter instances so no state
+    bleeds between tests.
+    """
+    ip_lim = RateLimiter(requests_per_minute=3)
+    org_lim = RateLimiter(requests_per_minute=5)
+    monkeypatch.setattr(tbot, "_ip_limiter", ip_lim)
+    monkeypatch.setattr(tbot, "_org_limiter", org_lim)
+    return ip_lim, org_lim
+
+
+def _send(c, org_id, msg="hello", ip="9.9.9.9"):
+    return c.post(
+        "/api/chatbot/send",
+        json={"org_id": org_id, "message": msg},
+        headers={"x-forwarded-for": ip},
+    )
+
+
+def test_chatbot_send_under_ip_limit_passes(db, throttle):
+    c = _client(OWNER)
+    # per-IP limit is 3; the first 3 from one IP must pass (canned → 200).
+    for _ in range(3):
+        r = _send(c, ORG_A, "what are your hours", ip="1.1.1.1")
+        assert r.status_code == 200
+
+
+def test_chatbot_send_burst_over_ip_limit_gets_429(db, throttle):
+    c = _client(OWNER)
+    codes = [_send(c, ORG_A, "what are your hours", ip="2.2.2.2").status_code
+             for _ in range(5)]
+    # 3 allowed, then 429s.
+    assert codes[:3] == [200, 200, 200]
+    assert codes[3] == 429 and codes[4] == 429
+
+
+def test_chatbot_ip_limit_is_per_ip_independent(db, throttle):
+    c = _client(OWNER)
+    # Exhaust IP A.
+    for _ in range(3):
+        assert _send(c, ORG_A, "what are your hours", ip="3.3.3.3").status_code == 200
+    assert _send(c, ORG_A, "what are your hours", ip="3.3.3.3").status_code == 429
+    # A DIFFERENT IP still has its own fresh budget.
+    assert _send(c, ORG_A, "what are your hours", ip="4.4.4.4").status_code == 200
+
+
+def test_chatbot_org_limit_trips_across_many_ips(db, throttle):
+    # per-org limit is 5. Send from 6 DISTINCT IPs (each under its own IP cap)
+    # to the SAME org → the org window trips independently of any IP window.
+    c = _client(OWNER)
+    codes = [_send(c, ORG_A, "what are your hours", ip=f"10.0.0.{i}").status_code
+             for i in range(6)]
+    assert codes[:5] == [200] * 5
+    assert codes[5] == 429  # org window exhausted, not the per-IP window
+
+
+def test_chatbot_org_limit_is_per_org_independent(db, throttle):
+    # Fill ORG_A's org window from distinct IPs; ORG_B still gets its own window.
+    c = _client(OWNER)
+    for i in range(5):
+        assert _send(c, ORG_A, "what are your hours", ip=f"11.0.0.{i}").status_code == 200
+    assert _send(c, ORG_A, "what are your hours", ip="11.0.0.99").status_code == 429
+    # ORG_B has no config → 404 (NOT 429): a different org's throttle window is
+    # untouched, so we reach the config gate rather than the org rate limit.
+    assert _send(c, ORG_B, "hi", ip="11.0.0.99").status_code == 404
+
+
+def test_chatbot_send_oversized_input_rejected(db, throttle):
+    c = _client(OWNER)
+    huge = "x" * 9000  # > CHATBOT_SEND_MAX_INPUT default (8000)
+    r = _send(c, ORG_A, huge, ip="5.5.5.5")
+    assert r.status_code == 413
+    # Oversized input must be rejected BEFORE any transcript write.
+    assert not any(t == "chatbot_messages" for t, _ in db.writes)
