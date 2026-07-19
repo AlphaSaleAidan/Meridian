@@ -5,6 +5,7 @@ Pulls merchant settings from Supabase for phone agent behavior.
 import asyncio
 import logging
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -42,6 +43,49 @@ def _get_http_client():
         _http_client = httpx.AsyncClient()
         _http_client_loop = loop
     return _http_client
+
+
+# ── Short-TTL config cache ──────────────────────────────────────────────────
+# A single phone call resolves the merchant config several times across its
+# lifetime: assistant-request → each submit_order tool-call → end-of-call
+# report → deferred POS push at payment. Each was a separate Supabase round
+# trip, adding latency the caller hears (esp. before submit_order confirms) and
+# load on the service-role rail. The config is read-mostly and a merchant edit
+# only needs to land within a few seconds, so cache successful lookups for a
+# short window. Misses/errors are NOT cached, so a just-activated merchant
+# appears on the next call rather than after the TTL. Set the TTL env to 0 to
+# disable entirely (revert knob).
+_CONFIG_CACHE_TTL_SEC = float(os.getenv("MERIDIAN_CONFIG_CACHE_TTL_SEC", "60") or 0)
+_config_cache: dict[str, tuple[float, object]] = {}
+
+
+def _cache_get(key: str):
+    if _CONFIG_CACHE_TTL_SEC <= 0:
+        return None
+    hit = _config_cache.get(key)
+    if hit is None:
+        return None
+    ts, val = hit
+    if (time.monotonic() - ts) > _CONFIG_CACHE_TTL_SEC:
+        _config_cache.pop(key, None)
+        return None
+    return val
+
+
+def _cache_put(key: str, val) -> None:
+    # Only cache real hits — never None — so misconfigured/just-activated
+    # merchants re-resolve immediately instead of being pinned to the miss.
+    if _CONFIG_CACHE_TTL_SEC > 0 and val is not None:
+        _config_cache[key] = (time.monotonic(), val)
+
+
+def invalidate_config_cache(merchant_id: str = "") -> None:
+    """Drop cached entries. Called with a merchant_id after a config write, or
+    with no arg to clear everything (tests)."""
+    if not merchant_id:
+        _config_cache.clear()
+        return
+    _config_cache.pop(f"cfg:{merchant_id}", None)
 
 
 @dataclass
@@ -246,6 +290,10 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
         logger.warning("No Supabase configured — using demo config for %s", merchant_id)
         return _demo_config(merchant_id)
 
+    cached = _cache_get(f"cfg:{merchant_id}")
+    if cached is not None:
+        return cached
+
     try:
         headers = {
             "apikey": SUPABASE_KEY,
@@ -347,6 +395,10 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
         except Exception as menu_exc:  # noqa: BLE001 — store read never breaks a call
             logger.warning("menu store read failed for %s (JSONB fallback): %s",
                            merchant_id, menu_exc)
+        # Cache the fully-resolved config (incl. menu-store enrichment) — only
+        # real hits are stored, so a just-activated merchant is not pinned to a
+        # miss (see _cache_put).
+        _cache_put(f"cfg:{merchant_id}", config)
         return config
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
@@ -356,6 +408,10 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
 async def get_merchant_by_phone(phone_number: str) -> Optional[str]:
     if not SUPABASE_URL or not SUPABASE_KEY:
         return "demo-merchant"
+
+    cached = _cache_get(f"phone:{phone_number}")
+    if cached is not None:
+        return cached
 
     try:
         headers = {
@@ -370,7 +426,9 @@ async def get_merchant_by_phone(phone_number: str) -> Optional[str]:
             headers=headers,
         )
         if res.status_code == 200 and res.json():
-            return res.json()[0]["merchant_id"]
+            mid = res.json()[0]["merchant_id"]
+            _cache_put(f"phone:{phone_number}", mid)
+            return mid
     except Exception as e:
         logger.error("Failed to lookup merchant by phone: %s", e)
     return None
