@@ -996,3 +996,53 @@ async def get_team(request: Request, user: dict = Depends(require_jwt)):
         "applicants": applicants,
         "viewer": {"role": scope.role, "rep_id": scope.rep_id, "is_admin": scope.is_admin},
     }
+
+
+def _rollup_team_commissions(milestones: list[dict]) -> dict:
+    """Pure per-rep commission rollup. earned='earned' (unpaid) / pending /
+    paid; 'halted' and unknown statuses are excluded. Rows sorted by total desc.
+    """
+    by_rep: dict[str, dict] = {}
+    tot = {"earned_cents": 0, "pending_cents": 0, "paid_cents": 0}
+    bucket_of = {"earned": "earned_cents", "pending": "pending_cents", "paid": "paid_cents"}
+    for m in milestones or []:
+        rid = m.get("rep_id")
+        bucket = bucket_of.get(m.get("status"))
+        if not rid or bucket is None:
+            continue
+        cents = int(m.get("amount_cents") or 0)
+        r = by_rep.setdefault(rid, {"rep_id": rid, "earned_cents": 0, "pending_cents": 0, "paid_cents": 0})
+        r[bucket] += cents
+        tot[bucket] += cents
+    rows = sorted(by_rep.values(),
+                  key=lambda r: -(r["earned_cents"] + r["pending_cents"] + r["paid_cents"]))
+    return {"rows": rows, "totals": tot}
+
+
+@router.get("/team/commissions")
+async def get_team_commissions(user: dict = Depends(require_jwt)):
+    """Per-rep commission rollup for the caller's VISIBLE subtree (view-only).
+
+    Powers the Manager team view's commission column. Scoped by the same
+    hierarchy plane as /team: a manager sees their downline, a rep sees only
+    themselves, an admin sees everyone. Amounts are earned / pending / paid in
+    integer cents — this NEVER pays or mutates anything.
+    """
+    scope = await hierarchy.resolve_scope(user)
+    allowed = await hierarchy.visible_rep_ids(scope)  # None ⇒ admin (all reps)
+
+    from ...db import get_db
+    db = get_db()
+    filters = {}
+    if allowed is not None:
+        if not allowed:
+            return {"rows": [], "totals": {"earned_cents": 0, "pending_cents": 0, "paid_cents": 0}}
+        filters["rep_id"] = "in.(" + ",".join(sorted(allowed)) + ")"
+    milestones = await db.select(
+        "commission_milestones",
+        columns="rep_id,amount_cents,status",
+        filters=filters or None,
+        limit=5000,
+    )
+
+    return _rollup_team_commissions(milestones)

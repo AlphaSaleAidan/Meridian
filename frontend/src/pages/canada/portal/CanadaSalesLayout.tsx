@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import SalesPortalMobileNav from './SalesPortalMobileNav'
-import { useSalesAuth } from '@/lib/sales-auth'
+import { useSalesAuth, repTier } from '@/lib/sales-auth'
 import { useMobile } from '@/hooks/useMobile'
 import ClineAIChatWidget from '@/components/ClineAIChatWidget'
 
@@ -35,6 +35,7 @@ const salesNavBase = [
 ] as const
 
 const teamNavAdmin = { path: '/canada/portal/team', icon: Users, label: 'Team' } as const
+const teamNavManager = { path: '/canada/portal/team', icon: Users, label: 'My Team' } as const
 const teamNavRep = { path: '/canada/portal/team', icon: Trophy, label: 'Leaderboard' } as const
 // Recruiting pipeline: NOT a nav tab (Aidan's call, 2026-07-17) — the route
 // stays live and is linked from the Team page instead.
@@ -145,9 +146,14 @@ export default function CanadaSalesLayout() {
     }
   }, [])
 
-  const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
-  const salesNavItems = [...salesNavBase, isAdmin ? teamNavAdmin : teamNavRep, ...salesNavTail]
-  const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
+  // View tier is driven by the DB role (admin / manager / rep). The email
+  // allowlist is kept only as a transition fallback so the existing CA admins
+  // keep the admin view even if their sales_reps.role isn't 'admin' yet.
+  const emailIsAdmin = !!rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
+  const tier = emailIsAdmin ? 'admin' : repTier(rep)
+  const teamNav = tier === 'admin' ? teamNavAdmin : tier === 'manager' ? teamNavManager : teamNavRep
+  const salesNavItems = [...salesNavBase, teamNav, ...salesNavTail]
+  const allNav: NavEntry[] = tier === 'admin' ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 
   const sidebarContent = (
     <>

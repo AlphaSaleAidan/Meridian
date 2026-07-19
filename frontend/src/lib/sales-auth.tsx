@@ -16,6 +16,11 @@ export interface SalesRepProfile {
   total_paid: number
   created_at: string
   portal_context: PortalContext
+  // Sales hierarchy (20260716). role drives the SR-portal view archetype
+  // (admin / manager / rep); manager_id + level position the rep in the tree.
+  role: string
+  manager_id: string | null
+  level: number | null
 }
 
 export interface SalesAuthState {
@@ -26,6 +31,39 @@ export interface SalesAuthState {
   signup: (name: string, email: string, password: string, phone?: string, portal?: 'us' | 'canada') => Promise<string | null>
   resetPassword: (email: string) => Promise<string | null>
   logout: () => void
+}
+
+// ── SR-portal view archetypes (3 tiers) ─────────────────────────────────────
+// All five middle roles share one 'manager' view (own subtree, view-only); the
+// exact title is still shown as a badge. Keeps the UI to admin / manager / rep.
+export const MANAGER_ROLES = [
+  'vp_sales', 'regional_manager', 'district_manager', 'office_manager', 'assistant_manager',
+] as const
+
+export type RepTier = 'admin' | 'manager' | 'rep'
+
+/** Resolve a rep's SR-portal view tier from their DB role. */
+export function repTier(rep: { role?: string | null } | null | undefined): RepTier {
+  const role = String(rep?.role ?? '').toLowerCase()
+  if (role === 'admin') return 'admin'
+  if ((MANAGER_ROLES as readonly string[]).includes(role)) return 'manager'
+  return 'rep'
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Admin',
+  vp_sales: 'VP Sales',
+  regional_manager: 'Regional Manager',
+  district_manager: 'District Manager',
+  office_manager: 'Office Manager',
+  assistant_manager: 'Assistant Manager',
+  sales_rep: 'Sales Rep',
+}
+
+/** Human label for a role string (falls back to a title-cased value). */
+export function roleLabel(role?: string | null): string {
+  const key = String(role ?? '').toLowerCase()
+  return ROLE_LABELS[key] || (key ? key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Sales Rep')
 }
 
 const SalesAuthContext = createContext<SalesAuthState | null>(null)
@@ -110,6 +148,9 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     total_paid: 0,
     created_at: new Date().toISOString(),
     portal_context: resolvePortalContext(email),
+    role: 'sales_rep',
+    manager_id: null,
+    level: null,
   }
   return localProfile
 }
@@ -242,6 +283,9 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         total_paid: 9600,
         created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
         portal_context: resolvePortalContext(email),
+        role: 'sales_rep',
+        manager_id: null,
+        level: null,
       }
       saveRep(demoRep)
       setRep(demoRep)
@@ -287,6 +331,9 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         total_paid: 0,
         created_at: new Date().toISOString(),
         portal_context: resolvePortalContext(email),
+        role: 'sales_rep',
+        manager_id: null,
+        level: null,
       }
       saveRep(demoRep)
       setRep(demoRep)
@@ -423,5 +470,8 @@ function repFromRow(data: Record<string, unknown>): SalesRepProfile {
     total_paid: 0,
     created_at: data.created_at as string,
     portal_context: (data.portal_context as PortalContext) || resolvePortalContext(data.email as string),
+    role: (data.role as string) || 'sales_rep',
+    manager_id: (data.manager_id as string) || null,
+    level: data.level != null ? Number(data.level) : null,
   }
 }
