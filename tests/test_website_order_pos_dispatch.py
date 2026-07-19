@@ -100,6 +100,8 @@ async def test_clover_happy_path_tags_expands_qty_and_fires_kitchen(monkeypatch)
 
     assert res == {
         "success": True, "pos_order_id": "CLV_ORD_1", "kitchen_print_fired": True,
+        # no item_id_map passed → every line freeform, nothing booked to inventory
+        "line_items_mapped": 0,
     }
     order_calls = [c for c in calls if c[0].endswith("/orders")]
     li_calls = [c for c in calls if "/line_items" in c[0]]

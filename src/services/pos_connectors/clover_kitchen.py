@@ -72,16 +72,45 @@ def build_kitchen_note(order: dict, source_tag: str) -> str:
     return "\n".join(lines)[:2000]
 
 
+def _clover_item_id_for(item: dict, item_id_map: dict | None) -> str:
+    """Resolve an order item to the merchant's Clover inventory itemId.
+
+    Prefer an explicit id stored on the order item (``clover_item_id`` /
+    ``pos_item_id`` / ``source_external_id``, e.g. threaded from the menu row),
+    then fall back to a lower(name) lookup in ``item_id_map`` (built from the
+    merchant's POS-imported menu items). Returns "" when nothing maps — the
+    caller then sends a freeform name+price line item, never blocking the order
+    on a missing mapping.
+    """
+    for key in ("clover_item_id", "pos_item_id", "source_external_id"):
+        val = item.get(key)
+        if val:
+            return str(val).strip()
+    if item_id_map:
+        name = str(item.get("name", "")).strip().lower()
+        if name:
+            return str(item_id_map.get(name) or "").strip()
+    return ""
+
+
 async def submit_clover_kitchen_order(
     *,
     access_token: str,
     external_merchant_id: str,
     order: dict,
     source_tag: str = "Meridian Mobile Order",
+    item_id_map: dict | None = None,
 ) -> dict:
     """Create the order in Clover, attach line items, then fire it to the
     kitchen printer. Returns
-    {success, pos_order_id, kitchen_print_fired, reason?}.
+    {success, pos_order_id, kitchen_print_fired, line_items_mapped?, reason?}.
+
+    ``item_id_map`` is an optional {lower(name): clover_item_id} map (the
+    merchant's POS-imported inventory). When an order item resolves to a real
+    Clover itemId, the line item carries ``{"item": {"id": <id>}}`` so the sale
+    books against real inventory and shows up in the merchant's Clover sales
+    reports — otherwise we send the current freeform name+price line item. A
+    missing/failed mapping NEVER blocks an order.
 
     Print-event failure is non-fatal: the order still exists on the register,
     so we report success with kitchen_print_fired=False and let staff see it
@@ -133,6 +162,7 @@ async def submit_clover_kitchen_order(
         pos_order_id = (res.json() or {}).get("id", "")
 
         created = 0
+        mapped = 0
         for item in order.get("items", []):
             unit_price = float(item.get("price", item.get("unit_price", 0)) or 0)
             special = (item.get("special_instructions") or item.get("notes") or "").strip()
@@ -140,6 +170,14 @@ async def submit_clover_kitchen_order(
                 "name": str(item.get("name", "Item"))[:127],
                 "price": int(round(unit_price * 100)),
             }
+            # Sales-reporting parity: when this order item maps to a real Clover
+            # inventory item, book the line against it. Name + price still ride
+            # along (Clover keeps the override), so an unmapped item is simply
+            # the current freeform behavior — a missing map never blocks.
+            clover_item_id = _clover_item_id_for(item, item_id_map)
+            if clover_item_id:
+                li["item"] = {"id": clover_item_id}
+                mapped += 1
             if special:
                 li["note"] = special[:255]
             # Clover line items are one row per unit — expand quantity.
@@ -183,6 +221,9 @@ async def submit_clover_kitchen_order(
         "success": True,
         "pos_order_id": pos_order_id,
         "kitchen_print_fired": kitchen_print_fired,
+        # How many distinct order items booked against real Clover inventory
+        # (support/observability — 0 means every line was freeform).
+        "line_items_mapped": mapped,
     }
 
 

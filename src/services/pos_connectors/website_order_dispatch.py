@@ -104,11 +104,17 @@ async def _dispatch(order_row: dict, merchant_id: str) -> dict:
     api_result: dict | None = None
     if conn:
         if system_key == "clover":
+            # Map order line items to real Clover inventory itemIds (from the
+            # merchant's POS-imported menu) so the sale attributes to real
+            # menu items in Clover's reports. Enrichment only — a lookup
+            # failure yields {} and every line falls back to freeform.
+            item_id_map = await _clover_inventory_map(merchant_id)
             api_result = await submit_clover_kitchen_order(
                 access_token=conn["token"],
                 external_merchant_id=conn["external_merchant_id"],
                 order={**order_row, "order_ref": order_id},
                 source_tag=SOURCE_TAG,
+                item_id_map=item_id_map,
             )
         elif system_key == "square":
             api_result = await submit_square_kitchen_order(
@@ -256,6 +262,23 @@ async def _merchant_contact(order_row: dict) -> dict:
     except Exception as e:  # noqa: BLE001 — no contact just means notify can't deliver
         logger.warning("merchant contact lookup failed: %s", e)
     return {"phone": phone, "email": email, "name": name}
+
+
+async def _clover_inventory_map(merchant_id: str) -> dict:
+    """{lower(name): clover_item_id} from the merchant's POS-imported menu, for
+    booking order line items against real Clover inventory. Best-effort: any
+    failure (or no store rows) returns {} so the order dispatches with freeform
+    line items exactly as before — mapping never blocks an order."""
+    if not merchant_id:
+        return {}
+    try:
+        from ...db import get_db
+        from ...services.menu_store import get_pos_item_id_map
+
+        return await get_pos_item_id_map(get_db(), merchant_id)
+    except Exception as e:  # noqa: BLE001 — enrichment only, never a dispatch gate
+        logger.warning("clover inventory map lookup failed for %s: %s", merchant_id, e)
+        return {}
 
 
 async def _resolve_connection(merchant_id: str) -> dict | None:

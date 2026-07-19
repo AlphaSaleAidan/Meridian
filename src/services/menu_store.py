@@ -186,6 +186,47 @@ async def get_menu_for_agent(db, merchant_id: str) -> tuple[list[dict], list[str
     return agent_menu(rows), sold_out_names(rows)
 
 
+# ── POS inventory mapping (sales-reporting parity) ───────────────────────
+
+def pos_item_id_map(rows: list[dict], source: str = "pos") -> dict[str, str]:
+    """{lower(name): source_external_id} for rows whose ``source`` matches and
+    that carry a POS catalog object id.
+
+    This is the bridge that lets an outbound order line item book against the
+    merchant's REAL inventory item (so their POS sales reports attribute the
+    Meridian order to the right menu item) instead of a freeform name+price
+    row that reports as an untracked custom sale.
+
+    Keyed by lower(name) because the order the customer placed carries item
+    NAMES (from the same published menu), while the catalog id lives on the
+    store row. First row wins on a name collision (``_sorted`` order) so the
+    map is stable across calls. Only non-empty ids are included, so a caller
+    can treat "name absent from map" as "no mapping — send freeform".
+    """
+    out: dict[str, str] = {}
+    for row in _sorted(rows):
+        if (row.get("source") or "") != source:
+            continue
+        ext_id = str(row.get("source_external_id") or "").strip()
+        name = (row.get("name") or "").strip().lower()
+        if name and ext_id and name not in out:
+            out[name] = ext_id
+    return out
+
+
+async def get_pos_item_id_map(db, merchant_id: str, source: str = "pos") -> dict[str, str]:
+    """DB-backed :func:`pos_item_id_map` — the merchant's live name→POS-item-id
+    map for order dispatch. Never raises on a store miss: returns {} so a
+    missing/failed lookup can never block an order (callers treat {} as
+    "everything freeform")."""
+    try:
+        rows = await list_items(db, merchant_id)
+    except Exception as e:  # noqa: BLE001 — mapping is an enrichment, never a gate
+        logger.warning("pos_item_id_map lookup failed for %s: %s", merchant_id, e)
+        return {}
+    return pos_item_id_map(rows, source=source)
+
+
 # ── write-through mirror ─────────────────────────────────────────────────
 
 async def mirror_to_config(db, merchant_id: str, rows: list[dict] | None = None) -> list[dict]:
