@@ -30,6 +30,18 @@ export function useIsDemo(): boolean {
   return isDemoPath(location.pathname)
 }
 
+/**
+ * Command-tier check for gating the Multi-Location Hub.
+ *
+ * The sales `command` plan maps onto the account tier `enterprise`
+ * (backend onboarding._PLAN_TIER_MAP), so on the merchant side the Command tier
+ * shows as plan === 'enterprise'. This is UI convenience only — the server
+ * re-checks the tier on every /api/hub/* call (docs/multi-location-hub-journey.md).
+ */
+export function useIsCommandTier(): boolean {
+  return useTier() === 'enterprise'
+}
+
 export const tierLimits = {
   trial:      { insightLimit: 5,   forecastDays: 7,   moneyLeft: false },
   starter:    { insightLimit: 5,   forecastDays: 7,   moneyLeft: false },
