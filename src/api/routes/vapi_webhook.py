@@ -851,13 +851,20 @@ async def vapi_webhook(request: Request):
             # Voice-ledger gate: if this merchant is underwater past the floor,
             # forward the call to the Telnyx/Pipecat agent instead of burning
             # Vapi minutes. Fail-open — any error/None balance serves via Vapi.
-            if TELNYX_FALLBACK_NUMBER and VOICE_BALANCE_FLOOR_CENTS is not None:
+            # Per-location floor (migration 072): the merchant's own
+            # voice_balance_floor_cents overrides the global env default, so each
+            # operator sets their own self-funding tolerance. None on either ⇒
+            # that layer is simply off.
+            _floor = getattr(config, "voice_balance_floor_cents", None)
+            if _floor is None:
+                _floor = VOICE_BALANCE_FLOOR_CENTS
+            if TELNYX_FALLBACK_NUMBER and _floor is not None:
                 try:
                     from ...services.voice_ledger import balance_cents
                     bal = await balance_cents(getattr(config, "merchant_id", "") or "")
-                    if bal is not None and bal <= VOICE_BALANCE_FLOOR_CENTS:
+                    if bal is not None and bal <= _floor:
                         logger.info("VAPI fallback→Telnyx: merchant=%s balance=%d¢ floor=%d¢",
-                                    config.merchant_id, bal, VOICE_BALANCE_FLOOR_CENTS)
+                                    config.merchant_id, bal, _floor)
                         return {"destination": {"type": "number", "number": TELNYX_FALLBACK_NUMBER}}
                 except Exception as e:  # noqa: BLE001 — fallback check never strands the call
                     logger.error("voice-ledger fallback check failed: %s", e)

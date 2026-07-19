@@ -202,6 +202,12 @@ class MerchantPhoneConfig:
     # that hasn't opted in behind the warning modal.
     accept_cash: bool = False
 
+    # Per-location voice self-funding floor (cents, may be negative = grace
+    # float). When the merchant's voice_ledger balance <= this, incoming calls
+    # fall back to the cheaper Telnyx rail. None = use the global env default
+    # (VOICE_BALANCE_FLOOR_CENTS). Migration 072.
+    voice_balance_floor_cents: Optional[int] = None
+
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
 
@@ -381,6 +387,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                                else None),
             script_pack=(row.get("script_pack") or "").strip().lower(),
             accept_cash=bool(row.get("accept_cash", False)),
+            voice_balance_floor_cents=(int(row["voice_balance_floor_cents"])
+                                       if row.get("voice_balance_floor_cents") is not None else None),
         )
         # MENU STORE (single source of truth): merchants with rows in the
         # normalized menu_items table get their menu from the store —
