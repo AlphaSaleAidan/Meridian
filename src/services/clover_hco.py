@@ -269,13 +269,39 @@ async def settle_clover_session(db, sess: dict[str, Any], payment_ref: str) -> N
     phone = (sess.get("caller_phone") or "").strip()
     if phone:
         try:
-            from ..sms.client import send_sms
+            # Shared, idempotent receipt — the SAME send the streaming and
+            # Stripe paths use. Keyed on the order id so both Clover
+            # confirmation paths (HCO webhook + /pay/clover/return) and any
+            # prior streaming send collapse to exactly one receipt.
+            _phone_agent_path()
+            from merchant_config import _demo_config, get_merchant_config
+            from order_receipt import ReceiptClaim, send_order_receipt
 
-            cur = (sess.get("currency") or "cad").upper()
-            sym = "CA$" if cur == "CAD" else f"{cur} "
-            await send_sms(phone, (
-                f"Payment received \u2713 Your order is confirmed and paid — "
-                f"{sym}{(sess.get('amount_cents') or 0) / 100:,.2f}. "
-                "We'll have it ready shortly."))
+            cfg = (await get_merchant_config(merchant_id)) if merchant_id else None
+            cfg = cfg or _demo_config(merchant_id or "demo")
+            order = {
+                "merchant_id": merchant_id,
+                "business_name": getattr(cfg, "business_name", "") or "",
+                "customer_name": sess.get("customer_name", "") or "",
+                "caller_phone": phone,
+            }
+            # CLAIM the row: Clover-native carries a real pos_order_id on the row,
+            # so claim on it directly; if the session lacks one (rare), fall back
+            # to merchant+phone most-recent — the short_code/ref are NOT columns on
+            # phone_orders and would match nothing (silent receipt drop).
+            clover_pos_id = str(sess.get("pos_order_id") or "")
+            dedup = clover_pos_id or str(sess.get("short_code") or ref)
+            if clover_pos_id:
+                claim = ReceiptClaim(column="pos_order_id", value=clover_pos_id, dedup_id=dedup)
+            else:
+                claim = ReceiptClaim(merchant_id=merchant_id, caller_phone=phone, dedup_id=dedup)
+            await send_order_receipt(
+                order, cfg,
+                order_id=dedup,
+                claim=claim,
+                paid=True,
+                amount_cents=sess.get("amount_cents"),
+                currency=sess.get("currency"),
+            )
         except Exception as e:  # noqa: BLE001 — receipt never blocks settlement
             logger.warning("clover settle: receipt SMS failed: %s", e)
