@@ -114,6 +114,24 @@ export interface PhoneStatsResponse {
   avg_duration_seconds: number
 }
 
+/** One advisory recommendation from the call-telemetry feedback loop.
+ * READ-ONLY: it names a suggested_change; nothing is auto-applied. */
+export interface PhoneRecommendation {
+  signal: 'RAISE_CAP' | 'AGENT_QUALITY' | 'PRICING_HEADROOM' | string
+  title: string
+  suggested_change: string
+  impact_score: number
+  advisory: boolean
+  evidence: Record<string, number>
+}
+
+export interface PhoneRecommendationsResponse {
+  merchant_id: string
+  days: number
+  total_calls: number
+  recommendations: PhoneRecommendation[]
+}
+
 export const phoneService = {
   async getConfig(merchantId: string): Promise<PhoneConfig> {
     const res = await fetch(
@@ -159,6 +177,17 @@ export const phoneService = {
   async getStats(merchantId: string, days = 7): Promise<PhoneStatsResponse | null> {
     const res = await fetch(
       `${API_BASE}/api/phone/stats/${merchantId}?days=${days}`,
+      { headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return null
+    return res.json()
+  },
+
+  /** Advisory cap/fee recommendations derived from call-ending telemetry.
+   * Read-only: the server never mutates a cap or fee — a human decides. */
+  async getRecommendations(merchantId: string, days = 7): Promise<PhoneRecommendationsResponse | null> {
+    const res = await fetch(
+      `${API_BASE}/api/phone/recommendations/${merchantId}?days=${days}`,
       { headers: await getAuthHeaders() },
     )
     if (!res.ok) return null
