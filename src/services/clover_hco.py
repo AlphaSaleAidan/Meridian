@@ -175,14 +175,35 @@ def clover_fee_cents(sess: dict[str, Any]) -> int:
     import payment_links as _pl
 
     amount = int(sess.get("amount_cents") or 0)
+    payload = sess.get("payload") or {}
+    currency = (sess.get("currency") or "cad").lower()
+    plan_tier = (payload.get("plan_tier") or "").strip()
+    # Tolerant override parse — a garbage value must never crash settlement (it
+    # falls through to the plan-tier / env default, same as the flat rail).
+    override = payload.get("fee_override_cents")
+    override_cents: int | None = None
+    if override is not None:
+        try:
+            override_cents = int(override)
+        except (TypeError, ValueError):
+            override_cents = None
+
+    # 3-mode allocation (business_pays/split_5050/customer_pays): the WHOLE
+    # per-order fee F = M + S is Meridian's, regardless of who fronted which
+    # half at checkout. Subtotal was recorded in the payload so S is exact.
+    mode = payload.get("fee_allocation_mode")
+    try:
+        subtotal = int(payload.get("subtotal_cents") or 0)
+    except (TypeError, ValueError):
+        subtotal = 0
+    alloc = _pl.allocate_fee(subtotal, plan_tier, currency, mode,
+                             override_cents=override_cents)
+    if alloc is not None and amount > 0:
+        return _pl.mode_application_fee_cents(subtotal, alloc)
+
     if _pl.FEE_SPLIT_ENABLED and amount > 0:
-        currency = (sess.get("currency") or "cad").lower()
-        payload = sess.get("payload") or {}
-        plan_tier = (payload.get("plan_tier") or "").strip()
-        override = payload.get("fee_override_cents")
         surcharge = _pl.customer_surcharge_cents(
-            plan_tier, currency,
-            override_cents=(int(override) if override is not None else None))
+            plan_tier, currency, override_cents=override_cents)
         subtotal = max(amount - surcharge, 0)
         return _pl.split_application_fee_cents(subtotal, surcharge)
     # Flat model: the rep-negotiated per-order fee still wins over the env

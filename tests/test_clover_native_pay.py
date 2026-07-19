@@ -55,9 +55,9 @@ def _wire_rails(monkeypatch):
     lazy_calls, stripe_calls = [], []
 
     async def lazy(order, pos_order_id, mid_hint="", plan_tier="",
-                   fee_override_cents=None):
+                   fee_override_cents=None, fee_allocation_mode=None):
         lazy_calls.append((order, pos_order_id, mid_hint, plan_tier,
-                           fee_override_cents))
+                           fee_override_cents, fee_allocation_mode))
         return {"method": "clover", "url": "/p/x"}
 
     async def has_clover(cfg):

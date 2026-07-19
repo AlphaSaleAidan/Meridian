@@ -197,6 +197,13 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
   } | null>(null)
   const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
   const [billingError, setBillingError] = useState<string | null>(null)
+  // Fee allocation mode: rep-set + READ-ONLY here. The owner can only file a
+  // change request (POST /api/billing/fee-mode/change-request).
+  const [feeMode, setFeeMode] = useState<{ fee_allocation_mode: string | null; label: string } | null>(null)
+  const [feeReqOpen, setFeeReqOpen] = useState(false)
+  const [feeReqMode, setFeeReqMode] = useState<'business_pays' | 'split_5050' | 'customer_pays'>('business_pays')
+  const [feeReqReason, setFeeReqReason] = useState('')
+  const [feeReqState, setFeeReqState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
   useEffect(() => {
     // Demo org has no billing row and no session — skip instead of 401ing.
@@ -211,8 +218,28 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
         .then(r => r.ok ? r.json() : null)
         .then(d => d && setInvoiceUrl(d.invoice_url))
         .catch(() => { setBillingError('Could not load billing info') })
+      fetch(`${apiUrl}/api/billing/fee-mode/${orgId}`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setFeeMode(d))
+        .catch(() => { /* fee mode is non-critical; ignore */ })
     })
   }, [orgId, apiUrl])
+
+  async function submitFeeChangeRequest() {
+    setFeeReqState('sending')
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${apiUrl}/api/billing/fee-mode/change-request`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_id: orgId, requested_mode: feeReqMode, reason: feeReqReason }),
+      })
+      if (!res.ok) throw new Error('request failed')
+      setFeeReqState('sent')
+    } catch {
+      setFeeReqState('error')
+    }
+  }
 
   const statusLabel = billing?.status === 'active' ? 'Active' :
     billing?.status === 'pending_payment' ? 'Pending Payment' :
@@ -284,12 +311,74 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between py-1.5">
+        <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
           <span className="text-[#A1A1A8]/60">Auto-Renew</span>
           <span className={billing?.auto_renew !== false ? 'text-[#17C5B0]' : 'text-[#A1A1A8]'}>
             {billing?.auto_renew !== false ? 'On' : 'Off'}
           </span>
         </div>
+
+        {/* Fee handling — READ-ONLY (rep-set at close). Owner may only request a change. */}
+        {feeMode && (
+          <div className="pt-1.5">
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-[#A1A1A8]/60">Fee Handling</span>
+              <span className="text-[#F5F5F7] font-medium">{feeMode.label}</span>
+            </div>
+            {!feeReqOpen && feeReqState !== 'sent' && (
+              <button
+                onClick={() => { setFeeReqOpen(true); setFeeReqState('idle') }}
+                className="mt-1 text-[11px] font-medium text-[#7C5CFF] hover:text-[#6B4FE0] transition-colors"
+              >
+                Request a change
+              </button>
+            )}
+            {feeReqState === 'sent' && (
+              <div className="mt-2 p-2.5 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[11px] text-[#17C5B0]">
+                Change request submitted — our team will follow up.
+              </div>
+            )}
+            {feeReqOpen && feeReqState !== 'sent' && (
+              <div className="mt-2 p-3 rounded-lg bg-[#0A0A0B] border border-[#1F1F23] space-y-2">
+                <label className="block text-[11px] text-[#A1A1A8]/60">Requested handling</label>
+                <select
+                  value={feeReqMode}
+                  onChange={e => setFeeReqMode(e.target.value as typeof feeReqMode)}
+                  className="w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-[#7C5CFF]"
+                >
+                  <option value="business_pays">Business pays the fee</option>
+                  <option value="split_5050">Split 50/50 with the customer</option>
+                  <option value="customer_pays">Customer pays the fee</option>
+                </select>
+                <textarea
+                  value={feeReqReason}
+                  onChange={e => setFeeReqReason(e.target.value)}
+                  placeholder="Reason (optional)"
+                  rows={2}
+                  className="w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-[#7C5CFF] resize-none"
+                />
+                {feeReqState === 'error' && (
+                  <div className="text-[11px] text-red-400">Could not submit — please try again.</div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={submitFeeChangeRequest}
+                    disabled={feeReqState === 'sending'}
+                    className="px-3 py-1.5 text-[11px] font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all disabled:opacity-50"
+                  >
+                    {feeReqState === 'sending' ? 'Submitting…' : 'Submit request'}
+                  </button>
+                  <button
+                    onClick={() => { setFeeReqOpen(false); setFeeReqState('idle') }}
+                    className="px-3 py-1.5 text-[11px] font-medium text-[#A1A1A8] hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

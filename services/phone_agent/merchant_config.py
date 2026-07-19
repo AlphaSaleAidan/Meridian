@@ -117,6 +117,9 @@ class MerchantPhoneConfig:
     # Rep-negotiated per-order Meridian fee override in cents of the charge
     # currency (rep-portal fee slider). None = plan-tier / env default.
     order_fee_cents: Optional[int] = None
+    # Rep-set fee allocation mode (business_pays | split_5050 | customer_pays),
+    # FIXED at close (migration 048). None = legacy fee-split / env default.
+    fee_allocation_mode: Optional[str] = None
     # Voice accent group picked in the setup wizard (north_american | indian |
     # east_asian). Presentation-level grouping; `voice` carries the voice id.
     accent: str = ""
@@ -166,6 +169,16 @@ def _norm_payment_link_provider(value: Optional[str]) -> str:
     zero behavior change for existing merchants)."""
     provider = (value or "").strip().lower()
     return provider if provider in _VALID_PAYMENT_LINK_PROVIDERS else "stripe"
+
+
+_VALID_FEE_ALLOCATION_MODES = ("business_pays", "split_5050", "customer_pays")
+
+
+def _norm_fee_allocation_mode(value: Optional[str]) -> Optional[str]:
+    """Normalize fee_allocation_mode; unknown/missing → None (legacy behavior:
+    the caller keeps the existing fee-split / env-default fee handling)."""
+    mode = (value or "").strip().lower()
+    return mode if mode in _VALID_FEE_ALLOCATION_MODES else None
 
 
 # Base URL for the hosted public menu page (/m/{slug}).
@@ -303,6 +316,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
             restaurant_brief=(row.get("restaurant_brief") or "").strip(),
             order_fee_cents=(int(row["order_fee_cents"])
                              if row.get("order_fee_cents") is not None else None),
+            fee_allocation_mode=_norm_fee_allocation_mode(
+                row.get("fee_allocation_mode")),
             accent=(row.get("accent") or "").strip().lower(),
             max_call_minutes=(int(row["max_call_minutes"])
                               if row.get("max_call_minutes") is not None else None),

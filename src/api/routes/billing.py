@@ -13,6 +13,7 @@ import hmac
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -231,6 +232,113 @@ async def get_billing_status(org_id: str, _user: dict = Depends(require_jwt)):
     except Exception:
         logger.exception(f"Status check failed for org {org_id}")
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
+
+
+# ── Fee allocation mode (rep-set, owner-read-only + change requests) ──
+
+_FEE_MODES = ("business_pays", "split_5050", "customer_pays")
+_FEE_MODE_LABELS = {
+    "business_pays": "Business pays the fee",
+    "split_5050": "Split 50/50 with the customer",
+    "customer_pays": "Customer pays the fee",
+    None: "Standard (default)",
+}
+
+
+class FeeChangeRequestBody(BaseModel):
+    org_id: str
+    requested_mode: str
+    reason: str = ""
+
+    @field_validator("requested_mode")
+    @classmethod
+    def _valid_mode(cls, v: str) -> str:
+        if v not in _FEE_MODES:
+            raise ValueError(f"requested_mode must be one of {_FEE_MODES}")
+        return v
+
+
+@router.get("/fee-mode/{org_id}")
+async def get_fee_mode(org_id: str, principal: dict = Depends(require_jwt)):
+    """Owner-facing READ-ONLY view of the merchant's fee allocation mode. The
+    mode is set by the sales rep at close and cannot be changed here — the owner
+    can only file a change request (POST /fee-mode/change-request)."""
+    await _enforce_billing_org_access(principal, org_id)
+    db = get_db()
+    mode = None
+    try:
+        rows = await db.select(
+            "phone_agent_config", "fee_allocation_mode",
+            filters={"merchant_id": f"eq.{org_id}"}, limit=1,
+        )
+        if rows:
+            mode = rows[0].get("fee_allocation_mode")
+    except Exception:  # noqa: BLE001 — fail-open to the legacy/default label
+        logger.warning("fee-mode lookup failed for %s", org_id, exc_info=True)
+    if mode not in _FEE_MODES:
+        mode = None
+    return {
+        "org_id": org_id,
+        "fee_allocation_mode": mode,
+        "label": _FEE_MODE_LABELS.get(mode, _FEE_MODE_LABELS[None]),
+        "editable": False,  # owner cannot change it — rep-set + fixed
+    }
+
+
+@router.post("/fee-mode/change-request")
+async def create_fee_change_request(
+    req: FeeChangeRequestBody, principal: dict = Depends(require_jwt)
+):
+    """File an owner-initiated fee-mode change request (a simple ticket). Inserts
+    a fee_change_requests row (HQ/service reads all) and drops an in-app
+    notification. HQ actions it out of band — the owner cannot self-serve the
+    change. Reuses the existing notification path; no email is sent from here."""
+    await _enforce_billing_org_access(principal, req.org_id)
+    db = get_db()
+
+    # Current mode for the audit record (best-effort; NULL = legacy/default).
+    current_mode = None
+    try:
+        rows = await db.select(
+            "phone_agent_config", "fee_allocation_mode",
+            filters={"merchant_id": f"eq.{req.org_id}"}, limit=1,
+        )
+        if rows and rows[0].get("fee_allocation_mode") in _FEE_MODES:
+            current_mode = rows[0]["fee_allocation_mode"]
+    except Exception:  # noqa: BLE001
+        logger.warning("fee-mode current lookup failed for %s", req.org_id, exc_info=True)
+
+    request_id = str(uuid4())
+    try:
+        await db.insert("fee_change_requests", {
+            "id": request_id,
+            "org_id": req.org_id,
+            "current_mode": current_mode,
+            "requested_mode": req.requested_mode,
+            "reason": (req.reason or "").strip() or None,
+            "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:  # noqa: BLE001
+        logger.error("fee_change_requests insert failed for %s: %s", req.org_id, e)
+        raise HTTPException(status_code=500, detail="Could not file the change request")
+
+    # Notify HQ via the existing in-app notification rail (no email built here).
+    try:
+        from .webhooks import _send_notification
+        await _send_notification(
+            org_id=req.org_id,
+            title="Fee handling change requested",
+            body=(f"Requested change to '{_FEE_MODE_LABELS.get(req.requested_mode)}' "
+                  f"(from '{_FEE_MODE_LABELS.get(current_mode)}'). "
+                  f"{('Reason: ' + req.reason.strip()) if req.reason.strip() else ''}").strip(),
+            priority="normal",
+        )
+    except Exception:  # noqa: BLE001 — notification is best-effort; the row is the record
+        logger.warning("fee-change notification failed for %s", req.org_id, exc_info=True)
+
+    return {"ok": True, "request_id": request_id, "status": "open",
+            "requested_mode": req.requested_mode}
 
 
 @router.post("/update-payment-method")

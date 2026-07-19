@@ -295,6 +295,19 @@ class ProvisionCustomerRequest(BaseModel):
     lead_id: str | None = None
     lead_market: str | None = None  # 'ca' | 'us'; defaults from `country`
     order_fee_cents: int | None = None
+    # Fee allocation mode chosen by the rep at close, FIXED thereafter
+    # (business_pays | split_5050 | customer_pays). None → legacy fee behavior.
+    fee_allocation_mode: str | None = None
+
+    @field_validator("fee_allocation_mode")
+    @classmethod
+    def _validate_fee_mode(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        if v not in ("business_pays", "split_5050", "customer_pays"):
+            raise ValueError(
+                "fee_allocation_mode must be business_pays, split_5050, or customer_pays")
+        return v
     # When true (self-serve onboarding wizard), the customer already created
     # their account with a self-chosen password — do NOT overwrite it with a
     # temp password or force a reset, and skip the credentials email. Default
@@ -522,11 +535,19 @@ async def provision_customer(req: ProvisionCustomerRequest):
         billing_terms_recorded, terms = await _record_provision_fee_terms(db, req)
         # Seed the live phone/website order-fee rail (phone_agent_config) from
         # the same terms so the negotiated per-order fee applies the moment the
-        # phone agent goes live (mirrors canada/us create-customer seeding).
-        if billing_terms_recorded and terms.get("order_fee_cents") is not None:
+        # phone agent goes live (mirrors canada/us create-customer seeding). The
+        # rep-set fee_allocation_mode is seeded here too — even for tiers with no
+        # per-order fee (standard) — so the mode is FIXED from the moment of
+        # provisioning.
+        _seed_order_fee = billing_terms_recorded and terms.get("order_fee_cents") is not None
+        if _seed_order_fee or req.fee_allocation_mode:
             try:
-                pac_seed = {"order_fee_cents": int(terms["order_fee_cents"]),
-                            "plan_tier": terms.get("plan_tier")}
+                pac_seed: dict = {}
+                if _seed_order_fee:
+                    pac_seed["order_fee_cents"] = int(terms["order_fee_cents"])
+                    pac_seed["plan_tier"] = terms.get("plan_tier")
+                if req.fee_allocation_mode:
+                    pac_seed["fee_allocation_mode"] = req.fee_allocation_mode
                 existing_pac = await db.select(
                     "phone_agent_config", "id",
                     filters={"merchant_id": f"eq.{req.org_id}"}, limit=1)
@@ -542,7 +563,7 @@ async def provision_customer(req: ProvisionCustomerRequest):
                         **pac_seed,
                     })
             except Exception as pac_err:  # noqa: BLE001
-                logger.error("provision-customer: order-fee seed failed for %s: %s",
+                logger.error("provision-customer: order-fee/mode seed failed for %s: %s",
                              req.org_id, pac_err)
     except Exception as terms_err:  # noqa: BLE001
         logger.error("provision-customer: billing terms provisioning FAILED for %s: %s",
