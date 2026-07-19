@@ -453,6 +453,33 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                 locked_by=claims.get("email") or user_id,
             )
 
+            # Commission accrual (Canada, LIVE + flag-gated). Writes the rep's
+            # M0-M3 milestone schedule the moment a deal closes. Best-effort +
+            # idempotent (UNIQUE(account_id,milestone)) — a hiccup here must
+            # NEVER fail customer creation. Rep is resolved from the closing
+            # rep's verified JWT email; package = nearest price-point (Enoch's
+            # plan). Milestones are 'pending'/'earned', never auto-PAID —
+            # settlement stays quarterly + gated. See commission_engine.py.
+            try:
+                from ...services.commission_engine import (
+                    CommissionEngineService,
+                    canada_commission_live,
+                )
+                from datetime import datetime, timezone
+
+                if canada_commission_live() and req.monthly_price:
+                    from ...db import get_db as _get_commission_db
+
+                    _csvc = CommissionEngineService(db=_get_commission_db())
+                    await _csvc.accrue_for_canada_close(
+                        account_id=org_id,
+                        rep_email=claims.get("email") or "",
+                        negotiated_monthly_cents=req.monthly_price * 100,
+                        close_date=datetime.now(timezone.utc).date(),
+                    )
+            except Exception as e:  # noqa: BLE001 — never fail customer creation
+                logger.error("commission accrual failed for org %s: %s", org_id, e)
+
             # Rep fee slider: pre-seed phone_agent_config with the negotiated
             # per-order fee so every payment rail picks it up the moment the
             # phone agent goes live. Best-effort — a fee-seed hiccup must never

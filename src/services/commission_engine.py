@@ -58,10 +58,24 @@ from __future__ import annotations
 
 import calendar
 import logging
+import os
 from dataclasses import dataclass
 from datetime import date, timedelta
 
 logger = logging.getLogger("meridian.services.commission_engine")
+
+
+def canada_commission_live() -> bool:
+    """Kill-switch for LIVE Canada commission accrual.
+
+    Default ON (Enoch's plan wired live for Canada, 2026-07-19). Set
+    COMMISSION_ENGINE_CANADA_LIVE=0 in Railway to instantly stop accrual +
+    cancel-halt without a deploy. Accrual is always best-effort and idempotent,
+    so flipping this off/on never corrupts the ledger.
+    """
+    return os.environ.get("COMMISSION_ENGINE_CANADA_LIVE", "1").strip().lower() not in (
+        "0", "false", "off", "no", "",
+    )
 
 # Fixed 57-unit milestone split (One-Pager).
 MILESTONE_WEIGHTS: dict[str, int] = {"M0": 13, "M1": 28, "M2": 10, "M3": 6}
@@ -169,6 +183,24 @@ def adjusted_m0_cents(
     if config.m0_floor_zero:
         m0 = max(0, m0)
     return m0
+
+
+def nearest_package_by_price(monthly_cents: int, packages: dict[str, "Package"]) -> str:
+    """Pick the commission package whose list price is closest to the negotiated
+    monthly. Ties break toward the CHEAPER package (rep-favorable is handled by
+    the M0 adjustment, not here). Returns the package_key.
+
+    This is how a live Canada close maps to Enoch's four price-point packages:
+    the package sets the list baseline + unit value; the negotiated-vs-list
+    delta is then applied to M0 by adjusted_m0_cents (+50% upsell / -100%
+    discount). So a deal at any price still resolves to an exact, defensible
+    schedule — the package is the anchor, the negotiated price is the truth.
+    """
+    target = int(monthly_cents)
+    return min(
+        packages.values(),
+        key=lambda p: (abs(p.list_monthly_cents - target), p.list_monthly_cents),
+    ).package_key
 
 
 def post_close_upsell_cents(
@@ -368,6 +400,71 @@ class CommissionEngineService:
         )
         if not inserted:
             logger.info("Account %s already scheduled — no-op", account_id)
+        return inserted
+
+    async def accrue_for_canada_close(
+        self,
+        *,
+        account_id: str,
+        rep_email: str,
+        negotiated_monthly_cents: int,
+        close_date: date,
+        package_key: str | None = None,
+        assignment_id: str | None = None,
+    ) -> list[dict]:
+        """LIVE Canada close hook: resolve the rep, pick the package, schedule.
+
+        Returns the inserted milestone rows ([] on skip/no-op). NEVER raises for
+        an expected miss (unknown rep, no price) — the caller wraps it best-effort
+        anyway, but keeping the skips quiet here means a normal non-rep close
+        doesn't log noise.
+
+          - rep_email -> sales_reps.id (verified email join, same as the read API).
+            No rep match => skip (returns []). A commission can't exist repless.
+          - package_key defaults to the nearest price-point package (Enoch's four).
+          - account_id is the businesses(id) [text] of the new customer (mig 071).
+        """
+        if not account_id or not rep_email or negotiated_monthly_cents <= 0:
+            return []
+        # Case-insensitive rep match. sales_reps.email is stored with mixed case
+        # for some rows, so an eq.<lower> filter would silently miss them. ilike
+        # is case-insensitive but treats _ and % as wildcards (emails legally
+        # contain _), so we ilike-fetch candidates then narrow by an EXACT
+        # case-insensitive compare in Python — no wildcard false-positives.
+        target = rep_email.strip().lower()
+        reps = await self.db.select(
+            "sales_reps",
+            columns="id,email,is_active",
+            filters={"email": f"ilike.{rep_email.strip()}"},
+            limit=10,
+        )
+        rep = next(
+            (r for r in (reps or []) if (r.get("email") or "").strip().lower() == target),
+            None,
+        )
+        if rep is None:
+            logger.info("commission accrual skipped: %s is not a sales_rep", rep_email)
+            return []
+        rep_id = rep["id"]
+
+        await self.load_packages()
+        key = package_key or nearest_package_by_price(negotiated_monthly_cents, self.packages)
+        if key not in self.packages:
+            logger.warning("commission accrual skipped: unknown package %r", key)
+            return []
+
+        inserted = await self.schedule_account(
+            account_id=account_id,
+            rep_id=rep_id,
+            package_key=key,
+            negotiated_monthly_cents=negotiated_monthly_cents,
+            close_date=close_date,
+            assignment_id=assignment_id,
+        )
+        logger.info(
+            "commission accrual: account=%s rep=%s package=%s negotiated=%d -> %d rows",
+            account_id, rep_id, key, negotiated_monthly_cents, len(inserted),
+        )
         return inserted
 
     async def cancel_account(self, account_id: str) -> int:
