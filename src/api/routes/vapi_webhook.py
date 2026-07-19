@@ -388,12 +388,14 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         "6. Calculate the total (size price + per-topping charge × number of toppings for each "
         "item, then add sides and drinks). Read back the COMPLETE order — every item, size, "
         "and toppings — with the total, then ask 'Does that all look right?'\n"
+        f"{_cash_offer_step(config)}"
         "7. Call submit_order ONLY after the customer confirms the order is correct.\n"
         "8. After submit_order returns, tell the caller: 'I've sent a secure payment link to "
         "your phone — you'll get a receipt once it goes through.'\n\n"
         "GUARD RULES:\n"
         f"- Available order types: {order_types}.\n"
         f"{reservation_lines}"
+        f"{_cash_guard_line(config)}"
         "- Delivery without an address → ask for the address before calling submit_order.\n"
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
@@ -444,6 +446,32 @@ def _menu_link_line(config) -> str:
         f"\n- The full menu is online at {url} — if the caller asks to see the "
         "menu or asks for it to be texted, tell them that address clearly "
         "(say it once, slowly)."
+    )
+
+
+def _cash_offer_step(config) -> str:
+    """CALL FLOW step: offer cash — ONLY when the merchant enabled accept_cash.
+
+    Off/absent → "" so the prompt is byte-for-byte unchanged for every merchant
+    that hasn't opted in behind the warning modal. When on, the agent asks how
+    the caller wants to pay and passes pay_choice='cash' on submit_order for a
+    cash order (unpaid, pay-on-pickup — no payment link is texted)."""
+    if not getattr(config, "accept_cash", False):
+        return ""
+    return (
+        "6b. Ask how they'd like to pay: pay now by secure text link, or CASH on "
+        "pickup. If they choose cash, set pay_choice to 'cash' on submit_order — "
+        "no payment link is sent and they pay at the counter.\n"
+    )
+
+
+def _cash_guard_line(config) -> str:
+    """GUARD RULE reminder that cash is a valid choice — only when enabled."""
+    if not getattr(config, "accept_cash", False):
+        return ""
+    return (
+        "- Cash is accepted: if the caller wants to pay cash on pickup, take the "
+        "order normally and set pay_choice='cash' — don't send a payment link.\n"
     )
 
 
@@ -526,6 +554,13 @@ _SUBMIT_ORDER_TOOL = {
                     "modifications": {"type": "array", "items": {"type": "string"}},
                 }, "required": ["name", "quantity"]}},
                 "delivery_address": {"type": "string"},
+                "pay_choice": {
+                    "type": "string",
+                    "enum": ["pay_now", "pay_at_pickup", "cash"],
+                    "description": "How the caller chose to pay. Set 'cash' ONLY "
+                    "when the merchant accepts cash and the caller wants to pay "
+                    "cash on pickup (no payment link is sent). Omit otherwise.",
+                },
             },
             "required": ["customer_name", "order_type", "items"],
         },

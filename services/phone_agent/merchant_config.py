@@ -148,6 +148,12 @@ class MerchantPhoneConfig:
     # (vapi_webhook._resolve_script_pack is strictly fail-legacy). NEVER
     # auto-derived from business_type — packs are opt-in per merchant.
     script_pack: str = ""
+    # "PAY WITH CASH" (migration 047): when True, the phone agent offers cash as
+    # a payment option and cash orders reach the kitchen flagged UNPAID / CASH ON
+    # PICKUP with NO payment link. False/NULL (default) = never offer cash, so
+    # the prompt + dispatch path are byte-for-byte unchanged for every merchant
+    # that hasn't opted in behind the warning modal.
+    accept_cash: bool = False
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -311,6 +317,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                                if isinstance(row.get("delivery_channels"), dict)
                                else None),
             script_pack=(row.get("script_pack") or "").strip().lower(),
+            accept_cash=bool(row.get("accept_cash", False)),
         )
         # MENU STORE (single source of truth): merchants with rows in the
         # normalized menu_items table get their menu from the store —

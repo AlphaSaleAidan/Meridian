@@ -77,6 +77,11 @@ export interface PhoneConfig {
   // unset = the standard generic script (default, zero behavior change);
   // other values opt into a per-vertical time-optimized script.
   script_pack?: string
+  // "Pay with Cash" opt-in (migration 047). When true, the phone agent may
+  // offer cash on pickup; cash orders reach the kitchen flagged UNPAID / CASH
+  // ON PICKUP with no payment link. false/undefined = never offer cash.
+  // Turning it ON is gated behind a warning modal in the wizard / Settings.
+  accept_cash?: boolean
 }
 
 /** Result of POST /api/phone/config — carries enough to explain a failure. */
