@@ -87,9 +87,11 @@ class Package:
 
 # Mirrors the migration-046 seed rows. Prod code should load the table via
 # CommissionEngineService.load_packages(); these are for pure math + tests.
-# Lowest price is $250 USD (Starter) — the $200 minimum-price SKU was dropped
-# per Aidan 2026-07-19, which also retires the min_price_is_anchor question.
+# Packages match Enoch's official Rep Commission One-Pager (2026): the $200/mo
+# minimum-price tier is its OWN SKU (unit $6.00, schedule $78/$168/$60/$36 =
+# $342), not a discounted Starter — reinstated per Enoch's plan 2026-07-19.
 DEFAULT_PACKAGES: dict[str, Package] = {
+    "minimum": Package("minimum", 20000, 600),                   # $200/mo, unit $6.00
     "starter": Package("starter", 25000, 750),                   # $250/mo, unit $7.50
     "middle": Package("middle", 39900, 1375),                    # $399/mo, unit $13.75
     "higher": Package("higher", 68900, 2000),                    # $689/mo, unit $20.00
@@ -109,9 +111,9 @@ class EngineConfig:
     m0_min_gap_days: int = 7
     settlement_months: tuple[int, ...] = (1, 4, 7, 10)
     settlement_day_rule: str = "first_friday"
-    # Lowest sellable monthly price. A discount can never take the negotiated
-    # price below this ($250 USD = the Starter list). Reps cannot sell under it.
-    min_monthly_cents: int = 25000
+    # Lowest sellable monthly price = the $200 minimum-price tier (Enoch's plan).
+    # A discount can never price below it; reps cannot sell under it.
+    min_monthly_cents: int = 20000
 
 
 @dataclass(frozen=True)

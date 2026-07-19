@@ -40,6 +40,7 @@ from src.services.commission_engine import (
 
 # package_key -> (list_monthly_cents, unit_cents, M0, M1, M2, M3, total)
 MATRIX = {
+    "minimum": (20000, 600, 7800, 16800, 6000, 3600, 34200),    # $78.00/$168.00/$60.00/$36.00 = $342.00
     "starter": (25000, 750, 9750, 21000, 7500, 4500, 42750),    # $97.50/$210.00/$75.00/$45.00 = $427.50
     "middle": (39900, 1375, 17875, 38500, 13750, 8250, 78375),  # $178.75/$385.00/$137.50/$82.50 = $783.75
     "higher": (68900, 2000, 26000, 56000, 20000, 12000, 114000),  # $260.00/$560.00/$200.00/$120.00 = $1,140.00
@@ -102,13 +103,13 @@ def test_no_adjustment_at_list_price():
 
 
 def test_m0_floors_at_zero_by_default():
-    # Higher discounted to the $250 floor -> 26000 - 43900 = -17900 -> floored to 0
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["higher"], 25000, CFG) == 0
+    # Higher discounted to the $200 floor -> 26000 - 48900 = -22900 -> floored to 0
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["higher"], 20000, CFG) == 0
 
 
 def test_m0_floor_disabled_allows_negative():
     cfg = EngineConfig(m0_floor_zero=False)
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["higher"], 25000, cfg) == -17900
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["higher"], 20000, cfg) == -22900
 
 
 def test_m1_m2_m3_never_adjusted():
@@ -128,23 +129,23 @@ def test_m1_m2_m3_never_adjusted():
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# 3. $250 USD floor — reps cannot sell below the lowest tier
+# 3. $200 USD floor — the minimum-price tier; reps cannot sell below it
 # ───────────────────────────────────────────────────────────────────────────
 
-def test_only_three_packages_lowest_is_250():
-    assert set(DEFAULT_PACKAGES) == {"starter", "middle", "higher"}
-    assert min(p.list_monthly_cents for p in DEFAULT_PACKAGES.values()) == 25000
+def test_four_packages_lowest_is_200():
+    assert set(DEFAULT_PACKAGES) == {"minimum", "starter", "middle", "higher"}
+    assert min(p.list_monthly_cents for p in DEFAULT_PACKAGES.values()) == 20000
 
 
-def test_discount_cannot_price_below_250_floor():
-    # A "discount" to $220 is clamped to the $250 floor -> no adjustment at all.
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["starter"], 22000, CFG) == 9750
+def test_discount_cannot_price_below_200_floor():
+    # A "discount" to $150 is clamped to the $200 floor. On minimum ($200 list)
+    # that means no adjustment at all -> M0 stays $78.00.
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["minimum"], 15000, CFG) == 7800
 
 
-def test_middle_discount_down_to_250_floor_applies_only_to_floor():
-    # Middle ($399) discounted toward $200 clamps at $250 -> delta = -$149.
-    # M0 = 17875 - 14900 = 2975.
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["middle"], 20000, CFG) == 17875 - 14900
+def test_starter_discount_clamps_at_200_floor():
+    # Starter ($250) sold at $150 clamps to $200 -> delta -$50 -> M0 9750 - 5000.
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["starter"], 15000, CFG) == 9750 - 5000
 
 
 def test_non_floor_discount_still_applies():
