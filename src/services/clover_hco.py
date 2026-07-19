@@ -254,7 +254,7 @@ async def settle_clover_session(db, sess: dict[str, Any], payment_ref: str) -> N
             # prior streaming send collapse to exactly one receipt.
             _phone_agent_path()
             from merchant_config import _demo_config, get_merchant_config
-            from order_receipt import send_order_receipt
+            from order_receipt import ReceiptClaim, send_order_receipt
 
             cfg = (await get_merchant_config(merchant_id)) if merchant_id else None
             cfg = cfg or _demo_config(merchant_id or "demo")
@@ -264,9 +264,20 @@ async def settle_clover_session(db, sess: dict[str, Any], payment_ref: str) -> N
                 "customer_name": sess.get("customer_name", "") or "",
                 "caller_phone": phone,
             }
+            # CLAIM the row: Clover-native carries a real pos_order_id on the row,
+            # so claim on it directly; if the session lacks one (rare), fall back
+            # to merchant+phone most-recent — the short_code/ref are NOT columns on
+            # phone_orders and would match nothing (silent receipt drop).
+            clover_pos_id = str(sess.get("pos_order_id") or "")
+            dedup = clover_pos_id or str(sess.get("short_code") or ref)
+            if clover_pos_id:
+                claim = ReceiptClaim(column="pos_order_id", value=clover_pos_id, dedup_id=dedup)
+            else:
+                claim = ReceiptClaim(merchant_id=merchant_id, caller_phone=phone, dedup_id=dedup)
             await send_order_receipt(
                 order, cfg,
-                order_id=str(sess.get("pos_order_id") or sess.get("short_code") or ref),
+                order_id=dedup,
+                claim=claim,
                 paid=True,
                 amount_cents=sess.get("amount_cents"),
                 currency=sess.get("currency"),

@@ -47,7 +47,7 @@ from delivery_channels import (
     save_order_row,
 )
 from merchant_config import MerchantPhoneConfig
-from order_receipt import send_order_receipt
+from order_receipt import ReceiptClaim, send_order_receipt
 from payment_links import create_checkout
 from sms_checkout import send_checkout_sms
 
@@ -225,13 +225,30 @@ async def _fanout_release(
     # now and has NO downstream payment webhook to text the caller a receipt (the
     # customer_sms leg above is the pay-LINK; for pay_at_pickup there is no link).
     # Fire the shared, idempotent order-receipt SMS so the streaming path matches
-    # the turn-based path. Keyed on the real pos_order_id so a later report of
-    # the same order (sidecar/webhook) never double-sends. Best-effort — a
-    # receipt hiccup never strands the released order.
+    # the turn-based path. CLAIM on the phone_orders row we just inserted — its
+    # primary key (phone_order_id) is ALWAYS present, whereas pos_order_id is ""
+    # when POS is disabled/failed (the old pos_order_id claim matched nothing and
+    # silently dropped the receipt). Best-effort — a receipt hiccup never strands
+    # the released order.
+    real_pos_id = str((final_pos or {}).get("pos_order_id") or "")
+    if phone_order_id:
+        receipt_claim = ReceiptClaim(column="id", value=str(phone_order_id),
+                                     dedup_id=real_pos_id or str(phone_order_id))
+    elif real_pos_id:
+        receipt_claim = ReceiptClaim(column="pos_order_id", value=real_pos_id,
+                                     dedup_id=real_pos_id)
+    else:
+        # No Supabase (tests/demo): no row id and no pos id — dedup on merchant+phone.
+        receipt_claim = ReceiptClaim(
+            merchant_id=config.merchant_id,
+            caller_phone=order.get("caller_phone", ""),
+            dedup_id=f"{config.merchant_id}:{order.get('caller_phone', '')}",
+        )
     try:
         await send_order_receipt(
             order, config,
-            order_id=str((final_pos or {}).get("pos_order_id") or "") or (phone_order_id or ""),
+            order_id=real_pos_id or (str(phone_order_id) if phone_order_id else "pay_at_pickup"),
+            claim=receipt_claim,
             paid=False,
         )
     except Exception as e:  # noqa: BLE001 — receipt never blocks a released order

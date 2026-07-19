@@ -217,7 +217,7 @@ async def connect_webhook(request: Request):
         if etype == "checkout.session.completed" and caller_phone:
             try:
                 from merchant_config import get_merchant_config, _demo_config
-                from order_receipt import send_order_receipt
+                from order_receipt import ReceiptClaim, send_order_receipt
                 cfg = (await get_merchant_config(merchant_id)) if merchant_id else None
                 cfg = cfg or _demo_config(merchant_id or "demo")
                 name = (obj.get("customer_details") or {}).get("name") or ""
@@ -227,9 +227,25 @@ async def connect_webhook(request: Request):
                     "customer_name": name,
                     "caller_phone": caller_phone,
                 }
+                # CLAIM the right phone_orders row. For pay_now the POS ticket is
+                # DEFERRED, so the held row carried pos_order_id="" at checkout and
+                # metadata.pos_order_id is empty here — claiming on the Stripe
+                # session id (obj.id) matched ZERO rows and SILENTLY DROPPED the
+                # receipt. mark_order_paid (above) just released this caller's
+                # newest order, so claim on merchant+phone most-recent. Only when a
+                # real pos_order_id rode along in metadata (non-deferred) do we
+                # claim on it directly.
+                dedup = str(pos_order_id or obj.get("id") or txn)
+                if pos_order_id:
+                    claim = ReceiptClaim(column="pos_order_id", value=str(pos_order_id),
+                                         dedup_id=dedup)
+                else:
+                    claim = ReceiptClaim(merchant_id=merchant_id, caller_phone=caller_phone,
+                                         dedup_id=dedup)
                 res = await send_order_receipt(
                     order, cfg,
-                    order_id=str(pos_order_id or obj.get("id") or txn),
+                    order_id=dedup,
+                    claim=claim,
                     paid=True,
                     amount_cents=obj.get("amount_total"),
                     currency=obj.get("currency"),
