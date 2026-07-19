@@ -426,16 +426,26 @@ class CommissionEngineService:
         """
         if not account_id or not rep_email or negotiated_monthly_cents <= 0:
             return []
+        # Case-insensitive rep match. sales_reps.email is stored with mixed case
+        # for some rows, so an eq.<lower> filter would silently miss them. ilike
+        # is case-insensitive but treats _ and % as wildcards (emails legally
+        # contain _), so we ilike-fetch candidates then narrow by an EXACT
+        # case-insensitive compare in Python — no wildcard false-positives.
+        target = rep_email.strip().lower()
         reps = await self.db.select(
             "sales_reps",
-            columns="id,is_active",
-            filters={"email": f"eq.{rep_email.strip().lower()}"},
-            limit=1,
+            columns="id,email,is_active",
+            filters={"email": f"ilike.{rep_email.strip()}"},
+            limit=10,
         )
-        if not reps:
+        rep = next(
+            (r for r in (reps or []) if (r.get("email") or "").strip().lower() == target),
+            None,
+        )
+        if rep is None:
             logger.info("commission accrual skipped: %s is not a sales_rep", rep_email)
             return []
-        rep_id = reps[0]["id"]
+        rep_id = rep["id"]
 
         await self.load_packages()
         key = package_key or nearest_package_by_price(negotiated_monthly_cents, self.packages)

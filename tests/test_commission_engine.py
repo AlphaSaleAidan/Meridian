@@ -440,8 +440,16 @@ class MultiTableFakeDB(FakeDB):
     async def select(self, table, columns="*", filters=None, order=None,
                      limit=None, offset=None):
         if table == "sales_reps":
-            email = (filters or {}).get("email", "").removeprefix("eq.")
-            return [r for r in self._reps if r.get("email") == email][:limit or None]
+            raw = (filters or {}).get("email", "")
+            # Mirror PostgREST: eq.<x> exact, ilike.<x> case-insensitive.
+            if raw.startswith("ilike."):
+                want = raw.removeprefix("ilike.").lower()
+                hits = [r for r in self._reps
+                        if (r.get("email") or "").lower() == want]
+            else:
+                want = raw.removeprefix("eq.")
+                hits = [r for r in self._reps if r.get("email") == want]
+            return hits[:limit or None]
         if table == "commission_packages":
             return list(self._packages)
         return await super().select(table, columns, filters, order, limit, offset)
@@ -511,3 +519,15 @@ async def test_accrue_explicit_package_overrides_price_map():
         package_key="higher",             # explicit wins
     )
     assert all(r["package_key"] == "higher" for r in rows)
+
+
+async def test_accrue_matches_rep_email_case_insensitively():
+    # A rep stored with mixed-case email must still accrue (prod has 1 such row).
+    db = MultiTableFakeDB(reps=[{"id": REP, "email": "Rep.Closer@Meridian.Tips", "is_active": True}])
+    svc = CommissionEngineService(db=db, config=EngineConfig())
+    rows = await svc.accrue_for_canada_close(
+        account_id="biz-ci", rep_email="rep.closer@meridian.tips",  # lowercased JWT email
+        negotiated_monthly_cents=25000, close_date=date(2026, 7, 21),
+    )
+    assert len(rows) == 4
+    assert all(r["rep_id"] == REP for r in rows)
