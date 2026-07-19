@@ -295,6 +295,149 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
   )
 }
 
+// Cancel subscription / account. No dark patterns: the button is plainly
+// labelled and easy to find. The flow always offers "talk to us first" BEFORE
+// the final confirm, captures an optional reason, and records the cancellation
+// server-side (POST /api/billing/self-cancel — owner-only, org from session).
+function CancelAccountCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
+  type Step = 'idle' | 'confirm' | 'reason' | 'done'
+  const [step, setStep] = useState<Step>('idle')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Demo org has no session — hide the destructive action there.
+  if (!orgId || orgId === 'demo') return null
+
+  const submitCancel = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const headers = { ...(await getAuthHeaders()), 'Content-Type': 'application/json' }
+      const r = await fetch(`${apiUrl}/api/billing/self-cancel`, {
+        method: 'POST',
+        headers,
+        // org is derived from the session server-side — never sent here.
+        body: JSON.stringify({ reason: reason.trim() }),
+      })
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}))
+        throw new Error(d.detail || 'Could not cancel. Please contact support.')
+      }
+      setStep('done')
+    } catch (e: any) {
+      setError(e?.message || 'Could not cancel. Please contact support.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card overflow-hidden border-red-500/20">
+      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center gap-2">
+        <AlertCircle size={14} className="text-red-400" />
+        <h3 className="text-sm font-semibold text-[#F5F5F7]">Cancel Subscription</h3>
+      </div>
+      <div className="p-4 sm:p-5 space-y-3 text-xs">
+        {step === 'idle' && (
+          <>
+            <p className="text-[#A1A1A8]">
+              Cancelling stops future renewals. You keep access through the end of
+              your current paid period.
+            </p>
+            <button
+              onClick={() => setStep('confirm')}
+              className="px-4 py-2 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all"
+            >
+              Cancel subscription
+            </button>
+          </>
+        )}
+
+        {step === 'confirm' && (
+          <>
+            <p className="text-[#F5F5F7] font-medium">Before you go — can we help?</p>
+            <p className="text-[#A1A1A8]">
+              Most issues (pricing, a feature you need, a bug) we can sort out in a
+              quick chat. Talk to us first before cancelling.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <a
+                href="mailto:support@meridian.tips?subject=Before%20I%20cancel"
+                className="px-4 py-2 text-xs font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all text-center"
+              >
+                Talk to us first
+              </a>
+              <button
+                onClick={() => setStep('reason')}
+                className="px-4 py-2 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all"
+              >
+                Continue to cancel
+              </button>
+              <button
+                onClick={() => setStep('idle')}
+                className="px-4 py-2 text-xs font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-all"
+              >
+                Never mind
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'reason' && (
+          <>
+            <p className="text-[#F5F5F7] font-medium">Confirm cancellation</p>
+            <label className="block text-[#A1A1A8]">
+              Anything we could have done better? (optional)
+              <textarea
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="Optional — helps us improve"
+                className="mt-1.5 w-full rounded-lg bg-[#0F0F12] border border-[#1F1F23] px-3 py-2 text-xs text-[#F5F5F7] focus:outline-none focus:border-[#7C5CFF]"
+              />
+            </label>
+            {error && (
+              <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{error}</div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={submitCancel}
+                disabled={busy}
+                className="px-4 py-2 text-xs font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-all disabled:opacity-50"
+              >
+                {busy ? 'Cancelling…' : 'Confirm cancellation'}
+              </button>
+              <button
+                onClick={() => setStep('confirm')}
+                disabled={busy}
+                className="px-4 py-2 text-xs font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-all disabled:opacity-50"
+              >
+                Back
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'done' && (
+          <div className="flex items-start gap-2">
+            <CheckCircle2 size={16} className="text-[#17C5B0] mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[#F5F5F7] font-medium">Cancellation recorded</p>
+              <p className="text-[#A1A1A8] mt-1">
+                Your subscription won't renew. You keep access through the end of
+                your current paid period. We've emailed you a confirmation — reply
+                any time if you change your mind.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const location = useLocation()
   const basePath = location.pathname.startsWith('/app') ? '/app'
@@ -522,6 +665,11 @@ export default function SettingsPage() {
       {/* Billing & Subscription */}
       <ScrollReveal variant="fadeUp" delay={0.22}>
         <BillingCard orgId={orgId} apiUrl={API_URL} />
+      </ScrollReveal>
+
+      {/* Cancel Subscription / Account */}
+      <ScrollReveal variant="fadeUp" delay={0.25}>
+        <CancelAccountCard orgId={orgId} apiUrl={API_URL} />
       </ScrollReveal>
 
       {/* API Info */}
