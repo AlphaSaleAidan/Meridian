@@ -10,7 +10,10 @@ import os
 import subprocess
 import time
 import uuid
+import re
 from pathlib import Path
+
+from ..security.secret_mask import mask_secrets
 
 logger = logging.getLogger("meridian.ai.garry_tools")
 
@@ -146,7 +149,9 @@ async def execute_tool(name: str, arguments: dict) -> str:
             return json.dumps({"error": f"Unknown tool: {name}"})
     except Exception as e:
         logger.exception("Tool execution error: %s", name)
-        return json.dumps({"error": str(e)})
+        # Error text goes back into the LLM conversation (and can be echoed to
+        # the user) — scrub any key material before it leaves this boundary.
+        return json.dumps({"error": mask_secrets(str(e))})
 
 
 def _tool_read_file(args: dict) -> str:
@@ -301,6 +306,27 @@ def _tool_list_patches(args: dict) -> str:
     return json.dumps({"patches": patches, "count": len(patches)})
 
 
+# run_query filter allowlist (prompt-injection guard): the filter string is
+# LLM-generated, and run_query hits PostgREST with the SERVICE key (RLS
+# bypassed). Only simple `column=op.value` filters are allowed — no select=
+# override, no rpc, no embedded resources, no boolean trees.
+_FILTER_OPS = ("eq", "neq", "gt", "lt", "gte", "lte", "like", "ilike")
+_SIMPLE_FILTER_RE = re.compile(
+    r"^[A-Za-z_]\w*=(?:(?:%s)\.[^&()]*|in\.\([^&()]*\))$" % "|".join(_FILTER_OPS)
+)
+_SELECT_RE = re.compile(r"^(\*|[A-Za-z_]\w*(,[A-Za-z_]\w*)*)$")
+
+
+def _sanitize_filters(filters: str) -> bool:
+    """True only if every &-separated segment is a simple column filter."""
+    if not filters:
+        return True
+    lowered = filters.lower()
+    if "select=" in lowered or "rpc" in lowered:
+        return False
+    return all(_SIMPLE_FILTER_RE.match(part) for part in filters.split("&"))
+
+
 async def _tool_run_query(args: dict) -> str:
     import httpx
 
@@ -311,6 +337,13 @@ async def _tool_run_query(args: dict) -> str:
 
     if not table or not table.replace("_", "").isalnum():
         return json.dumps({"error": "Invalid table name"})
+    if not _SELECT_RE.match(select):
+        return json.dumps({"error": "Invalid select — plain comma-separated column names or * only"})
+    if not _sanitize_filters(filters):
+        return json.dumps({
+            "error": "Invalid filters — only simple column filters are allowed "
+                     "(col=eq|neq|gt|lt|gte|lte|like|ilike|in.value, joined by &)"
+        })
 
     supabase_url = os.environ.get("SUPABASE_URL", "")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
@@ -328,11 +361,12 @@ async def _tool_run_query(args: dict) -> str:
                 "apikey": service_key,
             })
             if resp.status_code != 200:
-                return json.dumps({"error": f"Query failed: {resp.status_code}", "detail": resp.text[:200]})
+                return json.dumps({"error": f"Query failed: {resp.status_code}",
+                                   "detail": mask_secrets(resp.text[:200])})
             rows = resp.json()
             return json.dumps({"table": table, "rows": rows, "count": len(rows)})
     except Exception as e:
-        return json.dumps({"error": str(e)})
+        return json.dumps({"error": mask_secrets(str(e))})
 
 
 def get_patch(patch_id: str) -> dict | None:

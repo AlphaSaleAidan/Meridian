@@ -18,11 +18,39 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from ..auth import require_org_access
+from ..auth import enforce_service_member, require_org_access, require_service_auth
 
 logger = logging.getLogger("meridian.spaces")
 
 router = APIRouter(prefix="/api/spaces", tags=["spaces"], dependencies=[Depends(require_org_access)])
+
+
+async def _authorize_space_access(principal: dict, space_id: str) -> None:
+    """BOLA guard for routes keyed only by space_id (status/zones/model).
+
+    require_org_access is a no-op here — these routes carry no org_id in
+    query/path/body (live-probed 2026-07-15: POST /{id}/zones returned 200
+    UNAUTHENTICATED). So: authenticate via require_service_auth at the route,
+    then load the space row and require the caller's org to match its org_id.
+    The org comes from the AUTHENTICATED session (enforce_service_member),
+    never from the request. Machine principals (admin key / service token)
+    are org-agnostic, mirroring phone_dashboard.py.
+    """
+    if principal.get("kind") in ("admin", "service"):
+        return
+    from ...db import _db_instance as db
+    if not db:
+        return  # demo mode — no tenant rows exist to protect
+    try:
+        rows = await db.select("spaces", "*", filters={"id": f"eq.{space_id}"}, limit=1)
+    except Exception as e:
+        # Fail CLOSED for session users — an authz lookup error must not
+        # grant cross-tenant access.
+        logger.warning("Space authz lookup failed for %s: %s", space_id, e)
+        raise HTTPException(status_code=503, detail="Space authorization unavailable")
+    if not rows:
+        raise HTTPException(status_code=404, detail="Space not found")
+    await enforce_service_member(principal, rows[0].get("org_id") or "")
 
 
 class ScanUploadRequest(BaseModel):
@@ -251,9 +279,11 @@ async def upload_splat(
 
 
 @router.get("/{space_id}/model")
-async def get_space_model(space_id: str):
-    """Serve the .splat/.ply model file for a space."""
+async def get_space_model(space_id: str, principal=Depends(require_service_auth)):
+    """Serve the .splat/.ply model file for a space (org-scoped)."""
     from fastapi.responses import FileResponse
+
+    await _authorize_space_access(principal, space_id)
 
     space_dir = Path("data/spaces") / space_id
     for ext in [".splat", ".ply", ".spz"]:
@@ -323,7 +353,8 @@ async def get_space(org_id: str, space_id: str):
 
 
 @router.patch("/{space_id}/status")
-async def update_status(space_id: str, status: str):
+async def update_status(space_id: str, status: str, principal=Depends(require_service_auth)):
+    await _authorize_space_access(principal, space_id)
     from ...db import _db_instance as db
     if not db:
         return {"id": space_id, "status": status}
@@ -341,7 +372,8 @@ async def update_status(space_id: str, status: str):
 
 
 @router.post("/{space_id}/zones")
-async def store_zones(space_id: str, req: ZonesRequest):
+async def store_zones(space_id: str, req: ZonesRequest, principal=Depends(require_service_auth)):
+    await _authorize_space_access(principal, space_id)
     from ...db import _db_instance as db
     if not db:
         return {"space_id": space_id, "zones_stored": len(req.zones)}

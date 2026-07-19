@@ -30,9 +30,11 @@ from ...services.pos_connectors import (
 
 logger = logging.getLogger("meridian.api.pos_connections")
 
-# Router-level tenancy guard: every endpoint that accepts org_id in query OR path
-# is automatically protected. POST endpoints that pass org_id in body (e.g.
-# /connect, /test-connection, /upload-csv) must enforce internally (P1 follow-up).
+# Router-level tenancy guard: every endpoint that accepts org_id in query, path,
+# OR body is automatically protected — require_org_access resolves body org_id
+# too (auth.py _org_id_from_body, CA-1/CA-2 fix), covering /connect,
+# /test-connection and /upload-csv. Verified by
+# tests/test_security_batch_20260719.py (section 7).
 router = APIRouter(
     prefix="/api/pos",
     tags=["pos-connections"],

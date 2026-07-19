@@ -119,9 +119,16 @@ async def rebuild_context_async(use_llm: bool = True):
 
 @router.post("/rebuild-all")
 async def rebuild_all(use_llm: bool = True):
-    """Full token-saving pipeline: context + file digests + diff summaries + session compression."""
-    from src.inference.context_engine import rebuild_all as _rebuild_all
-    result = _rebuild_all(use_llm=use_llm)
+    """Full token-saving pipeline: context + file digests + diff summaries + session compression.
+
+    Cost cap: bounded by MERIDIAN_REBUILD_MAX_CALLS (default 200) LLM calls.
+    When the cap is hit the partial result is returned with HTTP 429.
+    """
+    import src.inference.context_engine as _ce
+    result = _ce.rebuild_all(use_llm=use_llm)
+    if isinstance(result, dict) and result.get("llm_budget_exceeded"):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(status_code=429, content=result)
     return result
 
 

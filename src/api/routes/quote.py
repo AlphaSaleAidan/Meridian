@@ -94,14 +94,29 @@ async def create_quote_request(req: QuoteRequest) -> dict:
         "created_at": now,
     }
 
-    # 3) Persist (best-effort — never fail the prospect over a DB hiccup).
+    # 3) Spam dedup (2026-07-15 hunt): same email within 24h → 200 but no
+    #    duplicate row / founder email. Best-effort: a dedup-lookup failure
+    #    must never drop a real lead.
     try:
         db = get_db()
-        await db.insert("quote_requests", row)
+    except Exception as e:
+        logger.warning("quote_requests DB unavailable: %s", e)
+        db = None
+
+    if db is not None:
+        from ...services.submission_guard import is_recent_duplicate
+        if await is_recent_duplicate(db, "quote_requests", email):
+            logger.info("Duplicate quote request suppressed: %s (%s)", business_name, email)
+            return {"ok": True}
+
+    # 4) Persist (best-effort — never fail the prospect over a DB hiccup).
+    try:
+        if db is not None:
+            await db.insert("quote_requests", row)
     except Exception as e:
         logger.warning("quote_requests insert failed (table may not exist / DB down): %s", e)
 
-    # 4) Notify the founders (best-effort — email errors must not bounce the lead).
+    # 5) Notify the founders (best-effort — email errors must not bounce the lead).
     try:
         await send_quote_request(
             full_name=full_name,

@@ -62,7 +62,10 @@ def _require_admin(admin_email: str) -> None:
 # ---------- Request Models ----------
 
 class AcceptanceRequest(BaseModel):
-    user_id: str
+    # user_id is IGNORED — kept optional for old clients that still send it.
+    # The recorded user_id always comes from the authenticated session (JWT):
+    # the unauthenticated endpoint let anyone mark ANY user_id compliant.
+    user_id: str = ""
     user_type: str  # customer, sales_rep, admin
     document_type: str
     document_version: str
@@ -100,19 +103,25 @@ class AdminQuery(BaseModel):
 # ---------- Document Acceptance ----------
 
 @router.post("/api/compliance/accept")
-async def accept_document(req: AcceptanceRequest):
-    """Record a user's acceptance of a compliance document."""
-    _validate_user_id(req.user_id)
+async def accept_document(req: AcceptanceRequest, caller: dict = Depends(require_jwt)):
+    """Record the AUTHENTICATED user's acceptance of a compliance document.
+
+    Security (2026-07-15 bug hunt): this endpoint had no auth and trusted the
+    payload user_id, letting anyone mark any user compliant. user_id now comes
+    exclusively from the verified session token.
+    """
+    user_id = caller.get("id") or caller.get("sub") or ""
+    _validate_user_id(user_id)
     supabase_url, service_key = _get_supabase()
     if not supabase_url or not service_key:
         raise HTTPException(503, "Supabase not configured")
 
     now = datetime.now(timezone.utc).isoformat()
-    hash_input = f"{req.user_id}:{req.document_type}:{req.document_version}:{now}"
+    hash_input = f"{user_id}:{req.document_type}:{req.document_version}:{now}"
     acceptance_hash = hashlib.sha256(hash_input.encode()).hexdigest()
 
     payload = {
-        "user_id": req.user_id,
+        "user_id": user_id,
         "user_type": req.user_type,
         "document_type": req.document_type,
         "document_version": req.document_version,
@@ -139,7 +148,7 @@ async def accept_document(req: AcceptanceRequest):
         logger.error("Acceptance insert failed: %s %s", resp.status_code, resp.text)
         raise HTTPException(500, "Could not record acceptance")
 
-    logger.info("Acceptance recorded: user=%s doc=%s v=%s", req.user_id, req.document_type, req.document_version)
+    logger.info("Acceptance recorded: user=%s doc=%s v=%s", user_id, req.document_type, req.document_version)
     return {"ok": True, "acceptance_hash": acceptance_hash}
 
 
