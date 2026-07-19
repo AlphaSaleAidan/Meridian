@@ -14,6 +14,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from ..auth import ADMIN_EMAILS, require_jwt, require_admin_jwt, rate_limit_signup
 from .. import hierarchy
+from ...billing.fee_terms import ORDER_FEE_CAP_CENTS, ORDER_FEE_FLOOR_CENTS
 from .careers import submit_application, CareerApplication
 from ._supabase_admin import delete_auth_user_by_email
 
@@ -118,22 +119,28 @@ class CreateCustomerRequest(BaseModel):
 
 # Per-order fee REDLINES (cents) — the floor the rep slider can reach, by plan.
 # Aidan 2026-07-15: premium (middle tier) floor $0.65/order, command (top tier)
-# floor $0.45/order in USD. Canada floors run HIGHER (CA$0.85 / CA$0.65):
-# CA$ is worth ~27% less while Vapi bills in USD — at CA$0.45 the margin
-# simulation nets only ~US$0.07/order (redline sim, 2026-07-15), so the CAD
-# floors preserve roughly the US-floor margin. Unknown plan → the lowest
-# non-zero floor, so a crafted request can never zero out the fee.
-_ORDER_FEE_FLOOR_CENTS_USD = {"standard": 0, "premium": 65, "command": 45}
-_ORDER_FEE_FLOOR_CENTS_CAD = {"standard": 0, "premium": 85, "command": 65}
-_ORDER_FEE_CAP_CENTS = 500
+# floor $0.45/order in USD. Aidan 2026-07-19: CAD floors + cap = the standard
+# ×1.4 CAD multiplier, rounded down to 5¢, applied to those USD constants
+# (premium CA$0.90, command CA$0.60, cap CA$7.00) — supersedes CA$0.85/CA$0.65.
+# SOURCE OF TRUTH: src/billing/fee_terms.py (ORDER_FEE_FLOOR_CENTS /
+# ORDER_FEE_CAP_CENTS); the aliases below are kept for existing importers.
+# Unknown plan → the lowest non-zero floor, so a crafted request can never
+# zero out the fee.
+_ORDER_FEE_FLOOR_CENTS_USD = ORDER_FEE_FLOOR_CENTS["us"]
+_ORDER_FEE_FLOOR_CENTS_CAD = ORDER_FEE_FLOOR_CENTS["ca"]
 
 
 def _clamp_order_fee_cents(fee: int, plan_id: str | None,
-                           floors: dict[str, int] | None = None) -> int:
-    floors = floors if floors is not None else _ORDER_FEE_FLOOR_CENTS_CAD
+                           market: str = "ca") -> int:
+    """Server-side redline: clamp a client-sent per-order fee to the market's
+    [tier floor, hard cap]. Currency-aware — a crafted CA request can't ride
+    the lower US floors."""
+    m = market if market in ORDER_FEE_FLOOR_CENTS else "ca"
+    floors = ORDER_FEE_FLOOR_CENTS[m]
+    cap = ORDER_FEE_CAP_CENTS[m]
     default_floor = min(v for v in floors.values() if v > 0)
     floor = floors.get((plan_id or "").strip().lower(), default_floor)
-    return max(min(int(fee), _ORDER_FEE_CAP_CENTS), floor)
+    return max(min(int(fee), cap), floor)
 
 
 async def _provision_fee_terms(

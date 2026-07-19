@@ -6,8 +6,10 @@ Money invariants:
      on EVERY rail (split surcharge, legacy application fee, Clover-native,
      phone-order ledger credit) — and None everywhere means "default rate",
      so existing merchants are byte-for-byte unchanged.
-  2. The redline is enforced server-side: create-customer clamps to the tier
-     floor (premium 65¢, command 45¢) no matter what the client sends.
+  2. The redline is enforced server-side and is CURRENCY-AWARE: create-customer
+     clamps to the tier floor (US premium 65¢ / command 45¢, cap $5.00; Canada
+     = USD × 1.4, rounded down to 5¢ → CA$0.90 / CA$0.60, cap CA$7.00) no matter what the client
+     sends.
 
 Accent invariants:
   3. The wizard may write Vapi voice names or legacy kokoro ids — both resolve
@@ -147,26 +149,70 @@ def test_clover_native_fee_uses_override(monkeypatch):
 
 
 # ── 2. redline enforcement ────────────────────────────────────
+# Aidan 2026-07-19: CAD floors/cap = the standard ×1.4 CAD multiplier applied
+# to the USD constants (supersedes the hand-set CA$0.85/CA$0.65 of 2026-07-15):
+# premium 65¢→90¢, command 45¢→60¢, cap $5.00→CA$7.00. US unchanged.
 
 
-def test_clamp_enforces_tier_redlines():
-    # Default floors are CANADA's (CA$0.85 premium / CA$0.65 command) — higher
-    # than US because CA$ is worth less while per-call costs bill in USD.
-    assert _clamp_order_fee_cents(50, "premium") == 85    # below premium floor → 85
-    assert _clamp_order_fee_cents(85, "premium") == 85
+def test_clamp_enforces_cad_tier_redlines():
+    # Default market is Canada: floors CA$0.90 premium / CA$0.60 command.
+    assert _clamp_order_fee_cents(50, "premium") == 90    # below floor → clamped up
+    assert _clamp_order_fee_cents(90, "premium") == 90    # at floor untouched
     assert _clamp_order_fee_cents(149, "premium") == 149  # in range untouched
-    assert _clamp_order_fee_cents(10, "command") == 65    # command floor 65
-    assert _clamp_order_fee_cents(0, None) == 65          # unknown plan → lowest non-zero floor
+    assert _clamp_order_fee_cents(10, "command") == 60    # command floor 60
+    assert _clamp_order_fee_cents(0, None) == 60          # unknown plan → lowest non-zero floor
     assert _clamp_order_fee_cents(0, "standard") == 0     # standard has no phone agent fee
-    assert _clamp_order_fee_cents(99999, "premium") == 500  # cap
+    assert _clamp_order_fee_cents(99999, "premium") == 700  # CAD cap CA$7.00
 
 
 def test_clamp_us_floors_unchanged():
-    from src.api.routes.canada import _ORDER_FEE_FLOOR_CENTS_USD as US
-    assert _clamp_order_fee_cents(50, "premium", floors=US) == 65
-    assert _clamp_order_fee_cents(10, "command", floors=US) == 45
-    assert _clamp_order_fee_cents(0, None, floors=US) == 45
-    assert _clamp_order_fee_cents(0, "standard", floors=US) == 0
+    assert _clamp_order_fee_cents(50, "premium", market="us") == 65
+    assert _clamp_order_fee_cents(10, "command", market="us") == 45
+    assert _clamp_order_fee_cents(0, None, market="us") == 45
+    assert _clamp_order_fee_cents(0, "standard", market="us") == 0
+    assert _clamp_order_fee_cents(99999, "premium", market="us") == 500  # US cap unchanged
+
+
+def test_clamp_between_usd_and_cad_floor_diverges_by_market():
+    # A fee BETWEEN the USD floor and the CAD floor: legal for a US deal,
+    # clamped up for a Canada deal — a crafted CA request can't ride the US
+    # redline.
+    assert _clamp_order_fee_cents(85, "premium", market="us") == 85   # ≥ US floor 65 → allowed
+    assert _clamp_order_fee_cents(85, "premium") == 90                # < CA floor 90 → clamped up
+    assert _clamp_order_fee_cents(50, "command", market="us") == 50   # ≥ US floor 45 → allowed
+    assert _clamp_order_fee_cents(50, "command") == 60                # < CA floor 60 → clamped up
+
+
+def test_cad_floors_and_cap_derive_from_usd_times_multiplier():
+    # ONE source of truth: CAD values are the USD constants × CAD_FEE_MULTIPLIER,
+    # not hand-set magic numbers — a future US floor change propagates.
+    from src.billing.fee_terms import (
+        CAD_FEE_MULTIPLIER,
+        ORDER_FEE_CAP_CENTS,
+        ORDER_FEE_FLOOR_CENTS,
+    )
+    assert CAD_FEE_MULTIPLIER == 1.4
+    # CAD = USD × 1.4, rounded DOWN to nearest 5¢ (never above the raw multiple).
+    for tier, usd in ORDER_FEE_FLOOR_CENTS["us"].items():
+        assert ORDER_FEE_FLOOR_CENTS["ca"][tier] == int(usd * CAD_FEE_MULTIPLIER) // 5 * 5
+    assert ORDER_FEE_FLOOR_CENTS["ca"] == {"standard": 0, "premium": 90, "command": 60}
+    assert ORDER_FEE_CAP_CENTS == {"us": 500, "ca": 700}
+    # canada.py clamps and fee_terms canonical table share the same values
+    from src.api.routes.canada import (
+        _ORDER_FEE_FLOOR_CENTS_CAD,
+        _ORDER_FEE_FLOOR_CENTS_USD,
+    )
+    assert _ORDER_FEE_FLOOR_CENTS_CAD is ORDER_FEE_FLOOR_CENTS["ca"]
+    assert _ORDER_FEE_FLOOR_CENTS_USD is ORDER_FEE_FLOOR_CENTS["us"]
+
+
+def test_resolve_fee_terms_clamps_to_cad_floor():
+    from src.billing.fee_terms import resolve_fee_terms
+    # below-floor negotiated fee at close → clamped up to the CAD redline
+    assert resolve_fee_terms("ca", "premium", order_fee_cents=70)["order_fee_cents"] == 90
+    assert resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 60
+    # same fee on a US deal → US floors apply
+    assert resolve_fee_terms("us", "premium", order_fee_cents=70)["order_fee_cents"] == 70
 
 
 # ── 3+4. accent / voice / multilingual ────────────────────────
