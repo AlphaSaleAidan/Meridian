@@ -253,7 +253,10 @@ async def rep_signup(req: RepSignupRequest):
             json={
                 "org_id": CANADA_ORG_ID,
                 "name": req.name,
-                "email": req.email,
+                # Store lowercased so every email-join (JWT claim is lowercased
+                # by Supabase auth) matches — a mixed-case row silently breaks
+                # rep entitlement + commission lookups. See fix/sales-rep-email-case.
+                "email": (req.email or "").strip().lower(),
                 "phone": req.phone or "",
                 "commission_rate": 0.70,
                 "is_active": False,
