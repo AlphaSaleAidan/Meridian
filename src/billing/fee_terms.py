@@ -55,7 +55,7 @@ FEE_TERM_FIELDS = (
 # USD constants are canonical; CAD values are DERIVED via the standard CAD
 # multiplier ×1.4, then ROUNDED DOWN to the nearest 5¢ for clean pricing
 # (Aidan 2026-07-19 — supersedes the hand-set CA$0.85/CA$0.65 of 2026-07-15):
-# premium 65¢→91¢→CA$0.90, command 45¢→63¢→CA$0.60, cap $5.00→CA$7.00.
+# premium 65¢→90¢→CA$0.90, command 45¢→60¢→CA$0.60, cap $5.00→CA$7.00.
 # Rounding DOWN keeps the CAD floor at/below the raw multiple, so it never
 # quotes above the intended redline. A US floor change propagates automatically.
 CAD_FEE_MULTIPLIER = 1.4
@@ -85,8 +85,8 @@ ORDER_FEE_CAP_CENTS: dict[str, int] = {
 # Values mirror the frontend plan files (see module docstring):
 #   US: Standard $250 / Premium $350 ($1.49/order, floor $0.65)
 #       / Command $500 ($1.00/order, floor $0.45)
-#   CA: Standard CA$350 / Premium CA$500 (CA$1.99/order, floor CA$0.91)
-#       / Command CA$700 (CA$1.39/order, floor CA$0.63)
+#   CA: Standard CA$350 / Premium CA$500 (CA$1.99/order, floor CA$0.90)
+#       / Command CA$700 (CA$1.39/order, floor CA$0.60)
 # order_fee_floor_cents = the rep-slider redline (canada.py clamps to the same
 # values, referenced from ORDER_FEE_FLOOR_CENTS above so there is exactly one
 # copy); order_fee_cents = the tier's standard (maximum) rate.
