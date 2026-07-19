@@ -137,6 +137,22 @@ export interface PhoneRecommendationsResponse {
   recommendations: PhoneRecommendation[]
 }
 
+export interface VoiceWallet {
+  merchant_id: string
+  balance_cents: number
+  self_funded: boolean
+  window_days: number
+  window_credit_cents: number
+  window_debit_cents: number
+  window_net_cents: number
+  avg_daily_debit_cents: number
+  runway_days: number | null
+  floor_cents: number | null
+  floor_source: 'per_location' | 'global_env' | null
+  fallback_armed: boolean
+  below_floor: boolean
+}
+
 export const phoneService = {
   async getConfig(merchantId: string): Promise<PhoneConfig> {
     const res = await fetch(
@@ -193,6 +209,18 @@ export const phoneService = {
   async getRecommendations(merchantId: string, days = 7): Promise<PhoneRecommendationsResponse | null> {
     const res = await fetch(
       `${API_BASE}/api/phone/recommendations/${merchantId}?days=${days}`,
+      { headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return null
+    return res.json()
+  },
+
+  /** Per-location voice self-funding wallet (READ-ONLY): the location's
+   * voice_ledger P&L — fees credited vs Vapi cost debited — with runway + the
+   * effective fallback floor. */
+  async getVoiceWallet(merchantId: string, days = 30): Promise<VoiceWallet | null> {
+    const res = await fetch(
+      `${API_BASE}/api/phone/voice-wallet/${merchantId}?days=${days}`,
       { headers: await getAuthHeaders() },
     )
     if (!res.ok) return null

@@ -346,3 +346,56 @@ async def phone_recommendations(
         "total_calls": block["total_calls"],
         "recommendations": recommend_for_merchant(block),
     }
+
+
+@router.get("/voice-wallet/{merchant_id}")
+async def voice_wallet(
+    merchant_id: str,
+    days: int = Query(30, ge=1, le=365),
+    user: dict = Depends(require_jwt),
+):
+    """Per-location voice self-funding wallet (READ-ONLY).
+
+    The location's voice P&L from voice_ledger: all-time balance (Stripe/Clover
+    fees credited minus each Vapi call's cost), the last-`days` credit/debit
+    run-rate, burn rate, and a linear runway estimate — plus the effective
+    self-funding floor (per-location override or the global env default) and
+    whether the cheaper-rail fallback is currently armed for this account.
+
+    Org-auth: caller must be a member/owner of `merchant_id` (or a global admin).
+    """
+    _validate_merchant_id(merchant_id)
+    await require_org_member(user, merchant_id)
+
+    from ...services.voice_ledger import wallet_summary
+    summary = await wallet_summary(merchant_id, window_days=days)
+    if summary is None:
+        raise HTTPException(503, "Voice ledger temporarily unavailable")
+
+    # Effective floor: per-location override (phone_agent_config) else global env.
+    per_location = None
+    try:
+        db = get_db()
+        rows = await db.select(
+            "phone_agent_config", "voice_balance_floor_cents",
+            filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
+        )
+        if rows and rows[0].get("voice_balance_floor_cents") is not None:
+            per_location = int(rows[0]["voice_balance_floor_cents"])
+    except Exception:  # noqa: BLE001 — floor display never blocks the wallet read
+        logger.warning("voice-wallet floor lookup failed for %s", merchant_id, exc_info=True)
+
+    _env_raw = os.getenv("VOICE_BALANCE_FLOOR_CENTS", "").strip()
+    global_floor = int(_env_raw) if _env_raw.lstrip("-").isdigit() else None
+    effective_floor = per_location if per_location is not None else global_floor
+    fallback_armed = bool(os.getenv("TELNYX_FALLBACK_NUMBER", "").strip()) and effective_floor is not None
+    below_floor = effective_floor is not None and summary["balance_cents"] <= effective_floor
+
+    return {
+        **summary,
+        "floor_cents": effective_floor,
+        "floor_source": ("per_location" if per_location is not None
+                         else "global_env" if global_floor is not None else None),
+        "fallback_armed": fallback_armed,
+        "below_floor": below_floor,  # true ⇒ calls currently route to the cheaper rail
+    }

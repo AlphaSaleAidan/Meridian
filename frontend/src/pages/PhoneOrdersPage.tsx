@@ -20,7 +20,7 @@ import { phoneService, type PhoneConfig } from '@/lib/phone-service'
 import { getAuthHeaders } from '@/lib/supabase'
 import {
   LiveCallsBanner, RecordingPlayback, SettingsTab, ForwardingWizard,
-  CallRecommendationsCard,
+  CallRecommendationsCard, VoiceWalletCard,
 } from '@/components/phone'
 
 /* ---------- Config maps ---------- */
@@ -240,6 +240,7 @@ function OverviewTab({ calls, biz, orgId, isDemo, period, setPeriod, onViewCall,
       )}
       <ConversionFunnel calls={calls} />
       <CallRecommendationsCard merchantId={orgId} isDemo={isDemo} days={PERIOD_DAYS[period] ?? 7} />
+      <VoiceWalletCard merchantId={orgId} isDemo={isDemo} days={30} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="card p-4 border-[#1A8FD6]/10"><div className="flex items-start gap-2"><div className="w-8 h-8 rounded-lg bg-[#1A8FD6]/10 flex items-center justify-center flex-shrink-0"><Mic size={16} className="text-[#1A8FD6]" /></div><div><h3 className="text-sm font-semibold text-[#F5F5F7]">AI Voice Agent</h3><p className="text-[10px] text-[#A1A1A8] mt-1 leading-relaxed">Answers calls 24/7, takes orders conversationally. Included with your plan.</p></div></div></div>
         <div className="card p-4"><div className="flex items-center gap-2 mb-2"><Clock size={12} className="text-[#A1A1A8]" /><span className="text-[10px] text-[#A1A1A8] font-medium">AVG CALL DURATION</span></div><p className="text-xl font-bold text-[#F5F5F7] font-mono">{Math.floor(stats.avgDurationSec / 60)}:{String(stats.avgDurationSec % 60).padStart(2, '0')}</p></div>
