@@ -133,6 +133,105 @@ def split_application_fee_cents(subtotal_cents: int, surcharge_cents: int) -> in
     return min(fee, max(total - 1, 0))
 
 
+# ── 3-MODE FEE ALLOCATION (business_pays / split_5050 / customer_pays) ────────
+#
+# Rep-set at close, FIXED thereafter (stored on phone_agent_config.
+# fee_allocation_mode, migration 048; owner sees it read-only and can only file
+# a change request). Allocates the PER-ORDER fee between the customer's total
+# and the merchant's payout. Two fee components:
+#   M  Meridian's per-order fee — the merchant's effective per-order fee
+#      (rep override, else the plan-tier rate). Same tier table the split model
+#      uses (tier_order_fee_cents) — NEVER re-hardcoded here.
+#   S  Stripe's processing fee = round(subtotal × 2.9%) + 30¢.
+#   F = M + S  is fully allocated in every mode (customer surcharge + business
+#      absorbed == F, always).
+#
+# fee_allocation_mode = None (or an unknown value) → allocate_fee returns None
+# and callers fall back to the pre-existing FEE_SPLIT / gross-up behavior
+# byte-for-byte. This new model only activates when a mode is explicitly set.
+FEE_ALLOCATION_MODES = ("business_pays", "split_5050", "customer_pays")
+
+# Stripe's per-charge processing rate for the S component. Independent of the
+# legacy STRIPE_FEE_BPS/STRIPE_FEE_FIXED_CENTS gross-up knobs (those govern the
+# old model) but defaulted to the same 2.9% + 30¢ Stripe actually charges.
+MODE_STRIPE_FEE_BPS = int(os.getenv("MERIDIAN_MODE_STRIPE_FEE_BPS", "290") or 290)
+MODE_STRIPE_FEE_FIXED_CENTS = int(os.getenv("MERIDIAN_MODE_STRIPE_FEE_FIXED_CENTS", "30") or 30)
+
+
+def meridian_fee_cents(plan_tier: str, currency: str,
+                       override_cents: int | None = None) -> int:
+    """M — Meridian's per-order fee for this order: the rep-negotiated override
+    when set, else the plan-tier rate (tier_order_fee_cents). This is the SAME
+    per-order fee the split model surfaces; kept as a thin wrapper so the mode
+    math and the split math can never diverge on M."""
+    if override_cents is not None:
+        try:
+            return max(int(override_cents), 0)
+        except (TypeError, ValueError):
+            pass
+    return tier_order_fee_cents(plan_tier, currency)
+
+
+def stripe_fee_cents(subtotal_cents: int) -> int:
+    """S — Stripe's processing fee on the order subtotal: 2.9% + 30¢."""
+    return int(round(max(subtotal_cents, 0) * MODE_STRIPE_FEE_BPS / 10000)) \
+        + MODE_STRIPE_FEE_FIXED_CENTS
+
+
+def allocate_fee(subtotal_cents: int, plan_tier: str, currency: str,
+                 mode: str | None, override_cents: int | None = None) -> dict | None:
+    """Allocate the per-order fee F = M + S between customer and business for
+    the given mode. Returns a dict, or None when `mode` is None/unknown (the
+    caller then keeps the legacy fee behavior).
+
+    Keys (all integer cents):
+      meridian_fee_cents        M
+      stripe_fee_cents          S
+      total_fee_cents           F = M + S
+      customer_surcharge_cents  added to the customer's total
+      business_absorbed_cents   taken out of the merchant's payout
+      customer_total_cents      subtotal + customer surcharge
+      mode                      the resolved mode
+
+    business_pays  customer 0,          business F
+    split_5050     customer ceil(F/2),  business floor(F/2)  (ODD CENT → customer)
+    customer_pays  customer F,          business 0
+    """
+    if mode not in FEE_ALLOCATION_MODES:
+        return None
+    subtotal_cents = max(int(subtotal_cents), 0)
+    m = meridian_fee_cents(plan_tier, currency, override_cents)
+    s = stripe_fee_cents(subtotal_cents)
+    f = m + s
+    if mode == "business_pays":
+        customer = 0
+    elif mode == "customer_pays":
+        customer = f
+    else:  # split_5050 — odd cent to the customer side (ceil vs floor)
+        customer = (f + 1) // 2          # == ceil(f / 2)
+    business = f - customer               # floor(f / 2) for the split; F or 0 otherwise
+    return {
+        "meridian_fee_cents": m,
+        "stripe_fee_cents": s,
+        "total_fee_cents": f,
+        "customer_surcharge_cents": customer,
+        "business_absorbed_cents": business,
+        "customer_total_cents": subtotal_cents + customer,
+        "mode": mode,
+    }
+
+
+def mode_application_fee_cents(subtotal_cents: int, alloc: dict) -> int:
+    """Stripe application fee (Meridian's cut from a destination charge) under
+    the 3-mode model: the WHOLE per-order fee F routes to Meridian regardless of
+    who fronted which half — the customer surcharge rides the charge as a line
+    item, and the business-absorbed part is deducted from the merchant payout.
+    Capped below the charge total so we never take more than was charged."""
+    fee = int(alloc["total_fee_cents"])
+    charge_total = int(subtotal_cents) + int(alloc["customer_surcharge_cents"])
+    return min(fee, max(charge_total - 1, 0))
+
+
 # Demo test-charge override: when set, orders for a demo merchant charge this flat
 # amount (clamped to Stripe's $0.50 CAD minimum) instead of the real total, so
 # test runs cost ~$0.50 rather than full price. Real merchants are never touched.
@@ -237,7 +336,8 @@ async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: 
                 return await _clover_lazy_checkout(
                     order, pos_order_id, _clover_merchant_id_hint(merchant_config),
                     plan_tier=getattr(merchant_config, "plan_tier", "") or "",
-                    fee_override_cents=getattr(merchant_config, "order_fee_cents", None))
+                    fee_override_cents=getattr(merchant_config, "order_fee_cents", None),
+                    fee_allocation_mode=getattr(merchant_config, "fee_allocation_mode", None))
             logger.warning(
                 "payment_link_provider=clover but no Clover connection for %s — "
                 "falling back to default checkout", order.get("merchant_id", ""))
@@ -300,10 +400,19 @@ async def _stripe_checkout(
     # + fixed 30¢, added to the total as its own line item. 0 when the split is
     # disabled or on demo test charges.
     surcharge = 0
+    # 3-mode allocation (business_pays/split_5050/customer_pays), when the rep
+    # set a fee_allocation_mode at close. Present → it wins over FEE_SPLIT_ENABLED
+    # and drives BOTH the customer surcharge line and the application fee below.
+    # None/unknown → falls through to the pre-existing behavior byte-for-byte.
+    alloc = allocate_fee(
+        amount, getattr(merchant_config, "plan_tier", "") or "", currency,
+        getattr(merchant_config, "fee_allocation_mode", None),
+        override_cents=getattr(merchant_config, "order_fee_cents", None))
 
     # Demo test-charge override → flat ~$0.50 line instead of the real total.
     if DEMO_TEST_CHARGE_CENTS and order.get("merchant_id", "") in _DEMO_MERCHANT_IDS:
         amount = max(50, DEMO_TEST_CHARGE_CENTS)  # Stripe CAD minimum is 50¢
+        alloc = None  # never surcharge a demo test charge
         line_items = [{"quantity": 1, "price_data": {
             "currency": currency, "unit_amount": amount,
             "product_data": {"name": "Demo test charge"}}}]
@@ -311,7 +420,18 @@ async def _stripe_checkout(
                     amount, order.get("merchant_id"))
     else:
         line_items = _stripe_line_items(order, currency)
-        if FEE_SPLIT_ENABLED:
+        if alloc is not None:
+            surcharge = alloc["customer_surcharge_cents"]
+            if surcharge > 0:
+                line_items.append({
+                    "quantity": 1,
+                    "price_data": {
+                        "currency": currency,
+                        "unit_amount": surcharge,
+                        "product_data": {"name": "Service & processing fee"},
+                    },
+                })
+        elif FEE_SPLIT_ENABLED:
             surcharge = customer_surcharge_cents(
                 getattr(merchant_config, "plan_tier", ""), currency,
                 override_cents=getattr(merchant_config, "order_fee_cents", None))
@@ -350,7 +470,11 @@ async def _stripe_checkout(
         # flat service fee + optional % + (Case B) Stripe gross-up. Stripe
         # routes the fee to Meridian and pays the merchant the remainder
         # (daily). Capped below the charge so we never take more than was paid.
-        if FEE_SPLIT_ENABLED and surcharge:
+        if alloc is not None:
+            # 3-mode: the whole per-order fee (M + S) routes to Meridian; the
+            # customer surcharge rode the charge, the rest comes from the payout.
+            fee = mode_application_fee_cents(amount, alloc)
+        elif FEE_SPLIT_ENABLED and surcharge:
             fee = split_application_fee_cents(amount, surcharge)
         else:
             fee = application_fee_cents(
@@ -556,17 +680,19 @@ def _split_name(full_name: str) -> tuple[str, str]:
 
 
 def _clover_hco_line_items(order: dict[str, Any], plan_tier: str = "",
-                           fee_override_cents: int | None = None) -> tuple[list[dict], int]:
+                           fee_override_cents: int | None = None,
+                           fee_allocation_mode: str | None = None) -> tuple[list[dict], int]:
     """HCO shoppingCart lineItems (unit price in CENTS) + their total.
 
     Hosted Checkout ignores the merchant's Clover tax configuration and
     inventory, so tax must be computed INTO the cart: itemized lines get an
     explicit "Tax" line; unpriced orders get a single tax-inclusive total line.
 
-    Under the fee-split model the customer surcharge ALSO rides as a cart line
-    item (mirroring the Stripe rail) — the money settles on the merchant's own
-    Clover, and Meridian's full fee is booked to the voice ledger when the
-    payment is verified server-side (src/services/clover_hco.settle).
+    Under the fee-split model — or a rep-set fee_allocation_mode — the customer
+    surcharge ALSO rides as a cart line item (mirroring the Stripe rail): the
+    money settles on the merchant's own Clover, and Meridian's full fee is
+    booked to the voice ledger when the payment is verified server-side
+    (src/services/clover_hco.settle). A set mode wins over FEE_SPLIT_ENABLED.
     """
     items, ok = [], True
     for i in order.get("items", []):
@@ -586,15 +712,26 @@ def _clover_hco_line_items(order: dict[str, Any], plan_tier: str = "",
         if note:
             line["note"] = note
         items.append(line)
+    subtotal_cents = 0
     if ok and items:
+        subtotal_cents = sum(li["price"] * li["unitQty"] for li in items)
         tax_cents = int(round(float(order.get("tax", 0) or 0) * 100))
         if tax_cents > 0:
             items.append({"name": "Tax", "price": tax_cents, "unitQty": 1})
+            subtotal_cents += tax_cents
     else:
         # tax-inclusive single line (order total already includes tax)
-        items = [{"name": "Phone order", "price": _order_amount_cents(order), "unitQty": 1}]
-    if FEE_SPLIT_ENABLED:
-        currency = (order.get("currency") or "cad").lower()
+        subtotal_cents = _order_amount_cents(order)
+        items = [{"name": "Phone order", "price": subtotal_cents, "unitQty": 1}]
+    currency = (order.get("currency") or "cad").lower()
+    alloc = allocate_fee(subtotal_cents, plan_tier, currency, fee_allocation_mode,
+                         override_cents=fee_override_cents)
+    if alloc is not None:
+        surcharge = alloc["customer_surcharge_cents"]
+        if surcharge > 0:
+            items.append({"name": "Service & processing fee",
+                          "price": surcharge, "unitQty": 1})
+    elif FEE_SPLIT_ENABLED:
         surcharge = customer_surcharge_cents(plan_tier, currency,
                                              override_cents=fee_override_cents)
         if surcharge > 0:
@@ -648,6 +785,7 @@ async def _merchant_has_clover(merchant_config) -> bool:
 async def _clover_lazy_checkout(
     order: dict[str, Any], pos_order_id: str, clover_merchant_id: str = "",
     plan_tier: str = "", fee_override_cents: int | None = None,
+    fee_allocation_mode: str | None = None,
 ) -> dict:
     """Write the checkout_sessions row that backs a LAZY Clover Hosted Checkout
     and return the branded short link. No Clover HTTP happens here — the /p
@@ -662,7 +800,8 @@ async def _clover_lazy_checkout(
 
     currency = (order.get("currency") or "cad").lower()
     line_items, amount_cents = _clover_hco_line_items(order, plan_tier,
-                                                      fee_override_cents)
+                                                      fee_override_cents,
+                                                      fee_allocation_mode)
     first, last = _split_name(order.get("customer_name", ""))
     customer: dict[str, Any] = {"firstName": first}
     if last:
@@ -701,6 +840,12 @@ async def _clover_lazy_checkout(
             # rep-negotiated per-order fee override (rep-portal fee slider);
             # None = plan-tier / env default
             "fee_override_cents": fee_override_cents,
+            # rep-set fee allocation mode (business_pays/split_5050/customer_pays);
+            # None = legacy fee-split / env default
+            "fee_allocation_mode": fee_allocation_mode,
+            # pre-surcharge subtotal (cents) so settlement reconstructs the exact
+            # allocation (S depends on the subtotal, not the surcharged total).
+            "subtotal_cents": _order_amount_cents(order),
         },
         # legacy meridian-checkout columns so a fallback page could render the
         # order if HCO creation fails at tap time

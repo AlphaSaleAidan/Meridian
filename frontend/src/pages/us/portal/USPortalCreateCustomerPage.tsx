@@ -516,6 +516,8 @@ export default function USPortalCreateCustomerPage() {
     priceBump: 0,
     setupFee: '',
     firstMonthFree: false,
+    // Per-order fee handling, set here at close and FIXED for the merchant.
+    feeAllocationMode: 'business_pays' as 'business_pays' | 'split_5050' | 'customer_pays',
     notes: '',
   })
 
@@ -693,6 +695,8 @@ export default function USPortalCreateCustomerPage() {
             country: 'US',
             rep_id: rep?.rep_id || null,
             rep_name: rep?.name || null,
+            // Rep-set fee allocation mode, FIXED for this merchant thereafter.
+            fee_allocation_mode: form.feeAllocationMode,
             // Fee parity: the backend locks the sold terms onto this lead
             // (first-lock-wins) and records merchant_billing_terms against it.
             lead_id: leadId,
@@ -1025,6 +1029,22 @@ export default function USPortalCreateCustomerPage() {
 
             <div className="mb-4">
               <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
+                Fee Handling <span className="text-[#4a5550]">(who covers the per-order fee — set now, fixed after)</span>
+              </label>
+              <select
+                value={form.feeAllocationMode}
+                onChange={e => update('feeAllocationMode', e.target.value)}
+                className="w-full bg-[#0A0A0B] border border-[#1F1F23] rounded-lg px-3 py-2.5 text-[13px] text-white focus:outline-none focus:border-[#17C5B0]"
+              >
+                <option value="business_pays">Business pays the fee (customer total = order subtotal)</option>
+                <option value="split_5050">Split 50/50 (half added to customer, half absorbed)</option>
+                <option value="customer_pays">Customer pays the fee (added to their total)</option>
+              </select>
+              <p className="text-[10px] text-[#4a5550] mt-1">The owner cannot change this later — they can only request a change from Settings.</p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
                 Setup Fee <span className="text-[#17C5B0]">(you keep 100%)</span>
               </label>
               <div className="relative">
@@ -1309,7 +1329,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1463,7 +1483,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

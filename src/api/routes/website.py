@@ -655,10 +655,11 @@ async def create_website_order(req: CreateOrderRequest):
     stripe_account_id = ""
     stripe_charges_enabled = False
     order_fee_cents = None
+    fee_allocation_mode = None
     try:
         cfg_rows = await db.select(
             "phone_agent_config",
-            "plan_tier,stripe_account_id,stripe_charges_enabled,order_fee_cents",
+            "plan_tier,stripe_account_id,stripe_charges_enabled,order_fee_cents,fee_allocation_mode",
             filters={"merchant_id": f"eq.{merchant_id}"}, limit=1,
         )
         if cfg_rows:
@@ -667,10 +668,21 @@ async def create_website_order(req: CreateOrderRequest):
             stripe_charges_enabled = bool(cfg_rows[0].get("stripe_charges_enabled"))
             if cfg_rows[0].get("order_fee_cents") is not None:
                 order_fee_cents = int(cfg_rows[0]["order_fee_cents"])
+            fee_allocation_mode = cfg_rows[0].get("fee_allocation_mode")
     except Exception as e:  # noqa: BLE001 — unknown tier → default rate, platform charge
         logger.warning(f"payment config lookup failed for {merchant_id}: {e}")
 
-    if payment_links.FEE_SPLIT_ENABLED:
+    # 3-mode allocation wins when the rep set one at close; it drives BOTH the
+    # customer surcharge (fee_amount) and the business-absorbed part
+    # (merchant_fee_amount). None/unknown → legacy fee-split / flat behavior.
+    subtotal_cents = int(round(subtotal * 100))
+    alloc = payment_links.allocate_fee(
+        subtotal_cents, plan_tier, currency.lower(), fee_allocation_mode,
+        override_cents=order_fee_cents)
+    if alloc is not None:
+        fee_amount = round(alloc["customer_surcharge_cents"] / 100, 2)
+        merchant_fee_amount = round(alloc["business_absorbed_cents"] / 100, 2)
+    elif payment_links.FEE_SPLIT_ENABLED:
         fee_amount = round(
             payment_links.customer_surcharge_cents(
                 plan_tier, currency.lower(), override_cents=order_fee_cents) / 100, 2)
@@ -702,9 +714,10 @@ async def create_website_order(req: CreateOrderRequest):
         "status": "awaiting_payment",
         "created_at": now,
     }
-    if payment_links.FEE_SPLIT_ENABLED:
-        # Column ships in migration 036 — only referenced when the split is on,
-        # so deploys with the flag off don't depend on the migration.
+    if alloc is not None or payment_links.FEE_SPLIT_ENABLED:
+        # Column ships in migration 036 — only referenced when the split OR a
+        # fee-allocation mode is active, so deploys with neither don't depend on
+        # the migration.
         order_row["merchant_fee_amount"] = merchant_fee_amount
     await db.insert("website_orders", order_row)
 
@@ -720,7 +733,10 @@ async def create_website_order(req: CreateOrderRequest):
         }
         for item in req.items
     ]
-    if not payment_links.FEE_SPLIT_ENABLED and fee_amount > 0:
+    # Under a fee-allocation mode OR the legacy split, _stripe_checkout appends
+    # the surcharge line itself; only the flat-legacy path adds an ordering-fee
+    # line here.
+    if alloc is None and not payment_links.FEE_SPLIT_ENABLED and fee_amount > 0:
         checkout_items.append({"name": "Online ordering fee", "price": fee_amount, "quantity": 1})
 
     site_base = os.getenv("PUBLIC_SITE_BASE", "https://meridian.tips").rstrip("/")
@@ -731,6 +747,7 @@ async def create_website_order(req: CreateOrderRequest):
         stripe_account_id=stripe_account_id,
         stripe_charges_enabled=stripe_charges_enabled,
         order_fee_cents=order_fee_cents,
+        fee_allocation_mode=fee_allocation_mode,
     )
     try:
         checkout = await payment_links.create_website_checkout(
@@ -738,8 +755,11 @@ async def create_website_order(req: CreateOrderRequest):
                 "merchant_id": merchant_id,
                 "caller_phone": req.customer_phone or "",
                 "currency": currency.lower(),
+                # Mode / split: pass the SUBTOTAL and let _stripe_checkout add the
+                # surcharge line (so it charges exactly `total`). Flat legacy: the
+                # fee is already a checkout line, so pass the full total.
                 "items": checkout_items,
-                "total": subtotal if payment_links.FEE_SPLIT_ENABLED else total,
+                "total": subtotal if (alloc is not None or payment_links.FEE_SPLIT_ENABLED) else total,
             },
             merchant_cfg,
             website_order_id=order_id,
