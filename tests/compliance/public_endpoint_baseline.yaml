@@ -46,6 +46,11 @@ public-form:
   - "POST /api/canada/careers/apply"
   - "POST /api/canada/rep-signup"
   - "POST /api/careers/apply"
+  # Customer-facing website chatbot widget on the merchant's own site (visitors
+  # are not logged in). Gated by a required ENABLED chatbot_config per org, and
+  # rate-limited per-IP AND per-org on independent windows to protect the shared
+  # LLM gateway. No auth by design.
+  - "POST /api/chatbot/send"
   - "POST /api/pos/waitlist"
   - "POST /api/privacy/request"
   - "POST /api/privacy/unsubscribe"
