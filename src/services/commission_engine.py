@@ -22,7 +22,7 @@ Source of truth: the official Rep Commission One-Pager.
       earned/paid amounts are never clawed back.
 
 Package unit values live in the `commission_packages` config table
-(migration 045) — adding a tier is a row insert, not a code change.
+(migration 046) — adding a tier is a row insert, not a code change.
 `DEFAULT_PACKAGES` mirrors the seeded rows for pure/unit use.
 
 Classification: commissions are independent-contractor, lump-sum,
@@ -100,7 +100,7 @@ DEFAULT_PACKAGES: dict[str, Package] = {
 
 @dataclass(frozen=True)
 class EngineConfig:
-    """Engine flags. Defaults mirror the commission_config seed (migration 045).
+    """Engine flags. Defaults mirror the commission_config seed (migration 046).
 
     Every field here is an OPEN QUESTION default flagged for Aidan/Enoch —
     see the module docstring.
@@ -283,7 +283,7 @@ def compute_schedule(
 # ───────────────────────────────────────────────────────────────────────────
 
 class CommissionEngineService:
-    """Writes/reads the commission_milestones ledger (migration 045).
+    """Writes/reads the commission_milestones ledger (migration 046).
 
     All writes go through the service role (RLS denies user-JWT writes).
     Idempotency: UNIQUE(account_id, milestone) + ON CONFLICT DO NOTHING —
