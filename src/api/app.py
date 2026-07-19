@@ -64,6 +64,7 @@ from .routes.cline import router as cline_router
 from .routes.pos import router as pos_router
 from .routes.spaces import router as spaces_router
 from .routes.canada import router as canada_router
+from .routes.commissions import router as commissions_router
 from .routes.us import router as us_router
 from .routes.compliance import router as compliance_router
 from .routes.careers import router as careers_router
@@ -251,6 +252,7 @@ app.include_router(cline_router)
 app.include_router(pos_router)
 app.include_router(spaces_router)
 app.include_router(canada_router)
+app.include_router(commissions_router)  # rep-facing READ-ONLY commission engine (mig 045)
 app.include_router(us_router)
 app.include_router(compliance_router)
 app.include_router(careers_router)
