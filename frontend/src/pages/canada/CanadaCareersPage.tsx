@@ -69,7 +69,7 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
   {
     id: '2',
     name: 'Aidan Nguyen',
-    title: 'Canadian Admin & Onboarding Lead',
+    title: 'Regional Sales Director',
     company: 'Meridian',
     bio: 'Handles onboarding support, training materials, and account setup. Reach out for any technical or portal questions.',
     linkedin_url: 'https://www.linkedin.com/company/nexusconsulting',
