@@ -22,15 +22,13 @@ const CAD_ORDER_FEES: Record<PlanTier['id'], number> = {
   command: 1.39,
 }
 
-// REDLINES for the rep fee slider — Canada floors run HIGHER than the US
-// $0.65/$0.45: CA$ is worth ~27% less while our per-call costs bill in USD,
-// so CA$0.45 nets only ~US$0.07/order (redline simulation, 2026-07-15).
-// These floors preserve roughly the US-floor margin. The backend clamps to
-// the same cents values (_ORDER_FEE_FLOOR_CENTS_CAD in canada.py).
-const CAD_ORDER_FEE_FLOORS: Record<PlanTier['id'], number> = {
-  standard: 0,
-  premium: 0.85,
-  command: 0.65,
+// REDLINES for the rep fee slider — DERIVED from the US floors ($0.65/$0.45)
+// via the standard CAD_RATE ×1.4 (Aidan 2026-07-19, supersedes the hand-set
+// CA$0.85/CA$0.65): premium CA$0.91, command CA$0.63. One source of truth —
+// a future US floor change propagates here automatically. The backend clamps
+// to the same cents values (fee_terms.py ORDER_FEE_FLOOR_CENTS['ca']).
+function cadOrderFeeFloor(usdFloor: number): number {
+  return Math.round(usdFloor * CAD_RATE * 100) / 100
 }
 
 function roundToNearest50(n: number): number {
@@ -41,7 +39,7 @@ export const PLAN_TIERS: PlanTier[] = US_PLAN_TIERS.map(p => ({
   ...p,
   price: roundToNearest50(p.price * CAD_RATE),
   orderFee: CAD_ORDER_FEES[p.id],
-  orderFeeFloor: CAD_ORDER_FEE_FLOORS[p.id],
+  orderFeeFloor: cadOrderFeeFloor(p.orderFeeFloor),
   features: p.features.map(f =>
     f
       .replace('$1.49 per-order transaction fee', 'CA$1.99 per-order transaction fee')

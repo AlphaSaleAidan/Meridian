@@ -50,34 +50,62 @@ FEE_TERM_FIELDS = (
     "included_call_min",
 )
 
+# ── Per-order fee floors + cap (rep-slider redlines) ─────────────────────────
+# SINGLE SOURCE OF TRUTH for the slider redlines and the hard per-order cap.
+# USD constants are canonical; CAD values are DERIVED via the standard CAD
+# multiplier ×1.4 (Aidan 2026-07-19 — supersedes the hand-set CA$0.85/CA$0.65
+# of 2026-07-15): premium 65¢→91¢, command 45¢→63¢, cap $5.00→CA$7.00.
+# A future US floor change propagates to CAD automatically.
+CAD_FEE_MULTIPLIER = 1.4
+
+
+def cad_fee_cents(usd_cents: int) -> int:
+    """USD cents → CAD cents via the standard ×1.4 multiplier."""
+    return int(round(usd_cents * CAD_FEE_MULTIPLIER))
+
+
+ORDER_FEE_FLOOR_CENTS_USD: dict[str, int] = {"standard": 0, "premium": 65, "command": 45}
+ORDER_FEE_CAP_CENTS_USD = 500
+
+# Market-keyed views ('us' | 'ca') — the only floor/cap tables consumers read.
+ORDER_FEE_FLOOR_CENTS: dict[str, dict[str, int]] = {
+    "us": ORDER_FEE_FLOOR_CENTS_USD,
+    "ca": {tier: cad_fee_cents(v) for tier, v in ORDER_FEE_FLOOR_CENTS_USD.items()},
+}
+ORDER_FEE_CAP_CENTS: dict[str, int] = {
+    "us": ORDER_FEE_CAP_CENTS_USD,
+    "ca": cad_fee_cents(ORDER_FEE_CAP_CENTS_USD),
+}
+
 # ── Canonical tier table ─────────────────────────────────────────────────────
 # Values mirror the frontend plan files (see module docstring):
 #   US: Standard $250 / Premium $350 ($1.49/order, floor $0.65)
 #       / Command $500 ($1.00/order, floor $0.45)
-#   CA: Standard CA$350 / Premium CA$500 (CA$1.99/order, floor CA$0.85)
-#       / Command CA$700 (CA$1.39/order, floor CA$0.65)
+#   CA: Standard CA$350 / Premium CA$500 (CA$1.99/order, floor CA$0.91)
+#       / Command CA$700 (CA$1.39/order, floor CA$0.63)
 # order_fee_floor_cents = the rep-slider redline (canada.py clamps to the same
-# values); order_fee_cents = the tier's standard (maximum) rate.
+# values, referenced from ORDER_FEE_FLOOR_CENTS above so there is exactly one
+# copy); order_fee_cents = the tier's standard (maximum) rate.
 CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
     "us": {
         "standard": {
             "monthly_fee_cents": 25000,
             "order_fee_cents": 0,
-            "order_fee_floor_cents": 0,
+            "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["us"]["standard"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "premium": {
             "monthly_fee_cents": 35000,
             "order_fee_cents": 149,
-            "order_fee_floor_cents": 65,
+            "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["us"]["premium"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "command": {
             "monthly_fee_cents": 50000,
             "order_fee_cents": 100,
-            "order_fee_floor_cents": 45,
+            "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["us"]["command"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
@@ -86,21 +114,21 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
         "standard": {
             "monthly_fee_cents": 35000,
             "order_fee_cents": 0,
-            "order_fee_floor_cents": 0,
+            "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["standard"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "premium": {
             "monthly_fee_cents": 50000,
             "order_fee_cents": 199,
-            "order_fee_floor_cents": 85,
+            "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["premium"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "command": {
             "monthly_fee_cents": 70000,
             "order_fee_cents": 139,
-            "order_fee_floor_cents": 65,
+            "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["command"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
