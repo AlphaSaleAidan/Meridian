@@ -104,12 +104,18 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     return null
   }
 
-  // 1. Try to find existing record (active or pending approval)
-  const { data: repData } = await supabase
+  // 1. Try to find existing record (active or pending approval).
+  // Case-INSENSITIVE: sales_reps.email can be stored mixed-case (Supabase auth
+  // lowercases the login, but a raw signup insert did not), so `.eq(email)`
+  // would miss the row and (worse) fall through to auto-create a DUPLICATE
+  // lowercase row. ilike is case-insensitive; _ and % are ilike wildcards
+  // (emails contain _), so narrow to the exact case-insensitive match in JS.
+  const emailLc = email.toLowerCase()
+  const { data: repRows } = await supabase
     .from('sales_reps')
     .select('*')
-    .eq('email', email)
-    .maybeSingle()
+    .ilike('email', email)
+  const repData = (repRows || []).find(r => String((r as { email?: string }).email ?? '').toLowerCase() === emailLc) ?? null
 
   if (repData) return repFromRow(repData)
 
@@ -125,7 +131,7 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     .from('sales_reps')
     .insert({
       name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      email,
+      email: emailLc,
       commission_rate: 70,
       is_active: false,
     })
