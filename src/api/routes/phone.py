@@ -10,6 +10,9 @@ Webhook URL to configure in Twilio Console:
 import asyncio
 import json
 import logging
+import base64
+import hashlib
+import hmac
 import os
 import sys
 import time
@@ -17,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Request, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
 from fastapi.responses import Response
 
 from ...services.pos_connectors.order_dispatcher import create_pos_order
@@ -32,6 +35,46 @@ from ...credits import (
 )
 
 logger = logging.getLogger("meridian.phone")
+
+
+def _verify_twilio_signature(request: "Request", form: dict) -> bool:
+    """Validate Twilio's X-Twilio-Signature over the public URL + sorted POST
+    params (base64 HMAC-SHA1 with the account auth token). Mirrors the proven
+    sms_order._verify_twilio_signature that already guards the inbound-SMS
+    webhook in prod.
+
+    Fail-closed when TWILIO_AUTH_TOKEN is set (prod). Bypass with
+    PHONE_SKIP_WEBHOOK_VERIFY=1 for local/dev only.
+    """
+    if os.getenv("PHONE_SKIP_WEBHOOK_VERIFY", "0") == "1":
+        return True
+    token = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
+    if not token:
+        logger.error("phone webhook REJECTED — TWILIO_AUTH_TOKEN not set (cannot verify)")
+        return False
+    provided = request.headers.get("X-Twilio-Signature", "")
+    if not provided:
+        return False
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    url = f"{proto}://{host}{request.url.path}"
+    if request.url.query:
+        url += f"?{request.url.query}"
+    payload = url + "".join(f"{k}{form[k]}" for k in sorted(form.keys()))
+    digest = hmac.new(token.encode(), payload.encode("utf-8"), hashlib.sha1).digest()
+    expected = base64.b64encode(digest).decode()
+    return hmac.compare_digest(expected, provided)
+
+
+async def verify_twilio_webhook(request: Request) -> None:
+    """Dependency: reject a TwiML webhook whose Twilio signature doesn't check
+    out. Starlette caches request.form(), so the handler can re-read the same
+    form. Without this, /twilio/* was fully forgeable — anyone could POST a
+    /gather with chosen SpeechResult to inject orders, or drive /pay charges.
+    """
+    form = await request.form()
+    if not _verify_twilio_signature(request, {k: str(v) for k, v in form.items()}):
+        raise HTTPException(status_code=403, detail="invalid webhook signature")
 
 router = APIRouter(prefix="/twilio", tags=["phone-agent"])
 
@@ -313,12 +356,19 @@ async def _transcribe_recording(recording_url: str) -> str:
     api_key = os.getenv("TELNYX_API_KEY", "")
     if not api_key or not recording_url:
         return ""
+    # SSRF guard: RecordingUrl arrives in a webhook form field. Only ever attach
+    # the Telnyx API key when the host is actually Telnyx — otherwise a forged
+    # RecordingUrl pointing at an attacker host that replies 401 would harvest
+    # the key off the retry.
+    from urllib.parse import urlparse
+    _host = (urlparse(recording_url).hostname or "").lower()
+    _telnyx_host = _host == "telnyx.com" or _host.endswith(".telnyx.com")
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             audio = b""
             for _ in range(6):
                 r = await client.get(recording_url)
-                if r.status_code in (401, 403):
+                if r.status_code in (401, 403) and _telnyx_host:
                     r = await client.get(
                         recording_url, headers={"Authorization": f"Bearer {api_key}"}
                     )
@@ -820,7 +870,7 @@ def _media_stream_twiml(merchant_id: str, caller_phone: str) -> str:
 
 
 @router.post("/voice")
-async def twilio_voice(request: Request):
+async def twilio_voice(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     """Initial call webhook — greet the caller.
     Looks up the merchant by the incoming Twilio phone number (To field).
     Falls back to DEMO_MERCHANT_ID if no merchant is found.
@@ -969,7 +1019,7 @@ async def twilio_voice(request: Request):
 
 
 @router.post("/gather")
-async def twilio_gather(request: Request):
+async def twilio_gather(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     """Process caller speech and return AI response."""
     form = await request.form()
     call_sid = form.get("CallSid", "unknown")
@@ -1299,7 +1349,7 @@ async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> Or
 
 
 @router.post("/status")
-async def twilio_status(request: Request):
+async def twilio_status(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     """Call status callback — clean up session, log, and charge credits."""
     form = await request.form()
     call_sid = form.get("CallSid", "")
@@ -1331,7 +1381,7 @@ async def twilio_status(request: Request):
 
 
 @router.post("/record_diag")
-async def twilio_record_diag(request: Request):
+async def twilio_record_diag(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     """Flag-gated diagnostic: log the dual-channel recording URL + metadata so
     we can listen to whether the caller's channel actually carries audio."""
     form = await request.form()
@@ -1347,7 +1397,7 @@ async def twilio_record_diag(request: Request):
 
 
 @router.post("/transcribe_diag")
-async def twilio_transcribe_diag(request: Request):
+async def twilio_transcribe_diag(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     """Flag-gated diagnostic: log Telnyx's transcription of the recording. If
     this captures the caller's words but <Gather input=speech> does not, the
     fault is the Gather speech path, not the audio reaching Telnyx."""
@@ -1649,7 +1699,7 @@ def _pay_gather(say: str, action: str, reprompt: str, num_digits: str = "",
 
 
 @router.post("/pay/start")
-async def pay_start(request: Request):
+async def pay_start(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     """Entry into the keypad payment flow. Ensures a capture exists for the call
     (seeded from the live session when present) and asks for the card number."""
     form = await request.form()
@@ -1675,7 +1725,7 @@ async def pay_start(request: Request):
 
 
 @router.post("/pay/number")
-async def pay_number(request: Request):
+async def pay_number(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     form = await request.form()
     call_sid = form.get("CallSid", "")
     digits = form.get("Digits", "")
@@ -1694,7 +1744,7 @@ async def pay_number(request: Request):
 
 
 @router.post("/pay/expiry")
-async def pay_expiry(request: Request):
+async def pay_expiry(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     form = await request.form()
     call_sid = form.get("CallSid", "")
     digits = form.get("Digits", "")
@@ -1714,7 +1764,7 @@ async def pay_expiry(request: Request):
 
 
 @router.post("/pay/cvv")
-async def pay_cvv(request: Request):
+async def pay_cvv(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     form = await request.form()
     call_sid = form.get("CallSid", "")
     digits = form.get("Digits", "")
@@ -1733,7 +1783,7 @@ async def pay_cvv(request: Request):
 
 
 @router.post("/pay/zip")
-async def pay_zip(request: Request):
+async def pay_zip(request: Request, _sig: None = Depends(verify_twilio_webhook)):
     """Final step: run the card and tell the caller approved or declined."""
     form = await request.form()
     call_sid = form.get("CallSid", "")
