@@ -1,6 +1,6 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
-  LayoutDashboard, Zap, Layers, Calendar, Phone, Video, Settings, Receipt,
+  LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -30,6 +30,10 @@ const AnomaliesPage = lazyRetry(() => import('@/pages/AnomaliesPage'))
 const SchedulePage = lazyRetry(() => import('@/pages/SchedulePage'))
 const PeakHoursPage = lazyRetry(() => import('@/pages/PeakHoursPage'))
 const StaffPage = lazyRetry(() => import('@/pages/StaffPage'))
+const TeamManagementPage = lazyRetry(() => import('@/pages/team/TeamManagementPage'))
+const TimeClockPage = lazyRetry(() => import('@/pages/team/TimeClockPage'))
+const TeamChatPage = lazyRetry(() => import('@/pages/team/TeamChatPage'))
+const ChatbotConfigPage = lazyRetry(() => import('@/pages/team/ChatbotConfigPage'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
 const PhoneSetupWizard = lazyRetry(() => import('@/pages/canada/merchant/PhoneSetupWizard'))
 const CPAHandoffPage = lazyRetry(() => import('@/pages/canada/merchant/CPAHandoffPage'))
@@ -87,13 +91,20 @@ export const merchantPillars: Pillar[] = [
     ],
   },
   {
+    // Renamed from "Schedule" → the owner's control center for scheduling AND
+    // the whole team surface (roster/RBAC, time clock, chat, customer chatbot).
+    // The "Team" management view sits immediately after "Staff" (Workstream 1a).
     path: 'schedule',
-    label: 'Schedule',
-    icon: Calendar,
+    label: 'Team Management',
+    icon: Users,
     segments: [
       { view: 'builder', label: 'Schedule', Component: SchedulePage },
       { view: 'peak', label: 'Peak Hours', Component: PeakHoursPage },
       { view: 'staff', label: 'Staff', Component: StaffPage },
+      { view: 'team', label: 'Team', Component: TeamManagementPage },
+      { view: 'timeclock', label: 'Time Clock', Component: TimeClockPage },
+      { view: 'chat', label: 'Chat', Component: TeamChatPage },
+      { view: 'chatbot', label: 'Customer Bot', Component: ChatbotConfigPage },
     ],
   },
   {
