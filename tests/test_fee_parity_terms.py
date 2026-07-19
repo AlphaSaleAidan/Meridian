@@ -54,9 +54,9 @@ class MockDB:
     ("us", "premium", 35000, 149, 65),
     ("us", "command", 50000, 100, 45),
     ("ca", "standard", 35000, 0, 0),
-    # CAD floors = USD floors × 1.4 (Aidan 2026-07-19): 65→91, 45→63.
-    ("ca", "premium", 50000, 199, 91),
-    ("ca", "command", 70000, 139, 63),
+    # CAD floors = USD floors × 1.4, rounded down to 5¢ (Aidan 2026-07-19): 65→90, 45→60.
+    ("ca", "premium", 50000, 199, 90),
+    ("ca", "command", 70000, 139, 60),
 ])
 def test_canonical_table_matches_frontend_plans(market, tier, monthly, order_fee, floor):
     base = ft.CANONICAL_FEE_TERMS[market][tier]
@@ -118,7 +118,7 @@ def test_resolve_keeps_rep_price_bump_within_headroom():
 def test_resolve_clamps_order_fee_to_tier_redline_and_ceiling():
     # crafted low fee → clamped up to the floor
     assert ft.resolve_fee_terms("us", "premium", order_fee_cents=1)["order_fee_cents"] == 65
-    assert ft.resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 63
+    assert ft.resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 60
     # above the tier standard rate → clamped down
     assert ft.resolve_fee_terms("us", "command", order_fee_cents=9999)["order_fee_cents"] == 100
     # in-range negotiated fee passes through

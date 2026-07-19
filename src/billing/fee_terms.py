@@ -53,15 +53,19 @@ FEE_TERM_FIELDS = (
 # ── Per-order fee floors + cap (rep-slider redlines) ─────────────────────────
 # SINGLE SOURCE OF TRUTH for the slider redlines and the hard per-order cap.
 # USD constants are canonical; CAD values are DERIVED via the standard CAD
-# multiplier ×1.4 (Aidan 2026-07-19 — supersedes the hand-set CA$0.85/CA$0.65
-# of 2026-07-15): premium 65¢→91¢, command 45¢→63¢, cap $5.00→CA$7.00.
-# A future US floor change propagates to CAD automatically.
+# multiplier ×1.4, then ROUNDED DOWN to the nearest 5¢ for clean pricing
+# (Aidan 2026-07-19 — supersedes the hand-set CA$0.85/CA$0.65 of 2026-07-15):
+# premium 65¢→91¢→CA$0.90, command 45¢→63¢→CA$0.60, cap $5.00→CA$7.00.
+# Rounding DOWN keeps the CAD floor at/below the raw multiple, so it never
+# quotes above the intended redline. A US floor change propagates automatically.
 CAD_FEE_MULTIPLIER = 1.4
+CAD_ROUND_DOWN_TO_CENTS = 5
 
 
 def cad_fee_cents(usd_cents: int) -> int:
-    """USD cents → CAD cents via the standard ×1.4 multiplier."""
-    return int(round(usd_cents * CAD_FEE_MULTIPLIER))
+    """USD cents → CAD cents via ×1.4, rounded DOWN to the nearest 5¢."""
+    raw = usd_cents * CAD_FEE_MULTIPLIER
+    return int(raw // CAD_ROUND_DOWN_TO_CENTS) * CAD_ROUND_DOWN_TO_CENTS
 
 
 ORDER_FEE_FLOOR_CENTS_USD: dict[str, int] = {"standard": 0, "premium": 65, "command": 45}

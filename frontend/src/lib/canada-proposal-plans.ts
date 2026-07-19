@@ -23,12 +23,13 @@ const CAD_ORDER_FEES: Record<PlanTier['id'], number> = {
 }
 
 // REDLINES for the rep fee slider — DERIVED from the US floors ($0.65/$0.45)
-// via the standard CAD_RATE ×1.4 (Aidan 2026-07-19, supersedes the hand-set
-// CA$0.85/CA$0.65): premium CA$0.91, command CA$0.63. One source of truth —
-// a future US floor change propagates here automatically. The backend clamps
-// to the same cents values (fee_terms.py ORDER_FEE_FLOOR_CENTS['ca']).
+// via CAD_RATE ×1.4, rounded DOWN to the nearest 5¢ (Aidan 2026-07-19,
+// supersedes the hand-set CA$0.85/CA$0.65): premium CA$0.90, command CA$0.60.
+// One source of truth — a future US floor change propagates here automatically.
+// Matches the backend clamp (fee_terms.py ORDER_FEE_FLOOR_CENTS['ca']).
 function cadOrderFeeFloor(usdFloor: number): number {
-  return Math.round(usdFloor * CAD_RATE * 100) / 100
+  const cents = Math.floor((usdFloor * CAD_RATE * 100) / 5) * 5
+  return cents / 100
 }
 
 function roundToNearest50(n: number): number {

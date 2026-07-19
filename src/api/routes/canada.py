@@ -120,8 +120,8 @@ class CreateCustomerRequest(BaseModel):
 # Per-order fee REDLINES (cents) — the floor the rep slider can reach, by plan.
 # Aidan 2026-07-15: premium (middle tier) floor $0.65/order, command (top tier)
 # floor $0.45/order in USD. Aidan 2026-07-19: CAD floors + cap = the standard
-# ×1.4 CAD multiplier applied to those USD constants (premium CA$0.91, command
-# CA$0.63, cap CA$7.00) — supersedes the hand-set CA$0.85/CA$0.65.
+# ×1.4 CAD multiplier, rounded down to 5¢, applied to those USD constants
+# (premium CA$0.90, command CA$0.60, cap CA$7.00) — supersedes CA$0.85/CA$0.65.
 # SOURCE OF TRUTH: src/billing/fee_terms.py (ORDER_FEE_FLOOR_CENTS /
 # ORDER_FEE_CAP_CENTS); the aliases below are kept for existing importers.
 # Unknown plan → the lowest non-zero floor, so a crafted request can never
