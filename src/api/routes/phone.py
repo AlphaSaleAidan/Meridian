@@ -869,6 +869,12 @@ async def twilio_voice(request: Request):
 
     await _log_call_start(call_sid, caller_phone, merchant_id=merchant_id)
 
+    # Merchant language (en default; 'fr…' for CA-French). Defined here — before
+    # the after-hours gate — because that gate passes it to _after_hours_twiml;
+    # it was previously only assigned further down, so an after-hours call to a
+    # real merchant raised NameError and 500'd instead of playing the message.
+    merchant_lang = ((config_row or {}).get("language") or "en").lower()
+
     # After-hours gate: if the merchant has configured BOTH business hours and a
     # timezone and we're currently outside them, play their after-hours message
     # and hang up instead of taking an order. Only non-demo merchants who opted
@@ -907,7 +913,6 @@ async def twilio_voice(request: Request):
     # French merchant must stay on the turn-based path (which transcribes FR) until
     # a French streaming ASR is wired. We never route a 'fr*' merchant to streaming
     # even if the flag is set — that would silently mis-transcribe the call.
-    merchant_lang = ((config_row or {}).get("language") or "en").lower()
     streaming_on = MEDIA_STREAMS_ENABLED and not merchant_lang.startswith("fr") and (
         bool((config_row or {}).get("streaming_enabled"))
         or (merchant_id == DEMO_MERCHANT_ID and os.getenv("STREAMING_TEST_DEMO") == "1")
