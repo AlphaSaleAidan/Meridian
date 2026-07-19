@@ -189,7 +189,11 @@ export default function CanadaPortalTeamPage() {
   const canSeeTeam = admin || isManager || !!region
   const hideBoard = isLeaderboardHidden() || regionBoardHidden
   const [search, setSearch] = useState('')
-  const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
+  // Start EMPTY, not DEMO_TEAM. The fetch only overwrites team when reps.length
+  // > 0, so on an empty roster or a fetch error the seed persisted → real reps
+  // saw 3 phantom admins and computeTeamStats summed over them. (US twin
+  // already starts []; this aligns Canada.)
+  const [team, setTeam] = useState<TeamMember[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [teamLoading, setTeamLoading] = useState(true)
   const [teamError, setTeamError] = useState<string | null>(null)
