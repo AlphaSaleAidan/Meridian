@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { useSalesAuth } from '@/lib/sales-auth'
+import { useSalesAuth, repTier } from '@/lib/sales-auth'
 import { getAuthHeaders } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
@@ -168,13 +168,20 @@ function computeTeamStats(team: TeamMember[], deals: Deal[]) {
 
 export default function CanadaPortalTeamPage() {
   const { rep } = useSalesAuth()
-  const admin = isAdmin(rep?.email)
+  // Admin = email allowlist (transition) OR DB role 'admin'. Managers (the 5
+  // middle roles) get a READ-ONLY team view of their own subtree; the backend
+  // /api/canada/team already scopes the roster, and every mutating control
+  // below stays gated on `admin`, so a manager can look but not touch.
+  const tier = repTier(rep)
+  const admin = isAdmin(rep?.email) || tier === 'admin'
+  const isManager = !admin && tier === 'manager'
+  const canSeeTeam = admin || isManager
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [teamLoading, setTeamLoading] = useState(true)
   const [teamError, setTeamError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(admin ? 'reps' : 'leaderboard')
+  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(canSeeTeam ? 'reps' : 'leaderboard')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
@@ -514,12 +521,12 @@ export default function CanadaPortalTeamPage() {
 
       {/* Tabs */}
       <div className="flex items-center gap-1 bg-pm-canada-surface border border-pm-canada-border rounded-xl p-1 w-fit">
-        {admin && (
+        {canSeeTeam && (
           <button
             onClick={() => setActiveTab('reps')}
             className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-pm-canada-border text-white' : 'text-pm-canada-text-muted hover:text-white')}
           >
-            Sales Reps
+            {admin ? 'Sales Reps' : 'My Team'}
           </button>
         )}
         <button
