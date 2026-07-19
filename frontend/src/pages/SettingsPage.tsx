@@ -197,6 +197,13 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
   } | null>(null)
   const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
   const [billingError, setBillingError] = useState<string | null>(null)
+  // Fee allocation mode: rep-set + READ-ONLY here. The owner can only file a
+  // change request (POST /api/billing/fee-mode/change-request).
+  const [feeMode, setFeeMode] = useState<{ fee_allocation_mode: string | null; label: string } | null>(null)
+  const [feeReqOpen, setFeeReqOpen] = useState(false)
+  const [feeReqMode, setFeeReqMode] = useState<'business_pays' | 'split_5050' | 'customer_pays'>('business_pays')
+  const [feeReqReason, setFeeReqReason] = useState('')
+  const [feeReqState, setFeeReqState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
   useEffect(() => {
     // Demo org has no billing row and no session — skip instead of 401ing.
@@ -211,8 +218,28 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
         .then(r => r.ok ? r.json() : null)
         .then(d => d && setInvoiceUrl(d.invoice_url))
         .catch(() => { setBillingError('Could not load billing info') })
+      fetch(`${apiUrl}/api/billing/fee-mode/${orgId}`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d && setFeeMode(d))
+        .catch(() => { /* fee mode is non-critical; ignore */ })
     })
   }, [orgId, apiUrl])
+
+  async function submitFeeChangeRequest() {
+    setFeeReqState('sending')
+    try {
+      const headers = await getAuthHeaders()
+      const res = await fetch(`${apiUrl}/api/billing/fee-mode/change-request`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ org_id: orgId, requested_mode: feeReqMode, reason: feeReqReason }),
+      })
+      if (!res.ok) throw new Error('request failed')
+      setFeeReqState('sent')
+    } catch {
+      setFeeReqState('error')
+    }
+  }
 
   const statusLabel = billing?.status === 'active' ? 'Active' :
     billing?.status === 'pending_payment' ? 'Pending Payment' :
@@ -284,12 +311,217 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
             </span>
           </div>
         )}
-        <div className="flex items-center justify-between py-1.5">
+        <div className="flex items-center justify-between py-1.5 border-b border-[#1F1F23]/50">
           <span className="text-[#A1A1A8]/60">Auto-Renew</span>
           <span className={billing?.auto_renew !== false ? 'text-[#17C5B0]' : 'text-[#A1A1A8]'}>
             {billing?.auto_renew !== false ? 'On' : 'Off'}
           </span>
         </div>
+
+        {/* Fee handling — READ-ONLY (rep-set at close). Owner may only request a change. */}
+        {feeMode && (
+          <div className="pt-1.5">
+            <div className="flex items-center justify-between py-1.5">
+              <span className="text-[#A1A1A8]/60">Fee Handling</span>
+              <span className="text-[#F5F5F7] font-medium">{feeMode.label}</span>
+            </div>
+            {!feeReqOpen && feeReqState !== 'sent' && (
+              <button
+                onClick={() => { setFeeReqOpen(true); setFeeReqState('idle') }}
+                className="mt-1 text-[11px] font-medium text-[#7C5CFF] hover:text-[#6B4FE0] transition-colors"
+              >
+                Request a change
+              </button>
+            )}
+            {feeReqState === 'sent' && (
+              <div className="mt-2 p-2.5 rounded-lg bg-[#17C5B0]/10 border border-[#17C5B0]/20 text-[11px] text-[#17C5B0]">
+                Change request submitted — our team will follow up.
+              </div>
+            )}
+            {feeReqOpen && feeReqState !== 'sent' && (
+              <div className="mt-2 p-3 rounded-lg bg-[#0A0A0B] border border-[#1F1F23] space-y-2">
+                <label className="block text-[11px] text-[#A1A1A8]/60">Requested handling</label>
+                <select
+                  value={feeReqMode}
+                  onChange={e => setFeeReqMode(e.target.value as typeof feeReqMode)}
+                  className="w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-[#7C5CFF]"
+                >
+                  <option value="business_pays">Business pays the fee</option>
+                  <option value="split_5050">Split 50/50 with the customer</option>
+                  <option value="customer_pays">Customer pays the fee</option>
+                </select>
+                <textarea
+                  value={feeReqReason}
+                  onChange={e => setFeeReqReason(e.target.value)}
+                  placeholder="Reason (optional)"
+                  rows={2}
+                  className="w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-[#7C5CFF] resize-none"
+                />
+                {feeReqState === 'error' && (
+                  <div className="text-[11px] text-red-400">Could not submit — please try again.</div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={submitFeeChangeRequest}
+                    disabled={feeReqState === 'sending'}
+                    className="px-3 py-1.5 text-[11px] font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all disabled:opacity-50"
+                  >
+                    {feeReqState === 'sending' ? 'Submitting…' : 'Submit request'}
+                  </button>
+                  <button
+                    onClick={() => { setFeeReqOpen(false); setFeeReqState('idle') }}
+                    className="px-3 py-1.5 text-[11px] font-medium text-[#A1A1A8] hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Cancel subscription / account. No dark patterns: the button is plainly
+// labelled and easy to find. The flow always offers "talk to us first" BEFORE
+// the final confirm, captures an optional reason, and records the cancellation
+// server-side (POST /api/billing/self-cancel — owner-only, org from session).
+function CancelAccountCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
+  type Step = 'idle' | 'confirm' | 'reason' | 'done'
+  const [step, setStep] = useState<Step>('idle')
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Demo org has no session — hide the destructive action there.
+  if (!orgId || orgId === 'demo') return null
+
+  const submitCancel = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const headers = { ...(await getAuthHeaders()), 'Content-Type': 'application/json' }
+      const r = await fetch(`${apiUrl}/api/billing/self-cancel`, {
+        method: 'POST',
+        headers,
+        // org is derived from the session server-side — never sent here.
+        body: JSON.stringify({ reason: reason.trim() }),
+      })
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}))
+        throw new Error(d.detail || 'Could not cancel. Please contact support.')
+      }
+      setStep('done')
+    } catch (e: any) {
+      setError(e?.message || 'Could not cancel. Please contact support.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card overflow-hidden border-red-500/20">
+      <div className="px-4 sm:px-5 py-4 border-b border-[#1F1F23] flex items-center gap-2">
+        <AlertCircle size={14} className="text-red-400" />
+        <h3 className="text-sm font-semibold text-[#F5F5F7]">Cancel Subscription</h3>
+      </div>
+      <div className="p-4 sm:p-5 space-y-3 text-xs">
+        {step === 'idle' && (
+          <>
+            <p className="text-[#A1A1A8]">
+              Cancelling stops future renewals. You keep access through the end of
+              your current paid period.
+            </p>
+            <button
+              onClick={() => setStep('confirm')}
+              className="px-4 py-2 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all"
+            >
+              Cancel subscription
+            </button>
+          </>
+        )}
+
+        {step === 'confirm' && (
+          <>
+            <p className="text-[#F5F5F7] font-medium">Before you go — can we help?</p>
+            <p className="text-[#A1A1A8]">
+              Most issues (pricing, a feature you need, a bug) we can sort out in a
+              quick chat. Talk to us first before cancelling.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2 pt-1">
+              <a
+                href="mailto:support@meridian.tips?subject=Before%20I%20cancel"
+                className="px-4 py-2 text-xs font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all text-center"
+              >
+                Talk to us first
+              </a>
+              <button
+                onClick={() => setStep('reason')}
+                className="px-4 py-2 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all"
+              >
+                Continue to cancel
+              </button>
+              <button
+                onClick={() => setStep('idle')}
+                className="px-4 py-2 text-xs font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-all"
+              >
+                Never mind
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'reason' && (
+          <>
+            <p className="text-[#F5F5F7] font-medium">Confirm cancellation</p>
+            <label className="block text-[#A1A1A8]">
+              Anything we could have done better? (optional)
+              <textarea
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="Optional — helps us improve"
+                className="mt-1.5 w-full rounded-lg bg-[#0F0F12] border border-[#1F1F23] px-3 py-2 text-xs text-[#F5F5F7] focus:outline-none focus:border-[#7C5CFF]"
+              />
+            </label>
+            {error && (
+              <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">{error}</div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={submitCancel}
+                disabled={busy}
+                className="px-4 py-2 text-xs font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-all disabled:opacity-50"
+              >
+                {busy ? 'Cancelling…' : 'Confirm cancellation'}
+              </button>
+              <button
+                onClick={() => setStep('confirm')}
+                disabled={busy}
+                className="px-4 py-2 text-xs font-medium text-[#A1A1A8] hover:text-[#F5F5F7] transition-all disabled:opacity-50"
+              >
+                Back
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'done' && (
+          <div className="flex items-start gap-2">
+            <CheckCircle2 size={16} className="text-[#17C5B0] mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[#F5F5F7] font-medium">Cancellation recorded</p>
+              <p className="text-[#A1A1A8] mt-1">
+                Your subscription won't renew. You keep access through the end of
+                your current paid period. We've emailed you a confirmation — reply
+                any time if you change your mind.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -522,6 +754,11 @@ export default function SettingsPage() {
       {/* Billing & Subscription */}
       <ScrollReveal variant="fadeUp" delay={0.22}>
         <BillingCard orgId={orgId} apiUrl={API_URL} />
+      </ScrollReveal>
+
+      {/* Cancel Subscription / Account */}
+      <ScrollReveal variant="fadeUp" delay={0.25}>
+        <CancelAccountCard orgId={orgId} apiUrl={API_URL} />
       </ScrollReveal>
 
       {/* API Info */}

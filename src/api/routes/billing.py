@@ -13,6 +13,7 @@ import hmac
 import logging
 import os
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
@@ -33,6 +34,51 @@ logger = logging.getLogger("meridian.billing.routes")
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 MAX_AMOUNT_CENTS = 10_000_00  # $10,000 safety cap
+
+# Access-wind-down enforcement kill-switch (Workstream 4).
+# Proposed policy (flagged for Aidan in the PR):
+#   full access to end of paid period -> 30-day read-only export window ->
+#   deactivation. Until this flag is ON, self-cancel RECORDS the cancellation
+#   and halts renewals but makes NO access change ('recorded' status) — nothing
+#   cuts a live merchant off without sign-off. Default OFF.
+WINDDOWN_READONLY_DAYS = 30
+
+
+def _winddown_enforced() -> bool:
+    """True only when SUBSCRIPTION_WINDDOWN_ENFORCED is explicitly truthy.
+
+    Default OFF (conservative): cancel is recorded, renewals stop, but access
+    is not changed until Aidan flips this flag.
+    """
+    return os.environ.get("SUBSCRIPTION_WINDDOWN_ENFORCED", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+async def _resolve_owned_org(user: dict) -> str | None:
+    """Return the org_id the session user is the OWNER of, or None.
+
+    The org is derived from the SESSION (businesses.owner_user_id == user.id),
+    never from the request body. Members who are not owners get None — only an
+    owner may cancel the account. Global ADMIN_EMAILS are NOT auto-granted an
+    org here (admins use the admin-locked /cancel route).
+    """
+    user_id = user.get("id") or user.get("sub") or ""
+    if not user_id:
+        return None
+    try:
+        db = get_db()
+        rows = await db.select(
+            "businesses", "id",
+            filters={"owner_user_id": f"eq.{user_id}"},
+            limit=1,
+        )
+    except Exception as exc:
+        logger.warning("owner-org lookup failed for user %s: %s", user_id, exc)
+        return None
+    if rows:
+        return str(rows[0].get("id"))
+    return None
 
 
 async def _is_active_sales_rep(user: dict) -> bool:
@@ -105,6 +151,18 @@ class InvoiceRequest(BaseModel):
 class CancelRequest(BaseModel):
     org_id: str
     reason: str = ""
+
+
+class SelfCancelRequest(BaseModel):
+    """Owner-initiated cancellation from the merchant Settings page.
+
+    org_id is intentionally ABSENT — the org is resolved from the session
+    owner, never trusted from the body. reason is optional. talk_first is the
+    retention off-ramp: when true the endpoint records NOTHING and cancels
+    NOTHING.
+    """
+    reason: str = ""
+    talk_first: bool = False
 
 
 class UpdatePaymentMethodRequest(BaseModel):
@@ -192,6 +250,121 @@ async def cancel_subscription(req: CancelRequest):
         raise HTTPException(status_code=500, detail="Cancellation failed")
 
 
+@router.post("/self-cancel")
+async def self_cancel_subscription(
+    req: SelfCancelRequest,
+    user: dict = Depends(require_jwt),
+):
+    """Owner self-serve cancellation (merchant Settings → Cancel account).
+
+    Auth: the authenticated OWNER of the org only. The org is derived from the
+    session (businesses.owner_user_id), never from the body — a non-owner
+    member or an outsider naming an org is denied 403.
+
+    Flow contract:
+      - talk_first=true  → retention off-ramp. Records NOTHING, cancels
+        NOTHING. Returns {canceled: false, talk_first: true} so the UI can
+        route the owner to support.
+      - otherwise → records an append-only subscription_cancellations row
+        (timestamp + reason + who), halts renewals via the existing
+        billing_service.cancel_subscription path, and emits the commission-halt
+        hook. Access-wind-down is RECORDED only unless SUBSCRIPTION_WINDDOWN_ENFORCED.
+    """
+    org_id = await _resolve_owned_org(user)
+    if not org_id:
+        # Not the owner of any org (or unverifiable) → cannot cancel.
+        raise HTTPException(
+            403, "Only the account owner can cancel the subscription.")
+
+    # Retention off-ramp: talk to us first. Record nothing, cancel nothing.
+    if req.talk_first:
+        logger.info("Self-cancel: owner %s chose talk-first for org %s (no cancellation recorded)",
+                    user.get("email"), org_id)
+        return {"canceled": False, "talk_first": True, "org_id": org_id}
+
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    enforced = _winddown_enforced()
+
+    # ── Access wind-down policy (RECORDED here; enforcement gated) ──
+    # Proposed: full access to end of paid period → 30-day read-only export
+    # window → deactivation. Default (flag OFF) records 'recorded' and makes
+    # NO access change.
+    access_until = None
+    read_only_until = None
+    winddown_status = "recorded"
+    if enforced:
+        sub_rows = []
+        try:
+            sub_rows = await db.select(
+                "subscriptions", filters={"org_id": f"eq.{org_id}"}, limit=1)
+        except Exception:
+            sub_rows = []
+        period_end = None
+        if sub_rows:
+            period_end = sub_rows[0].get("current_period_end")
+        access_until = period_end or now.isoformat()
+        try:
+            base = datetime.fromisoformat(str(access_until).replace("Z", "+00:00"))
+        except Exception:
+            base = now
+        read_only_until = (base + timedelta(days=WINDDOWN_READONLY_DAYS)).isoformat()
+        winddown_status = "active_until_period_end"
+
+    # 1) Record the cancellation (append-only audit) — timestamp + reason + who.
+    cancel_row = {
+        "org_id": org_id,
+        "canceled_by_user_id": user.get("id") or user.get("sub") or "",
+        "canceled_by_email": user.get("email") or "",
+        "reason": req.reason or "",
+        "canceled_at": now.isoformat(),
+        "winddown_status": winddown_status,
+        "access_until": access_until,
+        "read_only_until": read_only_until,
+        # Commission-halt hook: mark intent. Wiring to
+        # commission_engine.cancel_account(org_id) lands when
+        # feat/canada-commission-engine merges — see PR body.
+        "commission_halt_requested": True,
+    }
+    try:
+        await db.insert("subscription_cancellations", cancel_row)
+    except Exception:
+        logger.exception("Failed to record cancellation for org %s", org_id)
+        raise HTTPException(500, "Could not record cancellation")
+
+    # 2) Halt renewals via the existing billing service (Square + local status).
+    try:
+        from src.billing.billing_service import BillingService
+        service = BillingService(db)
+        await service.cancel_subscription(org_id, req.reason or "owner self-cancel")
+    except ImportError:
+        logger.warning("Billing service unavailable during self-cancel for %s", org_id)
+    except Exception:
+        # The cancellation is already recorded; renewal-halt failure is an
+        # operator follow-up, not a reason to 500 the owner.
+        logger.exception("cancel_subscription failed during self-cancel for %s", org_id)
+
+    # 3) Commission-halt HOOK POINT.
+    #    feat/canada-commission-engine (migration 046, commission_milestones)
+    #    exposes CommissionEngine.cancel_account(org_id) to halt FUTURE
+    #    milestones. Cannot import cross-worktree, so we emit the intent above
+    #    (commission_halt_requested=true) and wire the call here when both
+    #    branches land:
+    #        from src.services.commission_engine import CommissionEngine
+    #        await CommissionEngine(db, ...).cancel_account(org_id)
+
+    logger.info("Self-cancel recorded for org %s by owner %s (winddown_enforced=%s)",
+                org_id, user.get("email"), enforced)
+    return {
+        "canceled": True,
+        "talk_first": False,
+        "org_id": org_id,
+        "canceled_at": now.isoformat(),
+        "winddown_enforced": enforced,
+        "winddown_status": winddown_status,
+    }
+
+
 @router.get("/status/{org_id}")
 async def get_billing_status(org_id: str, _user: dict = Depends(require_jwt)):
     """Get current subscription/billing status for an organization."""
@@ -231,6 +404,113 @@ async def get_billing_status(org_id: str, _user: dict = Depends(require_jwt)):
     except Exception:
         logger.exception(f"Status check failed for org {org_id}")
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
+
+
+# ── Fee allocation mode (rep-set, owner-read-only + change requests) ──
+
+_FEE_MODES = ("business_pays", "split_5050", "customer_pays")
+_FEE_MODE_LABELS = {
+    "business_pays": "Business pays the fee",
+    "split_5050": "Split 50/50 with the customer",
+    "customer_pays": "Customer pays the fee",
+    None: "Standard (default)",
+}
+
+
+class FeeChangeRequestBody(BaseModel):
+    org_id: str
+    requested_mode: str
+    reason: str = ""
+
+    @field_validator("requested_mode")
+    @classmethod
+    def _valid_mode(cls, v: str) -> str:
+        if v not in _FEE_MODES:
+            raise ValueError(f"requested_mode must be one of {_FEE_MODES}")
+        return v
+
+
+@router.get("/fee-mode/{org_id}")
+async def get_fee_mode(org_id: str, principal: dict = Depends(require_jwt)):
+    """Owner-facing READ-ONLY view of the merchant's fee allocation mode. The
+    mode is set by the sales rep at close and cannot be changed here — the owner
+    can only file a change request (POST /fee-mode/change-request)."""
+    await _enforce_billing_org_access(principal, org_id)
+    db = get_db()
+    mode = None
+    try:
+        rows = await db.select(
+            "phone_agent_config", "fee_allocation_mode",
+            filters={"merchant_id": f"eq.{org_id}"}, limit=1,
+        )
+        if rows:
+            mode = rows[0].get("fee_allocation_mode")
+    except Exception:  # noqa: BLE001 — fail-open to the legacy/default label
+        logger.warning("fee-mode lookup failed for %s", org_id, exc_info=True)
+    if mode not in _FEE_MODES:
+        mode = None
+    return {
+        "org_id": org_id,
+        "fee_allocation_mode": mode,
+        "label": _FEE_MODE_LABELS.get(mode, _FEE_MODE_LABELS[None]),
+        "editable": False,  # owner cannot change it — rep-set + fixed
+    }
+
+
+@router.post("/fee-mode/change-request")
+async def create_fee_change_request(
+    req: FeeChangeRequestBody, principal: dict = Depends(require_jwt)
+):
+    """File an owner-initiated fee-mode change request (a simple ticket). Inserts
+    a fee_change_requests row (HQ/service reads all) and drops an in-app
+    notification. HQ actions it out of band — the owner cannot self-serve the
+    change. Reuses the existing notification path; no email is sent from here."""
+    await _enforce_billing_org_access(principal, req.org_id)
+    db = get_db()
+
+    # Current mode for the audit record (best-effort; NULL = legacy/default).
+    current_mode = None
+    try:
+        rows = await db.select(
+            "phone_agent_config", "fee_allocation_mode",
+            filters={"merchant_id": f"eq.{req.org_id}"}, limit=1,
+        )
+        if rows and rows[0].get("fee_allocation_mode") in _FEE_MODES:
+            current_mode = rows[0]["fee_allocation_mode"]
+    except Exception:  # noqa: BLE001
+        logger.warning("fee-mode current lookup failed for %s", req.org_id, exc_info=True)
+
+    request_id = str(uuid4())
+    try:
+        await db.insert("fee_change_requests", {
+            "id": request_id,
+            "org_id": req.org_id,
+            "current_mode": current_mode,
+            "requested_mode": req.requested_mode,
+            "reason": (req.reason or "").strip() or None,
+            "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception as e:  # noqa: BLE001
+        logger.error("fee_change_requests insert failed for %s: %s", req.org_id, e)
+        raise HTTPException(status_code=500, detail="Could not file the change request")
+
+    # Notify HQ via the existing in-app notification rail (no email built here).
+    try:
+        from .webhooks import _send_notification
+        await _send_notification(
+            org_id=req.org_id,
+            title="Fee handling change requested",
+            body=(f"Requested change to '{_FEE_MODE_LABELS.get(req.requested_mode)}' "
+                  f"(from '{_FEE_MODE_LABELS.get(current_mode)}'). "
+                  f"{('Reason: ' + req.reason.strip()) if req.reason.strip() else ''}").strip(),
+            priority="normal",
+        )
+    except Exception:  # noqa: BLE001 — notification is best-effort; the row is the record
+        logger.warning("fee-change notification failed for %s", req.org_id, exc_info=True)
+
+    return {"ok": True, "request_id": request_id, "status": "open",
+            "requested_mode": req.requested_mode}
 
 
 @router.post("/update-payment-method")

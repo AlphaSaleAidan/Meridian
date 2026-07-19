@@ -175,14 +175,35 @@ def clover_fee_cents(sess: dict[str, Any]) -> int:
     import payment_links as _pl
 
     amount = int(sess.get("amount_cents") or 0)
+    payload = sess.get("payload") or {}
+    currency = (sess.get("currency") or "cad").lower()
+    plan_tier = (payload.get("plan_tier") or "").strip()
+    # Tolerant override parse — a garbage value must never crash settlement (it
+    # falls through to the plan-tier / env default, same as the flat rail).
+    override = payload.get("fee_override_cents")
+    override_cents: int | None = None
+    if override is not None:
+        try:
+            override_cents = int(override)
+        except (TypeError, ValueError):
+            override_cents = None
+
+    # 3-mode allocation (business_pays/split_5050/customer_pays): the WHOLE
+    # per-order fee F = M + S is Meridian's, regardless of who fronted which
+    # half at checkout. Subtotal was recorded in the payload so S is exact.
+    mode = payload.get("fee_allocation_mode")
+    try:
+        subtotal = int(payload.get("subtotal_cents") or 0)
+    except (TypeError, ValueError):
+        subtotal = 0
+    alloc = _pl.allocate_fee(subtotal, plan_tier, currency, mode,
+                             override_cents=override_cents)
+    if alloc is not None and amount > 0:
+        return _pl.mode_application_fee_cents(subtotal, alloc)
+
     if _pl.FEE_SPLIT_ENABLED and amount > 0:
-        currency = (sess.get("currency") or "cad").lower()
-        payload = sess.get("payload") or {}
-        plan_tier = (payload.get("plan_tier") or "").strip()
-        override = payload.get("fee_override_cents")
         surcharge = _pl.customer_surcharge_cents(
-            plan_tier, currency,
-            override_cents=(int(override) if override is not None else None))
+            plan_tier, currency, override_cents=override_cents)
         subtotal = max(amount - surcharge, 0)
         return _pl.split_application_fee_cents(subtotal, surcharge)
     # Flat model: the rep-negotiated per-order fee still wins over the env
@@ -248,13 +269,39 @@ async def settle_clover_session(db, sess: dict[str, Any], payment_ref: str) -> N
     phone = (sess.get("caller_phone") or "").strip()
     if phone:
         try:
-            from ..sms.client import send_sms
+            # Shared, idempotent receipt — the SAME send the streaming and
+            # Stripe paths use. Keyed on the order id so both Clover
+            # confirmation paths (HCO webhook + /pay/clover/return) and any
+            # prior streaming send collapse to exactly one receipt.
+            _phone_agent_path()
+            from merchant_config import _demo_config, get_merchant_config
+            from order_receipt import ReceiptClaim, send_order_receipt
 
-            cur = (sess.get("currency") or "cad").upper()
-            sym = "CA$" if cur == "CAD" else f"{cur} "
-            await send_sms(phone, (
-                f"Payment received \u2713 Your order is confirmed and paid — "
-                f"{sym}{(sess.get('amount_cents') or 0) / 100:,.2f}. "
-                "We'll have it ready shortly."))
+            cfg = (await get_merchant_config(merchant_id)) if merchant_id else None
+            cfg = cfg or _demo_config(merchant_id or "demo")
+            order = {
+                "merchant_id": merchant_id,
+                "business_name": getattr(cfg, "business_name", "") or "",
+                "customer_name": sess.get("customer_name", "") or "",
+                "caller_phone": phone,
+            }
+            # CLAIM the row: Clover-native carries a real pos_order_id on the row,
+            # so claim on it directly; if the session lacks one (rare), fall back
+            # to merchant+phone most-recent — the short_code/ref are NOT columns on
+            # phone_orders and would match nothing (silent receipt drop).
+            clover_pos_id = str(sess.get("pos_order_id") or "")
+            dedup = clover_pos_id or str(sess.get("short_code") or ref)
+            if clover_pos_id:
+                claim = ReceiptClaim(column="pos_order_id", value=clover_pos_id, dedup_id=dedup)
+            else:
+                claim = ReceiptClaim(merchant_id=merchant_id, caller_phone=phone, dedup_id=dedup)
+            await send_order_receipt(
+                order, cfg,
+                order_id=dedup,
+                claim=claim,
+                paid=True,
+                amount_cents=sess.get("amount_cents"),
+                currency=sess.get("currency"),
+            )
         except Exception as e:  # noqa: BLE001 — receipt never blocks settlement
             logger.warning("clover settle: receipt SMS failed: %s", e)

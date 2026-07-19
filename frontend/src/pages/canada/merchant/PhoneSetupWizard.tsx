@@ -17,7 +17,7 @@ import { menuService, type MenuStoreItem } from '@/lib/menu-service'
 import MenuIngestPanel from '@/components/menu/MenuIngestPanel'
 import MenuReviewTable from '@/components/menu/MenuReviewTable'
 import { posSystems } from '@/data/pos-systems'
-import { VoicePlayButton, VoicePreviewCard, TestCallModal, ForwardingWizard } from '@/components/phone'
+import { VoicePlayButton, VoicePreviewCard, TestCallModal, ForwardingWizard, CashPaymentToggle } from '@/components/phone'
 import { TestOrderProveOut } from '@/components/phone/TestOrderProveOut'
 import {
   VOICE_OPTIONS, ACCENT_OPTIONS,
@@ -206,6 +206,9 @@ export default function PhoneSetupWizard() {
   const [orderTypes, setOrderTypes] = useState<string[]>(['pickup', 'delivery'])
   const [reservationConfig, setReservationConfig] = useState<ReservationConfig | null>(null)
   const [routing, setRouting] = useState<'pos' | 'webhook' | 'sms' | 'email'>(connectedPos ? 'pos' : 'sms')
+  // "Pay with Cash" opt-in (accept_cash). Enabling is gated behind a warning
+  // modal inside CashPaymentToggle; default OFF.
+  const [acceptCash, setAcceptCash] = useState(false)
   const [transferNumber, setTransferNumber] = useState('')
   const [menu, setMenu] = useState<PhoneMenuItem[]>([])
   const [newItem, setNewItem] = useState({ name: '', price: '', category: '' })
@@ -257,6 +260,7 @@ export default function PhoneSetupWizard() {
       if (cfg.order_types?.length) setOrderTypes(cfg.order_types)
       if (cfg.reservation_config) setReservationConfig(cfg.reservation_config)
       if (cfg.order_routing) setRouting(cfg.order_routing)
+      if (typeof cfg.accept_cash === 'boolean') setAcceptCash(cfg.accept_cash)
       if (cfg.transfer_number) setTransferNumber(cfg.transfer_number)
       if (cfg.menu_items?.length) {
         setMenu(cfg.menu_items.map((m: any, i: number) => ({
@@ -413,6 +417,7 @@ export default function PhoneSetupWizard() {
       menu_items: menu.map(m => ({ name: m.name, price: m.price, category: m.category })),
       transfer_number: transferTrimmed ? normalizeToE164(transferTrimmed) : undefined,
       order_routing: routing,
+      accept_cash: acceptCash,
       active: true,
     })
     setSaving(false)
@@ -424,7 +429,7 @@ export default function PhoneSetupWizard() {
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
     setStep('test')
-  }, [isDemo, orgId, businessName, phoneConfig?.phone_number, greeting, voice, accent, multilingual, businessType, scriptPack, orderTypes, menu, transferTrimmed, routing])
+  }, [isDemo, orgId, businessName, phoneConfig?.phone_number, greeting, voice, accent, multilingual, businessType, scriptPack, orderTypes, menu, transferTrimmed, routing, acceptCash])
 
   const currentStepIdx = STEPS.findIndex(s => s.key === step)
 
@@ -953,6 +958,12 @@ export default function PhoneSetupWizard() {
                 <p className={clsx('text-sm font-medium', routing === 'email' ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>Email</p>
                 <p className="text-[10px] text-[#A1A1A8]/60 mt-0.5">Send formatted order confirmation via email</p>
               </button>
+            </div>
+
+            {/* Pay with Cash — warned opt-in. When on, the agent offers cash on
+                pickup and those orders reach the kitchen UNPAID with no pay link. */}
+            <div className="pt-2 border-t border-[#1F1F23]">
+              <CashPaymentToggle enabled={acceptCash} onChange={setAcceptCash} />
             </div>
 
             {/* Human warm-transfer fallback */}

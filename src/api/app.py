@@ -64,6 +64,7 @@ from .routes.cline import router as cline_router
 from .routes.pos import router as pos_router
 from .routes.spaces import router as spaces_router
 from .routes.canada import router as canada_router
+from .routes.commissions import router as commissions_router
 from .routes.us import router as us_router
 from .routes.compliance import router as compliance_router
 from .routes.careers import router as careers_router
@@ -102,6 +103,7 @@ from .routes.team_admin import router as team_admin_router
 from .routes.time_clock import router as time_clock_router
 from .routes.team_chat import router as team_chat_router
 from .routes.chatbot import router as chatbot_router
+from .routes.hub import router as hub_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -255,6 +257,7 @@ app.include_router(cline_router)
 app.include_router(pos_router)
 app.include_router(spaces_router)
 app.include_router(canada_router)
+app.include_router(commissions_router)  # rep-facing READ-ONLY commission engine (mig 045)
 app.include_router(us_router)
 app.include_router(compliance_router)
 app.include_router(careers_router)
@@ -295,6 +298,7 @@ app.include_router(team_admin_router)
 app.include_router(time_clock_router)
 app.include_router(team_chat_router)
 app.include_router(chatbot_router)
+app.include_router(hub_router)
 if _has_billing:
     app.include_router(billing_router)
 if _has_marketplace:

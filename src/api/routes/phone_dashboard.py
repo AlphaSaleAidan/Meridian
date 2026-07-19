@@ -118,6 +118,12 @@ class PhoneConfigRequest(BaseModel):
     # be a known pack id (services/phone_agent/script_packs.py). None leaves
     # the stored value untouched; "" / "legacy" explicitly selects legacy.
     script_pack: str | None = None
+    # "Pay with Cash" opt-in (migration 047). When true, the phone agent may
+    # offer cash as a payment option and cash orders reach the kitchen flagged
+    # UNPAID / CASH ON PICKUP with NO payment link. None leaves the stored value
+    # untouched; the setup wizard / Settings tab gate turning it ON behind an
+    # explicit warning modal. NULL/false = never offer cash (current behavior).
+    accept_cash: bool | None = None
 
     @field_validator("script_pack")
     @classmethod

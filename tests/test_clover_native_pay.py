@@ -55,9 +55,9 @@ def _wire_rails(monkeypatch):
     lazy_calls, stripe_calls = [], []
 
     async def lazy(order, pos_order_id, mid_hint="", plan_tier="",
-                   fee_override_cents=None):
+                   fee_override_cents=None, fee_allocation_mode=None):
         lazy_calls.append((order, pos_order_id, mid_hint, plan_tier,
-                           fee_override_cents))
+                           fee_override_cents, fee_allocation_mode))
         return {"method": "clover", "url": "/p/x"}
 
     async def has_clover(cfg):
@@ -238,13 +238,25 @@ def _wire_route(monkeypatch, db, payment):
         return True
     monkeypatch.setattr(vl, "credit", fake_credit)
 
-    import src.sms.client as sms
+    # The receipt now goes through the SHARED, idempotent helper
+    # (order_receipt.send_order_receipt), which resolves send_sms +
+    # fetch_optout_status on its own module. Spy the helper's send path and
+    # neutralise its opt-out + DB-idempotency lookups so the receipt fires.
+    import order_receipt as orc
     texts = []
 
     async def fake_sms(phone, message):
         texts.append((phone, message))
         return {"sent": True}
-    monkeypatch.setattr(sms, "send_sms", fake_sms)
+    monkeypatch.setattr(orc, "send_sms", fake_sms)
+
+    async def no_optout(merchant_id, phone):
+        return {"marketing_optout": False, "transactional_optout": False}
+    monkeypatch.setattr(orc, "fetch_optout_status", no_optout)
+
+    async def claim(order_id):
+        return True
+    monkeypatch.setattr(orc, "_claim_receipt", claim)
     return released, credits, texts
 
 

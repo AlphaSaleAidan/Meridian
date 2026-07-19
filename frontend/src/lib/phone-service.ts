@@ -77,6 +77,11 @@ export interface PhoneConfig {
   // unset = the standard generic script (default, zero behavior change);
   // other values opt into a per-vertical time-optimized script.
   script_pack?: string
+  // "Pay with Cash" opt-in (migration 047). When true, the phone agent may
+  // offer cash on pickup; cash orders reach the kitchen flagged UNPAID / CASH
+  // ON PICKUP with no payment link. false/undefined = never offer cash.
+  // Turning it ON is gated behind a warning modal in the wizard / Settings.
+  accept_cash?: boolean
 }
 
 /** Result of POST /api/phone/config — carries enough to explain a failure. */
@@ -112,6 +117,24 @@ export interface PhoneStatsResponse {
   total_orders: number
   total_revenue: number
   avg_duration_seconds: number
+}
+
+/** One advisory recommendation from the call-telemetry feedback loop.
+ * READ-ONLY: it names a suggested_change; nothing is auto-applied. */
+export interface PhoneRecommendation {
+  signal: 'RAISE_CAP' | 'AGENT_QUALITY' | 'PRICING_HEADROOM' | string
+  title: string
+  suggested_change: string
+  impact_score: number
+  advisory: boolean
+  evidence: Record<string, number>
+}
+
+export interface PhoneRecommendationsResponse {
+  merchant_id: string
+  days: number
+  total_calls: number
+  recommendations: PhoneRecommendation[]
 }
 
 export const phoneService = {
@@ -159,6 +182,17 @@ export const phoneService = {
   async getStats(merchantId: string, days = 7): Promise<PhoneStatsResponse | null> {
     const res = await fetch(
       `${API_BASE}/api/phone/stats/${merchantId}?days=${days}`,
+      { headers: await getAuthHeaders() },
+    )
+    if (!res.ok) return null
+    return res.json()
+  },
+
+  /** Advisory cap/fee recommendations derived from call-ending telemetry.
+   * Read-only: the server never mutates a cap or fee — a human decides. */
+  async getRecommendations(merchantId: string, days = 7): Promise<PhoneRecommendationsResponse | null> {
+    const res = await fetch(
+      `${API_BASE}/api/phone/recommendations/${merchantId}?days=${days}`,
       { headers: await getAuthHeaders() },
     )
     if (!res.ok) return null

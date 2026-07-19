@@ -5,6 +5,7 @@ Pulls merchant settings from Supabase for phone agent behavior.
 import asyncio
 import logging
 import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -42,6 +43,49 @@ def _get_http_client():
         _http_client = httpx.AsyncClient()
         _http_client_loop = loop
     return _http_client
+
+
+# ── Short-TTL config cache ──────────────────────────────────────────────────
+# A single phone call resolves the merchant config several times across its
+# lifetime: assistant-request → each submit_order tool-call → end-of-call
+# report → deferred POS push at payment. Each was a separate Supabase round
+# trip, adding latency the caller hears (esp. before submit_order confirms) and
+# load on the service-role rail. The config is read-mostly and a merchant edit
+# only needs to land within a few seconds, so cache successful lookups for a
+# short window. Misses/errors are NOT cached, so a just-activated merchant
+# appears on the next call rather than after the TTL. Set the TTL env to 0 to
+# disable entirely (revert knob).
+_CONFIG_CACHE_TTL_SEC = float(os.getenv("MERIDIAN_CONFIG_CACHE_TTL_SEC", "60") or 0)
+_config_cache: dict[str, tuple[float, object]] = {}
+
+
+def _cache_get(key: str):
+    if _CONFIG_CACHE_TTL_SEC <= 0:
+        return None
+    hit = _config_cache.get(key)
+    if hit is None:
+        return None
+    ts, val = hit
+    if (time.monotonic() - ts) > _CONFIG_CACHE_TTL_SEC:
+        _config_cache.pop(key, None)
+        return None
+    return val
+
+
+def _cache_put(key: str, val) -> None:
+    # Only cache real hits — never None — so misconfigured/just-activated
+    # merchants re-resolve immediately instead of being pinned to the miss.
+    if _CONFIG_CACHE_TTL_SEC > 0 and val is not None:
+        _config_cache[key] = (time.monotonic(), val)
+
+
+def invalidate_config_cache(merchant_id: str = "") -> None:
+    """Drop cached entries. Called with a merchant_id after a config write, or
+    with no arg to clear everything (tests)."""
+    if not merchant_id:
+        _config_cache.clear()
+        return
+    _config_cache.pop(f"cfg:{merchant_id}", None)
 
 
 @dataclass
@@ -117,6 +161,9 @@ class MerchantPhoneConfig:
     # Rep-negotiated per-order Meridian fee override in cents of the charge
     # currency (rep-portal fee slider). None = plan-tier / env default.
     order_fee_cents: Optional[int] = None
+    # Rep-set fee allocation mode (business_pays | split_5050 | customer_pays),
+    # FIXED at close (migration 048). None = legacy fee-split / env default.
+    fee_allocation_mode: Optional[str] = None
     # Voice accent group picked in the setup wizard (north_american | indian |
     # east_asian). Presentation-level grouping; `voice` carries the voice id.
     accent: str = ""
@@ -148,6 +195,12 @@ class MerchantPhoneConfig:
     # (vapi_webhook._resolve_script_pack is strictly fail-legacy). NEVER
     # auto-derived from business_type — packs are opt-in per merchant.
     script_pack: str = ""
+    # "PAY WITH CASH" (migration 047): when True, the phone agent offers cash as
+    # a payment option and cash orders reach the kitchen flagged UNPAID / CASH ON
+    # PICKUP with NO payment link. False/NULL (default) = never offer cash, so
+    # the prompt + dispatch path are byte-for-byte unchanged for every merchant
+    # that hasn't opted in behind the warning modal.
+    accept_cash: bool = False
 
 
 _VALID_PAYMENT_MODES = ("pay_now", "pay_at_pickup", "optional")
@@ -166,6 +219,16 @@ def _norm_payment_link_provider(value: Optional[str]) -> str:
     zero behavior change for existing merchants)."""
     provider = (value or "").strip().lower()
     return provider if provider in _VALID_PAYMENT_LINK_PROVIDERS else "stripe"
+
+
+_VALID_FEE_ALLOCATION_MODES = ("business_pays", "split_5050", "customer_pays")
+
+
+def _norm_fee_allocation_mode(value: Optional[str]) -> Optional[str]:
+    """Normalize fee_allocation_mode; unknown/missing → None (legacy behavior:
+    the caller keeps the existing fee-split / env-default fee handling)."""
+    mode = (value or "").strip().lower()
+    return mode if mode in _VALID_FEE_ALLOCATION_MODES else None
 
 
 # Base URL for the hosted public menu page (/m/{slug}).
@@ -246,6 +309,10 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
         logger.warning("No Supabase configured — using demo config for %s", merchant_id)
         return _demo_config(merchant_id)
 
+    cached = _cache_get(f"cfg:{merchant_id}")
+    if cached is not None:
+        return cached
+
     try:
         headers = {
             "apikey": SUPABASE_KEY,
@@ -303,6 +370,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
             restaurant_brief=(row.get("restaurant_brief") or "").strip(),
             order_fee_cents=(int(row["order_fee_cents"])
                              if row.get("order_fee_cents") is not None else None),
+            fee_allocation_mode=_norm_fee_allocation_mode(
+                row.get("fee_allocation_mode")),
             accent=(row.get("accent") or "").strip().lower(),
             max_call_minutes=(int(row["max_call_minutes"])
                               if row.get("max_call_minutes") is not None else None),
@@ -311,6 +380,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                                if isinstance(row.get("delivery_channels"), dict)
                                else None),
             script_pack=(row.get("script_pack") or "").strip().lower(),
+            accept_cash=bool(row.get("accept_cash", False)),
         )
         # MENU STORE (single source of truth): merchants with rows in the
         # normalized menu_items table get their menu from the store —
@@ -347,6 +417,10 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
         except Exception as menu_exc:  # noqa: BLE001 — store read never breaks a call
             logger.warning("menu store read failed for %s (JSONB fallback): %s",
                            merchant_id, menu_exc)
+        # Cache the fully-resolved config (incl. menu-store enrichment) — only
+        # real hits are stored, so a just-activated merchant is not pinned to a
+        # miss (see _cache_put).
+        _cache_put(f"cfg:{merchant_id}", config)
         return config
     except Exception as e:
         logger.error("Failed to load merchant config: %s", e)
@@ -356,6 +430,10 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
 async def get_merchant_by_phone(phone_number: str) -> Optional[str]:
     if not SUPABASE_URL or not SUPABASE_KEY:
         return "demo-merchant"
+
+    cached = _cache_get(f"phone:{phone_number}")
+    if cached is not None:
+        return cached
 
     try:
         headers = {
@@ -370,7 +448,9 @@ async def get_merchant_by_phone(phone_number: str) -> Optional[str]:
             headers=headers,
         )
         if res.status_code == 200 and res.json():
-            return res.json()[0]["merchant_id"]
+            mid = res.json()[0]["merchant_id"]
+            _cache_put(f"phone:{phone_number}", mid)
+            return mid
     except Exception as e:
         logger.error("Failed to lookup merchant by phone: %s", e)
     return None
