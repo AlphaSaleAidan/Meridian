@@ -43,18 +43,26 @@ async def _resolve_rep_id(db, claims: dict) -> str:
     auth signup) — email is the canonical join key, same as the canada_leads
     RLS policies.
     """
-    email = (claims.get("email") or "").strip().lower()
+    raw = (claims.get("email") or "").strip()
+    email = raw.lower()
     if not email:
         raise HTTPException(403, "No email on session")
+    # Case-insensitive match: sales_reps.email is stored mixed-case for some
+    # rows, so eq.<lower> would 403 a legit rep. ilike is case-insensitive but
+    # treats _/% as wildcards (emails contain _), so narrow in Python.
     reps = await db.select(
         "sales_reps",
-        columns="id,is_active",
-        filters={"email": f"eq.{email}"},
-        limit=1,
+        columns="id,email,is_active",
+        filters={"email": f"ilike.{raw}"},
+        limit=10,
     )
-    if not reps:
+    rep = next(
+        (r for r in (reps or []) if (r.get("email") or "").strip().lower() == email),
+        None,
+    )
+    if rep is None:
         raise HTTPException(403, "Not a sales rep account")
-    return reps[0]["id"]
+    return rep["id"]
 
 
 @router.get("/summary")
