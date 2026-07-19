@@ -27,7 +27,13 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
-from ..auth import enforce_service_member, require_admin_jwt, require_service_auth
+from ..auth import (
+    enforce_service_member,
+    require_admin_jwt,
+    require_jwt,
+    require_org_member,
+    require_service_auth,
+)
 from ...db import get_db
 from ...services.phone_safety import (
     FORWARD_VERIFY_CALLER,
@@ -35,6 +41,7 @@ from ...services.phone_safety import (
     normalize_e164,
     same_number,
 )
+from ...services.phone_recommendations import recommend_for_merchant
 from .phone_dashboard import _validate_merchant_id
 
 logger = logging.getLogger("meridian.api.phone_activation")
@@ -228,17 +235,11 @@ async def record_activation_event(req: ActivationEventRequest,
 
 # ── call-ending telemetry summary (admin) ────────────────────────────
 
-@router.get("/call-endings/summary")
-async def call_endings_summary(
-    days: int = Query(7, ge=1, le=90),
-    merchant_id: str | None = Query(None),
-    admin=Depends(require_admin_jwt),
-):
-    """Counts by disposition + average duration per merchant over a date range.
+async def _call_endings_summary(days: int, merchant_id: str | None) -> dict:
+    """Per-merchant disposition counts + avg duration over the window.
 
-    The "how many orders was the call cap killing" instrument: the `cutoff`
-    bucket (exceeded-max-duration) split by had_order shows calls the wall
-    ended before an order landed.
+    Shared by the admin summary endpoint and the recommendation endpoint so both
+    read the telemetry the same way. Pure read (no writes).
     """
     from datetime import timedelta
     db = get_db()
@@ -287,4 +288,61 @@ async def call_endings_summary(
         "days": days,
         "total_calls": sum(m["total_calls"] for m in merchants),
         "merchants": merchants,
+    }
+
+
+@router.get("/call-endings/summary")
+async def call_endings_summary(
+    days: int = Query(7, ge=1, le=90),
+    merchant_id: str | None = Query(None),
+    admin=Depends(require_admin_jwt),
+):
+    """Counts by disposition + average duration per merchant over a date range.
+
+    The "how many orders was the call cap killing" instrument: the `cutoff`
+    bucket (exceeded-max-duration) split by had_order shows calls the wall
+    ended before an order landed.
+    """
+    return await _call_endings_summary(days, merchant_id)
+
+
+# ── advisory recommendations (org-scoped, READ-ONLY) ─────────────────
+
+@router.get("/recommendations/{merchant_id}")
+async def phone_recommendations(
+    merchant_id: str,
+    days: int = Query(7, ge=1, le=90),
+    user: dict = Depends(require_jwt),
+):
+    """Ranked, evidence-backed cap/fee recommendations for one merchant.
+
+    ADVISORY ONLY — derives signals (raise-cap, agent-quality, pricing-headroom)
+    from this merchant's call-ending telemetry over the window and returns them
+    with the numbers behind each. Does NOT change any cap/fee; a human decides.
+
+    Org-auth: the caller must be a member/owner of `merchant_id` (or a global
+    admin). The org is the path merchant_id, verified against the session JWT.
+    """
+    _validate_merchant_id(merchant_id)
+    await require_org_member(user, merchant_id)
+
+    summary = await _call_endings_summary(days, merchant_id)
+    block = next(
+        (m for m in summary["merchants"] if m["merchant_id"] == merchant_id),
+        None,
+    )
+    if block is None:
+        # No telemetry for this merchant in the window — nothing to advise on.
+        return {
+            "merchant_id": merchant_id,
+            "days": days,
+            "total_calls": 0,
+            "recommendations": [],
+        }
+
+    return {
+        "merchant_id": merchant_id,
+        "days": days,
+        "total_calls": block["total_calls"],
+        "recommendations": recommend_for_merchant(block),
     }
