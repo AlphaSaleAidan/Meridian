@@ -47,6 +47,7 @@ from delivery_channels import (
     save_order_row,
 )
 from merchant_config import MerchantPhoneConfig
+from order_receipt import send_order_receipt
 from payment_links import create_checkout
 from sms_checkout import send_checkout_sms
 
@@ -219,6 +220,22 @@ async def _fanout_release(
         row["payment_method"] = sms_out.get("method", "")
         row["payment_status"] = "pending"
     phone_order_id = await save_order_row(row)
+
+    # RECEIPT RECONCILIATION: the pay_at_pickup order is released to the kitchen
+    # now and has NO downstream payment webhook to text the caller a receipt (the
+    # customer_sms leg above is the pay-LINK; for pay_at_pickup there is no link).
+    # Fire the shared, idempotent order-receipt SMS so the streaming path matches
+    # the turn-based path. Keyed on the real pos_order_id so a later report of
+    # the same order (sidecar/webhook) never double-sends. Best-effort — a
+    # receipt hiccup never strands the released order.
+    try:
+        await send_order_receipt(
+            order, config,
+            order_id=str((final_pos or {}).get("pos_order_id") or "") or (phone_order_id or ""),
+            paid=False,
+        )
+    except Exception as e:  # noqa: BLE001 — receipt never blocks a released order
+        logger.error("pay_at_pickup receipt SMS failed: %s", e)
 
     logger.info(
         "Order fan-out (pay_at_pickup): merchant=%s pos=%s customer_sms=%s merchant_sms=%s",

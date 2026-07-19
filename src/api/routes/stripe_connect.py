@@ -208,24 +208,33 @@ async def connect_webhook(request: Request):
             except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
                 logger.error("mark_order_paid failed for %s: %s", merchant_id, e)
 
-        # Text the customer a paid receipt. Only on checkout.session.completed
-        # (canonical, fires once) so payment_intent.succeeded can't double-send.
+        # Text the customer a paid receipt via the SHARED, idempotent helper —
+        # the SAME send the streaming pay_at_pickup path uses. Only on
+        # checkout.session.completed (canonical, fires once) so
+        # payment_intent.succeeded can't double-send; the helper is also
+        # idempotent on the order id so a webhook retry (or the streaming path
+        # already having sent) never double-texts.
         if etype == "checkout.session.completed" and caller_phone:
             try:
                 from merchant_config import get_merchant_config, _demo_config
-                from sms_checkout import send_sms
+                from order_receipt import send_order_receipt
                 cfg = (await get_merchant_config(merchant_id)) if merchant_id else None
                 cfg = cfg or _demo_config(merchant_id or "demo")
-                biz = getattr(cfg, "business_name", "") or "the restaurant"
-                cents = obj.get("amount_total")
-                cur = (obj.get("currency") or "cad").upper()
-                name = ((obj.get("customer_details") or {}).get("name") or "").split(" ")[0]
-                hi = f" {name}" if name else ""
-                amt = f" — {cur} ${cents/100:.2f}" if isinstance(cents, (int, float)) else ""
-                body = (f"Payment received ✓ Thanks{hi}! Your order at {biz} is "
-                        f"confirmed and paid{amt}. We'll have it ready shortly.")
-                res = await send_sms(caller_phone, body)
-                logger.info("Receipt SMS to %s: sent=%s", caller_phone, res.get("sent"))
+                name = (obj.get("customer_details") or {}).get("name") or ""
+                order = {
+                    "merchant_id": merchant_id,
+                    "business_name": getattr(cfg, "business_name", "") or "",
+                    "customer_name": name,
+                    "caller_phone": caller_phone,
+                }
+                res = await send_order_receipt(
+                    order, cfg,
+                    order_id=str(pos_order_id or obj.get("id") or txn),
+                    paid=True,
+                    amount_cents=obj.get("amount_total"),
+                    currency=obj.get("currency"),
+                )
+                logger.info("Receipt SMS to %s: %s", caller_phone, res)
             except Exception as e:  # noqa: BLE001 — receipt never blocks the webhook
                 logger.error("receipt SMS failed for %s: %s", merchant_id, e)
 
