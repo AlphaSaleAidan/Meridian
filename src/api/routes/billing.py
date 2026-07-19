@@ -35,6 +35,51 @@ router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 MAX_AMOUNT_CENTS = 10_000_00  # $10,000 safety cap
 
+# Access-wind-down enforcement kill-switch (Workstream 4).
+# Proposed policy (flagged for Aidan in the PR):
+#   full access to end of paid period -> 30-day read-only export window ->
+#   deactivation. Until this flag is ON, self-cancel RECORDS the cancellation
+#   and halts renewals but makes NO access change ('recorded' status) — nothing
+#   cuts a live merchant off without sign-off. Default OFF.
+WINDDOWN_READONLY_DAYS = 30
+
+
+def _winddown_enforced() -> bool:
+    """True only when SUBSCRIPTION_WINDDOWN_ENFORCED is explicitly truthy.
+
+    Default OFF (conservative): cancel is recorded, renewals stop, but access
+    is not changed until Aidan flips this flag.
+    """
+    return os.environ.get("SUBSCRIPTION_WINDDOWN_ENFORCED", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+async def _resolve_owned_org(user: dict) -> str | None:
+    """Return the org_id the session user is the OWNER of, or None.
+
+    The org is derived from the SESSION (businesses.owner_user_id == user.id),
+    never from the request body. Members who are not owners get None — only an
+    owner may cancel the account. Global ADMIN_EMAILS are NOT auto-granted an
+    org here (admins use the admin-locked /cancel route).
+    """
+    user_id = user.get("id") or user.get("sub") or ""
+    if not user_id:
+        return None
+    try:
+        db = get_db()
+        rows = await db.select(
+            "businesses", "id",
+            filters={"owner_user_id": f"eq.{user_id}"},
+            limit=1,
+        )
+    except Exception as exc:
+        logger.warning("owner-org lookup failed for user %s: %s", user_id, exc)
+        return None
+    if rows:
+        return str(rows[0].get("id"))
+    return None
+
 
 async def _is_active_sales_rep(user: dict) -> bool:
     """True if the session user has an ACTIVE sales_reps row (by email).
@@ -106,6 +151,18 @@ class InvoiceRequest(BaseModel):
 class CancelRequest(BaseModel):
     org_id: str
     reason: str = ""
+
+
+class SelfCancelRequest(BaseModel):
+    """Owner-initiated cancellation from the merchant Settings page.
+
+    org_id is intentionally ABSENT — the org is resolved from the session
+    owner, never trusted from the body. reason is optional. talk_first is the
+    retention off-ramp: when true the endpoint records NOTHING and cancels
+    NOTHING.
+    """
+    reason: str = ""
+    talk_first: bool = False
 
 
 class UpdatePaymentMethodRequest(BaseModel):
@@ -191,6 +248,121 @@ async def cancel_subscription(req: CancelRequest):
     except Exception:
         logger.exception("Cancellation failed")
         raise HTTPException(status_code=500, detail="Cancellation failed")
+
+
+@router.post("/self-cancel")
+async def self_cancel_subscription(
+    req: SelfCancelRequest,
+    user: dict = Depends(require_jwt),
+):
+    """Owner self-serve cancellation (merchant Settings → Cancel account).
+
+    Auth: the authenticated OWNER of the org only. The org is derived from the
+    session (businesses.owner_user_id), never from the body — a non-owner
+    member or an outsider naming an org is denied 403.
+
+    Flow contract:
+      - talk_first=true  → retention off-ramp. Records NOTHING, cancels
+        NOTHING. Returns {canceled: false, talk_first: true} so the UI can
+        route the owner to support.
+      - otherwise → records an append-only subscription_cancellations row
+        (timestamp + reason + who), halts renewals via the existing
+        billing_service.cancel_subscription path, and emits the commission-halt
+        hook. Access-wind-down is RECORDED only unless SUBSCRIPTION_WINDDOWN_ENFORCED.
+    """
+    org_id = await _resolve_owned_org(user)
+    if not org_id:
+        # Not the owner of any org (or unverifiable) → cannot cancel.
+        raise HTTPException(
+            403, "Only the account owner can cancel the subscription.")
+
+    # Retention off-ramp: talk to us first. Record nothing, cancel nothing.
+    if req.talk_first:
+        logger.info("Self-cancel: owner %s chose talk-first for org %s (no cancellation recorded)",
+                    user.get("email"), org_id)
+        return {"canceled": False, "talk_first": True, "org_id": org_id}
+
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    enforced = _winddown_enforced()
+
+    # ── Access wind-down policy (RECORDED here; enforcement gated) ──
+    # Proposed: full access to end of paid period → 30-day read-only export
+    # window → deactivation. Default (flag OFF) records 'recorded' and makes
+    # NO access change.
+    access_until = None
+    read_only_until = None
+    winddown_status = "recorded"
+    if enforced:
+        sub_rows = []
+        try:
+            sub_rows = await db.select(
+                "subscriptions", filters={"org_id": f"eq.{org_id}"}, limit=1)
+        except Exception:
+            sub_rows = []
+        period_end = None
+        if sub_rows:
+            period_end = sub_rows[0].get("current_period_end")
+        access_until = period_end or now.isoformat()
+        try:
+            base = datetime.fromisoformat(str(access_until).replace("Z", "+00:00"))
+        except Exception:
+            base = now
+        read_only_until = (base + timedelta(days=WINDDOWN_READONLY_DAYS)).isoformat()
+        winddown_status = "active_until_period_end"
+
+    # 1) Record the cancellation (append-only audit) — timestamp + reason + who.
+    cancel_row = {
+        "org_id": org_id,
+        "canceled_by_user_id": user.get("id") or user.get("sub") or "",
+        "canceled_by_email": user.get("email") or "",
+        "reason": req.reason or "",
+        "canceled_at": now.isoformat(),
+        "winddown_status": winddown_status,
+        "access_until": access_until,
+        "read_only_until": read_only_until,
+        # Commission-halt hook: mark intent. Wiring to
+        # commission_engine.cancel_account(org_id) lands when
+        # feat/canada-commission-engine merges — see PR body.
+        "commission_halt_requested": True,
+    }
+    try:
+        await db.insert("subscription_cancellations", cancel_row)
+    except Exception:
+        logger.exception("Failed to record cancellation for org %s", org_id)
+        raise HTTPException(500, "Could not record cancellation")
+
+    # 2) Halt renewals via the existing billing service (Square + local status).
+    try:
+        from src.billing.billing_service import BillingService
+        service = BillingService(db)
+        await service.cancel_subscription(org_id, req.reason or "owner self-cancel")
+    except ImportError:
+        logger.warning("Billing service unavailable during self-cancel for %s", org_id)
+    except Exception:
+        # The cancellation is already recorded; renewal-halt failure is an
+        # operator follow-up, not a reason to 500 the owner.
+        logger.exception("cancel_subscription failed during self-cancel for %s", org_id)
+
+    # 3) Commission-halt HOOK POINT.
+    #    feat/canada-commission-engine (migration 046, commission_milestones)
+    #    exposes CommissionEngine.cancel_account(org_id) to halt FUTURE
+    #    milestones. Cannot import cross-worktree, so we emit the intent above
+    #    (commission_halt_requested=true) and wire the call here when both
+    #    branches land:
+    #        from src.services.commission_engine import CommissionEngine
+    #        await CommissionEngine(db, ...).cancel_account(org_id)
+
+    logger.info("Self-cancel recorded for org %s by owner %s (winddown_enforced=%s)",
+                org_id, user.get("email"), enforced)
+    return {
+        "canceled": True,
+        "talk_first": False,
+        "org_id": org_id,
+        "canceled_at": now.isoformat(),
+        "winddown_enforced": enforced,
+        "winddown_status": winddown_status,
+    }
 
 
 @router.get("/status/{org_id}")
