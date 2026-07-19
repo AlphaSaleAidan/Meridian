@@ -166,6 +166,21 @@ async def connect_webhook(request: Request):
         logger.error("Connect webhook verify failed: %s", e)
         raise HTTPException(status_code=400, detail="Invalid signature")
 
+    # Idempotency: dedupe on event.id via the same durable webhook_events table
+    # the platform + Square/Clover/Toast webhooks use, so a REDELIVERED event
+    # (Stripe retries on any non-2xx / timeout) can't re-run the release. This
+    # is defense-in-depth alongside the single-event gating below; it does not
+    # dedupe the distinct checkout.session.completed vs payment_intent.succeeded
+    # pair (different ids) — that's what the gating handles.
+    event_id = event.get("id", "")
+    if event_id:
+        try:
+            from .webhooks import _record_webhook_event
+            if not await _record_webhook_event(event_id, provider="stripe_connect"):
+                return {"received": True, "dedup": True}
+        except Exception:  # noqa: BLE001 — fail-open to downstream idempotency on a DB hiccup
+            pass
+
     etype = event.get("type", "")
     obj = event.get("data", {}).get("object", {})
     db = get_db()
@@ -197,7 +212,16 @@ async def connect_webhook(request: Request):
                 logger.info("Stripe payment confirmed → website order: %s", result)
             except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
                 logger.error("mark_paid_and_dispatch failed for %s: %s", website_order_id, e)
-        else:
+        elif etype == "checkout.session.completed":
+            # Phone order release ONLY on the canonical single event — the SAME
+            # gate the receipt + voice_ledger credit below already use.
+            # payment_intent.succeeded fires for the same order, and
+            # mark_order_paid re-creates the DEFERRED POS ticket non-atomically
+            # (SELECT-then-PATCH, no CAS), so processing both events concurrently
+            # (two uvicorn workers) double-pushes the kitchen ticket. A phone
+            # pay_now Checkout always emits checkout.session.completed, so gating
+            # here loses no releases. (website path above stays on both events —
+            # mark_paid_and_dispatch is an atomic CAS, so it's already safe.)
             try:
                 from pay_on_phone import mark_order_paid
                 result = await mark_order_paid(
