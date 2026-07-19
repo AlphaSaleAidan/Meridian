@@ -16,6 +16,52 @@ FALLBACK_MODEL = "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
 _llm_instance = None
 
 
+# ── Call budget (cost cap) ────────────────────────────────────────────────
+# Batch pipelines (rebuild-all) set a hard cap on LLM calls so a pathological
+# repo state / runaway loop can't burn unbounded compute. None = unlimited.
+
+class LLMBudgetExceeded(RuntimeError):
+    """Raised by generate() once the configured call budget is exhausted."""
+
+
+_budget: dict = {"remaining": None, "used": 0, "exceeded": False}
+
+
+def set_llm_call_budget(max_calls: int) -> None:
+    """Arm the call budget. Subsequent generate() calls decrement it."""
+    _budget["remaining"] = max(0, int(max_calls))
+    _budget["used"] = 0
+    _budget["exceeded"] = False
+
+
+def clear_llm_call_budget() -> int:
+    """Disarm the budget; returns how many calls were used."""
+    used = _budget["used"]
+    _budget["remaining"] = None
+    return used
+
+
+def llm_calls_used() -> int:
+    return _budget["used"]
+
+
+def llm_budget_exceeded() -> bool:
+    return _budget["exceeded"]
+
+
+def _consume_budget() -> None:
+    if _budget["remaining"] is None:
+        _budget["used"] += 1
+        return
+    if _budget["remaining"] <= 0:
+        _budget["exceeded"] = True
+        raise LLMBudgetExceeded(
+            f"LLM call budget exhausted after {_budget['used']} calls"
+        )
+    _budget["remaining"] -= 1
+    _budget["used"] += 1
+
+
 def get_llm(
     model_name: str = DEFAULT_MODEL,
     n_ctx: int = 4096,
@@ -55,6 +101,7 @@ def generate(
     temperature: float = 0.7,
     model_name: str = DEFAULT_MODEL,
 ) -> str:
+    _consume_budget()
     llm = get_llm(model_name)
     messages = [
         {"role": "system", "content": system},

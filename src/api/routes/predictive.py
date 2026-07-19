@@ -20,9 +20,10 @@ from ..auth import require_org_access
 
 logger = logging.getLogger("meridian.api.predictive")
 
-# Router-level tenancy guard: every endpoint that accepts org_id (query or path)
-# is automatically protected. The POST /scenario endpoint passes org_id in body —
-# that's not auto-checked here; it must enforce internally (P1 follow-up).
+# Router-level tenancy guard: every endpoint that accepts org_id (query, path,
+# or BODY) is automatically protected — require_org_access resolves body org_id
+# too (auth.py _org_id_from_body, CA-1/CA-2 fix), covering POST /scenario.
+# Verified by tests/test_security_batch_20260719.py (section 7).
 router = APIRouter(
     prefix="/api/predictive",
     tags=["predictive"],

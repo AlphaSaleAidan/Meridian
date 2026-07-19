@@ -74,6 +74,24 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
 
     db = get_db()
 
+    # Spam dedup (2026-07-15 hunt): same email + position + country within 24h
+    # → answer 200 (never tip off a bot / punish a double-click) but store no
+    # duplicate row and send no duplicate email.
+    from ...services.submission_guard import is_recent_duplicate
+    if await is_recent_duplicate(
+        db, "career_applications", str(req.email),
+        extra_filters={"position": f"eq.{req.position}", "country": f"eq.{country}"},
+    ):
+        logger.info("Duplicate career application suppressed: %s (%s/%s)",
+                    req.email, req.position, country)
+        return {
+            "status": "received",
+            "application_id": app_id,
+            "name": req.name,
+            "position": req.position,
+            "message": "Your application has been received. We'll be in touch soon!",
+        }
+
     try:
         await db.insert("career_applications", {
             "id": app_id,

@@ -23,6 +23,7 @@ from ..auth import (
     require_admin_auth,
     require_admin_jwt,
     require_jwt,
+    require_org_member,
     require_service_auth,
 )
 from ...db import get_db
@@ -32,6 +33,53 @@ logger = logging.getLogger("meridian.billing.routes")
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 MAX_AMOUNT_CENTS = 10_000_00  # $10,000 safety cap
+
+
+async def _is_active_sales_rep(user: dict) -> bool:
+    """True if the session user has an ACTIVE sales_reps row (by email).
+
+    Rep portals (Accounts/LeadDetail/OnboardingWizard pages) drive the invoice
+    and payment-notification routes on behalf of their clients, and reps are
+    not `business_users` members of those orgs — so org-membership alone would
+    lock them out. An active rep row is the entitlement instead.
+    """
+    email = (user.get("email") or "").strip().lower()
+    if not email:
+        return False
+    try:
+        db = get_db()
+        rows = await db.select(
+            "sales_reps", "id",
+            filters={"email": f"eq.{email}", "is_active": "eq.true"},
+            limit=1,
+        )
+        return bool(rows)
+    except Exception as e:
+        logger.warning("sales_reps lookup failed for %s: %s", email, e)
+        return False  # fail closed
+
+
+async def _enforce_billing_org_access(principal: dict, org_id: str) -> None:
+    """Org-scope guard for service-authed billing mutations (June
+    require_service_auth cross-tenant BOLA batch).
+
+    Allowed: machine principals (admin key / service token), members of the
+    target org (merchant self-serve onboarding), global ADMIN_EMAILS, and
+    ACTIVE sales reps. Everyone else — e.g. an ordinary logged-in merchant
+    naming ANOTHER org's id — is denied 403.
+    """
+    if not principal or principal.get("kind") in ("admin", "service"):
+        return
+    user = principal.get("user") or {}
+    try:
+        # require_org_member passes members + ADMIN_EMAILS and honors the
+        # TENANCY_ENFORCEMENT_DISABLED rollback knob.
+        await require_org_member(user, org_id)
+        return
+    except HTTPException:
+        if await _is_active_sales_rep(user):
+            return
+        raise
 
 
 # ── Request/Response Models ──
@@ -77,12 +125,13 @@ class PaymentNotifyRequest(BaseModel):
 
 # ── Route handlers ──
 
-@router.post("/create-invoice", dependencies=[Depends(require_service_auth)])
-async def create_invoice(req: InvoiceRequest):
+@router.post("/create-invoice")
+async def create_invoice(req: InvoiceRequest, principal=Depends(require_service_auth)):
     """
     Create a Square Invoice for custom amounts or manual billing.
     Used for non-standard pricing or when the SR sets a custom amount.
     """
+    await _enforce_billing_org_access(principal, req.org_id)
     try:
         from src.billing.billing_service import BillingService
 
@@ -184,13 +233,14 @@ async def get_billing_status(org_id: str, _user: dict = Depends(require_jwt)):
         raise HTTPException(status_code=500, detail="Could not retrieve billing status")
 
 
-@router.post("/update-payment-method", dependencies=[Depends(require_service_auth)])
-async def update_payment_method(req: UpdatePaymentMethodRequest):
+@router.post("/update-payment-method")
+async def update_payment_method(req: UpdatePaymentMethodRequest, principal=Depends(require_service_auth)):
     """
     Generate a new Square invoice so the customer can update their card on file.
     Creates a fresh invoice at the current subscription price with card storage enabled.
     Returns the invoice URL to send to the customer.
     """
+    await _enforce_billing_org_access(principal, req.org_id)
     try:
         from src.billing.billing_service import BillingService
 
@@ -243,12 +293,13 @@ async def update_payment_method(req: UpdatePaymentMethodRequest):
         raise HTTPException(500, "Could not create payment update link")
 
 
-@router.post("/notify-payment-failed", dependencies=[Depends(require_service_auth)])
-async def notify_payment_failed(req: PaymentNotifyRequest):
+@router.post("/notify-payment-failed")
+async def notify_payment_failed(req: PaymentNotifyRequest, principal=Depends(require_service_auth)):
     """
     Send a 'payment failed' email to the customer with a link to update their card.
     Auto-generates a new invoice link if one doesn't already exist.
     """
+    await _enforce_billing_org_access(principal, req.org_id)
     try:
         db = get_db()
         rows = await db.select("subscriptions", filters={"org_id": f"eq.{req.org_id}"}, limit=1)

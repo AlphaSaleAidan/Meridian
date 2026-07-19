@@ -235,8 +235,11 @@ class LLMClient:
             )
 
         if resp.status_code != 200:
+            # Provider error bodies can echo the Authorization header / key
+            # material — mask before this text reaches logs or callers.
+            from ..security.secret_mask import mask_secrets
             raise RuntimeError(
-                f"{provider.name} HTTP {resp.status_code}: {resp.text[:200]}"
+                f"{provider.name} HTTP {resp.status_code}: {mask_secrets(resp.text[:200])}"
             )
 
         return _parse_openai_completion(resp.json())

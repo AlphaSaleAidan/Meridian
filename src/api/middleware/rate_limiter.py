@@ -27,6 +27,10 @@ RATE_LIMITS: dict[str, tuple[int, int]] = {
     "/api/content/calendar/generate": (3, 3600),
     "/api/compliance/breach": (5, 3600),
     "/api/privacy/request": (10, 3600),
+    # Unauthenticated lead/application capture — spam caps (2026-07-15 hunt).
+    "/api/careers/apply": (5, 3600),
+    "/api/canada/careers/apply": (5, 3600),
+    "/api/quote-request": (10, 3600),
 }
 
 DEFAULT_LIMIT = (200, 60)

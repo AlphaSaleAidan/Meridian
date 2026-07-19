@@ -371,32 +371,66 @@ def rebuild_context(use_llm: bool = True) -> dict:
 
 
 def rebuild_all(use_llm: bool = True) -> dict:
-    """Full pipeline: context + file digests + diff summaries + session compression."""
+    """Full pipeline: context + file digests + diff summaries + session compression.
+
+    Cost cap: MERIDIAN_REBUILD_MAX_CALLS (default 200) bounds the total LLM
+    calls the pipeline may make. Once exhausted, each remaining LLM call falls
+    back to its raw/no-LLM path (every step already tolerates LLM failure) and
+    the result carries llm_budget_exceeded=True so the API layer can answer
+    429 with the partial result.
+    """
+    import os
+
+    from .local_llm import (
+        clear_llm_call_budget,
+        llm_budget_exceeded,
+        set_llm_call_budget,
+    )
+
+    try:
+        max_calls = int(os.environ.get("MERIDIAN_REBUILD_MAX_CALLS", "200"))
+    except ValueError:
+        max_calls = 200
+    set_llm_call_budget(max_calls)
+
     results = {}
-
-    results["context"] = rebuild_context(use_llm=use_llm)
-
     try:
-        from .file_digest import rebuild_file_digest
-        results["file_digest"] = rebuild_file_digest(use_llm=use_llm)
-    except Exception as e:
-        logger.warning(f"File digest failed: {e}")
-        results["file_digest"] = {"status": "error", "error": str(e)}
+        try:
+            results["context"] = rebuild_context(use_llm=use_llm)
+        except Exception as e:
+            logger.warning(f"Context rebuild failed: {e}")
+            results["context"] = {"status": "error", "error": str(e)}
 
-    try:
-        from .diff_summarizer import rebuild_diff_summaries
-        results["diff_summaries"] = rebuild_diff_summaries(count=10, use_llm=use_llm)
-    except Exception as e:
-        logger.warning(f"Diff summaries failed: {e}")
-        results["diff_summaries"] = {"status": "error", "error": str(e)}
+        try:
+            from .file_digest import rebuild_file_digest
+            results["file_digest"] = rebuild_file_digest(use_llm=use_llm)
+        except Exception as e:
+            logger.warning(f"File digest failed: {e}")
+            results["file_digest"] = {"status": "error", "error": str(e)}
 
-    try:
-        from .session_compressor import rebuild_session_learnings
-        results["session_learnings"] = rebuild_session_learnings(max_sessions=3, use_llm=use_llm)
-    except Exception as e:
-        logger.warning(f"Session compression failed: {e}")
-        results["session_learnings"] = {"status": "error", "error": str(e)}
+        try:
+            from .diff_summarizer import rebuild_diff_summaries
+            results["diff_summaries"] = rebuild_diff_summaries(count=10, use_llm=use_llm)
+        except Exception as e:
+            logger.warning(f"Diff summaries failed: {e}")
+            results["diff_summaries"] = {"status": "error", "error": str(e)}
 
-    _update_memory_index()
+        try:
+            from .session_compressor import rebuild_session_learnings
+            results["session_learnings"] = rebuild_session_learnings(max_sessions=3, use_llm=use_llm)
+        except Exception as e:
+            logger.warning(f"Session compression failed: {e}")
+            results["session_learnings"] = {"status": "error", "error": str(e)}
 
+        _update_memory_index()
+
+        results["llm_budget_exceeded"] = llm_budget_exceeded()
+        results["llm_budget_max_calls"] = max_calls
+    finally:
+        results["llm_calls_used"] = clear_llm_call_budget()
+
+    if results.get("llm_budget_exceeded"):
+        logger.warning(
+            "rebuild_all hit MERIDIAN_REBUILD_MAX_CALLS=%d — partial result", max_calls
+        )
     return results

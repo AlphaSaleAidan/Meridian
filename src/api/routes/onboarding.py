@@ -13,7 +13,13 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, field_validator
 
-from ..auth import require_admin_auth, require_jwt, require_org_member, require_service_auth
+from ..auth import (
+    enforce_service_member,
+    require_admin_auth,
+    require_jwt,
+    require_org_member,
+    require_service_auth,
+)
 from ...db import get_db
 
 logger = logging.getLogger("meridian.api.onboarding")
@@ -59,8 +65,15 @@ class SendWelcomeRequest(BaseModel):
 @router.get("/checklist")
 async def get_checklist(
     org_id: str,
+    principal=Depends(require_service_auth),
 ):
-    """Onboarding checklist: which steps are complete for this org."""
+    """Onboarding checklist: which steps are complete for this org.
+
+    Security (June require_service_auth BOLA batch): this endpoint was fully
+    unauthenticated and org_id-keyed — anyone could probe any org's POS/
+    onboarding state. Now requires auth + org scope (machine principals pass).
+    """
+    await enforce_service_member(principal, org_id)
     db = get_db()
 
     org_rows = await db.select("organizations", filters={"id": f"eq.{org_id}"}, limit=1)
@@ -161,13 +174,21 @@ async def create_account(req: CreateAccountRequest):
 
 
 @router.post("/send-welcome")
-async def send_welcome(req: SendWelcomeRequest):
+async def send_welcome(req: SendWelcomeRequest, principal=Depends(require_service_auth)):
     """
-    Send welcome email with login link and Square connect button.
+    Send welcome email with login link and Square connect button (org-scoped).
 
-    In production, integrate with SendGrid/Resend/SES.
-    For now, logs the email content and creates a notification.
+    Security (June require_service_auth BOLA batch): previously unauthenticated
+    — anyone could send a Square-connect welcome email for ANY org to ANY
+    address. The trusted internal webhook path calls _send_welcome_impl.
     """
+    await enforce_service_member(principal, req.org_id)
+    return await _send_welcome_impl(req)
+
+
+async def _send_welcome_impl(req: SendWelcomeRequest):
+    """Implementation shared by the authed route and the internal
+    subscription-payment webhook path (handle_subscription_payment)."""
     db = get_db()
 
     orgs = await db.select("organizations", filters={"id": f"eq.{req.org_id}"}, limit=1)
@@ -227,7 +248,7 @@ async def handle_subscription_payment(payment_data: dict):
         )
         result = await create_account(req)
 
-        await send_welcome(SendWelcomeRequest(
+        await _send_welcome_impl(SendWelcomeRequest(
             org_id=result.org_id,
             email=customer_email,
         ))
