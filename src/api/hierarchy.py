@@ -91,11 +91,21 @@ async def _service_get(params: dict) -> list[dict]:
 
 
 async def _fetch_rep_by_email(email: str) -> dict | None:
-    """Test seam: caller's sales_reps row (or None)."""
+    """Test seam: caller's sales_reps row (or None).
+
+    SECURITY: match case-insensitively but EXACTLY. PostgREST `ilike` treats `_`
+    and `%` as wildcards, and reps self-signup with an attacker-chosen email
+    (`/rep-signup`), so a plain `ilike.<email>` + `rows[0]` would let someone who
+    registers `a_min@corp.com` bind their session to `admin@corp.com`'s
+    role/path — a privilege escalation, since resolve_scope derives is_admin
+    from this row. So we ilike-FETCH then narrow to an exact lowercased compare
+    (same pattern as commissions/billing/commission_engine).
+    """
     if not email:
         return None
-    rows = await _service_get({"email": f"ilike.{email}", "select": _HIER_COLS, "limit": "1"})
-    return rows[0] if rows else None
+    target = email.strip().lower()
+    rows = await _service_get({"email": f"ilike.{email.strip()}", "select": _HIER_COLS, "limit": "20"})
+    return next((r for r in (rows or []) if (r.get("email") or "").strip().lower() == target), None)
 
 
 async def _fetch_reps_under(path: str) -> list[dict]:

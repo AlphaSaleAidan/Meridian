@@ -276,3 +276,31 @@ def test_us_leads_endpoint_filters_service_role_superset(monkeypatch):
     ids = {ld["id"] for ld in out["leads"]}
     assert "lead-2" not in ids, "us_leads leaked a sibling rep's lead through the backend plane"
     assert "lead-1" in ids, "rep lost their own lead in /api/us/leads"
+
+
+# ── SECURITY: _fetch_rep_by_email must narrow ilike matches to an EXACT compare ──
+# Reps self-signup with attacker-chosen emails; PostgREST ilike treats _ and %
+# as wildcards. A plain ilike + rows[0] would let a_min@corp.com bind to
+# admin@corp.com's row (privilege escalation via resolve_scope's is_admin).
+
+def test_fetch_rep_by_email_ignores_wildcard_matches(monkeypatch):
+    # _service_get simulates PostgREST ilike.'a_min@corp.com' matching BOTH the
+    # attacker's own row and admin@corp.com ('_' matches 'd').
+    async def _svc(params):
+        return [
+            {"id": "admin-1", "email": "admin@corp.com", "role": "admin", "path": "admin-1"},
+            {"id": "att-1", "email": "a_min@corp.com", "role": "sales_rep", "path": "att-1"},
+        ]
+    monkeypatch.setattr(hierarchy, "_service_get", _svc)
+    row = _run(hierarchy._fetch_rep_by_email("a_min@corp.com"))
+    assert row is not None
+    assert row["id"] == "att-1"           # the attacker's OWN row, never admin's
+    assert row["role"] == "sales_rep"
+
+
+def test_fetch_rep_by_email_none_when_no_exact(monkeypatch):
+    async def _svc(params):
+        return [{"id": "admin-1", "email": "admin@corp.com", "role": "admin", "path": "admin-1"}]
+    monkeypatch.setattr(hierarchy, "_service_get", _svc)
+    # ilike matched admin@ only (wildcard), but no exact match for the attacker.
+    assert _run(hierarchy._fetch_rep_by_email("a_min@corp.com")) is None

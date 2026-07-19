@@ -379,8 +379,15 @@ async def self_cancel_subscription(
 
 
 @router.get("/status/{org_id}")
-async def get_billing_status(org_id: str, _user: dict = Depends(require_jwt)):
-    """Get current subscription/billing status for an organization."""
+async def get_billing_status(org_id: str, user: dict = Depends(require_jwt)):
+    """Get current subscription/billing status for an organization.
+
+    BOLA guard: an authenticated caller may only read the billing status of an
+    org they belong to (member / owner / ADMIN_EMAILS / active sales rep) — the
+    same plane every billing mutation in this file uses. Without this, any
+    logged-in user could read any org's subscription tier/price/rep by UUID.
+    """
+    await _enforce_billing_org_access({"kind": "user", "user": user}, org_id)
     try:
         db = get_db()
 

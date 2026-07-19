@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Optional
 
@@ -146,7 +146,30 @@ async def list_punches(
         # week is [week_start, week_start+7d)
         filters["clock_in_at"] = f"gte.{week_start}"
     rows = await db.select("time_punches", filters=filters, order="clock_in_at.desc")
+    rows = _within_week(rows, week_start)  # bound the high end ([start, start+7d))
     return {"punches": rows, "total": len(rows)}
+
+
+def _week_end(week_start: str) -> Optional[str]:
+    """Exclusive upper bound (week_start + 7 days) as YYYY-MM-DD, or None if the
+    input isn't a parseable date. ISO timestamps sort lexically, so callers can
+    keep rows with `clock_in_at < _week_end(...)` to bound the week's high end —
+    the `gte.week_start` DB filter already sets the low end."""
+    if not week_start:
+        return None
+    try:
+        return (datetime.fromisoformat(week_start).date() + timedelta(days=7)).isoformat()
+    except (ValueError, TypeError):
+        return None
+
+
+def _within_week(rows: list[dict], week_start: str) -> list[dict]:
+    """Keep only punches in [week_start, week_start+7d). No-op if week_start is
+    empty/unparseable (matches the unfiltered query behavior)."""
+    end = _week_end(week_start)
+    if not end:
+        return rows
+    return [r for r in rows if (r.get("clock_in_at") or "") < end]
 
 
 def _hours(iso_in: str, iso_out: Optional[str]) -> float:
@@ -196,6 +219,7 @@ async def hours_summary(
         "time_punches",
         filters={"org_id": f"eq.{org_id}", "clock_in_at": f"gte.{week_start}"},
     )
+    punches = _within_week(punches, week_start)  # bound the high end ([start, start+7d))
 
     scheduled: dict[str, float] = {}
     for sh in shifts:
