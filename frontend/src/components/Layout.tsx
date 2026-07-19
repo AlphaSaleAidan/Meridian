@@ -28,10 +28,12 @@ import {
   Calendar,
   Video,
   Sparkles,
+  Building2,
 } from 'lucide-react'
 import MeridianLogo, { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import MobileNavBar from './MobileNavBar'
 import { useAuth } from '@/lib/auth'
+import { useIsCommandTier } from '@/hooks/useOrg'
 import { useMobile } from '@/hooks/useMobile'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import OnboardingWizard from '@/pages/OnboardingWizard'
@@ -80,6 +82,8 @@ const navGroups = [
     label: 'Tools',
     items: [
       { path: 'agents', icon: Bot, label: 'AI Agents' },
+      // Command-tier only — filtered in the render loop (server also gates /api/hub/*).
+      { path: 'hub', icon: Building2, label: 'Multi-Location Hub', commandOnly: true },
       { path: 'camera-analytics', icon: Video, label: 'Camera Intel' },
       { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
       { path: 'my-website', icon: Globe, label: 'My Website' },
@@ -101,6 +105,7 @@ export default function Layout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { org, logout } = useAuth()
+  const isCommandTier = useIsCommandTier()
   const { isDesktop } = useMobile()
   const { unreadCount } = useUnreadNotifications()
   const basePath = location.pathname.startsWith('/app') ? '/app'
@@ -191,7 +196,9 @@ export default function Layout() {
               <p className="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#A1A1A8]/30">{group.label}</p>
             )}
             <div className="space-y-0.5">
-              {group.items.map(({ path, icon: Icon, label }) => {
+              {group.items
+                .filter((item) => !(item as { commandOnly?: boolean }).commandOnly || isCommandTier)
+                .map(({ path, icon: Icon, label }) => {
                 const to = path ? `${basePath}/${path}` : basePath
                 return (
                   <NavLink

@@ -28,6 +28,7 @@ const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 const InventoryPage = lazyRetry(() => import('@/pages/InventoryPage'))
 const AgentDashboardPage = lazyRetry(() => import('@/pages/AgentDashboardPage'))
+const HubPage = lazyRetry(() => import('@/pages/HubPage'))
 const ActionsPage = lazyRetry(() => import('@/pages/ActionsPage'))
 const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
 const StaffPage = lazyRetry(() => import('@/pages/StaffPage'))
@@ -177,6 +178,7 @@ function CustomerDashboardRoutes() {
       <Route path="insights" element={<Suspense fallback={<InlineFallback />}><InsightsPage /></Suspense>} />
       <Route path="forecasts" element={<Suspense fallback={<InlineFallback />}><ForecastsPage /></Suspense>} />
       <Route path="agents" element={<Suspense fallback={<InlineFallback />}><AgentDashboardPage /></Suspense>} />
+      <Route path="hub" element={<Suspense fallback={<InlineFallback />}><HubPage /></Suspense>} />
       <Route path="actions" element={<Suspense fallback={<InlineFallback />}><ActionsPage /></Suspense>} />
       <Route path="customers" element={<Suspense fallback={<InlineFallback />}><CustomersPage /></Suspense>} />
       <Route path="staff" element={<Suspense fallback={<InlineFallback />}><StaffPage /></Suspense>} />

@@ -98,6 +98,7 @@ from .routes.analytics import router as analytics_router
 from .routes.content import router as content_router
 from .routes.portal import router as portal_router
 from .routes.quote import router as quote_router
+from .routes.hub import router as hub_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -285,6 +286,7 @@ app.include_router(analytics_router)
 app.include_router(content_router)
 app.include_router(portal_router)
 app.include_router(quote_router)
+app.include_router(hub_router)
 if _has_billing:
     app.include_router(billing_router)
 if _has_marketplace:
