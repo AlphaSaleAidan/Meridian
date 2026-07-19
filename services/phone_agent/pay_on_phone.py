@@ -88,11 +88,22 @@ def is_demo(merchant_id: str) -> bool:
 
 
 def resolve_mode(config: MerchantPhoneConfig, pay_choice: str = "") -> str:
-    """Resolve the effective payment path for this order. `optional` defers to
-    the caller's pay_choice (defaults to pay_now if unset/invalid)."""
+    """Resolve the effective payment path for this order.
+
+    CASH: when the merchant enabled accept_cash AND the caller chose cash, the
+    order takes the 'cash' path (unpaid, released to the kitchen now, NO payment
+    link) regardless of the configured payment_mode. This gate is fail-safe: an
+    'cash' choice with accept_cash OFF is ignored and falls through to the
+    merchant's real mode, so a merchant that never opted in can never end up
+    dispatching an unpaid cash order.
+
+    `optional` defers to the caller's pay_choice (defaults to pay_now if
+    unset/invalid)."""
+    choice = (pay_choice or "").strip().lower()
+    if choice == "cash" and getattr(config, "accept_cash", False):
+        return "cash"
     mode = getattr(config, "payment_mode", "pay_now")
     if mode == "optional":
-        choice = (pay_choice or "").strip().lower()
         return choice if choice in ("pay_now", "pay_at_pickup") else "pay_now"
     return mode if mode in ("pay_now", "pay_at_pickup") else "pay_now"
 
@@ -122,6 +133,10 @@ async def dispatch_order(
     """
     mode = resolve_mode(config, pay_choice)
     channels = resolve_channels(config)
+    if mode == "cash":
+        # PAY WITH CASH: unpaid, released to the kitchen NOW (mirrors
+        # pay_at_pickup), flagged CASH ON PICKUP, and NO payment link created.
+        return await _cash_release(order, config, caller_info, pos_result, channels)
     if mode == "pay_now":
         already_created = bool((pos_result or {}).get("pos_order_id"))
         if POS_PUSH_AFTER_PAYMENT and not already_created:
@@ -237,6 +252,88 @@ async def _fanout_release(
         "delivery": outcomes,
         "phone_order_id": phone_order_id,
     }
+
+
+async def _cash_release(
+    order: dict[str, Any],
+    config: MerchantPhoneConfig,
+    caller_info: dict,
+    pos_result: dict | None,
+    channels: dict[str, bool],
+) -> dict:
+    """PAY WITH CASH release: the order is created and released to the kitchen
+    NOW (like pay_at_pickup) but flagged CASH ON PICKUP / UNPAID, and NO payment
+    link / checkout SMS is ever generated.
+
+    Legs (parallel, per-leg exception isolation):
+      pos          → ticket pushed into the merchant's POS now (marked cash so
+                     build_kitchen_note prints "CASH ON PICKUP").
+      merchant_sms → staff notification so the kitchen sees the order + that it's
+                     collect-cash-on-pickup.
+    There is deliberately NO customer_sms leg — a cash order never gets a pay
+    link (create_checkout / send_checkout_sms are never called on this path).
+    """
+    order.setdefault("caller_phone", caller_info.get("phone") or order.get("caller_phone", ""))
+    # Flag the order as cash so the POS kitchen ticket shows CASH ON PICKUP.
+    order["payment_method"] = "cash"
+
+    legs: dict = {}
+    outcomes: dict[str, dict] = {}
+    if channels.get("pos", True) or pos_result is not None:
+        legs["pos"] = partial(pos_delivery_leg, order, config, pos_result)
+    else:
+        outcomes["pos"] = leg_outcome(SKIPPED_DISABLED)
+
+    # Cash orders carry NO pay link — the customer_sms leg is skipped entirely.
+    outcomes["customer_sms"] = leg_outcome("skipped_cash")
+
+    if channels.get("merchant_sms", True):
+        legs["merchant_sms"] = partial(
+            merchant_sms_leg, order, config, body=_cash_merchant_body(order, config))
+    else:
+        outcomes["merchant_sms"] = leg_outcome(SKIPPED_DISABLED)
+
+    outcomes.update(await run_legs(legs))
+
+    final_pos = (outcomes.get("pos") or {}).get("pos_result") or pos_result \
+        or {"success": False, "reason": "channel_disabled", "pos_order_id": ""}
+
+    row = {
+        **base_order_row(order, final_pos),
+        "status": "placed",
+        "kitchen_released": True,
+        "payment_method": "cash",
+        "payment_status": "unpaid",
+        "sms_sent": False,
+        **delivery_columns(outcomes),
+    }
+    phone_order_id = await save_order_row(row)
+
+    logger.info(
+        "Order fan-out (cash on pickup): merchant=%s pos=%s merchant_sms=%s (no pay link)",
+        config.merchant_id,
+        (outcomes.get("pos") or {}).get("status"),
+        (outcomes.get("merchant_sms") or {}).get("status"),
+    )
+
+    return {
+        "mode": "cash",
+        "released": True,
+        "sms_sent": False,
+        "payment_link": "",
+        "pos_result": final_pos,
+        "delivery": outcomes,
+        "phone_order_id": phone_order_id,
+    }
+
+
+def _cash_merchant_body(order: dict, config: MerchantPhoneConfig) -> str:
+    """Staff notification body for a cash order — makes the UNPAID / collect-cash
+    status unmissable at the top of the ticket text."""
+    from order_router import _format_order_summary
+    summary = _format_order_summary(
+        {**order, "business_name": getattr(config, "business_name", "") or ""})
+    return "💵 CASH ON PICKUP — collect payment at the counter.\n" + summary
 
 
 async def collect_pay_now(

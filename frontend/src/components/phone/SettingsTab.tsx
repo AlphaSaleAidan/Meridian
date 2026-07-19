@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import PersonalityPanel from './PersonalityPanel'
+import CashPaymentToggle from './CashPaymentToggle'
 import {
   VOICE_OPTIONS, DEFAULT_PERSONALITY,
   type PhoneBizConfig, type VoicePersonality,
@@ -79,6 +80,13 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
   const transferTrimmed = transferNumber.trim()
   const transferValid = transferTrimmed === '' || isValidE164(normalizeToE164(transferTrimmed))
 
+  // "Pay with Cash" opt-in (accept_cash). Enabling is gated behind a warning
+  // modal inside CashPaymentToggle; default OFF.
+  const [acceptCash, setAcceptCash] = useState(false)
+  useEffect(() => {
+    if (typeof phoneConfig?.accept_cash === 'boolean') setAcceptCash(phoneConfig.accept_cash)
+  }, [phoneConfig?.accept_cash])
+
   async function handleSave() {
     if (!orgId) return
     if (!transferValid) {
@@ -102,6 +110,7 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
       sms_pay_template: smsPayTemplate.trim() || undefined,
       transfer_number: transferTrimmed ? normalizeToE164(transferTrimmed) : undefined,
       personality,
+      accept_cash: acceptCash,
     })
     setSaving(false)
     if (!res.ok) {
@@ -273,6 +282,12 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
             <p className="text-[9px] text-[#A1A1A8]/50 mt-1">
               Leave blank to use the default message. The payment {'{link}'} is always appended if your message omits it.
             </p>
+          </div>
+
+          {/* Pay with Cash — warned opt-in. When on, the agent offers cash on
+              pickup and those orders reach the kitchen UNPAID with no pay link. */}
+          <div className="pt-3 mt-1 border-t border-[#1F1F23]">
+            <CashPaymentToggle enabled={acceptCash} onChange={setAcceptCash} />
           </div>
         </div>
       </div>

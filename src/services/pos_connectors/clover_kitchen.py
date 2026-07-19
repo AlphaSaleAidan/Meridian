@@ -62,10 +62,14 @@ def build_kitchen_note(order: dict, source_tag: str) -> str:
         # Payment state must be unmissable on the ticket: staff either collect
         # in store or hand the bag over, and the wrong guess costs real money.
         paid = order.get("status") == "paid" or bool(order.get("paid"))
-        pay_line = (
-            "PAID ONLINE (Stripe) — do not collect" if paid
-            else "UNPAID, collect in store"
-        )
+        is_cash = (order.get("payment_method") or "").strip().lower() == "cash"
+        if paid:
+            pay_line = "PAID ONLINE (Stripe) — do not collect"
+        elif is_cash:
+            # Pay-with-cash order: staff collect cash on pickup, no online charge.
+            pay_line = "UNPAID — CASH ON PICKUP, collect cash in store"
+        else:
+            pay_line = "UNPAID, collect in store"
         lines += ["", f"Total: {float(total):.2f} {currency} — {pay_line}"]
 
     # Clover order.note caps at 2048 chars; trim rather than 400.
