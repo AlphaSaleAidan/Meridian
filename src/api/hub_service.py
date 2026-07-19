@@ -73,8 +73,10 @@ PUSH_DOWN_HANDLERS = {
     "phone_agent_voice": _push_not_implemented,       # stub
 }
 
-# Hub roles allowed to push config down to a branch.
-_PUSH_ROLES = {"owner", "admin"}
+# Hub roles allowed to push config down to a branch. "manager" is the role
+# stored by connect() for a controlled org, so it must be included or connected
+# managers are silently locked out of push-down (review finding, PR #360).
+_PUSH_ROLES = {"owner", "admin", "manager"}
 
 
 def _now_iso() -> str:
