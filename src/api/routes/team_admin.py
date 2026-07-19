@@ -174,7 +174,7 @@ async def list_members(org_id: str = Query(...), principal=Depends(require_servi
 
 @router.post("/members")
 async def create_member(body: MemberCreate, principal=Depends(require_service_auth)):
-    access = await rbac.require_action(principal, body.org_id, "manage_team")
+    await rbac.require_action(principal, body.org_id, "manage_team")
 
     role = rbac.normalize_role(body.role)
     if role == rbac.ROLE_OWNER:
