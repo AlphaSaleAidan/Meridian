@@ -703,8 +703,15 @@ async def _log_call_start(call_sid: str, caller_phone: str, merchant_id: str = "
         logger.warning("Failed to log call start: %s", e)
 
 
-async def _log_call_end(call_sid: str, status: str, order_data: dict | None = None):
-    """Update call log on completion."""
+async def _log_call_end(call_sid: str, status: str, order_data: dict | None = None,
+                        pos_result: dict | None = None):
+    """Update call log on completion.
+
+    `pos_result` carries the payment outcome (payment_status/sms_sent/
+    payment_link/pos_order_id) so the merchant dashboard can show the correct
+    paid/pending badge — without it every order rendered as 'none' regardless
+    of whether a pay-link was texted or a card was charged.
+    """
     try:
         db = get_db()
         session = _sessions.get(call_sid, {})
@@ -717,6 +724,8 @@ async def _log_call_end(call_sid: str, status: str, order_data: dict | None = No
         }
         if order_data:
             payload["order_data"] = order_data
+        if pos_result:
+            payload["pos_result"] = pos_result
         await db.update(
             "phone_call_logs",
             payload,
@@ -1086,7 +1095,10 @@ async def twilio_gather(request: Request):
                     amount_cents=amount_cents,
                     caller_phone=session.get("caller_phone", ""),
                 )
-                await _log_call_end(call_sid, "order_placed_awaiting_card", tool["input"])
+                await _log_call_end(
+                    call_sid, "order_placed_awaiting_card", tool["input"],
+                    pos_result={"payment_status": "pending", "pos_order_id": order_id},
+                )
                 # Keep the session alive through the payment IVR.
                 say = (f"Great — that's {order_summary}, order number {order_id}. "
                        f"Now let's take payment to lock it in.")
@@ -1106,7 +1118,18 @@ async def twilio_gather(request: Request):
             else:
                 confirmation = f"Great! I've placed your order for {order_summary}. Your order number is {order_id}. Thank you and enjoy your meal!"
             session["messages"].append({"role": "assistant", "content": confirmation})
-            await _log_call_end(call_sid, "order_placed", tool["input"])
+            # Pay-link texted (no-POS SMS path) → payment is pending the caller's
+            # tap; a direct POS order is pay-at-pickup so we assert nothing about
+            # its payment state (stays 'none') rather than falsely show 'pending'.
+            _sms_link = getattr(order_result, "pos_system", "") == "sms_link"
+            await _log_call_end(
+                call_sid, "order_placed", tool["input"],
+                pos_result={
+                    "payment_status": "pending" if _sms_link else "none",
+                    "sms_sent": _sms_link,
+                    "pos_order_id": order_id,
+                },
+            )
             del _sessions[call_sid]
             return Response(content=_hangup(confirmation, voice=_sess_voice), media_type=TWIML)
 
@@ -1767,7 +1790,10 @@ async def pay_zip(request: Request):
             logger.error("card pay: mark_order_paid failed: %s", e)
         clear_capture(call_sid)
         if call_sid in _sessions:
-            await _log_call_end(call_sid, "order_paid_card")
+            await _log_call_end(
+                call_sid, "order_paid_card",
+                pos_result={"payment_status": "paid", "pos_order_id": cap.order_ref},
+            )
             _sessions.pop(call_sid, None)
         return Response(content=_hangup(result.spoken + " Thank you, and enjoy!"),
                         media_type=TWIML)
