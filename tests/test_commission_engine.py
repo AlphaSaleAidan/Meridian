@@ -25,10 +25,12 @@ from src.services.commission_engine import (
     Package,
     add_months,
     adjusted_m0_cents,
+    canada_commission_live,
     compute_schedule,
     first_friday,
     m0_pay_date,
     milestone_amounts,
+    nearest_package_by_price,
     next_settlement_date,
     package_total_cents,
     post_close_upsell_cents,
@@ -389,3 +391,123 @@ async def test_rep_summary(svc):
     assert summary["next_payday"] == "2026-07-31"
     assert summary["next_payday_amount_cents"] == 9750
     assert summary["currency"] == "CAD"
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# 9. Option B — LIVE Canada accrual: package selection + close hook
+# ───────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("monthly_cents,expected", [
+    (20000, "minimum"),     # exact $200
+    (25000, "starter"),     # exact $250
+    (39900, "middle"),      # exact $399
+    (68900, "higher"),      # exact $689
+    (22000, "minimum"),     # $220 -> |20| min vs |30| starter -> minimum
+    (21000, "minimum"),     # $210 -> |10| min vs |40| starter -> minimum
+    (35000, "middle"),      # $350 CA deal -> |100| starter vs |49| middle -> middle
+    (50000, "middle"),      # $500 CA deal -> |101| middle vs |189| higher -> middle
+    (70000, "higher"),      # $700 CA deal -> nearest 689
+    (999999, "higher"),     # absurdly high -> highest package
+])
+def test_nearest_package_by_price(monthly_cents, expected):
+    assert nearest_package_by_price(monthly_cents, DEFAULT_PACKAGES) == expected
+
+
+def test_nearest_package_ties_break_cheaper():
+    # Midpoint 225 between minimum(200) and starter(250): |25|==|25| -> cheaper wins.
+    assert nearest_package_by_price(22500, DEFAULT_PACKAGES) == "minimum"
+
+
+def test_canada_commission_live_default_on(monkeypatch):
+    monkeypatch.delenv("COMMISSION_ENGINE_CANADA_LIVE", raising=False)
+    assert canada_commission_live() is True
+
+
+@pytest.mark.parametrize("val", ["0", "false", "off", "no", ""])
+def test_canada_commission_live_killswitch(monkeypatch, val):
+    monkeypatch.setenv("COMMISSION_ENGINE_CANADA_LIVE", val)
+    assert canada_commission_live() is False
+
+
+class MultiTableFakeDB(FakeDB):
+    """FakeDB that also serves sales_reps + commission_packages lookups."""
+
+    def __init__(self, reps=None, packages=None):
+        super().__init__()
+        self._reps = reps or []
+        self._packages = packages or []
+
+    async def select(self, table, columns="*", filters=None, order=None,
+                     limit=None, offset=None):
+        if table == "sales_reps":
+            email = (filters or {}).get("email", "").removeprefix("eq.")
+            return [r for r in self._reps if r.get("email") == email][:limit or None]
+        if table == "commission_packages":
+            return list(self._packages)
+        return await super().select(table, columns, filters, order, limit, offset)
+
+
+REP_EMAIL = "rep@meridian.tips"
+
+
+def _accrual_svc():
+    db = MultiTableFakeDB(reps=[{"id": REP, "email": REP_EMAIL, "is_active": True}])
+    return CommissionEngineService(db=db, config=EngineConfig())
+
+
+async def test_accrue_for_canada_close_writes_full_schedule():
+    svc = _accrual_svc()
+    rows = await svc.accrue_for_canada_close(
+        account_id="biz-text-id-123",   # businesses(id) is TEXT under Option B
+        rep_email=REP_EMAIL,
+        negotiated_monthly_cents=25000,  # -> starter
+        close_date=date(2026, 7, 21),
+    )
+    assert {r["milestone"] for r in rows} == {"M0", "M1", "M2", "M3"}
+    assert all(r["account_id"] == "biz-text-id-123" for r in rows)
+    assert all(r["rep_id"] == REP for r in rows)
+    assert all(r["package_key"] == "starter" for r in rows)
+
+
+async def test_accrue_is_idempotent_per_account():
+    svc = _accrual_svc()
+    first = await svc.accrue_for_canada_close(
+        account_id="biz-1", rep_email=REP_EMAIL,
+        negotiated_monthly_cents=39900, close_date=date(2026, 7, 21),
+    )
+    second = await svc.accrue_for_canada_close(
+        account_id="biz-1", rep_email=REP_EMAIL,
+        negotiated_monthly_cents=39900, close_date=date(2026, 7, 21),
+    )
+    assert len(first) == 4
+    assert second == []  # UNIQUE(account_id,milestone) -> no double accrual
+
+
+async def test_accrue_skips_unknown_rep():
+    svc = _accrual_svc()
+    rows = await svc.accrue_for_canada_close(
+        account_id="biz-2", rep_email="stranger@nowhere.com",
+        negotiated_monthly_cents=25000, close_date=date(2026, 7, 21),
+    )
+    assert rows == []
+    assert svc.db.rows == []
+
+
+async def test_accrue_skips_zero_price():
+    svc = _accrual_svc()
+    rows = await svc.accrue_for_canada_close(
+        account_id="biz-3", rep_email=REP_EMAIL,
+        negotiated_monthly_cents=0, close_date=date(2026, 7, 21),
+    )
+    assert rows == []
+
+
+async def test_accrue_explicit_package_overrides_price_map():
+    svc = _accrual_svc()
+    rows = await svc.accrue_for_canada_close(
+        account_id="biz-4", rep_email=REP_EMAIL,
+        negotiated_monthly_cents=25000,   # would map to starter
+        close_date=date(2026, 7, 21),
+        package_key="higher",             # explicit wins
+    )
+    assert all(r["package_key"] == "higher" for r in rows)

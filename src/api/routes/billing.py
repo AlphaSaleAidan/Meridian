@@ -344,14 +344,21 @@ async def self_cancel_subscription(
         # operator follow-up, not a reason to 500 the owner.
         logger.exception("cancel_subscription failed during self-cancel for %s", org_id)
 
-    # 3) Commission-halt HOOK POINT.
-    #    feat/canada-commission-engine (migration 046, commission_milestones)
-    #    exposes CommissionEngine.cancel_account(org_id) to halt FUTURE
-    #    milestones. Cannot import cross-worktree, so we emit the intent above
-    #    (commission_halt_requested=true) and wire the call here when both
-    #    branches land:
-    #        from src.services.commission_engine import CommissionEngine
-    #        await CommissionEngine(db, ...).cancel_account(org_id)
+    # 3) Commission-halt: halt this account's FUTURE (pending) milestones.
+    #    Earned/paid rows are NEVER clawed back. Best-effort — the cancellation
+    #    is already recorded; a halt hiccup is an operator follow-up, not a 500.
+    #    Flag-gated by the same Canada kill-switch as accrual.
+    try:
+        from src.services.commission_engine import (
+            CommissionEngineService,
+            canada_commission_live,
+        )
+
+        if canada_commission_live():
+            halted = await CommissionEngineService(db=db).cancel_account(org_id)
+            logger.info("commission halt: %d future milestones halted for %s", halted, org_id)
+    except Exception:
+        logger.exception("commission cancel_account failed for %s", org_id)
 
     logger.info("Self-cancel recorded for org %s by owner %s (winddown_enforced=%s)",
                 org_id, user.get("email"), enforced)
