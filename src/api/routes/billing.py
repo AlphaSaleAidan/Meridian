@@ -89,17 +89,23 @@ async def _is_active_sales_rep(user: dict) -> bool:
     not `business_users` members of those orgs — so org-membership alone would
     lock them out. An active rep row is the entitlement instead.
     """
-    email = (user.get("email") or "").strip().lower()
+    raw = (user.get("email") or "").strip()
+    email = raw.lower()
     if not email:
         return False
     try:
         db = get_db()
+        # Case-insensitive: sales_reps.email can be stored mixed-case (Supabase
+        # auth lowercases the login, but a raw signup insert did not), so
+        # eq.<lower> would miss and fail-close a real rep. ilike is
+        # case-insensitive; _ and % are ilike wildcards (emails contain _), so
+        # narrow with an exact compare in Python.
         rows = await db.select(
-            "sales_reps", "id",
-            filters={"email": f"eq.{email}", "is_active": "eq.true"},
-            limit=1,
+            "sales_reps", "id,email,is_active",
+            filters={"email": f"ilike.{raw}", "is_active": "eq.true"},
+            limit=10,
         )
-        return bool(rows)
+        return any((r.get("email") or "").strip().lower() == email for r in rows)
     except Exception as e:
         logger.warning("sales_reps lookup failed for %s: %s", email, e)
         return False  # fail closed
