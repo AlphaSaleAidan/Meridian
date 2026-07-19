@@ -29,15 +29,16 @@ Classification: commissions are independent-contractor, lump-sum,
 outcome-based payments (stored as row metadata).
 
 INERT BY DESIGN: nothing imports this from live billing flows. The service
-layer only writes `commission_milestones` (migration 045) via the injected
+layer only writes `commission_milestones` (migration 046) via the injected
 db client; wiring into webhooks/billing is a separate reviewed change.
+
+Lowest price is $250 USD (Starter); the $200 minimum SKU was dropped
+2026-07-19, retiring the old anchor question. Reps cannot sell below $250.
 
 ── PARAMETERIZED OPEN QUESTIONS (defaults below; each needs Aidan/Enoch
    sign-off before go-live) ────────────────────────────────────────────────
-1. min_price_is_anchor = True
-   $200 "Minimum-price" is its own SKU with its own schedule, NOT a
-   discounted Starter. The discount rule applies only to non-anchor slider
-   prices. Set False to treat $200 as Starter-minus-$50 (both built + tested).
+1. min_monthly_cents = 25000 — lowest sellable price ($250 USD). Discounts
+   cannot price below it.
 2. m0_floor_zero = True — M0 floors at $0, never goes negative.
 3. currency = 'CAD'.
 4. retro_upsell_commission = False — post-close upsells generate no
@@ -81,14 +82,14 @@ class Package:
     package_key: str
     list_monthly_cents: int
     unit_value_cents: int
-    is_anchor: bool = False
     active: bool = True
 
 
-# Mirrors the migration-045 seed rows. Prod code should load the table via
+# Mirrors the migration-046 seed rows. Prod code should load the table via
 # CommissionEngineService.load_packages(); these are for pure math + tests.
+# Lowest price is $250 USD (Starter) — the $200 minimum-price SKU was dropped
+# per Aidan 2026-07-19, which also retires the min_price_is_anchor question.
 DEFAULT_PACKAGES: dict[str, Package] = {
-    "minimum": Package("minimum", 20000, 600, is_anchor=True),   # $200/mo, unit $6.00
     "starter": Package("starter", 25000, 750),                   # $250/mo, unit $7.50
     "middle": Package("middle", 39900, 1375),                    # $399/mo, unit $13.75
     "higher": Package("higher", 68900, 2000),                    # $689/mo, unit $20.00
@@ -102,16 +103,15 @@ class EngineConfig:
     Every field here is an OPEN QUESTION default flagged for Aidan/Enoch —
     see the module docstring.
     """
-    min_price_is_anchor: bool = True
     m0_floor_zero: bool = True
     currency: str = "CAD"
     retro_upsell_commission: bool = False
     m0_min_gap_days: int = 7
     settlement_months: tuple[int, ...] = (1, 4, 7, 10)
     settlement_day_rule: str = "first_friday"
-    # Package the anchor SKU falls back to when min_price_is_anchor=False
-    # ($200 treated as a discounted Starter).
-    anchor_fallback_package: str = "starter"
+    # Lowest sellable monthly price. A discount can never take the negotiated
+    # price below this ($250 USD = the Starter list). Reps cannot sell under it.
+    min_monthly_cents: int = 25000
 
 
 @dataclass(frozen=True)
@@ -150,16 +150,16 @@ def adjusted_m0_cents(
     Upsell   (negotiated > list): +50% of the delta (odd cents floor — flagged).
     Discount (negotiated < list): -100% of the delta.
 
-    Anchor semantics (min_price_is_anchor=True): the anchor SKU is not a
-    slider price, so the discount rule does not apply below its list; upsells
-    above any list still count.
+    The negotiated price is clamped to config.min_monthly_cents ($250 USD) —
+    reps cannot sell below the lowest tier, so no discount can price under it.
     """
     base = package.unit_value_cents * MILESTONE_WEIGHTS["M0"]
-    delta = negotiated_monthly_cents - package.list_monthly_cents
+    negotiated = max(negotiated_monthly_cents, config.min_monthly_cents)
+    delta = negotiated - package.list_monthly_cents
 
     if delta > 0:
         m0 = base + delta // 2  # floor on odd cents — flagged for Aidan
-    elif delta < 0 and not (config.min_price_is_anchor and package.is_anchor):
+    elif delta < 0:
         m0 = base + delta  # full discount comes out of M0
     else:
         m0 = base
@@ -243,16 +243,10 @@ def compute_schedule(
     - M0: earned at close, status 'earned', payable Friday-after-full-week.
     - M1/M2/M3: earned at months 4/9/12 of activity, status 'pending',
       payable on the next settlement date strictly after each earn date.
-    - min_price_is_anchor=False remaps the anchor SKU onto the fallback
-      package (Starter) as a discounted slider price.
     """
     packages = packages or DEFAULT_PACKAGES
     package = packages[package_key]
     activation = activation_date or close_date
-
-    if package.is_anchor and not config.min_price_is_anchor:
-        # $200 is NOT its own SKU: price it as a discounted Starter.
-        package = packages[config.anchor_fallback_package]
 
     amounts = milestone_amounts(package)
     amounts["M0"] = adjusted_m0_cents(package, negotiated_monthly_cents, config)
@@ -315,7 +309,6 @@ class CommissionEngineService:
                     package_key=r["package_key"],
                     list_monthly_cents=int(r["list_monthly_cents"]),
                     unit_value_cents=int(r["unit_value_cents"]),
-                    is_anchor=bool(r.get("is_anchor")),
                     active=bool(r.get("active", True)),
                 )
                 for r in rows

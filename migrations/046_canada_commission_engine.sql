@@ -28,23 +28,19 @@ CREATE TABLE IF NOT EXISTS public.commission_packages (
     list_monthly_cents integer NOT NULL CHECK (list_monthly_cents > 0),
     unit_value_cents   integer NOT NULL CHECK (unit_value_cents > 0),
     currency           text NOT NULL DEFAULT 'CAD',
-    -- OPEN QUESTION #1 (default true, flagged for Aidan/Enoch):
-    -- the $200 minimum-price package is its own SKU (anchor), NOT a
-    -- discounted Starter. The engine reads this flag together with
-    -- commission_config.min_price_is_anchor.
-    is_anchor          boolean NOT NULL DEFAULT false,
     active             boolean NOT NULL DEFAULT true,
     created_at         timestamptz NOT NULL DEFAULT now(),
     updated_at         timestamptz NOT NULL DEFAULT now()
 );
 
+-- Lowest price is $250 USD (Starter). The $200 minimum-price SKU was dropped
+-- per Aidan 2026-07-19; a new tier is still just a row insert.
 INSERT INTO public.commission_packages
-    (package_key, display_name, list_monthly_cents, unit_value_cents, is_anchor)
+    (package_key, display_name, list_monthly_cents, unit_value_cents)
 VALUES
-    ('minimum', 'Minimum price', 20000,  600, true),   -- $200/mo, unit $6.00  -> total $342.00
-    ('starter', 'Starter',       25000,  750, false),  -- $250/mo, unit $7.50  -> total $427.50
-    ('middle',  'Middle',        39900, 1375, false),  -- $399/mo, unit $13.75 -> total $783.75
-    ('higher',  'Higher',        68900, 2000, false)   -- $689/mo, unit $20.00 -> total $1,140.00
+    ('starter', 'Starter', 25000,  750),  -- $250/mo, unit $7.50  -> total $427.50
+    ('middle',  'Middle',  39900, 1375),  -- $399/mo, unit $13.75 -> total $783.75
+    ('higher',  'Higher',  68900, 2000)   -- $689/mo, unit $20.00 -> total $1,140.00
 ON CONFLICT (package_key) DO NOTHING;
 
 -- ============================================================
@@ -59,8 +55,8 @@ CREATE TABLE IF NOT EXISTS public.commission_config (
 );
 
 INSERT INTO public.commission_config (key, value, description) VALUES
-    ('min_price_is_anchor', 'true',
-     'OPEN #1: $200 is its own SKU with its own schedule, NOT a discounted Starter. Discount rule applies only to non-anchor slider prices. false = treat $200 as Starter minus $50.'),
+    ('min_monthly_cents', '25000',
+     'Lowest sellable monthly price ($250 USD = Starter list). Discounts cannot price below it; reps cannot sell under it.'),
     ('m0_floor_zero', 'true',
      'OPEN #2: M0 floors at $0, never negative.'),
     ('currency', '"CAD"',

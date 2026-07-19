@@ -40,7 +40,6 @@ from src.services.commission_engine import (
 
 # package_key -> (list_monthly_cents, unit_cents, M0, M1, M2, M3, total)
 MATRIX = {
-    "minimum": (20000, 600, 7800, 16800, 6000, 3600, 34200),    # $78.00/$168.00/$60.00/$36.00 = $342.00
     "starter": (25000, 750, 9750, 21000, 7500, 4500, 42750),    # $97.50/$210.00/$75.00/$45.00 = $427.50
     "middle": (39900, 1375, 17875, 38500, 13750, 8250, 78375),  # $178.75/$385.00/$137.50/$82.50 = $783.75
     "higher": (68900, 2000, 26000, 56000, 20000, 12000, 114000),  # $260.00/$560.00/$200.00/$120.00 = $1,140.00
@@ -92,8 +91,8 @@ def test_upsell_odd_delta_floors_the_half_cent():
 
 
 def test_discount_subtracts_full_delta_from_m0():
-    # Starter negotiated $225 vs list $250 -> M0 -= $25.00
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["starter"], 22500, CFG) == 9750 - 2500
+    # Middle negotiated $374 vs list $399 (both above the $250 floor) -> M0 -= $25.00
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["middle"], 37400, CFG) == 17875 - 2500
 
 
 def test_no_adjustment_at_list_price():
@@ -103,13 +102,13 @@ def test_no_adjustment_at_list_price():
 
 
 def test_m0_floors_at_zero_by_default():
-    # Starter negotiated $130 -> 9750 - 12000 = -2250 -> floored to 0
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["starter"], 13000, CFG) == 0
+    # Higher discounted to the $250 floor -> 26000 - 43900 = -17900 -> floored to 0
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["higher"], 25000, CFG) == 0
 
 
 def test_m0_floor_disabled_allows_negative():
     cfg = EngineConfig(m0_floor_zero=False)
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["starter"], 13000, cfg) == -2250
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["higher"], 25000, cfg) == -17900
 
 
 def test_m1_m2_m3_never_adjusted():
@@ -129,47 +128,28 @@ def test_m1_m2_m3_never_adjusted():
 
 
 # ───────────────────────────────────────────────────────────────────────────
-# 3. min_price_is_anchor flag — BOTH behaviors
+# 3. $250 USD floor — reps cannot sell below the lowest tier
 # ───────────────────────────────────────────────────────────────────────────
 
-def test_anchor_true_minimum_uses_own_schedule_no_discount():
-    # $200 is its own SKU: negotiated == its own list -> full own schedule.
-    cfg = EngineConfig(min_price_is_anchor=True)
-    rows = compute_schedule(
-        package_key="minimum",
-        negotiated_monthly_cents=20000,
-        close_date=date(2026, 7, 21),
-        activation_date=date(2026, 7, 21),
-        config=cfg,
-    )
-    by_ms = {r.milestone: r.amount_cents for r in rows}
-    assert by_ms == {"M0": 7800, "M1": 16800, "M2": 6000, "M3": 3600}
+def test_only_three_packages_lowest_is_250():
+    assert set(DEFAULT_PACKAGES) == {"starter", "middle", "higher"}
+    assert min(p.list_monthly_cents for p in DEFAULT_PACKAGES.values()) == 25000
 
 
-def test_anchor_true_discount_below_anchor_list_not_applied():
-    # Anchor SKU is not a "slider price": discount rule does NOT apply to it.
-    cfg = EngineConfig(min_price_is_anchor=True)
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["minimum"], 19000, cfg) == 7800
+def test_discount_cannot_price_below_250_floor():
+    # A "discount" to $220 is clamped to the $250 floor -> no adjustment at all.
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["starter"], 22000, CFG) == 9750
 
 
-def test_anchor_true_non_anchor_slider_discount_still_applies():
-    cfg = EngineConfig(min_price_is_anchor=True)
-    assert adjusted_m0_cents(DEFAULT_PACKAGES["starter"], 22500, cfg) == 7250
+def test_middle_discount_down_to_250_floor_applies_only_to_floor():
+    # Middle ($399) discounted toward $200 clamps at $250 -> delta = -$149.
+    # M0 = 17875 - 14900 = 2975.
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["middle"], 20000, CFG) == 17875 - 14900
 
 
-def test_anchor_false_minimum_is_discounted_starter():
-    # $200 treated as Starter discounted by $50:
-    # M0 = 9750 - 5000 = 4750; M1/M2/M3 = Starter's (never adjusted).
-    cfg = EngineConfig(min_price_is_anchor=False)
-    rows = compute_schedule(
-        package_key="minimum",
-        negotiated_monthly_cents=20000,
-        close_date=date(2026, 7, 21),
-        activation_date=date(2026, 7, 21),
-        config=cfg,
-    )
-    by_ms = {r.milestone: r.amount_cents for r in rows}
-    assert by_ms == {"M0": 4750, "M1": 21000, "M2": 7500, "M3": 4500}
+def test_non_floor_discount_still_applies():
+    # Middle discounted to $349 (above floor) -> -$50 off M0.
+    assert adjusted_m0_cents(DEFAULT_PACKAGES["middle"], 34900, CFG) == 17875 - 5000
 
 
 # ───────────────────────────────────────────────────────────────────────────
