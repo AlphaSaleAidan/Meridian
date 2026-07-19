@@ -366,6 +366,9 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
           total_paid: 0,
           created_at: new Date().toISOString(),
           portal_context: resolvePortalContext(email),
+          role: 'sales_rep',
+          manager_id: null,
+          level: null,
         }
         saveRep(profile)
         setRep(profile)
