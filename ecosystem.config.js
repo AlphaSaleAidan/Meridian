@@ -21,7 +21,12 @@ module.exports = {
     {
       name: "celery-worker",
       script: "/usr/bin/bash",
-      args: "-c 'celery -A src.workers.celery_app worker --loglevel=info -Q default,sync,analysis,reports --concurrency=8 --max-tasks-per-child=200'",
+      // Queues MUST cover every queue tasks are routed to (celery_app route
+      // table = critical/default/bulk; inference.py + onboarding.py also enqueue
+      // to `analysis`). `critical` and `bulk` were missing, so process_billing_
+      // renewals (critical) and nightly analysis/weekly reports/archives (bulk)
+      // were enqueued by beat but consumed by nothing and piled up in Redis.
+      args: "-c 'celery -A src.workers.celery_app worker --loglevel=info -Q critical,default,bulk,sync,analysis,reports --concurrency=8 --max-tasks-per-child=200'",
       cwd: "/root/Meridian",
       exec_mode: "fork",
       instances: 1,
