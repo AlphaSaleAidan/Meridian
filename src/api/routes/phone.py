@@ -703,6 +703,63 @@ async def _log_call_start(call_sid: str, caller_phone: str, merchant_id: str = "
         logger.warning("Failed to log call start: %s", e)
 
 
+def _menu_price(name: str, menu_items: list[dict], size: str = "") -> float:
+    """Best-effort unit price for an LLM order item by matching the merchant
+    menu (case-insensitive exact, then substring). Returns 0.0 when unmatched.
+    Mirrors services/phone_agent/order_normalizer pricing without importing the
+    sidecar into the API path."""
+    n = (name or "").strip().lower()
+    if not n:
+        return 0.0
+    # 3-tier match mirroring the sidecar normalizer's _find_menu_item:
+    # exact name, then >=60% word overlap (handles multi-word items), then
+    # substring. Pure aliases (e.g. "coke" vs "Coca-Cola") price at 0 here too —
+    # display-only best effort, consistent with the streaming path.
+    match = next((it for it in (menu_items or [])
+                  if (it.get("name") or "").strip().lower() == n), None)
+    if match is None:
+        input_words = set(n.split())
+        for it in menu_items or []:
+            iw = set((it.get("name") or "").lower().split())
+            if iw and len(iw & input_words) >= len(iw) * 0.6:
+                match = it
+                break
+    if match is None:
+        for it in menu_items or []:
+            inm = (it.get("name") or "").strip().lower()
+            if inm and (inm in n or n in inm):
+                match = it
+                break
+    if not match:
+        return 0.0
+    size_prices = {str(k).lower(): float(v)
+                   for k, v in (match.get("size_prices") or {}).items()}
+    if size_prices:
+        s = (size or "").strip().lower()
+        return float(size_prices.get(s) or next(iter(size_prices.values()), 0.0))
+    return float(match.get("price", 0.0) or 0.0)
+
+
+def _price_order_for_display(order_input: dict, menu_items: list[dict],
+                             tax_rate: float = 0.13) -> dict:
+    """Attach unit_price/line_total to each item + compute subtotal/tax/total for
+    the merchant dashboard. LLM order items carry name/quantity but no price, so
+    turn-based phone orders otherwise render as $0.00. Display-only: does NOT
+    change what the POS pipeline receives (that path prices independently)."""
+    priced = []
+    subtotal = 0.0
+    for it in (order_input.get("items") or []):
+        qty = max(1, int(it.get("quantity", 1) or 1))
+        unit = _menu_price(it.get("name", ""), menu_items, it.get("size", ""))
+        line = round(unit * qty, 2)
+        subtotal += line
+        priced.append({**it, "unit_price": unit, "line_total": line})
+    subtotal = round(subtotal, 2)
+    tax = round(subtotal * (tax_rate or 0.0), 2)
+    return {**order_input, "items": priced, "subtotal": subtotal,
+            "tax": tax, "total": round(subtotal + tax, 2)}
+
+
 async def _log_call_end(call_sid: str, status: str, order_data: dict | None = None,
                         pos_result: dict | None = None):
     """Update call log on completion.
@@ -962,6 +1019,11 @@ async def twilio_voice(request: Request):
         "merchant_email": ((config_row or {}).get("merchant_email") or "").strip(),
         # Language tag for Polly voice selection and CA disclosure.
         "lang": merchant_lang,
+        # Menu (with prices) + tax rate stashed so the turn-based order dispatch
+        # can price the captured order for the dashboard (LLM items carry no
+        # price, so orders otherwise render as $0.00).
+        "menu_items": menu_items,
+        "tax_rate": float((config_row or {}).get("tax_rate", 0.13) or 0.13),
     }
     greeting = (
         (config_row or {}).get("greeting")
@@ -1080,6 +1142,14 @@ async def twilio_gather(request: Request):
 
             order_id = order_result.order_id or f"MRD-{abs(hash(call_sid)) % 9000 + 1000}"
 
+            # Menu-price the captured order for the dashboard (LLM items carry no
+            # price → every phone order rendered as $0.00). Display-only: the POS
+            # pipeline prices independently in _dispatch_order/create_pos_order.
+            _priced_order = _price_order_for_display(
+                tool["input"], session.get("menu_items") or [],
+                session.get("tax_rate", 0.13),
+            )
+
             # PAY ON THE PHONE (keypad backup): when enabled + the merchant takes
             # payment up front, collect the card on the call before confirming, so
             # the kitchen only ever sees a paid order (anti-scam). Gated by
@@ -1090,9 +1160,10 @@ async def twilio_gather(request: Request):
                 CARD_PAYMENT_ENABLED = False
             payment_mode = session.get("payment_mode", "pay_now")
             if CARD_PAYMENT_ENABLED and payment_mode == "pay_now":
-                amount_cents = 0
-                for i in tool["input"].get("items", []):
-                    amount_cents += int(round(float(i.get("price", 0) or 0) * 100)) * int(i.get("quantity", 1) or 1)
+                # Charge the menu-priced total (incl. tax). The old per-item
+                # i["price"] sum was always 0 (LLM items have no price), so
+                # card-on-phone would have captured $0.
+                amount_cents = int(round(_priced_order.get("total", 0.0) * 100))
                 start_capture(
                     call_sid,
                     order_ref=order_id,
@@ -1101,7 +1172,7 @@ async def twilio_gather(request: Request):
                     caller_phone=session.get("caller_phone", ""),
                 )
                 await _log_call_end(
-                    call_sid, "order_placed_awaiting_card", tool["input"],
+                    call_sid, "order_placed_awaiting_card", _priced_order,
                     pos_result={"payment_status": "pending", "pos_order_id": order_id},
                 )
                 # Keep the session alive through the payment IVR.
@@ -1128,7 +1199,7 @@ async def twilio_gather(request: Request):
             # its payment state (stays 'none') rather than falsely show 'pending'.
             _sms_link = getattr(order_result, "pos_system", "") == "sms_link"
             await _log_call_end(
-                call_sid, "order_placed", tool["input"],
+                call_sid, "order_placed", _priced_order,
                 pos_result={
                     "payment_status": "pending" if _sms_link else "none",
                     "sms_sent": _sms_link,
