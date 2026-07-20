@@ -816,20 +816,19 @@ async def get_phone_stats(
         limit=5000,
     )
 
-    orders = await db.select(
-        "phone_orders",
-        filters={
-            "merchant_id": f"eq.{merchant_id}",
-            "created_at": f"gte.{since}",
-        },
-        order="created_at.desc",
-        limit=5000,
-    )
-
     total_calls = len(calls)
-    order_calls = sum(1 for c in calls if c.get("status") == "order_placed")
-    total_orders = len(orders)
-    total_revenue = sum(float(o.get("total", 0)) for o in orders)
+    # Orders + revenue derive from phone_call_logs — the superset both the
+    # turn-based AND streaming paths write (one row per call). phone_orders is a
+    # streaming-only subset, so reading it undercounted turn-based merchants to
+    # 0 orders / $0 revenue. order_data.total is populated by both paths
+    # (turn-based via the #378 menu pricer, streaming via normalize_order).
+    order_statuses = {"order_placed", "order_placed_awaiting_card", "order_paid_card"}
+    order_logs = [c for c in calls if c.get("status") in order_statuses]
+    order_calls = len(order_logs)
+    total_orders = order_calls
+    total_revenue = sum(
+        float((c.get("order_data") or {}).get("total", 0) or 0) for c in order_logs
+    )
     avg_duration = 0
     durations = [c.get("duration_seconds", 0) for c in calls if c.get("duration_seconds")]
     if durations:
