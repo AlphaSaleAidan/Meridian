@@ -29,7 +29,7 @@ async def route_order(
 ):
     order_summary = _format_order_summary(order)
 
-    await _save_to_supabase(order, pos_result)
+    order_row_id = await _save_to_supabase(order, pos_result)
 
     if config.transfer_number:
         await _send_sms_notification(config.transfer_number, order_summary)
@@ -55,6 +55,7 @@ async def route_order(
             )
             await _update_order_payment(
                 order, payment_result, sms_result,
+                order_row_id=order_row_id,
             )
 
     logger.info(
@@ -107,13 +108,16 @@ def _format_order_summary(order: dict) -> str:
     return "\n".join(lines)
 
 
-async def _save_to_supabase(order: dict, pos_result: dict):
+async def _save_to_supabase(order: dict, pos_result: dict) -> str | None:
+    """Insert the phone order; return its row id so the later payment update can
+    target the exact row (PostgREST PATCH ignores order/limit, so scoping by
+    merchant+caller would update ALL of that caller's orders)."""
     if not SUPABASE_URL or not SUPABASE_KEY:
-        return
+        return None
 
     try:
         async with httpx.AsyncClient() as client:
-            await client.post(
+            resp = await client.post(
                 f"{SUPABASE_URL}/rest/v1/phone_orders",
                 json={
                     "merchant_id": order.get("merchant_id", ""),
@@ -135,30 +139,39 @@ async def _save_to_supabase(order: dict, pos_result: dict):
                     "apikey": SUPABASE_KEY,
                     "Authorization": f"Bearer {SUPABASE_KEY}",
                     "Content-Type": "application/json",
-                    "Prefer": "return=minimal",
+                    "Prefer": "return=representation",
                 },
                 timeout=10,
             )
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                if isinstance(data, list) and data:
+                    return data[0].get("id")
     except Exception as e:
         logger.error("Failed to save order to Supabase: %s", e)
+    return None
 
 
 async def _update_order_payment(
-    order: dict, payment_result: dict, sms_result: dict
+    order: dict, payment_result: dict, sms_result: dict,
+    order_row_id: str | None = None,
 ):
-    """Update the Supabase order record with payment link and SMS status."""
+    """Update the saved order with payment link + SMS status, scoped to the
+    EXACT row by id. Without the id we skip rather than PATCH by
+    merchant+caller_phone: PostgREST ignores order/limit on PATCH, so that
+    filter would overwrite the payment status of ALL of that caller's orders."""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return
-    merchant_id = order.get("merchant_id", "")
-    caller_phone = order.get("caller_phone", "")
-    if not merchant_id or not caller_phone:
+    if not order_row_id:
+        logger.warning(
+            "skip payment update: no order row id (insert returned none) — "
+            "not PATCHing by merchant+caller to avoid clobbering prior orders"
+        )
         return
     try:
         async with httpx.AsyncClient() as client:
             await client.patch(
-                f"{SUPABASE_URL}/rest/v1/phone_orders"
-                f"?merchant_id=eq.{merchant_id}&caller_phone=eq.{caller_phone}"
-                f"&order=created_at.desc&limit=1",
+                f"{SUPABASE_URL}/rest/v1/phone_orders?id=eq.{order_row_id}",
                 json={
                     "payment_link": payment_result.get("url", ""),
                     "payment_method": payment_result.get("method", ""),
