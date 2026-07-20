@@ -26,6 +26,6 @@ ThreadingHTTPServer(('0.0.0.0', int(os.environ.get('PORT', 8000))), H).serve_for
     --beat \
     --schedule=/tmp/celerybeat-schedule \
     --loglevel="${CELERY_LOG_LEVEL:-info}" \
-    -Q "${CELERY_QUEUES:-critical,default,bulk}"
+    -Q "${CELERY_QUEUES:-critical,default,bulk,sync,analysis,reports}"
 fi
 exec uvicorn src.api.app:app --host 0.0.0.0 --port "${PORT:-8000}"
