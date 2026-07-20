@@ -17,7 +17,7 @@
 
 Typical time to connect: **2–3 minutes**.
 
-**Partner program:** Meridian's Clover App Market listing (https://www.clover.com/developers) is **pending approval** — read-only OAuth sync works today, but write access (order injection) stays gated until the review lands. See [Clover — read-only today](clover-read-only.md) for the exact merchant-expectation language; never tell a merchant we're already approved.
+**Partner program:** Meridian's Clover dev-dashboard app ("Meridian Ai Business Support", App ID `YK86AE2YAHSP2` — matches `CLOVER_APP_ID`) **requests write scopes as of 2026-07-20**: Orders Read+Write, Customers Read+Write, Inventory/Merchant/Payments Read. The app itself is still a **DRAFT** — no App Market release has ever been submitted (App Releases is empty, 0 merchant installs), so "pending approval" was inaccurate: nothing is in review yet. Production write for real merchants stays gated on submitting + passing App Market review. What DID change: any test/dev merchant that authorizes the draft app from now on grants the write scopes, which unblocks end-to-end testing of order injection (`clover_kitchen.py`). See [Clover — read-only today](clover-read-only.md) for the exact merchant-expectation language; never tell a merchant we're already approved.
 
 ## What data we pull
 
@@ -107,5 +107,5 @@ Note: Clover App Market approval gates *marketplace distribution* only — it do
 
 ---
 
-_Last updated: 2026-07-16 (direct kitchen injection: built, pending live verification)_
+_Last updated: 2026-07-20 (dev-dashboard app now requests Orders + Customers Write; app still an unsubmitted DRAFT)_
 _Sourced from: src/services/pos_connectors/registry.py (clover config) + docs/playbook/_status/phase-2-decisions.md (Wave 1 #2, production issue #1) + docs/playbook/_status/pos/clover.md (Phase 1)_
