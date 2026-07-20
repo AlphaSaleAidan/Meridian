@@ -350,6 +350,19 @@ class BillingService:
                 return
 
             for sub in subs:
+                # Resilience: skip malformed rows instead of aborting the whole
+                # batch. A single row missing id/org_id/monthly_price_cents used
+                # to raise KeyError below (e.g. `sub["monthly_price_cents"]`),
+                # which propagated to the outer handler and killed every
+                # remaining renewal in the run.
+                if (not sub.get("id") or not sub.get("org_id")
+                        or sub.get("monthly_price_cents") is None):
+                    logger.warning(
+                        "renewals: skipping malformed subscription row id=%r org=%r",
+                        sub.get("id"), sub.get("org_id"),
+                    )
+                    continue
+
                 meta = sub.get("metadata") or {}
                 is_trial_conversion = sub.get("status") == "trialing"
 
