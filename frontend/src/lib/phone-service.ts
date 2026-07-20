@@ -473,9 +473,16 @@ function mapCallRow(row: any): PhoneCallEntry {
   const items = (row.order_data?.items || []).map((i: any) => ({
     name: i.name || '',
     qty: i.quantity || 1,
-    price: i.price || 0,
+    // Sidecar orders carry `unit_price`; turn-based LLM orders may only have
+    // `price`. Read either so the dashboard stops showing every order as $0.00.
+    price: i.unit_price ?? i.price ?? 0,
   }))
-  const subtotal = items.reduce((s: number, i: any) => s + i.price * i.qty, 0)
+  const itemsSubtotal = items.reduce((s: number, i: any) => s + i.price * i.qty, 0)
+  // Prefer a priced total from the order payload when present (sidecar path),
+  // else fall back to the summed line items.
+  const subtotal = typeof row.order_data?.total === 'number' && row.order_data.total > 0
+    ? row.order_data.total
+    : itemsSubtotal
 
   const transcript: TranscriptLine[] = (row.transcript || []).map((t: any) => ({
     speaker: t.role === 'user' ? 'caller' : 'agent',

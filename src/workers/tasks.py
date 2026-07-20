@@ -147,9 +147,11 @@ def run_nightly_analysis():
             return {"status": "error", "error": "DB unavailable"}
 
         try:
-            orgs = await db.fetch(
-                "SELECT id, pos_type FROM organizations WHERE status = 'active'"
-            )
+            orgs = await db.select(
+                "organizations",
+                columns="id,pos_type",
+                filters={"status": "eq.active"},
+            ) or []
 
             workflows = []
             for org in orgs:
@@ -190,9 +192,11 @@ def generate_weekly_reports():
             return {"status": "error", "error": "DB unavailable"}
 
         try:
-            orgs = await db.fetch(
-                "SELECT id FROM organizations WHERE status = 'active'"
-            )
+            orgs = await db.select(
+                "organizations",
+                columns="id",
+                filters={"status": "eq.active"},
+            ) or []
 
             if orgs:
                 group(generate_report.si(org["id"]) for org in orgs)()
@@ -352,9 +356,11 @@ def train_swarm_batch():
             return {"status": "error", "error": "DB unavailable"}
 
         try:
-            orgs = await db.fetch(
-                "SELECT id FROM organizations WHERE status = 'active'"
-            )
+            orgs = await db.select(
+                "organizations",
+                columns="id",
+                filters={"status": "eq.active"},
+            ) or []
 
             for org in orgs:
                 train_swarm.apply_async(args=[org["id"]])
