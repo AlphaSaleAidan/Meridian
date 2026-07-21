@@ -137,6 +137,8 @@ async def _dispatch(order_row: dict, merchant_id: str) -> dict:
         }
         if "kitchen_print_fired" in api_result:
             out["kitchen_print_fired"] = api_result["kitchen_print_fired"]
+        if api_result.get("kitchen_print_reason"):
+            out["kitchen_print_reason"] = api_result["kitchen_print_reason"]
         return out
 
     # Universal fallback: a PAID order must never be stranded. Text (then
