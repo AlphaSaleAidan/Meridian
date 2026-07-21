@@ -61,17 +61,36 @@ async def square_marketplace_webhook(request: Request):
     sig = request.headers.get("x-square-hmacsha256-signature", "")
     webhook_url = str(request.url)
 
-    if os.getenv("SQUARE_MARKETPLACE_WEBHOOK_SECRET") and not _verify_square_signature(payload, sig, webhook_url):
+    # Fail CLOSED: without the signing secret an unsigned payload previously
+    # sailed through (the guard only ran WHEN the secret was set), so a spoofed
+    # payment.completed could trigger a real presigned dataset download URL +
+    # email. Refuse to process an unverified marketplace event.
+    if not os.getenv("SQUARE_MARKETPLACE_WEBHOOK_SECRET"):
+        logger.error("SQUARE_MARKETPLACE_WEBHOOK_SECRET not set — refusing webhook (fail closed)")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    if not _verify_square_signature(payload, sig, webhook_url):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     import json
     event = json.loads(payload)
     event_type = event.get("type", "")
 
+    # Idempotency: Square retries on any non-2xx/timeout — dedupe on event id so
+    # a redelivered payment.completed can't email a second download link / log a
+    # duplicate sale. Same durable table the other Square webhooks use.
+    event_id = event.get("event_id") or event.get("id") or ""
+    if event_id:
+        try:
+            from src.api.routes.webhooks import _record_webhook_event
+            if await _record_webhook_event(event_id, provider="square_marketplace") is False:
+                logger.info("Duplicate marketplace webhook %s — skipping", event_id)
+                return {"received": True, "dedup": True}
+        except Exception:  # noqa: BLE001 — fail-open to downstream on a DB hiccup
+            pass
+
     if event_type == "payment.completed":
         payment = event.get("data", {}).get("object", {}).get("payment", {})
         buyer_email = payment.get("buyer_email_address", "")
-        order_id = payment.get("order_id", "")
         amount_cents = payment.get("total_money", {}).get("amount", 0)
 
         product_key = _resolve_product_from_order(event)

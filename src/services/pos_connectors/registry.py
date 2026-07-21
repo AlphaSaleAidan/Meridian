@@ -225,7 +225,9 @@ SYSTEM_CONFIGS: dict[str, dict] = {
         "supports_orders": True,
     },
     "tekmetric": {
-        "base_url": "https://sandbox.tekmetric.com/api/v1",
+        # Production host — was pinned to sandbox.tekmetric.com, so a real
+        # Tekmetric merchant's calls went to the sandbox (auth/data mismatch).
+        "base_url": "https://shop.tekmetric.com/api/v1",
         "auth_type": "header",
         "auth_header_name": "Authorization",
         "test_endpoint": "/shops",
