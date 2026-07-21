@@ -2,20 +2,21 @@
 Vapi phone-number binding — the missing link that makes a self-serve merchant's
 provisioned DID actually ring the AI agent.
 
-Provisioning buys a Twilio number and (until now) pointed its VoiceUrl at the
-legacy /twilio/voice pipeline — but the live agent runs on Vapi, so a
-wizard-provisioned number never reached the assistant and forwarding
-verification (which waits for a Vapi `assistant-request`) could never pass.
+Provisioning buys a Telnyx number, but a bought DID is inert until Vapi owns
+it — the live agent runs on Vapi, so an unbound number never reaches the
+assistant and forwarding verification (which waits for a Vapi
+`assistant-request`) can never pass.
 
-This module imports a purchased Twilio number INTO Vapi with our webhook as the
-server URL and no static assistant, so every inbound call fires
-`assistant-request` → src/api/routes/vapi_webhook.py resolves the merchant by
-the dialed number and returns a transient assistant.
+This module imports a purchased Telnyx number INTO Vapi (provider=telnyx + the
+stored Telnyx credential) with our webhook as the server URL and no static
+assistant, so every inbound call fires `assistant-request` →
+src/api/routes/vapi_webhook.py resolves the merchant by the dialed number and
+returns a transient assistant.
 
-Gating: binding is active only when VAPI_PRIVATE_KEY is set. Without it every
-function no-ops (returns None / False) and provisioning falls back to its prior
-behavior unchanged — so the key can be added to prod to switch this on with no
-code change.
+Gating: Telnyx binding needs VAPI_PRIVATE_KEY + VAPI_TELNYX_CREDENTIAL_ID
+(vapi_telnyx_enabled). Without them the import no-ops (returns None) and the
+caller rolls back the purchase — so the keys can be added to prod to switch
+this on with no code change.
 """
 import logging
 import os
@@ -40,6 +41,66 @@ def vapi_binding_enabled() -> bool:
     return bool(_api_key())
 
 
+def _telnyx_credential_id() -> str:
+    """Vapi's stored-Telnyx-credential id (a reference, not a secret). Vapi uses
+    it to configure the Telnyx number's routing to Vapi on import. Created once
+    in the Vapi dashboard / API; carried in env so tests can override."""
+    return os.getenv("VAPI_TELNYX_CREDENTIAL_ID", "").strip()
+
+
+def vapi_telnyx_enabled() -> bool:
+    """Telnyx→Vapi binding needs both the API key and the Telnyx credential id."""
+    return bool(_api_key() and _telnyx_credential_id())
+
+
+async def import_telnyx_number(number: str, *, name: str = "") -> str | None:
+    """Register an existing Telnyx number with Vapi for dynamic assistant
+    routing (provider=telnyx + the stored Telnyx credential). Returns the Vapi
+    phone-number id, or None when disabled / on failure (logged; caller decides
+    rollback). Inbound calls then fire assistant-request to our webhook."""
+    if not vapi_telnyx_enabled():
+        return None
+    if not number:
+        logger.error("vapi telnyx import: missing number")
+        return None
+
+    body = {
+        "provider": "telnyx",
+        "number": number,
+        "credentialId": _telnyx_credential_id(),
+        "server": _server_config(),
+    }
+    if name:
+        body["name"] = name[:40]
+    return await _create_phone_number(body, number)
+
+
+async def _create_phone_number(body: dict, number: str) -> str | None:
+    """POST /phone-number with a provider-specific body; returns the Vapi id or
+    None. Shared by the Twilio and Telnyx import paths."""
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            res = await client.post(
+                f"{_VAPI_API}/phone-number",
+                json=body,
+                headers={"Authorization": f"Bearer {_api_key()}"},
+            )
+    except httpx.HTTPError as e:
+        logger.error("vapi import: network error for %s: %s", number, e)
+        return None
+    if res.status_code not in (200, 201):
+        logger.error("vapi import %s failed HTTP %s: %s",
+                     number, res.status_code, res.text[:300])
+        return None
+    vapi_id = (res.json() or {}).get("id", "")
+    if not vapi_id:
+        logger.error("vapi import %s: 2xx but no id in response", number)
+        return None
+    logger.info("vapi import: bound %s → phone-number %s (%s)",
+                number, vapi_id, body.get("provider"))
+    return vapi_id
+
+
 def _server_config() -> dict:
     """The server block Vapi calls on every inbound event. `secret` is echoed
     back as the x-vapi-secret header our webhook checks (fail-closed), so the
@@ -55,55 +116,6 @@ def _server_config() -> dict:
     if secret:
         cfg["secret"] = secret
     return cfg
-
-
-async def import_twilio_number(
-    number: str,
-    *,
-    twilio_account_sid: str,
-    twilio_auth_token: str,
-    name: str = "",
-) -> str | None:
-    """Register an existing Twilio number with Vapi for dynamic assistant
-    routing. Returns the Vapi phone-number id, or None when binding is disabled
-    or the import fails (logged — the caller decides whether to roll back)."""
-    if not vapi_binding_enabled():
-        return None
-    if not (number and twilio_account_sid and twilio_auth_token):
-        logger.error("vapi import: missing number/twilio credentials")
-        return None
-
-    body = {
-        "provider": "twilio",
-        "number": number,
-        "twilioAccountSid": twilio_account_sid,
-        "twilioAuthToken": twilio_auth_token,
-        "server": _server_config(),
-    }
-    if name:
-        body["name"] = name[:40]
-
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            res = await client.post(
-                f"{_VAPI_API}/phone-number",
-                json=body,
-                headers={"Authorization": f"Bearer {_api_key()}"},
-            )
-    except httpx.HTTPError as e:
-        logger.error("vapi import: network error for %s: %s", number, e)
-        return None
-
-    if res.status_code not in (200, 201):
-        logger.error("vapi import %s failed HTTP %s: %s",
-                     number, res.status_code, res.text[:300])
-        return None
-    vapi_id = (res.json() or {}).get("id", "")
-    if not vapi_id:
-        logger.error("vapi import %s: 2xx but no id in response", number)
-        return None
-    logger.info("vapi import: bound %s → phone-number %s", number, vapi_id)
-    return vapi_id
 
 
 async def delete_vapi_number(vapi_id: str) -> bool:
