@@ -110,8 +110,14 @@ async def test_clover_happy_path_tags_expands_qty_and_fires_kitchen(monkeypatch)
     assert order_calls[0][1]["title"] == "Meridian Mobile Order — Priya S"
     assert "Meridian Mobile Order" in order_calls[0][1]["note"]
     assert order_calls[0][1]["state"] == "open"
-    # ties the Clover order back to the Meridian order id (Square parity)
-    assert order_calls[0][1]["externalReferenceId"] == ORDER["id"][:32]
+    # ties the Clover order back to the Meridian order id (Square parity).
+    # Clover's Invoice ID must be <=12 chars AND alphanumeric-only — a
+    # hyphen (present in every UUID) 400s the ENTIRE order create with a
+    # misleading length error (probed live 2026-07-21). Pin strip + cut.
+    ref = order_calls[0][1]["externalReferenceId"]
+    import re as _re
+    assert ref == _re.sub(r"[^A-Za-z0-9]", "", ORDER["id"])[:12]
+    assert len(ref) <= 12 and ref.isalnum()
 
     # 2x Butter Chicken + 1x Naan → 3 line-item POSTs, per unit
     assert len(li_calls) == 3

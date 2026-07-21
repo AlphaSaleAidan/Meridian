@@ -11,6 +11,7 @@ created for it — the generic single-POST connector can't express that.
 """
 import logging
 import os
+import re
 
 import httpx
 
@@ -142,10 +143,15 @@ async def submit_clover_kitchen_order(
         "note": note,
         "manualTransaction": False,
     }
-    if order_ref:
-        # Traceability + dedup handle: ties the Clover order back to the
-        # Meridian order id (parity with Square's reference_id).
-        order_body["externalReferenceId"] = order_ref[:32]
+    # Traceability + dedup handle: ties the Clover order back to the Meridian
+    # order id (parity with Square's reference_id). Clover treats this as the
+    # Invoice ID and REJECTS the whole order create unless it's <=12 chars AND
+    # purely alphanumeric — a hyphen (every UUID has one by char 9) 400s with
+    # the misleading "Invoice ID cannot exceed 12 characters". Probed live
+    # 2026-07-21: 12 alnum → 200, 12 with hyphen → 400, so strip + cut.
+    ref_alnum = re.sub(r"[^A-Za-z0-9]", "", order_ref)[:12]
+    if ref_alnum:
+        order_body["externalReferenceId"] = ref_alnum
 
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         res = await client.post(
