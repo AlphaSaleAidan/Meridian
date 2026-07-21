@@ -366,6 +366,19 @@ async def self_cancel_subscription(
     except Exception:
         logger.exception("commission cancel_account failed for %s", org_id)
 
+    # 4) Reclaim the phone number to the pool for reassignment. The DID (Telnyx
+    #    + Vapi binding) is kept — only the assignment is undone, so a new
+    #    merchant can be handed this number. Best-effort: the cancellation is
+    #    already recorded; a reclaim hiccup is an operator follow-up, not a 500.
+    try:
+        from src.services.number_pool import release_to_pool
+        reclaimed = await release_to_pool(db, org_id)
+        if reclaimed:
+            logger.info("Self-cancel: reclaimed %s from %s → pool",
+                        reclaimed["phone_number"], org_id)
+    except Exception:
+        logger.exception("number reclaim failed during self-cancel for %s", org_id)
+
     logger.info("Self-cancel recorded for org %s by owner %s (winddown_enforced=%s)",
                 org_id, user.get("email"), enforced)
     return {

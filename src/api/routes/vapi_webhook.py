@@ -662,6 +662,24 @@ def _loop_guard_assistant(config) -> dict:
     }
 
 
+def _inactive_assistant(config) -> dict:
+    """Answer for a number whose merchant is cancelled/inactive: say the line
+    isn't active and end. Never takes an order (the account isn't paying)."""
+    return {
+        "name": "Meridian — Inactive Line",
+        "firstMessage": "Thanks for calling. This number isn't active for "
+                        "ordering right now. Goodbye!",
+        "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
+        "model": {"provider": "openai", "model": "gpt-4.1",
+                  "messages": [{"role": "system", "content":
+                                "This phone line is not active. Briefly say it isn't "
+                                "available for ordering and end the call. Take no orders."}],
+                  "tools": []},
+        "endCallFunctionEnabled": True,
+        "maxDurationSeconds": 15,
+    }
+
+
 def _forwarding_verified_assistant(config) -> dict:
     """Minimal assistant answering our own forwarding-verification test call:
     confirm out loud and hang up — the DB row is already marked verified."""
@@ -809,6 +827,18 @@ async def vapi_webhook(request: Request):
                         return {"assistant": _forwarding_verified_assistant(config)}
                 except Exception as e:  # noqa: BLE001 — verification never strands a call
                     logger.error("forwarding-verification check failed: %s", e)
+
+            # Subscription gate: a cancelled merchant's number is reclaimed to
+            # the pool (config cleared → this resolves to the demo fallback), but
+            # in the window before reclaim — or if an account is flipped inactive
+            # any other way — a real merchant whose agent is turned OFF must not
+            # keep taking orders. Only gate a POSITIVELY-resolved real merchant
+            # (not the demo fallback) whose `active` is explicitly False, so a
+            # transient lookup miss never declines a paying merchant's call.
+            _mid = getattr(config, "merchant_id", "") or ""
+            if _mid and _mid != "demo" and getattr(config, "active", True) is False:
+                logger.info("VAPI inactive gate: merchant=%s active=False — not serving orders", _mid)
+                return {"assistant": _inactive_assistant(config)}
 
             # Runtime loop guard + transfer fleet check hit the same table and
             # are independent of each other, so they run CONCURRENTLY — one
