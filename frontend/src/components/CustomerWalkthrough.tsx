@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   CheckCircle2, Camera, Smartphone, ArrowRight,
   X, Clock, WifiOff, Phone,
@@ -45,6 +45,12 @@ interface CustomerWalkthroughProps {
 
 export default function CustomerWalkthrough({ userId, posConnected = false, onDismiss }: CustomerWalkthroughProps) {
   const navigate = useNavigate()
+  // The walkthrough mounts in BOTH the Canada and US merchant layouts. Derive
+  // the dashboard base from the current portal so US merchants don't get thrown
+  // into the Canada portal (behind CanadaProtectedRoute) — settings/phone-orders
+  // exist under both /canada/dashboard and /us/dashboard.
+  const { pathname } = useLocation()
+  const dashBase = pathname.startsWith('/us') ? '/us/dashboard' : '/canada/dashboard'
   const orgId = useOrgId()
   const [showCameraWizard, setShowCameraWizard] = useState(false)
   const [cameraConnected, setCameraConnected] = useState(false)
@@ -163,7 +169,7 @@ export default function CustomerWalkthrough({ userId, posConnected = false, onDi
                     <span className="text-sm text-amber-400 font-medium">Waiting for POS connection...</span>
                   </div>
                   <p className="text-xs text-[#6b7a74]">
-                    Connect your POS from <button onClick={() => navigate('/canada/dashboard/settings')} className="text-[#00d4aa] underline">Settings</button> to start the insight engine. The 30-minute timer starts once your POS is linked.
+                    Connect your POS from <button onClick={() => navigate(`${dashBase}/settings`)} className="text-[#00d4aa] underline">Settings</button> to start the insight engine. The 30-minute timer starts once your POS is linked.
                   </p>
                 </div>
               ) : (
@@ -283,7 +289,7 @@ export default function CustomerWalkthrough({ userId, posConnected = false, onDi
               </div>
 
               <button
-                onClick={() => { handleComplete(); navigate('/canada/dashboard/phone-orders') }}
+                onClick={() => { handleComplete(); navigate(`${dashBase}/phone-orders`) }}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00d4aa] text-[#0a0f0d] text-sm font-semibold rounded-lg hover:bg-[#00d4aa]/90 transition-all"
               >
                 <Phone size={16} /> Set Up Phone Orders
