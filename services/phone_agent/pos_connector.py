@@ -115,11 +115,31 @@ async def create_pos_order(
         return {"success": False, "reason": "pos_error", "pos_system": pos_system, "error": str(e)}
 
 
+def _order_idempotency_key(order: dict) -> str:
+    """Deterministic Square idempotency key for a phone order.
+
+    A fresh uuid4 per call meant a timeout-then-retry (where Square actually
+    created the order) generated a NEW key, so Square couldn't dedup → duplicate
+    order, double-cooked food. Derive the key from the STABLE order content
+    (explicit ref if present, else merchant + caller + items) so a retry of the
+    same order reuses the same key. Max 45 chars (Square limit)."""
+    import hashlib
+
+    ref = str(order.get("order_ref") or order.get("id") or "").strip()
+    if not ref:
+        stable = "{}|{}|{}".format(
+            order.get("merchant_id", ""),
+            order.get("caller_phone", ""),
+            ",".join(f"{i.get('name', '')}:{i.get('quantity', 1)}:{i.get('size', '')}"
+                     for i in order.get("items", [])),
+        )
+        ref = hashlib.sha256(stable.encode()).hexdigest()
+    return f"mmo-{ref}"[:45]
+
+
 async def _create_square_order(
     order: dict, access_token: str, location_id: str
 ) -> dict:
-    import uuid
-
     line_items = []
     for item in order.get("items", []):
         line_items.append({
@@ -174,7 +194,7 @@ async def _create_square_order(
             },
         }
     payload = {
-        "idempotency_key": str(uuid.uuid4()),
+        "idempotency_key": _order_idempotency_key(order),
         "order": {
             "location_id": location_id,
             "line_items": line_items,
@@ -329,17 +349,24 @@ async def _create_generic_order(
 
 async def _create_notification_order(order: dict, pos_system: str) -> dict:
     """
-    Notification-based fallback for POS systems without direct API or webhook.
-    Saves the order to Supabase with status 'pending_manual' so it appears in
-    the merchant's Meridian dashboard for manual entry into their POS.
-    Also triggers SMS/email notification to the merchant.
+    Fallback for POS systems without direct API or webhook: save the order to
+    Supabase with status 'pending_manual' so it appears in the merchant's
+    Meridian dashboard for manual entry into their POS.
+
+    This function does NOT itself send SMS/email — merchant notification is the
+    separate merchant_sms/email leg (delivery_channels / order_router). So it
+    reports success ONLY when the row actually saved (a dashboard row is the one
+    thing it guarantees), and flags requires_merchant_notification so the caller
+    knows a delivery leg still has to fire — a save alone must not read as
+    "the kitchen got it".
     """
     merchant_id = order.get("merchant_id", "")
 
+    saved = False
     if SUPABASE_URL and SUPABASE_KEY:
         try:
             async with httpx.AsyncClient() as client:
-                await client.post(
+                resp = await client.post(
                     f"{SUPABASE_URL}/rest/v1/phone_orders",
                     json={
                         "merchant_id": merchant_id,
@@ -366,16 +393,26 @@ async def _create_notification_order(order: dict, pos_system: str) -> dict:
                     },
                     timeout=10,
                 )
-                logger.info("Order saved for manual POS entry: merchant=%s pos=%s", merchant_id, pos_system)
+                saved = resp.status_code in (200, 201, 204)
+                if saved:
+                    logger.info("Order saved for manual POS entry: merchant=%s pos=%s", merchant_id, pos_system)
+                else:
+                    logger.error("Notification order save failed HTTP %s: %s",
+                                 resp.status_code, resp.text[:200])
         except Exception as e:
             logger.error("Failed to save notification order: %s", e)
 
     return {
-        "success": True,
+        "success": saved,
         "pos_system": pos_system,
         "method": "notification",
         "pos_order_id": "",
-        "message": f"Order saved — merchant notified to enter in {pos_system}",
+        # A dashboard row is NOT delivery — the caller must still fire the
+        # merchant SMS/email leg and treat a skipped leg as non-delivery.
+        "requires_merchant_notification": True,
+        "reason": None if saved else "notification_order_save_failed",
+        "message": (f"Order saved to dashboard for {pos_system} — merchant must be notified"
+                    if saved else f"Could not save order for {pos_system}"),
     }
 
 

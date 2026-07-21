@@ -749,10 +749,14 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
     # Off-menu items are DROPPED by the normalizer (never billed at $0.00) —
     # the agent must say so, and an order with nothing left must not dispatch.
     missing = normalized.get("unavailable_items") or []
-    if missing and not normalized.get("items"):
-        names = " or ".join(missing[:3])
-        return (f"I'm sorry — I couldn't find {names} on our menu, so I "
-                "haven't placed the order. Would you like to try something else?")
+    if normalized.get("is_empty"):
+        # Nothing priceable to make — never dispatch a $0 order to the kitchen.
+        if missing:
+            names = " or ".join(missing[:3])
+            return (f"I'm sorry — I couldn't find {names} on our menu, so I "
+                    "haven't placed the order. Would you like to try something else?")
+        return ("I didn't catch any items on that order — what would you like "
+                "to get?")
     # the pay-link SMS only fires when the order carries caller_phone —
     # force it from the call's caller id so the SMS always goes out.
     if caller_phone:
