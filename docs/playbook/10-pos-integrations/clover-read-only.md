@@ -6,6 +6,8 @@
 > 2. **The exact words to use** (the "orders arrive by text" sentence flips)
 > 3. **Objection handling vs Square** (objection #1 goes away)
 
+> **Status 2026-07-20:** The dev-dashboard app (`YK86AE2YAHSP2`) now requests **Orders, Customers, and Employees Read+Write** — saved live on the Clover developer dashboard. App Market approval has NOT landed: the app is still an unpublished DRAFT (no release submitted, 0 merchant installs), so every gate below still applies for real merchants. What changed: merchants who authorize the draft app from now on grant write scopes, so order injection can finally be exercised end-to-end in dev/sandbox.
+
 This module exists so nobody oversells Clover. Read it before your first Clover pitch.
 For connection mechanics and failure modes, see the main [Clover guide](clover.md).
 

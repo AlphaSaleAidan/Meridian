@@ -44,6 +44,20 @@ Arrays wrap in `"elements"`; pagination is **offset + limit** (`page_size: 100`)
 - **Timeline:** Sandbox immediately; first App Market review ~1–2 weeks
 - **Cost:** Free dev account; paid apps rev-share
 
+### Dashboard app permissions (as of 2026-07-20)
+App "Meridian Ai Business Support" (`YK86AE2YAHSP2` = `CLOVER_APP_ID`), still **DRAFT** — no App Market release submitted, 0 merchant installs.
+
+| Category | Read | Write |
+|---|---|---|
+| Orders | ✓ | ✓ (added 2026-07-20) |
+| Customers | ✓ | ✓ (added 2026-07-20) |
+| Employees | ✓ (added 2026-07-20) | ✓ (added 2026-07-20) |
+| Inventory | ✓ | — |
+| Merchant | ✓ | — |
+| Payments | ✓ | — |
+
+Write scopes only reach tokens issued AFTER this change (new/re-authorizations). Employees Read closes the earlier gap with `client.py`'s `/employees` pull. Employees **Write** has no code path using it — candidate to uncheck before App Market submission (least privilege; fewer scopes = less reviewer + merchant-consent friction).
+
 ## Sandbox / test environment
 - **Available:** Yes — `sandbox.dev.clover.com` (OAuth) + `apisandbox.dev.clover.com` (REST). Prod: `clover.com` / `api.clover.com`.
 - **Notes:** Test tokens have extra rate-limit restrictions in prod — never reuse live.
