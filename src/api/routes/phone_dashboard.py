@@ -20,6 +20,11 @@ from pydantic import BaseModel, field_validator
 
 from ..auth import enforce_service_member, require_service_auth
 from ...db import get_db
+from ...services.vapi_provisioning import (
+    delete_vapi_number,
+    import_twilio_number,
+    vapi_binding_enabled,
+)
 
 logger = logging.getLogger("meridian.api.phone_dashboard")
 
@@ -1304,6 +1309,7 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
     )
     existing = rows[0].get("phone_number") if rows else None
     existing_sid = rows[0].get("phone_number_sid") if rows else None
+    existing_vapi_id = rows[0].get("vapi_phone_number_id") if rows else None
     if existing and not req.force:
         return {"phone_number": existing, "provisioned": False, "already_existed": True}
 
@@ -1311,6 +1317,10 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
         # Swap: release the old number at the provider first. Best-effort —
         # a failed release (already released, legacy row without a sid, provider
         # hiccup) is logged but never blocks buying the replacement.
+        # Release the old Vapi binding too, or it lingers pointing at a released
+        # Twilio number (best-effort, never blocks the swap).
+        if existing_vapi_id:
+            await delete_vapi_number(existing_vapi_id)
         if PHONE_PROVIDER == "telnyx":
             released = await _telnyx_release(existing, existing_sid)
         elif existing_sid:
@@ -1339,6 +1349,33 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
         purchased = await _twilio_purchase(available, req.business_name or f"Meridian {req.merchant_id[:8]}")
     number = purchased["phone_number"]
 
+    # ── Bind the number to Vapi so it actually reaches the live agent ──
+    # A bought DID is inert until Vapi owns it: only then does an inbound call
+    # fire assistant-request → vapi_webhook resolves the merchant and answers,
+    # and only then can forwarding verification (which waits for that event)
+    # ever pass. Binding is active when VAPI_PRIVATE_KEY is set; otherwise
+    # vapi_binding_enabled() is False and this is a no-op (prior behavior).
+    # Telnyx numbers attach to a TeXML app instead and are not Vapi-imported.
+    vapi_id = None
+    if PHONE_PROVIDER != "telnyx" and vapi_binding_enabled():
+        vapi_id = await import_twilio_number(
+            number,
+            twilio_account_sid=TWILIO_SID,
+            twilio_auth_token=TWILIO_TOKEN,
+            name=req.business_name or f"Meridian {req.merchant_id[:8]}",
+        )
+        if not vapi_id:
+            # The DID exists at Twilio but couldn't be bound — leaving it would
+            # hand the merchant a dead number that silently fails verification.
+            # Release it so we don't strand a paid, unusable line, and fail loud.
+            await _twilio_release(purchased.get("sid") or "")
+            raise HTTPException(
+                502,
+                "Provisioned the number but could not bind it to the calling "
+                "platform — released it and did not charge you a dead line. "
+                "Please retry.",
+            )
+
     payload = {
         "phone_number": number,
         # Provider id/sid stored at purchase time so a later swap can release
@@ -1346,14 +1383,30 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
         "phone_number_sid": purchased.get("sid"),
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
-    if rows:
-        await db.update("phone_agent_config", payload, filters={"merchant_id": f"eq.{req.merchant_id}"})
-    else:
-        payload["merchant_id"] = req.merchant_id
-        await db.insert("phone_agent_config", payload)
+    # vapi_phone_number_id ships in migration 20260721; tolerate its absence so
+    # a deploy that predates the migration still provisions (best-effort store).
+    payload_with_vapi = {**payload, "vapi_phone_number_id": vapi_id}
+    try:
+        if rows:
+            await db.update("phone_agent_config", payload_with_vapi,
+                            filters={"merchant_id": f"eq.{req.merchant_id}"})
+        else:
+            payload_with_vapi["merchant_id"] = req.merchant_id
+            await db.insert("phone_agent_config", payload_with_vapi)
+    except Exception as e:  # noqa: BLE001 — pre-migration column absence must not lose the number
+        logger.warning("provision store with vapi id failed (%s); retrying without column", e)
+        if rows:
+            await db.update("phone_agent_config", payload,
+                            filters={"merchant_id": f"eq.{req.merchant_id}"})
+        else:
+            payload["merchant_id"] = req.merchant_id
+            await db.insert("phone_agent_config", payload)
     logger.info(
-        "Provisioned %s for merchant %s via %s%s",
-        number, req.merchant_id, PHONE_PROVIDER, " (swap)" if req.force and existing else "",
+        "Provisioned %s for merchant %s via %s%s%s",
+        number, req.merchant_id, PHONE_PROVIDER,
+        " (swap)" if req.force and existing else "",
+        f" +vapi:{vapi_id}" if vapi_id else "",
     )
 
-    return {"phone_number": number, "provisioned": True, "already_existed": False, "provider": PHONE_PROVIDER}
+    return {"phone_number": number, "provisioned": True, "already_existed": False,
+            "provider": PHONE_PROVIDER, "vapi_bound": bool(vapi_id)}
