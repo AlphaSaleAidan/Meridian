@@ -675,11 +675,16 @@ async def process_renewals():
 
 
 @router.get("/invoice-url/{org_id}")
-async def get_invoice_url(org_id: str, _user: dict = Depends(require_jwt)):
+async def get_invoice_url(org_id: str, user: dict = Depends(require_jwt)):
     """
     Get the latest invoice URL for an org — used for in-platform pay buttons.
     Returns the most recent setup or recurring invoice link.
     """
+    # BOLA guard: an authenticated caller may only read invoice links for an org
+    # they belong to — the SAME plane every other billing route in this file
+    # uses. Without this, any logged-in user could pull any org's invoice URL +
+    # subscription/payment state by UUID (CONFIRMED BOLA, 2026-07-22).
+    await _enforce_billing_org_access({"kind": "user", "user": user}, org_id)
     try:
         db = get_db()
         try:
