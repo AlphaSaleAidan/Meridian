@@ -79,3 +79,48 @@ def test_demo_fallback_config_is_demo_safe():
     assert cfg.demo_safe is True, (
         "the unknown-DID fallback config must be demo_safe so a mis-routed real "
         "caller can never trigger a live order/charge")
+
+
+# ── go-live gate: no activation without a provisioned number ──────────────
+def test_activate_blocked_without_number(monkeypatch):
+    import src.db as db_mod
+    from fastapi import HTTPException
+    from src.api.routes.phone_dashboard import PhoneConfigRequest, save_phone_config
+
+    _patch_membership(monkeypatch)
+    db = FakeDB({"merchant_id": MID})  # no phone_number stored
+    monkeypatch.setattr(db_mod, "_db_instance", db)
+
+    req = PhoneConfigRequest(merchant_id=MID, active=True)
+    import pytest as _pytest
+    with _pytest.raises(HTTPException) as exc:
+        _run(save_phone_config(req, principal=SERVICE))
+    assert exc.value.status_code == 400
+
+
+def test_activate_allowed_with_number(monkeypatch):
+    import src.db as db_mod
+    from src.api.routes.phone_dashboard import PhoneConfigRequest, save_phone_config
+
+    _patch_membership(monkeypatch)
+    db = FakeDB({"merchant_id": MID, "phone_number": "+15068017376",
+                 "menu_items": [{"name": "Burger"}]})
+    monkeypatch.setattr(db_mod, "_db_instance", db)
+
+    req = PhoneConfigRequest(merchant_id=MID, active=True)
+    _run(save_phone_config(req, principal=SERVICE))
+    assert db.tables["phone_agent_config"][0].get("active") is True
+
+
+def test_deactivate_never_blocked(monkeypatch):
+    import src.db as db_mod
+    from src.api.routes.phone_dashboard import PhoneConfigRequest, save_phone_config
+
+    _patch_membership(monkeypatch)
+    db = FakeDB({"merchant_id": MID})  # no number
+    monkeypatch.setattr(db_mod, "_db_instance", db)
+
+    # active=False must always be allowed (e.g. reclaim clears it)
+    req = PhoneConfigRequest(merchant_id=MID, active=False)
+    _run(save_phone_config(req, principal=SERVICE))
+    assert db.tables["phone_agent_config"][0].get("active") is False

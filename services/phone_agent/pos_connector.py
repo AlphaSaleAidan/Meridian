@@ -18,11 +18,27 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY
 
 TOAST_API_BASE = os.getenv("TOAST_API_BASE_URL", "https://ws-api.toasttab.com")
 
+
+def _square_orders_url() -> str:
+    """Square Orders endpoint — honor SQUARE_ENVIRONMENT so a sandbox/test
+    merchant on the phone path doesn't fire against the real production POS
+    (the host was hardcoded to prod). Mirrors src/config.SquareConfig."""
+    if os.getenv("SQUARE_ENVIRONMENT", "").strip().lower() == "sandbox":
+        return "https://connect.squareupsandbox.com/v2/orders"
+    return "https://connect.squareup.com/v2/orders"
+
+
 # Clover write path (order + line items + kitchen print event) lives in its
 # own module; clover_api_base is re-exported here for existing callers.
 from clover_orders import clover_api_base, create_clover_order  # noqa: E402,F401
 
-DIRECT_API_SYSTEMS = {"square", "toast", "clover"}
+# Systems with a WORKING direct order writer on the phone path. Toast is
+# deliberately NOT here: its writer sends name/price selections but Toast's
+# Orders API requires menu-item GUIDs (+ a GUID diningOption) we can't supply
+# without a per-merchant menu-GUID map, so a real Toast order 4xx's. Route
+# Toast to the notification fallback (dashboard + merchant SMS) — honest
+# delivery — until a GUID-based writer exists. (Square/Clover are real.)
+DIRECT_API_SYSTEMS = {"square", "clover"}
 
 OAUTH_SYSTEMS = {
     "square", "clover", "lightspeed-restaurant", "lightspeed-retail",
@@ -101,8 +117,6 @@ async def create_pos_order(
     try:
         if pos_system == "square":
             return await _create_square_order(order, access_token, location_id)
-        elif pos_system == "toast":
-            return await _create_toast_order(order, access_token, location_id)
         elif pos_system == "clover":
             return await create_clover_order(order, access_token, location_id)
         elif pos_system in WEBHOOK_CAPABLE_SYSTEMS or pos_system in OAUTH_SYSTEMS:
@@ -204,7 +218,7 @@ async def _create_square_order(
 
     async with httpx.AsyncClient() as client:
         res = await client.post(
-            "https://connect.squareup.com/v2/orders",
+            _square_orders_url(),
             json=payload,
             headers={
                 "Authorization": f"Bearer {access_token}",
