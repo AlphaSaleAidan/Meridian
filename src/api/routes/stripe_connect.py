@@ -82,6 +82,52 @@ async def _merchant_service_fee_cents(merchant_id: str) -> int:
     return fee
 
 
+async def _reverse_paid_order(db, payment_intent: str, *, disputed: bool) -> None:
+    """A charge was refunded/disputed — undo what payment confirmation did.
+
+    Linked by the payment_intent stored as phone_orders.payment_txn_id at pay
+    time. Flips the order status and reverses the service-fee credit via an
+    idempotent ledger debit (source stripe_fee_reversal, ref=payment_intent), so
+    a webhook retry never double-reverses. Best-effort throughout: a missing row
+    / column / ledger hiccup is logged, never raised (the webhook must still 200
+    so Stripe stops retrying). Website orders take their fee as a checkout line,
+    not a ledger credit, so there is nothing to reverse for them here."""
+    if not payment_intent:
+        return
+    status = "disputed" if disputed else "refunded"
+    try:
+        rows = await db.select(
+            "phone_orders", "id,merchant_id,status",
+            filters={"payment_txn_id": f"eq.{payment_intent}"}, limit=1,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("refund: phone_orders lookup failed for %s: %s", payment_intent, e)
+        return
+    if not rows:
+        logger.info("refund: no phone order for payment_intent %s (website/other) — nothing to reverse",
+                    payment_intent)
+        return
+    order = rows[0]
+    merchant_id = order.get("merchant_id") or ""
+    try:
+        await db.update("phone_orders", {"status": status},
+                        filters={"id": f"eq.{order['id']}"})
+    except Exception as e:  # noqa: BLE001
+        logger.warning("refund: status flip failed for order %s: %s", order.get("id"), e)
+
+    if merchant_id:
+        fee_cents = await _merchant_service_fee_cents(merchant_id)
+        if fee_cents > 0:
+            try:
+                from ...services.voice_ledger import debit
+                await debit(merchant_id, fee_cents, source="stripe_fee_reversal",
+                            ref=payment_intent, note=f"{status}:{order.get('id')}")
+                logger.info("refund: reversed %d¢ fee for merchant %s (%s)",
+                            fee_cents, merchant_id, status)
+            except Exception as e:  # noqa: BLE001 — ledger reversal never blocks the webhook
+                logger.error("refund: voice_ledger reversal failed for %s: %s", merchant_id, e)
+
+
 @router.post("/onboard/{merchant_id}")
 async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
     """Create the merchant's Stripe connected account (once) and return a hosted
@@ -193,6 +239,34 @@ async def connect_webhook(request: Request):
             await db.update("phone_agent_config", {"stripe_charges_enabled": charges},
                             filters={"stripe_account_id": f"eq.{acct}"})
             logger.info("Connect account %s charges_enabled=%s", acct, charges)
+
+    elif etype in ("charge.refunded", "charge.dispute.created",
+                   "charge.dispute.funds_withdrawn"):
+        # Money left the merchant after we'd marked the order paid and credited
+        # our fee. Reflect it: flip the phone order to refunded/disputed and
+        # REVERSE the fee we credited, or a refunded order keeps billing the
+        # merchant a service fee for revenue they no longer have. Linked by the
+        # payment_intent we stored as phone_orders.payment_txn_id at pay time.
+        disputed = etype.startswith("charge.dispute")
+        pi = obj.get("payment_intent") or (
+            obj.get("charge") if disputed else obj.get("id")) or ""
+        await _reverse_paid_order(db, str(pi), disputed=disputed)
+
+    elif etype == "checkout.session.expired":
+        # Stripe Checkout sessions die ~24h after creation. Without this the
+        # short pay-link row stays 'created', so /p/<code> 303s a customer to a
+        # dead Stripe page. Flip it to expired → pay_redirect shows the branded
+        # "ask for a fresh link" page instead.
+        sid = obj.get("id", "")
+        if sid:
+            try:
+                await db.update(
+                    "checkout_sessions", {"status": "expired"},
+                    filters={"provider_ref": f"eq.{sid}", "status": "neq.complete"},
+                )
+                logger.info("Stripe session %s expired → checkout_sessions marked", sid)
+            except Exception as e:  # noqa: BLE001 — never fail the webhook on a stale row
+                logger.warning("expire flip failed for session %s: %s", sid, e)
 
     elif etype in ("checkout.session.completed", "payment_intent.succeeded"):
         meta = obj.get("metadata", {}) or {}
