@@ -36,21 +36,23 @@ ORDER = {
 
 
 class _Resp:
-    def __init__(self, status, data=None):
+    def __init__(self, status, data=None, text=""):
         self.status_code = status
         self._d = data or {}
-        self.text = ""
+        self.text = text
 
     def json(self):
         return self._d
 
 
 class _Client:
-    def __init__(self, calls, order_status=200, li_status=200, print_status=200):
+    def __init__(self, calls, order_status=200, li_status=200, print_status=200,
+                 print_body=""):
         self.calls = calls
         self.order_status = order_status
         self.li_status = li_status
         self.print_status = print_status
+        self.print_body = print_body
 
     async def __aenter__(self):
         return self
@@ -61,7 +63,7 @@ class _Client:
     async def post(self, url, json=None, headers=None):
         self.calls.append((url, json))
         if url.endswith("/print_event"):
-            return _Resp(self.print_status, {})
+            return _Resp(self.print_status, {}, text=self.print_body)
         if url.endswith("/orders"):
             return _Resp(self.order_status, {"id": "CLV_ORD_1"})
         return _Resp(self.li_status, {"id": "LI"})
@@ -110,8 +112,14 @@ async def test_clover_happy_path_tags_expands_qty_and_fires_kitchen(monkeypatch)
     assert order_calls[0][1]["title"] == "Meridian Mobile Order — Priya S"
     assert "Meridian Mobile Order" in order_calls[0][1]["note"]
     assert order_calls[0][1]["state"] == "open"
-    # ties the Clover order back to the Meridian order id (Square parity)
-    assert order_calls[0][1]["externalReferenceId"] == ORDER["id"][:32]
+    # ties the Clover order back to the Meridian order id (Square parity).
+    # Clover's Invoice ID must be <=12 chars AND alphanumeric-only — a
+    # hyphen (present in every UUID) 400s the ENTIRE order create with a
+    # misleading length error (probed live 2026-07-21). Pin strip + cut.
+    ref = order_calls[0][1]["externalReferenceId"]
+    import re as _re
+    assert ref == _re.sub(r"[^A-Za-z0-9]", "", ORDER["id"])[:12]
+    assert len(ref) <= 12 and ref.isalnum()
 
     # 2x Butter Chicken + 1x Naan → 3 line-item POSTs, per unit
     assert len(li_calls) == 3
@@ -388,3 +396,30 @@ async def test_refresh_failure_falls_back_to_stored_token(monkeypatch):
             "access_token_enc": "enc-at"}
     assert await wod._connection_token(conn) == "stored-tok"
     assert len(refresh_calls) == 1
+
+
+@aio
+async def test_no_default_printer_reports_stable_reason(monkeypatch):
+    """A merchant without a default order printer (Clover 400s the print_event
+    with "The default printing device is missing" — verified live 2026-07-21)
+    still gets the order on the register, and the result carries a stable
+    kitchen_print_reason so onboarding/support can tell them to set one."""
+    calls = []
+    _patch_client(monkeypatch, calls, print_status=400,
+                  print_body='{"message":"The default printing device is missing"}')
+    res = await ck.submit_clover_kitchen_order(
+        access_token="tok", external_merchant_id="M1", order=dict(ORDER))
+    assert res["success"] is True
+    assert res["kitchen_print_fired"] is False
+    assert res["kitchen_print_reason"] == "no_default_printer"
+
+
+@aio
+async def test_other_print_failures_keep_http_reason(monkeypatch):
+    calls = []
+    _patch_client(monkeypatch, calls, print_status=500, print_body="boom")
+    res = await ck.submit_clover_kitchen_order(
+        access_token="tok", external_merchant_id="M1", order=dict(ORDER))
+    assert res["success"] is True
+    assert res["kitchen_print_fired"] is False
+    assert res["kitchen_print_reason"] == "print_event_http_500"

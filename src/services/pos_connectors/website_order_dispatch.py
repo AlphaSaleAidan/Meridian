@@ -137,6 +137,8 @@ async def _dispatch(order_row: dict, merchant_id: str) -> dict:
         }
         if "kitchen_print_fired" in api_result:
             out["kitchen_print_fired"] = api_result["kitchen_print_fired"]
+        if api_result.get("kitchen_print_reason"):
+            out["kitchen_print_reason"] = api_result["kitchen_print_reason"]
         return out
 
     # Universal fallback: a PAID order must never be stranded. Text (then
@@ -251,13 +253,18 @@ async def _merchant_contact(order_row: dict) -> dict:
                 email = (rows[0].get("email") or "").strip()
                 name = (rows[0].get("business_name") or "").strip()
         if not (phone or email):
+            # phone_agent_config has no merchant_phone/merchant_email columns
+            # (selecting them 400s the whole lookup — caught live 2026-07-21).
+            # The merchant's reachable number is transfer_number (same source
+            # phone.py uses), with the business line as backup. No email lives
+            # on this table — merchant_websites above is the only email source.
             rows = await db.select(
-                "phone_agent_config", "merchant_phone,merchant_email,business_name",
+                "phone_agent_config", "transfer_number,business_line_number,business_name",
                 filters={"merchant_id": f"eq.{order_row.get('merchant_id', '')}"}, limit=1,
             )
             if rows:
-                phone = phone or (rows[0].get("merchant_phone") or "").strip()
-                email = email or (rows[0].get("merchant_email") or "").strip()
+                phone = phone or (rows[0].get("transfer_number") or "").strip() \
+                    or (rows[0].get("business_line_number") or "").strip()
                 name = name or (rows[0].get("business_name") or "").strip()
     except Exception as e:  # noqa: BLE001 — no contact just means notify can't deliver
         logger.warning("merchant contact lookup failed: %s", e)

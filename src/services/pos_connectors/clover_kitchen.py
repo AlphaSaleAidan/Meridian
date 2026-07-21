@@ -11,6 +11,7 @@ created for it — the generic single-POST connector can't express that.
 """
 import logging
 import os
+import re
 
 import httpx
 
@@ -142,10 +143,15 @@ async def submit_clover_kitchen_order(
         "note": note,
         "manualTransaction": False,
     }
-    if order_ref:
-        # Traceability + dedup handle: ties the Clover order back to the
-        # Meridian order id (parity with Square's reference_id).
-        order_body["externalReferenceId"] = order_ref[:32]
+    # Traceability + dedup handle: ties the Clover order back to the Meridian
+    # order id (parity with Square's reference_id). Clover treats this as the
+    # Invoice ID and REJECTS the whole order create unless it's <=12 chars AND
+    # purely alphanumeric — a hyphen (every UUID has one by char 9) 400s with
+    # the misleading "Invoice ID cannot exceed 12 characters". Probed live
+    # 2026-07-21: 12 alnum → 200, 12 with hyphen → 400, so strip + cut.
+    ref_alnum = re.sub(r"[^A-Za-z0-9]", "", order_ref)[:12]
+    if ref_alnum:
+        order_body["externalReferenceId"] = ref_alnum
 
     async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
         res = await client.post(
@@ -205,6 +211,7 @@ async def submit_clover_kitchen_order(
                 created += 1
 
         kitchen_print_fired = False
+        kitchen_print_reason = ""
         try:
             pe_res = await client.post(
                 f"{base}/print_event",
@@ -213,15 +220,33 @@ async def submit_clover_kitchen_order(
             )
             kitchen_print_fired = pe_res.status_code in (200, 201)
             if not kitchen_print_fired:
-                logger.warning(
-                    "clover kitchen: print_event failed HTTP %s for order %s "
-                    "(order still on register)",
-                    pe_res.status_code, pos_order_id,
-                )
+                # Clover 400s "The default printing device is missing" when the
+                # merchant has no default order printer set on their register —
+                # a config state, not a fault (verified live 2026-07-21; no API
+                # workaround, explicit deviceRef/printerRef doesn't bypass it).
+                # The order is on the register either way; staff see it in the
+                # Orders app. Surface a stable reason so onboarding/support can
+                # tell the merchant to set their kitchen printer as default.
+                body = pe_res.text[:200]
+                if "default printing device" in body.lower():
+                    kitchen_print_reason = "no_default_printer"
+                    logger.info(
+                        "clover kitchen: merchant %s has no default order "
+                        "printer — order %s on register, no auto ticket",
+                        external_merchant_id, pos_order_id,
+                    )
+                else:
+                    kitchen_print_reason = f"print_event_http_{pe_res.status_code}"
+                    logger.warning(
+                        "clover kitchen: print_event failed HTTP %s for order %s "
+                        "(order still on register): %s",
+                        pe_res.status_code, pos_order_id, body,
+                    )
         except Exception as e:  # noqa: BLE001 — order exists; print is best-effort
+            kitchen_print_reason = "print_event_error"
             logger.warning("clover kitchen: print_event error for %s: %s", pos_order_id, e)
 
-    return {
+    result = {
         "success": True,
         "pos_order_id": pos_order_id,
         "kitchen_print_fired": kitchen_print_fired,
@@ -229,6 +254,9 @@ async def submit_clover_kitchen_order(
         # (support/observability — 0 means every line was freeform).
         "line_items_mapped": mapped,
     }
+    if kitchen_print_reason:
+        result["kitchen_print_reason"] = kitchen_print_reason
+    return result
 
 
 def _safe_qty(item: dict) -> int:

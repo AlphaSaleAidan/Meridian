@@ -75,6 +75,7 @@ Note: Clover App Market approval gates *marketplace distribution* only — it do
 | Backfill stalls around 50% | 429 throttling — Clover allows 12 req/sec sustained / 16 burst; apps sharing a token share the budget | We auto-throttle and resume; share the standard rate limiter across workers, not per-task. Large merchants may take 12+ hours |
 | Webhook returns 200 but no DB write | Missing entity-type stamp during parse (payload only carries `{type, objectId, ts}` — handlers re-fetch) | Engineering fix — stamp entity from subscription verification code |
 | Missing customer data | Merchant doesn't capture customer info at checkout | Expected — customer LTV agent falls back to anonymous bucketing |
+| **Injected order shows in the Orders app but never prints a kitchen ticket** | Merchant has **no default order printer** — Clover 400s our `print_event` with "The default printing device is missing" (verified live 2026-07-21; explicit device/printer targeting doesn't bypass it). Dispatch reports `kitchen_print_reason=no_default_printer`; the order still lands on the register. | Merchant-side, one-time: on the Clover register → **Setup → Printers → set the kitchen/order printer as default**. Make this an onboarding checklist step for every order-injection merchant. |
 
 ## Sales angle
 
