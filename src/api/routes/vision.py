@@ -308,11 +308,28 @@ async def delete_camera(camera_id: str, org_id: str = Query(...)):
     return {"deleted": True, "camera_id": camera_id}
 
 
-@router.post("/cameras/{camera_id}/heartbeat", dependencies=[Depends(require_device_token)])
-async def camera_heartbeat(camera_id: str, req: HeartbeatRequest):
+async def _device_owns_camera_or_403(db, camera_id: str, principal: dict) -> None:
+    """A per-org device token may only touch cameras in ITS org. The legacy
+    global VISION_INGEST_TOKEN (org_id None) is unbound and allowed. Without
+    this, any org's device token could heartbeat another org's camera or read
+    its stream URLs (CONFIRMED cross-tenant, 2026-07-22)."""
+    if principal and principal.get("legacy"):
+        return
+    tok_org = str((principal or {}).get("org_id") or "")
+    rows = await db.select("vision_cameras", "org_id", filters={"id": f"eq.{camera_id}"}, limit=1)
+    if not rows:
+        raise HTTPException(status_code=404, detail="Camera not found")
+    if str(rows[0].get("org_id") or "") != tok_org:
+        raise HTTPException(status_code=403, detail="Camera does not belong to this device's org")
+
+
+@router.post("/cameras/{camera_id}/heartbeat")
+async def camera_heartbeat(camera_id: str, req: HeartbeatRequest,
+                           principal: dict = Depends(require_device_token)):
     db = _get_db()
     if not db:
         raise HTTPException(status_code=503, detail="Database not available")
+    await _device_owns_camera_or_403(db, camera_id, principal)
 
     now = datetime.now(timezone.utc).isoformat()
     try:
@@ -383,13 +400,14 @@ async def request_live_view(camera_id: str, org_id: str = Query(...)):
     return {"camera_id": camera_id, "whep_url": whep, "ttl_sec": LIVE_REQUEST_TTL_SEC}
 
 
-@router.get("/cameras/{camera_id}/live-state", dependencies=[Depends(require_device_token)])
-async def live_state(camera_id: str):
+@router.get("/cameras/{camera_id}/live-state")
+async def live_state(camera_id: str, principal: dict = Depends(require_device_token)):
     """Edge polls this: should I be WHIP-publishing this camera right now? True only
     while live_view is on AND a viewer requested within the TTL (on-demand)."""
     db = _get_db()
     if not db:
         return {"publish": False}
+    await _device_owns_camera_or_403(db, camera_id, principal)
     rows = await db.select("vision_cameras", filters={"id": f"eq.{camera_id}"}, limit=1)
     if not rows:
         return {"publish": False}

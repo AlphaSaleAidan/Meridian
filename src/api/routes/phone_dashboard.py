@@ -208,7 +208,15 @@ async def get_phone_config(merchant_id: str, principal=Depends(require_service_a
         return {"exists": False, "merchant_id": merchant_id}
 
     row = rows[0]
-    row.pop("pos_access_token", None)
+    # Strip every credential/secret before returning the config to a client.
+    # popping only pos_access_token left clover_hco_webhook_secret (the
+    # per-merchant Clover HCO signing secret) in the response — a member could
+    # read it and forge PAYMENT-APPROVED events (CONFIRMED leak, 2026-07-22).
+    for _k in list(row.keys()):
+        if _k.endswith("_secret") or _k.endswith("_token") or _k in (
+                "pos_access_token", "credentials_encrypted", "access_token_enc",
+                "refresh_token_enc"):
+            row.pop(_k, None)
     return {"exists": True, **row}
 
 

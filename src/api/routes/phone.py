@@ -1673,9 +1673,19 @@ async def phone_payment_webhook(request: Request):
         return Response(content='{"error":"bad_json"}', status_code=400,
                         media_type="application/json")
 
-    # Demo-safe: an unsigned {"simulate": true, ...} body flips immediately so the
-    # flow is demonstrable without a real charge. Real (signed) events flip too.
-    simulate = bool(event.get("simulate"))
+    # `simulate` is a DEMO-ONLY convenience so the release flow is demonstrable
+    # without a real charge — it must NEVER release a real merchant's held
+    # order. Honor it ONLY for the demo merchant; a real merchant requires a
+    # valid Square signature. Without this gate an unauthenticated
+    # {"simulate": true, "merchant_id": <victim>, ...} body released any held
+    # order with no signature (CONFIRMED bypass, 2026-07-22).
+    simulate_req = bool(event.get("simulate"))
+    _wh_merchant = event.get("merchant_id", "")
+    simulate = simulate_req and _wh_merchant == DEMO_MERCHANT_ID
+    if simulate_req and not simulate:
+        logger.warning("Payment webhook: simulate rejected for non-demo merchant %r", _wh_merchant)
+        return Response(content='{"error":"forbidden"}', status_code=403,
+                        media_type="application/json")
     if not sig_ok and not simulate:
         logger.warning("Payment webhook rejected (no valid signature, not simulate)")
         return Response(content='{"error":"unauthorized"}', status_code=403,
