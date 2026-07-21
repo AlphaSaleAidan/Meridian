@@ -56,7 +56,7 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
   {
     id: '1',
     name: 'Enoch Cheung',
-    title: 'Canadian Regional Director',
+    title: 'VP of Expansion',
     company: 'Meridian AI Business Solutions',
     bio: "Leading Meridian's expansion across Canadian markets. Your primary contact for pipeline strategy, deal support, and regional questions.",
     linkedin_url: 'https://www.linkedin.com/company/meridian-ai-business-solutions',
@@ -69,7 +69,7 @@ const FALLBACK_RECRUITERS: Recruiter[] = [
   {
     id: '2',
     name: 'Aidan Nguyen',
-    title: 'Regional Sales Director',
+    title: 'Regional Sales Manager',
     company: 'Meridian',
     bio: 'Handles onboarding support, training materials, and account setup. Reach out for any technical or portal questions.',
     linkedin_url: 'https://www.linkedin.com/company/nexusconsulting',
