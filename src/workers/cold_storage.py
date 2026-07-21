@@ -68,7 +68,13 @@ from pathlib import Path
 
 logger = logging.getLogger("meridian.workers.cold_storage")
 
-ARCHIVE_DIR = Path(os.getenv("MERIDIAN_ARCHIVE_DIR", "/root/Meridian/data/archives"))
+# Default is CWD-relative ("data/archives") so it resolves under the app's
+# working dir on any host — the old absolute "/root/Meridian/data/archives"
+# silently failed to create on Docker/Railway (/app), making the whole
+# cold-storage archive a no-op off the original box. Override with
+# MERIDIAN_ARCHIVE_DIR (point it at a mounted volume for durability — a
+# container-local path is ephemeral across redeploys).
+ARCHIVE_DIR = Path(os.getenv("MERIDIAN_ARCHIVE_DIR", "data/archives"))
 HOT_RETENTION_DAYS = int(os.getenv("MERIDIAN_HOT_RETENTION_DAYS", "90"))
 
 ARCHIVE_TIERS = {

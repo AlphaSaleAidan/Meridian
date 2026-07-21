@@ -155,7 +155,12 @@ def run_nightly_analysis():
 
             workflows = []
             for org in orgs:
-                oid = org["id"]
+                # A single malformed org row (missing id) must not abort the
+                # whole nightly dispatch — skip it and keep going.
+                oid = org.get("id")
+                if not oid:
+                    logger.warning("nightly: skipping org row with no id: %r", org)
+                    continue
                 pos = org.get("pos_type", "square")
                 workflows.append(chain(
                     sync_pos_data.si(oid, pos),
@@ -198,10 +203,11 @@ def generate_weekly_reports():
                 filters={"status": "eq.active"},
             ) or []
 
-            if orgs:
-                group(generate_report.si(org["id"]) for org in orgs)()
+            ids = [o.get("id") for o in orgs if o.get("id")]
+            if ids:
+                group(generate_report.si(oid) for oid in ids)()
 
-            return {"status": "dispatched", "merchant_count": len(orgs)}
+            return {"status": "dispatched", "merchant_count": len(ids)}
         finally:
             await close_db()
 
