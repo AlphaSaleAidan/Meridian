@@ -13,13 +13,30 @@ from ..security.encryption import decrypt_token
 logger = logging.getLogger("meridian.services.pos_sync_runner")
 
 
+def _parse_since(raw) -> datetime | None:
+    """last_sync_at comes back from PostgREST as an ISO STRING, but the sync
+    engines type ``since`` as datetime (Clover calls ``since.isoformat()`` and
+    crashed with AttributeError on every incremental run). None on any parse
+    failure — engines fall back to their own default window."""
+    if raw is None or isinstance(raw, datetime):
+        return raw
+    try:
+        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        logger.warning("unparseable last_sync_at %r — using engine default window", raw)
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
 async def run_incremental(org_id: str, provider: str, connection: dict):
     """Run an incremental sync for a single POS connection."""
     from ..db import get_db
     db = get_db()
 
     conn_id = connection["id"]
-    since = connection.get("last_sync_at")
+    since = _parse_since(connection.get("last_sync_at"))
 
     try:
         if provider == "square":
