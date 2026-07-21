@@ -302,6 +302,32 @@ def _decrypt_connection_token(conn: dict) -> str:
     return ""
 
 
+async def _fresh_connection_token(conn: dict) -> str:
+    """Access token for a pos_connections row, refreshed inline when it expires.
+
+    Clover v2/OAuth (the 1-click connect path) issues ~30-minute access tokens
+    plus a refresh token; a row carrying refresh_token_enc is routed through
+    ensure_fresh_clover_token, which refreshes at/near expiry and persists
+    the rotation. Every other shape — Square, manual tokens, legacy Clover —
+    falls through to the stored token unchanged, so this is a strict superset
+    of _decrypt_connection_token for order/menu-time resolution.
+    """
+    provider = (conn.get("provider") or "").strip().lower()
+    if provider == "clover" and conn.get("refresh_token_enc"):
+        try:
+            from ...clover.oauth import ensure_fresh_clover_token
+
+            token = (await ensure_fresh_clover_token(conn) or "").strip()
+            if token:
+                return token
+        except Exception:  # noqa: BLE001 — refresh must never take down order dispatch
+            logger.warning(
+                "clover inline token refresh failed for connection %s — using stored token",
+                conn.get("id"),
+            )
+    return _decrypt_connection_token(conn)
+
+
 # ---------------------------------------------------------------------------
 # Auto menu-builder — when a merchant connects their POS, build the phone
 # agent's menu from the POS catalog (read-only) and expose VISIBLE progress.
@@ -369,7 +395,7 @@ async def _sync_menu_from_pos_impl(merchant_id: str, db) -> dict:
                 conn = conns[0]
                 system = system or (conn.get("provider") or "").strip()
                 external_merchant_id = (conn.get("external_merchant_id") or "").strip()
-                token = token or _decrypt_connection_token(conn)
+                token = token or await _fresh_connection_token(conn)
                 source = "pos_connections"
 
         if not system or not token:

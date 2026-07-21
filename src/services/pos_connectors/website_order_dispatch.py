@@ -298,7 +298,7 @@ async def _resolve_connection(merchant_id: str) -> dict | None:
     if not conns:
         return None
     conn = conns[0]
-    token = _connection_token(conn)
+    token = await _connection_token(conn)
     system = (conn.get("provider") or "").strip()
     if not (token and system):
         return None
@@ -310,12 +310,14 @@ async def _resolve_connection(merchant_id: str) -> dict | None:
     }
 
 
-def _connection_token(conn: dict) -> str:
+async def _connection_token(conn: dict) -> str:
     # Lazy import: phone_dashboard is an api.routes module and this is a
     # service — importing at call time keeps module import acyclic.
-    from ...api.routes.phone_dashboard import _decrypt_connection_token
+    # _fresh_connection_token refreshes expiring Clover v2 (1-click OAuth)
+    # tokens inline; all other providers/shapes get the stored token.
+    from ...api.routes.phone_dashboard import _fresh_connection_token
 
-    return (_decrypt_connection_token(conn) or "").strip()
+    return (await _fresh_connection_token(conn) or "").strip()
 
 
 def _build_pos_config(system_key: str, conn: dict, api_config: dict):
