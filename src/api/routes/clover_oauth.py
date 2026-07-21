@@ -198,6 +198,23 @@ async def callback(
         }, denied_origin)
 
     if not code or not state:
+        # First-time connects route through Clover's App Market install flow,
+        # whose post-install redirect hits the Site URL (this endpoint) with
+        # merchant_id + client_id but NO code/state — that's Clover's install
+        # ping, not the OAuth grant. Send the merchant back to the portal to
+        # click Connect again (now that the app is installed, the authorize
+        # flow completes normally) instead of dead-ending on raw JSON.
+        if merchant_id:
+            logger.info(
+                f"Clover market-install redirect for merchant {merchant_id} "
+                f"(no code/state) — bouncing to portal to finish OAuth"
+            )
+            return _redirect_to(_DEFAULT_RETURN_TO, {
+                "oauth": "install_complete",
+                "provider": "clover",
+                "merchant_id": merchant_id,
+                "hint": "App installed — click Connect once more to finish linking.",
+            })
         raise HTTPException(400, "Missing code or state parameter")
 
     verified = _verify_state(state)
