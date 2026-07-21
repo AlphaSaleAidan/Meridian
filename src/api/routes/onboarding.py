@@ -80,9 +80,10 @@ async def get_checklist(
     if not org_rows:
         raise HTTPException(404, "Organization not found")
 
+    from ...db.org_ids import connection_org_id
     connections = await db.select(
         "pos_connections",
-        filters={"org_id": f"eq.{org_id}"},
+        filters={"org_id": f"eq.{connection_org_id(org_id) or org_id}"},
         limit=1,
     )
     pos_connected = bool(connections and connections[0].get("status") == "connected")

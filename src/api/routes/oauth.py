@@ -232,16 +232,26 @@ async def callback(
     # ── Store tokens in Supabase ──────────────────────────
     try:
         from ...db import _db_instance
+        from ...db.org_ids import connection_org_id
         if _db_instance:
+            # organizations.id / pos_connections.org_id are uuid columns, but
+            # merchants authenticated off a businesses row pass TEXT `biz_` ids
+            # — those inserts failed the uuid cast, so every biz_ merchant's
+            # 1-click connect ended in "Connected but failed to save". Map to
+            # the deterministic companion UUID for the uuid-keyed tables; the
+            # businesses update below keeps the ORIGINAL id (TEXT table).
+            # Odd/demo shapes fall through unchanged (same storage attempt
+            # as before this mapping existed).
+            org_uuid = connection_org_id(org_id) or org_id
             # Ensure organization exists
             existing_orgs = await _db_instance.select(
                 "organizations",
-                filters={"id": f"eq.{org_id}"},
+                filters={"id": f"eq.{org_uuid}"},
                 limit=1,
             )
             if not existing_orgs:
                 await _db_instance.insert("organizations", {
-                    "id": org_id,
+                    "id": org_uuid,
                     "name": f"Org {org_id}",
                     "slug": org_id.lower().replace(" ", "-"),
                     # `vertical` is NOT NULL with no default on organizations — omitting
@@ -257,7 +267,7 @@ async def callback(
             # Upsert POS connection
             connection_data = {
                 "id": str(uuid4()),
-                "org_id": org_id,
+                "org_id": org_uuid,
                 "provider": "square",
                 "status": "connected",
                 "external_merchant_id": tokens["merchant_id"],
@@ -273,7 +283,7 @@ async def callback(
             existing = await _db_instance.select(
                 "pos_connections",
                 filters={
-                    "org_id": f"eq.{org_id}",
+                    "org_id": f"eq.{org_uuid}",
                     "external_merchant_id": f"eq.{tokens['merchant_id']}",
                 },
                 limit=1,
@@ -310,7 +320,7 @@ async def callback(
             await _db_instance.update(
                 "organizations",
                 {"pos_system": "square", "pos_connection_status": "connected"},
-                filters={"id": f"eq.{org_id}"},
+                filters={"id": f"eq.{org_uuid}"},
             )
 
             # Kick off historical backfill in background FIRST — a failure of the
@@ -320,7 +330,7 @@ async def callback(
             background_tasks.add_task(
                 run_backfill,
                 access_token=tokens["access_token"],
-                org_id=org_id,
+                org_id=org_uuid,
                 connection_id=conn_id,
             )
             logger.info(f"Queued backfill task for org={org_id}, connection={conn_id}")
@@ -336,7 +346,7 @@ async def callback(
                 if owner_user_id:
                     await _db_instance.insert("notifications", {
                         "id": str(uuid4()),
-                        "org_id": org_id,
+                        "org_id": org_uuid,
                         "user_id": owner_user_id,
                         "channel": "in_app",
                         "scheduled_for": datetime.now(timezone.utc).isoformat(),
@@ -380,15 +390,17 @@ async def connection_status(org_id: str):
     if not _db_instance:
         return {"connected": False, "reason": "db_unavailable"}
 
-    # pos_connections.org_id is a UUID column in prod; `biz_` merchant ids are
-    # the TEXT businesses.id with NO businesses→organizations mapping, so a
-    # biz_ id can never match a row — querying with it raises a 22P02 uuid cast
-    # error → 500. Report not-connected instead of querying the uuid column.
-    if not _UUID_RE.match(org_id):
+    # pos_connections.org_id is a UUID column; biz_ merchant ids map to their
+    # deterministic companion UUID (db.org_ids — same mapping the OAuth
+    # callback stores under), so biz_ merchants see their real connection
+    # state instead of a hardcoded not-connected.
+    from ...db.org_ids import connection_org_id
+    query_org = connection_org_id(org_id)
+    if not query_org:
         return {"connected": False, "reason": "org_not_uuid_keyed"}
 
     try:
-        conn = await _db_instance.get_pos_connection(org_id)
+        conn = await _db_instance.get_pos_connection(query_org)
     except SupabaseRESTError as exc:
         # Backstop: no validated id shape may 500 this read-only status
         # endpoint — a uuid-cast 400 (22P02) simply means "no such row".

@@ -287,11 +287,15 @@ async def _resolve_connection(merchant_id: str) -> dict | None:
     if not merchant_id:
         return None
     from ...db import get_db
+    from ...db.org_ids import connection_org_id
 
+    # biz_-keyed merchants store connections under their deterministic
+    # companion UUID (db.org_ids) — same mapping the OAuth callback uses.
+    query_org = connection_org_id(merchant_id) or merchant_id
     db = get_db()
     conns = await db.select(
         "pos_connections",
-        filters={"org_id": f"eq.{merchant_id}", "status": "eq.connected"},
+        filters={"org_id": f"eq.{query_org}", "status": "eq.connected"},
         order="updated_at.desc",
         limit=1,
     )

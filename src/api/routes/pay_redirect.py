@@ -121,9 +121,12 @@ async def _resolve_clover_credentials(db, merchant_id: str, payload: dict) -> tu
     mid_hint = ((payload or {}).get("clover_merchant_id") or "").strip()
     if merchant_id:
         try:
+            # biz_ ids map to the companion UUID the callback stores under
+            from ...db.org_ids import connection_org_id
             conns = await db.select(
                 "pos_connections",
-                filters={"org_id": f"eq.{merchant_id}", "provider": "eq.clover",
+                filters={"org_id": f"eq.{connection_org_id(merchant_id) or merchant_id}",
+                         "provider": "eq.clover",
                          "status": "eq.connected"},
                 order="updated_at.desc",
                 limit=1,
