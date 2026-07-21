@@ -451,11 +451,13 @@ class FeeChangeRequestBody(BaseModel):
 
 
 @router.get("/fee-mode/{org_id}")
-async def get_fee_mode(org_id: str, principal: dict = Depends(require_jwt)):
+async def get_fee_mode(org_id: str, user: dict = Depends(require_jwt)):
     """Owner-facing READ-ONLY view of the merchant's fee allocation mode. The
     mode is set by the sales rep at close and cannot be changed here — the owner
     can only file a change request (POST /fee-mode/change-request)."""
-    await _enforce_billing_org_access(principal, org_id)
+    # require_jwt yields the raw user dict — wrap it in the principal shape
+    # _enforce_billing_org_access expects, else the org owner is denied 403.
+    await _enforce_billing_org_access({"kind": "user", "user": user}, org_id)
     db = get_db()
     mode = None
     try:
@@ -479,13 +481,13 @@ async def get_fee_mode(org_id: str, principal: dict = Depends(require_jwt)):
 
 @router.post("/fee-mode/change-request")
 async def create_fee_change_request(
-    req: FeeChangeRequestBody, principal: dict = Depends(require_jwt)
+    req: FeeChangeRequestBody, user: dict = Depends(require_jwt)
 ):
     """File an owner-initiated fee-mode change request (a simple ticket). Inserts
     a fee_change_requests row (HQ/service reads all) and drops an in-app
     notification. HQ actions it out of band — the owner cannot self-serve the
     change. Reuses the existing notification path; no email is sent from here."""
-    await _enforce_billing_org_access(principal, req.org_id)
+    await _enforce_billing_org_access({"kind": "user", "user": user}, req.org_id)
     db = get_db()
 
     # Current mode for the audit record (best-effort; NULL = legacy/default).
