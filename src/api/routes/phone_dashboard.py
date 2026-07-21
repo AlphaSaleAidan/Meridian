@@ -224,6 +224,13 @@ async def save_phone_config(req: PhoneConfigRequest, principal=Depends(require_s
         k: v for k, v in req.model_dump().items()
         if v is not None and k != "merchant_id"
     }
+    # phone_number is SYSTEM-MANAGED — only /provision-number assigns it (with
+    # a real provider purchase + Vapi binding). Accepting it here let a merchant
+    # write ANY number, including another merchant's DID, which then routes that
+    # merchant's inbound calls nondeterministically (get_merchant_by_phone
+    # returns the first match). Drop it from the writable payload; the value is
+    # still read below for the transfer-loop own-DID check only.
+    payload.pop("phone_number", None)
     payload["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     # Transfer-loop guard (onboarding layer): reject a transfer number that is

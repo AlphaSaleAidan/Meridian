@@ -554,4 +554,10 @@ def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
         sms_ordering_enabled=True,
         tax_rate=0.13,
         payment_mode="pay_now",
+        # This config is also the fallback for a dialed number with NO merchant
+        # row (unknown/ported/mid-provision DID). demo_safe makes that fallback
+        # provably harmless: the POS connector + payment path are logs-only, so
+        # a real caller reaching it can never trigger a real order or charge —
+        # they hear the "nothing gets charged" demo, not a phantom live order.
+        demo_safe=True,
     )
