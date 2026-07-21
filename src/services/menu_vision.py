@@ -27,9 +27,15 @@ import httpx
 logger = logging.getLogger("meridian.services.menu_vision")
 
 # Vision models that can read an image. Configurable so we can move off gpt-4o
-# without a code change.
+# without a code change. MENU_VISION_* vars are dedicated so vision can point
+# at a different OpenAI-compatible provider (e.g. Moonshot/Kimi) without
+# redirecting the global OPENAI_* fallback path, whose model names would not
+# exist on the other provider.
 _MODEL = os.getenv("MENU_VISION_MODEL", "gpt-4o")
-_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+_BASE_URL = (
+    os.getenv("MENU_VISION_BASE_URL")
+    or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+).rstrip("/")
 
 _SUPPORTED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_ITEMS = 200
@@ -136,9 +142,14 @@ async def extract_menu_from_image(image_bytes: bytes, content_type: str) -> list
     Raises ``MenuVisionError`` on missing key, unsupported type, or a model/
     transport failure so the route can surface a clean reason to the UI.
     """
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    api_key = (
+        os.getenv("MENU_VISION_API_KEY", "").strip()
+        or os.getenv("OPENAI_API_KEY", "").strip()
+    )
     if not api_key:
-        raise MenuVisionError("vision model not configured (OPENAI_API_KEY missing)")
+        raise MenuVisionError(
+            "vision model not configured (MENU_VISION_API_KEY / OPENAI_API_KEY missing)"
+        )
 
     ctype = (content_type or "").split(";")[0].strip().lower()
     if ctype not in _SUPPORTED_TYPES:
