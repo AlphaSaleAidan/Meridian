@@ -10,6 +10,36 @@ from merchant_config import MerchantPhoneConfig
 
 logger = logging.getLogger("meridian.phone_agent.normalizer")
 
+# Cap a single line's quantity so a mis-heard "nine nine nine" can't produce an
+# overflow-scale order/charge; and clamp any unit price to a sane ceiling.
+_MAX_QTY = 99
+_MAX_UNIT_PRICE = 9999.99
+
+_WORD_NUMBERS = {
+    "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+    "twelve": 12, "dozen": 12, "couple": 2, "few": 3,
+}
+
+
+def _safe_qty(raw: Any) -> int:
+    """Coerce an LLM/ASR quantity (int, float, "2", or a word like "two") to a
+    bounded int in [1, _MAX_QTY]. Unparseable → 1 (never crash, never 0)."""
+    if isinstance(raw, bool):  # bool is an int subclass — treat as 1
+        return 1
+    if isinstance(raw, (int, float)):
+        try:
+            n = int(raw)
+        except (ValueError, OverflowError):
+            return 1
+        return max(1, min(n, _MAX_QTY))
+    s = str(raw or "").strip().lower()
+    if s.isdigit():
+        return max(1, min(int(s), _MAX_QTY))
+    if s in _WORD_NUMBERS:
+        return max(1, min(_WORD_NUMBERS[s], _MAX_QTY))
+    return 1
+
 
 def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> dict:
     items = []
@@ -19,7 +49,10 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
 
     for raw_item in raw_order.get("items", []):
         item_name = raw_item.get("name", "").strip()
-        quantity = max(1, raw_item.get("quantity", 1))
+        # LLM/ASR quantity may be a word ("two"), a string, or a float —
+        # max(1, "two") raised TypeError and 500'd the whole order before
+        # pricing/dispatch. _safe_qty coerces to a bounded int.
+        quantity = _safe_qty(raw_item.get("quantity", 1))
         size = raw_item.get("size", "").strip().lower()
         modifications = raw_item.get("modifications", [])
         special = raw_item.get("special_instructions", "")
@@ -64,7 +97,14 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
             resolved_name = item_name
             unit_price = 0.0
 
-        line_total = round((unit_price + modifier_total) * quantity, 2)
+        # Clamp the unit price to a sane, non-negative ceiling — a no-menu
+        # merchant's item price (or a bad size_prices value) must never go
+        # negative or overflow the charge.
+        try:
+            unit_price = max(0.0, min(float(unit_price), _MAX_UNIT_PRICE))
+        except (TypeError, ValueError):
+            unit_price = 0.0
+        line_total = round((unit_price + max(0.0, modifier_total)) * quantity, 2)
         subtotal += line_total
 
         items.append({
@@ -78,6 +118,12 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
             "special_instructions": special,
             "matched_menu_item": bool(menu_match),
         })
+
+    # An order with nothing left (all items off-menu, or an empty items list)
+    # must not become a $0 order that dispatches to the kitchen. Signal it so
+    # the caller (submit_order) can tell the customer instead of confirming an
+    # empty order. unavailable[] already carries what was dropped.
+    order_is_empty = not items
 
     tax_rate = config.tax_rate if hasattr(config, 'tax_rate') else 0.13
     tax = round(subtotal * tax_rate, 2)
@@ -113,6 +159,9 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
         "order_type": order_type,
         "items": items,
         "unavailable_items": unavailable,
+        # True when nothing priceable remains — callers must NOT dispatch a $0
+        # order to the kitchen (submit_order tells the customer instead).
+        "is_empty": order_is_empty,
         "subtotal": round(subtotal, 2),
         "tax": tax,
         "total": total,
