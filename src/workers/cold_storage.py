@@ -148,6 +148,22 @@ def _all_archivable_tables() -> list[tuple[str, dict]]:
     return result
 
 
+# The only table names read_archive will resolve — anything else (e.g. a
+# traversal payload "../../etc/passwd") is rejected before it touches the path.
+_ARCHIVABLE_TABLE_NAMES = frozenset(
+    t["table"] for tier in ARCHIVE_TIERS.values() for t in tier["tables"]
+)
+
+
+def _safe_org_segment(org_id: str) -> str | None:
+    """org_id is a path segment in the archive layout — reject anything that
+    could traverse (slashes, .., null) before it's joined into a Path."""
+    s = str(org_id or "").strip()
+    if not s or "/" in s or "\\" in s or ".." in s or "\x00" in s:
+        return None
+    return s
+
+
 def _compress_zstd(data: bytes) -> bytes:
     try:
         import zstandard as zstd
@@ -386,7 +402,23 @@ async def upload_to_r2(org_id: str, year: int, month: int) -> dict:
 
 def read_archive(org_id: str, year: int, month: int, table_name: str) -> list[dict]:
     """Read a compressed archive back into memory. Searches tier subdirs and flat layout."""
-    org_dir = ARCHIVE_DIR / org_id / str(year) / f"{month:02d}"
+    # Path-traversal guard: table_name and org_id are caller-controlled path
+    # segments. Whitelist the table against the known archivable set and reject
+    # a traversing org_id — a "../.." table/org otherwise climbs out of
+    # ARCHIVE_DIR (the .jsonl.zst suffix alone doesn't stop `..`).
+    if table_name not in _ARCHIVABLE_TABLE_NAMES:
+        logger.warning("read_archive: rejected non-archivable table %r", table_name)
+        return []
+    safe_org = _safe_org_segment(org_id)
+    if not safe_org:
+        logger.warning("read_archive: rejected unsafe org_id %r", org_id)
+        return []
+    org_dir = ARCHIVE_DIR / safe_org / str(int(year)) / f"{int(month):02d}"
+    # No archive for this org/month → empty, not a crash. (The tier-subdir
+    # scan below calls org_dir.iterdir(), which raised FileNotFoundError when
+    # the dir didn't exist — every read for a not-yet-archived org 500'd.)
+    if not org_dir.exists():
+        return []
 
     for ext in [".jsonl.zst", ".jsonl.gz"]:
         filepath = org_dir / f"{table_name}{ext}"
