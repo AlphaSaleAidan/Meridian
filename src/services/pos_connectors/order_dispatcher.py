@@ -46,8 +46,17 @@ async def create_pos_order(
         )
 
     try:
-        connector = GenericRESTConnector(config, api_config)
-        result = await connector.create_order(order_data)
+        if system_key == "clover":
+            # Clover cannot take a single generic POST: an API-created order
+            # only reaches the kitchen via order → per-unit line_items →
+            # print_event, so phone orders route through the same submitter
+            # the website path uses (tag, kitchen note, inventory mapping).
+            # The generic /atomic_order/orders endpoint previously used here
+            # skipped all of that — orders never printed.
+            result = await _clover_kitchen_order(order_data, config)
+        else:
+            connector = GenericRESTConnector(config, api_config)
+            result = await connector.create_order(order_data)
 
         if not result.success:
             logger.warning(f"[{system_key}] API order failed, trying fallback: {result.fallback_reason}")
@@ -70,6 +79,50 @@ async def create_pos_order(
             system_key, order_data, api_config,
             api_result={"attempted": True, "sent": False, "error": str(e)},
         )
+
+
+async def _clover_kitchen_order(
+    order_data: dict,
+    config: POSConnectionConfig,
+) -> OrderResult:
+    """Adapter: run a phone order through the Clover kitchen submitter and
+    map its dict result onto OrderResult so the dispatcher's existing
+    fallback chain (API → SMS → email) applies unchanged."""
+    from .clover_kitchen import submit_clover_kitchen_order
+
+    item_id_map: dict = {}
+    org_id = (getattr(config, "org_id", "") or "").strip()
+    if org_id:
+        try:
+            # Same enrichment the website path uses: book line items against
+            # the merchant's real Clover inventory when the menu maps. Lookup
+            # failure yields {} — mapping never blocks an order.
+            from .website_order_dispatch import _clover_inventory_map
+            item_id_map = await _clover_inventory_map(org_id)
+        except Exception:  # noqa: BLE001
+            item_id_map = {}
+
+    creds = config.credentials or {}
+    res = await submit_clover_kitchen_order(
+        access_token=(creds.get("access_token") or "").strip(),
+        external_merchant_id=(creds.get("merchant_id") or config.merchant_id or "").strip(),
+        order=order_data,
+        source_tag="Meridian Phone Order",
+        item_id_map=item_id_map,
+    )
+    if res.get("success"):
+        return OrderResult(
+            success=True,
+            order_id=res.get("pos_order_id", ""),
+            pos_system="clover",
+            raw_response=res,
+        )
+    return OrderResult(
+        success=False,
+        pos_system="clover",
+        fallback_used=True,
+        fallback_reason=res.get("reason") or "clover_kitchen_failed",
+    )
 
 
 async def _fallback_order(
