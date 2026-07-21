@@ -132,9 +132,9 @@ async def _resolve_clover_credentials(db, merchant_id: str, payload: dict) -> tu
             logger.warning("clover pay: pos_connections lookup failed: %s", e)
             conns = []
         if conns:
-            from .phone_dashboard import _decrypt_connection_token
+            from .phone_dashboard import _fresh_connection_token
 
-            token = (_decrypt_connection_token(conns[0]) or "").strip()
+            token = (await _fresh_connection_token(conns[0]) or "").strip()
             mid = mid_hint or (conns[0].get("external_merchant_id") or "").strip()
             if token and mid:
                 return token, mid

@@ -1252,12 +1252,12 @@ async def _resolve_pos_for_session(session: dict) -> dict:
                 limit=1,
             )
             if conns:
-                from .phone_dashboard import _decrypt_connection_token
+                from .phone_dashboard import _fresh_connection_token
                 conn = conns[0]
                 system = system or (conn.get("provider") or "").strip()
                 external_merchant_id = (conn.get("external_merchant_id") or "").strip()
                 location_id = location_id or (conn.get("external_location_id") or "").strip()
-                token = token or _decrypt_connection_token(conn)
+                token = token or await _fresh_connection_token(conn)
         except Exception as e:
             logger.warning("phone: POS resolution failed for %s: %s", merchant_id, e)
 

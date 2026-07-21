@@ -327,3 +327,64 @@ async def test_dispatch_never_raises(monkeypatch):
     res = await wod.dispatch_website_order_to_pos(dict(ORDER))
     assert res["dispatched"] is False
     assert "db is down" in res["reason"]
+
+
+# ── order-time token resolution: expiring Clover v2 (1-click OAuth) tokens ──
+#
+# The 1-click connect path stores a ~30-minute access token + refresh token.
+# _connection_token must refresh Clover rows inline (via ensure_fresh_clover_token)
+# or a merchant who OAuth-connected would receive orders for half an hour and
+# then silently fall to the SMS path forever. Non-Clover rows and legacy
+# (non-expiring) Clover rows must NOT touch the refresh machinery.
+
+def _patch_token_helpers(monkeypatch, refresh_calls, refresh_result="fresh-tok"):
+    import src.clover.oauth as clover_oauth
+    import src.api.routes.phone_dashboard as pd
+
+    async def fake_refresh(conn):
+        refresh_calls.append(conn)
+        if isinstance(refresh_result, Exception):
+            raise refresh_result
+        return refresh_result
+    monkeypatch.setattr(clover_oauth, "ensure_fresh_clover_token", fake_refresh)
+    monkeypatch.setattr(pd, "_decrypt_connection_token", lambda conn: "stored-tok")
+
+
+@aio
+async def test_clover_v2_connection_refreshes_inline(monkeypatch):
+    refresh_calls = []
+    _patch_token_helpers(monkeypatch, refresh_calls)
+    conn = {"id": "c1", "provider": "clover", "refresh_token_enc": "enc-rt",
+            "access_token_enc": "enc-at"}
+    assert await wod._connection_token(conn) == "fresh-tok"
+    assert refresh_calls == [conn]
+
+
+@aio
+async def test_legacy_clover_connection_skips_refresh(monkeypatch):
+    refresh_calls = []
+    _patch_token_helpers(monkeypatch, refresh_calls)
+    conn = {"id": "c2", "provider": "clover", "access_token_enc": "enc-at"}
+    assert await wod._connection_token(conn) == "stored-tok"
+    assert refresh_calls == []
+
+
+@aio
+async def test_non_clover_connection_never_touches_clover_refresh(monkeypatch):
+    refresh_calls = []
+    _patch_token_helpers(monkeypatch, refresh_calls)
+    conn = {"id": "c3", "provider": "square", "refresh_token_enc": "enc-rt",
+            "access_token_enc": "enc-at"}
+    assert await wod._connection_token(conn) == "stored-tok"
+    assert refresh_calls == []
+
+
+@aio
+async def test_refresh_failure_falls_back_to_stored_token(monkeypatch):
+    refresh_calls = []
+    _patch_token_helpers(monkeypatch, refresh_calls,
+                         refresh_result=RuntimeError("clover 503"))
+    conn = {"id": "c4", "provider": "clover", "refresh_token_enc": "enc-rt",
+            "access_token_enc": "enc-at"}
+    assert await wod._connection_token(conn) == "stored-tok"
+    assert len(refresh_calls) == 1
