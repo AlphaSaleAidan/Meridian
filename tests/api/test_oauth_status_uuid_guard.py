@@ -215,16 +215,22 @@ def test_dashboard_validate_org_id_rejects_garbage():
 # clover /api/clover/status ---------------------------------------------------
 
 @pytest.mark.parametrize("org_id", [VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
-def test_clover_status_biz_org_empty_with_real_flags(monkeypatch, _clover_flags, org_id):
+def test_clover_status_biz_org_queries_mapped_uuid(monkeypatch, _clover_flags, org_id):
+    # biz_ ids now resolve through their deterministic companion UUID
+    # (db.org_ids.connection_org_id) — the SAME id the OAuth callback stores
+    # under — so a connected biz_ merchant sees their real state. The raw biz_
+    # string itself must still never reach the uuid column.
+    from src.db.org_ids import connection_org_id
     stub = _StubDB(rows=[CONNECTED_ROW])
     monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
     result = _run(clover_oauth.connection_status(org_id))
-    assert result["connected"] is False
-    # The wizard gates the 1-click button on oauth_available — must be REAL, not
-    # the pre-fix 500→false default.
+    assert result["connected"] is True
     assert result["oauth_available"] is True
     assert result["clover_available"] is True
-    assert stub.calls == [], "biz_ ids must never reach the uuid column"
+    assert stub.calls, "mapped uuid must be queried"
+    queried = str(stub.calls)
+    assert org_id not in queried
+    assert connection_org_id(org_id) in queried
 
 
 def test_clover_status_uuid_org_unchanged(monkeypatch, _clover_flags):
@@ -254,12 +260,19 @@ def test_clover_status_other_store_errors_still_raise(monkeypatch, _clover_flags
 # square /api/square/status ---------------------------------------------------
 
 @pytest.mark.parametrize("org_id", [VALID_BIZ_ID, VALID_BIZ_ID_SHORT])
-def test_square_status_biz_org_empty_without_query(monkeypatch, org_id):
+def test_square_status_biz_org_queries_mapped_uuid(monkeypatch, org_id):
+    # biz_ ids resolve through their deterministic companion UUID (db.org_ids)
+    # — the id the OAuth callback stores under — so a connected biz_ merchant
+    # sees their real state. The raw biz_ string never reaches the uuid column.
+    from src.db.org_ids import connection_org_id
     stub = _StubDB(rows=[CONNECTED_ROW])
     monkeypatch.setattr(db_mod, "_db_instance", stub, raising=False)
     result = _run(oauth.connection_status(org_id))
-    assert result["connected"] is False
-    assert stub.calls == [], "biz_ ids must never reach the uuid column"
+    assert result["connected"] is True
+    assert stub.calls, "mapped uuid must be queried"
+    queried = str(stub.calls)
+    assert org_id not in queried
+    assert connection_org_id(org_id) in queried
 
 
 def test_square_status_uuid_org_unchanged(monkeypatch):

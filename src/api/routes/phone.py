@@ -1245,9 +1245,12 @@ async def _resolve_pos_for_session(session: dict) -> dict:
     if not (system and token) and merchant_id and merchant_id != DEMO_MERCHANT_ID:
         try:
             db = get_db()
+            from ...db.org_ids import connection_org_id
             conns = await db.select(
                 "pos_connections",
-                filters={"org_id": f"eq.{merchant_id}", "status": "eq.connected"},
+                # biz_ ids map to the companion UUID the callback stores under
+                filters={"org_id": f"eq.{connection_org_id(merchant_id) or merchant_id}",
+                         "status": "eq.connected"},
                 order="updated_at.desc",
                 limit=1,
             )

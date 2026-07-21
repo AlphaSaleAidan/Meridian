@@ -28,6 +28,7 @@ os.environ.setdefault("ENABLE_SWARM_TRAINING", "0")
 os.environ.setdefault("ENABLE_POS_SYNC", "0")
 # Don't let the callback path try to encrypt against a real env; the encryption
 # module has its own dev fallback, but make the run hermetic.
+os.environ.setdefault("ENCRYPTION_KEY", "0" * 64)  # hermetic: encrypt_token must not depend on sibling test modules
 os.environ.setdefault("ENVIRONMENT", "test")
 
 ORG = "e2e-test-org-0001"
@@ -220,11 +221,11 @@ def _build_client_and_db(monkeypatch):
     return client, fakedb
 
 
-def _run_connect_flow(client, fakedb):
+def _run_connect_flow(client, fakedb, org=ORG):
     """Seed, hit authorize, then callback. Returns parsed callback redirect."""
     # Seed the businesses row the dashboard gate reads.
     fakedb.tables["businesses"].append({
-        "id": ORG,
+        "id": org,
         "owner_user_id": OWNER,
         "pos_connected": False,
     })
@@ -232,7 +233,7 @@ def _run_connect_flow(client, fakedb):
     # Step 1: authorize → 307 redirect to Square, carrying the signed state.
     r1 = client.get(
         "/api/square/authorize",
-        params={"org_id": ORG, "return_to": "/canada/merchant/onboard"},
+        params={"org_id": org, "return_to": "/canada/merchant/onboard"},
         follow_redirects=False,
     )
     assert r1.status_code == 307, f"authorize status {r1.status_code}: {r1.text[:300]}"
@@ -345,3 +346,51 @@ if __name__ == "__main__":
         sys.exit(1)
     finally:
         mp.close()
+
+
+def test_portal_square_connect_biz_org_maps_to_companion_uuid(monkeypatch):
+    """Merchants authenticated off a businesses row pass TEXT `biz_` ids. The
+    uuid-keyed tables (organizations / pos_connections) must receive the
+    deterministic companion UUID (db.org_ids) — a raw biz_ id there failed the
+    uuid cast in prod and every 1-click connect ended in 'failed to save'. The
+    businesses gate row keeps the ORIGINAL biz_ id, and the status endpoint
+    resolves the connection back from the biz_ id."""
+    from src.db.org_ids import connection_org_id
+
+    biz_org = "biz_9e066503fe6b43c1b8a50cc0c3989e6c"
+    mapped = connection_org_id(biz_org)
+    assert mapped != biz_org and len(mapped) == 36  # sanity: real mapping
+
+    client, fakedb = _build_client_and_db(monkeypatch)
+    with client:
+        cb = _run_connect_flow(client, fakedb, org=biz_org)
+
+        assert cb.get("oauth") == ["success"], f"callback not success: {cb}"
+
+        # uuid-keyed tables carry the mapped uuid, never the raw biz_ id
+        org_ids = {o["id"] for o in fakedb.tables["organizations"]}
+        assert mapped in org_ids and biz_org not in org_ids
+        conns = [c for c in fakedb.tables["pos_connections"]]
+        assert conns and all(c["org_id"] == mapped for c in conns)
+
+        # the TEXT-keyed businesses gate flips under the ORIGINAL id
+        biz = next(b for b in fakedb.tables["businesses"] if b["id"] == biz_org)
+        assert biz["pos_connected"] is True
+
+        # and the status endpoint resolves the connection FROM the biz_ id
+        st = client.get("/api/square/status", params={"org_id": biz_org}).json()
+        assert st["connected"] is True
+
+
+def test_org_id_mapping_is_deterministic_and_shape_strict():
+    from src.db.org_ids import connection_org_id, is_biz_id
+
+    biz = "biz_9e066503fe6b43c1b8a50cc0c3989e6c"
+    assert is_biz_id(biz)
+    a, b = connection_org_id(biz), connection_org_id(biz.upper())
+    assert a == b and len(a) == 36  # case-insensitive + stable
+
+    u = "168b6df2-e9af-4b00-8fec-51e51149ff19"
+    assert connection_org_id(u) == u          # uuids pass through
+    assert connection_org_id("demo") == ""    # odd shapes refuse to map
+    assert connection_org_id("") == ""

@@ -333,12 +333,20 @@ async def connect_pos(
     # the insert below would hit pos_connections_org_id_fkey (409 23503), failing
     # the whole connect. Create it with the NOT-NULL `vertical` (refined to the
     # detected business type by the organizations update further down).
+    # organizations.id / pos_connections.org_id are uuid columns; merchants
+    # authenticated off a businesses row pass TEXT `biz_` ids, which map to a
+    # deterministic companion UUID (db.org_ids) — same mapping the OAuth
+    # callbacks store under. businesses updates keep the ORIGINAL id.
+    from ...db.org_ids import connection_org_id
+    org_uuid = connection_org_id(req.org_id)
+    if not org_uuid:
+        raise HTTPException(400, "Invalid org_id format")
     existing_org = await db.select(
-        "organizations", filters={"id": f"eq.{req.org_id}"}, limit=1,
+        "organizations", filters={"id": f"eq.{org_uuid}"}, limit=1,
     )
     if not existing_org:
         await db.insert("organizations", {
-            "id": req.org_id,
+            "id": org_uuid,
             "name": f"Org {req.org_id}",
             "slug": req.org_id.lower().replace(" ", "-"),
             "vertical": "other",
@@ -350,7 +358,7 @@ async def connect_pos(
     existing = await db.select(
         "pos_connections",
         filters={
-            "org_id": f"eq.{req.org_id}",
+            "org_id": f"eq.{org_uuid}",
             "provider": f"eq.{req.pos_system}",
         },
         limit=1,
@@ -376,7 +384,7 @@ async def connect_pos(
     else:
         await db.insert("pos_connections", {
             "id": connection_id,
-            "org_id": req.org_id,
+            "org_id": org_uuid,
             "provider": req.pos_system,
             "status": "connected",
             "credentials_encrypted": encrypted_creds,
@@ -400,7 +408,7 @@ async def connect_pos(
             except Exception as e:
                 logger.warning(f"Square business type detection failed: {e}")
 
-    await db.update("organizations", org_update, filters={"id": f"eq.{req.org_id}"})
+    await db.update("organizations", org_update, filters={"id": f"eq.{org_uuid}"})
     # Open BOTH halves of the dashboard gate. businesses.pos_connected is the
     # primary gate; businesses-based customers have no pos_connection_status
     # column to fall back on. Mirrors the OAuth callback path and is symmetric
@@ -410,14 +418,14 @@ async def connect_pos(
     if req.pos_system == "toast":
         background_tasks.add_task(
             _run_toast_backfill,
-            org_id=req.org_id,
+            org_id=org_uuid,
             connection_id=connection_id,
             credentials=req.credentials,
         )
     elif req.pos_system == "clover":
         background_tasks.add_task(
             _run_clover_backfill,
-            org_id=req.org_id,
+            org_id=org_uuid,
             connection_id=connection_id,
             access_token=req.credentials.get("access_token", ""),
             merchant_id=(req.credentials.get("merchant_id", "") or req.restaurant_guid or ""),
@@ -436,7 +444,7 @@ async def connect_pos(
             background_tasks.add_task(
                 run_backfill,
                 access_token=token,
-                org_id=req.org_id,
+                org_id=org_uuid,
                 connection_id=connection_id,
             )
     else:
@@ -444,7 +452,7 @@ async def connect_pos(
         if api_config and api_config.get("auth_type") != "csv_only":
             background_tasks.add_task(
                 _run_generic_backfill,
-                org_id=req.org_id,
+                org_id=org_uuid,
                 connection_id=connection_id,
                 pos_system=req.pos_system,
                 credentials=req.credentials,
@@ -763,8 +771,12 @@ async def upload_csv(
             "message": "No valid records found. Check that the file matches the expected format.",
         }
 
+    # transactions/pos_connections org_id are uuid columns — biz_ ids map to
+    # their deterministic companion UUID (db.org_ids).
+    from ...db.org_ids import connection_org_id
+    org_uuid = connection_org_id(org_id) or org_id
     normalized = [
-        normalize_transaction(r, pos_system, org_id=org_id)
+        normalize_transaction(r, pos_system, org_id=org_uuid)
         for r in records
     ]
 
@@ -772,7 +784,7 @@ async def upload_csv(
 
     existing = await db.select(
         "pos_connections",
-        filters={"org_id": f"eq.{org_id}", "provider": f"eq.{pos_system}"},
+        filters={"org_id": f"eq.{org_uuid}", "provider": f"eq.{pos_system}"},
         limit=1,
     )
     now = datetime.now(timezone.utc).isoformat()
@@ -785,7 +797,7 @@ async def upload_csv(
     else:
         await db.insert("pos_connections", {
             "id": str(uuid4()),
-            "org_id": org_id,
+            "org_id": org_uuid,
             "provider": pos_system,
             "status": "connected",
             "external_merchant_id": "",
@@ -812,9 +824,10 @@ async def get_connections(org_id: str):
     if not db:
         raise HTTPException(503, "Database not available")
 
+    from ...db.org_ids import connection_org_id
     connections = await db.select(
         "pos_connections",
-        filters={"org_id": f"eq.{org_id}"},
+        filters={"org_id": f"eq.{connection_org_id(org_id) or org_id}"},
     )
 
     result = []
@@ -886,11 +899,16 @@ async def teardown_connection(db, connection_id: str, org_id: str | None = None)
         rows = await db.select("pos_connections", filters={"id": f"eq.{connection_id}"}, limit=1)
         org_id = rows[0].get("org_id") if rows else None
     if org_id:
+        from ...db.org_ids import connection_org_id
+        # businesses is TEXT-keyed (biz_ ids), organizations uuid-keyed — a biz_
+        # id must hit businesses verbatim and organizations via its mapped uuid.
+        # (When org_id came off the connection row it is already the uuid; the
+        # businesses update is then a no-match no-op, same as before.)
         await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
         await db.update(
             "organizations",
             {"pos_connection_status": None, "pos_system": None},
-            filters={"id": f"eq.{org_id}"},
+            filters={"id": f"eq.{connection_org_id(org_id) or org_id}"},
         )
 
 
@@ -904,10 +922,11 @@ async def disconnect_pos(req: DisconnectRequest, user: dict = Depends(require_jw
     if not db:
         raise HTTPException(503, "Database not available")
 
+    from ...db.org_ids import connection_org_id
     connections = await db.select(
         "pos_connections",
         filters={
-            "org_id": f"eq.{req.org_id}",
+            "org_id": f"eq.{connection_org_id(req.org_id) or req.org_id}",
             "provider": f"eq.{req.pos_system}",
         },
         limit=1,
@@ -945,10 +964,11 @@ async def trigger_sync(org_id: str, pos_system: str, background_tasks: Backgroun
     if not db:
         raise HTTPException(503, "Database not available")
 
+    from ...db.org_ids import connection_org_id
     connections = await db.select(
         "pos_connections",
         filters={
-            "org_id": f"eq.{org_id}",
+            "org_id": f"eq.{connection_org_id(org_id) or org_id}",
             "provider": f"eq.{pos_system}",
             "status": "eq.connected",
         },

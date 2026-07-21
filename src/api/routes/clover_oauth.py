@@ -234,15 +234,25 @@ async def callback(
     # ── Store tokens in Supabase (mirror Square's storage shape) ──
     try:
         from ...db import _db_instance
+        from ...db.org_ids import connection_org_id
         if _db_instance:
+            # organizations.id / pos_connections.org_id are uuid columns, but
+            # merchants authenticated off a businesses row pass TEXT `biz_` ids
+            # — those inserts failed the uuid cast, so every biz_ merchant's
+            # 1-click connect ended in "Connected but failed to save". Map to
+            # the deterministic companion UUID for the uuid-keyed tables; the
+            # businesses update below keeps the ORIGINAL id (TEXT table).
+            # Odd/demo shapes fall through unchanged (same storage attempt
+            # as before this mapping existed).
+            org_uuid = connection_org_id(org_id) or org_id
             existing_orgs = await _db_instance.select(
                 "organizations",
-                filters={"id": f"eq.{org_id}"},
+                filters={"id": f"eq.{org_uuid}"},
                 limit=1,
             )
             if not existing_orgs:
                 await _db_instance.insert("organizations", {
-                    "id": org_id,
+                    "id": org_uuid,
                     "name": f"Org {org_id}",
                     "slug": org_id.lower().replace(" ", "-"),
                     # `vertical` is NOT NULL with no default on organizations — omitting
@@ -263,7 +273,7 @@ async def callback(
             )
             connection_data = {
                 "id": str(uuid4()),
-                "org_id": org_id,
+                "org_id": org_uuid,
                 "provider": "clover",
                 "status": "connected",
                 "external_merchant_id": resolved_merchant_id,
@@ -282,7 +292,7 @@ async def callback(
             existing = await _db_instance.select(
                 "pos_connections",
                 filters={
-                    "org_id": f"eq.{org_id}",
+                    "org_id": f"eq.{org_uuid}",
                     "provider": "eq.clover",
                 },
                 limit=1,
@@ -316,7 +326,7 @@ async def callback(
             await _db_instance.update(
                 "organizations",
                 {"pos_system": "clover", "pos_connection_status": "connected"},
-                filters={"id": f"eq.{org_id}"},
+                filters={"id": f"eq.{org_uuid}"},
             )
 
             # Queue backfill FIRST — the best-effort notification below must never
@@ -324,7 +334,7 @@ async def callback(
             from .pos_connections import _run_clover_backfill
             background_tasks.add_task(
                 _run_clover_backfill,
-                org_id=org_id,
+                org_id=org_uuid,
                 connection_id=conn_id,
                 access_token=tokens["access_token"],
                 merchant_id=resolved_merchant_id,
@@ -339,7 +349,7 @@ async def callback(
                 if owner_user_id:
                     await _db_instance.insert("notifications", {
                         "id": str(uuid4()),
-                        "org_id": org_id,
+                        "org_id": org_uuid,
                         "user_id": owner_user_id,
                         "channel": "in_app",
                         "scheduled_for": datetime.now(timezone.utc).isoformat(),
@@ -393,13 +403,13 @@ async def connection_status(org_id: str):
             "clover_available": clover_available,
         }
 
-    # pos_connections.org_id is a UUID column in prod; `biz_` merchant ids are
-    # the TEXT businesses.id with NO businesses→organizations mapping, so a
-    # biz_ id can never match a row — querying with it raises a 22P02 uuid cast
-    # → 500 → the onboarding wizard read oauth_available as false and hid the
-    # Clover 1-click button. Report not-connected but keep the REAL capability
-    # flags (computed from env above, exactly as the happy path does).
-    if not _UUID_RE.match(org_id):
+    # pos_connections.org_id is a UUID column; biz_ merchant ids map to their
+    # deterministic companion UUID (db.org_ids — same mapping the OAuth
+    # callback stores under), so biz_ merchants see their real connection
+    # state instead of a hardcoded not-connected.
+    from ...db.org_ids import connection_org_id
+    query_org = connection_org_id(org_id)
+    if not query_org:
         return {
             "connected": False,
             "reason": "org_not_uuid_keyed",
@@ -410,7 +420,7 @@ async def connection_status(org_id: str):
     try:
         conns = await _db_instance.select(
             "pos_connections",
-            filters={"org_id": f"eq.{org_id}", "provider": "eq.clover"},
+            filters={"org_id": f"eq.{query_org}", "provider": "eq.clover"},
             limit=1,
         )
     except SupabaseRESTError as exc:
