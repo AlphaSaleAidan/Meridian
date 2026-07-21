@@ -249,3 +249,38 @@ def test_connect_path_routes_square_through_env_aware_client():
     assert "connect.squareup.com" not in src, "connect path still hardcodes the prod Square URL"
     assert "2024-01-18" not in src, "connect path still pins a stale Square-Version"
     assert "_square_merchant_and_vertical" in src, "expected the shared env-aware Square helper"
+
+
+# ── App Market install redirect (no code/state) ──────────────────────────────
+#
+# First-time connects route through Clover's App Market install flow, whose
+# post-install redirect hits the callback with merchant_id + client_id but NO
+# code/state. That must bounce the merchant back to the portal with a
+# finish-the-connect hint — a raw 400 JSON dead-ends every first-time merchant.
+
+def test_clover_callback_market_install_redirects_to_portal():
+    from types import SimpleNamespace
+
+    res = asyncio.run(clover_oauth.callback(
+        request=SimpleNamespace(headers={}),
+        background_tasks=BackgroundTasks(),
+        code=None, state=None,
+        merchant_id="PRG0TESTMID99",
+    ))
+    assert res.status_code == 307
+    loc = res.headers["location"]
+    assert "oauth=install_complete" in loc
+    assert "merchant_id=PRG0TESTMID99" in loc
+    assert loc.startswith(clover_oauth._FRONTEND_URL)
+
+
+def test_clover_callback_still_400s_with_nothing_at_all():
+    from types import SimpleNamespace
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(clover_oauth.callback(
+            request=SimpleNamespace(headers={}),
+            background_tasks=BackgroundTasks(),
+            code=None, state=None, merchant_id=None,
+        ))
+    assert exc.value.status_code == 400
