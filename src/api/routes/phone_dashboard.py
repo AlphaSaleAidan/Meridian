@@ -18,12 +18,12 @@ import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel, field_validator
 
-from ..auth import enforce_service_member, require_service_auth
+from ..auth import enforce_service_member, require_admin_auth, require_service_auth
 from ...db import get_db
 from ...services.vapi_provisioning import (
     delete_vapi_number,
-    import_twilio_number,
-    vapi_binding_enabled,
+    import_telnyx_number,
+    vapi_telnyx_enabled,
 )
 
 logger = logging.getLogger("meridian.api.phone_dashboard")
@@ -1104,21 +1104,15 @@ async def build_restaurant_brief(
 # our backend, so inbound calls route through the same agent.
 # ---------------------------------------------------------------------------
 
-PHONE_PROVIDER = os.getenv("PHONE_PROVIDER", "twilio").lower()
-
-TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
-TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_API = "https://api.twilio.com/2010-04-01"
+# Number provisioning is Telnyx-only. (Twilio is still used elsewhere for SMS
+# and the forwarding-verification call — see sms/client.py, phone_activation.py
+# — but numbers are never bought at Twilio.)
+PHONE_PROVIDER = "telnyx"
 
 TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
 TELNYX_API = "https://api.telnyx.com/v2"
 TELNYX_VOICE_CONNECTION_ID = os.getenv("TELNYX_VOICE_CONNECTION_ID", "")
 TELNYX_MESSAGING_PROFILE_ID = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
-
-
-def _webhook_base() -> str:
-    host = os.getenv("MEDIA_STREAM_HOST", "api.meridian.tips")
-    return f"https://{host}"
 
 
 class ProvisionNumberRequest(BaseModel):
@@ -1131,56 +1125,7 @@ class ProvisionNumberRequest(BaseModel):
     force: bool = False
 
 
-# --- Twilio provider ---
-
-async def _twilio_search(country: str, area_code: str | None) -> str | None:
-    """Return one available voice+SMS local number for the country, or None."""
-    params: dict[str, str] = {"VoiceEnabled": "true", "SmsEnabled": "true", "Limit": "5"}
-    if area_code:
-        params["AreaCode"] = area_code
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        res = await client.get(
-            f"{TWILIO_API}/Accounts/{TWILIO_SID}/AvailablePhoneNumbers/{country}/Local.json",
-            params=params,
-            auth=(TWILIO_SID, TWILIO_TOKEN),
-        )
-        if res.status_code != 200:
-            logger.error("Twilio number search %d: %s", res.status_code, res.text[:300])
-            return None
-        nums = res.json().get("available_phone_numbers", [])
-        return nums[0]["phone_number"] if nums else None
-
-
-async def _twilio_purchase(phone_number: str, friendly_name: str) -> dict:
-    """Buy the number and point its voice/status webhooks at our backend."""
-    base = _webhook_base()
-    data = {
-        "PhoneNumber": phone_number,
-        "FriendlyName": friendly_name,
-        "VoiceUrl": f"{base}/twilio/voice",
-        "VoiceMethod": "POST",
-        "StatusCallback": f"{base}/twilio/status",
-        "StatusCallbackMethod": "POST",
-    }
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        res = await client.post(
-            f"{TWILIO_API}/Accounts/{TWILIO_SID}/IncomingPhoneNumbers.json",
-            data=data,
-            auth=(TWILIO_SID, TWILIO_TOKEN),
-        )
-        if res.status_code not in (200, 201):
-            logger.error("Twilio purchase %d: %s", res.status_code, res.text[:400])
-            # Surface Twilio's own message (e.g. regulatory bundle / no funds).
-            try:
-                msg = res.json().get("message", res.text[:200])
-            except Exception:
-                msg = res.text[:200]
-            raise HTTPException(502, f"Twilio could not provision a number: {msg}")
-        body = res.json()
-        return {"phone_number": body.get("phone_number"), "sid": body.get("sid")}
-
-
-# --- Telnyx provider ---
+# --- Telnyx provider (the only number-buying provider — no Twilio) ---
 
 async def _telnyx_search(country: str, area_code: str | None) -> str | None:
     """Return one available voice+SMS number for the country, or None."""
@@ -1239,23 +1184,6 @@ async def _telnyx_purchase(phone_number: str) -> dict:
 
 # --- Number release (swap support) ---
 
-async def _twilio_release(sid: str) -> bool:
-    """Release a purchased Twilio number by its IncomingPhoneNumber SID.
-    Best-effort: failures are logged, never raised."""
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            res = await client.delete(
-                f"{TWILIO_API}/Accounts/{TWILIO_SID}/IncomingPhoneNumbers/{sid}.json",
-                auth=(TWILIO_SID, TWILIO_TOKEN),
-            )
-        if res.status_code in (200, 204):
-            return True
-        logger.error("Twilio number release %s failed %d: %s", sid, res.status_code, res.text[:300])
-    except Exception as exc:  # noqa: BLE001 — best-effort release
-        logger.error("Twilio number release %s failed: %s", sid, exc)
-    return False
-
-
 async def _telnyx_release(phone_number: str, sid: str | None) -> bool:
     """Release a purchased Telnyx number. The sid we store at purchase time is
     the number ORDER id, so resolve the phone-number resource id by number
@@ -1300,13 +1228,9 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
     await enforce_service_member(principal, req.merchant_id)
     _validate_merchant_id(req.merchant_id)
 
-    if PHONE_PROVIDER == "telnyx":
-        if not TELNYX_API_KEY:
-            raise HTTPException(503, "Telnyx is not configured")
-        if not TELNYX_VOICE_CONNECTION_ID:
-            raise HTTPException(503, "Telnyx voice connection is not configured (TELNYX_VOICE_CONNECTION_ID)")
-    elif not TWILIO_SID or not TWILIO_TOKEN:
-        raise HTTPException(503, "Twilio is not configured")
+    # All-Telnyx: numbers are bought at Telnyx and bound to Vapi (no Twilio).
+    if not TELNYX_API_KEY:
+        raise HTTPException(503, "Telnyx is not configured")
 
     db = get_db()
     rows = await db.select(
@@ -1321,61 +1245,57 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
         return {"phone_number": existing, "provisioned": False, "already_existed": True}
 
     if existing and req.force:
-        # Swap: release the old number at the provider first. Best-effort —
-        # a failed release (already released, legacy row without a sid, provider
+        # Swap: release the old number at Telnyx + Vapi first. Best-effort — a
+        # failed release (already released, legacy row without a sid, provider
         # hiccup) is logged but never blocks buying the replacement.
-        # Release the old Vapi binding too, or it lingers pointing at a released
-        # Twilio number (best-effort, never blocks the swap).
         if existing_vapi_id:
             await delete_vapi_number(existing_vapi_id)
-        if PHONE_PROVIDER == "telnyx":
-            released = await _telnyx_release(existing, existing_sid)
-        elif existing_sid:
-            released = await _twilio_release(existing_sid)
-        else:
-            released = False
-            logger.warning(
-                "Swap for %s: no provider sid stored for %s — skipping release",
-                req.merchant_id, existing,
-            )
+        released = await _telnyx_release(existing, existing_sid)
         if not released:
             logger.warning(
-                "Swap for %s: could not release %s at %s (continuing with purchase)",
-                req.merchant_id, existing, PHONE_PROVIDER,
+                "Swap for %s: could not release %s at Telnyx (continuing with purchase)",
+                req.merchant_id, existing,
             )
 
+    # ── Pool-first: hand out a pre-bought, Vapi-bound number instantly ──
+    # buy_into_pool already did the Telnyx purchase + Vapi import ahead of time,
+    # so a claim is one DB update with zero external latency and no
+    # purchase-failure surface at signup. Falls through to a live buy only when
+    # the pool is dry.
+    from ...services.number_pool import claim_from_pool
+    claimed = await claim_from_pool(db, req.merchant_id)
+    if claimed:
+        number = claimed["phone_number"]
+        vapi_id = claimed.get("vapi_phone_number_id")
+        await _store_provisioned_number(db, req.merchant_id, bool(rows), {
+            "phone_number": number,
+            "phone_number_sid": claimed.get("provider_sid"),
+            "vapi_phone_number_id": vapi_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info("Provisioned %s for merchant %s from POOL", number, req.merchant_id)
+        return {"phone_number": number, "provisioned": True, "already_existed": False,
+                "provider": "telnyx", "vapi_bound": bool(vapi_id), "from_pool": True}
+
+    # ── Pool empty → live buy at Telnyx + bind to Vapi ──
     country = (req.country or "CA").upper()
-    available = await _telnyx_search(country, req.area_code) if PHONE_PROVIDER == "telnyx" \
-        else await _twilio_search(country, req.area_code)
+    available = await _telnyx_search(country, req.area_code)
     if not available:
         raise HTTPException(404, f"No available {country} numbers found")
-
-    if PHONE_PROVIDER == "telnyx":
-        purchased = await _telnyx_purchase(available)
-    else:
-        purchased = await _twilio_purchase(available, req.business_name or f"Meridian {req.merchant_id[:8]}")
+    purchased = await _telnyx_purchase(available)
     number = purchased["phone_number"]
 
-    # ── Bind the number to Vapi so it actually reaches the live agent ──
     # A bought DID is inert until Vapi owns it: only then does an inbound call
     # fire assistant-request → vapi_webhook resolves the merchant and answers,
-    # and only then can forwarding verification (which waits for that event)
-    # ever pass. Binding is active when VAPI_PRIVATE_KEY is set; otherwise
-    # vapi_binding_enabled() is False and this is a no-op (prior behavior).
-    # Telnyx numbers attach to a TeXML app instead and are not Vapi-imported.
+    # and only then can forwarding verification pass. On import failure, release
+    # the Telnyx number and fail loud — never hand a merchant a dead line.
     vapi_id = None
-    if PHONE_PROVIDER != "telnyx" and vapi_binding_enabled():
-        vapi_id = await import_twilio_number(
-            number,
-            twilio_account_sid=TWILIO_SID,
-            twilio_auth_token=TWILIO_TOKEN,
-            name=req.business_name or f"Meridian {req.merchant_id[:8]}",
+    if vapi_telnyx_enabled():
+        vapi_id = await import_telnyx_number(
+            number, name=req.business_name or f"Meridian {req.merchant_id[:8]}",
         )
         if not vapi_id:
-            # The DID exists at Twilio but couldn't be bound — leaving it would
-            # hand the merchant a dead number that silently fails verification.
-            # Release it so we don't strand a paid, unusable line, and fail loud.
-            await _twilio_release(purchased.get("sid") or "")
+            await _telnyx_release(number, purchased.get("sid"))
             raise HTTPException(
                 502,
                 "Provisioned the number but could not bind it to the calling "
@@ -1383,37 +1303,64 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
                 "Please retry.",
             )
 
-    payload = {
+    await _store_provisioned_number(db, req.merchant_id, bool(rows), {
         "phone_number": number,
-        # Provider id/sid stored at purchase time so a later swap can release
-        # the number (migration 20260706_phone_number_sid).
         "phone_number_sid": purchased.get("sid"),
+        "vapi_phone_number_id": vapi_id,
         "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    # vapi_phone_number_id ships in migration 20260721; tolerate its absence so
-    # a deploy that predates the migration still provisions (best-effort store).
-    payload_with_vapi = {**payload, "vapi_phone_number_id": vapi_id}
-    try:
-        if rows:
-            await db.update("phone_agent_config", payload_with_vapi,
-                            filters={"merchant_id": f"eq.{req.merchant_id}"})
-        else:
-            payload_with_vapi["merchant_id"] = req.merchant_id
-            await db.insert("phone_agent_config", payload_with_vapi)
-    except Exception as e:  # noqa: BLE001 — pre-migration column absence must not lose the number
-        logger.warning("provision store with vapi id failed (%s); retrying without column", e)
-        if rows:
-            await db.update("phone_agent_config", payload,
-                            filters={"merchant_id": f"eq.{req.merchant_id}"})
-        else:
-            payload["merchant_id"] = req.merchant_id
-            await db.insert("phone_agent_config", payload)
-    logger.info(
-        "Provisioned %s for merchant %s via %s%s%s",
-        number, req.merchant_id, PHONE_PROVIDER,
-        " (swap)" if req.force and existing else "",
-        f" +vapi:{vapi_id}" if vapi_id else "",
-    )
-
+    })
+    logger.info("Provisioned %s for merchant %s via Telnyx%s%s",
+                number, req.merchant_id, " (swap)" if req.force and existing else "",
+                f" +vapi:{vapi_id}" if vapi_id else "")
     return {"phone_number": number, "provisioned": True, "already_existed": False,
-            "provider": PHONE_PROVIDER, "vapi_bound": bool(vapi_id)}
+            "provider": "telnyx", "vapi_bound": bool(vapi_id), "from_pool": False}
+
+
+class PoolPreloadRequest(BaseModel):
+    count: int = 10
+    country: str = "CA"
+    area_code: str | None = None
+
+    @field_validator("count")
+    @classmethod
+    def _cap_count(cls, v: int) -> int:
+        # Guard a fat-fingered bulk buy — each number is real money.
+        if v < 1 or v > 50:
+            raise ValueError("count must be between 1 and 50")
+        return v
+
+
+@router.post("/pool/preload")
+async def pool_preload(req: PoolPreloadRequest, principal=Depends(require_admin_auth)):
+    """Admin: buy `count` Telnyx numbers, bind each to Vapi, and stock the pool.
+    Onboarding then claims a ready number instantly. Admin-only (bulk spend)."""
+    if not vapi_telnyx_enabled():
+        raise HTTPException(503, "Telnyx→Vapi binding not configured "
+                                 "(VAPI_PRIVATE_KEY + VAPI_TELNYX_CREDENTIAL_ID)")
+    from ...services.number_pool import buy_into_pool
+    return await buy_into_pool(req.count, country=req.country, area_code=req.area_code)
+
+
+@router.get("/pool")
+async def pool_status_endpoint(principal=Depends(require_admin_auth)):
+    """Admin: pool inventory counts (available / assigned / released)."""
+    from ...services.number_pool import pool_status
+    return await pool_status(get_db())
+
+
+async def _store_provisioned_number(db, merchant_id: str, has_row: bool, payload: dict) -> None:
+    """Write a provisioned number onto phone_agent_config. vapi_phone_number_id
+    ships in migration 20260721; tolerate its absence so a deploy that predates
+    the migration still provisions (retry without the column)."""
+    try:
+        if has_row:
+            await db.update("phone_agent_config", payload, filters={"merchant_id": f"eq.{merchant_id}"})
+        else:
+            await db.insert("phone_agent_config", {**payload, "merchant_id": merchant_id})
+    except Exception as e:  # noqa: BLE001 — pre-migration column absence must not lose the number
+        logger.warning("provision store failed (%s); retrying without vapi column", e)
+        payload = {k: v for k, v in payload.items() if k != "vapi_phone_number_id"}
+        if has_row:
+            await db.update("phone_agent_config", payload, filters={"merchant_id": f"eq.{merchant_id}"})
+        else:
+            await db.insert("phone_agent_config", {**payload, "merchant_id": merchant_id})
