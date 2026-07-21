@@ -4,13 +4,16 @@ Merchant settings routes.
 The Settings page's Notifications tab has called GET/PUT
 /api/settings/notifications since it shipped, but no backend route existed —
 every load 404'd silently and preferences only lived in localStorage (so they
-were lost across devices/browsers). Preferences persist in
-organizations.metadata.notification_prefs (existing jsonb column — no
-migration), merged so other metadata keys are never clobbered.
+were lost across devices/browsers). Preferences persist in the
+notification_prefs table (migration 024) — keyed by org id with NO parent-table
+FK, because Canada merchants live in `businesses` while US-era orgs live in
+`organizations` (entity-model split): a route bound to either table misses the
+other, which is exactly how the first cut of this route 404'd for every Canada
+merchant.
 """
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from ..auth import require_jwt, require_org_member
@@ -19,8 +22,6 @@ from ...db import get_db
 logger = logging.getLogger("meridian.settings.routes")
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
-
-_METADATA_KEY = "notification_prefs"
 
 # Keep in lockstep with NOTIF_DEFAULTS in frontend/src/pages/SettingsPage.tsx.
 _PREF_KEYS = ("deal_stage", "daily_revenue", "ai_anomaly", "low_stock", "new_customer")
@@ -43,21 +44,17 @@ def _known_prefs(raw) -> dict:
     return {k: bool(raw[k]) for k in _PREF_KEYS if isinstance(raw.get(k), bool)}
 
 
-async def _load_metadata(db, org_id: str) -> dict:
+async def _load_prefs(db, org_id: str) -> dict:
     rows = await db.select(
-        "organizations", "metadata", filters={"id": f"eq.{org_id}"}, limit=1,
+        "notification_prefs", "prefs", filters={"org_id": f"eq.{org_id}"}, limit=1,
     )
-    if not rows:
-        raise HTTPException(404, "Organization not found")
-    return rows[0].get("metadata") or {}
+    return _known_prefs(rows[0].get("prefs")) if rows else {}
 
 
 @router.get("/notifications")
 async def get_notification_prefs(org_id: str, user: dict = Depends(require_jwt)):
     await require_org_member(user, org_id)
-    db = get_db()
-    metadata = await _load_metadata(db, org_id)
-    return _known_prefs(metadata.get(_METADATA_KEY))
+    return await _load_prefs(get_db(), org_id)
 
 
 @router.put("/notifications")
@@ -66,19 +63,14 @@ async def put_notification_prefs(
 ):
     await require_org_member(user, req.org_id)
     db = get_db()
-    metadata = await _load_metadata(db, req.org_id)
-
-    current = _known_prefs(metadata.get(_METADATA_KEY))
+    current = await _load_prefs(db, req.org_id)
     updates = {
         k: v for k, v in req.model_dump(exclude={"org_id"}).items() if v is not None
     }
     merged = {**current, **updates}
-
-    # Merge under our one key — never clobber sibling metadata (stripe
-    # checkout et al. store their own keys here).
-    await db.update(
-        "organizations",
-        {"metadata": {**metadata, _METADATA_KEY: merged}},
-        filters={"id": f"eq.{req.org_id}"},
+    await db.upsert(
+        "notification_prefs",
+        {"org_id": req.org_id, "prefs": merged},
+        on_conflict="org_id",
     )
     return merged
