@@ -189,6 +189,15 @@ async def stripe_webhook(request: Request):
                             await db.update("organizations", {
                                 "metadata": json_mod.dumps({**meta, "payment_status": "cancelled"}),
                             }, filters={"id": f"eq.{s['org_id']}"})
+                            # Reclaim the merchant's phone number to the pool for
+                            # reassignment (Stripe-side / dunning cancellation).
+                            # Best-effort — a reclaim hiccup never fails the webhook.
+                            try:
+                                from src.services.number_pool import release_to_pool
+                                await release_to_pool(db, s["org_id"])
+                            except Exception:
+                                logger.exception("number reclaim failed for cancelled org %s",
+                                                 s.get("org_id"))
                 except Exception as e:
                     logger.error(f"Webhook processing error: {e}")
 

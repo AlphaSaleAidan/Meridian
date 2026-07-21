@@ -137,6 +137,66 @@ async def claim_from_pool(db, merchant_id: str) -> dict | None:
     return None
 
 
+async def release_to_pool(db, merchant_id: str) -> dict | None:
+    """Reclaim a cancelled merchant's number back into the pool for reassignment.
+
+    Called on cancellation: the number itself is KEPT (Telnyx DID + Vapi binding
+    stay — the binding is merchant-agnostic, calls resolve by DB lookup), only
+    the ASSIGNMENT is undone so a new merchant can claim it. Clears the number
+    off the merchant's phone_agent_config and flips the agent off, then marks
+    the pool row available (or inserts one for a live-bought number that never
+    had a pool row). Returns {phone_number, ...} or None if the merchant has no
+    number. Best-effort / idempotent — safe to call twice.
+    """
+    rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{merchant_id}"},
+        limit=1,
+    )
+    if not rows:
+        return None
+    cfg = rows[0]
+    number = (cfg.get("phone_number") or "").strip()
+    if not number:
+        return None
+    vapi_id = cfg.get("vapi_phone_number_id")
+    sid = cfg.get("phone_number_sid")
+
+    # Return the DID to the pool (upsert-by-number): existing row → available,
+    # else insert (covers numbers provisioned by a live buy with no pool row).
+    existing = await db.select(
+        "phone_number_pool", filters={"phone_number": f"eq.{number}"}, limit=1)
+    if existing:
+        await db.update(
+            "phone_number_pool",
+            {"status": "available", "assigned_merchant_id": None, "assigned_at": None},
+            filters={"id": f"eq.{existing[0]['id']}"},
+        )
+    else:
+        await db.insert("phone_number_pool", {
+            "provider": "telnyx",
+            "phone_number": number,
+            "provider_sid": sid,
+            "vapi_phone_number_id": vapi_id,
+            "status": "available",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    # Unassign from the merchant + stop the agent. The unique index on
+    # phone_agent_config.phone_number requires the old row to drop the number
+    # before a new merchant can be assigned it.
+    await db.update(
+        "phone_agent_config",
+        {"phone_number": None, "phone_number_sid": None,
+         "vapi_phone_number_id": None, "active": False,
+         "updated_at": datetime.now(timezone.utc).isoformat()},
+        filters={"merchant_id": f"eq.{merchant_id}"},
+    )
+    logger.info("pool: reclaimed %s from cancelled merchant %s → available",
+                number, merchant_id)
+    return {"phone_number": number, "vapi_phone_number_id": vapi_id}
+
+
 async def pool_status(db) -> dict:
     """Counts by status for the admin view."""
     out = {"available": 0, "assigned": 0, "released": 0}
