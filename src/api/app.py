@@ -99,6 +99,7 @@ from .routes.analytics import router as analytics_router
 from .routes.content import router as content_router
 from .routes.portal import router as portal_router
 from .routes.quote import router as quote_router
+from .routes.settings import router as settings_router
 from .routes.team_admin import router as team_admin_router
 from .routes.time_clock import router as time_clock_router
 from .routes.team_chat import router as team_chat_router
@@ -292,6 +293,7 @@ app.include_router(analytics_router)
 app.include_router(content_router)
 app.include_router(portal_router)
 app.include_router(quote_router)
+app.include_router(settings_router)
 # Team Management (Workstream 1): employee RBAC admin, time clock, internal chat,
 # customer chatbot. All org-scoped + server-side permission enforced (src/api/rbac.py).
 app.include_router(team_admin_router)
