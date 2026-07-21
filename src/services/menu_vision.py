@@ -37,6 +37,24 @@ _BASE_URL = (
     or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 ).rstrip("/")
 
+# Reasoning models constrain sampling params: Moonshot's kimi-k3 rejects any
+# temperature except 1 ("invalid temperature: only 1 is allowed"), and its
+# reasoning tokens eat into max_tokens before the JSON comes out. Both knobs
+# follow the provider choice, defaulting to the gpt-4o values.
+def _vision_temperature() -> float:
+    try:
+        return float(os.getenv("MENU_VISION_TEMPERATURE", "0"))
+    except ValueError:
+        return 0.0
+
+
+def _vision_max_tokens() -> int:
+    try:
+        return int(os.getenv("MENU_VISION_MAX_TOKENS", "4000"))
+    except ValueError:
+        return 4000
+
+
 _SUPPORTED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_ITEMS = 200
 
@@ -160,8 +178,8 @@ async def extract_menu_from_image(image_bytes: bytes, content_type: str) -> list
     data_uri = f"data:{ctype};base64,{base64.b64encode(image_bytes).decode('ascii')}"
     payload = {
         "model": _MODEL,
-        "temperature": 0,
-        "max_tokens": 4000,
+        "temperature": _vision_temperature(),
+        "max_tokens": _vision_max_tokens(),
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
