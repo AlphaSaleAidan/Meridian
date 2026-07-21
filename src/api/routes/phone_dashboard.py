@@ -233,6 +233,25 @@ async def save_phone_config(req: PhoneConfigRequest, principal=Depends(require_s
         limit=1,
     )
 
+    # Go-live gate: an agent cannot be "active" (answering calls) without a
+    # provisioned phone number — activating without one left the merchant
+    # believing they were live while no call could ever land. phone_number is
+    # system-managed (only /provision-number sets it), so check the STORED
+    # value. Block only this unambiguous case; an empty menu is warned, not
+    # blocked (POS-synced menus can populate asynchronously).
+    if req.active is True:
+        stored_number = (rows[0].get("phone_number") if rows else "") or ""
+        if not stored_number.strip():
+            raise HTTPException(
+                400,
+                "Provision a phone number before activating your agent — "
+                "an active agent with no number can't receive calls.",
+            )
+        stored_menu = (rows[0].get("menu_items") if rows else None) or []
+        if not (req.menu_items or stored_menu):
+            logger.warning("phone go-live: merchant %s activating with an empty menu",
+                           req.merchant_id)
+
     payload = {
         k: v for k, v in req.model_dump().items()
         if v is not None and k != "merchant_id"
