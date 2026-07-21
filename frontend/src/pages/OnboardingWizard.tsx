@@ -379,7 +379,7 @@ export default function OnboardingWizard() {
                 Historical data import usually takes 1-2 hours. Your AI agents will start generating insights as data flows in. We'll notify you when your first insights are ready.
               </div>
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/app')}
                 className="w-full py-2.5 bg-[#17C5B0] text-white text-sm font-semibold rounded-lg hover:bg-[#17C5B0]/90 transition-all"
               >
                 Go to Dashboard
