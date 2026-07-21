@@ -74,6 +74,9 @@ function uid(): string {
 }
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
+// One-shot guard so the Clover App-Market install_complete relaunch can never
+// loop: set before we auto-relaunch authorize, cleared on oauth=success.
+const CLOVER_INSTALL_RELAUNCH_KEY = 'clover_install_relaunch'
 
 export default function CustomerOnboardingWizard() {
   const navigate = useNavigate()
@@ -120,6 +123,8 @@ export default function CustomerOnboardingWizard() {
   const [oauthSyncing, setOauthSyncing] = useState(false)
   const [oauthConnected, setOauthConnected] = useState(false)
   const [oauthError, setOauthError] = useState<string | null>(null)
+  // Brief notice while the Clover install_complete relaunch redirects away
+  const [oauthNotice, setOauthNotice] = useState<string | null>(null)
   const posConn = usePosStatusPoll(orgId, oauthSyncing)
 
   // Inventory
@@ -239,13 +244,30 @@ export default function CustomerOnboardingWizard() {
     if (!oauth) return
     // Clear the param so a refresh doesn't re-trigger this.
     const cleaned = new URLSearchParams(searchParams)
-    cleaned.delete('oauth'); cleaned.delete('merchant_id'); cleaned.delete('error'); cleaned.delete('warning')
+    cleaned.delete('oauth'); cleaned.delete('merchant_id'); cleaned.delete('error'); cleaned.delete('warning'); cleaned.delete('provider'); cleaned.delete('hint')
     window.history.replaceState({}, '', `${window.location.pathname}${cleaned.toString() ? '?' + cleaned.toString() : ''}`)
     if (oauth === 'success') {
+      try { sessionStorage.removeItem(CLOVER_INSTALL_RELAUNCH_KEY) } catch { /* ignore */ }
       setStep('pos'); setError(null); setOauthError(null); setOauthConnected(false); setOauthSyncing(true)
     } else if (oauth === 'denied' || oauth === 'error') {
       setStep('pos')
       setOauthError(searchParams.get('error') || 'POS authorization didn\'t complete. You can try again.')
+    } else if (oauth === 'install_complete') {
+      // Clover App-Market install completed but the OAuth code exchange hasn't
+      // run yet — relaunch authorize ONCE to finish linking. A sessionStorage
+      // one-shot guard prevents a redirect loop: if we already relaunched, ask
+      // the merchant to click Connect manually instead.
+      setStep('pos')
+      let alreadyRelaunched = false
+      try { alreadyRelaunched = sessionStorage.getItem(CLOVER_INSTALL_RELAUNCH_KEY) === '1' } catch { /* ignore */ }
+      if (!alreadyRelaunched && orgId) {
+        try { sessionStorage.setItem(CLOVER_INSTALL_RELAUNCH_KEY, '1') } catch { /* ignore */ }
+        setOauthNotice('App installed — finishing connection…')
+        window.location.href = `${API_BASE}/api/clover/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(window.location.pathname)}`
+      } else {
+        try { sessionStorage.removeItem(CLOVER_INSTALL_RELAUNCH_KEY) } catch { /* ignore */ }
+        setOauthError('Clover app installed, but the connection did not finish. Click "Connect with Clover" to finish linking.')
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -788,6 +810,11 @@ export default function CustomerOnboardingWizard() {
             {oauthError && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[12px] text-red-400">
                 {oauthError}
+              </div>
+            )}
+            {oauthNotice && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-[#1A8FD6]/10 border border-[#1A8FD6]/20 text-[12px] text-[#1A8FD6]">
+                <Loader2 size={14} className="animate-spin" /> {oauthNotice}
               </div>
             )}
             {oauthSyncing && !oauthConnected && (

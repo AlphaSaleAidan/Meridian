@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { Wifi, WifiOff, RefreshCw, CheckCircle2, AlertCircle, Clock, ExternalLink, SlidersHorizontal, Building2, Check, CreditCard, Camera, Plus, Bell } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useApi } from '@/hooks/useApi'
@@ -17,6 +17,10 @@ import { getAuthHeaders } from '@/lib/supabase'
 import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
+
+// One-shot guard so the Clover App-Market install_complete relaunch can never
+// loop: set before we auto-relaunch authorize, cleared on oauth=success.
+const CLOVER_INSTALL_RELAUNCH_KEY = 'clover_install_relaunch'
 
 const statusIcons: Record<string, typeof Wifi> = {
   connected: CheckCircle2,
@@ -540,6 +544,60 @@ export default function SettingsPage() {
   const orgId = useOrgId()
   const conn = useApi(() => api.connection(orgId), [orgId])
   const [showCameraWizard, setShowCameraWizard] = useState(false)
+  const [searchParams] = useSearchParams()
+  // POS OAuth return banner (Square/Clover callbacks redirect here with ?oauth=…)
+  const [oauthBanner, setOauthBanner] = useState<{ kind: 'success' | 'partial' | 'denied' | 'install'; text: string } | null>(null)
+
+  // ── POS OAuth return ──
+  // The Square/Clover OAuth callbacks redirect to /app/settings with
+  // ?oauth=success|partial|denied (plus merchant_id/warning/error). Surface the
+  // outcome and clear the params so a refresh doesn't re-trigger (same pattern
+  // as the onboarding wizards).
+  useEffect(() => {
+    const oauth = searchParams.get('oauth')
+    if (!oauth) return
+    // install_complete needs orgId to relaunch authorize; auth may still be
+    // hydrating on mount, so wait — this effect re-runs when orgId arrives.
+    if (oauth === 'install_complete' && !orgId) return
+    const cleaned = new URLSearchParams(searchParams)
+    cleaned.delete('oauth'); cleaned.delete('merchant_id'); cleaned.delete('error'); cleaned.delete('warning'); cleaned.delete('provider'); cleaned.delete('hint')
+    window.history.replaceState({}, '', `${window.location.pathname}${cleaned.toString() ? '?' + cleaned.toString() : ''}`)
+
+    if (oauth === 'success') {
+      try { sessionStorage.removeItem(CLOVER_INSTALL_RELAUNCH_KEY) } catch { /* ignore */ }
+      const merchantId = searchParams.get('merchant_id')
+      setOauthBanner({ kind: 'success', text: `POS connected${merchantId ? ` (merchant ${merchantId})` : ''}` })
+    } else if (oauth === 'partial') {
+      setOauthBanner({
+        kind: 'partial',
+        text: searchParams.get('warning') || 'POS authorized, but we could not finish saving the connection. Please try connecting again.',
+      })
+    } else if (oauth === 'denied' || oauth === 'error') {
+      setOauthBanner({
+        kind: 'denied',
+        text: searchParams.get('error') || 'POS authorization did not complete. You can try again.',
+      })
+    } else if (oauth === 'install_complete') {
+      // Clover App-Market install finished but the OAuth code exchange hasn't
+      // run yet — relaunch authorize ONCE to finish linking. A sessionStorage
+      // one-shot guard prevents a redirect loop: if we already relaunched,
+      // ask the merchant to click Connect manually instead.
+      let alreadyRelaunched = false
+      try { alreadyRelaunched = sessionStorage.getItem(CLOVER_INSTALL_RELAUNCH_KEY) === '1' } catch { /* ignore */ }
+      if (alreadyRelaunched) {
+        try { sessionStorage.removeItem(CLOVER_INSTALL_RELAUNCH_KEY) } catch { /* ignore */ }
+        setOauthBanner({
+          kind: 'partial',
+          text: 'Clover app installed, but the connection did not finish. Use Connect below to finish linking.',
+        })
+      } else {
+        try { sessionStorage.setItem(CLOVER_INSTALL_RELAUNCH_KEY, '1') } catch { /* ignore */ }
+        setOauthBanner({ kind: 'install', text: 'App installed — finishing connection…' })
+        window.location.href = `${API_URL}/api/clover/authorize?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent(window.location.pathname)}`
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId])
 
   // vision_cameras.features arrives as a JSON string via PostgREST
   const parseFeatures = (f: any): Record<string, any> => {
@@ -579,6 +637,21 @@ export default function SettingsPage() {
           <p className="text-sm text-[#A1A1A8] mt-1">POS connections and account configuration</p>
         </div>
       </ScrollReveal>
+
+      {/* POS OAuth return outcome */}
+      {oauthBanner && (
+        <div className={clsx('flex items-center gap-2 p-3 rounded-lg border text-xs', {
+          'bg-[#17C5B0]/10 border-[#17C5B0]/20 text-[#17C5B0]': oauthBanner.kind === 'success',
+          'bg-amber-500/10 border-amber-500/20 text-amber-400': oauthBanner.kind === 'partial',
+          'bg-red-500/10 border-red-500/20 text-red-400': oauthBanner.kind === 'denied',
+          'bg-[#1A8FD6]/10 border-[#1A8FD6]/20 text-[#1A8FD6]': oauthBanner.kind === 'install',
+        })}>
+          {oauthBanner.kind === 'success' && <CheckCircle2 size={14} className="shrink-0" />}
+          {(oauthBanner.kind === 'partial' || oauthBanner.kind === 'denied') && <AlertCircle size={14} className="shrink-0" />}
+          {oauthBanner.kind === 'install' && <RefreshCw size={14} className="shrink-0 animate-spin" />}
+          {oauthBanner.text}
+        </div>
+      )}
 
       {/* POS Connections */}
       <ScrollReveal variant="fadeUp" delay={0.1}>
