@@ -121,8 +121,40 @@ class ToastClient:
             for group in menu.get("groups", []):
                 for item in group.get("items", []):
                     item["_menu_group"] = group.get("name", "")
+                    # Toast's Orders API needs the group GUID (not name) on
+                    # every selection — stash it so the order writer can build
+                    # a real GUID-referenced order. Read path ignores it.
+                    item["_menu_group_guid"] = group.get("guid", "")
                     items.append(item)
         return items
+
+    async def get_dining_options(self) -> list[dict]:
+        """Dining options for this restaurant. Each carries a `guid` + a
+        `behavior` (TAKE_OUT / DELIVERY / DINE_IN) — the Orders API wants the
+        GUID, so the writer resolves order_type → behavior → guid."""
+        result = await self._get("/config/v2/diningOptions")
+        return result if isinstance(result, list) else []
+
+    async def _post(self, path: str, body: dict) -> tuple[int, Any]:
+        """POST with a single re-auth retry on 401. Returns (status, json|text)."""
+        async def _do():
+            async with httpx.AsyncClient(timeout=15.0) as http:
+                return await http.post(
+                    f"{TOAST_API_BASE}{path}", headers=self._headers(), json=body,
+                )
+        resp = await _do()
+        if resp.status_code == 401:
+            await self._authenticate()
+            resp = await _do()
+        try:
+            payload = resp.json()
+        except Exception:
+            payload = resp.text[:500]
+        return resp.status_code, payload
+
+    async def create_order(self, order_payload: dict) -> tuple[int, Any]:
+        """Write a GUID-referenced order to Toast (Orders API v2)."""
+        return await self._post("/orders/v2/orders", order_payload)
 
     async def get_employees(self) -> list[dict]:
         result = await self._get("/labor/v1/employees")

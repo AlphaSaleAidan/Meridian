@@ -19,6 +19,13 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY") or os.getenv("SUPABASE_ANON_KEY
 TOAST_API_BASE = os.getenv("TOAST_API_BASE_URL", "https://ws-api.toasttab.com")
 
 
+def _toast_writer_enabled() -> bool:
+    """Gate for the real Toast Orders-API writer. Default OFF — Toast routes to
+    the notification fallback until this is flipped on post-sandbox-verification."""
+    return os.environ.get("TOAST_ORDER_WRITER_ENABLED", "").strip().lower() in (
+        "1", "true", "yes", "on")
+
+
 def _square_orders_url() -> str:
     """Square Orders endpoint — honor SQUARE_ENVIRONMENT so a sandbox/test
     merchant on the phone path doesn't fire against the real production POS
@@ -32,12 +39,11 @@ def _square_orders_url() -> str:
 # own module; clover_api_base is re-exported here for existing callers.
 from clover_orders import clover_api_base, create_clover_order  # noqa: E402,F401
 
-# Systems with a WORKING direct order writer on the phone path. Toast is
-# deliberately NOT here: its writer sends name/price selections but Toast's
-# Orders API requires menu-item GUIDs (+ a GUID diningOption) we can't supply
-# without a per-merchant menu-GUID map, so a real Toast order 4xx's. Route
-# Toast to the notification fallback (dashboard + merchant SMS) — honest
-# delivery — until a GUID-based writer exists. (Square/Clover are real.)
+# Systems with an always-on direct order writer on the phone path. Toast has a
+# real GUID-referenced writer now (_create_toast_order) but stays OUT of this
+# set: it's gated behind TOAST_ORDER_WRITER_ENABLED (default OFF) and dispatched
+# explicitly, falling back to notification on any miss, until it's verified
+# against a real Toast sandbox. (Square/Clover are on unconditionally.)
 DIRECT_API_SYSTEMS = {"square", "clover"}
 
 OAUTH_SYSTEMS = {
@@ -119,6 +125,17 @@ async def create_pos_order(
             return await _create_square_order(order, access_token, location_id)
         elif pos_system == "clover":
             return await create_clover_order(order, access_token, location_id)
+        elif pos_system == "toast":
+            # Toast direct write is gated OFF until verified against a real Toast
+            # sandbox. When on, try the real GUID-referenced writer; on ANY
+            # miss (unresolved item, menu unavailable, API error) fall back to
+            # the notification path so the order is never silently dropped.
+            if _toast_writer_enabled():
+                result = await _create_toast_order(order, access_token, location_id)
+                if result.get("success"):
+                    return result
+                logger.info("Toast writer miss (%s) — notification fallback", result.get("reason"))
+            return await _create_notification_order(order, "toast")
         elif pos_system in WEBHOOK_CAPABLE_SYSTEMS or pos_system in OAUTH_SYSTEMS:
             return await _create_generic_order(order, pos_system, access_token, location_id)
         else:
@@ -237,63 +254,81 @@ async def _create_square_order(
             return {"success": False, "reason": "square_api_error", "status": res.status_code}
 
 
+def _toast_headers(access_token: str, location_id: str) -> dict:
+    return {
+        "Authorization": f"Bearer {access_token}",
+        "Toast-Restaurant-External-ID": location_id,
+        "Content-Type": "application/json",
+    }
+
+
 async def _create_toast_order(
     order: dict, access_token: str, location_id: str
 ) -> dict:
-    selections = []
-    for item in order.get("items", []):
-        selections.append({
-            "name": item["name"],
-            "quantity": item["quantity"],
-            "price": item.get("unit_price", 0),
-            "modifiers": [
-                {"name": mod} for mod in item.get("modifications", [])
-            ],
-            "specialRequest": item.get("special_instructions", ""),
-        })
+    """Write a real GUID-referenced order to Toast (Orders API v2).
 
-    payload = {
-        "entityType": "Order",
-        "externalId": f"meridian-phone-{order.get('merchant_id', '')}",
-        "diningOption": _toast_dining_option(order.get("order_type", "pickup")),
-        "checks": [
-            {
-                "customer": {
-                    "firstName": order.get("customer_name", "").split()[0] if order.get("customer_name") else "Phone",
-                    "lastName": " ".join(order.get("customer_name", "").split()[1:]) or "Order",
-                    "phone": order.get("caller_phone", ""),
-                },
-                "selections": selections,
-            }
-        ],
-    }
+    Toast rejects name/price selections — every selection must reference a live
+    menu-item GUID (+ its menu-group GUID) and the order a dining-option GUID.
+    So we fetch the merchant's live menu + dining options, resolve the phone
+    order's item names → GUIDs, and only POST when everything resolves. If any
+    item can't be mapped we return a structured failure so the caller falls back
+    to the SMS/dashboard path — an honest miss beats a mis-charged order.
 
-    async with httpx.AsyncClient() as client:
+    Gated OFF by TOAST_ORDER_WRITER_ENABLED at the dispatch site; verified
+    against a real Toast sandbox before that flag is ever flipped on. Toast
+    tokens are short-lived (client_credentials) — token refresh is a
+    sandbox-verification follow-up, out of scope for the mapping layer here.
+    """
+    # Import the pure resolver from src/ (same sys.path trick as sms_order.py).
+    import sys
+    from pathlib import Path
+    _root = str(Path(__file__).resolve().parents[2])
+    if _root not in sys.path:
+        sys.path.insert(0, _root)
+    from src.toast.order_writer import ToastMenuResolver, build_toast_order
+
+    headers = _toast_headers(access_token, location_id)
+    async with httpx.AsyncClient(timeout=15) as client:
+        menu_res, dining_res = None, None
+        try:
+            menu_raw = await client.get(f"{TOAST_API_BASE}/menus/v2/menus", headers=headers)
+            dining_raw = await client.get(
+                f"{TOAST_API_BASE}/config/v2/diningOptions", headers=headers)
+            menu_res = menu_raw.json() if menu_raw.status_code == 200 else None
+            dining_res = dining_raw.json() if dining_raw.status_code == 200 else None
+        except Exception as e:
+            logger.warning("Toast menu/dining fetch failed: %s — falling back", e)
+            return {"success": False, "reason": "toast_menu_fetch_failed", "pos_system": "toast"}
+
+        if not menu_res or dining_res is None:
+            return {"success": False, "reason": "toast_menu_unavailable", "pos_system": "toast"}
+
+        # Flatten menus → items with group GUID (mirrors client.get_menu_items).
+        menu_items = []
+        for menu in (menu_res if isinstance(menu_res, list) else [menu_res]):
+            for group in menu.get("groups", []):
+                for it in group.get("items", []):
+                    it["_menu_group_guid"] = group.get("guid", "")
+                    menu_items.append(it)
+
+        resolver = ToastMenuResolver(menu_items, dining_res)
+        built = build_toast_order(order, resolver)
+        if not built.get("ok"):
+            logger.info("Toast order not built (%s, unresolved=%s) — notification fallback",
+                        built.get("reason"), built.get("unresolved"))
+            return {"success": False, "reason": f"toast_{built.get('reason')}",
+                    "pos_system": "toast", "unresolved": built.get("unresolved", [])}
+
         res = await client.post(
             f"{TOAST_API_BASE}/orders/v2/orders",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Toast-Restaurant-External-ID": location_id,
-                "Content-Type": "application/json",
-            },
-            timeout=10,
+            json=built["payload"], headers=headers,
         )
         if res.status_code in (200, 201):
             data = res.json()
             return {"success": True, "pos_order_id": data.get("guid", ""), "pos_system": "toast"}
-        else:
-            return {"success": False, "reason": "toast_api_error", "status": res.status_code}
-
-
-def _toast_dining_option(order_type: str) -> str:
-    mapping = {
-        "pickup": "TAKE_OUT",
-        "delivery": "DELIVERY",
-        "dine_in": "DINE_IN",
-        "reservation": "DINE_IN",
-    }
-    return mapping.get(order_type, "TAKE_OUT")
+        logger.warning("Toast order POST %d: %s", res.status_code, res.text[:300])
+        return {"success": False, "reason": "toast_api_error",
+                "status": res.status_code, "pos_system": "toast"}
 
 
 async def _create_generic_order(
