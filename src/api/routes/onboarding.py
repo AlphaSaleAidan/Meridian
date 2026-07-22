@@ -804,6 +804,24 @@ def _pos_lead_table(table: str | None) -> str:
     return t
 
 
+async def _enforce_lead_owner(db, table: str, deal_id: str, claims: dict) -> None:
+    """A rep may only connect/verify POS for a lead assigned to them (or an
+    unassigned one) — otherwise any logged-in rep could flip another rep's deal.
+    Reuses commissions._resolve_rep_id (email→sales_reps.id, the same join the
+    canada/us_leads RLS uses). Unassigned (rep_id NULL) stays open to any rep,
+    matching that RLS."""
+    rows = await db.select(table, columns="rep_id",
+                           filters={"id": f"eq.{deal_id}"}, limit=1)
+    if not rows:
+        return
+    lead_rep = rows[0].get("rep_id")
+    if not lead_rep:
+        return
+    from .commissions import _resolve_rep_id
+    if str(lead_rep) != str(await _resolve_rep_id(db, claims)):
+        raise HTTPException(403, "This lead is assigned to another rep")
+
+
 class ConnectPosRequest(BaseModel):
     deal_id: str | None = None
     provider: str
@@ -820,11 +838,16 @@ class VerifyPosRequest(BaseModel):
     table: str | None = None
 
 
-@router.post("/connect-pos", dependencies=[Depends(require_jwt)])
-async def connect_pos_onboarding(req: ConnectPosRequest):
+@router.post("/connect-pos")
+async def connect_pos_onboarding(req: ConnectPosRequest, claims: dict = Depends(require_jwt)):
     """Test POS credentials then save if valid. Called from the US lead detail
     page (Canada reps have no POS UI — customers self-connect via /api/pos)."""
     from .pos_connections import test_connection, TestConnectionRequest
+
+    if req.deal_id:
+        # Ownership check BEFORE the (expensive) provider test — a rep can't
+        # connect POS for another rep's lead.
+        await _enforce_lead_owner(get_db(), _pos_lead_table(req.table), req.deal_id, claims)
 
     test_result = await test_connection(TestConnectionRequest(
         pos_system=req.provider,
@@ -855,12 +878,14 @@ async def connect_pos_onboarding(req: ConnectPosRequest):
     }
 
 
-@router.post("/verify-pos", dependencies=[Depends(require_jwt)])
-async def verify_pos_onboarding(req: VerifyPosRequest):
+@router.post("/verify-pos")
+async def verify_pos_onboarding(req: VerifyPosRequest, claims: dict = Depends(require_jwt)):
     """Quick verify that POS connection is still live."""
 
     if req.deal_id:
         db = get_db()
+        # Ownership first — and it must NOT be swallowed by the except below.
+        await _enforce_lead_owner(db, _pos_lead_table(req.table), req.deal_id, claims)
         try:
             rows = await db.select(_pos_lead_table(req.table), filters={"id": f"eq.{req.deal_id}"}, limit=1)
             if rows and rows[0].get("pos_status") == "connected":
