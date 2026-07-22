@@ -3,7 +3,7 @@
 // (US sales tax on SaaS is state-specific and handled downstream, not
 // fabricated here), "United States" branding, and a US invoice number/URL.
 // Kept as a separate file so the Canada invoice generator is never touched.
-import jsPDF from 'jspdf'
+// jsPDF (~592KB) lazy-imported inside generateInvoicePdf — see generate-invoice-pdf.ts.
 import QRCode from 'qrcode'
 
 export interface InvoiceInput {
@@ -44,6 +44,7 @@ export function generateInvoiceUrl(invoiceNumber: string): string {
 }
 
 export async function generateInvoicePdf(input: InvoiceInput): Promise<Blob> {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const W = 210
   const margin = 20

@@ -126,6 +126,16 @@ function MeshGradientScene() {
 
 export default function MeshGradient() {
   const [contextLost, setContextLost] = useState(false)
+  // Skip the continuous WebGL shader on phones and for reduced-motion users —
+  // it animates every frame and is a primary source of landing-page jank on
+  // low-end devices. Fall back to the cheap static gradient below. ponytail:
+  // native matchMedia, no lib.
+  const [staticOnly] = useState(() =>
+    typeof window !== 'undefined' && !!window.matchMedia && (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      window.matchMedia('(max-width: 768px)').matches
+    )
+  )
 
   const handleCreated = useCallback(({ gl }: { gl: THREE.WebGLRenderer }) => {
     const canvas = gl.domElement
@@ -140,8 +150,9 @@ export default function MeshGradient() {
     })
   }, [])
 
-  // Graceful fallback when WebGL context is lost
-  if (contextLost) {
+  // Graceful fallback when WebGL context is lost OR when we skip the shader
+  // (mobile / reduced-motion).
+  if (contextLost || staticOnly) {
     return (
       <div
         className="absolute inset-0 overflow-hidden"
