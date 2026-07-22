@@ -189,6 +189,31 @@ async def stripe_webhook(request: Request):
                             await db.update("organizations", {
                                 "metadata": json_mod.dumps({**meta, "payment_status": "cancelled"}),
                             }, filters={"id": f"eq.{s['org_id']}"})
+                            # Record an append-only cancellation so the wind-down
+                            # gate (auth._subscription_wound_down) can cut access
+                            # at period end. Mirrors billing.self_cancel's row.
+                            # access_until = Stripe's current_period_end (paid
+                            # through), else now (immediate). Best-effort: the row
+                            # is audit + gate input, never fails the webhook.
+                            try:
+                                cpe = data.get("current_period_end")
+                                if isinstance(cpe, (int, float)):
+                                    access_until = datetime.fromtimestamp(
+                                        cpe, tz=timezone.utc).isoformat()
+                                else:
+                                    access_until = datetime.now(timezone.utc).isoformat()
+                                await db.insert("subscription_cancellations", {
+                                    "org_id": s["org_id"],
+                                    "canceled_by_email": "",
+                                    "reason": "stripe:subscription.deleted",
+                                    "canceled_at": datetime.now(timezone.utc).isoformat(),
+                                    "winddown_status": "active_until_period_end",
+                                    "access_until": access_until,
+                                    "commission_halt_requested": True,
+                                })
+                            except Exception:
+                                logger.exception("cancellation record failed for org %s",
+                                                 s.get("org_id"))
                             # Reclaim the merchant's phone number to the pool for
                             # reassignment (Stripe-side / dunning cancellation).
                             # Best-effort — a reclaim hiccup never fails the webhook.
