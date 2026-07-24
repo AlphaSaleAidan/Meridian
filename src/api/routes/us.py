@@ -505,11 +505,18 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                 # Surface a seed failure so the rep knows the negotiated fee
                 # fell back to the tier default (mirrors canada.create_customer).
                 return {"ok": True, "org_id": org_id,
+                        # Return BOTH keys: US portal pages read a mix of
+                        # temp_password / temporary_password (Canada uses the
+                        # latter). Aliasing both removes the drift without a
+                        # coordinated frontend deploy.
                         "temp_password": temp_password,
+                        "temporary_password": temp_password,
                         "fee_seeded": fee_seeded, "order_fee_cents": fee,
                         **fee_parity}
 
-    return {"ok": True, "org_id": org_id, "temp_password": temp_password,
+    return {"ok": True, "org_id": org_id,
+            "temp_password": temp_password,
+            "temporary_password": temp_password,
             **fee_parity}
 
 
