@@ -512,7 +512,7 @@ async def test_already_paid_order_excluded_from_match(monkeypatch):
         patched["row_id"] = row_id
     monkeypatch.setattr(pay_on_phone, "_patch_order_row", fake_patch)
 
-    res = await pay_on_phone.mark_order_paid(merchant_id="m1", caller_phone="+1555")
+    await pay_on_phone.mark_order_paid(merchant_id="m1", caller_phone="+1555")
     assert patched["row_id"] == "row-open"  # the finalized row is skipped
 
 
