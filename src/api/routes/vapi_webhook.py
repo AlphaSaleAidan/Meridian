@@ -778,7 +778,13 @@ def _order_reached(routed: dict) -> bool:
     if mode == "pay_now":
         return bool(routed.get("sms_sent") or routed.get("simulated_paid"))
     delivery = routed.get("delivery") or {}
-    pos_ok = (delivery.get("pos") or {}).get("status") in _REACHED_POS
+    # POS ticket landed (either the final pos_result reports success, or the
+    # delivery leg does) OR the merchant staff SMS went out. A POS rejection
+    # leaves pos_result.success False, so the honesty guarantee holds.
+    pos_ok = (
+        bool((routed.get("pos_result") or {}).get("success"))
+        or (delivery.get("pos") or {}).get("status") in _REACHED_POS
+    )
     merchant_ok = (delivery.get("merchant_sms") or {}).get("status") == "sent"
     return bool(pos_ok or merchant_ok)
 

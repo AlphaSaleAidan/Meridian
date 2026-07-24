@@ -37,6 +37,25 @@ router = APIRouter(prefix="/twilio", tags=["phone-agent"])
 
 DEMO_MERCHANT_ID = os.getenv("DEMO_MERCHANT_ID", "demo-merchant")
 
+
+def _demo_numbers() -> set[str]:
+    """Inbound DIDs that legitimately answer as the demo assistant (the demo /
+    test-kitchen line). Comma-separated E.164 in DEMO_PHONE_NUMBERS."""
+    return {
+        n.strip() for n in os.getenv("DEMO_PHONE_NUMBERS", "").split(",") if n.strip()
+    }
+
+
+def _unmapped_strict() -> bool:
+    """When on, an inbound call to a DID we can't map to a real merchant is NOT
+    served the demo assistant (which would silently route any order to the demo
+    merchant, losing it). Instead the caller hears a polite 'not set up' message.
+    DEFAULT OFF — legacy behavior (serve demo) is preserved until an operator
+    populates DEMO_PHONE_NUMBERS and flips PHONE_UNMAPPED_STRICT=1."""
+    return os.getenv("PHONE_UNMAPPED_STRICT", "0").strip().lower() in (
+        "1", "true", "on", "yes",
+    )
+
 # Feature flag: when true, /voice returns <Connect><Stream> TwiML and the
 # Pipecat sidecar handles the call over WebSocket. When false, the legacy
 # stitched <Gather>+Polly path runs (instant rollback).
@@ -921,8 +940,29 @@ async def twilio_voice(request: Request):
     if config_row and not merchant_id:
         merchant_id = config_row.get("merchant_id")
     if not merchant_id:
+        # Unmapped inbound DID. Serving the demo assistant here means any order
+        # the caller places is routed to the DEMO merchant — the real business
+        # never sees it. Default (legacy) keeps serving demo so the demo/test
+        # line and any transient lookup miss are unaffected; but with
+        # PHONE_UNMAPPED_STRICT on, a DID that is NOT an allow-listed demo line
+        # gets a polite "not set up" hangup instead of silently swallowing an
+        # order into the demo merchant.
+        if _unmapped_strict() and twilio_number and twilio_number not in _demo_numbers():
+            logger.error(
+                "Unmapped inbound DID %s and strict mode on — refusing to take an "
+                "order to the demo merchant.", twilio_number,
+            )
+            await _log_call_end(call_sid, "unmapped_number")
+            return Response(
+                content=_hangup(
+                    "Thanks for calling. This number isn't set up to take orders "
+                    "yet. Please try again later or contact the business directly."
+                ),
+                media_type=TWIML,
+            )
         merchant_id = DEMO_MERCHANT_ID
-        logger.info("No merchant found for %s — using demo merchant %s", twilio_number, DEMO_MERCHANT_ID)
+        logger.warning("No merchant found for %s — serving demo merchant %s (unmapped DID)",
+                       twilio_number, DEMO_MERCHANT_ID)
 
     await _log_call_start(call_sid, caller_phone, merchant_id=merchant_id)
 
