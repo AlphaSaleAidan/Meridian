@@ -294,11 +294,20 @@ def _install_pos_spy(monkeypatch, spy):
     monkeypatch.setattr(dc, "create_pos_for_config", fake_create_pos_for_config)
 
 
+def _row_id_from_url(url: str) -> str:
+    return url.split("id=eq.")[1].split("&")[0] if "id=eq." in url else "row"
+
+
 def _install_patch_client(monkeypatch, patches=None):
-    """Stub httpx.AsyncClient so mark_order_paid's PATCH lands in `patches`
-    (when given) instead of hitting Supabase."""
+    """Stub httpx.AsyncClient so mark_order_paid's PATCHes land in `patches`
+    (when given) instead of hitting Supabase. The CAS claim (url carries
+    status=neq.paid) echoes a representation row so the flip 'matches'."""
     class FakeResp:
-        status_code = 204
+        def __init__(self, code=204, rows=None):
+            self.status_code = code
+            self._rows = rows or []
+            self.content = b"x" if rows else b""
+        def json(self): return self._rows
 
     class FakeClient:
         async def __aenter__(self): return self
@@ -307,7 +316,9 @@ def _install_patch_client(monkeypatch, patches=None):
         async def patch(self, url, json=None, headers=None, timeout=None):
             if patches is not None:
                 patches.append({"url": url, "json": json})
-            return FakeResp()
+            if "status=neq.paid" in url:  # the CAS claim → matched one row
+                return FakeResp(200, [{"id": _row_id_from_url(url)}])
+            return FakeResp(204)
 
     monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
 
@@ -408,25 +419,27 @@ async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
     assert res["pos_pushed"] is True
     assert len(spy.pos_calls) == 1                            # ticket pushed on payment
     assert spy.pos_calls[0]["items"][0]["name"] == "Cheeseburger"
-    # PATCH SPLIT: critical paid/kitchen flags first, telemetry second — a
-    # telemetry-column 400 can never hold the kitchen release hostage.
+    # CLAIM-THEN-FANOUT: the CAS claim (status=neq.paid) flips paid/kitchen
+    # first and gates the fan-out; the pos ids + telemetry land in the
+    # best-effort post-claim PATCH so a column 400 can't un-commit the money.
     assert len(patches) == 2
-    assert "id=eq.row-42" in patches[0]["url"]                # patched by primary key
+    assert "id=eq.row-42" in patches[0]["url"]                # claim by primary key
+    assert "status=neq.paid" in patches[0]["url"]             # ...guarded (CAS)
     p = patches[0]["json"]
     assert p["payment_status"] == "paid"
     assert p["kitchen_released"] is True
-    assert p["pos_order_id"] == "POS-DEFERRED-1"
-    assert p["pos_success"] is True
-    # the critical PATCH carries NO fan-out telemetry columns
+    # the CLAIM carries NO pos ids / fan-out telemetry (those come post-claim)
+    assert "pos_order_id" not in p
     assert "pos_delivery_status" not in p
     assert "merchant_notify_status" not in p
     assert "delivery_detail" not in p
-    # release fan-out ledger (best-effort PATCH 2): POS pushed on payment;
-    # merchant notification attempted (demo config has no transfer_number →
-    # recorded as skipped).
+    # post-claim PATCH: POS pushed on payment; merchant notification attempted
+    # (demo config has no transfer_number → recorded as skipped).
     assert "id=eq.row-42" in patches[1]["url"]
     t = patches[1]["json"]
-    assert "payment_status" not in t                          # telemetry only
+    assert "payment_status" not in t                          # post-claim only
+    assert t["pos_order_id"] == "POS-DEFERRED-1"
+    assert t["pos_success"] is True
     assert t["pos_delivery_status"] == "sent"
     assert t["merchant_notify_status"] == "skipped_no_number"
     assert t["delivery_detail"]["pos"]["released_at_payment"] is True
@@ -476,17 +489,18 @@ async def test_two_open_orders_matched_by_paid_amount(monkeypatch):
         return [dict(order_12), dict(order_30)]  # created_at.desc → $12 latest
     monkeypatch.setattr(pay_on_phone, "_fetch_orders", fake_fetch_list)
 
-    patched = {}
-    async def fake_patch(row_id, patch):
-        patched["row_id"] = row_id
-    monkeypatch.setattr(pay_on_phone, "_patch_order_row", fake_patch)
+    claimed = {}
+    async def fake_claim(row_id, patch):
+        claimed["row_id"] = row_id
+        return [{"id": row_id}]  # CAS matched
+    monkeypatch.setattr(pay_on_phone, "_claim_order_paid", fake_claim)
 
     # $30 order + a small surcharge that rode the Stripe charge.
     res = await pay_on_phone.mark_order_paid(
         merchant_id="m1", caller_phone="+15555550111", paid_amount_cents=3130,
     )
     assert res["matched_by"] == "merchant_phone_amount"
-    assert patched["row_id"] == "row-30"  # NOT the latest ($12) row
+    assert claimed["row_id"] == "row-30"  # NOT the latest ($12) row
 
 
 async def test_already_paid_order_excluded_from_match(monkeypatch):
@@ -507,13 +521,14 @@ async def test_already_paid_order_excluded_from_match(monkeypatch):
         return [dict(paid), dict(open_row)]  # paid is "latest"
     monkeypatch.setattr(pay_on_phone, "_fetch_orders", fake_fetch_list)
 
-    patched = {}
-    async def fake_patch(row_id, patch):
-        patched["row_id"] = row_id
-    monkeypatch.setattr(pay_on_phone, "_patch_order_row", fake_patch)
+    claimed = {}
+    async def fake_claim(row_id, patch):
+        claimed["row_id"] = row_id
+        return [{"id": row_id}]  # CAS matched
+    monkeypatch.setattr(pay_on_phone, "_claim_order_paid", fake_claim)
 
     await pay_on_phone.mark_order_paid(merchant_id="m1", caller_phone="+1555")
-    assert patched["row_id"] == "row-open"  # the finalized row is skipped
+    assert claimed["row_id"] == "row-open"  # the finalized row is skipped
 
 
 # ─── PATCH split: paid flag isolated from fan-out telemetry ──────────────────
@@ -552,11 +567,16 @@ def _install_release_env(monkeypatch, spy):
 
 
 def _install_scripted_patch_client(monkeypatch, patches, fail_when):
-    """PATCH client that fails (400) any request matching `fail_when(json)`."""
+    """PATCH client that fails (400) any request matching `fail_when(json)`.
+    The CAS claim (status=neq.paid) still honors fail_when, else echoes a matched
+    representation row so the release fan-out proceeds."""
     class FakeResp:
-        def __init__(self, code, text=""):
+        def __init__(self, code, text="", rows=None):
             self.status_code = code
             self.text = text
+            self._rows = rows or []
+            self.content = b"x" if rows else b""
+        def json(self): return self._rows
 
     class FakeClient:
         async def __aenter__(self): return self
@@ -566,6 +586,8 @@ def _install_scripted_patch_client(monkeypatch, patches, fail_when):
             patches.append({"url": url, "json": json})
             if fail_when(json or {}):
                 return FakeResp(400, 'column "does_not_exist" of relation "phone_orders"')
+            if "status=neq.paid" in url:  # the CAS claim → matched one row
+                return FakeResp(200, rows=[{"id": _row_id_from_url(url)}])
             return FakeResp(204)
 
     monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", FakeClient)
@@ -593,6 +615,56 @@ async def test_telemetry_patch_failure_never_blocks_kitchen_release(monkeypatch)
     assert patches[0]["json"]["payment_status"] == "paid"   # critical committed first
     assert patches[0]["json"]["kitchen_released"] is True
     assert "delivery_detail" in patches[1]["json"]          # telemetry tried + failed
+
+
+async def test_duplicate_event_loses_cas_and_skips_fanout(monkeypatch):
+    """The whole point of the CAS: a SECOND payment event for the same order
+    (Square payment.created + payment.updated, or a Stripe retry) finds the row
+    already paid, the claim matches zero rows, and the release fan-out (POS push
+    + merchant SMS) does NOT run again — no double kitchen ticket."""
+    spy = Spy()
+    _install_release_env(monkeypatch, spy)  # sets POS_PUSH_AFTER_PAYMENT, held row, config
+
+    # Claim returns [] → another worker/event already paid this order.
+    async def fake_claim(row_id, patch):
+        return []
+    monkeypatch.setattr(pay_on_phone, "_claim_order_paid", fake_claim)
+
+    res = await pay_on_phone.mark_order_paid(
+        merchant_id="real-merchant", caller_phone="+15555550111", method="stripe",
+    )
+
+    assert res["released"] is False
+    assert res.get("duplicate") is True
+    assert spy.pos_calls == []          # NO second POS push
+    assert spy.sms_calls == []          # NO second merchant SMS
+
+
+async def test_cas_claim_guards_on_status_neq_paid(monkeypatch):
+    """The claim PATCH must carry the status<>paid guard in its URL (the CAS
+    gate) — without it, concurrent events double-release."""
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_KEY", "fake-key")
+    seen = {}
+
+    class _Resp:
+        status_code = 200
+        content = b"x"
+        def json(self): return [{"id": "row-1"}]
+
+    class _Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def patch(self, url, json=None, headers=None, timeout=None):
+            seen["url"] = url
+            seen["prefer"] = (headers or {}).get("Prefer")
+            return _Resp()
+
+    monkeypatch.setattr(pay_on_phone.httpx, "AsyncClient", _Client)
+    rows = await pay_on_phone._claim_order_paid("row-1", {"status": "paid"})
+    assert rows == [{"id": "row-1"}]
+    assert "status=neq.paid" in seen["url"]
+    assert seen["prefer"] == "return=representation"
 
 
 async def test_critical_patch_failure_reports_not_released(monkeypatch):
