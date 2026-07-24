@@ -82,19 +82,57 @@ async def _merchant_service_fee_cents(merchant_id: str) -> int:
     return fee
 
 
-async def _reverse_paid_order(db, payment_intent: str, *, disputed: bool) -> None:
-    """A charge was refunded/disputed — undo what payment confirmation did.
+async def _reversed_fee_cents(db, merchant_id: str, order_id) -> int:
+    """Service-fee cents already reversed for this order (sum of prior
+    stripe_fee_reversal debits). Lets a later/larger partial (or full) refund
+    reverse only the not-yet-reversed DELTA instead of double-debiting. Fails to
+    0 (fail-open) — worst case we under-reverse, never over-reverse."""
+    try:
+        rows = await db.select(
+            "voice_ledger", "amount_cents,note",
+            filters={"merchant_id": f"eq.{merchant_id}", "source": "eq.stripe_fee_reversal"},
+            limit=1000,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning("refund: prior-reversal lookup failed for %s: %s", merchant_id, e)
+        return 0
+    suffix = f":{order_id}"
+    return sum(
+        int(r.get("amount_cents") or 0)
+        for r in (rows or []) if str(r.get("note") or "").endswith(suffix)
+    )
+
+
+async def _reverse_paid_order(
+    db, payment_intent: str, *, disputed: bool,
+    amount_charged: int = 0, amount_refunded: int = 0, fully_refunded: bool = True,
+) -> None:
+    """A charge was refunded/disputed — undo what payment confirmation did,
+    PROPORTIONAL to how much actually left the merchant.
 
     Linked by the payment_intent stored as phone_orders.payment_txn_id at pay
-    time. Flips the order status and reverses the service-fee credit via an
-    idempotent ledger debit (source stripe_fee_reversal, ref=payment_intent), so
-    a webhook retry never double-reverses. Best-effort throughout: a missing row
-    / column / ledger hiccup is logged, never raised (the webhook must still 200
-    so Stripe stops retrying). Website orders take their fee as a checkout line,
-    not a ledger credit, so there is nothing to reverse for them here."""
+    time. A partial refund (`fully_refunded=False`) marks the order
+    'partially_refunded' and reverses only the pro-rata slice of the service fee
+    (fee × amount_refunded / amount_charged); a full refund/dispute marks it
+    refunded/disputed and reverses the whole fee. The reversal debits only the
+    DELTA past what's already been reversed for this order (via
+    _reversed_fee_cents), so a $2 then $5 refund on the same order reverse
+    correctly and a webhook RETRY of either never double-reverses. Best-effort
+    throughout: a missing row / column / ledger hiccup is logged, never raised
+    (the webhook must still 200 so Stripe stops retrying). Website orders take
+    their fee as a checkout line, not a ledger credit, so nothing to reverse.
+
+    Note: sales-rep commission is milestone/subscription-based (accrued at deal
+    close, not per phone order), so a per-order refund correctly touches nothing
+    in the commission ledger — there is no per-order commission to reverse."""
     if not payment_intent:
         return
-    status = "disputed" if disputed else "refunded"
+    if disputed:
+        status = "disputed"
+    elif fully_refunded:
+        status = "refunded"
+    else:
+        status = "partially_refunded"
     try:
         rows = await db.select(
             "phone_orders", "id,merchant_id,status",
@@ -118,14 +156,29 @@ async def _reverse_paid_order(db, payment_intent: str, *, disputed: bool) -> Non
     if merchant_id:
         fee_cents = await _merchant_service_fee_cents(merchant_id)
         if fee_cents > 0:
-            try:
-                from ...services.voice_ledger import debit
-                await debit(merchant_id, fee_cents, source="stripe_fee_reversal",
-                            ref=payment_intent, note=f"{status}:{order.get('id')}")
-                logger.info("refund: reversed %d¢ fee for merchant %s (%s)",
-                            fee_cents, merchant_id, status)
-            except Exception as e:  # noqa: BLE001 — ledger reversal never blocks the webhook
-                logger.error("refund: voice_ledger reversal failed for %s: %s", merchant_id, e)
+            # Target reversal: whole fee on a full refund/dispute; pro-rata on a
+            # partial. Clamp to [0, fee_cents]. amount_charged<=0 (dispute object
+            # carries no amount_refunded) falls back to the full fee.
+            if disputed or fully_refunded or amount_charged <= 0:
+                target = fee_cents
+            else:
+                target = int(round(fee_cents * amount_refunded / amount_charged))
+                target = max(0, min(target, fee_cents))
+            already = await _reversed_fee_cents(db, merchant_id, order.get("id"))
+            delta = target - already
+            if delta > 0:
+                try:
+                    from ...services.voice_ledger import debit
+                    # ref carries the cumulative refunded amount so distinct
+                    # partial-refund totals post distinctly while a retry of the
+                    # same refund (same cumulative amount) dedupes as a no-op.
+                    ref = f"{payment_intent}:{amount_refunded}" if not (disputed or fully_refunded) else payment_intent
+                    await debit(merchant_id, delta, source="stripe_fee_reversal",
+                                ref=ref, note=f"{status}:{order.get('id')}")
+                    logger.info("refund: reversed %d¢ of %d¢ fee for merchant %s (%s, refunded %d/%d¢)",
+                                delta, fee_cents, merchant_id, status, amount_refunded, amount_charged)
+                except Exception as e:  # noqa: BLE001 — ledger reversal never blocks the webhook
+                    logger.error("refund: voice_ledger reversal failed for %s: %s", merchant_id, e)
 
 
 @router.post("/onboard/{merchant_id}")
@@ -250,7 +303,22 @@ async def connect_webhook(request: Request):
         disputed = etype.startswith("charge.dispute")
         pi = obj.get("payment_intent") or (
             obj.get("charge") if disputed else obj.get("id")) or ""
-        await _reverse_paid_order(db, str(pi), disputed=disputed)
+        # charge.refunded carries the CUMULATIVE amounts on the Charge object;
+        # obj.refunded is True only once fully refunded. Disputes withdraw the
+        # whole charge → treat as full. This lets a $2 courtesy refund on a $60
+        # order reverse ~3% of the fee instead of the whole thing.
+        amount_charged = int(obj.get("amount") or 0)
+        amount_refunded = int(obj.get("amount_refunded") or 0)
+        fully_refunded = (
+            disputed or bool(obj.get("refunded"))
+            or amount_charged <= 0                 # amounts unavailable → full (legacy-safe)
+            or amount_refunded >= amount_charged
+        )
+        await _reverse_paid_order(
+            db, str(pi), disputed=disputed,
+            amount_charged=amount_charged, amount_refunded=amount_refunded,
+            fully_refunded=fully_refunded,
+        )
 
     elif etype == "checkout.session.expired":
         # Stripe Checkout sessions die ~24h after creation. Without this the
