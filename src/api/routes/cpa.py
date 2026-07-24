@@ -107,6 +107,22 @@ _YEAR = Query(default=CURRENT_YEAR, ge=2020, le=2100, description="Calendar year
 
 # ─── Core data assembly (shared by summary + exports) ────────────────────────
 
+async def _org_currency(db, org_id: str) -> str:
+    """Report currency for an org: derived from its billing terms' source_market
+    ('us' → USD, else CAD). Fails open to CAD — the historical default — so an
+    org without applied billing terms (or a lookup hiccup) is unchanged. This
+    replaces the hardcoded 'CAD' that mislabeled every US merchant's tax packet.
+    """
+    try:
+        from ...billing.fee_terms import get_active_terms
+        terms = await get_active_terms(db, org_id)
+        if terms and (terms.get("source_market") or "").strip().lower() == "us":
+            return "USD"
+    except Exception:  # noqa: BLE001 — labeling never breaks the report
+        pass
+    return "CAD"
+
+
 async def _load_year_data(db, org_id: str, year: int) -> dict:
     """Fetch + reduce all the numbers for one org-year.
 
@@ -263,7 +279,7 @@ async def get_summary(
     result = {
         "org_id": org_id,
         "year": year,
-        "currency": "CAD",
+        "currency": await _org_currency(db, org_id),
         "revenue_cents": d["revenue_cents"],
         "sales_tax_collected_cents": d["sales_tax_collected_cents"],
         "order_count": d["order_count"],
@@ -411,10 +427,11 @@ async def export_csv(
 ):
     """CPA Handoff packet as CSV (stdlib csv)."""
     d = await _load_year_data(db, org_id, year)
+    cur = await _org_currency(db, org_id)
 
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["Meridian CPA Handoff", f"Year {year}", "Currency CAD"])
+    w.writerow(["Meridian CPA Handoff", f"Year {year}", f"Currency {cur}"])
     w.writerow([CPA_DISCLAIMER])
     w.writerow([])
     w.writerow(["Summary"])
@@ -483,7 +500,7 @@ def _category_lead(d: dict) -> str:
     )
 
 
-def _build_html(org_id: str, year: int, d: dict) -> str:
+def _build_html(org_id: str, year: int, d: dict, currency: str = "CAD") -> str:
     """Self-contained printable HTML packet (zero-dep; merchant uses Save-as-PDF)."""
     def rows_monthly() -> str:
         return "".join(
@@ -580,7 +597,7 @@ def _build_html(org_id: str, year: int, d: dict) -> str:
 </head>
 <body>
   <h1>CPA Handoff</h1>
-  <div class="sub">Meridian · Tax year {year} · Currency CAD</div>
+  <div class="sub">Meridian · Tax year {year} · Currency {currency}</div>
   <div class="disclaimer">{disclaimer_html}</div>
 
   <h2>Summary</h2>
@@ -635,7 +652,7 @@ async def export_html(
 ):
     """CPA Handoff packet as a self-contained printable HTML document (no PDF lib)."""
     d = await _load_year_data(db, org_id, year)
-    html = _build_html(org_id, year, d)
+    html = _build_html(org_id, year, d, await _org_currency(db, org_id))
     return HTMLResponse(
         content=html,
         headers={"Content-Disposition": f'inline; filename="meridian-cpa-{year}.html"'},

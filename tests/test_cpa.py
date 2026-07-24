@@ -167,6 +167,33 @@ def test_summary_revenue_tax_expenses_net(client):
     assert march["expenses_total_cents"] == 48230
 
 
+@pytest.mark.asyncio
+async def test_org_currency_us_from_billing_terms():
+    class _TermsDB:
+        async def select(self, table, columns="*", filters=None, order=None,
+                         limit=None, offset=None):
+            if table == "merchant_billing_terms":
+                return [{"source_market": "us"}]
+            return []
+    assert await cpa._org_currency(_TermsDB(), ORG) == "USD"
+
+
+@pytest.mark.asyncio
+async def test_org_currency_defaults_cad_when_no_terms():
+    class _EmptyDB:
+        async def select(self, *a, **k):
+            return []
+    assert await cpa._org_currency(_EmptyDB(), ORG) == "CAD"
+
+
+@pytest.mark.asyncio
+async def test_org_currency_fails_open_to_cad_on_error():
+    class _BoomDB:
+        async def select(self, *a, **k):
+            raise RuntimeError("db down")
+    assert await cpa._org_currency(_BoomDB(), ORG) == "CAD"
+
+
 def test_disclaimer_byte_identical_to_design_doc():
     expected = (
         "We prepare, your CPA files. Meridian organizes your sales and expense records into\n"
