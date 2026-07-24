@@ -254,7 +254,11 @@ async def rep_signup(req: RepSignupRequest):
             json={
                 "org_id": US_ORG_ID,
                 "name": req.name,
-                "email": req.email,
+                # Store lowercased so every email-join (the JWT claim is
+                # lowercased by Supabase auth) matches — a mixed-case row
+                # silently breaks rep entitlement + commission lookups. Mirrors
+                # the Canada path (canada.py). See fix/sales-rep-email-case.
+                "email": (req.email or "").strip().lower(),
                 "phone": req.phone or "",
                 "commission_rate": 0.70,
                 "is_active": False,
@@ -419,6 +423,35 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                 order_fee_cents=req.order_fee_cents,
                 locked_by=caller.get("email") or caller.get("id", ""),
             )
+
+            # Commission accrual (US) — path wired in lockstep with Canada
+            # (canada.py). Gated on us_commission_live() which DEFAULTS OFF: the
+            # rep's M0-M3 milestone schedule is written the moment a deal closes
+            # only once US comp terms are ratified and COMMISSION_ENGINE_US_LIVE=1
+            # is set. Rep resolved from the closing rep's verified JWT email;
+            # package = nearest price-point. Best-effort + idempotent
+            # (UNIQUE(account_id,milestone)) — a hiccup here must NEVER fail
+            # customer creation. Milestones are 'pending'/'earned', never
+            # auto-PAID; settlement stays quarterly + gated.
+            try:
+                from ...services.commission_engine import (
+                    CommissionEngineService,
+                    us_commission_live,
+                )
+                from datetime import datetime, timezone
+
+                if us_commission_live() and req.monthly_price:
+                    from ...db import get_db as _get_commission_db
+
+                    _csvc = CommissionEngineService(db=_get_commission_db())
+                    await _csvc.accrue_for_us_close(
+                        account_id=org_id,
+                        rep_email=caller.get("email") or "",
+                        negotiated_monthly_cents=req.monthly_price * 100,
+                        close_date=datetime.now(timezone.utc).date(),
+                    )
+            except Exception as e:  # noqa: BLE001 — never fail customer creation
+                logger.error("US commission accrual failed for org %s: %s", org_id, e)
 
             # Rep fee slider — pre-seed phone_agent_config with the negotiated
             # per-order fee (mirrors canada.create_customer). Best-effort: a

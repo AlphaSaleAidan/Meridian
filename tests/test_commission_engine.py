@@ -531,3 +531,30 @@ async def test_accrue_matches_rep_email_case_insensitively():
     )
     assert len(rows) == 4
     assert all(r["rep_id"] == REP for r in rows)
+
+
+async def test_accrue_for_us_close_writes_same_schedule_as_canada():
+    # US path is wired in lockstep — identical rep resolution, package pick, and
+    # 57-unit milestone split. Only the go-live gate differs.
+    svc = _accrual_svc()
+    rows = await svc.accrue_for_us_close(
+        account_id="biz-us-1",
+        rep_email=REP_EMAIL,
+        negotiated_monthly_cents=25000,  # -> starter, same as Canada
+        close_date=date(2026, 7, 21),
+    )
+    assert {r["milestone"] for r in rows} == {"M0", "M1", "M2", "M3"}
+    assert all(r["rep_id"] == REP for r in rows)
+    assert all(r["package_key"] == "starter" for r in rows)
+
+
+def test_us_commission_gate_defaults_off_canada_on(monkeypatch):
+    from src.services.commission_engine import canada_commission_live, us_commission_live
+
+    for var in ("COMMISSION_ENGINE_US_LIVE", "COMMISSION_ENGINE_CANADA_LIVE"):
+        monkeypatch.delenv(var, raising=False)
+    assert us_commission_live() is False   # US default OFF until comp ratified
+    assert canada_commission_live() is True  # Canada default ON (live)
+
+    monkeypatch.setenv("COMMISSION_ENGINE_US_LIVE", "1")
+    assert us_commission_live() is True
