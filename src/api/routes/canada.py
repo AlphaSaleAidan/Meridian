@@ -535,11 +535,16 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                 # KNOW the negotiated fee didn't stick (it falls back to the
                 # tier default until set manually) — surface it in the response.
                 return {"ok": True, "org_id": org_id,
+                        # Alias both keys (US portal reads temp_password) to kill
+                        # the cross-market response-key drift.
                         "temporary_password": temp_password,
+                        "temp_password": temp_password,
                         "fee_seeded": fee_seeded, "order_fee_cents": fee,
                         **fee_parity}
 
-    return {"ok": True, "org_id": org_id, "temporary_password": temp_password,
+    return {"ok": True, "org_id": org_id,
+            "temporary_password": temp_password,
+            "temp_password": temp_password,
             **fee_parity}
 
 

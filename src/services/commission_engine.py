@@ -77,6 +77,21 @@ def canada_commission_live() -> bool:
         "0", "false", "off", "no", "",
     )
 
+
+def us_commission_live() -> bool:
+    """Kill-switch for LIVE US commission accrual.
+
+    Default OFF — unlike Canada, US rep comp terms are not yet ratified and the
+    US price-points differ from the seeded (Canada) package catalog, so nearest-
+    price mapping could schedule the wrong amounts. The accrual PATH is wired so
+    US closes are ready to pay reps the instant the business turns it on: set
+    COMMISSION_ENGINE_US_LIVE=1 in Railway (no deploy). Accrual is best-effort
+    and idempotent, so flipping it never corrupts the ledger.
+    """
+    return os.environ.get("COMMISSION_ENGINE_US_LIVE", "0").strip().lower() in (
+        "1", "true", "on", "yes",
+    )
+
 # Fixed 57-unit milestone split (One-Pager).
 MILESTONE_WEIGHTS: dict[str, int] = {"M0": 13, "M1": 28, "M2": 10, "M3": 6}
 
@@ -466,6 +481,32 @@ class CommissionEngineService:
             account_id, rep_id, key, negotiated_monthly_cents, len(inserted),
         )
         return inserted
+
+    async def accrue_for_us_close(
+        self,
+        *,
+        account_id: str,
+        rep_email: str,
+        negotiated_monthly_cents: int,
+        close_date: date,
+        package_key: str | None = None,
+        assignment_id: str | None = None,
+    ) -> list[dict]:
+        """LIVE US close hook. The scheduling math is identical to Canada — rep
+        resolved from the closing rep's verified-JWT email, package = nearest
+        price-point, fixed 57-unit milestone split, milestones 'pending'/'earned'
+        never auto-PAID. Only the go-live gate differs (us_commission_live,
+        default OFF). Delegates to the shared close logic so both markets stay in
+        lockstep. Caller gates on us_commission_live() and wraps best-effort.
+        """
+        return await self.accrue_for_canada_close(
+            account_id=account_id,
+            rep_email=rep_email,
+            negotiated_monthly_cents=negotiated_monthly_cents,
+            close_date=close_date,
+            package_key=package_key,
+            assignment_id=assignment_id,
+        )
 
     async def cancel_account(self, account_id: str) -> int:
         """Cancellation hook: halt all FUTURE (pending) milestones immediately.

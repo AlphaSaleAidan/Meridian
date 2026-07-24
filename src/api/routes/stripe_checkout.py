@@ -189,6 +189,15 @@ async def stripe_webhook(request: Request):
                             await db.update("organizations", {
                                 "metadata": json_mod.dumps({**meta, "payment_status": "cancelled"}),
                             }, filters={"id": f"eq.{s['org_id']}"})
+                            # Stop the phone agent — INDEPENDENT safety plane, so
+                            # a reclaim hiccup can't leave a Stripe-cancelled /
+                            # dunned merchant's agent live burning Vapi/Telnyx.
+                            try:
+                                from src.services.number_pool import deactivate_phone_agent
+                                await deactivate_phone_agent(db, s["org_id"])
+                            except Exception:
+                                logger.exception("phone-agent deactivate failed for cancelled org %s",
+                                                 s.get("org_id"))
                             # Reclaim the merchant's phone number to the pool for
                             # reassignment (Stripe-side / dunning cancellation).
                             # Best-effort — a reclaim hiccup never fails the webhook.

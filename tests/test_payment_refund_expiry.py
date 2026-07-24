@@ -72,6 +72,70 @@ async def test_refund_flips_status_and_reverses_fee(monkeypatch):
 
 
 @aio
+async def test_partial_refund_reverses_pro_rata_and_marks_partial(monkeypatch):
+    # $2 refund on a $60 order, fee 99¢ → reverse round(99 * 200/6000) = 3¢, and
+    # the order is 'partially_refunded' (NOT the whole thing marked refunded).
+    db = _DB(orders=[{"id": "ordP", "merchant_id": "biz_p", "status": "paid",
+                      "payment_txn_id": "pi_P"}])
+    _patch_fee(monkeypatch, 99)
+    ledger = []
+    _patch_ledger(monkeypatch, ledger)
+
+    await sc._reverse_paid_order(
+        db, "pi_P", disputed=False,
+        amount_charged=6000, amount_refunded=200, fully_refunded=False,
+    )
+
+    assert ("phone_orders", {"status": "partially_refunded"}, {"id": "eq.ordP"}) in db.updates
+    assert len(ledger) == 1
+    assert ledger[0]["cents"] == 3
+    assert ledger[0]["ref"] == "pi_P:200"  # cumulative amount in ref for idempotency
+
+
+@aio
+async def test_second_partial_reverses_only_delta(monkeypatch):
+    # First refund reversed 3¢; a later cumulative $5 refund (fee 99¢, target
+    # round(99*500/6000)=8¢) reverses only the 5¢ delta, not another 8¢.
+    class _LedgerDB(_DB):
+        async def select(self, table, cols=None, filters=None, limit=None):
+            if table == "voice_ledger":
+                return [{"amount_cents": 3, "note": "partially_refunded:ordP"}]
+            return await super().select(table, cols, filters, limit)
+
+    db = _LedgerDB(orders=[{"id": "ordP", "merchant_id": "biz_p", "status": "paid",
+                            "payment_txn_id": "pi_P"}])
+    _patch_fee(monkeypatch, 99)
+    ledger = []
+    _patch_ledger(monkeypatch, ledger)
+
+    await sc._reverse_paid_order(
+        db, "pi_P", disputed=False,
+        amount_charged=6000, amount_refunded=500, fully_refunded=False,
+    )
+
+    assert len(ledger) == 1
+    assert ledger[0]["cents"] == 5  # 8¢ target − 3¢ already reversed
+
+
+@aio
+async def test_full_refund_via_amounts_reverses_whole_fee(monkeypatch):
+    db = _DB(orders=[{"id": "ordF", "merchant_id": "biz_f", "status": "paid",
+                      "payment_txn_id": "pi_F"}])
+    _patch_fee(monkeypatch, 99)
+    ledger = []
+    _patch_ledger(monkeypatch, ledger)
+
+    await sc._reverse_paid_order(
+        db, "pi_F", disputed=False,
+        amount_charged=6000, amount_refunded=6000, fully_refunded=True,
+    )
+
+    assert ("phone_orders", {"status": "refunded"}, {"id": "eq.ordF"}) in db.updates
+    assert ledger[0]["cents"] == 99
+    assert ledger[0]["ref"] == "pi_F"  # full refund uses the bare PI ref
+
+
+@aio
 async def test_dispute_uses_disputed_status(monkeypatch):
     db = _DB(orders=[{"id": "ord2", "merchant_id": "biz_y", "status": "paid",
                       "payment_txn_id": "pi_9"}])

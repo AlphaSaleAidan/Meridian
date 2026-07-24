@@ -384,6 +384,35 @@ async def create_website_checkout(
     )
 
 
+async def _merchant_currency(merchant_id: str) -> str:
+    """Charge currency for a merchant, derived from its billing terms'
+    source_market ('us' → usd, else cad). Fails open to 'cad' (the historical
+    default) so a merchant with no billing terms or a lookup hiccup is unchanged
+    — this only fixes US merchants being charged in CAD when nothing upstream set
+    an explicit order currency."""
+    if not (SUPABASE_URL and SUPABASE_KEY and merchant_id):
+        return "cad"
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(
+                f"{SUPABASE_URL}/rest/v1/merchant_billing_terms",
+                params={
+                    "merchant_id": f"eq.{merchant_id}",
+                    "superseded_at": "is.null",
+                    "select": "source_market",
+                    "limit": "1",
+                },
+                headers={"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"},
+            )
+        if res.status_code == 200 and res.json():
+            market = (res.json()[0].get("source_market") or "").strip().lower()
+            if market == "us":
+                return "usd"
+    except Exception as e:  # noqa: BLE001 — currency resolution is best-effort
+        logger.warning("merchant currency lookup failed for %s: %s", merchant_id, e)
+    return "cad"
+
+
 async def _stripe_checkout(
     order: dict[str, Any], merchant_config, pos_order_id: str, connect_account: str = "",
     extra_metadata: dict | None = None, success_url: str = "", cancel_url: str = "",
@@ -393,7 +422,11 @@ async def _stripe_checkout(
     Without one → a direct charge on Meridian's platform account so unboarded
     merchants (and the demo) can still take payment immediately."""
     stripe = _stripe()
-    currency = (order.get("currency") or "cad").lower()
+    # Explicit order currency wins; otherwise derive from the merchant's market
+    # (US → usd) instead of blindly defaulting to CAD, which charged US merchants
+    # in Canadian dollars when nothing upstream set a currency.
+    currency = (order.get("currency") or await _merchant_currency(
+        getattr(merchant_config, "merchant_id", "") or order.get("merchant_id", ""))).lower()
     amount = _order_amount_cents(order)
 
     # Customer-side per-order surcharge (fee-split model): Meridian's tier fee

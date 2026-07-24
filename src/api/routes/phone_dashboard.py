@@ -247,6 +247,20 @@ async def save_phone_config(req: PhoneConfigRequest, principal=Depends(require_s
                 "Provision a phone number before activating your agent — "
                 "an active agent with no number can't receive calls.",
             )
+        # When Vapi is the calling platform, the DID must also be imported into
+        # Vapi (vapi_phone_number_id) or an inbound call fires no assistant-
+        # request and the merchant is "live" while every call fails silently.
+        # Only gate when Vapi is active — a Twilio-only deployment legitimately
+        # has no Vapi binding, so requiring it there would block real go-lives.
+        if vapi_telnyx_enabled():
+            stored_vapi = (rows[0].get("vapi_phone_number_id") if rows else "") or ""
+            if not str(stored_vapi).strip():
+                raise HTTPException(
+                    400,
+                    "Your number isn't linked to the calling platform yet — "
+                    "reprovision it before activating, or inbound calls won't "
+                    "reach your agent.",
+                )
         stored_menu = (rows[0].get("menu_items") if rows else None) or []
         if not (req.menu_items or stored_menu):
             logger.warning("phone go-live: merchant %s activating with an empty menu",

@@ -112,6 +112,45 @@ def test_activate_allowed_with_number(monkeypatch):
     assert db.tables["phone_agent_config"][0].get("active") is True
 
 
+def test_activate_blocked_when_vapi_enabled_but_number_not_imported(monkeypatch):
+    # Vapi is the calling platform but the DID was never imported into Vapi
+    # (no vapi_phone_number_id) → activating would be "live" with silent call
+    # failure. Must be blocked.
+    import src.db as db_mod
+    from fastapi import HTTPException
+    import src.api.routes.phone_dashboard as pd
+    from src.api.routes.phone_dashboard import PhoneConfigRequest, save_phone_config
+
+    _patch_membership(monkeypatch)
+    monkeypatch.setattr(pd, "vapi_telnyx_enabled", lambda: True)
+    db = FakeDB({"merchant_id": MID, "phone_number": "+15068017376",
+                 "menu_items": [{"name": "Burger"}]})  # no vapi_phone_number_id
+    monkeypatch.setattr(db_mod, "_db_instance", db)
+
+    import pytest as _pytest
+    req = PhoneConfigRequest(merchant_id=MID, active=True)
+    with _pytest.raises(HTTPException) as exc:
+        _run(save_phone_config(req, principal=SERVICE))
+    assert exc.value.status_code == 400
+
+
+def test_activate_allowed_when_vapi_enabled_and_number_imported(monkeypatch):
+    import src.db as db_mod
+    import src.api.routes.phone_dashboard as pd
+    from src.api.routes.phone_dashboard import PhoneConfigRequest, save_phone_config
+
+    _patch_membership(monkeypatch)
+    monkeypatch.setattr(pd, "vapi_telnyx_enabled", lambda: True)
+    db = FakeDB({"merchant_id": MID, "phone_number": "+15068017376",
+                 "vapi_phone_number_id": "vapi_123",
+                 "menu_items": [{"name": "Burger"}]})
+    monkeypatch.setattr(db_mod, "_db_instance", db)
+
+    req = PhoneConfigRequest(merchant_id=MID, active=True)
+    _run(save_phone_config(req, principal=SERVICE))
+    assert db.tables["phone_agent_config"][0].get("active") is True
+
+
 def test_deactivate_never_blocked(monkeypatch):
     import src.db as db_mod
     from src.api.routes.phone_dashboard import PhoneConfigRequest, save_phone_config

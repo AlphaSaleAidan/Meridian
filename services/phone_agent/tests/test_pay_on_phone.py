@@ -387,6 +387,10 @@ async def test_mark_paid_pushes_deferred_ticket(monkeypatch):
         return dict(held_row)
     monkeypatch.setattr(pay_on_phone, "_fetch_held_order", fake_fetch)
 
+    async def fake_fetch_list(query):
+        return [dict(held_row)]
+    monkeypatch.setattr(pay_on_phone, "_fetch_orders", fake_fetch_list)
+
     import merchant_config as mc
     async def fake_get_config(merchant_id):
         return _demo_config(merchant_id)
@@ -452,6 +456,66 @@ async def test_mark_paid_skips_push_when_ticket_exists(monkeypatch):
     assert spy.pos_calls == []                                # idempotent — no duplicate
 
 
+# ─── Repeat-caller: pay the RIGHT open order (amount disambiguation) ──────────
+
+async def test_two_open_orders_matched_by_paid_amount(monkeypatch):
+    """A caller with two open orders ($30 and $12) pays $30 → the $30 order is
+    the one marked paid, not blindly the latest (which was the $12)."""
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_KEY", "fake-key")
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", False)
+
+    order_12 = {"id": "row-12", "merchant_id": "m1", "caller_phone": "+15555550111",
+                "total": 12.00, "kitchen_released": False, "payment_status": "pending",
+                "status": "awaiting_payment", "items": []}
+    order_30 = {"id": "row-30", "merchant_id": "m1", "caller_phone": "+15555550111",
+                "total": 30.00, "kitchen_released": False, "payment_status": "pending",
+                "status": "awaiting_payment", "items": []}
+
+    async def fake_fetch_list(query):
+        return [dict(order_12), dict(order_30)]  # created_at.desc → $12 latest
+    monkeypatch.setattr(pay_on_phone, "_fetch_orders", fake_fetch_list)
+
+    patched = {}
+    async def fake_patch(row_id, patch):
+        patched["row_id"] = row_id
+    monkeypatch.setattr(pay_on_phone, "_patch_order_row", fake_patch)
+
+    # $30 order + a small surcharge that rode the Stripe charge.
+    res = await pay_on_phone.mark_order_paid(
+        merchant_id="m1", caller_phone="+15555550111", paid_amount_cents=3130,
+    )
+    assert res["matched_by"] == "merchant_phone_amount"
+    assert patched["row_id"] == "row-30"  # NOT the latest ($12) row
+
+
+async def test_already_paid_order_excluded_from_match(monkeypatch):
+    """A finalized (paid) order is never re-matched — the open one wins even
+    without an amount to disambiguate."""
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_URL", "https://fake.supabase.co")
+    monkeypatch.setattr(pay_on_phone, "SUPABASE_KEY", "fake-key")
+    monkeypatch.setattr(pay_on_phone, "POS_PUSH_AFTER_PAYMENT", False)
+
+    paid = {"id": "row-paid", "merchant_id": "m1", "caller_phone": "+1555",
+            "total": 20.0, "kitchen_released": True, "payment_status": "paid",
+            "status": "paid", "items": []}
+    open_row = {"id": "row-open", "merchant_id": "m1", "caller_phone": "+1555",
+                "total": 20.0, "kitchen_released": False, "payment_status": "pending",
+                "status": "awaiting_payment", "items": []}
+
+    async def fake_fetch_list(query):
+        return [dict(paid), dict(open_row)]  # paid is "latest"
+    monkeypatch.setattr(pay_on_phone, "_fetch_orders", fake_fetch_list)
+
+    patched = {}
+    async def fake_patch(row_id, patch):
+        patched["row_id"] = row_id
+    monkeypatch.setattr(pay_on_phone, "_patch_order_row", fake_patch)
+
+    await pay_on_phone.mark_order_paid(merchant_id="m1", caller_phone="+1555")
+    assert patched["row_id"] == "row-open"  # the finalized row is skipped
+
+
 # ─── PATCH split: paid flag isolated from fan-out telemetry ──────────────────
 
 def _held_row():
@@ -476,6 +540,10 @@ def _install_release_env(monkeypatch, spy):
     async def fake_fetch(query):
         return _held_row()
     monkeypatch.setattr(pay_on_phone, "_fetch_held_order", fake_fetch)
+
+    async def fake_fetch_list(query):
+        return [_held_row()]
+    monkeypatch.setattr(pay_on_phone, "_fetch_orders", fake_fetch_list)
 
     import merchant_config as mc
     async def fake_get_config(merchant_id):

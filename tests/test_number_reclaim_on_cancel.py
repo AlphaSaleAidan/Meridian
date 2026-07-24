@@ -93,6 +93,46 @@ async def test_reclaim_live_bought_number_inserts_pool_row():
 
 
 @aio
+async def test_deactivate_is_independent_of_pool_return():
+    # release_to_pool stops the agent FIRST — so even if the pool upsert throws,
+    # the cancelled merchant's agent is already active=False (Vapi gate trips).
+    class _FailPoolDB(_DB):
+        async def insert(self, table, payload):
+            if table == "phone_number_pool":
+                raise RuntimeError("pool write down")
+            return await super().insert(table, payload)
+
+    db = _FailPoolDB(
+        config=[{"merchant_id": "biz_p", "phone_number": "+1999", "active": True,
+                 "vapi_phone_number_id": "v2", "phone_number_sid": "o2"}],
+        pool=[])  # no existing row → insert path → raises
+    with pytest.raises(RuntimeError):
+        await npool.release_to_pool(db, "biz_p")
+    # agent was turned off BEFORE the failing pool insert
+    assert db.config[0]["active"] is False
+    assert db.config[0]["phone_number"] is None
+
+
+@aio
+async def test_deactivate_phone_agent_flips_active_only():
+    db = _DB(config=[{"merchant_id": "biz_d", "phone_number": "+1888", "active": True}])
+    ok = await npool.deactivate_phone_agent(db, "biz_d")
+    assert ok is True
+    assert db.config[0]["active"] is False
+    # number is NOT cleared here — that's release_to_pool's job (separate plane)
+    assert db.config[0]["phone_number"] == "+1888"
+
+
+@aio
+async def test_deactivate_phone_agent_swallows_errors():
+    class _FailDB(_DB):
+        async def update(self, table, patch, filters=None):
+            raise RuntimeError("db down")
+    ok = await npool.deactivate_phone_agent(_FailDB(), "biz_e")
+    assert ok is False  # best-effort — never raises into the cancel path
+
+
+@aio
 async def test_reclaim_noop_when_no_number():
     db = _DB(config=[{"merchant_id": "biz_z", "phone_number": None, "active": False}])
     assert await npool.release_to_pool(db, "biz_z") is None

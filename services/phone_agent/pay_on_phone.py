@@ -498,10 +498,14 @@ async def mark_order_paid(
     card_brand: str = "",
     card_last4: str = "",
     payment_txn_id: str = "",
+    paid_amount_cents: int = 0,
 ) -> dict:
     """Payment confirmed → flip the held order to paid AND release the kitchen
-    ticket. Matches by pos_order_id when known (most precise), else by
-    merchant+phone (latest). Idempotent.
+    ticket. Matches by pos_order_id when known (most precise); else by
+    merchant+phone among the caller's OPEN (not-yet-paid) orders, disambiguated
+    by the amount actually paid so a repeat caller with two open orders pays the
+    RIGHT one (previously it blindly took the latest, so paying the $30 order
+    could release + settle the $12 one). Idempotent.
 
     Release now fans out too: the deferred POS ticket is pushed AND the
     merchant notification SMS goes to the merchant's line, each recorded on the
@@ -521,23 +525,19 @@ async def mark_order_paid(
         return {"released": True, "matched_by": "none"}
 
     if pos_order_id:
-        query = f"?pos_order_id=eq.{pos_order_id}"
+        # SELECT the held row first: (a) PATCH by primary key — the phone-match
+        # query's order/limit params are ignored by PostgREST on PATCH and would
+        # hit every row for that caller; (b) we need the stored order to push the
+        # deferred POS ticket now that payment is confirmed.
+        row = await _fetch_held_order(f"?pos_order_id=eq.{pos_order_id}")
         matched_by = "pos_order_id"
     elif merchant_id and caller_phone:
-        query = (
-            f"?merchant_id=eq.{merchant_id}&caller_phone=eq.{caller_phone}"
-            f"&order=created_at.desc&limit=1"
-        )
-        matched_by = "merchant_phone"
+        row, matched_by = await _match_open_order_by_phone(
+            merchant_id, caller_phone, paid_amount_cents)
     else:
         logger.warning("mark_order_paid: no key to match an order")
         return {"released": False, "matched_by": "none"}
 
-    # SELECT the held row first: (a) PATCH by primary key — the phone-match
-    # query's order/limit params are ignored by PostgREST on PATCH and would
-    # hit every row for that caller; (b) we need the stored order to push the
-    # deferred POS ticket now that payment is confirmed.
-    row = await _fetch_held_order(query)
     if row is None:
         logger.warning("mark_order_paid: no order matched (%s)", matched_by)
         return {"released": False, "matched_by": matched_by}
@@ -679,6 +679,81 @@ async def _patch_order_row(row_id: str | None, patch: dict) -> None:
             raise RuntimeError(
                 f"phone_orders PATCH {resp.status_code}: {resp.text[:200]}"
             )
+
+
+def _order_base_cents(row: dict) -> int:
+    """A phone_orders row's base order total in cents (total is stored in the
+    market currency's major units). 0 when unparseable."""
+    try:
+        return int(round(float(row.get("total") or 0) * 100))
+    except (TypeError, ValueError):
+        return 0
+
+
+async def _match_open_order_by_phone(
+    merchant_id: str, caller_phone: str, paid_amount_cents: int,
+) -> tuple[dict | None, str]:
+    """Pick the caller's order this payment belongs to when no pos_order_id ties
+    it down (the normal deferred pay_now case).
+
+    Fetches the caller's recent orders, drops ones already finalized (paid /
+    refunded / disputed) so a settled order is never re-matched, then — when the
+    paid amount is known and more than one order is still open — chooses the one
+    whose base total is CLOSEST to what was paid (robust to the small per-order
+    surcharge that rides the Stripe charge). Falls back to most-recent when there
+    is a single candidate or no amount to disambiguate.
+
+    Returns (row_or_None, matched_by)."""
+    rows = await _fetch_orders(
+        f"?merchant_id=eq.{merchant_id}&caller_phone=eq.{caller_phone}"
+        f"&order=created_at.desc&limit=10"
+    )
+    if not rows:
+        return None, "merchant_phone"
+
+    _final = {"paid", "refunded", "disputed"}
+    candidates = [
+        r for r in rows
+        if (r.get("payment_status") or "") != "paid"
+        and (r.get("status") or "") not in _final
+    ] or rows  # if everything looks finalized, fall back to the raw list
+
+    if paid_amount_cents and len(candidates) > 1:
+        best = min(candidates, key=lambda r: abs(_order_base_cents(r) - paid_amount_cents))
+        logger.info(
+            "mark_order_paid: %d open orders for %s/%s — matched by amount "
+            "(paid=%d¢, order total=%d¢)",
+            len(candidates), merchant_id, caller_phone,
+            paid_amount_cents, _order_base_cents(best),
+        )
+        return best, "merchant_phone_amount"
+
+    if len(candidates) > 1:
+        logger.warning(
+            "mark_order_paid: %d open orders for %s/%s and no paid amount to "
+            "disambiguate — using most recent (may be wrong)",
+            len(candidates), merchant_id, caller_phone,
+        )
+    return candidates[0], "merchant_phone"
+
+
+async def _fetch_orders(query: str) -> list[dict]:
+    """Fetch all order rows matched by `query` (select honors order/limit)."""
+    sep = "&" if "?" in query else "?"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{SUPABASE_URL}/rest/v1/phone_orders{query}{sep}select=*",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                },
+                timeout=10,
+            )
+            return resp.json() if resp.status_code == 200 else []
+    except Exception as e:  # noqa: BLE001
+        logger.error("_fetch_orders failed: %s", e)
+        return []
 
 
 async def _fetch_held_order(query: str) -> dict | None:
