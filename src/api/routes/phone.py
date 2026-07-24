@@ -1758,6 +1758,28 @@ async def phone_payment_webhook(request: Request):
     merchant_id = event.get("merchant_id", "")
     caller_phone = event.get("caller_phone", payment.get("buyer_phone_number", ""))
 
+    # Idempotency: dedupe on the Square event id via the durable webhook_events
+    # table (the same guard /api/webhooks/square uses). Square retries on any
+    # non-2xx, so without this a single retried event re-enters the release
+    # path. (mark_order_paid's CAS is the last line of defense and also collapses
+    # the payment.created + payment.updated twin; this layer stops retry storms
+    # and the redundant SELECT/config/POS work.) Skipped for the demo simulate
+    # path (no event id). Fail-open to the CAS on a DB hiccup.
+    if not simulate:
+        import hashlib
+        event_id = event.get("event_id") or event.get("id") or (
+            "sqpay-" + hashlib.sha256(
+                f"{event_type}:{pos_order_id}:{merchant_id}:{status}".encode()
+            ).hexdigest()[:24]
+        )
+        try:
+            from .webhooks import _record_webhook_event
+            if await _record_webhook_event(event_id, provider="square_phone") is False:
+                logger.info("phone payment webhook: duplicate event %s ignored", event_id)
+                return {"ok": True, "dedup": True}
+        except Exception as e:  # noqa: BLE001 — fall through to the CAS on a DB hiccup
+            logger.warning("phone payment webhook dedup unavailable: %s", e)
+
     try:
         from pay_on_phone import mark_order_paid
     except ImportError as e:

@@ -542,23 +542,42 @@ async def mark_order_paid(
         logger.warning("mark_order_paid: no order matched (%s)", matched_by)
         return {"released": False, "matched_by": matched_by}
 
-    patch = {
+    # CLAIM FIRST (compare-and-swap): flip to paid ONLY if not already paid.
+    # This is the idempotency gate — the release fan-out below (POS push +
+    # merchant SMS) runs ONLY for the event that wins the claim, so a duplicate
+    # delivery (Square payment.created + payment.updated, Stripe retries) on
+    # another worker can't double-push the kitchen ticket or double-text the
+    # merchant. (Previously the POS push ran BEFORE the flip, so both events
+    # pushed.) The claim carries the paid/kitchen flags + payment-method columns.
+    claim_patch = {
         "payment_status": "paid",
         "status": "paid",
         "kitchen_released": True,
     }
     if method:
-        patch["payment_method"] = method
+        claim_patch["payment_method"] = method
     if card_brand:
-        patch["card_brand"] = card_brand
+        claim_patch["card_brand"] = card_brand
     if card_last4:
-        patch["card_last4"] = card_last4
+        claim_patch["card_last4"] = card_last4
     if payment_txn_id:
-        patch["payment_txn_id"] = payment_txn_id
+        claim_patch["payment_txn_id"] = payment_txn_id
     if simulate:
-        patch["payment_note"] = "simulated (demo)"
+        claim_patch["payment_note"] = "simulated (demo)"
 
-    # RELEASE FAN-OUT: what still needs to fire now that payment confirmed?
+    try:
+        claimed = await _claim_order_paid(row.get("id"), claim_patch)
+    except Exception as e:  # noqa: BLE001
+        logger.error("mark_order_paid claim failed: %s", e)
+        return {"released": False, "matched_by": matched_by}
+    if not claimed:
+        # Another worker / a duplicate event already paid + released this order.
+        logger.info("mark_order_paid: order %s already paid — duplicate event ignored (%s)",
+                    row.get("id"), matched_by)
+        return {"released": False, "matched_by": matched_by, "duplicate": True}
+
+    # ── We WON the claim: run the release fan-out exactly once. ──
+    # What still needs to fire now that payment confirmed?
     #  - deferred POS ticket (no pos_order_id yet)
     #  - merchant notification SMS — only for a HELD row (pay_now deferral;
     #    pay_at_pickup rows already notified at order time).
@@ -581,35 +600,33 @@ async def mark_order_paid(
         "subtotal", "tax", "total", "delivery_address",
         "special_requests", "caller_phone",
     )}
-    # Fan-out telemetry goes in a SEPARATE best-effort PATCH: a missing/renamed
-    # telemetry column 400s the whole PostgREST call and must never hold the
-    # paid flag / kitchen release hostage.
-    telemetry: dict[str, Any] = {}
+    # The pos ids + fan-out telemetry go in a SEPARATE best-effort PATCH: the
+    # paid flag is already committed by the claim, so a missing/renamed column
+    # here (or a POS/SMS hiccup) must never un-commit the money truth.
+    post_patch: dict[str, Any] = {}
     detail = dict(row.get("delivery_detail") or {})
 
     # POS PUSH AFTER PAYMENT: the ticket was deferred at order time — payment
-    # is now confirmed, so push it to the kitchen. Idempotent: only when the
-    # row has no pos_order_id yet (a webhook retry won't create a second one).
-    # (simulate/demo included: the immediate simulated "paid" plays the same
-    # release path, and demo_safe merchants are logs-only in the connector.)
+    # is now confirmed, so push it to the kitchen. (simulate/demo included: the
+    # immediate simulated "paid" plays the same release path, and demo_safe
+    # merchants are logs-only in the connector.)
     pos_pushed = False
-    if needs_pos_push:
+    if needs_pos_push and cfg is not None:
         try:
-            if cfg is not None:
-                pos_result = await _create_pos(order, cfg)
-                patch["pos_order_id"] = pos_result.get("pos_order_id", "")
-                patch["pos_success"] = bool(pos_result.get("success"))
-                if pos_result.get("kitchen_fired"):
-                    # Clover print_event accepted on the deferred push.
-                    patch["fulfillment_state"] = "kitchen_fired"
-                pos_pushed = bool(pos_result.get("success"))
-                released_pos = pos_outcome(pos_result)
-                released_pos["released_at_payment"] = True
-                telemetry["pos_delivery_status"] = released_pos["status"]
-                detail["pos"] = released_pos
+            pos_result = await _create_pos(order, cfg)
+            post_patch["pos_order_id"] = pos_result.get("pos_order_id", "")
+            post_patch["pos_success"] = bool(pos_result.get("success"))
+            if pos_result.get("kitchen_fired"):
+                # Clover print_event accepted on the deferred push.
+                post_patch["fulfillment_state"] = "kitchen_fired"
+            pos_pushed = bool(pos_result.get("success"))
+            released_pos = pos_outcome(pos_result)
+            released_pos["released_at_payment"] = True
+            post_patch["pos_delivery_status"] = released_pos["status"]
+            detail["pos"] = released_pos
         except Exception as e:  # noqa: BLE001 — never lose the paid flag over a POS hiccup
             logger.error("deferred POS push failed (order stays SMS/email ticket): %s", e)
-            telemetry["pos_delivery_status"] = "failed"
+            post_patch["pos_delivery_status"] = "failed"
             detail["pos"] = leg_outcome("failed", error=str(e), released_at_payment=True)
 
     # MERCHANT NOTIFICATION RELEASE: the staff SMS was held with the ticket —
@@ -625,38 +642,27 @@ async def mark_order_paid(
             else:
                 notify = leg_outcome(SKIPPED_DISABLED)
             notify["released_at_payment"] = True
-            telemetry["merchant_notify_status"] = notify["status"]
+            post_patch["merchant_notify_status"] = notify["status"]
             detail["merchant_sms"] = notify
         except Exception as e:  # noqa: BLE001 — notification failure never blocks the paid flag
             logger.error("merchant release SMS failed: %s", e)
-            telemetry["merchant_notify_status"] = "failed"
+            post_patch["merchant_notify_status"] = "failed"
             detail["merchant_sms"] = leg_outcome("failed", error=str(e),
                                                  released_at_payment=True)
 
-    if telemetry:
-        # Only ship delivery_detail when this release actually changed it.
-        telemetry["delivery_detail"] = detail
-
-    # PATCH 1 (critical): paid flag + kitchen release (+ pos ids / payment
-    # method columns that predate the fan-out). This one gates the result.
-    try:
-        await _patch_order_row(row.get("id"), patch)
-    except Exception as e:  # noqa: BLE001
-        logger.error("mark_order_paid failed: %s", e)
-        return {"released": False, "matched_by": matched_by}
-
-    # PATCH 2 (best-effort): fan-out telemetry columns. Logged, never raised —
-    # the kitchen is already released; support just loses a ledger update.
-    if telemetry:
+    # POST-CLAIM PATCH (best-effort): pos ids + fan-out telemetry. Logged, never
+    # raised — the paid flag/kitchen release already committed in the claim.
+    if post_patch:
+        post_patch["delivery_detail"] = detail
         try:
-            await _patch_order_row(row.get("id"), telemetry)
+            await _patch_order_row(row.get("id"), post_patch)
         except Exception as e:  # noqa: BLE001
             logger.warning(
-                "mark_order_paid: telemetry update failed (paid flag already committed): %s", e,
+                "mark_order_paid: post-claim update failed (paid flag already committed): %s", e,
             )
 
     logger.info("Order paid + kitchen released (matched_by=%s pos_pushed=%s notify=%s)",
-                matched_by, pos_pushed, telemetry.get("merchant_notify_status", "n/a"))
+                matched_by, pos_pushed, post_patch.get("merchant_notify_status", "n/a"))
     return {"released": True, "matched_by": matched_by, "pos_pushed": pos_pushed}
 
 
@@ -679,6 +685,39 @@ async def _patch_order_row(row_id: str | None, patch: dict) -> None:
             raise RuntimeError(
                 f"phone_orders PATCH {resp.status_code}: {resp.text[:200]}"
             )
+
+
+async def _claim_order_paid(row_id: str | None, patch: dict) -> list[dict]:
+    """Compare-and-swap flip of an order to paid: PATCH ... WHERE id=? AND
+    status<>'paid', asking for the updated rows back. Returns the matched rows
+    ([] when another worker / a duplicate event already paid it).
+
+    This is THE idempotency gate for the release fan-out. Under multiple uvicorn
+    workers, one payment can arrive as two events (Square emits payment.created
+    AND payment.updated; Stripe retries on any non-2xx), so the naive
+    SELECT-then-PATCH-by-id let both events pass the unpaid check and each pushed
+    a second kitchen ticket + texted the merchant again. The status guard makes
+    exactly one event win. Mirrors website_order_dispatch.mark_paid_and_dispatch."""
+    async with httpx.AsyncClient() as client:
+        resp = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/phone_orders?id=eq.{row_id}&status=neq.paid",
+            json=patch,
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",
+            },
+            timeout=10,
+        )
+        if resp.status_code >= 300:
+            raise RuntimeError(
+                f"phone_orders claim PATCH {resp.status_code}: {resp.text[:200]}"
+            )
+        try:
+            return resp.json() or []
+        except Exception:  # noqa: BLE001 — empty/no body ⇒ no row matched
+            return []
 
 
 def _order_base_cents(row: dict) -> int:
