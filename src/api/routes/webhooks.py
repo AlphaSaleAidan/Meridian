@@ -143,6 +143,24 @@ async def _record_webhook_event(event_id: str, provider: str = "square") -> bool
     return bool(rows)
 
 
+async def _forget_webhook_event(event_id: str, provider: str = "square") -> None:
+    """Undo a _record_webhook_event when processing FAILED, so the provider's
+    retry isn't skipped as a duplicate. Without this, dedupe-before-processing
+    makes a failed critical write permanent (paid customer, no activation). The
+    delete is scoped to (event_id, provider) and best-effort — worst case the
+    retry is skipped and an operator reconciles, same as before."""
+    from ...db import _db_instance
+    if not (_db_instance and event_id):
+        return
+    try:
+        await _db_instance.delete(
+            "webhook_events",
+            {"event_id": f"eq.{event_id}", "provider": f"eq.{provider}"},
+        )
+    except Exception as e:  # noqa: BLE001 — never crash the webhook on cleanup
+        logger.warning(f"webhook_events forget failed for {event_id}: {e}")
+
+
 def _decrypt_conn_token(conn: dict) -> str:
     """Decrypt a pos_connections access token for API use. Handles both storage
     shapes (access_token_enc string; credentials_encrypted JSONB dict) and
