@@ -366,10 +366,20 @@ async def self_cancel_subscription(
     except Exception:
         logger.exception("commission cancel_account failed for %s", org_id)
 
-    # 4) Reclaim the phone number to the pool for reassignment. The DID (Telnyx
-    #    + Vapi binding) is kept — only the assignment is undone, so a new
-    #    merchant can be handed this number. Best-effort: the cancellation is
-    #    already recorded; a reclaim hiccup is an operator follow-up, not a 500.
+    # 4a) Stop the phone agent — INDEPENDENT safety plane. Done as its own
+    #     best-effort step (not folded into reclaim) so that even if the reclaim
+    #     below throws, a cancelled merchant's agent is already deactivated and
+    #     the Vapi gate declines further calls (no runaway Vapi/Telnyx spend).
+    try:
+        from src.services.number_pool import deactivate_phone_agent
+        await deactivate_phone_agent(db, org_id)
+    except Exception:
+        logger.exception("phone-agent deactivate failed during self-cancel for %s", org_id)
+
+    # 4b) Reclaim the phone number to the pool for reassignment. The DID (Telnyx
+    #     + Vapi binding) is kept — only the assignment is undone, so a new
+    #     merchant can be handed this number. Best-effort: the cancellation is
+    #     already recorded; a reclaim hiccup is an operator follow-up, not a 500.
     try:
         from src.services.number_pool import release_to_pool
         reclaimed = await release_to_pool(db, org_id)

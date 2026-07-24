@@ -162,6 +162,20 @@ async def release_to_pool(db, merchant_id: str) -> dict | None:
     vapi_id = cfg.get("vapi_phone_number_id")
     sid = cfg.get("phone_number_sid")
 
+    # SAFETY-CRITICAL FIRST: unassign the number + stop the agent on the merchant
+    # BEFORE freeing the pool row. Stopping a cancelled agent from serving (and
+    # burning Vapi/Telnyx spend) is the half that must not be blocked by a pool
+    # upsert hiccup, so it runs first; the pool return below is the reassignment
+    # convenience. (The unique index on phone_agent_config.phone_number also
+    # needs the old row to drop the number before a new merchant can claim it.)
+    await db.update(
+        "phone_agent_config",
+        {"phone_number": None, "phone_number_sid": None,
+         "vapi_phone_number_id": None, "active": False,
+         "updated_at": datetime.now(timezone.utc).isoformat()},
+        filters={"merchant_id": f"eq.{merchant_id}"},
+    )
+
     # Return the DID to the pool (upsert-by-number): existing row → available,
     # else insert (covers numbers provisioned by a live buy with no pool row).
     existing = await db.select(
@@ -182,19 +196,32 @@ async def release_to_pool(db, merchant_id: str) -> dict | None:
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # Unassign from the merchant + stop the agent. The unique index on
-    # phone_agent_config.phone_number requires the old row to drop the number
-    # before a new merchant can be assigned it.
-    await db.update(
-        "phone_agent_config",
-        {"phone_number": None, "phone_number_sid": None,
-         "vapi_phone_number_id": None, "active": False,
-         "updated_at": datetime.now(timezone.utc).isoformat()},
-        filters={"merchant_id": f"eq.{merchant_id}"},
-    )
     logger.info("pool: reclaimed %s from cancelled merchant %s → available",
                 number, merchant_id)
     return {"phone_number": number, "vapi_phone_number_id": vapi_id}
+
+
+async def deactivate_phone_agent(db, merchant_id: str) -> bool:
+    """Flip a merchant's phone agent OFF (active=False) — the safety-critical
+    half of cancellation, kept INDEPENDENT of DID reclaim so a pool-upsert hiccup
+    (or release_to_pool throwing) can never leave a cancelled agent serving
+    orders and burning Vapi/Telnyx spend. The Vapi assistant-request gate
+    declines any positively-resolved merchant whose config.active is False.
+    Best-effort + idempotent; returns True when the flip was written. Does NOT
+    clear the number — release_to_pool owns pool return; this owns 'stop serving'
+    so the two fail independently (see feedback: independent control planes)."""
+    if not merchant_id:
+        return False
+    try:
+        await db.update(
+            "phone_agent_config",
+            {"active": False, "updated_at": datetime.now(timezone.utc).isoformat()},
+            filters={"merchant_id": f"eq.{merchant_id}"},
+        )
+        return True
+    except Exception as e:  # noqa: BLE001 — never raise into the cancel path
+        logger.error("deactivate_phone_agent failed for %s: %s", merchant_id, e)
+        return False
 
 
 async def pool_status(db) -> dict:
