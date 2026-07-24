@@ -369,6 +369,10 @@ async def connect_webhook(request: Request):
                 result = await mark_order_paid(
                     merchant_id=merchant_id, caller_phone=caller_phone,
                     pos_order_id=pos_order_id, method="stripe", payment_txn_id=str(txn),
+                    # amount actually paid — disambiguates which open order this
+                    # settles when pos_order_id is empty (deferred pay_now) and a
+                    # repeat caller has more than one open order.
+                    paid_amount_cents=int(obj.get("amount_total") or 0),
                 )
                 logger.info("Stripe payment confirmed → order released: %s", result)
             except Exception as e:  # noqa: BLE001 — webhook must still 200 so Stripe stops retrying spuriously
