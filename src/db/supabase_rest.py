@@ -12,6 +12,8 @@ from typing import Any
 
 import httpx
 
+from .org_ids import connection_org_id
+
 logger = logging.getLogger("meridian.db.supabase_rest")
 
 # ─── Per-provider table routing (POS isolation, Option C) ──────────────────
@@ -419,6 +421,7 @@ class SupabaseREST:
         days: int = 30,
     ) -> list[dict]:
         """Get daily revenue aggregates for AI engine."""
+        org_id = connection_org_id(org_id) or org_id
         return await self.select(
             "daily_revenue",
             filters={
@@ -434,6 +437,7 @@ class SupabaseREST:
         days: int = 30,
     ) -> list[dict]:
         """Get hourly revenue aggregates for AI engine."""
+        org_id = connection_org_id(org_id) or org_id
         return await self.select(
             "hourly_revenue",
             filters={
@@ -449,6 +453,7 @@ class SupabaseREST:
         days: int = 30,
     ) -> list[dict]:
         """Get daily product performance for AI engine."""
+        org_id = connection_org_id(org_id) or org_id
         return await self.select(
             "daily_product_performance",
             filters={
@@ -460,6 +465,7 @@ class SupabaseREST:
 
     async def get_products(self, org_id: str) -> list[dict]:
         """Get all active products for an org."""
+        org_id = connection_org_id(org_id) or org_id
         return await self.select(
             "products",
             filters={
@@ -475,6 +481,7 @@ class SupabaseREST:
         limit: int = 5000,
     ) -> list[dict]:
         """Get recent transactions for AI engine."""
+        org_id = connection_org_id(org_id) or org_id
         return await self.select(
             "transactions",
             filters={
@@ -500,6 +507,7 @@ class SupabaseREST:
         so the Inventory page was permanently empty. Stock here is real; reorder
         point / daily usage / trend aren't tracked yet, so they default (the page
         shows on-hand levels without predictions until that's built)."""
+        org_id = connection_org_id(org_id) or org_id
         snapshots = await self.select(
             "inventory_snapshots",
             filters={"org_id": f"eq.{org_id}"},

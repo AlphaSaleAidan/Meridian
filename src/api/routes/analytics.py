@@ -19,6 +19,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query, HTTPException, Depends
 
 from ..auth import require_org_access
+from ...db.org_ids import connection_org_id
 from ...db.cache import dashboard_cache, TTL_FAST, TTL_SLOW
 from ...db.revenue import is_revenue_txn, net_revenue_cents
 
@@ -181,7 +182,9 @@ async def get_margins(
     # uploaded) replaces the estimate immediately.
     vertical = ""
     try:
-        org_rows = await db.select("organizations", filters={"id": f"eq.{org_id}"}, limit=1)
+        org_rows = await db.select(
+            "organizations",
+            filters={"id": f"eq.{connection_org_id(org_id) or org_id}"}, limit=1)
         vertical = (org_rows[0].get("vertical") or "").lower() if org_rows else ""
     except Exception:
         vertical = ""
