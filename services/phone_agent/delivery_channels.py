@@ -198,12 +198,45 @@ async def create_pos_for_config(order: dict, config, pos_result: dict | None = N
     pos_system = getattr(config, "pos_system", "") or ""
     token = getattr(config, "pos_access_token", "") or ""
     location = getattr(config, "pos_location_id", "") or ""
+    merchant_id = getattr(config, "merchant_id", "") or ""
+    demo_safe = bool(getattr(config, "demo_safe", False))
+
+    # OAuth-connected merchants store their POS token in pos_connections — the
+    # OAuth callback never writes phone_agent_config.pos_access_token — so a
+    # manual-creds-only resolver leaves token="" and the LIVE phone order
+    # silently falls to the SMS/manual fallback instead of the merchant's real
+    # POS. The Twilio path (_resolve_pos_for_session) already does this two-tier
+    # resolution; the live Vapi dispatch was missing it. When we have no manual
+    # token and this isn't a demo merchant, resolve the connected OAuth token
+    # (decrypt + refresh) via the same helper. Best-effort: on any failure we
+    # fall through to the env fallback exactly as before.
+    if not token and merchant_id and not demo_safe:
+        try:
+            from src.db import get_db
+            from src.db.org_ids import connection_org_id
+            from src.api.routes.phone_dashboard import _fresh_connection_token
+            db = get_db()
+            conns = await db.select(
+                "pos_connections",
+                filters={"org_id": f"eq.{connection_org_id(merchant_id) or merchant_id}",
+                         "status": "eq.connected"},
+                order="updated_at.desc",
+                limit=1,
+            )
+            if conns:
+                conn = conns[0]
+                pos_system = pos_system or (conn.get("provider") or "").strip()
+                location = location or (conn.get("external_location_id") or "").strip()
+                token = await _fresh_connection_token(conn)
+        except Exception as e:  # noqa: BLE001 — degrade to the env fallback below
+            logger.warning("live POS OAuth resolution failed for %s: %s", merchant_id, e)
+
     if pos_system == "square" and not token:
         token = os.getenv("SQUARE_ACCESS_TOKEN", "")
         location = location or os.getenv("SQUARE_LOCATION_ID", "")
     return await create_pos_order(
         order, pos_system, token, location,
-        demo_safe=bool(getattr(config, "demo_safe", False)),
+        demo_safe=demo_safe,
     )
 
 
