@@ -11,7 +11,7 @@ import os
 import secrets
 from datetime import datetime, timezone
 from typing import Optional
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -108,59 +108,11 @@ async def stripe_webhook(request: Request):
         from ...db import _db_instance as db
 
         if event_type == "checkout.session.completed":
-            session_id = data.get("id", "")
-            metadata = data.get("metadata", {})
-            org_id = metadata.get("meridian_org_id")
-            plan = metadata.get("meridian_plan", "standard")
-            rep_id = metadata.get("meridian_rep_id")
-            setup_fee = int(metadata.get("setup_fee_cents", "0"))
-
-            logger.info(
-                f"Checkout completed: session={session_id} "
-                f"org={org_id} plan={plan} rep={rep_id}"
-            )
-
-            if db and org_id:
-                import json as json_mod
-                try:
-                    await db.update("organizations", {
-                        "metadata": json_mod.dumps({
-                            "plan_tier": plan,
-                            "stripe_session_id": session_id,
-                            "stripe_customer_id": data.get("customer"),
-                            "stripe_subscription_id": data.get("subscription"),
-                            "payment_status": "active",
-                            "setup_fee_cents": setup_fee,
-                            "activated_at": datetime.now(timezone.utc).isoformat(),
-                        }),
-                    }, filters={"id": f"eq.{org_id}"})
-                except Exception as e:
-                    logger.warning(f"Failed to update org {org_id}: {e}")
-
-                if rep_id and setup_fee > 0:
-                    try:
-                        await db.insert("commissions", {
-                            "id": str(uuid4()),
-                            "rep_id": rep_id,
-                            "org_id": org_id,
-                            "type": "setup_fee",
-                            "amount_cents": setup_fee,
-                            "status": "earned",
-                            "metadata": json_mod.dumps({
-                                "stripe_session_id": session_id,
-                                "note": "Setup fee — 100% to rep",
-                            }),
-                        })
-                    except Exception as e:
-                        logger.warning(f"Failed to record setup fee commission: {e}")
-
-                try:
-                    await db.update("checkout_sessions", {
-                        "status": "completed",
-                        "completed_at": datetime.now(timezone.utc).isoformat(),
-                    }, filters={"stripe_session_id": f"eq.{session_id}"})
-                except Exception as e:
-                    logger.error(f"Webhook processing error: {e}")
+            # CRITICAL money path — raises on failure (see helper). The money
+            # already moved, so a swallowed activation/commission is not
+            # acceptable; on failure we un-record the dedupe marker and return a
+            # non-2xx below so Stripe retries.
+            await _activate_from_checkout(db, data)
 
         elif event_type == "invoice.paid":
             subscription_id = data.get("subscription", "")
@@ -212,8 +164,82 @@ async def stripe_webhook(request: Request):
 
     except Exception:
         logger.exception(f"Webhook processing error for {event_type}")
+        # A critical write failed. Un-record the dedupe marker so Stripe's retry
+        # is NOT skipped as a duplicate, and return a non-2xx so Stripe actually
+        # retries — instead of silently leaving a paid customer inactive / a rep
+        # unpaid with no recovery path. The activation + commission writes are
+        # idempotent, so the retry is safe.
+        if event_id:
+            from .webhooks import _forget_webhook_event
+            await _forget_webhook_event(event_id, provider="stripe")
+        raise HTTPException(status_code=500, detail="processing failed — will retry")
 
     return {"status": "ok"}
+
+
+async def _activate_from_checkout(db, data: dict) -> None:
+    """Activate the org + book the rep setup-fee commission for a completed
+    checkout. Both writes are IDEMPOTENT — activation is a full metadata
+    overwrite, and the commission id is derived deterministically from the
+    session id so a retry conflicts on the primary key (swallowed) instead of
+    double-booking. RAISES on a real write failure so the webhook can un-record
+    the dedupe marker and return a non-2xx: the money moved, so a silent drop is
+    not acceptable and Stripe must retry."""
+    session_id = data.get("id", "")
+    metadata = data.get("metadata", {}) or {}
+    org_id = metadata.get("meridian_org_id")
+    plan = metadata.get("meridian_plan", "standard")
+    rep_id = metadata.get("meridian_rep_id")
+    try:
+        setup_fee = int(metadata.get("setup_fee_cents", "0") or 0)
+    except (TypeError, ValueError):
+        setup_fee = 0
+
+    logger.info("Checkout completed: session=%s org=%s plan=%s rep=%s",
+                session_id, org_id, plan, rep_id)
+    if not (db and org_id):
+        return  # no db / no org in metadata — nothing to activate (not a failure)
+
+    import json as json_mod
+
+    # 1) Activate the org (idempotent full overwrite of the payment metadata).
+    await db.update("organizations", {
+        "metadata": json_mod.dumps({
+            "plan_tier": plan,
+            "stripe_session_id": session_id,
+            "stripe_customer_id": data.get("customer"),
+            "stripe_subscription_id": data.get("subscription"),
+            "payment_status": "active",
+            "setup_fee_cents": setup_fee,
+            "activated_at": datetime.now(timezone.utc).isoformat(),
+        }),
+    }, filters={"id": f"eq.{org_id}"})
+
+    # 2) Book the rep setup-fee commission — deterministic id per checkout
+    #    session, so a retry (or the un-record→reprocess path) hits a PK conflict
+    #    (swallowed) rather than inserting a second commission row.
+    if rep_id and setup_fee > 0:
+        await db.insert("commissions", {
+            "id": str(uuid5(NAMESPACE_URL, f"meridian-setup-fee:{session_id}")),
+            "rep_id": rep_id,
+            "org_id": org_id,
+            "type": "setup_fee",
+            "amount_cents": setup_fee,
+            "status": "earned",
+            "metadata": json_mod.dumps({
+                "stripe_session_id": session_id,
+                "note": "Setup fee — 100% to rep",
+            }),
+        })
+
+    # 3) Bookkeeping only (non-critical): mark the checkout_sessions row done.
+    try:
+        await db.update("checkout_sessions", {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }, filters={"stripe_session_id": f"eq.{session_id}"})
+    except Exception as e:  # noqa: BLE001 — bookkeeping never blocks activation
+        logger.warning("checkout_sessions completed-flip failed for %s: %s", session_id, e)
 
 
 # ── Subscribe-link management ──────────────────────────────────────────────
