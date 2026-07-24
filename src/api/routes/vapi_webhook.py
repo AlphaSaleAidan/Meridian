@@ -755,6 +755,45 @@ def _confirm(args: dict, routed: dict) -> str:
     return base + " We'll have it ready for you shortly — see you soon!"
 
 
+# POS leg statuses that mean the kitchen ticket actually landed (or was
+# intentionally guarded on a demo/test merchant — not a real failure).
+_REACHED_POS = {"sent", "demo_safe"}
+
+
+def _order_reached(routed: dict) -> bool:
+    """Did the placed order actually reach the merchant? Mirrors the honest
+    Twilio path (phone.py:1129) — never read back a confirmation for an order
+    that never landed.
+
+      pay_now       → held by design (ticket deferred until payment); 'reached'
+                      means the pay link was texted to the caller, or a demo
+                      simulated the payment. Without it the caller can't pay and
+                      no ticket is ever released.
+      pay_at_pickup → released to the kitchen now; 'reached' means the POS ticket
+                      pushed OR the merchant staff SMS went out. If neither, the
+                      kitchen never sees the order.
+      cash          → same as pay_at_pickup (no pay link by design).
+    """
+    mode = routed.get("mode", "")
+    if mode == "pay_now":
+        return bool(routed.get("sms_sent") or routed.get("simulated_paid"))
+    delivery = routed.get("delivery") or {}
+    pos_ok = (delivery.get("pos") or {}).get("status") in _REACHED_POS
+    merchant_ok = (delivery.get("merchant_sms") or {}).get("status") == "sent"
+    return bool(pos_ok or merchant_ok)
+
+
+def _order_failed_message(mode: str) -> str:
+    """Honest, non-fabricated response when an order did not reach the merchant."""
+    if mode == "pay_now":
+        return ("I'm sorry — I wasn't able to get a payment link out to your "
+                "phone just now, so your order isn't placed yet. Please give us "
+                "a call back in a moment and we'll get it sorted.")
+    return ("I'm so sorry — I'm having trouble sending your order to the kitchen "
+            "right now, so it hasn't gone through. I've flagged it for the team. "
+            "Please try calling back in a few minutes and we'll take care of you.")
+
+
 async def _place_order(args: dict, config, caller_phone: str) -> str:
     """Run the real order pipeline via pay_on_phone.dispatch_order — POS push
     timing follows the payment mode: pay_now defers the ticket until Stripe
@@ -783,11 +822,29 @@ async def _place_order(args: dict, config, caller_phone: str) -> str:
         normalized, config, {"phone": caller_phone},
         pay_choice=args.get("pay_choice", ""),
     )
+    routed = routed or {}
     pos_result = routed.get("pos_result", {})
     logger.info("VAPI order placed: merchant=%s caller=%s items=%d dropped=%d pos=%s sms=%s",
                 config.merchant_id, caller_phone or "?", len(normalized.get("items", [])),
                 len(missing), pos_result.get("success"), routed.get("sms_sent"))
-    confirm = _confirm({**args, "items": normalized.get("items", [])}, routed or {})
+
+    # Order integrity: never confirm an order that didn't actually reach the
+    # merchant. If dispatch reported no delivery (POS reject on pay_at_pickup,
+    # no pay link on pay_now, staff notification failed), apologize honestly and
+    # flag it instead of fabricating "Your order is in" — same contract as the
+    # Twilio path (phone.py:1129).
+    if not _order_reached(routed):
+        delivery = routed.get("delivery") or {}
+        logger.error(
+            "VAPI order NOT reached: merchant=%s caller=%s mode=%s pos=%s merchant_sms=%s sms_sent=%s",
+            config.merchant_id, caller_phone or "?", routed.get("mode"),
+            (delivery.get("pos") or {}).get("status"),
+            (delivery.get("merchant_sms") or {}).get("status"),
+            routed.get("sms_sent"),
+        )
+        return _order_failed_message(routed.get("mode", ""))
+
+    confirm = _confirm({**args, "items": normalized.get("items", [])}, routed)
     if missing:
         names = " or ".join(missing[:3])
         confirm += (f" One thing — I couldn't find {names} on the menu, "
@@ -941,7 +998,11 @@ async def vapi_webhook(request: Request):
                     res = await _place_order(args, config, _caller_number(msg))
                 except Exception as e:  # noqa: BLE001
                     logger.error("submit_order failed: %s", e)
-                    res = "Your order is in — we'll follow up by text shortly."
+                    # Order integrity: the pipeline threw, so the order did NOT
+                    # go through — never fabricate a confirmation.
+                    res = ("I'm sorry — something went wrong placing that order, "
+                           "so it hasn't gone through. Please give us a call back "
+                           "in a moment and we'll get you taken care of.")
                 results.append({"toolCallId": tc.get("id"), "result": res})
             else:
                 results.append({"toolCallId": tc.get("id"), "result": "ok"})
@@ -955,7 +1016,9 @@ async def vapi_webhook(request: Request):
                 return {"result": await _place_order(fc.get("parameters", {}) or {}, config, _caller_number(msg))}
             except Exception as e:  # noqa: BLE001
                 logger.error("submit_order (legacy) failed: %s", e)
-                return {"result": "Your order is in — we'll follow up by text shortly."}
+                return {"result": ("I'm sorry — something went wrong placing that "
+                                   "order, so it hasn't gone through. Please give "
+                                   "us a call back in a moment.")}
         return {"result": "ok"}
 
     if mtype == "end-of-call-report":
