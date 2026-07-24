@@ -10,10 +10,10 @@ Handles:
   - Setup fees (one-time line items)
   - First-month-free (Square discount)
 
-Uses Square catalog items:
+Uses Square catalog items (US canonical tiers — see billing/fee_terms.py):
   - $250/month (Standard)
-  - $500/month (Premium)
-  - $1,000/month (Command)
+  - $350/month (Premium)
+  - $500/month (Command)
   - $65/week (weekly plan)
   - Custom amounts via invoice API
 """
@@ -26,6 +26,8 @@ from typing import Optional
 from uuid import uuid4
 
 import httpx
+
+from .fee_terms import CANONICAL_FEE_TERMS
 
 logger = logging.getLogger("meridian.billing")
 
@@ -41,13 +43,16 @@ CATALOG_ITEMS = {
     "weekly": os.getenv("SQUARE_ITEM_65_WEEKLY", ""),
 }
 
-# Plan tier pricing (cents)
+# Plan tier pricing (cents) — DERIVED from the canonical US fee schedule
+# (fee_terms.CANONICAL_FEE_TERMS) so it can never drift from the contracted
+# tiers. A hardcoded copy previously read premium $500 / command $1,000 vs the
+# canonical $350 / $500 — a ~43% overcharge for anything routed through here.
+# 'weekly' has no canonical tier (billed via the invoice API) and stays literal.
 PLAN_PRICES = {
-    "standard": 25000,   # $250/mo
-    "premium": 50000,    # $500/mo
-    "command": 100000,   # $1,000/mo
-    "weekly": 6500,      # $65/wk
+    tier: CANONICAL_FEE_TERMS["us"][tier]["monthly_fee_cents"]
+    for tier in ("standard", "premium", "command")
 }
+PLAN_PRICES["weekly"] = 6500  # $65/wk
 
 # Map plan names to catalog keys
 PLAN_CATALOG_KEY = {
