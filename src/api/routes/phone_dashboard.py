@@ -9,6 +9,7 @@ Endpoints for the frontend phone orders page:
   GET    /api/phone/stats/{merchant_id}    → Aggregated stats
 """
 
+import asyncio
 import logging
 import os
 import re
@@ -1259,13 +1260,27 @@ async def _telnyx_release(phone_number: str, sid: str | None) -> bool:
     return False
 
 
+# Same-worker double-provision guard (double-click / double-submit / wizard
+# retry): serialize provisioning per merchant so the read-then-buy section
+# can't interleave. Cross-worker/instance races are caught by the atomic
+# store in _store_provisioned_number_atomic. The dict is bounded by the
+# number of merchants that ever provision in this process's lifetime.
+_provision_locks: dict[str, asyncio.Lock] = {}
+
+
+def _provision_lock(merchant_id: str) -> asyncio.Lock:
+    return _provision_locks.setdefault(merchant_id, asyncio.Lock())
+
+
 @router.post("/provision-number")
 async def provision_number(req: ProvisionNumberRequest, principal=Depends(require_service_auth)):
     """Provision a dedicated phone number for a merchant. Idempotent: if the
     merchant already has a number it is returned unchanged (never double-buys).
-    With ``force=true`` the current number is released at the provider
-    (best-effort) and a fresh one is purchased — the swap path.
-    Provider is chosen by PHONE_PROVIDER (telnyx | twilio)."""
+    Concurrent calls for the same merchant are serialized in-process and any
+    cross-instance race loses at the DB write (the loser's number is returned
+    to the pool / released, never leaked). With ``force=true`` the current
+    number is released at the provider (best-effort) and a fresh one is
+    purchased — the swap path."""
     await enforce_service_member(principal, req.merchant_id)
     _validate_merchant_id(req.merchant_id)
 
@@ -1273,6 +1288,11 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
     if not TELNYX_API_KEY:
         raise HTTPException(503, "Telnyx is not configured")
 
+    async with _provision_lock(req.merchant_id):
+        return await _provision_number_locked(req)
+
+
+async def _provision_number_locked(req: ProvisionNumberRequest):
     db = get_db()
     rows = await db.select(
         "phone_agent_config",
@@ -1305,15 +1325,25 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
     # the pool is dry.
     from ...services.number_pool import claim_from_pool
     claimed = await claim_from_pool(db, req.merchant_id)
+    # Fresh provisions (everything except an explicit swap of an existing
+    # number) must only land on a row that is still unassigned — a concurrent
+    # provision that got there first wins, and ours unwinds instead of
+    # overwriting (which would leak the winner's DID as a paid orphan).
+    require_unassigned = not (req.force and existing)
     if claimed:
         number = claimed["phone_number"]
         vapi_id = claimed.get("vapi_phone_number_id")
-        await _store_provisioned_number(db, req.merchant_id, bool(rows), {
+        stored = await _store_provisioned_number_atomic(db, req.merchant_id, bool(rows), {
             "phone_number": number,
             "phone_number_sid": claimed.get("provider_sid"),
             "vapi_phone_number_id": vapi_id,
             "updated_at": datetime.now(timezone.utc).isoformat(),
-        })
+        }, require_unassigned=require_unassigned)
+        if not stored:
+            return await _lost_race_response(
+                db, req.merchant_id, number, claimed.get("provider_sid"),
+                vapi_id, from_pool=True,
+            )
         logger.info("Provisioned %s for merchant %s from POOL", number, req.merchant_id)
         return {"phone_number": number, "provisioned": True, "already_existed": False,
                 "provider": "telnyx", "vapi_bound": bool(vapi_id), "from_pool": True}
@@ -1344,12 +1374,17 @@ async def provision_number(req: ProvisionNumberRequest, principal=Depends(requir
                 "Please retry.",
             )
 
-    await _store_provisioned_number(db, req.merchant_id, bool(rows), {
+    stored = await _store_provisioned_number_atomic(db, req.merchant_id, bool(rows), {
         "phone_number": number,
         "phone_number_sid": purchased.get("sid"),
         "vapi_phone_number_id": vapi_id,
         "updated_at": datetime.now(timezone.utc).isoformat(),
-    })
+    }, require_unassigned=require_unassigned)
+    if not stored:
+        return await _lost_race_response(
+            db, req.merchant_id, number, purchased.get("sid"), vapi_id,
+            from_pool=False,
+        )
     logger.info("Provisioned %s for merchant %s via Telnyx%s%s",
                 number, req.merchant_id, " (swap)" if req.force and existing else "",
                 f" +vapi:{vapi_id}" if vapi_id else "")
@@ -1405,3 +1440,77 @@ async def _store_provisioned_number(db, merchant_id: str, has_row: bool, payload
             await db.update("phone_agent_config", payload, filters={"merchant_id": f"eq.{merchant_id}"})
         else:
             await db.insert("phone_agent_config", {**payload, "merchant_id": merchant_id})
+
+
+async def _store_provisioned_number_atomic(
+    db, merchant_id: str, has_row: bool, payload: dict, *, require_unassigned: bool,
+) -> bool:
+    """Race-safe store for a freshly provisioned number. True = our number landed.
+
+    require_unassigned=True (every fresh provision) makes the write conditional:
+    the update only matches a row whose phone_number is still NULL, and an
+    insert that hits the merchant_id UNIQUE constraint counts as a loss — so
+    when two provision calls race across workers/instances, exactly one writes
+    and the loser returns False WITHOUT overwriting the winner's number.
+    require_unassigned=False (the force/swap path, which intentionally replaces
+    an existing number) is the legacy unconditional store. The
+    vapi_phone_number_id retry mirrors _store_provisioned_number (pre-migration
+    deploys must still provision)."""
+    if not require_unassigned:
+        await _store_provisioned_number(db, merchant_id, has_row, payload)
+        return True
+    if has_row:
+        filters = {"merchant_id": f"eq.{merchant_id}", "phone_number": "is.null"}
+        try:
+            updated = await db.update("phone_agent_config", payload, filters=filters)
+        except Exception as e:  # noqa: BLE001 — pre-migration vapi column
+            logger.warning("provision store failed (%s); retrying without vapi column", e)
+            slim = {k: v for k, v in payload.items() if k != "vapi_phone_number_id"}
+            updated = await db.update("phone_agent_config", slim, filters=filters)
+        return bool(updated)
+    try:
+        await db.insert("phone_agent_config", {**payload, "merchant_id": merchant_id})
+        return True
+    except Exception as e:  # noqa: BLE001
+        # Either the pre-migration vapi column or a concurrent insert (UNIQUE
+        # merchant_id). Retry slim once; a second failure = lost the race.
+        logger.warning("provision insert failed (%s); retrying without vapi column", e)
+        slim = {k: v for k, v in payload.items() if k != "vapi_phone_number_id"}
+        try:
+            await db.insert("phone_agent_config", {**slim, "merchant_id": merchant_id})
+            return True
+        except Exception as e2:  # noqa: BLE001
+            logger.warning("provision insert lost the race for %s: %s", merchant_id, e2)
+            return False
+
+
+async def _lost_race_response(
+    db, merchant_id: str, number: str, sid, vapi_id, *, from_pool: bool,
+) -> dict:
+    """Unwind the loser of a provision race and answer with the winner's number.
+
+    Pool claim → flip our claimed pool row back to available (the DID stays
+    Telnyx-owned + Vapi-bound; only the assignment is undone). Live buy →
+    delete the Vapi binding and release the Telnyx number, so a lost race never
+    leaks a monthly-billed orphan DID. Unwind is best-effort: an unwind failure
+    is logged loudly but the caller still gets the winner's (correct) number."""
+    try:
+        if from_pool:
+            await db.update(
+                "phone_number_pool",
+                {"status": "available", "assigned_merchant_id": None, "assigned_at": None},
+                filters={"phone_number": f"eq.{number}", "status": "eq.assigned"},
+            )
+        else:
+            if vapi_id:
+                await delete_vapi_number(vapi_id)
+            await _telnyx_release(number, sid)
+    except Exception as e:  # noqa: BLE001 — never mask the winner's number
+        logger.error("provision race unwind FAILED for %s (from_pool=%s) — "
+                     "possible orphan DID, check provider: %s", number, from_pool, e)
+    rows = await db.select(
+        "phone_agent_config", filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
+    winner = rows[0].get("phone_number") if rows else None
+    logger.warning("provision race for merchant %s: lost to concurrent request "
+                   "(winner=%s, our %s unwound)", merchant_id, winner, number)
+    return {"phone_number": winner, "provisioned": False, "already_existed": True}
