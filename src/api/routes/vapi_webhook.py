@@ -84,6 +84,43 @@ VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 0)
 # (cap − included) minutes, so the disclosed per-call maximum holds.
 VOICE_CAP_GRACE_SEC = int(os.getenv("MERIDIAN_VOICE_CAP_GRACE_SEC", "15") or 0)
 
+# Turn-taking tuning (startSpeakingPlan / stopSpeakingPlan) for every order
+# assistant. Flag-gated OFF: these keys change live-call turn-taking on every
+# merchant at once, and an unknown/renamed key on Vapi's side would fail the
+# whole assistant — so flip MERIDIAN_VOICE_SPEECH_TUNING=1 only after one
+# verified call on the test line. numWords=2 is the headline fix: it stops a
+# caller's "yeah"/"uh-huh" backchannel from cutting the agent off mid-sentence.
+VOICE_SPEECH_TUNING = (
+    os.getenv("MERIDIAN_VOICE_SPEECH_TUNING", "").strip().lower() in ("1", "true", "yes")
+)
+
+
+def _speech_plans(config) -> dict:
+    """startSpeakingPlan/stopSpeakingPlan keys for _assistant_for, or {} when
+    the tuning flag is off (assistant payload stays byte-for-byte unchanged).
+
+    Smart endpointing: LiveKit is Vapi's recommended EN-only provider; the
+    multilingual wizard toggle (language=multi, Hindi/Punjabi code-switch)
+    gets Vapi's own model instead so endpointing doesn't break mid-switch.
+    """
+    if not VOICE_SPEECH_TUNING:
+        return {}
+    lang = (getattr(config, "language", "") or "").strip().lower()
+    provider = "vapi" if lang in ("multi", "multilingual") else "livekit"
+    return {
+        "startSpeakingPlan": {
+            "waitSeconds": 0.4,
+            "smartEndpointingPlan": {"provider": provider},
+        },
+        "stopSpeakingPlan": {
+            # Ignore 1-word backchannels ("yeah", "okay") while the agent is
+            # talking; a real interruption (2+ words) still stops it fast.
+            "numWords": 2,
+            "voiceSeconds": 0.2,
+            "backoffSeconds": 1.0,
+        },
+    }
+
 
 # ── merchant resolution ──────────────────────────────────────────────
 
@@ -620,6 +657,7 @@ def _assistant_for(config, transfer_number: str | None = None) -> dict:
                   "tools": tools},
         "endCallFunctionEnabled": True,
     }
+    assistant.update(_speech_plans(config))
     cap_min = _effective_cap_min(config)
     if cap_min > 0:
         # Vapi drops the call at the cap (+ a short grace so the confirmation
