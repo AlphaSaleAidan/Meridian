@@ -48,10 +48,12 @@ def _upsell_guideline(ctx: "PromptContext", pack_default: str) -> str:
         return "Do not upsell — never suggest additional items."
     if ctx.upsell_mode == "active":
         return (
-            "Feel free to suggest add-ons that pair well (a drink, side, or "
-            "dessert) — up to TWO natural suggestions per call, never pushy; "
-            "move on as soon as they decline, and skip the suggestions "
-            "entirely if the call is running long."
+            "Feel free to suggest add-ons that pair well with what they've "
+            "ordered — name a specific item from the MENU (a drink, side, or "
+            "dessert), never a vague 'anything else?' — up to TWO natural "
+            "suggestions per call, never pushy; move on as soon as they "
+            "decline, and skip the suggestions entirely if the call is "
+            "running long."
         )
     return pack_default
 
@@ -116,7 +118,9 @@ def _efficient_guidelines(ctx: "PromptContext") -> list[str]:
             "rather than echoing every line back individually."
         ),
         _upsell_guideline(ctx, (
-            "Offer at most ONE natural upsell, and only when the order still "
+            "Offer at most ONE natural upsell — name a specific drink, side, "
+            "or dessert from the MENU that pairs with what they've ordered, "
+            "never a vague 'anything else?' — and only when the order still "
             "lacks a drink or side and the caller isn't rushed. If the order "
             "already includes a drink, the caller is brisk, or the call is "
             "running long — skip it."
@@ -168,9 +172,10 @@ def _pizzeria_guidelines(ctx: "PromptContext") -> list[str]:
             "batch naturally into a single short confirm."
         ),
         _upsell_guideline(ctx, (
-            "At most one natural pairing suggestion (garlic bread, drinks) — "
-            "and only when the order has no side or drink and the caller is "
-            "unhurried. Skip it for brisk callers or long calls."
+            "At most one natural pairing suggestion, named from the MENU "
+            "(e.g. the garlic bread or a drink) — and only when the order has "
+            "no side or drink and the caller is unhurried. Skip it for brisk "
+            "callers or long calls."
         )),
         "Pick up the caller's name wherever it fits naturally.",
         (
@@ -220,9 +225,9 @@ def _cafe_guidelines(ctx: "PromptContext") -> list[str]:
             "time rather than echoing each one."
         ),
         _upsell_guideline(ctx, (
-            "At most one light suggestion — a pastry with a drink-only order, "
-            "or a drink with a food-only one — and only when the caller is "
-            "unhurried. Skip it for brisk callers."
+            "At most one light suggestion, named from the MENU — a pastry "
+            "with a drink-only order, or a drink with a food-only one — and "
+            "only when the caller is unhurried. Skip it for brisk callers."
         )),
         (
             "Keep the pace quick and friendly — short questions, short "
@@ -268,9 +273,10 @@ def _indian_guidelines(ctx: "PromptContext") -> list[str]:
             "echoing each dish back."
         ),
         _upsell_guideline(ctx, (
-            "One gentle suggestion at most — naan, rice, or a drink such as a "
-            "lassi — and only when the order is missing it and the caller is "
-            "unhurried. Never push; move on immediately if declined."
+            "One gentle suggestion at most, named from the MENU — a naan or "
+            "rice to go with a curry, or a drink such as a lassi — and only "
+            "when the order is missing it and the caller is unhurried. Never "
+            "push; move on immediately if declined."
         )),
         (
             "Pick up the caller's name naturally; if it's unclear, politely "

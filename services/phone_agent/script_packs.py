@@ -92,6 +92,24 @@ def list_packs() -> list[dict]:
     return packs
 
 
+# Shared DELIVERY guidelines — how the agent *sounds*, appended after every
+# pack's own guidelines (packs own the call flow; these own the feel). Kept
+# out of HARD RULES on purpose: they're style principles the agent adapts,
+# not product guarantees. Word choice matters for the upsell-override tests:
+# never use the words "upsell" or "suggestion" here.
+_SHARED_DELIVERY_GUIDELINES = [
+    (
+        "Vary your acknowledgments — 'got it', 'perfect', 'sure thing', "
+        "'sounds good' — and never start two replies in a row with the same "
+        "phrase."
+    ),
+    (
+        "Ask ONE thing at a time. If you need two details, get the first, "
+        "acknowledge it, then ask for the second — a reply with two questions "
+        "in it forces the caller to remember both."
+    ),
+]
+
 # Shared HARD RULES — non-negotiable product behavior, rendered for every
 # pack. The first two carry the legacy prompt's read-back-then-submit and
 # pay-link guarantees (steps there, hard rules here); the rest are the same
@@ -130,7 +148,9 @@ def compose(
     rendered by the caller with the SAME helpers the legacy prompt uses.
     """
     pack = get_pack(pack_id)
-    guidelines = "\n".join(f"- {g}" for g in pack.guidelines(ctx))
+    guidelines = "\n".join(
+        f"- {g}" for g in [*pack.guidelines(ctx), *_SHARED_DELIVERY_GUIDELINES]
+    )
     extra_rules = pack.hard_rules(ctx)
     extra_rules_block = ("\n" + "\n".join(extra_rules)) if extra_rules else ""
 
