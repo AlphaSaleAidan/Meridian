@@ -4,7 +4,7 @@ import {
   LayoutDashboard, TrendingUp, Lightbulb, Target, Bot,
   MoreHorizontal, X, Users, Package, DollarSign, LineChart,
   Clock, UserCheck, Calendar, Layers, AlertTriangle, Phone,
-  Globe, Bell, Settings, Video, Box, ChefHat, Star,
+  Bell, Settings, Video, Box, ChefHat, Star,
 } from 'lucide-react'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
@@ -29,7 +29,7 @@ const ALL_ITEMS: TabItem[] = [
   { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
   { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix' },
   { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
-  { path: 'my-website', icon: Globe, label: 'My Website' },
+  // My Website hidden until the builder ships (renders "Under Construction").
   { path: 'space', icon: Box, label: '3D Space' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },

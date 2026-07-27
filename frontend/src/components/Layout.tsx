@@ -24,7 +24,6 @@ import {
   AlertTriangle,
   Box,
   Phone,
-  Globe,
   Calendar,
   Video,
   Sparkles,
@@ -86,7 +85,7 @@ const navGroups = [
       { path: 'hub', icon: Building2, label: 'Multi-Location Hub', commandOnly: true },
       { path: 'camera-analytics', icon: Video, label: 'Camera Intel' },
       { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
-      { path: 'my-website', icon: Globe, label: 'My Website' },
+      // My Website hidden until the builder ships (renders "Under Construction").
       { path: 'space', icon: Box, label: '3D Space' },
       { path: 'content', icon: Sparkles, label: 'Content' },
     ],
