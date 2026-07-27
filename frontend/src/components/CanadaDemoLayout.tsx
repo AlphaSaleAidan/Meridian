@@ -5,7 +5,7 @@ import {
   LayoutDashboard, TrendingUp, Package, Layers, Lightbulb,
   LineChart, Bell, Settings, Menu, Bot, Target, Users,
   UserCheck, Clock, DollarSign, ChefHat, AlertTriangle, Box,
-  MapPin, Phone, Calendar, Globe, Monitor, Video,
+  MapPin, Phone, Calendar, Monitor, Video,
 } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import MobileNavBar from './MobileNavBar'
@@ -44,7 +44,7 @@ const navItems: NavItem[] = [
   { path: 'anomalies', icon: AlertTriangle, label: 'Anomalies' },
   { path: 'menu-matrix', icon: ChefHat, label: 'Menu Matrix', desktopOnly: true },
   { path: 'phone-orders', icon: Phone, label: 'Phone Orders' },
-  { path: 'my-website', icon: Globe, label: 'My Website' },
+  // My Website hidden until the builder ships (renders "Under Construction").
   { path: 'space', icon: Box, label: '3D Space' },
   { path: 'notifications', icon: Bell, label: 'Notifications' },
   { path: 'settings', icon: Settings, label: 'Settings' },

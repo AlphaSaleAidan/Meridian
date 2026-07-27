@@ -49,7 +49,10 @@ export const defaultModuleFlags: ModuleFlags = {
   topActions: true,
   taxExpenses: true,
   customers: true,
-  myWebsite: true,
+  // Website Builder is not shippable yet (renders an "Under Construction" wall),
+  // so keep it out of the nav until the builder backend is real. Flip back to
+  // true when MyWebsitePage is functional.
+  myWebsite: false,
   content: true,
 }
 

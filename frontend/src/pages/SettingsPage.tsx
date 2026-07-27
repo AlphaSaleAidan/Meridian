@@ -10,6 +10,7 @@ import { generateBusinessProfiles } from '@/lib/agent-data'
 import ScrollReveal from '@/components/ScrollReveal'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import POSSelectorPanel from '@/components/POSSelectorPanel'
+import PosReconnectBanner from '@/components/PosReconnectBanner'
 import POSLogo from '@/components/POSLogo'
 import { posSystemsByKey, type POSSystemKey } from '@/data/pos-systems'
 import { useOrgId } from '@/hooks/useOrg'
@@ -631,6 +632,7 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
+      <PosReconnectBanner />
       <ScrollReveal variant="fadeUp">
         <div>
           <h1 className="text-2xl font-bold text-[#F5F5F7]">Settings</h1>

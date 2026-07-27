@@ -4,7 +4,7 @@ import { Search, ArrowRight } from 'lucide-react'
 import {
   LayoutDashboard, TrendingUp, Package, Layers, Lightbulb, LineChart,
   Bell, Settings, Bot, Target, Users, UserCheck, Clock, DollarSign,
-  ChefHat, AlertTriangle, Box, Phone, Globe, Calendar, Video,
+  ChefHat, AlertTriangle, Box, Phone, Calendar, Video,
 } from 'lucide-react'
 
 interface SearchItem {
@@ -33,7 +33,7 @@ const ITEMS: SearchItem[] = [
   { path: 'agents', label: 'AI Agents', group: 'Tools', icon: Bot, keywords: 'automation intelligence' },
   { path: 'camera-intelligence', label: 'Camera Intel', group: 'Tools', icon: Video, keywords: 'vision surveillance traffic' },
   { path: 'phone-orders', label: 'Phone Orders', group: 'Tools', icon: Phone, keywords: 'calls ordering voice' },
-  { path: 'my-website', label: 'My Website', group: 'Tools', icon: Globe, keywords: 'site builder online' },
+  // My Website hidden until the builder ships (renders "Under Construction").
   { path: 'space', label: '3D Space', group: 'Tools', icon: Box, keywords: 'floor plan layout' },
   { path: 'notifications', label: 'Notifications', group: 'System', icon: Bell, keywords: 'alerts messages inbox' },
   { path: 'settings', label: 'Settings', group: 'System', icon: Settings, keywords: 'preferences config account' },

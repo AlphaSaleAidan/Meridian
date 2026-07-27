@@ -378,7 +378,36 @@ async def _fresh_connection_token(conn: dict) -> str:
                 "clover inline token refresh failed for connection %s — using stored token",
                 conn.get("id"),
             )
+            # The refresh token itself is dead (rotated / revoked / expired) —
+            # the stored access token below will 401. Flag the connection so the
+            # merchant sees a "reconnect your POS" prompt instead of orders
+            # silently failing to reach the kitchen. Best-effort; a successful
+            # OAuth reconnect flips status back to 'connected' (oauth callback).
+            await _flag_pos_needs_reconnect(conn, reason="clover_refresh_failed")
     return _decrypt_connection_token(conn)
+
+
+async def _flag_pos_needs_reconnect(conn: dict, reason: str = "") -> None:
+    """Mark a pos_connections row as needing a fresh OAuth link (its token was
+    rotated/revoked). The connection-status endpoint surfaces this so the UI can
+    show a 'Your POS key was rotated — reconnect' prompt. Idempotent + best-
+    effort: never raises into the order path, and won't re-flag an already-
+    flagged row."""
+    conn_id = conn.get("id")
+    if not conn_id or (conn.get("status") == "needs_reconnect"):
+        return
+    try:
+        from ...db import get_db
+        # Only the existing `status` column is written (no migration needed for
+        # launch). The reason is logged for support.
+        await get_db().update(
+            "pos_connections",
+            {"status": "needs_reconnect"},
+            filters={"id": f"eq.{conn_id}"},
+        )
+        logger.info("pos_connections %s flagged needs_reconnect (%s)", conn_id, reason)
+    except Exception as e:  # noqa: BLE001 — flagging never blocks order dispatch
+        logger.warning("could not flag pos reconnect for %s: %s", conn_id, e)
 
 
 # ---------------------------------------------------------------------------
