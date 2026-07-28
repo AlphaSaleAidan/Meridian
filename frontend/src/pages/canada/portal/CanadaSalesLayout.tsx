@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import SalesPortalMobileNav from './SalesPortalMobileNav'
-import { useSalesAuth, repTier } from '@/lib/sales-auth'
+import { useSalesAuth, repTier, roleLabel } from '@/lib/sales-auth'
 import { isLeaderboardHidden } from '@/lib/leaderboard-flags'
 import { useMobile } from '@/hooks/useMobile'
 import ClineAIChatWidget from '@/components/ClineAIChatWidget'
@@ -162,6 +162,13 @@ export default function CanadaSalesLayout() {
   const salesNavItems = [...salesNavBase, ...(teamNav ? [teamNav] : []), ...salesNavTail]
   const allNav: NavEntry[] = tier === 'admin' ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 
+  // The sidebar used to print a hardcoded "Sales Rep" under every name, so an
+  // admin or office manager saw the wrong title for their own account. Show the
+  // role actually assigned in the Team section. When the email allowlist above
+  // is what granted the admin view, say "Admin" — the label must match the nav
+  // the person is looking at, not contradict it.
+  const sidebarRoleLabel = tier === 'admin' ? 'Admin' : roleLabel(rep?.role)
+
   const sidebarContent = (
     <>
       {/* Logo area */}
@@ -232,7 +239,7 @@ export default function CanadaSalesLayout() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-white truncate">{rep.name}</p>
-              <p className="text-2xs text-pm-canada-text-muted truncate">Sales Rep</p>
+              <p className="text-2xs text-pm-canada-text-muted truncate">{sidebarRoleLabel}</p>
             </div>
           </div>
         ) : null}
