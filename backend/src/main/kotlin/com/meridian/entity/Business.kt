@@ -24,4 +24,6 @@ class Business(
     var posProvider: String? = null,
     @Column(name = "onboarded")
     var onboarded: Boolean = false,
+    @Column(name = "owner_user_id")
+    var ownerUserId: String? = null,
 )

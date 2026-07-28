@@ -8,4 +8,9 @@ interface BusinessRepository : JpaRepository<Business, String> {
         accessToken: String,
         status: String,
     ): Business?
+
+    fun existsByIdAndOwnerUserId(
+        id: String,
+        ownerUserId: String,
+    ): Boolean
 }

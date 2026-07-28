@@ -27,6 +27,14 @@ class GlobalExceptionHandler {
             .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), ex.message ?: "Bad Request"))
     }
 
+    @ExceptionHandler(ForbiddenException::class)
+    fun handleForbiddenException(ex: ForbiddenException): ResponseEntity<ApiResponse<Any>> {
+        log.warn("Forbidden: {}", ex.message)
+        return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), ex.message ?: "Forbidden"))
+    }
+
     @ExceptionHandler(NotFoundException::class)
     fun handleNotFoundException(ex: NotFoundException): ResponseEntity<ApiResponse<Any>> {
         log.warn("Resource not found: {}", ex.message)

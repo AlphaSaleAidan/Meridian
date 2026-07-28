@@ -12,6 +12,9 @@ supabase:
 meridian:
   portal:
     base-url: http://localhost:8080
+  auth:
+    admin-emails: admin@test.com
+    tenancy-enforcement-disabled: false
 
 security:
   csrf:

@@ -58,7 +58,7 @@ class AuthController(
         @RequestBody request: LoginRequest,
         session: HttpSession,
     ): ResponseEntity<ApiResponse<Any>> {
-        val supabaseToken = authService.login(request)
+        val loginResult = authService.login(request)
 
         // Inform Spring Security that the user is authenticated
         val auth = UsernamePasswordAuthenticationToken(request.email, null, emptyList())
@@ -69,7 +69,8 @@ class AuthController(
         // Save the context to the session so it persists across requests
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext)
         session.setAttribute("USER_EMAIL", request.email)
-        session.setAttribute("SUPABASE_TOKEN", supabaseToken)
+        session.setAttribute("SUPABASE_TOKEN", loginResult.accessToken)
+        loginResult.userId?.let { session.setAttribute("SUPABASE_USER_ID", it) }
 
         log.info("Created backend JDBC session for: {}", request.email)
 

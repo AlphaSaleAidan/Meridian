@@ -30,6 +30,9 @@ server:
 meridian:
   portal:
     base-url: ${MERIDIAN_PORTAL_BASE_URL:https://canada.meridian.tips}
+  auth:
+    admin-emails: ${MERIDIAN_ADMIN_EMAILS:apierce@alphasale.co,aidanpierce72@gmail.com,aidanpierce@meridian.tips,cheungenochmgmt@gmail.com,aidanvietnguyen@gmail.com}
+    tenancy-enforcement-disabled: ${TENANCY_ENFORCEMENT_DISABLED:false}
 
 management:
   endpoints:

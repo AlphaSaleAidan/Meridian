@@ -15,3 +15,7 @@ class BadRequestException(
 class NotFoundException(
     message: String,
 ) : BaseException(message)
+
+class ForbiddenException(
+    message: String,
+) : BaseException(message)

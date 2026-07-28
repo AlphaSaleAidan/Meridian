@@ -5,6 +5,7 @@ import com.meridian.dto.LoginRequest
 import com.meridian.dto.SignupRequest
 import com.meridian.exception.UnauthorizedException
 import com.meridian.service.auth.AuthService
+import com.meridian.service.auth.LoginResult
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -53,7 +54,7 @@ class AuthControllerTest {
             val request = LoginRequest("test@test.com", "password")
             val httpSession = mockk<HttpSession>(relaxed = true)
 
-            coEvery { authService.login(any()) } returns "fake-jwt"
+            coEvery { authService.login(any()) } returns LoginResult(accessToken = "fake-jwt", userId = "user-123")
 
             val response = authController.login(request, httpSession)
 
@@ -63,6 +64,7 @@ class AuthControllerTest {
             coVerify { authService.login(request) }
             verify { httpSession.setAttribute("USER_EMAIL", "test@test.com") }
             verify { httpSession.setAttribute("SUPABASE_TOKEN", "fake-jwt") }
+            verify { httpSession.setAttribute("SUPABASE_USER_ID", "user-123") }
         }
 
     @Test

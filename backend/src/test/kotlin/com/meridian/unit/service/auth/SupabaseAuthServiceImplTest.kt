@@ -109,15 +109,18 @@ class SupabaseAuthServiceImplTest {
                     assertEquals("test-anon-key", request.headers["apikey"])
 
                     respond(
-                        content = """{"access_token": "jwt-token-abc", "token_type": "bearer"}""",
+                        content =
+                            """{"access_token": "jwt-token-abc", "token_type": "bearer",
+                               "user": {"id": "uuid-user-1", "email": "user@test.com"}}""",
                         status = HttpStatusCode.OK,
                         headers = headersOf(HttpHeaders.ContentType, "application/json"),
                     )
                 }
 
             val service = createService(engine)
-            val token = service.login(LoginRequest("user@test.com", "password123"))
-            assertEquals("jwt-token-abc", token)
+            val result = service.login(LoginRequest("user@test.com", "password123"))
+            assertEquals("jwt-token-abc", result.accessToken)
+            assertEquals("uuid-user-1", result.userId)
         }
 
     @Test
