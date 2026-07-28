@@ -7,6 +7,8 @@ import com.meridian.dto.PortalTokenResponse
 import com.meridian.service.portal.PortalService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.withContext
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -26,6 +28,9 @@ import org.springframework.web.bind.annotation.RestController
 )
 class PortalController(
     private val portalService: PortalService,
+    // JPA is blocking, so each service call runs on one virtual thread via
+    // withContext — keeps @Transactional's ThreadLocal binding intact.
+    private val virtualThreadDispatcher: CoroutineDispatcher,
 ) {
     @Operation(
         summary = "Resolve a portal token to org details",
@@ -36,9 +41,12 @@ class PortalController(
                 "unknown or the business is not active.",
     )
     @GetMapping("/resolve/{token}")
-    fun resolve(
+    suspend fun resolve(
         @PathVariable token: String,
-    ): ResponseEntity<ApiResponse<PortalResolveResponse>> = ResponseEntity.ok(ApiResponse.success(data = portalService.resolveToken(token)))
+    ): ResponseEntity<ApiResponse<PortalResolveResponse>> =
+        withContext(virtualThreadDispatcher) {
+            ResponseEntity.ok(ApiResponse.success(data = portalService.resolveToken(token)))
+        }
 
     @Operation(
         summary = "Generate (or fetch) a merchant's portal token",
@@ -48,8 +56,10 @@ class PortalController(
                 "it with token_status=pending, and returns the full portal URL. Requires an authenticated session.",
     )
     @PostMapping("/generate")
-    fun generate(
+    suspend fun generate(
         @RequestBody request: GeneratePortalTokenRequest,
     ): ResponseEntity<ApiResponse<PortalTokenResponse>> =
-        ResponseEntity.ok(ApiResponse.success(data = portalService.generateToken(request)))
+        withContext(virtualThreadDispatcher) {
+            ResponseEntity.ok(ApiResponse.success(data = portalService.generateToken(request)))
+        }
 }
