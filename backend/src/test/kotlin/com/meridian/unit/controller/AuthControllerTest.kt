@@ -82,20 +82,22 @@ class AuthControllerTest {
         }
 
     @Test
-    fun `me returns session email when logged in`() {
-        val response = authController.me("test@test.com")
+    fun `me returns session email when logged in`() =
+        runBlocking {
+            val response = authController.me("test@test.com")
 
-        assertEquals(HttpStatus.OK, response.statusCode)
-        assertEquals("success", response.body?.status)
-        assertEquals("test@test.com", response.body?.data?.email)
-    }
+            assertEquals(HttpStatus.OK, response.statusCode)
+            assertEquals("success", response.body?.status)
+            assertEquals("test@test.com", response.body?.data?.email)
+        }
 
     @Test
-    fun `me throws UnauthorizedException when no session email`() {
-        assertThrows<UnauthorizedException> {
-            authController.me(null)
+    fun `me throws UnauthorizedException when no session email`(): Unit =
+        runBlocking {
+            assertThrows<UnauthorizedException> {
+                authController.me(null)
+            }
         }
-    }
 
     @Test
     fun `logout invalidates existing session and returns 200`() {

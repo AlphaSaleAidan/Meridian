@@ -84,7 +84,7 @@ class AuthController(
                 "401 when there is no active session.",
     )
     @GetMapping("/me")
-    fun me(
+    suspend fun me(
         @SessionAttribute(name = "USER_EMAIL", required = false) email: String?,
     ): ResponseEntity<ApiResponse<SessionInfoResponse>> {
         if (email == null) {
