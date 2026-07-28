@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import java.time.Clock
 import java.util.concurrent.Executors
 
 @Configuration
@@ -16,4 +17,8 @@ class CoroutinesConfig {
      */
     @Bean
     fun virtualThreadDispatcher(): CoroutineDispatcher = Executors.newVirtualThreadPerTaskExecutor().asCoroutineDispatcher()
+
+    /** Injected rather than calling Instant.now() inline, so time windows are testable. */
+    @Bean
+    fun clock(): Clock = Clock.systemUTC()
 }
