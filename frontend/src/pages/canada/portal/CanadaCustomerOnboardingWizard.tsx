@@ -192,7 +192,9 @@ export default function CanadaCustomerOnboardingWizard() {
   useEffect(() => {
     if (!org?.org_id) return
     let cancelled = false
-    fetch(`${API_BASE}/api/clover/status?org_id=${encodeURIComponent(org.org_id)}`)
+    // /capabilities, not /status: this wizard is portal-token authed and has no
+    // JWT, and all it needs is the server-config flag — no org data.
+    fetch(`${API_BASE}/api/clover/capabilities`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d) setCloverOAuthAvailable(!!d.oauth_available) })
       .catch(() => { /* leave false — manual path still available downstream */ })

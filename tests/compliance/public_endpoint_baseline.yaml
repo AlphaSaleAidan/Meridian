@@ -28,7 +28,15 @@ payment-page:
 oauth:
   # OAuth dance / provider discovery — browser-redirect flow, no session yet.
   - "GET /api/clover/authorize"
+  # Server config only (is 1-click configured?) — takes no org_id, returns no
+  # merchant data. Read by the portal onboarding wizard, which is portal-token
+  # authed and has no JWT. Exists so /status can be tenancy-guarded.
+  - "GET /api/clover/capabilities"
   - "GET /api/clover/callback"
+  # NOTE: /status takes an org_id and returns THAT org's connection state
+  # (external merchant id, status, last sync) to anonymous callers — it does not
+  # fit this category's "no session yet" rationale. Tracked for a guard once the
+  # frontend ships JWT-bearing calls; see PR adding /capabilities.
   - "GET /api/clover/status"
   - "GET /api/pos/providers"
   - "GET /api/pos/{provider}/authorize"
