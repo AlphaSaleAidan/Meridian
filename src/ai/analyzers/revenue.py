@@ -61,7 +61,7 @@ class RevenueAnalyzer:
         total_tax = sum((d.get("total_tax_cents") or 0) for d in daily)
         total_tips = sum((d.get("total_tip_cents") or 0) for d in daily)
         total_discounts = sum((d.get("total_discount_cents") or 0) for d in daily)
-        total_customers = sum((d.get("total_customers") or 0) for d in daily)
+        total_customers = sum((d.get("unique_customers") or 0) for d in daily)
         
         active_days = len([d for d in daily if (d.get("transaction_count") or 0) > 0])
         
