@@ -9,6 +9,10 @@ supabase:
   url: http://localhost:54321
   key: test-anon-key
 
+meridian:
+  portal:
+    base-url: http://localhost:8080
+
 security:
   csrf:
     enabled: false
