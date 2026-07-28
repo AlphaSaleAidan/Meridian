@@ -19,7 +19,7 @@ class PortalControllerTest {
     private val portalService = mockk<PortalService>()
     private val portalController = PortalController(portalService)
 
-    private val orgId = UUID.randomUUID()
+    private val orgId = UUID.randomUUID().toString()
 
     @Test
     fun `resolve returns 200 with org details`() {

@@ -21,7 +21,7 @@ class PortalServiceTest {
     private val businessRepository = mockk<BusinessRepository>()
     private val portalService = PortalService(businessRepository, "https://canada.meridian.tips")
 
-    private val orgId = UUID.randomUUID()
+    private val orgId = UUID.randomUUID().toString()
 
     // ---- resolveToken tests ----
 

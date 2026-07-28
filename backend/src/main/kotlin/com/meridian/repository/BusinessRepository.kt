@@ -2,9 +2,8 @@ package com.meridian.repository
 
 import com.meridian.entity.Business
 import org.springframework.data.jpa.repository.JpaRepository
-import java.util.UUID
 
-interface BusinessRepository : JpaRepository<Business, UUID> {
+interface BusinessRepository : JpaRepository<Business, String> {
     fun findByAccessTokenAndStatus(
         accessToken: String,
         status: String,

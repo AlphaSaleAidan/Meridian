@@ -4,13 +4,12 @@ import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
-import java.util.UUID
 
 @Entity
 @Table(name = "businesses")
 class Business(
     @Id
-    val id: UUID,
+    val id: String,
     @Column(name = "name")
     var name: String? = null,
     @Column(name = "plan_tier")
