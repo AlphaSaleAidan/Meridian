@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:54322/postgres
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+supabase:
+  url: http://127.0.0.1:54321
+  key: ${SUPABASE_KEY}
+
+security:
+  csrf:
+    enabled: false

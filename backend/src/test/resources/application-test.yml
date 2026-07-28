@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: meridian-backend-test
+
+supabase:
+  url: http://localhost:54321
+  key: test-anon-key

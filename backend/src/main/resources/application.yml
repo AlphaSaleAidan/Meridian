@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: meridian-backend
+
+security:
+  csrf:
+    enabled: true
+
+  threads:
+    virtual:
+      enabled: true
+
+  session:
+    store-type: jdbc
+    jdbc:
+      initialize-schema: always
+
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${PORT:8080}
+
+meridian:
+  portal:
+    base-url: ${MERIDIAN_PORTAL_BASE_URL:https://canada.meridian.tips}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    com.meridian: DEBUG
