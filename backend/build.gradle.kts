@@ -1,0 +1,94 @@
+plugins {
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.kotlin.jpa)
+    alias(libs.plugins.ktlint)
+}
+
+group = "com.meridian"
+version = "0.0.1-SNAPSHOT"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(26)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot
+    implementation(libs.spring.boot.starter.web)
+    implementation(libs.spring.boot.starter.actuator)
+    implementation(libs.spring.boot.starter.validation)
+    implementation(libs.springdoc.openapi.starter.webmvc.ui)
+
+    // Security & Auth
+    implementation(libs.spring.boot.starter.security)
+    implementation(libs.spring.session.jdbc)
+
+    // HTTP Client (Ktor)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.apache5)
+
+    // Database
+    implementation(libs.spring.boot.starter.data.jpa)
+    runtimeOnly(libs.postgresql)
+
+    // Kotlin
+    implementation(libs.kotlin.reflect)
+    implementation(libs.jackson.module.kotlin)
+
+    // Coroutines (virtual threads as dispatcher)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.reactor)
+    implementation(libs.kotlinx.coroutines.jdk9)
+
+    // Testing
+    testImplementation(libs.mockk)
+    testImplementation(libs.ktor.client.mock)
+    testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.spring.boot.testcontainers)
+    testImplementation(libs.testcontainers.junit.jupiter)
+    testImplementation(libs.testcontainers.postgresql)
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xjsr305=strict")
+    }
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
+}
+
+// Unit tests only (excludes @Tag("integration"))
+tasks.register<Test>("unitTest") {
+    useJUnitPlatform {
+        excludeTags("integration")
+    }
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    description = "Runs unit tests only (no database required)."
+    group = "verification"
+}
+
+// Integration tests only (requires Docker for Testcontainers)
+tasks.register<Test>("integrationTest") {
+    useJUnitPlatform {
+        includeTags("integration")
+    }
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    description = "Runs integration tests only (requires Docker)."
+    group = "verification"
+}

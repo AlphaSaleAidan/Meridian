@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Include Spring Boot's default logback configuration for base defaults -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml" />
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml" />
+
+    <!-- Custom Console Appender with improved coloring and thread visibility -->
+    <appender name="CUSTOM_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <!-- 
+                %clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}}){faint} - Date/Time in faint color
+                %clr(${LOG_LEVEL_PATTERN:-%5p}) - Log level (INFO, WARN, ERROR) colored automatically
+                %clr(${PID:- }){magenta} - Process ID in magenta
+                %clr(-){faint} - Separator
+                %clr([%15.15t]){cyan} - Thread name in cyan (up to 15 chars)
+                %clr(%-40.40logger{39}){cyan} - Logger name in cyan (up to 40 chars)
+                %m%n - Log message and newline
+            -->
+            <pattern>%clr(%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){cyan} %clr(%-40.40logger{39}){cyan} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}</pattern>
+            <charset>utf8</charset>
+        </encoder>
+    </appender>
+
+    <!-- Configure the Root Logger -->
+    <root level="INFO">
+        <appender-ref ref="CUSTOM_CONSOLE" />
+    </root>
+
+    <!-- Adjust log levels for specific packages if needed -->
+    <logger name="com.meridian" level="DEBUG" />
+    <logger name="org.springframework.web" level="INFO" />
+
+</configuration>
