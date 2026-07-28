@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import USSalesPortalMobileNav from './USSalesPortalMobileNav'
-import { useSalesAuth } from '@/lib/sales-auth'
+import { useSalesAuth, roleLabel } from '@/lib/sales-auth'
 import { isUsAdmin } from '@/lib/us-admins'
 import { useMobile } from '@/hooks/useMobile'
 import ClineAIChatWidget from '@/components/ClineAIChatWidget'
@@ -119,8 +119,16 @@ export default function USSalesLayout() {
     }
   }, [])
 
-  const isAdmin = isUsAdmin(rep?.email)
+  // Admin status came from an email allowlist only, so a rep promoted to admin
+  // in the Team section still saw the rep view. Honour the assigned role as
+  // well; the allowlist stays as a union so nobody currently holding the admin
+  // view can lose it.
+  const isAdmin = isUsAdmin(rep?.email) || rep?.role === 'admin'
   const allNav: NavEntry[] = isAdmin ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
+
+  // Was a hardcoded "Sales Rep" for everyone — show the assigned role instead,
+  // falling back to "Admin" when the allowlist is what granted the admin view.
+  const sidebarRoleLabel = isAdmin ? 'Admin' : roleLabel(rep?.role)
 
   const sidebarContent = (
     <>
@@ -193,7 +201,7 @@ export default function USSalesLayout() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-white truncate">{rep.name}</p>
-              <p className="text-[11px] text-[#A1A1A8] truncate">Sales Rep</p>
+              <p className="text-[11px] text-[#A1A1A8] truncate">{sidebarRoleLabel}</p>
             </div>
           </div>
         ) : null}
