@@ -47,3 +47,7 @@ services/higgsfield/
 
 # LiteLLM gateway secrets (master key, budget) — never commit
 .env.litellm
+
+# Postal mail-server private key — must exist on disk for the containers,
+# must never be committed. Canonical copy: /root/.secrets/postal-signing.key
+services/postal/signing.key

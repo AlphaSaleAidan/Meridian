@@ -91,10 +91,17 @@ services:
       RABBITMQ_DEFAULT_USER: postal
       RABBITMQ_DEFAULT_PASS: ${POSTAL_RABBITMQ_PASSWORD:-postal_rmq_pw}
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      # `rabbitmq-diagnostics` boots a whole Erlang VM per run and needs well
+      # over 5s (broker startup alone is ~23s). With interval 10s / timeout 5s
+      # every probe was killed before it could answer, and the orphaned VMs
+      # piled up — 5 of them at ~100% CPU each, permanently. That load then made
+      # the next probe even slower: a self-feeding spiral that ate ~4 cores of
+      # a 16-core box for 8 days. Give the probe room and ask far less often.
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 90s
 
 volumes:
   postal-db-data:
