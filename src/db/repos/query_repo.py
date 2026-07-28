@@ -25,7 +25,7 @@ class QueryRepo:
                 total_tax_cents,
                 total_tip_cents,
                 total_discount_cents,
-                total_customers,
+                unique_customers,
                 refund_total_cents,
                 refund_count
             FROM daily_revenue
@@ -41,9 +41,9 @@ class QueryRepo:
             """
             SELECT
                 hour_bucket,
-                transaction_count,
                 total_revenue_cents,
                 avg_ticket_cents,
+                unique_customers,
                 cash_count, credit_count, debit_count, mobile_count,
                 sale_count, refund_count, void_count
             FROM hourly_revenue
@@ -66,9 +66,7 @@ class QueryRepo:
                 SUM(dpp.times_sold)::BIGINT AS times_sold,
                 SUM(dpp.total_quantity)::NUMERIC AS total_quantity,
                 SUM(dpp.total_revenue_cents)::BIGINT AS total_revenue_cents,
-                SUM(dpp.total_cost_cents)::BIGINT AS total_cost_cents,
-                AVG(dpp.avg_unit_price_cents)::INTEGER AS avg_price_cents,
-                SUM(dpp.total_discount_cents)::BIGINT AS total_discount_cents
+                AVG(dpp.avg_price_cents)::INTEGER AS avg_price_cents
             FROM daily_product_performance dpp
             JOIN products p ON p.id = dpp.product_id
             WHERE dpp.org_id = $1

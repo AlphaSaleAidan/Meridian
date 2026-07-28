@@ -244,7 +244,7 @@ def generate_test_data(days: int = 30, seed: int = 42) -> AnalysisContext:
             "total_tax_cents": day_tax,
             "total_tip_cents": day_tips,
             "total_discount_cents": day_discounts,
-            "total_customers": int(base_txns * 0.85),
+            "unique_customers": int(base_txns * 0.85),
             "refund_total_cents": day_refund_cents,
             "refund_count": day_refund_count,
         })
