@@ -103,6 +103,11 @@ celery_app.conf.update(
             "schedule": crontab(hour=8, minute=0),  # 8 AM UTC daily
             "options": {"queue": "default"},
         },
+        "careers-reconcile": {
+            "task": "src.workers.tasks.reconcile_careers_applicants",
+            "schedule": crontab(hour=15, minute=0),  # 3 PM UTC daily (morning PT) — applicant visibility invariant
+            "options": {"queue": "default"},
+        },
         "vector-ingestion": {
             "task": "src.workers.tasks.ingest_scraped_data",
             "schedule": 21600.0,  # 6 hours — after each scraper cycle

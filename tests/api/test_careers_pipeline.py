@@ -156,7 +156,9 @@ def test_ca_reapplication_never_touches_existing_rep_row(monkeypatch):
     assert not any(t == "sales_reps" for t, _, _ in db.upserts)
 
 
-def test_us_application_creates_no_sales_reps_row(monkeypatch):
+def test_us_application_creates_pending_row_in_us_portal(monkeypatch):
+    # Extended to US 2026-07-29: the US Team > Applications tab reads the same
+    # table and had the identical blind spot.
     db = FakeDB([])
     _wire_apply(monkeypatch, db)
 
@@ -165,8 +167,58 @@ def test_us_application_creates_no_sales_reps_row(monkeypatch):
     )
     out = _run(careers_mod.submit_application(req, country="US"))
     assert out["status"] == "received"
-    assert not any(t == "sales_reps" for t, _ in db.inserts)
+    rep_rows = [d for t, d in db.inserts if t == "sales_reps"]
+    assert len(rep_rows) == 1 and rep_rows[0]["portal_context"] == "us"
+    assert rep_rows[0]["is_active"] is False
     assert not any(t == "sales_reps" for t, _, _ in db.upserts)
+
+
+def test_rep_row_failure_surfaces_warning_in_alert_email(monkeypatch):
+    # The 07-16→07-29 outage died as an unread log line; a failed rep-row
+    # insert must now put a WARNING banner in the hiring-team email.
+    class FailingRepDB(FakeDB):
+        async def insert(self, table, data, return_data=True):
+            if table == "sales_reps":
+                raise RuntimeError("boom: column vanished")
+            return await super().insert(table, data, return_data)
+
+    db = FailingRepDB([])
+    monkeypatch.setattr(careers_mod, "get_db", lambda: db)
+
+    captured = []
+    import src.email.send as email_send
+
+    async def _capture(to, **kw):
+        captured.append((to, kw))
+        return {"status": "sent"}
+    monkeypatch.setattr(email_send, "send_career_application", _capture)
+
+    req = careers_mod.CareerApplication(
+        name="Alice Applicant", email="alice@example.com", position="sales_rep", city="Toronto",
+    )
+    out = _run(careers_mod.submit_application(req, country="CA"))
+    assert out["status"] == "received", "a rep-row failure must never block the application"
+    assert captured, "alert emails must still go out"
+    for _, kw in captured:
+        assert "WARNING" in kw.get("alert_note", ""), "failure must be visible in the email"
+        assert "boom: column vanished" in kw["alert_note"]
+
+
+def test_application_intake_never_sends_credentials(monkeypatch):
+    # Logins are emailed ONLY on acceptance (approve / hire) — never at intake.
+    db = FakeDB([])
+    _wire_apply(monkeypatch, db)
+
+    import src.email.send as email_send
+    async def _fail(*a, **kw):
+        raise AssertionError("send_rep_credentials must not be called at application intake")
+    monkeypatch.setattr(email_send, "send_rep_credentials", _fail)
+
+    req = careers_mod.CareerApplication(
+        name="Alice Applicant", email="alice@example.com", position="sales_rep", city="Toronto",
+    )
+    out = _run(careers_mod.submit_application(req, country="CA"))
+    assert out["status"] == "received"
 
 
 # ── 2. Stage transitions ─────────────────────────────────────────────────────
@@ -217,6 +269,24 @@ def test_hired_creates_rep_with_recruiter_as_manager(monkeypatch):
     assert row["portal_context"] == "canada"
     assert row.get("org_id"), "org_id is NOT NULL in the live table — hire upsert fails without it"
     assert db.apps["app-1"]["stage"] == "hired"
+
+
+def test_hire_provisions_login_credentials(monkeypatch):
+    # Acceptance via the pipeline must email working credentials, same as
+    # Team-tab approve (owner call, 2026-07-29).
+    db = FakeDB([{**APP_DM1, "stage": "offer"}])
+    _wire(monkeypatch, db)
+
+    provisioned = []
+
+    async def _capture(email, name, portal):
+        provisioned.append((email, name, portal))
+    monkeypatch.setattr(pipeline_mod, "_provision_rep_login", _capture)
+
+    out = _run(pipeline_mod.set_stage("app-1", StageRequest(stage="hired"),
+                                      {"email": "dm1@meridian.test"}))
+    assert out["ok"]
+    assert provisioned == [("alice@apply.test", "Alice Applicant", "canada")]
 
 
 # ── 4. Subtree scoping (both directions) ─────────────────────────────────────

@@ -378,6 +378,24 @@ def train_swarm_batch():
     return run_async(_batch())
 
 
+@shared_task(name="src.workers.tasks.reconcile_careers_applicants")
+def reconcile_careers_applicants():
+    """Daily invariant check: every pending career application must be visible
+    in Team > Applications and must have produced a hiring-team alert email.
+    Emails the hiring team only when something is broken."""
+
+    async def _run():
+        from ..db import init_db, close_db, get_db
+        await init_db()
+        try:
+            from ..services.careers_reconcile import run_reconciliation
+            return await run_reconciliation(get_db())
+        finally:
+            await close_db()
+
+    return run_async(_run())
+
+
 @shared_task(name="src.workers.tasks.send_daily_burn_rate")
 def send_daily_burn_rate():
     """Send daily burn rate SMS to admin."""

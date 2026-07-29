@@ -144,35 +144,46 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
     # so every insert 400'd and nothing consumed the rows. The durable record
     # is career_applications above; humans are notified via the email below.)
 
-    # Canada applicants must be visible in the portal's Team > Applications tab
-    # the moment they apply (owner call, 2026-07-29 — reverts the 2026-07-16
-    # pipeline-only behavior): insert an INACTIVE sales_reps row so an admin can
-    # approve them there without the applicant registering again. Insert only if
-    # absent — never an upsert — so a re-application can never deactivate or
-    # rewrite an existing rep's row. The recruiting pipeline (careers_pipeline.py)
-    # still owns staged hiring; stage='hired' upserts on the same email and
-    # activates this row under the recruiter.
-    if country == "CA":
-        try:
-            email_lc = str(req.email).strip().lower()
-            existing = await db.select(
-                "sales_reps", columns="id",
-                filters={"email": f"eq.{email_lc}"}, limit=1,
-            )
-            if not existing:
-                await db.insert("sales_reps", {
-                    "org_id": SALES_ORG_ID,
-                    "name": req.name,
-                    "email": email_lc,
-                    "phone": req.phone or "",
-                    "commission_rate": 0.70,
-                    "is_active": False,
-                    "portal_context": "canada",
-                    "created_at": now,
-                }, return_data=False)
-                logger.info("Created pending sales_reps applicant row for %s", email_lc)
-        except Exception as e:
-            logger.warning("Could not create applicant sales_reps row for %s: %s", req.email, e)
+    # Applicants must be visible in their portal's Team > Applications tab the
+    # moment they apply (owner call, 2026-07-29 — reverts the 2026-07-16
+    # pipeline-only behavior; extended to US 2026-07-29 since the US tab reads
+    # the same table and had the identical blind spot): insert an INACTIVE
+    # sales_reps row so an admin can approve them there without the applicant
+    # registering again. Insert only if absent — never an upsert — so a
+    # re-application can never deactivate or rewrite an existing rep's row.
+    # The recruiting pipeline (careers_pipeline.py) still owns staged hiring;
+    # stage='hired' upserts on the same email and activates this row under the
+    # recruiter. A failure here is surfaced as a WARNING banner in the alert
+    # emails below (and caught by the daily careers-reconcile worker) — it must
+    # never again die as an unread log line.
+    rep_row_issue = ""
+    try:
+        email_lc = str(req.email).strip().lower()
+        existing = await db.select(
+            "sales_reps", columns="id",
+            filters={"email": f"eq.{email_lc}"}, limit=1,
+        )
+        if not existing:
+            await db.insert("sales_reps", {
+                "org_id": SALES_ORG_ID,
+                "name": req.name,
+                "email": email_lc,
+                "phone": req.phone or "",
+                "commission_rate": 0.70,
+                "is_active": False,
+                "portal_context": "canada" if country == "CA" else "us",
+                "created_at": now,
+            }, return_data=False)
+            logger.info("Created pending sales_reps applicant row for %s", email_lc)
+    except Exception as e:
+        rep_row_issue = str(e)
+        logger.warning("Could not create applicant sales_reps row for %s: %s", req.email, e)
+
+    alert_note = (
+        "WARNING: this applicant could NOT be added to Team > Applications "
+        f"(pending rep row failed: {rep_row_issue}). They are saved in the "
+        "recruiting pipeline — run the careers backfill or check the API logs."
+    ) if rep_row_issue else ""
 
     # Email the hiring inbox + hiring team (Postal primary, Resend fallback) —
     # best-effort per recipient, never blocks the application: the DB rows
@@ -182,6 +193,7 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
             from ...email.send import send_career_application
             await send_career_application(
                 recipient,
+                alert_note=alert_note,
                 country_label=country_label,
                 position_label=position_label,
                 applicant_name=req.name,
