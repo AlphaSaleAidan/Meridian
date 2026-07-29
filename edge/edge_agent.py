@@ -1,15 +1,16 @@
 """
 Meridian Vision Edge Agent.
 
-Runs on merchant hardware (Jetson Nano/Orin). Processes RTSP camera feeds
-through YOLO → ByteTrack → optional DeepFace, then pushes anonymized
+Runs on merchant hardware — the store's existing back-office PC / POS
+station (CPU) or a Jetson Nano/Orin (GPU). Processes camera feeds
+(RTSP URL, USB webcam index, or video file path) through
+YOLO → ByteTrack → optional DeepFace, then pushes anonymized
 metrics to Meridian cloud API.
 
 No images or video frames are ever stored or transmitted.
 Face embeddings stay on-prem and auto-delete after 90 days.
 """
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -23,6 +24,12 @@ import cv2
 import httpx
 import numpy as np
 from ultralytics import YOLO
+
+try:
+    import torch
+    _HAS_CUDA = torch.cuda.is_available()
+except Exception:
+    _HAS_CUDA = False
 
 logging.basicConfig(
     level=logging.INFO,
@@ -62,6 +69,11 @@ class CameraProcessor:
     def __init__(self, camera_config: dict):
         self.camera_id = camera_config["id"]
         self.rtsp_url = camera_config["rtsp_url"]
+        # cv2 needs an int for USB webcams ("0" → 0); strings pass through
+        # unchanged for RTSP URLs and video file paths.
+        self.capture_source = (
+            int(self.rtsp_url) if str(self.rtsp_url).isdigit() else self.rtsp_url
+        )
         self.name = camera_config.get("name", "Camera")
         self.compliance_mode = camera_config.get("compliance_mode", "anonymous")
         self.zone_config = camera_config.get("zone_config", {})
@@ -69,6 +81,9 @@ class CameraProcessor:
 
         model_path = camera_config.get("model_path", os.environ.get("YOLO_MODEL", "yolo11n.pt"))
         self.model = YOLO(model_path)
+        logger.info(
+            f"{self.name}: inference device = {'cuda' if _HAS_CUDA else 'cpu'}"
+        )
         self.tracker = None
         self._init_tracker()
 
@@ -99,7 +114,7 @@ class CameraProcessor:
     def _init_depth(self):
         try:
             from depth_processor import DepthProcessor
-            device = os.environ.get("DEPTH_DEVICE", "cuda")
+            device = os.environ.get("DEPTH_DEVICE") or ("cuda" if _HAS_CUDA else "cpu")
             model_size = os.environ.get("DEPTH_MODEL_SIZE", "small")
             self.depth_processor = DepthProcessor(model_size=model_size, device=device)
             logger.info("Depth Anything V2 enabled")
@@ -261,9 +276,6 @@ class CameraProcessor:
                 self.current_bucket["depth_distances"].extend(distances)
 
                 if self.zone_config:
-                    zone_depths = self.depth_processor.get_zone_depths(
-                        depth_map, self.zone_config
-                    )
                     zone_counts = defaultdict(int)
                     for dist in distances:
                         zone_name = self.depth_processor.classify_zone_by_depth(dist)
@@ -373,7 +385,7 @@ class EdgeAgent:
 
     async def process_camera(self, cam: CameraProcessor):
         logger.info(f"Starting camera: {cam.name} ({cam.rtsp_url})")
-        cap = cv2.VideoCapture(cam.rtsp_url)
+        cap = cv2.VideoCapture(cam.capture_source)
 
         if not cap.isOpened():
             logger.error(f"Cannot open camera: {cam.name}")
@@ -390,7 +402,7 @@ class EdgeAgent:
                     logger.warning(f"Frame read failed: {cam.name}, reconnecting...")
                     cap.release()
                     await asyncio.sleep(5)
-                    cap = cv2.VideoCapture(cam.rtsp_url)
+                    cap = cv2.VideoCapture(cam.capture_source)
                     continue
 
                 frame_count += 1

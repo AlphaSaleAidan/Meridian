@@ -1,0 +1,10 @@
+# CPU deployment (merchant back-office PC / POS station — no GPU).
+# Install CPU-only torch FIRST so ultralytics doesn't pull CUDA wheels:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+ultralytics>=8.4.0
+opencv-python-headless>=4.10
+httpx>=0.27
+numpy>=1.26
+# Optional (heavier — enable per feature):
+#   boxmot          # ByteTrack person tracking
+#   deepface        # demographic buckets (ENABLE_DEMOGRAPHICS=1)

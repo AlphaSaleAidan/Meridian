@@ -1,0 +1,26 @@
+# Meridian Vision Edge Stack — CPU deployment.
+# Runs on hardware the merchant already has (back-office PC, POS station,
+# any Linux/Windows/macOS machine with Docker). No GPU, no extra services.
+#
+# Usage:
+#   1. Put camera sources in ./config/cameras.json (RTSP URL, USB index, or file)
+#   2. export MERIDIAN_API_URL / MERIDIAN_API_KEY / MERIDIAN_ORG_ID
+#   3. docker compose -f docker-compose.cpu.yml up -d
+#
+# For Jetson/GPU deployments use docker-compose.yml instead.
+
+services:
+  meridian-edge:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    restart: unless-stopped
+    environment:
+      MERIDIAN_API_URL: ${MERIDIAN_API_URL}
+      MERIDIAN_API_KEY: ${MERIDIAN_API_KEY}
+      MERIDIAN_ORG_ID: ${MERIDIAN_ORG_ID}
+      # Privacy-first defaults on customer hardware: counting only.
+      ENABLE_DEMOGRAPHICS: ${ENABLE_DEMOGRAPHICS:-0}
+      ENABLE_DEPTH: ${ENABLE_DEPTH:-0}
+    volumes:
+      - ./config:/app/config

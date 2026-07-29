@@ -1,0 +1,24 @@
+# Meridian Vision Edge Agent — CPU image.
+# Runs on the merchant's existing hardware: any x86/ARM Linux box,
+# a back-office PC, or Docker Desktop on Windows/macOS. No GPU required.
+#
+#   docker compose -f docker-compose.cpu.yml up -d
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-cpu.txt .
+RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements-cpu.txt
+
+COPY edge_agent.py depth_processor.py ./
+COPY config/ config/
+
+ENV ENABLE_DEMOGRAPHICS=0 \
+    ENABLE_DEPTH=0
+
+CMD ["python", "edge_agent.py"]
