@@ -17,8 +17,12 @@
 -- flow, plus any pending sales_reps row the post-deploy verification made).
 -- ============================================================================
 
-INSERT INTO sales_reps (name, email, phone, commission_rate, is_active, portal_context, created_at)
+-- org_id: NOT NULL in the live table (ad-hoc schema; not in 20260512's DDL) —
+-- every existing rep row, all portal contexts, uses the Canada org constant
+-- from canada.py.
+INSERT INTO sales_reps (org_id, name, email, phone, commission_rate, is_active, portal_context, created_at)
 SELECT DISTINCT ON (lower(ca.email))
+       '168b6df2-e9af-4b00-8fec-51e51149ff19'::uuid,
        ca.name,
        lower(ca.email),
        COALESCE(ca.phone, ''),

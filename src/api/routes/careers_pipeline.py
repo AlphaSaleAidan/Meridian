@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from ...db import get_db
 from ..auth import require_jwt
 from .. import hierarchy
+from .careers import SALES_ORG_ID
 
 logger = logging.getLogger("meridian.api.careers_pipeline")
 
@@ -132,6 +133,7 @@ async def _hire_applicant(db, app_row: dict) -> str | None:
     country = (app_row.get("country") or "US").upper()
 
     row = {
+        "org_id": SALES_ORG_ID,  # NOT NULL in the live table — insert fails without it
         "name": app_row.get("name") or email,
         "email": email,
         "phone": app_row.get("phone") or "",
