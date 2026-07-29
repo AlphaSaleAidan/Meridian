@@ -20,6 +20,16 @@ router = APIRouter(prefix="/api/careers", tags=["careers"])
 
 _NOTIFY_EMAIL_US = os.environ.get("CAREERS_NOTIFY_EMAIL", "careers@meridian.tips")
 _NOTIFY_EMAIL_CA = os.environ.get("CANADA_CAREERS_NOTIFY_EMAIL", "careers-canada@meridian.tips")
+# Hiring team: every inbound application is also confirmed to these inboxes —
+# the careers-* addresses above are unmonitored aliases (owner call, 2026-07-29).
+_ADMIN_NOTIFY_EMAILS = [
+    e.strip()
+    for e in os.environ.get(
+        "CAREERS_ADMIN_NOTIFY_EMAILS",
+        "aidanpierce72@gmail.com,cheungenochmgmt@gmail.com,aidanvietnguyen@gmail.com",
+    ).split(",")
+    if e.strip()
+]
 
 
 class CareerApplication(BaseModel):
@@ -128,37 +138,60 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
     # so every insert 400'd and nothing consumed the rows. The durable record
     # is career_applications above; humans are notified via the email below.)
 
-    # NOTE (2026-07-16, careers pipeline): applications NO LONGER auto-upsert an
-    # inactive sales_reps row here. They live in the recruiting pipeline
-    # (career_applications.stage, careers_pipeline.py) and the sales_reps row is
-    # created only at stage='hired', with manager_id = recruiter_id — the org
-    # tree grows from recruiting. Applicants who already got an inactive row
-    # from the old flow keep it (Team > Applications approve/reject still works
-    # for them); nothing is orphaned.
+    # Canada applicants must be visible in the portal's Team > Applications tab
+    # the moment they apply (owner call, 2026-07-29 — reverts the 2026-07-16
+    # pipeline-only behavior): insert an INACTIVE sales_reps row so an admin can
+    # approve them there without the applicant registering again. Insert only if
+    # absent — never an upsert — so a re-application can never deactivate or
+    # rewrite an existing rep's row. The recruiting pipeline (careers_pipeline.py)
+    # still owns staged hiring; stage='hired' upserts on the same email and
+    # activates this row under the recruiter.
+    if country == "CA":
+        try:
+            email_lc = str(req.email).strip().lower()
+            existing = await db.select(
+                "sales_reps", columns="id",
+                filters={"email": f"eq.{email_lc}"}, limit=1,
+            )
+            if not existing:
+                await db.insert("sales_reps", {
+                    "name": req.name,
+                    "email": email_lc,
+                    "phone": req.phone or "",
+                    "commission_rate": 0.70,
+                    "is_active": False,
+                    "portal_context": "canada",
+                    "created_at": now,
+                }, return_data=False)
+                logger.info("Created pending sales_reps applicant row for %s", email_lc)
+        except Exception as e:
+            logger.warning("Could not create applicant sales_reps row for %s: %s", req.email, e)
 
-    # Email the hiring inbox (Postal primary, Resend fallback) — best-effort,
-    # never blocks the application: the DB rows above are the source of truth.
-    try:
-        from ...email.send import send_career_application
-        await send_career_application(
-            notify_email,
-            country_label=country_label,
-            position_label=position_label,
-            applicant_name=req.name,
-            applicant_email=req.email,
-            applicant_phone=req.phone,
-            location=f"{req.city}{', ' + state_province if state_province else ''}",
-            experience=req.experience,
-            commission_experience=req.commission_experience,
-            availability=req.availability,
-            linkedin_url=req.linkedin_url,
-            referral_source=req.referral_source,
-            referral_name=req.referral_name,
-            motivation=req.motivation,
-            application_id=app_id,
-        )
-    except Exception as e:
-        logger.warning("Could not email career application %s: %s", app_id, e)
+    # Email the hiring inbox + hiring team (Postal primary, Resend fallback) —
+    # best-effort per recipient, never blocks the application: the DB rows
+    # above are the source of truth.
+    for recipient in dict.fromkeys([notify_email, *_ADMIN_NOTIFY_EMAILS]):
+        try:
+            from ...email.send import send_career_application
+            await send_career_application(
+                recipient,
+                country_label=country_label,
+                position_label=position_label,
+                applicant_name=req.name,
+                applicant_email=req.email,
+                applicant_phone=req.phone,
+                location=f"{req.city}{', ' + state_province if state_province else ''}",
+                experience=req.experience,
+                commission_experience=req.commission_experience,
+                availability=req.availability,
+                linkedin_url=req.linkedin_url,
+                referral_source=req.referral_source,
+                referral_name=req.referral_name,
+                motivation=req.motivation,
+                application_id=app_id,
+            )
+        except Exception as e:
+            logger.warning("Could not email career application %s to %s: %s", app_id, recipient, e)
 
     logger.info(
         "%s career application saved: %s (%s) for %s in %s [id=%s]",
