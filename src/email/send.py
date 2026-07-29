@@ -270,6 +270,7 @@ async def send_career_application(
     referral_name: str = "",
     motivation: str = "",
     application_id: str = "",
+    alert_note: str = "",
 ) -> dict:
     """Notify the hiring inbox about a new careers-page application.
 
@@ -285,7 +286,12 @@ async def send_career_application(
         )
 
     html = (
-        f'<h2 style="margin:0 0 4px">New {_esc(country_label)} Sales Application</h2>'
+        (
+            f'<p style="font:14px/1.5 sans-serif;padding:10px 14px;margin:0 0 16px;'
+            f'background:#fdecea;color:#b71c1c;border-radius:6px">{_esc(alert_note)}</p>'
+            if alert_note else ""
+        )
+        + f'<h2 style="margin:0 0 4px">New {_esc(country_label)} Sales Application</h2>'
         f'<p style="margin:0 0 16px;color:#555">{_esc(position_label)}</p>'
         '<table style="font:14px/1.5 sans-serif;border-collapse:collapse">'
         + row("Name", applicant_name)
@@ -305,6 +311,54 @@ async def send_career_application(
     subject = f"New {country_label} application: {applicant_name} — {position_label}"
     result = await _client.send(to, subject, html, tag="career_application", reply_to=applicant_email)
     await _log_send(to, "career_application", subject, result, tag="career_application")
+    return result
+
+
+async def send_careers_reconcile_alert(
+    to: str,
+    *,
+    visibility_gaps: list[dict],
+    email_gaps: list[dict],
+) -> dict:
+    """Daily careers-reconcile worker found applicants falling through the
+    pipeline — plain inline HTML, internal alert only."""
+    from html import escape as _esc
+
+    def block(title: str, apps: list[dict], detail: str) -> str:
+        if not apps:
+            return ""
+        items = "".join(
+            f'<li>{_esc(a.get("name") or "?")} &lt;{_esc(a.get("email") or "?")}&gt; — '
+            f'{_esc(a.get("country") or "?")}, applied {_esc(str(a.get("created_at") or "?")[:10])}</li>'
+            for a in apps
+        )
+        return (
+            f'<h3 style="margin:16px 0 4px">{_esc(title)}</h3>'
+            f'<p style="margin:0 0 8px;color:#555">{_esc(detail)}</p>'
+            f'<ul style="margin:0">{items}</ul>'
+        )
+
+    total = len(visibility_gaps) + len(email_gaps)
+    html = (
+        '<h2 style="margin:0 0 4px">Careers pipeline check failed</h2>'
+        '<p style="margin:0 0 8px;color:#555">The nightly reconciliation found applicants '
+        'falling through the flow. This is the failure mode that went unnoticed for two '
+        'weeks in July — please action or escalate.</p>'
+        + block(
+            "Not visible in Team > Applications",
+            visibility_gaps,
+            "Pending application but no rep row — the portal will not show them. "
+            "Run the careers backfill migration or check the API logs.",
+        )
+        + block(
+            "No alert email went out",
+            email_gaps,
+            "Application received in the last 25h but no career_application email was logged.",
+        )
+    )
+    subject = f"Careers pipeline check: {total} applicant(s) need attention"
+    result = await _client.send(to, subject, html, tag="careers_reconcile")
+    await _log_send(to, "careers_reconcile", subject, result, tag="careers_reconcile")
     return result
 
 

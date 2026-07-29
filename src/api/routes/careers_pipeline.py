@@ -150,7 +150,73 @@ async def _hire_applicant(db, app_row: dict) -> str | None:
         raise HTTPException(502, "Could not create the sales rep record for this hire")
     rep_id = created[0].get("id") if created else None
     logger.info("careers: hired %s -> rep %s under manager %s", email, rep_id, recruiter_id)
+
+    # Credentials go out ONLY on acceptance (owner call, 2026-07-29): provision
+    # the Supabase login + email it, exactly like canada.py/us.py rep-approve —
+    # a hire from the pipeline must never leave the rep unable to sign in.
+    # Best-effort: the hire itself is durable either way.
+    try:
+        await _provision_rep_login(email, row["name"], row["portal_context"])
+    except Exception as exc:
+        logger.warning("careers: hired %s but login provisioning failed: %s", email, exc)
     return rep_id
+
+
+async def _provision_rep_login(email: str, name: str, portal: str) -> None:
+    """Create the Supabase auth user (if absent) and email login credentials.
+
+    Mirrors the rep-approve flow in canada.py/us.py: temp password only when
+    the auth user is newly created; an existing user keeps their password and
+    the email just points at the login page.
+    """
+    import os
+    import secrets
+    import string
+
+    import httpx
+
+    supabase_url = os.environ.get("SUPABASE_URL", "")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "") or os.environ.get("SUPABASE_SERVICE_KEY", "")
+    if not supabase_url or not service_key:
+        raise RuntimeError("Supabase not configured — cannot provision rep login")
+
+    temp_password = "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+    auth_created = False
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"{supabase_url}/auth/v1/admin/users",
+            headers={
+                "Authorization": f"Bearer {service_key}",
+                "apikey": service_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "email": email,
+                "password": temp_password,
+                "email_confirm": True,
+                "user_metadata": {"full_name": name, "role": "sales_rep", "portal": portal},
+            },
+        )
+        if resp.status_code in (200, 201):
+            auth_created = True
+            logger.info("careers: created auth user for hired rep %s", email)
+        elif resp.status_code == 422 and "already been registered" in resp.text.lower():
+            logger.info("careers: auth user already exists for %s — keeping their password", email)
+        else:
+            logger.warning("careers: auth user creation failed for %s: %s %s", email, resp.status_code, resp.text)
+
+    from ...email.send import send_rep_credentials
+    login_url = (
+        "https://meridian.tips/canada/portal/login" if portal == "canada"
+        else "https://meridian.tips/us/portal/login"
+    )
+    await send_rep_credentials(
+        to=email,
+        rep_name=name,
+        email=email,
+        password=temp_password if auth_created else None,
+        login_url=login_url,
+    )
 
 
 @router.post("/{application_id}/assign-recruiter")
