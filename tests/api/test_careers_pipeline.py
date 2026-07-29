@@ -1,7 +1,9 @@
 """Careers recruiting pipeline tests (mock db layer, existing api-test style).
 
 Covers:
-  1. applications NO LONGER upsert a sales_reps row at apply time
+  1. CA applications create a pending (inactive) sales_reps row at apply time
+     via insert-if-absent — never an upsert, never touching an existing row,
+     and never for US applications (owner call, 2026-07-29)
   2. stage transitions append stage_history {stage, by, at}; invalid stage 400;
      'hired' is terminal (409 on re-stage)
   3. stage='hired' creates the rep WITH manager_id = recruiter_id (org tree
@@ -50,13 +52,19 @@ def _run(coro):
 
 
 class FakeDB:
-    def __init__(self, apps):
+    def __init__(self, apps, sales_reps=None):
         self.apps = {a["id"]: dict(a) for a in apps}
+        self.sales_reps = [dict(r) for r in (sales_reps or [])]
         self.updates: list = []
         self.upserts: list = []
         self.inserts: list = []
 
     async def select(self, table, columns="*", filters=None, order=None, limit=None, offset=None):
+        if table == "sales_reps":
+            if filters and "email" in filters:
+                em = filters["email"].removeprefix("eq.")
+                return [dict(r) for r in self.sales_reps if r.get("email") == em]
+            return [dict(r) for r in self.sales_reps]
         if table != "career_applications":
             return []
         if filters and "id" in filters:
@@ -93,28 +101,71 @@ def _wire(monkeypatch, db):
     monkeypatch.setattr(pipeline_mod, "get_db", lambda: db)
 
 
-# ── 1. Apply no longer creates a sales_reps row ──────────────────────────────
+# ── 1. Apply-time applicant visibility (owner call, 2026-07-29) ──────────────
+# CA applications create an INACTIVE sales_reps row (insert-if-absent, never an
+# upsert) so applicants show in Team > Applications immediately. A re-application
+# must never touch an existing row, and US applications create no row.
 
-def test_ca_application_does_not_upsert_sales_reps(monkeypatch):
-    db = FakeDB([])
+def _wire_apply(monkeypatch, db):
     monkeypatch.setattr(careers_mod, "get_db", lambda: db)
-
     import src.email.send as email_send
+
     async def _no_email(*a, **kw):
         return {"status": "skipped"}
     monkeypatch.setattr(email_send, "send_career_application", _no_email)
+
+
+def test_ca_application_creates_pending_applicant_row(monkeypatch):
+    db = FakeDB([])
+    _wire_apply(monkeypatch, db)
+
+    req = careers_mod.CareerApplication(
+        name="Alice Applicant", email="Alice@Example.com", position="sales_rep", city="Toronto",
+    )
+    out = _run(careers_mod.submit_application(req, country="CA"))
+    assert out["status"] == "received"
+    assert ("career_applications" in {t for t, _ in db.inserts}), "application row not saved"
+    app_row = next(d for t, d in db.inserts if t == "career_applications")
+    assert app_row["stage"] == "applied" and app_row["stage_history"] == []
+
+    assert not any(t == "sales_reps" for t, _, _ in db.upserts), (
+        "must be an insert-if-absent, never an upsert — an upsert could rewrite an existing rep"
+    )
+    rep_rows = [d for t, d in db.inserts if t == "sales_reps"]
+    assert len(rep_rows) == 1, "CA application must create exactly one pending sales_reps row"
+    row = rep_rows[0]
+    assert row["is_active"] is False
+    assert row["portal_context"] == "canada"
+    assert row["email"] == "alice@example.com", "email must be lowercased for the on-hire upsert join"
+    assert "id" not in row, "id must come from the DB default, never rewrite a PK"
+
+
+def test_ca_reapplication_never_touches_existing_rep_row(monkeypatch):
+    db = FakeDB([], sales_reps=[{"id": "rep-1", "email": "alice@example.com", "is_active": True}])
+    _wire_apply(monkeypatch, db)
 
     req = careers_mod.CareerApplication(
         name="Alice Applicant", email="alice@example.com", position="sales_rep", city="Toronto",
     )
     out = _run(careers_mod.submit_application(req, country="CA"))
     assert out["status"] == "received"
-    assert ("career_applications" in {t for t, _ in db.inserts}), "application row not saved"
-    assert not any(t == "sales_reps" for t, _, _ in db.upserts), (
-        "apply-time sales_reps upsert must be gone — reps are created only at stage='hired'"
+    assert not any(t == "sales_reps" for t, _ in db.inserts), (
+        "existing rep row (active or pending) must never be re-created or deactivated"
     )
-    app_row = next(d for t, d in db.inserts if t == "career_applications")
-    assert app_row["stage"] == "applied" and app_row["stage_history"] == []
+    assert not any(t == "sales_reps" for t, _, _ in db.upserts)
+
+
+def test_us_application_creates_no_sales_reps_row(monkeypatch):
+    db = FakeDB([])
+    _wire_apply(monkeypatch, db)
+
+    req = careers_mod.CareerApplication(
+        name="Bob Applicant", email="bob@example.com", position="sales_rep", city="Austin",
+    )
+    out = _run(careers_mod.submit_application(req, country="US"))
+    assert out["status"] == "received"
+    assert not any(t == "sales_reps" for t, _ in db.inserts)
+    assert not any(t == "sales_reps" for t, _, _ in db.upserts)
 
 
 # ── 2. Stage transitions ─────────────────────────────────────────────────────
