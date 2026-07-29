@@ -138,6 +138,7 @@ def test_ca_application_creates_pending_applicant_row(monkeypatch):
     assert row["portal_context"] == "canada"
     assert row["email"] == "alice@example.com", "email must be lowercased for the on-hire upsert join"
     assert "id" not in row, "id must come from the DB default, never rewrite a PK"
+    assert row.get("org_id"), "org_id is NOT NULL in the live table — insert fails without it"
 
 
 def test_ca_reapplication_never_touches_existing_rep_row(monkeypatch):
@@ -214,6 +215,7 @@ def test_hired_creates_rep_with_recruiter_as_manager(monkeypatch):
     assert row["is_active"] is True
     assert row["email"] == "alice@apply.test"
     assert row["portal_context"] == "canada"
+    assert row.get("org_id"), "org_id is NOT NULL in the live table — hire upsert fails without it"
     assert db.apps["app-1"]["stage"] == "hired"
 
 

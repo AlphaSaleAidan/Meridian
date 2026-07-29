@@ -31,6 +31,12 @@ _ADMIN_NOTIFY_EMAILS = [
     if e.strip()
 ]
 
+# The org UUID every production sales_reps row carries — org_id is NOT NULL in
+# the live table (ad-hoc schema, absent from 20260512's DDL), so inserts
+# without it fail. Same value as canada.py's CANADA_ORG_ID (import would be
+# circular: canada.py imports from this module).
+SALES_ORG_ID = os.environ.get("CANADA_ORG_ID", "168b6df2-e9af-4b00-8fec-51e51149ff19")
+
 
 class CareerApplication(BaseModel):
     # The US careers form (CareersPage.tsx) posts the canonical backend keys
@@ -155,6 +161,7 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
             )
             if not existing:
                 await db.insert("sales_reps", {
+                    "org_id": SALES_ORG_ID,
                     "name": req.name,
                     "email": email_lc,
                     "phone": req.phone or "",
