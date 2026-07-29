@@ -12,8 +12,9 @@
 -- touches an existing sales_reps row, active or pending. Safe to re-run.
 -- Pairs with the careers.py change that re-creates this row at apply time.
 --
--- Also removes the 2026-07-29 automated E2E test application (a clearly
--- labeled synthetic row created while verifying this flow).
+-- Also removes the 2026-07-29 automated E2E test rows (clearly labeled
+-- synthetic e2e-careers-test-* applications created while verifying this
+-- flow, plus any pending sales_reps row the post-deploy verification made).
 -- ============================================================================
 
 INSERT INTO sales_reps (name, email, phone, commission_rate, is_active, portal_context, created_at)
@@ -29,11 +30,15 @@ FROM career_applications ca
 WHERE ca.country = 'CA'
   AND ca.status = 'pending'
   AND ca.email IS NOT NULL AND ca.email <> ''
-  AND lower(ca.email) <> 'e2e-careers-test-20260729@meridian.tips'
+  AND lower(ca.email) NOT LIKE 'e2e-careers-test-%@meridian.tips'
   AND NOT EXISTS (
     SELECT 1 FROM sales_reps sr WHERE lower(sr.email) = lower(ca.email)
   )
 ORDER BY lower(ca.email), ca.created_at ASC;
 
 DELETE FROM career_applications
-WHERE lower(email) = 'e2e-careers-test-20260729@meridian.tips';
+WHERE lower(email) LIKE 'e2e-careers-test-%@meridian.tips';
+
+DELETE FROM sales_reps
+WHERE lower(email) LIKE 'e2e-careers-test-%@meridian.tips'
+  AND is_active = false;
