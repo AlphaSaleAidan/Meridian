@@ -1,6 +1,6 @@
 package com.meridian.repository
 
-import com.meridian.entity.Business
+import com.meridian.repository.schema.Business
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface BusinessRepository : JpaRepository<Business, String> {
@@ -8,9 +8,4 @@ interface BusinessRepository : JpaRepository<Business, String> {
         accessToken: String,
         status: String,
     ): Business?
-
-    fun existsByIdAndOwnerUserId(
-        id: String,
-        ownerUserId: String,
-    ): Boolean
 }

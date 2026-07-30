@@ -1,4 +1,4 @@
-package com.meridian.entity
+package com.meridian.repository.schema
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -24,6 +24,4 @@ class Business(
     var posProvider: String? = null,
     @Column(name = "onboarded")
     var onboarded: Boolean = false,
-    @Column(name = "owner_user_id")
-    var ownerUserId: String? = null,
 )

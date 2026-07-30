@@ -1,10 +1,10 @@
 package com.meridian.unit.service.portal
 
 import com.meridian.dto.GeneratePortalTokenRequest
-import com.meridian.entity.Business
 import com.meridian.exception.BadRequestException
 import com.meridian.exception.NotFoundException
 import com.meridian.repository.BusinessRepository
+import com.meridian.repository.schema.Business
 import com.meridian.service.portal.PortalService
 import io.mockk.every
 import io.mockk.mockk

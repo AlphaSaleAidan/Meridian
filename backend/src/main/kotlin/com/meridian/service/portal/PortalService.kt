@@ -3,10 +3,10 @@ package com.meridian.service.portal
 import com.meridian.dto.GeneratePortalTokenRequest
 import com.meridian.dto.PortalResolveResponse
 import com.meridian.dto.PortalTokenResponse
-import com.meridian.entity.Business
 import com.meridian.exception.BadRequestException
 import com.meridian.exception.NotFoundException
 import com.meridian.repository.BusinessRepository
+import com.meridian.repository.schema.Business
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.data.repository.findByIdOrNull

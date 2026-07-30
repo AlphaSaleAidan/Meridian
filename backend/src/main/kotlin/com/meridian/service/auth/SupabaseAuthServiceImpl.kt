@@ -43,17 +43,7 @@ class SupabaseAuthServiceImpl(
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             log.error("Signup failed: {}", errorBody)
-            val errorMessage =
-                try {
-                    val errorJson = jsonMapper.readValue<Map<String, Any>>(errorBody)
-                    (
-                        errorJson["msg"] ?: errorJson["error_description"] ?: errorJson["error"]
-                            ?: "Signup failed. Please check your credentials."
-                    ).toString()
-                } catch (e: Exception) {
-                    "Signup failed. Please check your credentials."
-                }
-            throw UnauthorizedException(errorMessage)
+            throw UnauthorizedException(parseErrorMessage(errorBody, "Signup failed. Please check your credentials."))
         }
         log.info("Signup successful for {}", request.email)
     }
@@ -78,22 +68,28 @@ class SupabaseAuthServiceImpl(
         if (!response.status.isSuccess()) {
             val errorBody = response.bodyAsText()
             log.error("Login failed: {}", errorBody)
-            val errorMessage =
-                try {
-                    val errorJson = jsonMapper.readValue<Map<String, Any>>(errorBody)
-                    (errorJson["msg"] ?: errorJson["error_description"] ?: errorJson["error"] ?: "Invalid email or password.").toString()
-                } catch (e: Exception) {
-                    "Invalid email or password."
-                }
-            throw UnauthorizedException(errorMessage)
+            throw UnauthorizedException(parseErrorMessage(errorBody, "Invalid email or password."))
         }
 
-        val responseBody = response.bodyAsText()
-        val json = jsonMapper.readValue<Map<String, Any>>(responseBody)
-        val user = json["user"] as? Map<*, *>
+        val tokenResponse = jsonMapper.readValue<SupabaseTokenResponse>(response.bodyAsText())
+        val accessToken = tokenResponse.accessToken
+        if (accessToken.isNullOrBlank()) {
+            log.error("Login response from Supabase carried no access_token")
+            throw UnauthorizedException("Invalid email or password.")
+        }
         return LoginResult(
-            accessToken = json["access_token"] as String,
-            userId = user?.get("id") as? String,
+            accessToken = accessToken,
+            userId = tokenResponse.user?.id,
         )
     }
+
+    private fun parseErrorMessage(
+        errorBody: String,
+        fallback: String,
+    ): String =
+        try {
+            jsonMapper.readValue<SupabaseErrorResponse>(errorBody).firstMessage() ?: fallback
+        } catch (e: Exception) {
+            fallback
+        }
 }
