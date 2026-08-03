@@ -1586,3 +1586,40 @@ async def refresh_upsell_brief(merchant_id: str, principal=Depends(require_servi
         row.get("sold_out_items") or [],
     )
     return {"ok": True, **brief}
+
+
+class OwnerNotesRequest(BaseModel):
+    """Body for POST /api/phone/owner-notes/{merchant_id}."""
+    notes: str = ""
+
+
+@router.post("/owner-notes/{merchant_id}")
+async def set_owner_notes(
+    merchant_id: str,
+    req: OwnerNotesRequest,
+    principal=Depends(require_service_auth),
+):
+    """Save the owner's selling notes (migration 074) — their own upsell
+    instincts, injected into every call prompt as a HOW THE OWNER SELLS block.
+    Empty string clears it (prompt reverts to unchanged)."""
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+    db = get_db()
+    notes = (req.notes or "").strip()[:2000]
+    rows = await db.update(
+        "phone_agent_config",
+        {"owner_selling_notes": notes,
+         "updated_at": datetime.now(timezone.utc).isoformat()},
+        filters={"merchant_id": f"eq.{merchant_id}"},
+    )
+    if not rows:
+        raise HTTPException(404, "No phone config found for this merchant — save a config first")
+    # Drop the cached config so the very next call hears the new notes.
+    import sys
+    from pathlib import Path
+    _pa_dir = str(Path(__file__).resolve().parents[3] / "services" / "phone_agent")
+    if _pa_dir not in sys.path:
+        sys.path.insert(0, _pa_dir)
+    from merchant_config import invalidate_config_cache
+    invalidate_config_cache(merchant_id)
+    return {"ok": True, "merchant_id": merchant_id, "notes_length": len(notes)}

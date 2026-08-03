@@ -124,3 +124,98 @@ class TestRendering:
 
     def test_active_allows_two(self):
         assert "TWO suggestions max" in render_upsell_block(self.BRIEF, "active")
+
+
+# ── owner brain ──────────────────────────────────────────────────────────────
+
+from src.services.owner_brain import (  # noqa: E402
+    current_daypart,
+    daypart_for_hour,
+    mine_dayparts,
+    mine_pairings,
+)
+
+
+def _txn_item(tid, name, at="2026-08-01T18:30:00+00:00", qty=1):
+    return {"transaction_id": tid, "product_name": name,
+            "transaction_at": at, "quantity": qty}
+
+
+class TestPairings:
+    def test_attach_rate_mined(self):
+        rows = []
+        # 10 burger orders, 6 with shake, 2 with fries
+        for i in range(10):
+            rows.append(_txn_item(f"t{i}", "Burger"))
+            if i < 6:
+                rows.append(_txn_item(f"t{i}", "Shake"))
+            if i < 2:
+                rows.append(_txn_item(f"t{i}", "Fries"))
+        p = mine_pairings(rows, min_support=5)
+        burger = p["Burger"]
+        assert burger[0]["partner"] == "Shake"
+        assert burger[0]["attach_pct"] == 60.0
+        # fries at 20% clears the 15% floor and ranks second
+        assert burger[1]["partner"] == "Fries"
+
+    def test_low_support_item_excluded(self):
+        rows = [_txn_item("t1", "Caviar"), _txn_item("t1", "Champagne")]
+        assert mine_pairings(rows, min_support=5) == {}
+
+    def test_weak_attach_excluded(self):
+        rows = []
+        for i in range(20):
+            rows.append(_txn_item(f"t{i}", "Burger"))
+        rows.append(_txn_item("t0", "Pickle"))  # 5% attach
+        assert "Burger" not in mine_pairings(rows, min_support=5)
+
+
+class TestDayparts:
+    def test_hour_buckets(self):
+        assert daypart_for_hour(8) == "morning"
+        assert daypart_for_hour(12) == "lunch"
+        assert daypart_for_hour(19) == "dinner"
+        assert daypart_for_hour(23) == "late-night"
+        assert daypart_for_hour(2) == "late-night"
+
+    def test_items_bucketed_by_local_hour(self):
+        rows = [
+            _txn_item("t1", "Croissant", at="2026-08-01T08:00:00+00:00"),
+            _txn_item("t2", "Croissant", at="2026-08-02T09:00:00+00:00"),
+            _txn_item("t3", "Steak", at="2026-08-01T19:00:00+00:00"),
+        ]
+        dp = mine_dayparts(rows, tz_name="")
+        assert dp["morning"] == ["Croissant"]
+        assert dp["dinner"] == ["Steak"]
+
+    def test_current_daypart_returns_known_bucket(self):
+        assert current_daypart("") in {
+            "morning", "lunch", "afternoon", "dinner", "late-night"}
+
+
+class TestOwnerBrainRendering:
+    BRIEF = {
+        "candidates": [{"name": "Milkshake", "price": 6.99,
+                        "pitch": "best margin", "reasons": ["high-margin"]}],
+        "pairings": {"Burger": [{"partner": "Milkshake", "attach_pct": 42.0}]},
+        "dayparts": {dp: ["Milkshake"] for dp in
+                     ("morning", "lunch", "afternoon", "dinner", "late-night")},
+    }
+
+    def test_pairings_rendered(self):
+        block = render_upsell_block(self.BRIEF, "gentle")
+        assert "Order has Burger" in block
+        assert "42% of Burger orders" in block
+
+    def test_daypart_line_rendered(self):
+        block = render_upsell_block(self.BRIEF, "gentle")
+        assert "RIGHT NOW (" in block
+
+    def test_pairings_alone_still_render(self):
+        block = render_upsell_block(
+            {"candidates": [], "pairings": self.BRIEF["pairings"]}, "gentle")
+        assert "PAIRINGS" in block
+        assert "TODAY'S UPSELL PRIORITIES" not in block
+
+    def test_none_mode_still_suppresses_everything(self):
+        assert render_upsell_block(self.BRIEF, "none") == ""

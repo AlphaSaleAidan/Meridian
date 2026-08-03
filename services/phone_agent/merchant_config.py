@@ -158,6 +158,11 @@ class MerchantPhoneConfig:
     # Empty string = no brief = prompt is byte-for-byte unchanged (no regression).
     website_url: str = ""
     restaurant_brief: str = ""
+    # OWNER SELLING NOTES (migration 074): the owner's own upsell instincts in
+    # their words ("push the lamb special Fridays", "never upsell dessert at
+    # lunch"). Injected as a HOW THE OWNER SELLS style block; empty = prompt
+    # byte-for-byte unchanged.
+    owner_selling_notes: str = ""
     # Rep-negotiated per-order Meridian fee override in cents of the charge
     # currency (rep-portal fee slider). None = plan-tier / env default.
     order_fee_cents: Optional[int] = None
@@ -374,6 +379,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
                 row.get("clover_hco_webhook_secret") or "").strip(),
             website_url=(row.get("website_url") or "").strip(),
             restaurant_brief=(row.get("restaurant_brief") or "").strip(),
+            owner_selling_notes=(row.get("owner_selling_notes") or "").strip(),
             order_fee_cents=(int(row["order_fee_cents"])
                              if row.get("order_fee_cents") is not None else None),
             fee_allocation_mode=_norm_fee_allocation_mode(

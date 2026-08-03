@@ -226,31 +226,71 @@ def _pitch(name: str, reasons: list[str]) -> str:
 
 # ── prompt rendering ────────────────────────────────────────────────────────
 
-def render_upsell_block(brief: Optional[dict], upsell_mode: str) -> str:
+def render_upsell_block(brief: Optional[dict], upsell_mode: str,
+                        tz_name: str = "") -> str:
     """The prompt block. Empty string when there's nothing actionable or the
-    merchant disabled upselling — prompt stays byte-for-byte unchanged."""
+    merchant disabled upselling — prompt stays byte-for-byte unchanged.
+
+    Beyond the priority list, renders the owner-brain signals when present:
+    real pairing stats and what sells at this hour (merchant-local)."""
     mode = (upsell_mode or "").strip().lower()
     if mode == "none" or not brief:
         return ""
     cands = brief.get("candidates") or []
-    if not cands:
+    pairings = brief.get("pairings") or {}
+    dayparts = brief.get("dayparts") or {}
+    if not cands and not pairings and not dayparts:
         return ""
     limit = "TWO suggestions max" if mode == "active" else "ONE suggestion max"
-    lines = []
-    for c in cands:
-        tag = ", ".join(c.get("reasons") or [])
-        price = f" (${c['price']:.2f})" if c.get("price") else ""
-        lines.append(f"- {c['name']}{price} — {c['pitch']} [{tag}]")
-    return (
-        "\n\nTODAY'S UPSELL PRIORITIES (computed from THIS restaurant's live "
-        "sales, margins and inventory — refreshed automatically):\n"
-        + "\n".join(lines)
-        + "\nWhen the call flow reaches the upsell step, pick the FIRST item "
-        "above that naturally fits what the caller ordered — phrase it as a "
-        f"friendly suggestion, never a pitch. {limit} per call; drop it "
-        "instantly if the caller declines. Never suggest something already in "
-        "the order or anything sold out."
+    parts: list[str] = []
+
+    if cands:
+        lines = []
+        for c in cands:
+            tag = ", ".join(c.get("reasons") or [])
+            price = f" (${c['price']:.2f})" if c.get("price") else ""
+            lines.append(f"- {c['name']}{price} — {c['pitch']} [{tag}]")
+        parts.append(
+            "\n\nTODAY'S UPSELL PRIORITIES (computed from THIS restaurant's live "
+            "sales, margins and inventory — refreshed automatically):\n"
+            + "\n".join(lines)
+        )
+
+    if pairings:
+        pair_lines = []
+        for item, partners in list(pairings.items())[:4]:
+            for p in partners[:1]:
+                pair_lines.append(
+                    f"- Order has {item} → suggest {p['partner']} "
+                    f"({p['attach_pct']:.0f}% of {item} orders here add it)")
+        if pair_lines:
+            parts.append(
+                "\nPAIRINGS (mined from this restaurant's actual order history — "
+                "use these over generic suggestions):\n" + "\n".join(pair_lines))
+
+    if dayparts:
+        try:
+            from .owner_brain import current_daypart
+            dp = current_daypart(tz_name)
+            now_items = dayparts.get(dp) or []
+            if now_items:
+                parts.append(
+                    f"\nRIGHT NOW ({dp}): customers here most often order "
+                    f"{', '.join(now_items)} — when several suggestions fit, "
+                    "lead with one of these.")
+        except Exception:  # noqa: BLE001 — daypart line is optional garnish
+            pass
+
+    if not parts:
+        return ""
+    parts.append(
+        "\nWhen the call flow reaches the upsell step, pick the FIRST priority "
+        "that naturally fits what the caller ordered — phrase it as a friendly "
+        f"suggestion, never a pitch. {limit} per call; drop it instantly if the "
+        "caller declines. Never suggest something already in the order or "
+        "anything sold out."
     )
+    return "".join(parts)
 
 
 # ── compute + cache ─────────────────────────────────────────────────────────
@@ -260,7 +300,8 @@ def _cache_key(merchant_id: str) -> str:
 
 
 async def compute_upsell_brief(merchant_id: str, menu_items: list[dict],
-                               sold_out: list[str] | None = None) -> dict:
+                               sold_out: list[str] | None = None,
+                               tz_name: str = "") -> dict:
     """Compute (and cache) the brief from live POS data. Never raises —
     an empty brief is the failure mode."""
     from ..db import get_db
@@ -285,6 +326,47 @@ async def compute_upsell_brief(merchant_id: str, menu_items: list[dict],
                     merchant_id, len(brief["candidates"]), brief["has_cost_data"])
     except Exception as e:  # noqa: BLE001 — a brief failure must never matter
         logger.warning("upsell brief compute failed for %s: %s", merchant_id, e)
+
+    # Owner-brain signals: pairings + dayparts from transaction_items, mapped
+    # onto the phone menu (only orderable items ever reach the prompt).
+    try:
+        from .owner_brain import fetch_transaction_items, mine_dayparts, mine_pairings
+        item_rows = await fetch_transaction_items(merchant_id)
+        if item_rows:
+            menu_norms = {_norm(m.get("name", "")): m.get("name", "")
+                          for m in menu_items or [] if m.get("name")}
+
+            def _on_menu(name: str) -> Optional[str]:
+                return match_menu_item(name, menu_norms)
+
+            pairings: dict[str, list[dict]] = {}
+            for item, partners in mine_pairings(item_rows).items():
+                mi = _on_menu(item)
+                if not mi:
+                    continue
+                mapped = []
+                for p in partners:
+                    mp = _on_menu(p["partner"])
+                    if mp and mp != mi:
+                        mapped.append({"partner": mp, "attach_pct": p["attach_pct"]})
+                if mapped:
+                    pairings[mi] = mapped
+            brief["pairings"] = pairings
+
+            dayparts: dict[str, list[str]] = {}
+            for dp, names in mine_dayparts(item_rows, tz_name=tz_name).items():
+                on_menu = []
+                for n in names:
+                    mn = _on_menu(n)
+                    if mn and mn not in on_menu:
+                        on_menu.append(mn)
+                if on_menu:
+                    dayparts[dp] = on_menu
+            brief["dayparts"] = dayparts
+            logger.info("owner brain for %s: %d pairings, %d dayparts",
+                        merchant_id, len(pairings), len(dayparts))
+    except Exception as e:  # noqa: BLE001 — owner brain is additive only
+        logger.warning("owner brain compute failed for %s: %s", merchant_id, e)
     try:
         dashboard_cache.set(_cache_key(merchant_id), brief, CACHE_TTL_SECONDS)
     except Exception:  # noqa: BLE001
@@ -301,7 +383,8 @@ def get_cached_brief(merchant_id: str) -> Optional[dict]:
 
 
 def cached_or_schedule(merchant_id: str, menu_items: list[dict],
-                       sold_out: list[str] | None = None) -> Optional[dict]:
+                       sold_out: list[str] | None = None,
+                       tz_name: str = "") -> Optional[dict]:
     """Hot-path read: cached brief, or None + a background refresh. Never
     blocks — assistant-request latency is sacred."""
     brief = get_cached_brief(merchant_id)
@@ -317,7 +400,7 @@ def cached_or_schedule(merchant_id: str, menu_items: list[dict],
 
     async def _run():
         try:
-            await compute_upsell_brief(merchant_id, menu_items, sold_out)
+            await compute_upsell_brief(merchant_id, menu_items, sold_out, tz_name)
         finally:
             _inflight.discard(merchant_id)
 
