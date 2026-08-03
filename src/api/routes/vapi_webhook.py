@@ -221,6 +221,28 @@ def _upsell_step(p: dict) -> str:
     return _UPSELL_STEP_GENTLE
 
 
+def _smart_upsell_block(config) -> str:
+    """TODAY'S UPSELL PRIORITIES — margin/overstock/crowd-favorite targets
+    computed from the merchant's POS data (services.upsell_brief). Cache-only
+    on this hot path: a miss schedules a background refresh and returns ""
+    (prompt byte-for-byte unchanged, generic upsell step still applies).
+    Shared by the legacy prompt and every script pack, like _menu_block."""
+    try:
+        from ...services.upsell_brief import cached_or_schedule, render_upsell_block
+        mode = str(_personality(config).get("upsell") or "").strip().lower()
+        if mode == "none":
+            return ""
+        brief = cached_or_schedule(
+            getattr(config, "merchant_id", "") or "",
+            getattr(config, "menu_items", None) or [],
+            getattr(config, "sold_out_items", None) or [],
+        )
+        return render_upsell_block(brief, mode)
+    except Exception as e:  # noqa: BLE001 — never let upsell data break a call
+        logger.debug("smart upsell block skipped: %s", e)
+        return ""
+
+
 def _menu_block(config) -> str:
     """The prompt's MENU (+ SOLD OUT) block — shared by the legacy prompt and
     every script pack, so pricing/sold-out behavior never varies by pack."""
@@ -365,7 +387,7 @@ def _pack_system_prompt(pack_id: str, config, transfer_number: str) -> str:
         transfer_block=_transfer_block(transfer_number),
         menu_link_line=_menu_link_line(config),
         pacing_line=_pacing_line(_effective_cap_min(config)),
-        menu_block=_menu_block(config),
+        menu_block=_menu_block(config) + _smart_upsell_block(config),
     )
 
 
@@ -441,6 +463,7 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         f"{_pacing_line(_effective_cap_min(config))}"
         f"{transfer_block}"
         f"{menu}"
+        f"{_smart_upsell_block(config)}"
     )
 
 
