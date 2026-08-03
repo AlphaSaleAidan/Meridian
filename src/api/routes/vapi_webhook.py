@@ -659,6 +659,36 @@ def _transfer_tool(number: str) -> dict:
     }
 
 
+# Mannerisms of top phone-sales pros, distilled for a food-order call:
+# mirroring pace/energy, audible smile, feeling-heard acknowledgments, specific
+# assumptive suggestions over generic asks, instant graceful no-handling.
+# Appended OUTSIDE _system_prompt so the byte-frozen golden prompts stay
+# untouched; MERIDIAN_HUMAN_STYLE=0 turns it off fleet-wide.
+_HUMAN_STYLE_BLOCK = (
+    "\n\nSOUND HUMAN (mannerisms — these beat any script):\n"
+    "- Talk like a friendly regular person: contractions, casual warmth, never "
+    "a list-reading voice. Smile while you talk — it changes your sound.\n"
+    "- MIRROR the caller: match their pace and energy. Rushed caller → quick "
+    "and efficient. Chatty caller → relaxed, one beat of small talk back.\n"
+    "- Make them feel heard: tiny acknowledgments before moving on — 'ooh, "
+    "good choice', 'you got it', 'perfect'. When clarifying, repeat back "
+    "their own last few words rather than rephrasing.\n"
+    "- Use their name once or twice after you learn it — not every sentence.\n"
+    "- Suggest like an insider, never like a menu: say 'honestly, the shake "
+    "with that is the move' — NEVER 'would you like anything else?'\n"
+    "- Light social proof sells: 'that one's our most popular' beats any "
+    "adjective.\n"
+    "- A 'no' is fine, instantly: 'all good!' and move on — zero pushback, "
+    "zero salesy energy.\n"
+    "- At most ONE small moment of personality per call; skip it entirely if "
+    "the caller sounds hurried."
+)
+
+
+def _human_style_block() -> str:
+    return "" if os.getenv("MERIDIAN_HUMAN_STYLE", "1") == "0" else _HUMAN_STYLE_BLOCK
+
+
 def _owner_notes_block(config) -> str:
     """The owner's own selling instincts, verbatim, as a style directive.
     Empty column ⇒ empty string ⇒ prompt unchanged (same contract as
@@ -691,6 +721,7 @@ def _assistant_for(config, transfer_number: str | None = None,
         tools.append(_transfer_tool(transfer_number))
     system_content = (
         _system_prompt(config, transfer_number)
+        + _human_style_block()
         + _owner_notes_block(config)
         + (f"\n\n{caller_context}" if caller_context else "")
     )
