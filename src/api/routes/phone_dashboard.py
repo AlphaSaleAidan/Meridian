@@ -1543,3 +1543,83 @@ async def _lost_race_response(
     logger.warning("provision race for merchant %s: lost to concurrent request "
                    "(winner=%s, our %s unwound)", merchant_id, winner, number)
     return {"phone_number": winner, "provisioned": False, "already_existed": True}
+
+
+# ---------------------------------------------------------------------------
+# SMART UPSELL BRIEF — margin / overstock / crowd-favorite priorities the voice
+# agent sells from (services.upsell_brief). Computed from POS data already
+# synced; cached 6h; the assistant-request hot path only ever reads the cache.
+# These endpoints exist so the dashboard can preview what the agent will push
+# today and force a refresh after a menu / inventory change.
+# ---------------------------------------------------------------------------
+
+@router.get("/upsell-brief/{merchant_id}")
+async def get_upsell_brief(merchant_id: str, principal=Depends(require_service_auth)):
+    """The cached upsell brief, or 404 when none has been computed yet."""
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+    from ...services.upsell_brief import get_cached_brief
+    brief = get_cached_brief(merchant_id)
+    if brief is None:
+        raise HTTPException(404, "No upsell brief cached yet — POST /upsell-brief/{merchant_id}/refresh")
+    return {"ok": True, **brief}
+
+
+@router.post("/upsell-brief/{merchant_id}/refresh")
+async def refresh_upsell_brief(merchant_id: str, principal=Depends(require_service_auth)):
+    """Recompute the upsell brief now from live POS data and cache it."""
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+    db = get_db()
+    rows = await db.select(
+        "phone_agent_config",
+        filters={"merchant_id": f"eq.{merchant_id}"},
+        limit=1,
+    )
+    if not rows:
+        raise HTTPException(404, "No phone config found for this merchant — save a config first")
+    row = rows[0]
+    from ...services.upsell_brief import compute_upsell_brief
+    brief = await compute_upsell_brief(
+        merchant_id,
+        row.get("menu_items") or [],
+        row.get("sold_out_items") or [],
+    )
+    return {"ok": True, **brief}
+
+
+class OwnerNotesRequest(BaseModel):
+    """Body for POST /api/phone/owner-notes/{merchant_id}."""
+    notes: str = ""
+
+
+@router.post("/owner-notes/{merchant_id}")
+async def set_owner_notes(
+    merchant_id: str,
+    req: OwnerNotesRequest,
+    principal=Depends(require_service_auth),
+):
+    """Save the owner's selling notes (migration 074) — their own upsell
+    instincts, injected into every call prompt as a HOW THE OWNER SELLS block.
+    Empty string clears it (prompt reverts to unchanged)."""
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+    db = get_db()
+    notes = (req.notes or "").strip()[:2000]
+    rows = await db.update(
+        "phone_agent_config",
+        {"owner_selling_notes": notes,
+         "updated_at": datetime.now(timezone.utc).isoformat()},
+        filters={"merchant_id": f"eq.{merchant_id}"},
+    )
+    if not rows:
+        raise HTTPException(404, "No phone config found for this merchant — save a config first")
+    # Drop the cached config so the very next call hears the new notes.
+    import sys
+    from pathlib import Path
+    _pa_dir = str(Path(__file__).resolve().parents[3] / "services" / "phone_agent")
+    if _pa_dir not in sys.path:
+        sys.path.insert(0, _pa_dir)
+    from merchant_config import invalidate_config_cache
+    invalidate_config_cache(merchant_id)
+    return {"ok": True, "merchant_id": merchant_id, "notes_length": len(notes)}

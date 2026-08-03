@@ -221,6 +221,30 @@ def _upsell_step(p: dict) -> str:
     return _UPSELL_STEP_GENTLE
 
 
+def _smart_upsell_block(config) -> str:
+    """TODAY'S UPSELL PRIORITIES — margin/overstock/crowd-favorite targets
+    computed from the merchant's POS data (services.upsell_brief). Cache-only
+    on this hot path: a miss schedules a background refresh and returns ""
+    (prompt byte-for-byte unchanged, generic upsell step still applies).
+    Shared by the legacy prompt and every script pack, like _menu_block."""
+    try:
+        from ...services.upsell_brief import cached_or_schedule, render_upsell_block
+        mode = str(_personality(config).get("upsell") or "").strip().lower()
+        if mode == "none":
+            return ""
+        brief = cached_or_schedule(
+            getattr(config, "merchant_id", "") or "",
+            getattr(config, "menu_items", None) or [],
+            getattr(config, "sold_out_items", None) or [],
+            tz_name=getattr(config, "business_timezone", "") or "",
+        )
+        return render_upsell_block(
+            brief, mode, tz_name=getattr(config, "business_timezone", "") or "")
+    except Exception as e:  # noqa: BLE001 — never let upsell data break a call
+        logger.debug("smart upsell block skipped: %s", e)
+        return ""
+
+
 def _menu_block(config) -> str:
     """The prompt's MENU (+ SOLD OUT) block — shared by the legacy prompt and
     every script pack, so pricing/sold-out behavior never varies by pack."""
@@ -365,7 +389,7 @@ def _pack_system_prompt(pack_id: str, config, transfer_number: str) -> str:
         transfer_block=_transfer_block(transfer_number),
         menu_link_line=_menu_link_line(config),
         pacing_line=_pacing_line(_effective_cap_min(config)),
-        menu_block=_menu_block(config),
+        menu_block=_menu_block(config) + _smart_upsell_block(config),
     )
 
 
@@ -441,6 +465,7 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         f"{_pacing_line(_effective_cap_min(config))}"
         f"{transfer_block}"
         f"{menu}"
+        f"{_smart_upsell_block(config)}"
     )
 
 
@@ -634,7 +659,51 @@ def _transfer_tool(number: str) -> dict:
     }
 
 
-def _assistant_for(config, transfer_number: str | None = None) -> dict:
+# Mannerisms of top phone-sales pros, distilled for a food-order call:
+# mirroring pace/energy, audible smile, feeling-heard acknowledgments, specific
+# assumptive suggestions over generic asks, instant graceful no-handling.
+# Appended OUTSIDE _system_prompt so the byte-frozen golden prompts stay
+# untouched; MERIDIAN_HUMAN_STYLE=0 turns it off fleet-wide.
+_HUMAN_STYLE_BLOCK = (
+    "\n\nSOUND HUMAN (mannerisms — these beat any script):\n"
+    "- Talk like a friendly regular person: contractions, casual warmth, never "
+    "a list-reading voice. Smile while you talk — it changes your sound.\n"
+    "- MIRROR the caller: match their pace and energy. Rushed caller → quick "
+    "and efficient. Chatty caller → relaxed, one beat of small talk back.\n"
+    "- Make them feel heard: tiny acknowledgments before moving on — 'ooh, "
+    "good choice', 'you got it', 'perfect'. When clarifying, repeat back "
+    "their own last few words rather than rephrasing.\n"
+    "- Use their name once or twice after you learn it — not every sentence.\n"
+    "- Suggest like an insider, never like a menu: say 'honestly, the shake "
+    "with that is the move' — NEVER 'would you like anything else?'\n"
+    "- Light social proof sells: 'that one's our most popular' beats any "
+    "adjective.\n"
+    "- A 'no' is fine, instantly: 'all good!' and move on — zero pushback, "
+    "zero salesy energy.\n"
+    "- At most ONE small moment of personality per call; skip it entirely if "
+    "the caller sounds hurried."
+)
+
+
+def _human_style_block() -> str:
+    return "" if os.getenv("MERIDIAN_HUMAN_STYLE", "1") == "0" else _HUMAN_STYLE_BLOCK
+
+
+def _owner_notes_block(config) -> str:
+    """The owner's own selling instincts, verbatim, as a style directive.
+    Empty column ⇒ empty string ⇒ prompt unchanged (same contract as
+    restaurant_brief). Length-capped so a rambling note can't eat the prompt."""
+    notes = (getattr(config, "owner_selling_notes", "") or "").strip()
+    if not notes:
+        return ""
+    return (
+        "\n\nHOW THE OWNER SELLS (their own words — match this judgment and "
+        "style when suggesting anything):\n" + notes[:1200]
+    )
+
+
+def _assistant_for(config, transfer_number: str | None = None,
+                   caller_context: str = "") -> dict:
     # personality.customGreeting (when set) overrides the standard greeting as
     # the spoken opener; _system_prompt's step-1 greet line uses the same value
     # so the prompt never contradicts what the caller just heard.
@@ -642,18 +711,27 @@ def _assistant_for(config, transfer_number: str | None = None) -> dict:
     # transfer_number: None → derive from config (own-DID loop guard applied);
     # "" → explicitly suppress (the handler found the number is a fleet agent
     # DID); non-empty → use as given (already validated by the handler).
+    #
+    # caller_context: per-caller memory block ("regular, usual order X") built
+    # by the handler from phone_orders history; "" ⇒ prompt unchanged.
     if transfer_number is None:
         transfer_number = _safe_transfer_number(config)
     tools = [_SUBMIT_ORDER_TOOL]
     if transfer_number:
         tools.append(_transfer_tool(transfer_number))
+    system_content = (
+        _system_prompt(config, transfer_number)
+        + _human_style_block()
+        + _owner_notes_block(config)
+        + (f"\n\n{caller_context}" if caller_context else "")
+    )
     assistant = {
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
         "transcriber": _transcriber_for(config),
         "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
         "model": {"provider": "openai", "model": "gpt-4.1",
-                  "messages": [{"role": "system", "content": _system_prompt(config, transfer_number)}],
+                  "messages": [{"role": "system", "content": system_content}],
                   "tools": tools},
         "endCallFunctionEnabled": True,
     }
@@ -967,8 +1045,25 @@ async def vapi_webhook(request: Request):
                 from merchant_config import get_merchant_by_phone
                 return await get_merchant_by_phone(transfer)
 
-            loop_hit, fleet_owner = await asyncio.gather(
-                _loop_check(), _fleet_check(), return_exceptions=True)
+            async def _memory_check() -> str:
+                # per-caller memory (regulars): phone_orders history → a short
+                # "returning customer, usual order X" block. The streaming path
+                # (phone.py) has had this for a while; this brings the Vapi
+                # flagship to parity. Fail-open "" — memory never delays or
+                # strands a call (caller_memory uses a 3s internal timeout).
+                mid = getattr(config, "merchant_id", "") or ""
+                if not caller or not mid or mid == "demo":
+                    return ""
+                from caller_memory import build_memory_block_for
+                return await build_memory_block_for(mid, caller)
+
+            loop_hit, fleet_owner, caller_context = await asyncio.gather(
+                _loop_check(), _fleet_check(), _memory_check(),
+                return_exceptions=True)
+            if isinstance(caller_context, BaseException):
+                logger.warning("caller-memory lookup failed (serving without): %s",
+                               caller_context)
+                caller_context = ""
 
             # Loop guard: serve the message-taker assistant instead of feeding
             # the loop. Fail-open on any error.
@@ -1018,7 +1113,9 @@ async def vapi_webhook(request: Request):
                     transfer, getattr(config, "merchant_id", "?"), fleet_owner)
                 transfer_override = ""
 
-            return {"assistant": _assistant_for(config, transfer_number=transfer_override)}
+            return {"assistant": _assistant_for(
+                config, transfer_number=transfer_override,
+                caller_context=caller_context or "")}
         except Exception as e:  # noqa: BLE001 — never strand the call
             logger.error("assistant-request failed: %s", e)
             return {"error": "Sorry, we couldn't connect your call. Please try again."}
