@@ -5,6 +5,7 @@ import com.meridian.dto.LoginRequest
 import com.meridian.dto.SessionInfoResponse
 import com.meridian.dto.SignupRequest
 import com.meridian.exception.UnauthorizedException
+import com.meridian.security.SecurityConstants
 import com.meridian.service.auth.AuthService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -68,8 +69,13 @@ class AuthController(
 
         // Save the context to the session so it persists across requests
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext)
-        session.setAttribute("USER_EMAIL", request.email)
-        session.setAttribute("SUPABASE_TOKEN", supabaseToken)
+        session.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, request.email)
+        session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, supabaseToken)
+
+        // TODO: Populate USER_ID and BUSINESS_IDS from user_profiles / business_access tables upon login
+        // Temporary placeholder dummy identity until user management / business mapping tables are created
+        session.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "dummy_user_id_${request.email}")
+        session.setAttribute(SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE, emptyList<String>())
 
         log.info("Created backend JDBC session for: {}", request.email)
 
@@ -85,7 +91,7 @@ class AuthController(
     )
     @GetMapping("/me")
     suspend fun me(
-        @SessionAttribute(name = "USER_EMAIL", required = false) email: String?,
+        @SessionAttribute(name = SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, required = false) email: String?,
     ): ResponseEntity<ApiResponse<SessionInfoResponse>> {
         if (email == null) {
             throw UnauthorizedException("Not authenticated")

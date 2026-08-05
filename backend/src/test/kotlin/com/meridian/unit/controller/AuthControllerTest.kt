@@ -4,6 +4,7 @@ import com.meridian.controller.AuthController
 import com.meridian.dto.LoginRequest
 import com.meridian.dto.SignupRequest
 import com.meridian.exception.UnauthorizedException
+import com.meridian.security.SecurityConstants
 import com.meridian.service.auth.AuthService
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -61,8 +62,10 @@ class AuthControllerTest {
             assertEquals("success", response.body?.status)
 
             coVerify { authService.login(request) }
-            verify { httpSession.setAttribute("USER_EMAIL", "test@test.com") }
-            verify { httpSession.setAttribute("SUPABASE_TOKEN", "fake-jwt") }
+            verify { httpSession.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, "test@test.com") }
+            verify { httpSession.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, "fake-jwt") }
+            verify { httpSession.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "dummy_user_id_test@test.com") }
+            verify { httpSession.setAttribute(SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE, emptyList<String>()) }
         }
 
     @Test
