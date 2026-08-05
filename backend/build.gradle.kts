@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
-    alias(libs.plugins.kotlin.jpa)
     alias(libs.plugins.ktlint)
 }
 
@@ -35,8 +34,9 @@ dependencies {
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.apache5)
 
-    // Database
-    implementation(libs.spring.boot.starter.data.jpa)
+    // Database (R2DBC)
+    implementation(libs.spring.boot.starter.data.r2dbc)
+    implementation(libs.r2dbc.postgresql)
     runtimeOnly(libs.postgresql)
 
     // Kotlin

@@ -1,3 +1,7 @@
+# Note: DatabaseClient / R2DBC connection parameters are configured per environment profile
+# (application-local.yml, application-staging.yml, application-prod.yml). If stricter connection
+# or connection pool controls are required in the future, DatabaseClient can be programmatically
+# configured via a @Configuration bean in code.
 spring:
   application:
     name: meridian-backend
@@ -14,12 +18,6 @@ security:
     store-type: jdbc
     jdbc:
       initialize-schema: always
-
-  jpa:
-    open-in-view: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
 
   jackson:
     default-property-inclusion: non_null

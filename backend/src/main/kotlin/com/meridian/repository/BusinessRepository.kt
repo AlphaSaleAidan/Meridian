@@ -1,11 +1,14 @@
 package com.meridian.repository
 
 import com.meridian.entity.Business
-import org.springframework.data.jpa.repository.JpaRepository
 
-interface BusinessRepository : JpaRepository<Business, String> {
-    fun findByAccessTokenAndStatus(
+interface BusinessRepository {
+    suspend fun findById(id: String): Business?
+
+    suspend fun findByAccessTokenAndStatus(
         accessToken: String,
         status: String,
     ): Business?
+
+    suspend fun save(business: Business): Business
 }

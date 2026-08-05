@@ -7,8 +7,6 @@ import com.meridian.dto.PortalTokenResponse
 import com.meridian.service.portal.PortalService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.withContext
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -28,9 +26,6 @@ import org.springframework.web.bind.annotation.RestController
 )
 class PortalController(
     private val portalService: PortalService,
-    // JPA is blocking, so each service call runs on one virtual thread via
-    // withContext — keeps @Transactional's ThreadLocal binding intact.
-    private val virtualThreadDispatcher: CoroutineDispatcher,
 ) {
     @Operation(
         summary = "Resolve a portal token to org details",
@@ -43,10 +38,7 @@ class PortalController(
     @GetMapping("/resolve/{token}")
     suspend fun resolve(
         @PathVariable token: String,
-    ): ResponseEntity<ApiResponse<PortalResolveResponse>> =
-        withContext(virtualThreadDispatcher) {
-            ResponseEntity.ok(ApiResponse.success(data = portalService.resolveToken(token)))
-        }
+    ): ResponseEntity<ApiResponse<PortalResolveResponse>> = ResponseEntity.ok(ApiResponse.success(data = portalService.resolveToken(token)))
 
     @Operation(
         summary = "Generate (or fetch) a merchant's portal token",
@@ -59,7 +51,5 @@ class PortalController(
     suspend fun generate(
         @RequestBody request: GeneratePortalTokenRequest,
     ): ResponseEntity<ApiResponse<PortalTokenResponse>> =
-        withContext(virtualThreadDispatcher) {
-            ResponseEntity.ok(ApiResponse.success(data = portalService.generateToken(request)))
-        }
+        ResponseEntity.ok(ApiResponse.success(data = portalService.generateToken(request)))
 }
