@@ -14,7 +14,7 @@ import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, type PlanTier } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/proposal-plans'
 
 // Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
 // one-time modules sum into the setup fee. Creating the customer fires the
@@ -643,10 +643,19 @@ export default function USPortalLeadDetailPage() {
         region: deal.province || 'New York',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
-        planName: closestMonthlyPlan(monthlyPrice).label,
+        planName: selectedPlan.label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
+        ...(selectedPlan.phoneAgent ? {
+          phoneAgent: {
+            orderFeeCents: Math.round(selectedPlan.orderFee * 100),
+            includedMinutes: VOICE_INCLUDED_MINUTES,
+            overageCentsPerMin: Math.round(VOICE_OVERAGE_PER_MIN * 100),
+            maxCallMinutes: VOICE_MAX_CALL_MINUTES,
+          },
+        } : {}),
+        ...(website ? { websiteMonthlyCents: websiteMonthlyDue * 100, websiteMonthlyIncluded: monthlyFree } : {}),
         startDate: new Date().toISOString().slice(0, 10),
       }
       const blob = await generateSlaDocument(slaInput)
@@ -673,10 +682,19 @@ export default function USPortalLeadDetailPage() {
         region: deal.province || 'New York',
         posSystem: selectedPOS || 'Unknown',
         repName: rep.name || 'Sales Representative',
-        planName: closestMonthlyPlan(monthlyPrice).label,
+        planName: selectedPlan.label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
+        ...(selectedPlan.phoneAgent ? {
+          phoneAgent: {
+            orderFeeCents: Math.round(selectedPlan.orderFee * 100),
+            includedMinutes: VOICE_INCLUDED_MINUTES,
+            overageCentsPerMin: Math.round(VOICE_OVERAGE_PER_MIN * 100),
+            maxCallMinutes: VOICE_MAX_CALL_MINUTES,
+          },
+        } : {}),
+        ...(website ? { websiteMonthlyCents: websiteMonthlyDue * 100, websiteMonthlyIncluded: monthlyFree } : {}),
         startDate: new Date().toISOString().slice(0, 10),
         clientSignature: slaSignature,
       }

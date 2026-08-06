@@ -5,6 +5,16 @@
 
 export type SlaCountry = 'CA' | 'US'
 
+/** Usage-based billing terms for the AI phone agent — mirrors the live
+ *  backend dials (fixed per-order tier rate, included minutes, overage,
+ *  hard call cap). Amounts in minor units of the local currency. */
+export interface SlaPhoneAgentTerms {
+  orderFeeCents: number
+  includedMinutes: number
+  overageCentsPerMin: number
+  maxCallMinutes: number
+}
+
 export interface SlaInput {
   country: SlaCountry
   clientCompanyName: string
@@ -19,6 +29,15 @@ export interface SlaInput {
   setupFeeCents: number
   /** When true, inserts a first-month complimentary clause in section 3. */
   firstMonthFree?: boolean
+  /** Present only when the selected plan includes the AI phone agent —
+   *  renders the usage-fee clause and the phone-agent service bullet. */
+  phoneAgent?: SlaPhoneAgentTerms
+  /** Website Buildout recurring (maintenance + hosting) actually billed, in
+   *  minor units. Pass together with websiteMonthlyIncluded when a website
+   *  was sold; omit both when no website is part of the deal. */
+  websiteMonthlyCents?: number
+  /** True when maintenance + hosting come free with the selected plan tier. */
+  websiteMonthlyIncluded?: boolean
   startDate: string
   clientSignature?: string
 }
@@ -75,6 +94,32 @@ function buildSlaHtml(input: SlaInput): string {
       <p>8A.5 Transfers of personal information outside Quebec shall require a privacy impact assessment ensuring adequate protection in the receiving jurisdiction.</p>
       <p>8A.6 Confidentiality incidents involving Quebec residents shall be reported to the Commission d&rsquo;acc&egrave;s &agrave; l&rsquo;information du Qu&eacute;bec (CAI) and to affected individuals.</p>
   ` : ''
+
+  const websiteSold = input.websiteMonthlyCents !== undefined || input.websiteMonthlyIncluded !== undefined
+
+  // Section 3 fee clauses — assembled then numbered sequentially so the
+  // conditional clauses (first month, phone agent, website) never leave gaps.
+  const feeClauses: string[] = []
+  feeClauses.push(`<strong>Monthly Service Fee.</strong> The Client shall pay a monthly service fee of <strong>${formatMoney(input.country, input.monthlyPriceCents)}</strong> (plus applicable taxes) for the ${input.planName ? `Meridian <strong>${esc(input.planName)}</strong> plan` : 'Services described herein'}.`)
+  feeClauses.push(input.setupFeeCents > 0
+    ? `<strong>Setup Fee.</strong> A one-time setup fee of <strong>${formatMoney(input.country, input.setupFeeCents)}</strong> (plus applicable taxes) is payable upon execution of this Agreement.`
+    : `<strong>Setup Fee.</strong> No setup fee is applicable under this Agreement.`)
+  if (input.firstMonthFree) {
+    feeClauses.push(`<strong>First Month Complimentary.</strong> As an introductory offer, the first calendar month of the Monthly Service Fee is waived. The one-time setup fee (where applicable) remains payable upon execution of this Agreement; recurring monthly billing commences at the start of the second calendar month.`)
+  }
+  if (input.phoneAgent) {
+    const pa = input.phoneAgent
+    feeClauses.push(`<strong>Phone Agent Usage Fees.</strong> In addition to the Monthly Service Fee, each order placed through the AI phone agent incurs a fixed per-order transaction fee of <strong>${formatMoney(input.country, pa.orderFeeCents)}</strong>. Every call includes the first ${pa.includedMinutes} minutes of call time at no additional charge; call time beyond the included minutes is billed at <strong>${formatMoney(input.country, pa.overageCentsPerMin)}</strong> per additional minute. Calls are automatically concluded at ${pa.maxCallMinutes} minutes, which caps the maximum per-call overage. Usage fees are calculated per order and per call and are billed to the Client&rsquo;s Meridian account.`)
+  }
+  if (websiteSold && input.websiteMonthlyIncluded) {
+    feeClauses.push(`<strong>Website Maintenance &amp; Hosting.</strong> Ongoing website maintenance and managed hosting are included in the Client&rsquo;s plan at no additional recurring charge. The one-time website buildout is billed as part of the Setup Fee above.`)
+  } else if (websiteSold && (input.websiteMonthlyCents ?? 0) > 0) {
+    feeClauses.push(`<strong>Website Maintenance &amp; Hosting.</strong> Ongoing website maintenance and managed hosting are provided for a recurring fee of <strong>${formatMoney(input.country, input.websiteMonthlyCents ?? 0)}</strong> per month (plus applicable taxes), billed alongside the Monthly Service Fee. The one-time website buildout is billed as part of the Setup Fee above.`)
+  }
+  feeClauses.push(`<strong>Payment Terms.</strong> All invoices are due and payable within thirty (30) days. Payments shall be made in ${currencyName}.`)
+  feeClauses.push(`<strong>Taxes.</strong> ${taxNote}`)
+  feeClauses.push(`<strong>Late Payment.</strong> Overdue invoices shall bear interest at 1.5% per month (18% per annum) or the maximum rate permitted by law.`)
+  const feesHtml = feeClauses.map((c, i) => `<p>3.${i + 1} ${c}</p>`).join('\n    ')
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -207,6 +252,8 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
       <li>Inventory optimization recommendations</li>
       <li>AI camera analytics and foot traffic analysis (where applicable)</li>
       <li>3D space mapping and visualization</li>
+      ${input.phoneAgent ? '<li>AI phone agent &mdash; automated call answering and order capture</li>' : ''}
+      ${websiteSold ? '<li>Website buildout, maintenance, and managed hosting</li>' : ''}
     </ul>
     <p>1.2 <strong>POS System Integration.</strong> The Provider shall integrate with the Client&rsquo;s existing POS system (${esc(input.posSystem)}) to enable data collection and analytics.</p>
   </div>
@@ -232,12 +279,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',system-ui,sans-
   <!-- 3. Fees -->
   <div class="section">
     <h2>3. Fees and Payment</h2>
-    <p>3.1 <strong>Monthly Service Fee.</strong> The Client shall pay a monthly service fee of <strong>${formatMoney(input.country, input.monthlyPriceCents)}</strong> (plus applicable taxes) for the ${input.planName ? `Meridian <strong>${esc(input.planName)}</strong> plan` : 'Services described herein'}.</p>
-    <p>3.2 <strong>Setup Fee.</strong> ${input.setupFeeCents > 0 ? `A one-time setup fee of <strong>${formatMoney(input.country, input.setupFeeCents)}</strong> (plus applicable taxes) is payable upon execution of this Agreement.` : 'No setup fee is applicable under this Agreement.'}</p>
-    ${input.firstMonthFree ? `<p>3.2A <strong>First Month Complimentary.</strong> As an introductory offer, the first calendar month of the Monthly Service Fee is waived. The one-time setup fee (where applicable) remains payable upon execution of this Agreement; recurring monthly billing commences at the start of the second calendar month.</p>` : ''}
-    <p>3.3 <strong>Payment Terms.</strong> All invoices are due and payable within thirty (30) days. Payments shall be made in ${currencyName}.</p>
-    <p>3.4 <strong>Taxes.</strong> ${taxNote}</p>
-    <p>3.5 <strong>Late Payment.</strong> Overdue invoices shall bear interest at 1.5% per month (18% per annum) or the maximum rate permitted by law.</p>
+    ${feesHtml}
   </div>
 
   <!-- 4. Term -->
