@@ -105,6 +105,31 @@ async def test_503_when_publishable_key_missing(monkeypatch):
 
 
 @aio
+async def test_status_reads_account_as_dict_not_stripeobject(monkeypatch):
+    """Regression: _retrieve_account must return a plain dict. This SDK's
+    StripeObject has no .get(), so the status endpoint's acc.get(...) would
+    500 the polling endpoint the onboarding UI depends on — the same bug class
+    the webhooks hit."""
+    import stripe as stripe_sdk
+    acct_obj = stripe_sdk.Account.construct_from(
+        {"id": "acct_x", "charges_enabled": True, "payouts_enabled": True,
+         "details_submitted": True}, "sk")
+
+    class _S:
+        class Account:
+            @staticmethod
+            def retrieve(a, **k):
+                return acct_obj
+    monkeypatch.setattr(sc, "_stripe", lambda *a, **k: _S)
+    monkeypatch.setattr(sc, "STRIPE_SECRET_KEY", "sk_live_x")
+    d = sc._retrieve_account("acct_x")
+    assert isinstance(d, dict)
+    # the exact access the status endpoint does — must not raise
+    assert d.get("charges_enabled") is True
+    assert d.get("payouts_enabled") is True
+
+
+@aio
 async def test_502_when_session_create_fails(monkeypatch):
     monkeypatch.setattr(sc, "get_db", lambda: _DB(acct="acct_x"))
 

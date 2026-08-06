@@ -86,7 +86,12 @@ def _retrieve_account(acct: str):
     err: Exception | None = None
     for key in keys:
         try:
-            return _stripe(key).Account.retrieve(acct, api_key=key)
+            acc = _stripe(key).Account.retrieve(acct, api_key=key)
+            # Return a PLAIN DICT — this SDK's StripeObject has no .get(), so
+            # callers doing acc.get(...) would 500 (same bug class as the
+            # webhook handlers). to_dict() gives the top-level fields the
+            # status endpoint needs (charges/payouts/details).
+            return acc.to_dict() if hasattr(acc, "to_dict") else dict(acc)
         except Exception as e:  # noqa: BLE001 — try the other platform
             err = e
     raise err if err else RuntimeError("Stripe not configured")
