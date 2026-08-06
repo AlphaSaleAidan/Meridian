@@ -216,3 +216,80 @@ async def test_killswitch_takes_precedence_over_demo_safe(monkeypatch):
     )
 
     assert result == {"success": False, "reason": "pos_orders_disabled"}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Square payload correctness — currency must be uppercase ISO
+# ──────────────────────────────────────────────────────────────────────
+
+class _CapturingClient:
+    """Minimal httpx.AsyncClient stand-in that records the POST payload."""
+
+    def __init__(self, calls):
+        self._calls = calls
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def post(self, url, json=None, headers=None, timeout=None):
+        self._calls.append(json)
+
+        class _Res:
+            status_code = 200
+
+            @staticmethod
+            def json():
+                return {"order": {"id": "sq-test-1"}}
+
+        return _Res()
+
+
+@pytest.mark.asyncio
+async def test_square_currency_is_uppercased(monkeypatch):
+    """The normalizer carries lowercase currency ("usd"/"cad" — Stripe's
+    convention); Square's Currency enum is uppercase ISO and 400s
+    (INVALID_ENUM_VALUE) on the raw value, killing every kitchen ticket.
+    The connector must uppercase at the Square boundary."""
+    calls: list = []
+    monkeypatch.setattr(
+        pos_connector.httpx, "AsyncClient", lambda: _CapturingClient(calls)
+    )
+
+    result = await pos_connector._create_square_order(
+        order={
+            "merchant_id": "m1",
+            "currency": "cad",
+            "customer_name": "Test",
+            "order_type": "pickup",
+            "items": [{"name": "Samosa", "quantity": 1, "unit_price": 5.0}],
+        },
+        access_token="tok",
+        location_id="LOC1",
+    )
+
+    assert result["success"] is True
+    assert calls[0]["order"]["line_items"][0]["base_price_money"]["currency"] == "CAD"
+
+
+@pytest.mark.asyncio
+async def test_square_currency_defaults_to_usd_when_absent(monkeypatch):
+    calls: list = []
+    monkeypatch.setattr(
+        pos_connector.httpx, "AsyncClient", lambda: _CapturingClient(calls)
+    )
+
+    await pos_connector._create_square_order(
+        order={
+            "merchant_id": "m1",
+            "customer_name": "Test",
+            "order_type": "pickup",
+            "items": [{"name": "Samosa", "quantity": 1, "unit_price": 5.0}],
+        },
+        access_token="tok",
+        location_id="LOC1",
+    )
+
+    assert calls[0]["order"]["line_items"][0]["base_price_money"]["currency"] == "USD"

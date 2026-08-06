@@ -161,7 +161,11 @@ async def _create_square_order(
             "quantity": str(item["quantity"]),
             "base_price_money": {
                 "amount": int(item.get("unit_price", 0) * 100),
-                "currency": order.get("currency", "usd"),
+                # Square's Currency enum is uppercase ISO ("USD"/"CAD"); the
+                # normalizer carries lowercase — passing it through raw 400s
+                # every order (INVALID_ENUM_VALUE) and no ticket reaches the
+                # kitchen.
+                "currency": (order.get("currency") or "usd").upper(),
             },
             "note": "; ".join(
                 filter(None, [
