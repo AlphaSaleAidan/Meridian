@@ -31,6 +31,15 @@ router = APIRouter(prefix="/api/stripe/connect", tags=["stripe-connect"])
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 CONNECT_WEBHOOK_SECRET = os.getenv("STRIPE_CONNECT_WEBHOOK_SECRET", "")
+# PHONE-ORDER ACCOUNT SPLIT (see services/phone_agent/payment_links.py): phone
+# order checkouts can run on their own Stripe account, which signs its webhooks
+# with its own secret and mints its own connected accounts. Both stay optional —
+# unset, this module behaves exactly as it did on a single platform account.
+STRIPE_PHONE_SECRET_KEY = os.getenv("STRIPE_PHONE_SECRET_KEY", "")
+PHONE_WEBHOOK_SECRET = os.getenv("STRIPE_PHONE_WEBHOOK_SECRET", "")
+# Opt-in: create NEW connected accounts under the phone-order platform. Default
+# off so onboarding keeps landing on the existing platform until ops flips it.
+PHONE_ONBOARDING = os.getenv("STRIPE_PHONE_ONBOARDING", "0") == "1"
 CONNECT_RETURN_URL = os.getenv("CONNECT_RETURN_URL", "https://meridian.tips/canada/portal?payments=connected")
 CONNECT_REFRESH_URL = os.getenv("CONNECT_REFRESH_URL", "https://meridian.tips/canada/portal?payments=retry")
 CONNECT_COUNTRY = os.getenv("CONNECT_DEFAULT_COUNTRY", "CA")
@@ -41,10 +50,50 @@ if _PHONE_AGENT_DIR not in sys.path:
     sys.path.insert(0, _PHONE_AGENT_DIR)
 
 
-def _stripe():
+def _stripe(api_key: str = ""):
     import stripe
-    stripe.api_key = STRIPE_SECRET_KEY
+    stripe.api_key = api_key or STRIPE_SECRET_KEY
     return stripe
+
+
+def _onboarding_key() -> str:
+    """Platform account that NEW connected accounts are created under."""
+    if PHONE_ONBOARDING and STRIPE_PHONE_SECRET_KEY:
+        return STRIPE_PHONE_SECRET_KEY
+    return STRIPE_SECRET_KEY
+
+
+def _webhook_secrets() -> list[str]:
+    """Signing secrets accepted on the Connect webhook, primary first. Two
+    endpoints (one per platform account) deliver the same event shapes; a
+    signature valid under either is processed identically."""
+    return [s for s in (CONNECT_WEBHOOK_SECRET, PHONE_WEBHOOK_SECRET) if s]
+
+
+def _retrieve_account(acct: str):
+    """Read a connected account from whichever platform owns it. Accounts minted
+    before the phone-order split live on the original platform and ones minted
+    after STRIPE_PHONE_ONBOARDING live on the new one, so the status endpoint
+    tries the platform key first and the phone key second."""
+    keys = [k for k in (STRIPE_SECRET_KEY, STRIPE_PHONE_SECRET_KEY) if k]
+    err: Exception | None = None
+    for key in keys:
+        try:
+            return _stripe(key).Account.retrieve(acct, api_key=key)
+        except Exception as e:  # noqa: BLE001 — try the other platform
+            err = e
+    raise err if err else RuntimeError("Stripe not configured")
+
+
+def _construct_event(stripe, payload: bytes, sig: str):
+    """Verify against each configured secret; raise the last error if none match."""
+    err: Exception | None = None
+    for secret in _webhook_secrets():
+        try:
+            return stripe.Webhook.construct_event(payload, sig, secret)
+        except Exception as e:  # noqa: BLE001 — try the next secret, then re-raise
+            err = e
+    raise err if err else RuntimeError("no webhook secret configured")
 
 
 async def _set_config(db, merchant_id: str, patch: dict) -> None:
@@ -186,9 +235,10 @@ async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
     """Create the merchant's Stripe connected account (once) and return a hosted
     onboarding link. Called from the onboarding wizard's Payments step."""
     await enforce_service_member(principal, merchant_id)
-    if not STRIPE_SECRET_KEY:
+    key = _onboarding_key()
+    if not key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
-    stripe = _stripe()
+    stripe = _stripe(key)
     db = get_db()
     rows = await db.select("phone_agent_config", filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
     row = rows[0] if rows else {}
@@ -196,7 +246,10 @@ async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
 
     if not acct:
         try:
+            # api_key passed per request as well as globally: an await between
+            # these two calls can let another task reassign the SDK global.
             account = stripe.Account.create(
+                api_key=key,
                 type="express",
                 country=CONNECT_COUNTRY,
                 email=(row.get("merchant_email") or None),
@@ -215,6 +268,7 @@ async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
         await _set_config(db, merchant_id, {"stripe_account_id": acct})
 
     link = stripe.AccountLink.create(
+        api_key=key,
         account=acct,
         refresh_url=CONNECT_REFRESH_URL,
         return_url=CONNECT_RETURN_URL,
@@ -232,10 +286,9 @@ async def status(merchant_id: str, principal=Depends(require_service_auth)):
     acct = (rows[0].get("stripe_account_id") if rows else "") or ""
     if not acct:
         return {"connected": False, "charges_enabled": False}
-    if not STRIPE_SECRET_KEY:
+    if not (STRIPE_SECRET_KEY or STRIPE_PHONE_SECRET_KEY):
         return {"connected": True, "account_id": acct, "charges_enabled": bool(rows[0].get("stripe_charges_enabled"))}
-    stripe = _stripe()
-    acc = stripe.Account.retrieve(acct)
+    acc = _retrieve_account(acct)
     charges = bool(acc.get("charges_enabled"))
     # keep our copy in sync so the checkout gate is accurate
     await _set_config(db, merchant_id, {"stripe_charges_enabled": charges})
@@ -256,11 +309,12 @@ async def connect_webhook(request: Request):
     sig = request.headers.get("stripe-signature", "")
     # Fail closed: a spoofed checkout.session.completed could mark a CAD order
     # paid and release it. Never process an unverified Connect event.
-    if not CONNECT_WEBHOOK_SECRET:
-        logger.error("STRIPE_CONNECT_WEBHOOK_SECRET not set — refusing Connect webhook (fail closed)")
+    if not _webhook_secrets():
+        logger.error("No Connect webhook signing secret set (STRIPE_CONNECT_WEBHOOK_SECRET / "
+                     "STRIPE_PHONE_WEBHOOK_SECRET) — refusing Connect webhook (fail closed)")
         raise HTTPException(status_code=503, detail="Webhook not configured")
     try:
-        event = stripe.Webhook.construct_event(payload, sig, CONNECT_WEBHOOK_SECRET)
+        event = _construct_event(stripe, payload, sig)
     except Exception as e:  # noqa: BLE001
         logger.error("Connect webhook verify failed: %s", e)
         raise HTTPException(status_code=400, detail="Invalid signature")

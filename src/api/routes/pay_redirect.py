@@ -217,16 +217,23 @@ async def pay_success(session_id: str = ""):
     real amount in its currency; falls back to a generic thank-you if the lookup
     fails (never leave a paying customer on an error)."""
     amount_html = ""
-    if session_id.startswith("cs_") and os.getenv("STRIPE_SECRET_KEY"):
-        try:
-            import stripe
-            stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
-            s = stripe.checkout.Session.retrieve(session_id)
-            cur = (s["currency"] or "cad").upper()
-            sym = "CA$" if cur == "CAD" else f"{cur} "
-            amount_html = f'<div class="amt">{sym}{(s["amount_total"] or 0) / 100:,.2f}</div>'
-        except Exception as e:  # noqa: BLE001 — display is best-effort
-            logger.warning("success page session lookup failed: %s", e)
+    # Order checkouts may run on the dedicated phone-order Stripe account
+    # (STRIPE_PHONE_SECRET_KEY), where the platform key can't read the session —
+    # so try that key first when it's set, then the platform key.
+    keys = [k for k in (os.getenv("STRIPE_PHONE_SECRET_KEY", ""),
+                        os.getenv("STRIPE_SECRET_KEY", "")) if k]
+    if session_id.startswith("cs_") and keys:
+        for key in keys:
+            try:
+                import stripe
+                stripe.api_key = key
+                s = stripe.checkout.Session.retrieve(session_id, api_key=key)
+                cur = (s["currency"] or "cad").upper()
+                sym = "CA$" if cur == "CAD" else f"{cur} "
+                amount_html = f'<div class="amt">{sym}{(s["amount_total"] or 0) / 100:,.2f}</div>'
+                break
+            except Exception as e:  # noqa: BLE001 — display is best-effort
+                logger.warning("success page session lookup failed: %s", e)
     body = (f"<h1>Payment received</h1>{amount_html}"
             "<p>Your order is confirmed and the restaurant has been notified.</p>"
             "<p>A receipt has been sent to your phone.</p>")
