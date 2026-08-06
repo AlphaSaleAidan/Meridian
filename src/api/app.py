@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -126,15 +127,8 @@ logging.basicConfig(
 logger = logging.getLogger("meridian")
 
 
-def _assert_single_worker() -> None:
-    """Live call/SMS/card state lives in per-process dicts (phone._sessions,
-    sms_order._sms_sessions, card_on_phone._captures). With one uvicorn worker
-    (the Procfile today) that is correct; with several, mid-call webhooks land
-    on workers that never saw the session and orders/card captures silently
-    die. Refuse the foot-gun until that state moves to a shared store —
-    MERIDIAN_ALLOW_MULTI_WORKER=1 overrides once it has."""
-    if os.environ.get("MERIDIAN_ALLOW_MULTI_WORKER") == "1":
-        return
+def _configured_workers() -> int:
+    """Worker count uvicorn/gunicorn will actually use, from env or argv."""
     workers = 0
     try:
         workers = int(os.environ.get("WEB_CONCURRENCY", "0") or 0)
@@ -147,13 +141,54 @@ def _assert_single_worker() -> None:
                 workers = max(workers, int(argv[argv.index(flag) + 1]))
             except (IndexError, ValueError):
                 pass
-    if workers > 1:
-        raise RuntimeError(
-            f"Refusing to start with {workers} workers: in-memory phone/SMS/card "
-            "session state is per-process and breaks under multiple workers. "
-            "Move sessions to a shared store first, then set "
-            "MERIDIAN_ALLOW_MULTI_WORKER=1."
+    return workers
+
+
+async def _shared_session_store_healthy() -> bool:
+    """True only when REDIS_URL is set AND Redis answers a PING right now.
+
+    A URL that points at nothing must not unlock multi-worker — that would
+    trade a loud startup failure for calls dropping mid-conversation.
+    """
+    try:
+        phone_agent_dir = str(Path(__file__).resolve().parents[2] / "services" / "phone_agent")
+        if phone_agent_dir not in sys.path:
+            sys.path.insert(0, phone_agent_dir)
+        from session_store import get_session_store
+        return await get_session_store().ping()
+    except Exception as e:
+        logger.warning("Shared session store unavailable: %s", type(e).__name__)
+        return False
+
+
+async def _assert_single_worker() -> None:
+    """Live call/SMS/card state lives in per-process dicts (phone._sessions,
+    sms_order._sms_sessions, card_on_phone._captures). With one uvicorn worker
+    (the Procfile today) that is correct; with several, mid-call webhooks land
+    on workers that never saw the session and orders/card captures silently
+    die.
+
+    Those dicts are now mirrored through services/phone_agent/session_store.py,
+    so multi-worker is safe once REDIS_URL points at a reachable Redis — we
+    check that here rather than trusting the env var. Without it, refuse the
+    foot-gun as before; MERIDIAN_ALLOW_MULTI_WORKER=1 still overrides."""
+    if os.environ.get("MERIDIAN_ALLOW_MULTI_WORKER") == "1":
+        return
+    workers = _configured_workers()
+    if workers <= 1:
+        return
+    if await _shared_session_store_healthy():
+        logger.info(
+            "Starting with %d workers: phone/SMS/card session state is shared "
+            "via REDIS_URL.", workers,
         )
+        return
+    raise RuntimeError(
+        f"Refusing to start with {workers} workers: in-memory phone/SMS/card "
+        "session state is per-process and breaks under multiple workers. "
+        "Set REDIS_URL to a reachable Redis (the sessions are mirrored there) "
+        "or set MERIDIAN_ALLOW_MULTI_WORKER=1 to override."
+    )
 
 
 @asynccontextmanager
@@ -161,7 +196,7 @@ async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle — initializes DB connection."""
     from ..db import init_db, close_db
     logger.info("Meridian server starting...")
-    _assert_single_worker()
+    await _assert_single_worker()
     await init_db()
     logger.info("Database connection initialized")
     from ..payouts.webhook_hook import init_commission_hook
@@ -231,6 +266,11 @@ async def lifespan(app: FastAPI):
     if _pos_scheduler_started:
         from ..services.pos_scheduler import stop_scheduler
         stop_scheduler()
+    try:
+        from session_store import get_session_store
+        await get_session_store().close()
+    except Exception:
+        pass
     await close_db()
     logger.info("Meridian server shut down.")
 

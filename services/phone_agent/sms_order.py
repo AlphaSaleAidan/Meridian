@@ -15,6 +15,8 @@ Flow:
 
 Conversation state is stored in-memory keyed by (merchant_id, customer_phone).
 """
+import dataclasses
+import functools
 import hashlib
 import hmac
 import logging
@@ -83,6 +85,74 @@ MAX_MESSAGES = 40
 
 # In-memory SMS sessions: (merchant_phone, customer_phone) → session
 _sms_sessions: dict[str, dict[str, Any]] = {}
+
+# Shared mirror for those sessions, dormant until REDIS_URL is set. See
+# session_store.py — without Redis `_shared_sms_session` is a pass-through and
+# _sms_sessions remains the only copy, exactly as today.
+from session_store import NS_SMS_SESSIONS, get_session_store  # noqa: E402
+
+
+def _session_to_wire(session: dict[str, Any]) -> dict[str, Any]:
+    """JSON-safe copy — the merchant config is a dataclass, not a dict."""
+    wire = dict(session)
+    config = wire.get("config")
+    if dataclasses.is_dataclass(config) and not isinstance(config, type):
+        wire["config"] = dataclasses.asdict(config)
+    return wire
+
+
+def _session_from_wire(wire: dict[str, Any]) -> dict[str, Any] | None:
+    """Rebuild a session read back from the store. None when the stored shape
+    no longer matches MerchantPhoneConfig (a deploy that changed its fields),
+    which just starts the customer on a fresh session."""
+    session = dict(wire)
+    config = session.get("config")
+    if isinstance(config, dict):
+        try:
+            session["config"] = MerchantPhoneConfig(**config)
+        except TypeError:
+            return None
+    return session
+
+
+def _shared_sms_session(handler):
+    """Load this conversation's session from the shared store before the
+    webhook runs and write it back after, so a customer's next text can land on
+    any worker. Store errors leave the in-process dict untouched."""
+    @functools.wraps(handler)
+    async def wrapper(request: Request, *args, **kwargs):
+        store = get_session_store()
+        if not store.shared:
+            return await handler(request, *args, **kwargs)
+        try:
+            form = await request.form()
+            key = _session_key(str(form.get("To", "") or ""), str(form.get("From", "") or ""))
+        except Exception:
+            key = ":"
+        if key == ":":
+            return await handler(request, *args, **kwargs)
+
+        try:
+            wire = await store.get(NS_SMS_SESSIONS, key)
+            if wire is not None:
+                restored = _session_from_wire(wire)
+                if restored is not None:
+                    _sms_sessions[key] = restored
+        except Exception as e:
+            # Best-effort: fall through on whatever this worker already holds.
+            logger.warning("Shared SMS session load failed: %s", type(e).__name__)
+        try:
+            return await handler(request, *args, **kwargs)
+        finally:
+            try:
+                session = _sms_sessions.get(key)
+                if session is None:
+                    await store.delete(NS_SMS_SESSIONS, key)
+                else:
+                    await store.set(NS_SMS_SESSIONS, key, _session_to_wire(session))
+            except Exception as e:
+                logger.warning("Shared SMS session write-back failed: %s", type(e).__name__)
+    return wrapper
 
 SMS_ORDER_TOOLS = [
     {
@@ -365,6 +435,7 @@ def _verify_twilio_signature(request: Request, form: dict) -> bool:
 
 
 @router.post("/inbound")
+@_shared_sms_session
 async def handle_inbound_sms(request: Request):
     """Twilio SMS webhook — receives incoming text messages."""
     _cleanup_old_sessions()
