@@ -4,8 +4,11 @@
  * Three tiers (USD). Every tier includes all Meridian features; the axis is
  * the AI phone agent and the per-order Meridian fee:
  *   Standard $250 — everything except the phone agent, no per-order fee
- *   Premium  $350 — phone agent included, $1.49 Meridian fee per order
- *   Command  $500 — phone agent included, $1.00 Meridian fee per order
+ *   Premium  $350 — phone agent included, $0.65 Meridian fee per order
+ *   Command  $500 — phone agent included, $0.45 Meridian fee per order
+ *
+ * 2026-08-06 (Aidan): per-order fees adjusted DOWN to the former redlines and
+ * FIXED — the rep fee slider is retired, so orderFee === orderFeeFloor.
  *
  * Reps may add up to REP_PRICE_HEADROOM on top of any tier via the price
  * slider — the base prices above are floors, never discounted.
@@ -22,9 +25,9 @@ export interface PlanTier {
   phoneAgent: boolean
   /** Per-order Meridian fee in the plan's currency (0 = no per-order fee). */
   orderFee: number
-  /** REDLINE: lowest per-order fee a rep may negotiate down to on the fee
-   *  slider (Aidan 2026-07-15: premium $0.65, command $0.45). The backend
-   *  clamps to the same floor. */
+  /** Server-side floor for the per-order fee. The fee slider is retired
+   *  (Aidan 2026-08-06) — the tier rate IS the floor; the backend still
+   *  clamps any client-sent fee to it. */
   orderFeeFloor: number
 }
 
@@ -66,13 +69,13 @@ export const PLAN_TIERS: PlanTier[] = [
     interval: 'month',
     tag: 'MOST POPULAR',
     phoneAgent: true,
-    orderFee: 1.49,
+    orderFee: 0.65,
     orderFeeFloor: 0.65,
     features: [
       'Everything in Standard',
       'AI phone agent — answers calls + takes orders',
       'Pay-by-text checkout',
-      '$1.49 per-order transaction fee',
+      '$0.65 per-order transaction fee',
       'Calls: first 3 min included, then $0.45/min (calls are capped at 5 min)',
     ],
   },
@@ -82,11 +85,11 @@ export const PLAN_TIERS: PlanTier[] = [
     price: 500,
     interval: 'month',
     phoneAgent: true,
-    orderFee: 1.0,
+    orderFee: 0.45,
     orderFeeFloor: 0.45,
     features: [
       'Everything in Premium',
-      'Lowest per-order rate — $1.00 Meridian fee per order',
+      'Lowest per-order rate — $0.45 Meridian fee per order',
       'Calls: first 3 min included, then $0.45/min (calls are capped at 5 min)',
       'Multi-location support',
       'Dedicated account manager',

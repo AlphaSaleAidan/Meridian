@@ -1054,28 +1054,12 @@ export default function USPortalLeadDetailPage() {
           </div>
           <p className="text-[10px] text-[#4a5550] mt-1">Billed monthly in USD. Base price is the floor — no discounts.</p>
 
-          {/* Per-order fee slider — phone-agent tiers only. Slides DOWN from the
-              tier's standard rate to the redline; the backend clamps to the
-              same floor so the redline is enforced server-side too. */}
+          {/* Per-order fee — fixed per tier (the negotiation slider is retired;
+              every deal sells at the tier rate). */}
           {selectedPlan.phoneAgent && (
             <div className="mt-4">
-              <label className="text-xs text-[#A1A1A8] block mb-1.5">
-                Per-Order Fee <span className="text-[#4a5550]">(redline ${selectedPlan.orderFeeFloor.toFixed(2)}/order)</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={orderFeeFloorCents}
-                  max={orderFeeMaxCents}
-                  step={1}
-                  value={Math.min(Math.max(orderFeeCents, orderFeeFloorCents), orderFeeMaxCents)}
-                  onChange={e => setOrderFeeCents(Number(e.target.value))}
-                  className="flex-1 h-2 bg-[#1F1F23] rounded-full appearance-none cursor-pointer accent-[#17C5B0]"
-                />
-                <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">${(orderFeeCents / 100).toFixed(2)}/order</span>
-              </div>
-              <p className="text-[10px] text-[#4a5550] mt-1">
-                Standard rate ${selectedPlan.orderFee.toFixed(2)} — negotiate down only, never below the redline.
+              <p className="text-xs text-[#A1A1A8]">
+                Per-order fee: <span className="font-semibold text-[#f0b429]">${selectedPlan.orderFee.toFixed(2)}/order</span> — fixed for this tier
               </p>
               <p className="text-[10px] text-[#A1A1A8] mt-1.5 px-2.5 py-1.5 rounded-md bg-[#0A0A0B] border border-[#1F1F23]">
                 Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-[#f0b429]">$0.45/min</span> billed automatically to the merchant's Meridian account. Calls end automatically at 5 minutes, so overage never exceeds $0.90/call.

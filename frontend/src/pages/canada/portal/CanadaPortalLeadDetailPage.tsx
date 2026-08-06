@@ -1041,28 +1041,12 @@ export default function CanadaPortalLeadDetailPage() {
           </div>
           <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / CAD_RATE).toLocaleString()}/mo. Base price is the floor — no discounts.</p>
 
-          {/* Per-order fee slider — phone-agent tiers only. Slides DOWN from the
-              tier's standard rate to the redline; the backend clamps to the
-              same floor so the redline is enforced server-side too. */}
+          {/* Per-order fee — fixed per tier (the negotiation slider is retired;
+              every deal sells at the tier rate). */}
           {selectedPlan.phoneAgent && (
             <div className="mt-4">
-              <label className="text-xs text-pm-canada-text-muted block mb-1.5">
-                Per-Order Fee <span className="text-pm-canada-text-faint">(redline CA${selectedPlan.orderFeeFloor.toFixed(2)}/order)</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={orderFeeFloorCents}
-                  max={orderFeeMaxCents}
-                  step={1}
-                  value={Math.min(Math.max(orderFeeCents, orderFeeFloorCents), orderFeeMaxCents)}
-                  onChange={e => setOrderFeeCents(Number(e.target.value))}
-                  className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent"
-                />
-                <span className="text-sm font-semibold text-pm-amber-gold w-28 text-right">CA${(orderFeeCents / 100).toFixed(2)}/order</span>
-              </div>
-              <p className="text-2xs text-pm-canada-text-faint mt-1">
-                Standard rate CA${selectedPlan.orderFee.toFixed(2)} — negotiate down only, never below the redline.
+              <p className="text-xs text-pm-canada-text-muted">
+                Per-order fee: <span className="font-semibold text-pm-amber-gold">CA${selectedPlan.orderFee.toFixed(2)}/order</span> — fixed for this tier
               </p>
               <p className="text-2xs text-pm-canada-text-muted mt-1.5 px-2.5 py-1.5 rounded-md bg-pm-canada-bg border border-pm-canada-border">
                 Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-pm-amber-gold">CA$0.45/min</span> billed automatically to the merchant's Meridian account. Calls end automatically at 5 minutes, so overage never exceeds CA$0.90/call.

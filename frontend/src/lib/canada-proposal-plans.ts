@@ -5,7 +5,9 @@
  * Standard US$250 → CA$350 · Premium US$350 → CA$500 · Command US$500 → CA$700
  *
  * Per-order Meridian fees are set explicitly (not formula-derived) so they
- * keep sane price points: Premium CA$1.99/order, Command CA$1.39/order.
+ * keep sane price points: Premium CA$0.90/order, Command CA$0.60/order
+ * (2026-08-06, Aidan: adjusted DOWN to the former redlines and FIXED — the
+ * rep fee slider is retired).
  */
 import { PLAN_TIERS as US_PLAN_TIERS, closestMonthlyPlan, type PlanTier } from './proposal-plans'
 
@@ -18,8 +20,8 @@ export type { PlanTier }
 
 const CAD_ORDER_FEES: Record<PlanTier['id'], number> = {
   standard: 0,
-  premium: 1.99,
-  command: 1.39,
+  premium: 0.9,
+  command: 0.6,
 }
 
 // REDLINES for the rep fee slider — DERIVED from the US floors ($0.65/$0.45)
@@ -43,8 +45,8 @@ export const PLAN_TIERS: PlanTier[] = US_PLAN_TIERS.map(p => ({
   orderFeeFloor: cadOrderFeeFloor(p.orderFeeFloor),
   features: p.features.map(f =>
     f
-      .replace('$1.49 per-order transaction fee', 'CA$1.99 per-order transaction fee')
-      .replace('$1.00 Meridian fee per order', 'CA$1.39 Meridian fee per order')
+      .replace('$0.65 per-order transaction fee', 'CA$0.90 per-order transaction fee')
+      .replace('$0.45 Meridian fee per order', 'CA$0.60 Meridian fee per order')
       .replace('then $0.45/min', 'then CA$0.45/min')
   ),
 }))
