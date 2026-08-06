@@ -13,6 +13,13 @@ import {
 } from '@/data/cadVerticals'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { closestMonthlyPlanCad, getPlan, PLAN_TIERS, REP_PRICE_HEADROOM_CAD, CAD_RATE, type PlanTier } from '@/lib/canada-proposal-plans'
+
+// Website Buildout setup service — flat CAD price (US$500 × 1.4); toggling it
+// is what sets the setup fee. Creating the customer fires the 48-hour build
+// contest on Meridian Foundry.
+const WEBSITE_ADDON_CAD = 700
+const FOUNDRY_ORDER_URL = 'https://foundry.meridian.tips/agency/api/sites/order'
+const FOUNDRY_JOB_BASE = 'https://foundry.meridian.tips/agency/jobs'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import {
   useCanadaLead,
@@ -144,7 +151,16 @@ export default function CanadaPortalLeadDetailPage() {
   const monthlyPrice = selectedPlan.price + priceBump
   const orderFeeFloorCents = Math.round(selectedPlan.orderFeeFloor * 100)
   const orderFeeMaxCents = Math.round(selectedPlan.orderFee * 100)
-  const [setupFee, setSetupFee] = useState('0')
+  // Setup Services (Aidan 08-06): the manual setup fee is retired — the fee
+  // is the sum of toggled services (Website Buildout today, more soon).
+  const [website, setWebsite] = useState(false)
+  const [websiteCurrentUrl, setWebsiteCurrentUrl] = useState('')
+  const [websiteGoals, setWebsiteGoals] = useState('')
+  const [websitePages, setWebsitePages] = useState('Home, Services, Contact')
+  const [websiteBrand, setWebsiteBrand] = useState('')
+  const [websiteContent, setWebsiteContent] = useState<'ready' | 'partial' | 'none'>('partial')
+  const [websiteContestUrl, setWebsiteContestUrl] = useState('')
+  const setupFee = website ? String(WEBSITE_ADDON_CAD) : '0'
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
   // Proposal state
@@ -215,6 +231,12 @@ export default function CanadaPortalLeadDetailPage() {
       setCustomerCreating(false)
       return
     }
+    if (website && websiteGoals.trim().length < 20) {
+      setCustomerError('Website Buildout is on but the goals are empty — give the builders at least one real sentence (20+ characters).')
+      creatingRef.current = false
+      setCustomerCreating(false)
+      return
+    }
 
     try {
       if (!supabase) throw new Error('Database not connected')
@@ -249,6 +271,37 @@ export default function CanadaPortalLeadDetailPage() {
       // forced reset on first login. Surface it so the rep can share it directly.
       const data = await res.json().catch(() => ({}))
       setCustomerCredentials({ email, tempPassword: data.temporary_password || '' })
+
+      // Website Buildout sold → fire the 48-hour build contest on Meridian
+      // Foundry (best-effort: a Foundry hiccup never blocks the account).
+      if (website) {
+        try {
+          const rawUrl = websiteCurrentUrl.trim()
+          const sprintRes = await fetch(FOUNDRY_ORDER_URL, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              company: deal.business_name,
+              contactName: deal.contact_name,
+              email,
+              currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
+              goals: websiteGoals.trim(),
+              pages: websitePages.split(',').map(x => x.trim()).filter(Boolean).slice(0, 12),
+              brandNotes: [websiteBrand.trim(), `Sold with Meridian ${selectedPlan.label} (Canada) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+              contentReady: websiteContent,
+              repEmail: '',
+            }),
+          })
+          const sprintData = await sprintRes.json().catch(() => null)
+          if ((sprintRes.ok || sprintRes.status === 409) && sprintData?.jobId) {
+            setWebsiteContestUrl(`${FOUNDRY_JOB_BASE}/${sprintData.jobId}`)
+          } else {
+            setCustomerError('Account created, but the website build contest did not launch — start it manually at foundry.meridian.tips/agency/website.')
+          }
+        } catch {
+          setCustomerError('Account created, but the website build contest did not launch — start it manually at foundry.meridian.tips/agency/website.')
+        }
+      }
       // The fee seed is best-effort server-side — if it failed, creation still
       // succeeded but the merchant is on the tier default fee. Tell the rep.
       if (selectedPlan.phoneAgent && data.fee_seeded === false) {
@@ -1055,16 +1108,52 @@ export default function CanadaPortalLeadDetailPage() {
           )}
         </div>
 
-        {/* Setup Fee */}
+        {/* Setup Services — priced toggles; their sum is the setup fee */}
         <div>
-          <label className="text-xs text-pm-canada-text-muted block mb-1.5">Setup Fee</label>
-          <input
-            type="text"
-            value={setupFee}
-            onChange={e => setSetupFee(e.target.value)}
-            className={inputClass}
-            placeholder="e.g. 250"
-          />
+          <label className="text-xs text-pm-canada-text-muted block mb-1.5">
+            Setup Services <span className="text-pm-canada-text-faint">(one-time — billed together as the setup fee)</span>
+          </label>
+          <div className="rounded-xl border border-pm-canada-border bg-pm-canada-bg">
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Website Buildout</p>
+                <p className="text-2xs text-pm-canada-text-muted">Custom site or rebuild, built in 48 hours on the Meridian network</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-pm-accent">CA${WEBSITE_ADDON_CAD}</span>
+                <div className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${website ? 'bg-pm-accent' : 'bg-pm-canada-border'}`}
+                  onClick={() => setWebsite(!website)}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${website ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+            </div>
+            {website && (
+              <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
+                <input type="text" value={websiteCurrentUrl} onChange={e => setWebsiteCurrentUrl(e.target.value)}
+                  className={inputClass} placeholder="Current website — leave empty if none" />
+                <div>
+                  <textarea rows={2} value={websiteGoals} onChange={e => setWebsiteGoals(e.target.value)}
+                    className={`${inputClass} resize-none`} placeholder="What must the site do? (required — the builders' brief)" />
+                  <p className="text-2xs text-pm-canada-text-faint mt-1">Ask the owner on the call — 20+ characters</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input type="text" value={websitePages} onChange={e => setWebsitePages(e.target.value)}
+                    className={inputClass} placeholder="Pages (comma-separated)" />
+                  <select value={websiteContent} onChange={e => setWebsiteContent(e.target.value as 'ready' | 'partial' | 'none')}
+                    className={inputClass}>
+                    <option value="ready">Owner has content ready</option>
+                    <option value="partial">Some of it exists</option>
+                    <option value="none">Write it for them</option>
+                  </select>
+                </div>
+                <input type="text" value={websiteBrand} onChange={e => setWebsiteBrand(e.target.value)}
+                  className={inputClass} placeholder="Brand notes — colors, tone, sites they like" />
+                <p className="text-2xs text-pm-accent/60">Creating the customer launches a 48-hour build contest — the owner picks their site from real, clickable previews.</p>
+              </div>
+            )}
+          </div>
+          <p className="text-2xs text-pm-canada-text-faint mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
         </div>
 
         {/* First month free */}
@@ -1597,6 +1686,15 @@ export default function CanadaPortalLeadDetailPage() {
 
           {customerCredentials ? (
             <div className="space-y-3">
+              {websiteContestUrl && (
+                <div className="p-4 rounded-lg bg-pm-accent/5 border border-pm-accent/20">
+                  <p className="text-2xs font-mono text-pm-accent tracking-wider mb-1.5">48-HOUR WEBSITE CONTEST — LIVE</p>
+                  <a href={websiteContestUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-white underline decoration-pm-accent/60 break-all">
+                    {websiteContestUrl}
+                  </a>
+                </div>
+              )}
               <div className="p-4 rounded-lg bg-pm-canada-bg border border-pm-canada-border space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-pm-canada-text-muted">Email</span>
