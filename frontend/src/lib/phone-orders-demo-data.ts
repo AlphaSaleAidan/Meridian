@@ -62,6 +62,9 @@ export interface VoicePersonality {
   customHold: string
   customClosing: string
   brandKeywords: string[]
+  // Selected character type ('' = none — classic voice applies). Ids must stay
+  // in lockstep with services/phone_agent/personas.py PERSONAS.
+  character?: string
 }
 
 export interface PhoneStats {
@@ -343,6 +346,20 @@ export const VOICE_OPTIONS: { id: string; label: string; desc: string; accent: V
   { id: 'bm_george', label: 'Neil', desc: 'Indian — clear, professional (male)', accent: 'indian', sampleText: "Hello there, lovely to hear from you -- what shall I put together?" },
 ]
 
+// Character types — each pairs a premium ElevenLabs voice with a charming,
+// family-friendly persona. Ids/labels/taglines/catchphrases mirror the backend
+// registry (services/phone_agent/personas.py) — keep in lockstep.
+export const CHARACTER_OPTIONS: { id: string; label: string; tagline: string; catchphrase: string }[] = [
+  { id: 'vinny', label: 'Vinny', tagline: 'Fun Italian guy — big New York pizzeria energy', catchphrase: "Whaddya havin' today, my friend?" },
+  { id: 'mel', label: 'Mel', tagline: 'Aussie mate — sunny, easygoing, zero fuss', catchphrase: "G'day! What are we gettin' ya today, mate?" },
+  { id: 'rosie', label: 'Rosie', tagline: 'Southern sweetheart — warm as fresh biscuits', catchphrase: 'What can I get ya, sugar?' },
+  { id: 'priya', label: 'Priya', tagline: 'Warm Indian host — everything first-class and fresh', catchphrase: 'Haan ji, what would you like today?' },
+  { id: 'jacques', label: 'Jacques', tagline: 'French bistro charmer — every order is magnifique', catchphrase: 'Bonjour! What may I prepare for you?' },
+  { id: 'carlos', label: 'Carlos', tagline: 'Taqueria amigo — lively, generous, muy fresh', catchphrase: '¡Órale! What are we making for you today, amigo?' },
+  { id: 'sam', label: 'Sam', tagline: 'Classic diner pro — smooth, fast, friendly', catchphrase: 'You got it, boss.' },
+  { id: 'mei', label: 'Mei', tagline: 'Bubbly and upbeat — makes ordering feel fun', catchphrase: 'Ooh, good choice! What else?' },
+]
+
 export const DEFAULT_PERSONALITY: VoicePersonality = {
   formality: 0.5,
   upsell: 'gentle',
@@ -350,5 +367,6 @@ export const DEFAULT_PERSONALITY: VoicePersonality = {
   customGreeting: '',
   customHold: '',
   customClosing: '',
+  character: '',
   brandKeywords: [],
 }

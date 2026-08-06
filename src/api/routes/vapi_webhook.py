@@ -162,10 +162,33 @@ def _personality(config) -> dict:
     return p if isinstance(p, dict) else {}
 
 
+def _persona(config):
+    """The selected character persona (personality.character), or None.
+
+    STRICTLY fail-open like the script-pack layer: unknown/typo'd ids, a
+    missing module, or ANY error resolves to None so a live call always has
+    the proven legacy voice + prompt as its floor."""
+    try:
+        from personas import get_persona
+        return get_persona(_personality(config).get("character"))
+    except Exception:  # noqa: BLE001 — persona selection never breaks a call
+        return None
+
+
 def _effective_greeting(config) -> str:
-    """customGreeting (personality) overrides the standard greeting when set."""
+    """customGreeting (personality) overrides the standard greeting when set;
+    otherwise a selected character's greeting template beats the plain one."""
     custom = str(_personality(config).get("customGreeting") or "").strip()
-    return custom or (config.greeting or "")
+    if custom:
+        return custom
+    persona = _persona(config)
+    if persona:
+        try:
+            from personas import persona_greeting
+            return persona_greeting(persona, config.business_name)
+        except Exception:  # noqa: BLE001
+            pass
+    return config.greeting or ""
 
 
 def _personality_style_lines(p: dict) -> list[str]:
@@ -589,6 +612,35 @@ def _vapi_voice(voice_id: str) -> str:
     return KOKORO_TO_VAPI.get(v, "Elliot")
 
 
+def _voice_for(config) -> dict:
+    """The assistant's full voice config: a selected character's premium
+    ElevenLabs voice when personality.character is set, else the legacy
+    merchant voice mapping. Fail-open — any persona-layer error serves the
+    proven vapi-native voice."""
+    persona = _persona(config)
+    if persona:
+        try:
+            from personas import persona_voice
+            return persona_voice(persona)
+        except Exception as e:  # noqa: BLE001 — voice never breaks a call
+            logger.error("persona voice failed (falling back to legacy): %s", e)
+    return {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")}
+
+
+def _persona_prompt_block(config) -> str:
+    """The selected character's PERSONA prompt section, or "" (prompt stays
+    byte-for-byte unchanged for merchants without a character)."""
+    persona = _persona(config)
+    if not persona:
+        return ""
+    try:
+        from personas import persona_block
+        return persona_block(persona)
+    except Exception as e:  # noqa: BLE001 — persona never breaks a call
+        logger.error("persona block failed (serving without): %s", e)
+        return ""
+
+
 def _transcriber_for(config) -> dict:
     """Deepgram nova-3; language=multi enables code-switch understanding
     (Hindi/Punjabi + English on one call) — set by the wizard's multilingual
@@ -722,6 +774,7 @@ def _assistant_for(config, transfer_number: str | None = None,
     system_content = (
         _system_prompt(config, transfer_number)
         + _human_style_block()
+        + _persona_prompt_block(config)
         + _owner_notes_block(config)
         + (f"\n\n{caller_context}" if caller_context else "")
     )
@@ -729,7 +782,7 @@ def _assistant_for(config, transfer_number: str | None = None,
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
         "transcriber": _transcriber_for(config),
-        "voice": {"provider": "vapi", "voiceId": _vapi_voice(getattr(config, "voice", "") or "")},
+        "voice": _voice_for(config),
         "model": {"provider": "openai", "model": "gpt-4.1",
                   "messages": [{"role": "system", "content": system_content}],
                   "tools": tools},

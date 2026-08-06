@@ -566,4 +566,16 @@ def _demo_config(merchant_id: str) -> MerchantPhoneConfig:
         # a real caller reaching it can never trigger a real order or charge —
         # they hear the "nothing gets charged" demo, not a phantom live order.
         demo_safe=True,
+        # Demo line leads with the "Vinny" character (premium ElevenLabs voice
+        # + NY pizzeria persona) — the flagship sales demo. customGreeting
+        # keeps the required "nothing gets charged" disclosure, which a bare
+        # persona greeting template would drop.
+        personality={
+            "character": "vinny",
+            "customGreeting": (
+                "Ay, Tony's Pizza, this is Vinny! This here's Meridian's live "
+                "demo — nothin' gets charged, capisce? Now whaddya havin' "
+                "today, my friend?"
+            ),
+        },
     )
