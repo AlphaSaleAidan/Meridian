@@ -16,7 +16,7 @@ import { ensureAnimStyles } from './phone-anim-styles'
  * AccountLink flow, which bounces the merchant to connect.stripe.com.)
  *
  * States: not connected → onboarding (embedded form) → pending (Stripe is
- * verifying; auto-polls /status) → connected.
+ * validating; auto-polls /status) → connected.
  */
 const API_BASE = (import.meta.env.VITE_API_URL || '') as string
 
@@ -41,6 +41,21 @@ interface AccountSession {
 }
 
 type CardState = 'loading' | 'not_connected' | 'onboarding' | 'pending' | 'connected'
+
+/**
+ * The account is only done when Stripe has VALIDATED the bank account and
+ * turned payouts on — NOT merely when charges are enabled. charges_enabled
+ * flips true as soon as the account can accept money, which routinely happens
+ * while the payout bank account is still unverified (and in CA, before the
+ * transit/institution/account numbers clear). Announcing "payouts go to your
+ * bank daily" at that point is a promise about the merchant's money that
+ * Stripe hasn't made yet, so payouts_enabled is the only signal we trust.
+ *
+ * A status response with no payouts_enabled field at all means the backend has
+ * no Stripe key configured and cannot confirm payouts — which reads as
+ * not-ready here, deliberately.
+ */
+const payoutsReady = (s: ConnectStatus | null) => Boolean(s?.payouts_enabled)
 
 /** Re-theme Stripe's embedded form to the portal's dark card palette so it
  *  doesn't read as a third-party widget dropped into the page. */
@@ -72,6 +87,7 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
   footnote?: ReactNode
 }) {
   const [state, setState] = useState<CardState>('loading')
+  const [status, setStatus] = useState<ConnectStatus | null>(null)
   const [resumable, setResumable] = useState(false)
   const [busy, setBusy] = useState(false)
   const [stalled, setStalled] = useState(false)
@@ -97,23 +113,24 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
     }
   }, [orgId])
 
-  // Initial status. An account that exists but hasn't finished onboarding
-  // resolves to "verifying" once details were submitted, and to a resumable
-  // CTA before that — reloading mid-flow must not look like a fresh start.
+  // Initial status. An account that exists but isn't payout-ready resolves to
+  // "verifying" once anything was submitted, and to a resumable CTA before
+  // that — reloading mid-flow must not look like a fresh start.
   useEffect(() => {
     let alive = true
     if (isDemo || !orgId) { setState('not_connected'); return }
     void (async () => {
       const s = await fetchStatus()
       if (!alive) return
-      if (s?.charges_enabled) { setState('connected'); return }
+      setStatus(s)
+      if (payoutsReady(s)) { setState('connected'); return }
       setResumable(Boolean(s?.connected))
-      setState(s?.connected && s.details_submitted ? 'pending' : 'not_connected')
+      setState(s?.connected && (s.details_submitted || s.charges_enabled) ? 'pending' : 'not_connected')
     })()
     return () => { alive = false }
   }, [orgId, isDemo, fetchStatus])
 
-  // While Stripe verifies, poll until charges are enabled.
+  // While Stripe validates, poll until payouts are live.
   useEffect(() => {
     if (state !== 'pending' || isDemo) return
     let alive = true
@@ -123,7 +140,8 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
         tries += 1
         const s = await fetchStatus()
         if (!alive) return
-        if (s?.charges_enabled) { setState('connected'); clearInterval(id) }
+        setStatus(s)
+        if (payoutsReady(s)) { setState('connected'); clearInterval(id) }
         else if (tries >= MAX_POLLS) { setStalled(true); clearInterval(id) }
       })()
     }, POLL_MS)
@@ -174,15 +192,16 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
   }
 
   // Stripe's embedded form is done with the merchant (submitted, or backed
-  // out). Charges are rarely live the same instant, so confirm once and fall
-  // through to the polling "verifying" state.
+  // out). Bank validation is rarely finished the same instant, so confirm once
+  // and fall through to the polling "verifying" state.
   const handleExit = useCallback(() => {
     setConnectInstance(null)
     setStalled(false)
     setState('pending')
     void (async () => {
       const s = await fetchStatus()
-      if (s?.charges_enabled) setState('connected')
+      setStatus(s)
+      if (payoutsReady(s)) setState('connected')
     })()
   }, [fetchStatus])
 
@@ -190,8 +209,9 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
     setStalled(false)
     setBusy(true)
     const s = await fetchStatus()
+    setStatus(s)
     setBusy(false)
-    if (s?.charges_enabled) setState('connected')
+    if (payoutsReady(s)) setState('connected')
     else setStalled(true)
   }
 
@@ -217,6 +237,9 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
 
   const onboarding = state === 'onboarding' && connectInstance !== null
   const verifying = state === 'pending'
+  // Charges live but payouts not: the merchant HAS linked a bank and Stripe is
+  // validating it. Distinct from "we're still reading your details".
+  const bankPending = verifying && Boolean(status?.charges_enabled)
 
   return (
     <div className={clsx('card p-5', onboarding ? 'border-[#1A8FD6]/25' : 'border-[#1A8FD6]/15')}>
@@ -229,14 +252,18 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-bold text-[#F5F5F7]">
             {verifying
-              ? 'Almost there — we’re verifying your details'
+              ? bankPending
+                ? 'Almost there — we’re verifying your bank'
+                : 'Almost there — we’re verifying your details'
               : onboarding
                 ? 'Connect your bank'
                 : 'Get paid for phone orders'}
           </h2>
           <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">
             {verifying
-              ? 'Stripe is reviewing what you submitted. This usually takes a minute — you can leave this page, payouts switch on automatically.'
+              ? bankPending
+                ? 'Stripe is validating the bank account you linked. Payouts switch on automatically once it clears — you can leave this page.'
+                : 'Stripe is reviewing what you submitted. This usually takes a minute — you can leave this page, payouts switch on automatically.'
               : onboarding
                 ? 'Your details go straight to Stripe, our payments processor. Meridian never sees your bank credentials.'
                 : 'Connect your bank to receive payouts — no Stripe account needed.'}
@@ -267,6 +294,12 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
           <ConnectComponentsProvider connectInstance={connectInstance}>
             <ConnectAccountOnboarding
               onExit={handleExit}
+              // Collect everything Stripe will EVENTUALLY need, not just what's
+              // currently due — so the bank account is collected and validated
+              // in this one pass instead of the merchant being marked done
+              // before a payout account exists. In CA this is where the
+              // transit/institution/account numbers are collected and checked.
+              collectionOptions={{ fields: 'eventually_due' }}
               onLoadError={({ error: e }) => setError(e.message || 'Stripe could not load the onboarding form.')}
             />
           </ConnectComponentsProvider>
@@ -276,7 +309,7 @@ export default function GetPaidCard({ orgId, isDemo = false, footnote }: {
       {stalled && (
         <div className="mt-4 bg-[#111113] border border-[#1F1F23] rounded-lg px-4 py-3 flex items-center gap-3">
           <p className="text-[11px] text-[#A1A1A8] leading-relaxed flex-1">
-            Stripe is still reviewing. You&apos;ll be able to take payments as soon as it clears.
+            Stripe is still validating your bank. Payouts switch on as soon as it clears.
           </p>
           <button
             onClick={recheck}

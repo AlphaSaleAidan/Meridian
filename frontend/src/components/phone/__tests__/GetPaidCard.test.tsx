@@ -6,9 +6,13 @@
  *  2. Clicking it POSTs account-session and renders Stripe's onboarding
  *     INLINE (never a redirect — window.location must not change).
  *  3. onExit hands off to the "verifying" state, which polls /status.
- *  4. charges_enabled → the connected state, including the plain-language
- *     line about how the per-order fee is taken.
- *  5. Demo mode never calls the API and never enables the CTA.
+ *  4. Success keys on payouts_enabled (bank linked AND validated) — NOT
+ *     charges_enabled, which flips true while the payout account is still
+ *     unverified. The connected state carries the plain-language line about
+ *     how the per-order fee is taken.
+ *  5. Onboarding collects eventually_due fields so the bank is collected and
+ *     validated in one pass rather than "done" before a payout account exists.
+ *  6. Demo mode never calls the API and never enables the CTA.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor, act } from '@testing-library/react'
@@ -24,12 +28,17 @@ vi.mock('@stripe/connect-js', () => ({
   loadConnectAndInitialize: (params: unknown) => loadConnectAndInitialize(params),
 }))
 
-// Capture onExit so the test can drive the post-onboarding handoff.
+// Capture onExit so the test can drive the post-onboarding handoff, and the
+// collection options so we can assert what Stripe is told to gather.
 let capturedOnExit: (() => void) | null = null
+let capturedCollectionOptions: unknown = null
 vi.mock('@stripe/react-connect-js', () => ({
   ConnectComponentsProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ConnectAccountOnboarding: ({ onExit }: { onExit: () => void }) => {
+  ConnectAccountOnboarding: (
+    { onExit, collectionOptions }: { onExit: () => void; collectionOptions?: unknown },
+  ) => {
     capturedOnExit = onExit
+    capturedCollectionOptions = collectionOptions
     return <div data-testid="stripe-onboarding">stripe embedded onboarding</div>
   },
 }))
@@ -57,6 +66,7 @@ describe('GetPaidCard', () => {
   beforeEach(() => {
     cleanup()
     capturedOnExit = null
+    capturedCollectionOptions = null
     loadConnectAndInitialize.mockClear()
   })
   afterEach(() => {
@@ -94,23 +104,48 @@ describe('GetPaidCard', () => {
     expect(fetchMock.mock.calls.some(([u]) => SESSION_URL.test(String(u)))).toBe(true)
   })
 
-  it('onExit shows the verifying state, then the connected state once charges are enabled', async () => {
-    let charges = false
-    vi.stubGlobal('fetch', mockApi(() => ({ connected: true, charges_enabled: charges, details_submitted: false })))
+  it('collects eventually_due fields so the bank is gathered in the same pass', async () => {
+    vi.stubGlobal('fetch', mockApi(() => ({ connected: false, charges_enabled: false })))
+    render(<GetPaidCard orgId="merchant-1" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: /connect payments/i }))
+    await screen.findByTestId('stripe-onboarding')
+
+    expect(capturedCollectionOptions).toEqual({ fields: 'eventually_due' })
+  })
+
+  it('onExit shows the verifying state, then connects once payouts are enabled', async () => {
+    let ready = false
+    vi.stubGlobal('fetch', mockApi(() => ({
+      connected: true, charges_enabled: ready, details_submitted: false, payouts_enabled: ready,
+    })))
 
     render(<GetPaidCard orgId="merchant-1" />)
     fireEvent.click(await screen.findByRole('button', { name: /finish connecting/i }))
     await screen.findByTestId('stripe-onboarding')
 
-    charges = true
+    ready = true
     await act(async () => { capturedOnExit?.() })
 
     await waitFor(() => expect(screen.getByText(/You're all set/i)).toBeTruthy())
     expect(screen.getByText(/nothing to invoice, nothing to pay us/i)).toBeTruthy()
   })
 
+  it('charges enabled but bank NOT yet validated stays verifying — never "all set"', async () => {
+    vi.stubGlobal('fetch', mockApi(() => ({
+      connected: true, charges_enabled: true, details_submitted: true, payouts_enabled: false,
+    })))
+    render(<GetPaidCard orgId="merchant-1" />)
+
+    expect(await screen.findByText(/verifying your bank/i)).toBeTruthy()
+    expect(screen.queryByText(/You're all set/i)).toBeNull()
+    expect(screen.queryByText(/Payouts go to your bank daily/i)).toBeNull()
+  })
+
   it('an account mid-verification reloads into the verifying state, not a fresh CTA', async () => {
-    vi.stubGlobal('fetch', mockApi(() => ({ connected: true, charges_enabled: false, details_submitted: true })))
+    vi.stubGlobal('fetch', mockApi(() => ({
+      connected: true, charges_enabled: false, details_submitted: true, payouts_enabled: false,
+    })))
     render(<GetPaidCard orgId="merchant-1" />)
 
     expect(await screen.findByText(/verifying your details/i)).toBeTruthy()
