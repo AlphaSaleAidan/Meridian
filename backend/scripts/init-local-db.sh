@@ -8,7 +8,12 @@ echo "======================================"
 echo " Initializing Local Meridian Database "
 echo "======================================"
 
-CONTAINER_NAME=$(docker ps -q -f name=supabase_db_backend || docker ps -q -f name=postgres | head -n 1)
+# docker ps exits 0 even with zero matches, so probe each name filter separately
+# instead of chaining with || (the fallback would never fire).
+CONTAINER_NAME=$(docker ps -q -f name=supabase_db_backend | head -n 1)
+if [ -z "$CONTAINER_NAME" ]; then
+    CONTAINER_NAME=$(docker ps -q -f name=postgres | head -n 1)
+fi
 
 if [ -z "$CONTAINER_NAME" ]; then
     echo "❌ Error: Could not find running Supabase Postgres container (supabase_db_backend)."
@@ -19,24 +24,7 @@ fi
 echo "Found Postgres container: $CONTAINER_NAME"
 echo "Applying database table definitions & seed data..."
 
-docker exec -i "$CONTAINER_NAME" psql -U postgres -d postgres << 'EOF'
--- Create businesses table
-CREATE TABLE IF NOT EXISTS public.businesses (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    plan_tier TEXT,
-    access_token TEXT,
-    token_status TEXT,
-    status TEXT,
-    pos_provider TEXT,
-    onboarded BOOLEAN DEFAULT FALSE
-);
-
--- Seed default local test record
-INSERT INTO public.businesses (id, name, plan_tier, access_token, token_status, status, pos_provider, onboarded)
-VALUES ('demo-org-123', 'Maple Bakery', 'starter', 'demo-portal-token-999', 'active', 'active', 'square', true)
-ON CONFLICT (id) DO NOTHING;
-EOF
+docker exec -i "$CONTAINER_NAME" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < scripts/sql/init-local-db.sql
 
 echo ""
 echo "✅ Local database schema & seed data initialized successfully!"

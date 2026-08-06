@@ -60,26 +60,24 @@ class BusinessRepositoryImpl(
                 onboarded = EXCLUDED.onboarded
             """.trimIndent()
 
-        val spec =
-            databaseClient
-                .sql(upsertSql)
-                .bind("id", business.id)
-
-        val withName = business.name?.let { spec.bind("name", it) } ?: spec.bindNull("name", String::class.java)
-        val withPlan = business.planTier?.let { withName.bind("planTier", it) } ?: withName.bindNull("planTier", String::class.java)
-        val withToken =
-            business.accessToken?.let { withPlan.bind("accessToken", it) } ?: withPlan.bindNull("accessToken", String::class.java)
-        val withTokenStatus =
-            business.tokenStatus?.let { withToken.bind("tokenStatus", it) } ?: withToken.bindNull("tokenStatus", String::class.java)
-        val withStatus =
-            business.status?.let { withTokenStatus.bind("status", it) } ?: withTokenStatus.bindNull("status", String::class.java)
-        val withPos =
-            business.posProvider?.let { withStatus.bind("posProvider", it) } ?: withStatus.bindNull("posProvider", String::class.java)
-        val withOnboarded = withPos.bind("onboarded", business.onboarded)
-
-        withOnboarded.await()
+        databaseClient
+            .sql(upsertSql)
+            .bind("id", business.id)
+            .bindNullable("name", business.name)
+            .bindNullable("planTier", business.planTier)
+            .bindNullable("accessToken", business.accessToken)
+            .bindNullable("tokenStatus", business.tokenStatus)
+            .bindNullable("status", business.status)
+            .bindNullable("posProvider", business.posProvider)
+            .bind("onboarded", business.onboarded)
+            .await()
         return business
     }
+
+    private fun DatabaseClient.GenericExecuteSpec.bindNullable(
+        name: String,
+        value: String?,
+    ): DatabaseClient.GenericExecuteSpec = value?.let { bind(name, it) } ?: bindNull(name, String::class.java)
 
     private fun mapRow(row: Row): Business =
         Business(
