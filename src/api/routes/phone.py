@@ -8,6 +8,8 @@ Webhook URL to configure in Twilio Console:
         Status: https://api.meridian.tips/twilio/status
         """
 import asyncio
+import dataclasses
+import functools
 import json
 import logging
 import os
@@ -97,6 +99,101 @@ QWEN_URL = os.getenv("GARRY_LLM_URL", "http://localhost:8002")
 _sessions: dict[str, dict[str, Any]] = {}
 SESSION_TTL = 600
 TWIML = "application/xml"
+
+
+# ── Shared session mirror (dormant until REDIS_URL is set) ────────────────────
+# `_sessions` and card_on_phone's `_captures` are per-process, so a mid-call
+# webhook that lands on another uvicorn worker sees nothing. `_shared_state`
+# loads this call's state from the shared store before the handler runs and
+# writes it back afterwards, which makes the dicts a per-worker cache instead of
+# the only copy. With no REDIS_URL the wrapper is a straight pass-through and
+# behaviour is exactly what it is today.
+try:
+    from session_store import (  # noqa: E402 — after the sys.path insert above
+        NS_CAPTURES,
+        NS_SESSIONS,
+        get_session_store,
+    )
+    _SESSION_STORE_AVAILABLE = True
+except ImportError:  # sidecar not on the path (unit tests importing bare routes)
+    _SESSION_STORE_AVAILABLE = False
+    NS_CAPTURES = "captures"
+    NS_SESSIONS = "sessions"
+
+    def get_session_store():  # type: ignore[misc]
+        return None
+
+
+def _shared_state(*, captures: bool = False):
+    """Mirror this call's session (and optionally its card capture) through the
+    shared store around a Twilio webhook handler.
+
+    Reads happen before the handler so it sees state another worker wrote;
+    the write-back is in a `finally` so every return path — including the ones
+    that delete the session to end a call — is mirrored. Any store error leaves
+    the in-process dicts untouched, so the call continues on this worker.
+    """
+    def decorate(handler):
+        @functools.wraps(handler)
+        async def wrapper(request: Request, *args, **kwargs):
+            store = get_session_store() if _SESSION_STORE_AVAILABLE else None
+            if store is None or not store.shared:
+                return await handler(request, *args, **kwargs)
+            call_sid = ""
+            try:
+                # Starlette caches the parsed form, so the handler's own
+                # `await request.form()` costs nothing extra.
+                form = await request.form()
+                call_sid = str(form.get("CallSid", "") or "")
+            except Exception:
+                call_sid = ""
+            if not call_sid:
+                return await handler(request, *args, **kwargs)
+
+            cop = _card_module() if captures else None
+            try:
+                loaded = await store.get(NS_SESSIONS, call_sid)
+                if loaded is not None:
+                    _sessions[call_sid] = loaded
+                if cop is not None:
+                    cap_data = await store.get(NS_CAPTURES, call_sid)
+                    if cap_data is not None:
+                        try:
+                            cop._captures[call_sid] = cop.CardCapture(**cap_data)
+                        except Exception:
+                            logger.warning("Discarding malformed shared card capture")
+            except Exception as e:
+                # The store is best-effort. Whatever this worker already has in
+                # memory is still a valid basis for answering the webhook.
+                logger.warning("Shared session load failed: %s", type(e).__name__)
+            try:
+                return await handler(request, *args, **kwargs)
+            finally:
+                try:
+                    session = _sessions.get(call_sid)
+                    if session is None:
+                        await store.delete(NS_SESSIONS, call_sid)
+                    else:
+                        await store.set(NS_SESSIONS, call_sid, session)
+                    if cop is not None:
+                        cap = cop._captures.get(call_sid)
+                        if cap is None:
+                            await store.delete(NS_CAPTURES, call_sid)
+                        else:
+                            await store.set(NS_CAPTURES, call_sid, dataclasses.asdict(cap))
+                except Exception as e:
+                    logger.warning("Shared session write-back failed: %s", type(e).__name__)
+        return wrapper
+    return decorate
+
+
+def _card_module():
+    """card_on_phone if it imports, else None (the module is optional)."""
+    try:
+        import card_on_phone  # noqa: PLC0415 — optional sidecar module
+        return card_on_phone
+    except ImportError:
+        return None
 
 # ── Polly TTS voice selection by language ──────────────────────────────────────
 # French-Canadian merchants use Chantal (fr-CA) instead of Joanna (en-US) so
@@ -905,6 +1002,7 @@ def _media_stream_twiml(merchant_id: str, caller_phone: str) -> str:
 
 
 @router.post("/voice")
+@_shared_state()
 async def twilio_voice(request: Request):
     """Initial call webhook — greet the caller.
     Looks up the merchant by the incoming Twilio phone number (To field).
@@ -1085,6 +1183,7 @@ async def twilio_voice(request: Request):
 
 
 @router.post("/gather")
+@_shared_state()
 async def twilio_gather(request: Request):
     """Process caller speech and return AI response."""
     form = await request.form()
@@ -1441,6 +1540,7 @@ async def _dispatch_order(call_sid: str, session: dict, order_input: dict) -> Or
 
 
 @router.post("/status")
+@_shared_state()
 async def twilio_status(request: Request):
     """Call status callback — clean up session, log, and charge credits."""
     form = await request.form()
@@ -1823,6 +1923,7 @@ def _pay_gather(say: str, action: str, reprompt: str, num_digits: str = "",
 
 
 @router.post("/pay/start")
+@_shared_state(captures=True)
 async def pay_start(request: Request):
     """Entry into the keypad payment flow. Ensures a capture exists for the call
     (seeded from the live session when present) and asks for the card number."""
@@ -1849,6 +1950,7 @@ async def pay_start(request: Request):
 
 
 @router.post("/pay/number")
+@_shared_state(captures=True)
 async def pay_number(request: Request):
     form = await request.form()
     call_sid = form.get("CallSid", "")
@@ -1868,6 +1970,7 @@ async def pay_number(request: Request):
 
 
 @router.post("/pay/expiry")
+@_shared_state(captures=True)
 async def pay_expiry(request: Request):
     form = await request.form()
     call_sid = form.get("CallSid", "")
@@ -1888,6 +1991,7 @@ async def pay_expiry(request: Request):
 
 
 @router.post("/pay/cvv")
+@_shared_state(captures=True)
 async def pay_cvv(request: Request):
     form = await request.form()
     call_sid = form.get("CallSid", "")
@@ -1907,6 +2011,7 @@ async def pay_cvv(request: Request):
 
 
 @router.post("/pay/zip")
+@_shared_state(captures=True)
 async def pay_zip(request: Request):
     """Final step: run the card and tell the caller approved or declined."""
     form = await request.form()

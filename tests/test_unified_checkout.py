@@ -87,6 +87,33 @@ def test_line_items_single_total_when_unpriced():
     assert items[0]["price_data"]["unit_amount"] == 2250
 
 
+def test_line_items_tax_delta_line_charges_full_total():
+    # Normalizer totals carry tax (and topping modifiers) that per-item
+    # unit_price lines don't — the delta MUST be billed or the merchant
+    # silently eats it. 22.50 items + 13% HST → 25.43.
+    order = dict(ORDER, total=25.43)
+    items = pl._stripe_line_items(order, "cad")
+    assert len(items) == 3
+    tax = items[-1]
+    assert tax["price_data"]["product_data"]["name"] == "Tax & extras"
+    assert tax["price_data"]["unit_amount"] == 2543 - 2250
+    billed = sum(i["price_data"]["unit_amount"] * i["quantity"] for i in items)
+    assert billed == 2543
+
+
+def test_line_items_no_delta_line_when_total_matches():
+    items = pl._stripe_line_items(ORDER, "cad")  # total == items sum
+    assert len(items) == 2
+
+
+def test_line_items_no_negative_delta_line():
+    # A discounted/comped total below the items sum must not create a
+    # negative line (Stripe rejects it) — items stand as-is.
+    order = dict(ORDER, total=20.00)
+    items = pl._stripe_line_items(order, "cad")
+    assert len(items) == 2
+
+
 @aio
 async def test_create_checkout_platform_direct_when_not_onboarded(monkeypatch):
     # Key present but merchant has no connected Stripe account (demo / pre-Connect):

@@ -17,6 +17,7 @@ def render_down(url: str, detail: str, consecutive_failures: int, checked_at: st
 </div>
 {paragraph(f"<strong style='color:#F5F5F7;'>{url}</strong> failed {consecutive_failures} consecutive checks from the Meridian backend.")}
 {_detail_table([("Surface", url), ("Last error", detail), ("Consecutive failures", str(consecutive_failures)), ("Checked at", checked_at)])}
+{paragraph("<strong>SEV-1 — run:</strong> docs/runbooks/incidents/server-down.md")}
 {paragraph("This probe runs on Railway, so the backend and its email path are unaffected by whatever took the surface down.")}""",
         preheader=f"DOWN — {url}",
     )

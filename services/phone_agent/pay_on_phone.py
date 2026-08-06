@@ -542,6 +542,14 @@ async def mark_order_paid(
         logger.warning("mark_order_paid: no order matched (%s)", matched_by)
         return {"released": False, "matched_by": matched_by}
 
+    # BILLING RECONCILIATION — the last line of defense on REAL money: if the
+    # customer paid LESS than the total this order was confirmed at (a
+    # line-item builder drifting from the order total again), the order still
+    # releases (the shortfall is our bug, not the customer's), but it must
+    # never pass silently: CRITICAL log + best-effort ops email. Overpayment
+    # (customer surcharge riding on top) is expected and not flagged.
+    _reconcile_paid_amount(row, paid_amount_cents, merchant_id)
+
     # CLAIM FIRST (compare-and-swap): flip to paid ONLY if not already paid.
     # This is the idempotency gate — the release fan-out below (POS push +
     # merchant SMS) runs ONLY for the event that wins the claim, so a duplicate
@@ -727,6 +735,51 @@ def _order_base_cents(row: dict) -> int:
         return int(round(float(row.get("total") or 0) * 100))
     except (TypeError, ValueError):
         return 0
+
+
+def _reconcile_paid_amount(row: dict, paid_amount_cents: int,
+                           merchant_id: str) -> None:
+    """CRITICAL-log (+ best-effort ops email) when a payment settles below the
+    order's confirmed total. Never raises, never blocks the release."""
+    try:
+        expected = _order_base_cents(row)
+        if not (paid_amount_cents and expected):
+            return  # amount unknown (simulate, non-Stripe rails) — nothing to say
+        if paid_amount_cents >= expected:
+            return
+        detail = (
+            f"phone order {row.get('pos_order_id') or row.get('id')} for merchant "
+            f"{merchant_id or row.get('merchant_id')} settled at {paid_amount_cents}¢ "
+            f"but was confirmed at {expected}¢ — a payment-link builder is billing "
+            f"below the order total (tax/modifier drift). Merchant is being "
+            f"shorted; fix the builder before more orders pay. "
+            f"RUN: docs/runbooks/incidents/pay-mismatch.md (SEV-1).")
+        logger.critical("UNDERPAYMENT DETECTED: %s", detail)
+
+        async def _alert():
+            try:
+                from src.email.send import send_anomaly_alert
+                await send_anomaly_alert(
+                    os.getenv("MERIDIAN_OPS_ALERT_EMAIL",
+                              "aidanpierce72@gmail.com"),
+                    row.get("business_name") or merchant_id or "Meridian",
+                    "Phone order underpayment — billing drift",
+                    detail, severity="high")
+            except Exception as e:  # noqa: BLE001 — alerting never breaks payment
+                logger.error("underpayment alert email failed: %s", e)
+            # DEFCON 1 — a live order settled short: page every responder.
+            try:
+                from src.services.defcon_alert import notify_defcon
+                await notify_defcon(
+                    1, "Live phone order settled below confirmed total",
+                    detail, protocol="pay-mismatch.md", event_key="underpayment")
+            except Exception as e:  # noqa: BLE001
+                logger.error("underpayment DEFCON page failed: %s", e)
+
+        import asyncio
+        asyncio.ensure_future(_alert())
+    except Exception as e:  # noqa: BLE001 — reconciliation never breaks payment
+        logger.error("paid-amount reconciliation failed: %s", e)
 
 
 async def _match_open_order_by_phone(
