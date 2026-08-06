@@ -12,6 +12,15 @@ pasted to a Claude session ("run the <name> protocol").
 | [phone-fleet-down.md](phone-fleet-down.md) | Demo/merchant lines dead air, calls failing, Vapi errors | SEV-1 |
 | [vendor-billing.md](vendor-billing.md) | Vapi credits / Telnyx balance / Stripe account restrictions | SEV-2 (SEV-1 if calls already failing) |
 
+## DEFCON readiness scale
+
+The primary rating system for every event — see **[DEFCON.md](DEFCON.md)** for
+the full contingency catalog: every known failure mode across payments, voice,
+infra, security, POS, and business/compliance, each rated DEFCON 1–5 with its
+detection status, fastest mitigation, and prevention. It also carries the
+ranked **detection-gap backlog** — the high-severity events nothing watches yet.
+DEFCON 1 = catastrophic (money/data/legal on fire); DEFCON 5 = normal.
+
 ## Severity ladder
 
 - **SEV-1 — money or availability actively broken.** Real customers/merchants
