@@ -30,7 +30,12 @@ logger = logging.getLogger("meridian.voice_ledger")
 async def _post(merchant_id: str, kind: str, amount_cents: int, source: str,
                 ref: str | None = None, note: str | None = None) -> bool:
     """Insert one posting; idempotent on (source, ref). Returns True if a new row
-    was written (or already existed), False on error/no-op."""
+    was written (or already existed), False on error/no-op.
+
+    The pre-select below is only a fast path — two concurrent settlements of
+    the same payment (Clover HCO webhook + /pay/clover/return) can both pass
+    it. The real guarantee is uq_voice_ledger_source_ref (migration 073): the
+    losing INSERT 409s, supabase_rest swallows it, and this still returns True."""
     if not merchant_id or not amount_cents or amount_cents <= 0:
         return False
     db = get_db()

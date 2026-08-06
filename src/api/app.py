@@ -13,6 +13,7 @@ Routes:
 """
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -125,11 +126,42 @@ logging.basicConfig(
 logger = logging.getLogger("meridian")
 
 
+def _assert_single_worker() -> None:
+    """Live call/SMS/card state lives in per-process dicts (phone._sessions,
+    sms_order._sms_sessions, card_on_phone._captures). With one uvicorn worker
+    (the Procfile today) that is correct; with several, mid-call webhooks land
+    on workers that never saw the session and orders/card captures silently
+    die. Refuse the foot-gun until that state moves to a shared store —
+    MERIDIAN_ALLOW_MULTI_WORKER=1 overrides once it has."""
+    if os.environ.get("MERIDIAN_ALLOW_MULTI_WORKER") == "1":
+        return
+    workers = 0
+    try:
+        workers = int(os.environ.get("WEB_CONCURRENCY", "0") or 0)
+    except ValueError:
+        pass
+    argv = sys.argv
+    for flag in ("--workers", "-w"):
+        if flag in argv:
+            try:
+                workers = max(workers, int(argv[argv.index(flag) + 1]))
+            except (IndexError, ValueError):
+                pass
+    if workers > 1:
+        raise RuntimeError(
+            f"Refusing to start with {workers} workers: in-memory phone/SMS/card "
+            "session state is per-process and breaks under multiple workers. "
+            "Move sessions to a shared store first, then set "
+            "MERIDIAN_ALLOW_MULTI_WORKER=1."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle — initializes DB connection."""
     from ..db import init_db, close_db
     logger.info("Meridian server starting...")
+    _assert_single_worker()
     await init_db()
     logger.info("Database connection initialized")
     from ..payouts.webhook_hook import init_commission_hook
