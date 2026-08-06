@@ -24,6 +24,38 @@ def test_index_links_every_protocol():
         assert name in index, f"{name} not linked from incidents/README.md"
 
 
+DEFCON_DOMAINS = [
+    "## Payments & Billing",
+    "## Voice & Phone",
+    "## Infrastructure & Deploy",
+    "## Data & Security",
+    "## POS & Fulfillment",
+    "## Communications, Compliance & Business Continuity",
+]
+
+
+def test_defcon_catalog_exists_and_is_complete():
+    """The DEFCON catalog must exist, define all five levels, cover every
+    subsystem domain, and keep the ranked detection-gap backlog — so a future
+    edit can't quietly drop a domain or hide the known gaps."""
+    dc = (_INCIDENTS / "DEFCON.md")
+    assert dc.is_file(), "docs/runbooks/incidents/DEFCON.md missing"
+    text = dc.read_text()
+    for level in ("DEFCON 1", "DEFCON 2", "DEFCON 3", "DEFCON 4", "DEFCON 5"):
+        assert level in text, f"DEFCON.md does not define {level}"
+    for domain in DEFCON_DOMAINS:
+        assert domain in text, f"DEFCON.md missing domain section: {domain}"
+    assert "detection-gap backlog" in text.lower(), \
+        "DEFCON.md must carry the ranked detection-gap backlog"
+    assert "Paid-without-kitchen-push" in text, \
+        "the #1 catastrophic gap (charged-no-food) must stay in the backlog"
+
+
+def test_defcon_linked_from_index():
+    assert "DEFCON.md" in (_INCIDENTS / "README.md").read_text(), \
+        "DEFCON.md not linked from the incidents index"
+
+
 def test_alert_sources_reference_a_real_protocol():
     """Any source that names a docs/runbooks/incidents/*.md path must point at
     a file that actually exists — a renamed/deleted protocol fails here."""
