@@ -11,6 +11,7 @@ an expired Stripe pay-link 303'd the customer to a dead page.
   matches (website/other). The webhook routes the new event types here and
   flips checkout_sessions → expired on session expiry.
 """
+import json
 import os
 import sys
 
@@ -219,12 +220,13 @@ async def test_webhook_routes_refund(monkeypatch):
     _patch_fee(monkeypatch, 25)
     ledger = []
     _patch_ledger(monkeypatch, ledger)
-    _mock_webhook(monkeypatch, {
+    event = {
         "id": "evt_1", "type": "charge.refunded",
         "data": {"object": {"id": "ch_1", "payment_intent": "pi_W"}},
-    }, db)
+    }
+    _mock_webhook(monkeypatch, event, db)
 
-    out = await sc.connect_webhook(_Req())
+    out = await sc.connect_webhook(_Req(json.dumps(event).encode()))
     assert out["received"] is True
     assert any(u[1] == {"status": "refunded"} for u in db.updates)
     assert ledger and ledger[0]["ref"] == "pi_W"
@@ -233,12 +235,13 @@ async def test_webhook_routes_refund(monkeypatch):
 @aio
 async def test_webhook_expires_checkout_session(monkeypatch):
     db = _DB()
-    _mock_webhook(monkeypatch, {
+    event = {
         "id": "evt_2", "type": "checkout.session.expired",
         "data": {"object": {"id": "cs_dead"}},
-    }, db)
+    }
+    _mock_webhook(monkeypatch, event, db)
 
-    out = await sc.connect_webhook(_Req())
+    out = await sc.connect_webhook(_Req(json.dumps(event).encode()))
     assert out["received"] is True
     assert ("checkout_sessions", {"status": "expired"},
             {"provider_ref": "eq.cs_dead", "status": "neq.complete"}) in db.updates

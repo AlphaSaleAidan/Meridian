@@ -15,6 +15,7 @@ Endpoints:
 
 All Stripe calls are lazy-imported so the module loads with no SDK/key present.
 """
+import json
 import logging
 import os
 import sys
@@ -314,10 +315,15 @@ async def connect_webhook(request: Request):
                      "STRIPE_PHONE_WEBHOOK_SECRET) — refusing Connect webhook (fail closed)")
         raise HTTPException(status_code=503, detail="Webhook not configured")
     try:
-        event = _construct_event(stripe, payload, sig)
+        _construct_event(stripe, payload, sig)  # verify signature (raises if bad)
     except Exception as e:  # noqa: BLE001
         logger.error("Connect webhook verify failed: %s", e)
         raise HTTPException(status_code=400, detail="Invalid signature")
+    # Read the VERIFIED payload as plain dicts. The stripe SDK's StripeObject in
+    # this version is not dict-subclassed, so event.get(...) raises
+    # "AttributeError: get" and 500s every webhook. The bytes are already
+    # signature-verified above, so json.loads is safe.
+    event = json.loads(payload)
 
     # Idempotency: dedupe on event.id via the same durable webhook_events table
     # the platform + Square/Clover/Toast webhooks use, so a REDELIVERED event

@@ -16,6 +16,7 @@ under the new one. These pin the three things that must hold:
 Plus the dual webhook signing secret and the onboarding key selection.
 Stripe is mocked throughout; no key value ever appears here.
 """
+import json
 import os
 import sys
 from pathlib import Path
@@ -264,12 +265,20 @@ class _WebhookStripe:
                     "data": {"object": {"id": "acct_1", "charges_enabled": True}}}
 
 
+_WEBHOOK_EVENT_BODY = json.dumps(
+    {"type": "account.updated",
+     "data": {"object": {"id": "acct_1", "charges_enabled": True}}}).encode()
+
+
 class _Req:
-    def __init__(self, sig):
+    def __init__(self, sig, body=None):
         self.headers = {"stripe-signature": sig}
+        # The handler reads the VERIFIED payload as a dict (json.loads), not the
+        # construct_event return, so the body must carry the event.
+        self._body = body if body is not None else _WEBHOOK_EVENT_BODY
 
     async def body(self):
-        return b"{}"
+        return self._body
 
 
 class _WebhookDB:
