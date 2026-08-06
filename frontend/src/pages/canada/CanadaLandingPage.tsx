@@ -343,8 +343,8 @@ export default function CanadaLandingPage() {
               },
               {
                 icon: Lock,
-                title: 'Data Residency in Canada',
-                desc: 'Your POS transaction data is stored and processed within Canada. Meridian does not transfer your data to servers outside Canadian jurisdiction.',
+                title: 'Transparent Data Practices',
+                desc: 'Meridian is upfront about where data lives: infrastructure runs on major cloud providers in US regions, with contractual cross-border safeguards. Data is encrypted in transit and at rest, and Meridian never sees raw payment card numbers.',
               },
             ].map((item, i) => (
               <ScrollReveal key={item.title} delay={i * 0.12}>

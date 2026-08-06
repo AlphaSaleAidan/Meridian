@@ -1347,7 +1347,7 @@ export const guides: GuideData[] = [
       },
       {
         "q": "Is Meridian certified for Quebec Law 25?",
-        "a": "No platform is 'certified' for Quebec Law 25. Meridian is designed around its principles-data residency, consent management, and access request support-but compliance is a shared responsibility between you and your legal team."
+        "a": "No platform is 'certified' for Quebec Law 25. Meridian is designed around its principles-consent management, documented retention, and access request support-but compliance is a shared responsibility between you and your legal team. On data location, Meridian is transparent: infrastructure runs in US cloud regions with contractual cross-border safeguards."
       },
       {
         "q": "How long does it take to set up Meridian with Alice POS?",
@@ -1503,7 +1503,7 @@ export const guides: GuideData[] = [
         "title": "Step 2: Assess the Risk and Notify the Right Authorities",
         "paragraphs": [
           "Under PIPEDA, you must report a breach to the Office of the Privacy Commissioner of Canada (OPC) if it poses a 'real risk of significant harm' to affected individuals. This includes financial harm, identity theft, or damage to reputation. You have as soon as possible-but no later than when you determine the risk exists.",
-          "If you operate in Quebec, Law 25 requires you to report breaches to the Commission d'accès à l'information (CAI) and notify affected individuals without delay. The threshold is lower: any breach that could cause 'prejudice' must be reported. Meridian Intelligence is built to support Quebec Law 25 compliance, including data residency in Canada and tools to help you identify reportable incidents."
+          "If you operate in Quebec, Law 25 requires you to report breaches to the Commission d'accès à l'information (CAI) and notify affected individuals without delay. The threshold is lower: any breach that could cause 'prejudice' must be reported. Meridian Intelligence is built to support Quebec Law 25 compliance, with access controls, documented retention, and tools to help you identify reportable incidents."
         ],
         "tip": "General information, not legal advice. Breach reporting timelines and thresholds vary by province. Always confirm with a qualified professional.",
         "stat": {
@@ -1643,7 +1643,7 @@ export const guides: GuideData[] = [
         "title": "Common Pitfalls and How to Avoid Them",
         "paragraphs": [
           "Pitfall #1: Using implied consent for marketing. Unless the customer clearly opted in, you don't have valid consent. Pitfall #2: Not updating consent when you change how data is used. If you start sharing loyalty data with a new partner, you need fresh consent. Pitfall #3: Ignoring Quebec Law 25 if you operate in Quebec - it applies even if your business is based elsewhere.",
-          "Meridian's platform is aligned with Canadian privacy frameworks, including Quebec Law 25, and offers features like consent tracking and data residency. However, compliance is a shared responsibility - your processes and staff training are equally important."
+          "Meridian's platform is aligned with Canadian privacy frameworks, including Quebec Law 25, and offers features like consent tracking, role-based access, and configurable retention. However, compliance is a shared responsibility - your processes and staff training are equally important."
         ],
         "stat": {
           "value": "35%",
@@ -1732,7 +1732,7 @@ export const guides: GuideData[] = [
         "title": "Compliance-First: PIPEDA and Quebec Law 25",
         "paragraphs": [
           "Meridian was one of the earliest POS analytics platforms to design around Canadian privacy laws. The platform is built to support PIPEDA's consent and access requirements, as well as Quebec Law 25's stricter rules on data collection and retention.",
-          "Key features include data residency in Canada, granular user permissions, and automated data anonymization for analytics. You can configure retention periods to align with your legal obligations.",
+          "Key features include granular user permissions, automated data anonymization for analytics, and encryption in transit and at rest. You can configure retention periods to align with your legal obligations. On hosting, Meridian is transparent: infrastructure runs in US cloud regions with contractual cross-border safeguards.",
           "Remember: no analytics tool can guarantee compliance. Meridian provides the tools; you must implement them correctly. Always consult with a legal professional for your specific obligations."
         ],
         "tip": "General information, not legal advice. Consult a qualified lawyer for compliance guidance."
@@ -2037,7 +2037,7 @@ export const guides: GuideData[] = [
         "title": "Using POS Analytics to Automate Tax Tracking",
         "paragraphs": [
           "Platforms like Meridian Intelligence are designed around Canadian tax requirements, including support for PIPEDA and Quebec Law 25. They can ingest POS data from systems like Moneris and Alice POS, then automatically categorize sales by tax type and province.",
-          "This means you can see a real-time breakdown of GST, HST, and PST collected, making reconciliation faster and reducing manual errors. Data residency in Canada ensures your sales data stays within Canadian borders."
+          "This means you can see a real-time breakdown of GST, HST, and PST collected, making reconciliation faster and reducing manual errors. Your data is encrypted in transit and at rest, with role-based access controls limiting who can see it."
         ],
         "tip": "Meridian is built to support compliance, but you remain responsible for verifying that your tax settings in the POS are correct."
       },
@@ -2098,7 +2098,7 @@ export const guides: GuideData[] = [
       }
     ],
     "ctaHeadline": "Simplify Your Sales Tax Reconciliation",
-    "ctaDescription": "See how Meridian Intelligence can help you track GST/HST/PST from your POS data-built for Canadian operators, with data residency and compliance support."
+    "ctaDescription": "See how Meridian Intelligence can help you track GST/HST/PST from your POS data-built for Canadian operators, aligned with PIPEDA and Quebec Law 25."
   },
   {
     "slug": "who-owns-your-pos-data-canadian-merchants",
